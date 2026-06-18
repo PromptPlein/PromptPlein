@@ -1,0 +1,7 @@
+# Supabase project-configuratie.
+# Vervang project_id door je eigen project ref bij `supabase link`.
+project_id = "overheid-prompt-library"
+
+[functions.optimize-prompt]
+# JWT-verificatie staat aan; de frontend stuurt de anon key mee.
+verify_jwt = true
