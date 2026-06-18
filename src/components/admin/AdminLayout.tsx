@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   Sparkles,
@@ -8,73 +7,31 @@ import {
   ScrollText,
   LogOut,
   ShieldCheck,
-  ArrowLeft,
   BarChart3,
+  Building2,
+  UserCog,
+  ClipboardCheck,
+  PieChart,
 } from 'lucide-react';
 import clsx from 'clsx';
-import { useAdmin } from '@/hooks/useAdmin';
+import { useAuth } from '@/context/AuthContext';
 
 const adminNav = [
   { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true },
+  { to: '/admin/goedkeuringen', label: 'Goedkeuringen', icon: ClipboardCheck, end: false },
+  { to: '/admin/gebruikers', label: 'Gebruikers', icon: UserCog, end: false },
+  { to: '/admin/organisaties', label: 'Organisaties', icon: Building2, end: false },
   { to: '/admin/technieken', label: 'Technieken', icon: Sparkles, end: false },
   { to: '/admin/rollen', label: 'Rollen', icon: Users, end: false },
   { to: '/admin/categorieen', label: 'Categorieën', icon: FolderTree, end: false },
   { to: '/admin/analytics', label: 'Analytics', icon: BarChart3, end: false },
+  { to: '/admin/rapportage', label: 'Rapportage', icon: PieChart, end: false },
   { to: '/admin/audit', label: 'Audit log', icon: ScrollText, end: false },
 ];
 
-function AdminLogin({ onLogin }: { onLogin: (token: string) => boolean }) {
-  const [token, setToken] = useState('');
-  const [error, setError] = useState(false);
-
-  function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!onLogin(token)) setError(true);
-  }
-
-  return (
-    <div className="mx-auto flex max-w-md flex-col items-center px-4 py-20">
-      <span className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-rijksblauw-500 text-white">
-        <ShieldCheck size={28} />
-      </span>
-      <h1 className="text-2xl font-bold text-rijksblauw-700">Admin-toegang</h1>
-      <p className="mt-1 text-center text-sm text-slate-500">
-        Voer de admin-token in om het beheerpaneel te openen.
-      </p>
-      <form onSubmit={submit} className="mt-6 w-full space-y-3">
-        <input
-          type="password"
-          autoFocus
-          className="opl-input"
-          placeholder="Admin-token"
-          value={token}
-          onChange={(e) => {
-            setToken(e.target.value);
-            setError(false);
-          }}
-        />
-        {error && <p className="text-sm text-rijksrood">Onjuiste token.</p>}
-        <button type="submit" className="opl-btn-primary w-full">
-          Inloggen
-        </button>
-      </form>
-      <p className="mt-4 text-xs text-slate-400">
-        Demo-token: <code className="rounded bg-slate-100 px-1.5 py-0.5">admin</code>
-      </p>
-      <Link to="/" className="mt-6 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800">
-        <ArrowLeft size={14} /> Terug naar de app
-      </Link>
-    </div>
-  );
-}
-
 export default function AdminLayout() {
-  const { authenticated, login, logout } = useAdmin();
+  const { signOut } = useAuth();
   const navigate = useNavigate();
-
-  if (!authenticated) {
-    return <AdminLogin onLogin={login} />;
-  }
 
   return (
     <div className="mx-auto flex max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:px-8">
@@ -106,7 +63,7 @@ export default function AdminLayout() {
           <div className="mt-3 border-t border-slate-100 pt-3">
             <button
               onClick={() => {
-                logout();
+                void signOut();
                 navigate('/');
               }}
               className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-red-50 hover:text-rijksrood"

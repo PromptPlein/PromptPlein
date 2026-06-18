@@ -1,4 +1,5 @@
 import { getAnonKey, getFunctionUrl, isSupabaseConfigured } from '@/lib/supabase';
+import type { AiProvider } from '@/config/aiModels';
 import type { OptimizeResult, Technique } from '@/types';
 
 /**
@@ -29,8 +30,9 @@ export async function optimizePrompt(args: {
   technique: Technique;
   promptContent: string;
   followUpAnswers: Record<string, string>;
+  preferredProvider?: AiProvider;
 }): Promise<OptimizeResult> {
-  const { technique, promptContent, followUpAnswers } = args;
+  const { technique, promptContent, followUpAnswers, preferredProvider } = args;
 
   const functionUrl = getFunctionUrl('optimize-prompt');
 
@@ -48,6 +50,7 @@ export async function optimizePrompt(args: {
           template: technique.template,
           promptContent,
           followUpAnswers,
+          preferredProvider: preferredProvider ?? 'auto',
         }),
       });
 

@@ -1,10 +1,27 @@
-# 🏛️ Overheid Prompt Library — Phase 1
+# 🏛️ Overheid Prompt Library
 
 Een moderne webapplicatie waar Nederlandse overheidsmedewerkers AI-prompts kunnen
 **uploaden, delen, zoeken en optimaliseren** op basis van bewezen prompting-technieken.
 
-> **Phase 1 (MVP):** core-functionaliteit, basis-optimalisatie, zoeken/filteren en
-> Three.js-visualisaties. Geen authenticatie.
+> **Phase 1 (MVP):** core-functionaliteit, basis-optimalisatie, zoeken/filteren, Three.js.
+> **Phase 2:** admin-panel, 9 technieken, e-mail/QR-delen, analytics & trending, geavanceerd zoeken.
+
+## 🆕 Phase 2 in het kort
+
+- **Admin-panel** (`/admin`) — token-login, dashboard met grafieken, CRUD voor **technieken**
+  (template- & vervolgvragen-editor met live preview), **rollen** en **categorieën**
+  (incl. CSV-import en herordenen), plus een **audit log** van alle beheeracties.
+- **9 optimalisatietechnieken** — Persona, Multi-Persona, Chain-of-Thought, Few-Shot,
+  Gestructureerde Output, Socratic, Meta, CRISP en CARE.
+- **Delen** — genereer een **QR-code** en deelbare link (`/share/[token]`), of stuur via
+  **e-mail** met een ingevuld sjabloon. Weergaven worden geteld.
+- **Analytics** — events worden gelogd (aanmaken, zoeken, optimaliseren, delen, favoriet).
+  Bekijk **Trending**, je eigen **activiteit** en de admin-analytics met **CSV-export**.
+- **Geavanceerd zoeken** — multi-select op categorie/rol/techniek/deelniveau, datumbereik en sortering.
+
+### Admin-token
+- Demo-modus: token `admin`.
+- Productie: zet `VITE_ADMIN_TOKEN` in `.env` voor je eigen token.
 
 ## ✨ Functionaliteit
 
@@ -52,8 +69,12 @@ Open http://localhost:5173. De footer toont of je in **demo-modus** of **Supabas
 2. Voer het schema en de seed uit (via de Supabase SQL-editor of CLI):
 
    ```bash
-   supabase db push                # of: plak supabase/migrations/0001_init.sql
+   # Schema (Phase 1 + Phase 2)
+   psql "$DATABASE_URL" -f supabase/migrations/0001_init.sql
+   psql "$DATABASE_URL" -f supabase/migrations/0002_phase2.sql
+   # Seed reference-data (rollen, categorieën, 4 + 5 technieken)
    psql "$DATABASE_URL" -f supabase/seed.sql
+   psql "$DATABASE_URL" -f supabase/seed_phase2.sql
    ```
 
 3. Deploy de Edge Function en stel de API-keys in:
@@ -78,19 +99,26 @@ De app schakelt automatisch over naar Supabase zodra de env-variabelen aanwezig 
 
 ```
 src/
-  components/   common · prompts · optimizer · three
-  context/      ReferenceDataContext (rollen/categorieën/technieken)
-  data/         seed.ts (hardcoded reference-data, Phase 1)
-  hooks/        useTilt, useDebouncedValue
-  lib/          supabase client + utils
-  pages/        Home · Search · Optimizer · Favorites · PromptDetail
-  services/     repository (Supabase ↔ localStore) · optimizeService
+  components/   common · prompts · optimizer · three · admin · share · analytics
+  context/      ReferenceDataContext (rollen/categorieën/technieken, met refresh)
+  data/         seed.ts (reference-data: 9 technieken)
+  hooks/        useTilt · useDebouncedValue · useAdmin
+  lib/          supabase client · utils · download
+  pages/        Home · Search · Optimizer · Favorites · Trending · Activity ·
+                PromptDetail · SharePreview · admin/* (Dashboard, Technieken,
+                Rollen, Categorieën, Analytics, Audit)
+  services/     repository · optimizeService · analyticsService ·
+                shareService · adminService · localStore
   types/        domeinmodellen
 supabase/
-  migrations/   0001_init.sql
-  seed.sql
+  migrations/   0001_init.sql · 0002_phase2.sql
+  seed.sql · seed_phase2.sql
   functions/    optimize-prompt/ (Claude + DeepSeek)
 ```
+
+> Reference-data, analytics, shares en audit-log werken **zowel in demo-modus**
+> (localStorage) **als met Supabase**. De `optimize-prompt` Edge Function blijft de
+> enige server-side functie; delen en analytics gebruiken directe tabel-toegang.
 
 ## 🛠️ Scripts
 

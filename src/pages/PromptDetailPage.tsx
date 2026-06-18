@@ -9,9 +9,13 @@ import {
   Share2,
   Trash2,
   History,
+  Download,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import ShareModal from '@/components/share/ShareModal';
+import ExportModal from '@/components/export/ExportModal';
+import CollaborationPanel from '@/components/collaboration/CollaborationPanel';
+import { PROMPT_STATUS_META } from '@/services/collaborationService';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import {
   deletePrompt,
@@ -37,6 +41,7 @@ export default function PromptDetailPage() {
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
 
   useEffect(() => {
     if (!promptId) return;
@@ -129,6 +134,11 @@ export default function PromptDetailPage() {
           <span className={`opl-badge ${sharingBadgeClasses(prompt.sharing_level)}`}>
             {sharingLabel(prompt.sharing_level)}
           </span>
+          {prompt.status && (
+            <span className={`opl-badge ${PROMPT_STATUS_META[prompt.status].classes}`}>
+              {PROMPT_STATUS_META[prompt.status].label}
+            </span>
+          )}
         </div>
 
         <div className="mb-2 flex items-center justify-between">
@@ -150,6 +160,9 @@ export default function PromptDetailPage() {
           </Link>
           <button onClick={() => setShareOpen(true)} className="opl-btn-secondary">
             <Share2 size={16} /> Delen
+          </button>
+          <button onClick={() => setExportOpen(true)} className="opl-btn-secondary">
+            <Download size={16} /> Exporteren
           </button>
           <button
             onClick={handleDelete}
@@ -198,7 +211,15 @@ export default function PromptDetailPage() {
         </section>
       )}
 
+      <CollaborationPanel prompt={prompt} onUpdated={setPrompt} />
+
       <ShareModal open={shareOpen} onClose={() => setShareOpen(false)} prompt={prompt} />
+      <ExportModal
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        prompt={prompt}
+        meta={{ categoryName: category?.name, roleName: role?.name }}
+      />
     </div>
   );
 }

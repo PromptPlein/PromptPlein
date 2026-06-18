@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { useReferenceData } from '@/context/ReferenceDataContext';
+import { useAuthGuard } from '@/hooks/useAuthGuard';
 import { createPrompt } from '@/services/repository';
 import { trackEvent } from '@/services/analyticsService';
 import { getCurrentUser, SHARING_LEVELS } from '@/lib/utils';
@@ -13,6 +14,7 @@ interface PromptUploadFormProps {
 
 export default function PromptUploadForm({ onCreated, onCancel }: PromptUploadFormProps) {
   const { categories, roles } = useReferenceData();
+  const requireAuth = useAuthGuard();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [content, setContent] = useState('');
@@ -35,6 +37,7 @@ export default function PromptUploadForm({ onCreated, onCancel }: PromptUploadFo
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!validate()) return;
+    if (!requireAuth('Log in om een prompt op te slaan.')) return;
     setSubmitting(true);
     const input: NewPromptInput = {
       title: title.trim(),

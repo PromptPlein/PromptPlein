@@ -10,6 +10,12 @@ import OptimizerPage from '@/pages/OptimizerPage';
 import FavoritesPage from '@/pages/FavoritesPage';
 import PromptDetailPage from '@/pages/PromptDetailPage';
 import SharePreviewPage from '@/pages/SharePreviewPage';
+import RequireAuth from '@/components/auth/RequireAuth';
+import LoginPage from '@/pages/auth/LoginPage';
+import SignupPage from '@/pages/auth/SignupPage';
+import PasswordResetPage from '@/pages/auth/PasswordResetPage';
+import ProfilePage from '@/pages/ProfilePage';
+const NetworkPage = lazy(() => import('@/pages/NetworkPage'));
 
 // Chart-/admin-zware pagina's lazy laden (houdt recharts uit de hoofdbundle).
 const TrendingPage = lazy(() => import('@/pages/TrendingPage'));
@@ -21,6 +27,10 @@ const RoleManagerPage = lazy(() => import('@/pages/admin/RoleManagerPage'));
 const CategoryManagerPage = lazy(() => import('@/pages/admin/CategoryManagerPage'));
 const AdminAnalyticsPage = lazy(() => import('@/pages/admin/AdminAnalyticsPage'));
 const AuditLogPage = lazy(() => import('@/pages/admin/AuditLogPage'));
+const UserManagerPage = lazy(() => import('@/pages/admin/UserManagerPage'));
+const OrganizationManagerPage = lazy(() => import('@/pages/admin/OrganizationManagerPage'));
+const ApprovalQueuePage = lazy(() => import('@/pages/admin/ApprovalQueuePage'));
+const ReportsPage = lazy(() => import('@/pages/admin/ReportsPage'));
 
 function PageFallback() {
   return (
@@ -49,14 +59,32 @@ export default function App() {
               <Route path="/prompt/:promptId" element={<PromptDetailPage />} />
               <Route path="/share/:token" element={<SharePreviewPage />} />
 
+              {/* Authenticatie */}
+              <Route path="/auth/login" element={<LoginPage />} />
+              <Route path="/auth/registreren" element={<SignupPage />} />
+              <Route path="/auth/wachtwoord-vergeten" element={<PasswordResetPage />} />
+
+              {/* Vereist een ingelogde gebruiker */}
+              <Route element={<RequireAuth />}>
+                <Route path="/profiel" element={<ProfilePage />} />
+                <Route path="/netwerk" element={<NetworkPage />} />
+              </Route>
+
               {/* Admin panel */}
-              <Route path="/admin" element={<AdminLayout />}>
-                <Route index element={<AdminDashboardPage />} />
-                <Route path="technieken" element={<TechniqueManagerPage />} />
-                <Route path="rollen" element={<RoleManagerPage />} />
-                <Route path="categorieen" element={<CategoryManagerPage />} />
-                <Route path="analytics" element={<AdminAnalyticsPage />} />
-                <Route path="audit" element={<AuditLogPage />} />
+              {/* Beheerpaneel — vereist een ingelogde admin/super_admin */}
+              <Route element={<RequireAuth role="admin" />}>
+                <Route path="/admin" element={<AdminLayout />}>
+                  <Route index element={<AdminDashboardPage />} />
+                  <Route path="goedkeuringen" element={<ApprovalQueuePage />} />
+                  <Route path="gebruikers" element={<UserManagerPage />} />
+                  <Route path="organisaties" element={<OrganizationManagerPage />} />
+                  <Route path="technieken" element={<TechniqueManagerPage />} />
+                  <Route path="rollen" element={<RoleManagerPage />} />
+                  <Route path="categorieen" element={<CategoryManagerPage />} />
+                  <Route path="analytics" element={<AdminAnalyticsPage />} />
+                  <Route path="rapportage" element={<ReportsPage />} />
+                  <Route path="audit" element={<AuditLogPage />} />
+                </Route>
               </Route>
 
               <Route path="*" element={<Navigate to="/" replace />} />

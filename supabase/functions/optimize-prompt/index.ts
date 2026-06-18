@@ -1,26 +1,39 @@
 // Supabase Edge Function: optimize-prompt
 //
 // Neemt een techniek-template + prompt + vervolgvragen, vult de template,
-// en laat Claude (Anthropic) een geoptimaliseerde prompt genereren.
-// Valt terug op DeepSeek wanneer Claude faalt.
+// en laat een AI-model een geoptimaliseerde prompt genereren.
+//
+// Multi-model met fallback-keten. De client kan een voorkeursprovider sturen
+// (`preferredProvider`: 'auto' | 'claude' | 'openai' | 'deepseek'); 'auto'
+// gebruikt de standaardvolgorde Claude → GPT-4 → DeepSeek. Faalt alles
+// (of ontbreken de keys), dan valt de functie terug op de ruwe template.
 //
 // Deploy:  supabase functions deploy optimize-prompt
-// Secrets: supabase secrets set CLAUDE_API_KEY=sk-ant-...
-//          supabase secrets set DEEPSEEK_API_KEY=sk-...   (optioneel, fallback)
+// Secrets: supabase secrets set CLAUDE_API_KEY=sk-ant-...     (Anthropic)
+//          supabase secrets set OPENAI_API_KEY=sk-...         (OpenAI, optioneel)
+//          supabase secrets set DEEPSEEK_API_KEY=sk-...       (DeepSeek, optioneel)
 //
 // Runtime: Deno (Supabase Edge Functions)
 
 import Anthropic from 'npm:@anthropic-ai/sdk@^0.65.0';
+
+type Provider = 'claude' | 'openai' | 'deepseek';
+type PreferredProvider = 'auto' | Provider;
 
 interface RequestBody {
   techniqueId?: string;
   template: string;
   promptContent: string;
   followUpAnswers?: Record<string, string>;
+  preferredProvider?: PreferredProvider;
 }
 
 const CLAUDE_MODEL = 'claude-opus-4-8';
+const OPENAI_MODEL = 'gpt-4o';
 const DEEPSEEK_MODEL = 'deepseek-chat';
+
+const USER_PROMPT = (filled: string) =>
+  `Hier is de ingevulde prompt-template. Lever de geoptimaliseerde prompt:\n\n${filled}`;
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -115,6 +128,50 @@ async function optimizeWithDeepSeek(filledTemplate: string): Promise<string> {
   return text;
 }
 
+async function optimizeWithOpenAI(filledTemplate: string): Promise<string> {
+  const apiKey = Deno.env.get('OPENAI_API_KEY');
+  if (!apiKey) throw new Error('OPENAI_API_KEY ontbreekt');
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: OPENAI_MODEL,
+      max_tokens: 4096,
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: USER_PROMPT(filledTemplate) },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`OpenAI gaf status ${response.status}`);
+  }
+
+  const data = await response.json();
+  const text: string = data?.choices?.[0]?.message?.content?.trim() ?? '';
+  if (!text) throw new Error('OpenAI gaf een lege respons');
+  return text;
+}
+
+const PROVIDERS: Record<Provider, (filled: string) => Promise<string>> = {
+  claude: optimizeWithClaude,
+  openai: optimizeWithOpenAI,
+  deepseek: optimizeWithDeepSeek,
+};
+
+const DEFAULT_ORDER: Provider[] = ['claude', 'openai', 'deepseek'];
+
+/** Bouw de fallback-volgorde op basis van de voorkeur van de client. */
+function buildOrder(preferred?: PreferredProvider): Provider[] {
+  if (!preferred || preferred === 'auto') return DEFAULT_ORDER;
+  return [preferred, ...DEFAULT_ORDER.filter((p) => p !== preferred)];
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -139,22 +196,19 @@ Deno.serve(async (req: Request) => {
 
     const filled = fillTemplate(body.template, body.promptContent, body.followUpAnswers ?? {});
 
-    // 1. Probeer Claude. 2. Val terug op DeepSeek. 3. Val terug op de ruwe template.
-    let optimized: string;
-    let provider: 'claude' | 'deepseek' | 'local-template';
+    // Doorloop de providers in voorkeursvolgorde; eerste succes wint.
+    // Faalt alles (of ontbreken alle keys), dan de ruwe template.
+    const order = buildOrder(body.preferredProvider);
+    let optimized = filled;
+    let provider: Provider | 'local-template' = 'local-template';
 
-    try {
-      optimized = await optimizeWithClaude(filled);
-      provider = 'claude';
-    } catch (claudeErr) {
-      console.error('Claude mislukt, probeer DeepSeek:', claudeErr);
+    for (const candidate of order) {
       try {
-        optimized = await optimizeWithDeepSeek(filled);
-        provider = 'deepseek';
-      } catch (deepseekErr) {
-        console.error('DeepSeek mislukt, gebruik ruwe template:', deepseekErr);
-        optimized = filled;
-        provider = 'local-template';
+        optimized = await PROVIDERS[candidate](filled);
+        provider = candidate;
+        break;
+      } catch (providerErr) {
+        console.error(`${candidate} mislukt, probeer volgende:`, providerErr);
       }
     }
 

@@ -8,9 +8,11 @@ import {
   Flame,
   Activity,
   ShieldCheck,
+  Network,
 } from 'lucide-react';
 import clsx from 'clsx';
 import UserMenu from './UserMenu';
+import NotificationBell from './NotificationBell';
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
@@ -18,6 +20,7 @@ const navItems = [
   { to: '/optimaliseren', label: 'Optimaliseren', icon: Sparkles, end: false },
   { to: '/trending', label: 'Trending', icon: Flame, end: false },
   { to: '/favorieten', label: 'Favorieten', icon: Star, end: false },
+  { to: '/netwerk', label: 'Netwerk', icon: Network, end: false },
 ];
 
 export default function Header() {
@@ -82,6 +85,7 @@ export default function Header() {
           >
             <ShieldCheck size={18} />
           </NavLink>
+          <NotificationBell />
           <UserMenu />
         </div>
       </div>

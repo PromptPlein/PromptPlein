@@ -10,6 +10,7 @@ import { getPrompt, saveOptimization } from '@/services/repository';
 import { optimizePrompt } from '@/services/optimizeService';
 import { trackEvent } from '@/services/analyticsService';
 import { getCurrentUser } from '@/lib/utils';
+import { AI_MODELS, type AiProvider } from '@/config/aiModels';
 import type { OptimizeResult } from '@/types';
 
 export default function OptimizerPage() {
@@ -22,6 +23,7 @@ export default function OptimizerPage() {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [loadingPrompt, setLoadingPrompt] = useState(Boolean(promptId));
   const [optimizing, setOptimizing] = useState(false);
+  const [provider, setProvider] = useState<AiProvider>('auto');
   const [result, setResult] = useState<OptimizeResult | null>(null);
   // 'input' = invoerpaneel zichtbaar, 'transition' = uitfaden, 'output' = resultaat
   const [phase, setPhase] = useState<'input' | 'transition' | 'output'>('input');
@@ -68,6 +70,7 @@ export default function OptimizerPage() {
         technique,
         promptContent: promptContent.trim(),
         followUpAnswers: answers,
+        preferredProvider: provider,
       });
 
       void trackEvent({
@@ -183,7 +186,23 @@ export default function OptimizerPage() {
             </section>
           )}
 
-          <div className="flex justify-end">
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <label className="flex items-center gap-2 text-sm text-slate-600">
+              <span className="hidden sm:inline">AI-model</span>
+              <select
+                className="opl-input w-auto py-2"
+                value={provider}
+                onChange={(e) => setProvider(e.target.value as AiProvider)}
+                disabled={optimizing}
+                title={AI_MODELS.find((m) => m.id === provider)?.hint}
+              >
+                {AI_MODELS.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </label>
             <button
               className="opl-btn-primary px-6 py-2.5"
               onClick={handleOptimize}

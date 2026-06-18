@@ -11,7 +11,8 @@ interface OptimizedOutputProps {
 
 const providerLabel: Record<OptimizeResult['provider'], string> = {
   claude: 'Claude (Anthropic)',
-  deepseek: 'DeepSeek (fallback)',
+  openai: 'GPT-4 (OpenAI)',
+  deepseek: 'DeepSeek',
   'local-template': 'Lokale template',
 };
 

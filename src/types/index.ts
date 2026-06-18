@@ -40,6 +40,9 @@ export interface Technique {
   created_at?: string;
 }
 
+/** Levenscyclus van een prompt in de goedkeuringsworkflow. */
+export type PromptStatus = 'draft' | 'submitted' | 'approved' | 'rejected' | 'archived';
+
 export interface Prompt {
   id: string;
   title: string;
@@ -52,6 +55,11 @@ export interface Prompt {
   is_favorite: boolean;
   created_at: string;
   updated_at: string;
+  status?: PromptStatus;
+  created_by_user?: string | null;
+  submitted_at?: string | null;
+  reviewed_at?: string | null;
+  reviewed_by?: string | null;
 }
 
 export interface Optimization {
@@ -143,6 +151,98 @@ export interface AuditLogEntry {
 export interface OptimizeResult {
   optimized_content: string;
   success: boolean;
-  provider: 'claude' | 'deepseek' | 'local-template';
+  provider: 'claude' | 'openai' | 'deepseek' | 'local-template';
   error?: string;
+}
+
+// --- Phase 3 entiteiten (authenticatie, organisaties & RBAC) ---
+
+/** Applicatierollen voor rolgebaseerde toegang (RBAC). */
+export type AppRole = 'user' | 'admin' | 'super_admin';
+
+export type OrganizationType = 'ministry' | 'department' | 'agency';
+
+/** Organisatie (ministerie / afdeling / agentschap) met hiërarchie. */
+export interface Organization {
+  id: string;
+  name: string;
+  code?: string | null;
+  description?: string | null;
+  logo_url?: string | null;
+  parent_id?: string | null;
+  organization_type: OrganizationType;
+  contact_email?: string | null;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+/** Gebruikersprofiel, gekoppeld aan een Supabase Auth-gebruiker. */
+export interface Profile {
+  id: string;
+  email: string;
+  full_name?: string | null;
+  avatar_url?: string | null;
+  organization_id?: string | null;
+  role: AppRole;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+// --- Phase 3 samenwerking & goedkeuring ---
+
+export interface PromptVersion {
+  id: string;
+  prompt_id: string;
+  version: number;
+  title: string;
+  content: string;
+  change_summary?: string | null;
+  created_by?: string | null;
+  created_at: string;
+}
+
+export type CollaboratorRole = 'editor' | 'viewer';
+
+export interface PromptCollaborator {
+  id: string;
+  prompt_id: string;
+  user_id: string;
+  role: CollaboratorRole;
+  added_by?: string | null;
+  created_at: string;
+  /** Verrijkt vanuit het profiel (optioneel). */
+  profile?: Pick<Profile, 'email' | 'full_name'> | null;
+}
+
+export interface PromptComment {
+  id: string;
+  prompt_id: string;
+  user_id: string;
+  body: string;
+  created_at: string;
+  profile?: Pick<Profile, 'email' | 'full_name'> | null;
+}
+
+export interface PromptApproval {
+  id: string;
+  prompt_id: string;
+  status: 'approved' | 'rejected';
+  reviewer_id?: string | null;
+  note?: string | null;
+  created_at: string;
+}
+
+export type NotificationType = 'approval' | 'comment' | 'collaborator' | 'system';
+
+export interface AppNotification {
+  id: string;
+  user_id: string;
+  type: NotificationType;
+  title: string;
+  body?: string | null;
+  link?: string | null;
+  read: boolean;
+  created_at: string;
 }
