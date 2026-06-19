@@ -15,6 +15,19 @@
       rel="stylesheet"
     />
     <title>Overheid Prompt Library</title>
+    <script>
+      // Pas het opgeslagen thema toe vóór de eerste paint (voorkomt flikkering).
+      (function () {
+        try {
+          var stored = localStorage.getItem('opl-theme') || 'system';
+          var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var dark = stored === 'dark' || (stored === 'system' && prefersDark);
+          var root = document.documentElement;
+          root.classList.toggle('dark', dark);
+          root.style.colorScheme = dark ? 'dark' : 'light';
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

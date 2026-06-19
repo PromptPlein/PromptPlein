@@ -167,8 +167,8 @@ export default function TechniqueManagerPage() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-rijksblauw-700">Technieken beheren</h1>
-          <p className="text-sm text-slate-500">{techniques.length} technieken</p>
+          <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Technieken beheren</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">{techniques.length} technieken</p>
         </div>
         <button className="opl-btn-primary" onClick={() => setEditor({ ...EMPTY })}>
           <Plus size={18} /> Nieuwe techniek
@@ -180,7 +180,7 @@ export default function TechniqueManagerPage() {
           <div className="skeleton h-64 w-full" />
         ) : (
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
               <tr>
                 <th className="px-4 py-3 font-medium">Naam</th>
                 <th className="hidden px-4 py-3 font-medium sm:table-cell">Vervolgvragen</th>
@@ -188,22 +188,22 @@ export default function TechniqueManagerPage() {
                 <th className="px-4 py-3 text-right font-medium">Acties</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
               {techniques.map((t, i) => (
-                <tr key={t.id} className="hover:bg-slate-50">
+                <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-slate-800">
                   <td className="px-4 py-3">
-                    <p className="font-medium text-slate-800">{t.name}</p>
-                    <p className="line-clamp-1 text-xs text-slate-400">{t.description}</p>
+                    <p className="font-medium text-slate-800 dark:text-slate-100">{t.name}</p>
+                    <p className="line-clamp-1 text-xs text-slate-400 dark:text-slate-500">{t.description}</p>
                   </td>
-                  <td className="hidden px-4 py-3 text-slate-600 sm:table-cell">
+                  <td className="hidden px-4 py-3 text-slate-600 sm:table-cell dark:text-slate-300">
                     {t.follow_up_questions.length}
                   </td>
                   <td className="px-4 py-3">
                     <span
                       className={`opl-badge ${
                         t.is_active === false
-                          ? 'bg-slate-100 text-slate-500'
-                          : 'bg-emerald-100 text-emerald-700'
+                          ? 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400'
+                          : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
                       }`}
                     >
                       {t.is_active === false ? 'Inactief' : 'Actief'}
@@ -214,7 +214,7 @@ export default function TechniqueManagerPage() {
                       <button
                         onClick={() => move(t, -1)}
                         disabled={i === 0}
-                        className="rounded p-1.5 text-slate-400 hover:bg-slate-100 disabled:opacity-30"
+                        className="rounded p-1.5 text-slate-400 hover:bg-slate-100 disabled:opacity-30 dark:text-slate-500 dark:hover:bg-slate-800"
                         aria-label="Omhoog"
                       >
                         <ArrowUp size={15} />
@@ -222,28 +222,28 @@ export default function TechniqueManagerPage() {
                       <button
                         onClick={() => move(t, 1)}
                         disabled={i === techniques.length - 1}
-                        className="rounded p-1.5 text-slate-400 hover:bg-slate-100 disabled:opacity-30"
+                        className="rounded p-1.5 text-slate-400 hover:bg-slate-100 disabled:opacity-30 dark:text-slate-500 dark:hover:bg-slate-800"
                         aria-label="Omlaag"
                       >
                         <ArrowDown size={15} />
                       </button>
                       <button
                         onClick={() => toggleActive(t)}
-                        className="rounded p-1.5 text-slate-400 hover:bg-slate-100"
+                        className="rounded p-1.5 text-slate-400 hover:bg-slate-100 dark:text-slate-500 dark:hover:bg-slate-800"
                         aria-label="Actief/inactief"
                       >
                         {t.is_active === false ? <EyeOff size={15} /> : <Eye size={15} />}
                       </button>
                       <button
                         onClick={() => setEditor(toEditor(t))}
-                        className="rounded p-1.5 text-rijksblauw-500 hover:bg-rijksblauw-50"
+                        className="rounded p-1.5 text-rijksblauw-500 hover:bg-rijksblauw-50 dark:hover:bg-rijksblauw-500/15"
                         aria-label="Bewerken"
                       >
                         <Pencil size={15} />
                       </button>
                       <button
                         onClick={() => setToDelete(t)}
-                        className="rounded p-1.5 text-rijksrood hover:bg-red-50"
+                        className="rounded p-1.5 text-rijksrood hover:bg-red-50 dark:hover:bg-red-500/10"
                         aria-label="Verwijderen"
                       >
                         <Trash2 size={15} />
@@ -276,7 +276,7 @@ export default function TechniqueManagerPage() {
                 />
               </div>
               <div className="flex items-end">
-                <label className="flex items-center gap-2 text-sm text-slate-700">
+                <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
                   <input
                     type="checkbox"
                     checked={editor.is_active}
@@ -311,8 +311,8 @@ export default function TechniqueManagerPage() {
 
             <div>
               <label className="opl-label">
-                Template (gebruik <code className="text-rijksblauw-500">{'{{PROMPT}}'}</code> en{' '}
-                <code className="text-rijksblauw-500">{'{{vraag_id}}'}</code>)
+                Template (gebruik <code className="text-rijksblauw-500 dark:text-rijksblauw-300">{'{{PROMPT}}'}</code> en{' '}
+                <code className="text-rijksblauw-500 dark:text-rijksblauw-300">{'{{vraag_id}}'}</code>)
               </label>
               <textarea
                 className="opl-input min-h-[160px] resize-y font-mono text-xs"
@@ -324,7 +324,7 @@ export default function TechniqueManagerPage() {
 
             <div>
               <label className="opl-label">Preview gegenereerde output</label>
-              <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 p-3 font-mono text-xs text-slate-700">
+              <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 p-3 font-mono text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
                 {preview}
               </pre>
             </div>

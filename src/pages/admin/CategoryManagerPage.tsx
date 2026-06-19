@@ -114,8 +114,8 @@ export default function CategoryManagerPage() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-rijksblauw-700">Categorieën beheren</h1>
-          <p className="text-sm text-slate-500">{categories.length} categorieën</p>
+          <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Categorieën beheren</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">{categories.length} categorieën</p>
         </div>
         <div className="flex gap-2">
           <button className="opl-btn-secondary" onClick={() => setCsvOpen(true)}>
@@ -135,7 +135,7 @@ export default function CategoryManagerPage() {
           <div className="skeleton h-48 w-full" />
         ) : (
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
               <tr>
                 <th className="px-4 py-3 font-medium">Naam</th>
                 <th className="hidden px-4 py-3 font-medium sm:table-cell">Beschrijving</th>
@@ -143,26 +143,26 @@ export default function CategoryManagerPage() {
                 <th className="px-4 py-3 text-right font-medium">Acties</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
               {categories.map((c, i) => (
-                <tr key={c.id} className="hover:bg-slate-50">
-                  <td className="px-4 py-3 font-medium text-slate-800">{c.name}</td>
-                  <td className="hidden px-4 py-3 text-slate-500 sm:table-cell">{c.description}</td>
-                  <td className="hidden px-4 py-3 text-slate-400 sm:table-cell">
+                <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-slate-800">
+                  <td className="px-4 py-3 font-medium text-slate-800 dark:text-slate-100">{c.name}</td>
+                  <td className="hidden px-4 py-3 text-slate-500 sm:table-cell dark:text-slate-400">{c.description}</td>
+                  <td className="hidden px-4 py-3 text-slate-400 sm:table-cell dark:text-slate-500">
                     <code className="text-xs">{c.icon}</code>
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => move(c, -1)} disabled={i === 0} className="rounded p-1.5 text-slate-400 hover:bg-slate-100 disabled:opacity-30" aria-label="Omhoog">
+                      <button onClick={() => move(c, -1)} disabled={i === 0} className="rounded p-1.5 text-slate-400 hover:bg-slate-100 disabled:opacity-30 dark:text-slate-500 dark:hover:bg-slate-800" aria-label="Omhoog">
                         <ArrowUp size={15} />
                       </button>
-                      <button onClick={() => move(c, 1)} disabled={i === categories.length - 1} className="rounded p-1.5 text-slate-400 hover:bg-slate-100 disabled:opacity-30" aria-label="Omlaag">
+                      <button onClick={() => move(c, 1)} disabled={i === categories.length - 1} className="rounded p-1.5 text-slate-400 hover:bg-slate-100 disabled:opacity-30 dark:text-slate-500 dark:hover:bg-slate-800" aria-label="Omlaag">
                         <ArrowDown size={15} />
                       </button>
-                      <button onClick={() => setEditor({ id: c.id, name: c.name, description: c.description ?? '', icon: c.icon ?? 'Folder' })} className="rounded p-1.5 text-rijksblauw-500 hover:bg-rijksblauw-50" aria-label="Bewerken">
+                      <button onClick={() => setEditor({ id: c.id, name: c.name, description: c.description ?? '', icon: c.icon ?? 'Folder' })} className="rounded p-1.5 text-rijksblauw-500 hover:bg-rijksblauw-50 dark:hover:bg-rijksblauw-500/15" aria-label="Bewerken">
                         <Pencil size={15} />
                       </button>
-                      <button onClick={() => setToDelete(c)} className="rounded p-1.5 text-rijksrood hover:bg-red-50" aria-label="Verwijderen">
+                      <button onClick={() => setToDelete(c)} className="rounded p-1.5 text-rijksrood hover:bg-red-50 dark:hover:bg-red-500/10" aria-label="Verwijderen">
                         <Trash2 size={15} />
                       </button>
                     </div>
@@ -204,7 +204,7 @@ export default function CategoryManagerPage() {
       </Modal>
 
       <Modal open={csvOpen} onClose={() => setCsvOpen(false)} title="CSV-import (categorieën)" size="max-w-lg">
-        <p className="mb-2 text-sm text-slate-500">Eén categorie per regel, formaat: <code>naam,beschrijving,icoon</code></p>
+        <p className="mb-2 text-sm text-slate-500 dark:text-slate-400">Eén categorie per regel, formaat: <code>naam,beschrijving,icoon</code></p>
         <textarea className="opl-input min-h-[160px] resize-y font-mono text-xs" value={csv} onChange={(e) => setCsv(e.target.value)} placeholder={'Subsidies,Aanvragen en regelingen,FileText\nKlachten,Klachtafhandeling,Mail'} />
         <div className="mt-4 flex justify-end gap-3">
           <button className="opl-btn-secondary" onClick={() => setCsvOpen(false)}>Annuleren</button>

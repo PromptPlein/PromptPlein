@@ -35,7 +35,7 @@ function Chip({
         'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
         active
           ? 'border-rijksblauw-500 bg-rijksblauw-500 text-white'
-          : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50',
+          : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-800',
       )}
     >
       {label}
@@ -69,7 +69,7 @@ export default function AdvancedFilterBar({ filters, onChange }: AdvancedFilterB
     <div className="opl-card p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="relative flex-1">
-          <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
           <input
             type="search"
             value={filters.query ?? ''}
@@ -95,7 +95,7 @@ export default function AdvancedFilterBar({ filters, onChange }: AdvancedFilterB
           <button
             type="button"
             onClick={() => setExpanded((v) => !v)}
-            className={clsx('opl-btn-secondary', activeCount > 0 && 'border-rijksblauw-300 text-rijksblauw-600')}
+            className={clsx('opl-btn-secondary', activeCount > 0 && 'border-rijksblauw-300 text-rijksblauw-600 dark:text-rijksblauw-300')}
           >
             <SlidersHorizontal size={16} /> Filters
             {activeCount > 0 && (
@@ -106,7 +106,7 @@ export default function AdvancedFilterBar({ filters, onChange }: AdvancedFilterB
       </div>
 
       {expanded && (
-        <div className="mt-4 space-y-4 border-t border-slate-100 pt-4">
+        <div className="mt-4 space-y-4 border-t border-slate-100 pt-4 dark:border-slate-800">
           <FilterGroup label="Categorieën">
             {categories.map((c) => (
               <Chip
@@ -175,7 +175,7 @@ export default function AdvancedFilterBar({ filters, onChange }: AdvancedFilterB
             {activeCount > 0 && (
               <button
                 onClick={() => onChange({ query: filters.query, sort: filters.sort, favorites_only: filters.favorites_only })}
-                className="inline-flex items-center gap-1 pb-2 text-sm text-rijksblauw-500 hover:text-rijksblauw-700"
+                className="inline-flex items-center gap-1 pb-2 text-sm text-rijksblauw-500 hover:text-rijksblauw-700 dark:hover:text-rijksblauw-200"
               >
                 <X size={14} /> Filters wissen
               </button>
@@ -190,7 +190,7 @@ export default function AdvancedFilterBar({ filters, onChange }: AdvancedFilterB
 function FilterGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</p>
+      <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">{label}</p>
       <div className="flex flex-wrap gap-1.5">{children}</div>
     </div>
   );

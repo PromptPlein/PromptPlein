@@ -71,7 +71,7 @@ export default function NotificationBell() {
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="relative rounded-lg p-2 text-slate-600 hover:bg-slate-100"
+        className="relative rounded-lg p-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
         aria-label="Notificaties"
       >
         <Bell size={20} />
@@ -83,13 +83,13 @@ export default function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 z-30 mt-2 w-80 rounded-xl border border-slate-100 bg-white shadow-lg">
-          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2.5">
-            <span className="text-sm font-semibold text-slate-700">Notificaties</span>
+        <div className="absolute right-0 z-30 mt-2 w-80 rounded-xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-800 shadow-lg">
+          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 px-4 py-2.5">
+            <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Notificaties</span>
             {unread > 0 && (
               <button
                 onClick={handleMarkAll}
-                className="inline-flex items-center gap-1 text-xs text-rijksblauw-600 hover:underline"
+                className="inline-flex items-center gap-1 text-xs text-rijksblauw-600 dark:text-rijksblauw-300 hover:underline"
               >
                 <CheckCheck size={13} /> Alles gelezen
               </button>
@@ -97,7 +97,7 @@ export default function NotificationBell() {
           </div>
           <div className="max-h-96 overflow-y-auto">
             {items.length === 0 ? (
-              <p className="px-4 py-8 text-center text-sm text-slate-400">Geen notificaties.</p>
+              <p className="px-4 py-8 text-center text-sm text-slate-400 dark:text-slate-500">Geen notificaties.</p>
             ) : (
               items.map((n) => {
                 const Icon = ICONS[n.type] ?? Info;
@@ -105,17 +105,17 @@ export default function NotificationBell() {
                   <button
                     key={n.id}
                     onClick={() => handleClick(n)}
-                    className={`flex w-full items-start gap-3 border-b border-slate-50 px-4 py-3 text-left hover:bg-slate-50 ${
-                      n.read ? '' : 'bg-rijksblauw-50/40'
+                    className={`flex w-full items-start gap-3 border-b border-slate-50 dark:border-slate-800 px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800 ${
+                      n.read ? '' : 'bg-rijksblauw-50/40 dark:bg-rijksblauw-500/15'
                     }`}
                   >
                     <span className="mt-0.5 text-rijksblauw-500">
                       <Icon size={16} />
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-medium text-slate-800">{n.title}</span>
-                      {n.body && <span className="block truncate text-xs text-slate-500">{n.body}</span>}
-                      <span className="mt-0.5 block text-[11px] text-slate-400">
+                      <span className="block text-sm font-medium text-slate-800 dark:text-slate-100">{n.title}</span>
+                      {n.body && <span className="block truncate text-xs text-slate-500 dark:text-slate-400">{n.body}</span>}
+                      <span className="mt-0.5 block text-[11px] text-slate-400 dark:text-slate-500">
                         {formatDate(n.created_at)}
                       </span>
                     </span>

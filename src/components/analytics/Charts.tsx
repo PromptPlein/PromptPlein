@@ -13,6 +13,7 @@ import {
   YAxis,
 } from 'recharts';
 import type { CountByLabel } from '@/services/analyticsService';
+import { useTheme } from '@/context/ThemeContext';
 
 const PALETTE = ['#154273', '#e17000', '#39870c', '#d52b1e', '#5377d3', '#a9bbe9', '#0e2e51', '#e8a33d'];
 
@@ -22,10 +23,24 @@ interface ChartCardProps {
   emptyHint?: string;
 }
 
+/** Themabewuste kleuren voor de recharts-elementen (assen, raster, tooltip). */
+function useChartColors() {
+  const { resolvedTheme } = useTheme();
+  const dark = resolvedTheme === 'dark';
+  return {
+    grid: dark ? '#334155' : '#e2e8f0',
+    tick: dark ? '#94a3b8' : '#64748b',
+    cursor: dark ? '#1e293b' : '#f1f5f9',
+    tooltip: dark
+      ? { backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#e2e8f0' }
+      : { borderRadius: 8 },
+  };
+}
+
 function CardShell({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="opl-card p-5">
-      <h3 className="mb-4 text-sm font-semibold text-slate-700">{title}</h3>
+      <h3 className="mb-4 text-sm font-semibold text-slate-700 dark:text-slate-200">{title}</h3>
       {children}
     </div>
   );
@@ -33,13 +48,14 @@ function CardShell({ title, children }: { title: string; children: React.ReactNo
 
 function EmptyState({ hint }: { hint?: string }) {
   return (
-    <div className="flex h-48 items-center justify-center text-sm text-slate-400">
+    <div className="flex h-48 items-center justify-center text-sm text-slate-400 dark:text-slate-500">
       {hint ?? 'Nog geen data.'}
     </div>
   );
 }
 
 export function BarChartCard({ title, data, emptyHint }: ChartCardProps) {
+  const c = useChartColors();
   return (
     <CardShell title={title}>
       {data.length === 0 ? (
@@ -47,10 +63,10 @@ export function BarChartCard({ title, data, emptyHint }: ChartCardProps) {
       ) : (
         <ResponsiveContainer width="100%" height={240}>
           <BarChart data={data} margin={{ top: 4, right: 8, left: -16, bottom: 4 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-            <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#64748b' }} interval={0} angle={-15} textAnchor="end" height={60} />
-            <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#64748b' }} />
-            <Tooltip cursor={{ fill: '#f1f5f9' }} />
+            <CartesianGrid strokeDasharray="3 3" stroke={c.grid} />
+            <XAxis dataKey="label" tick={{ fontSize: 11, fill: c.tick }} interval={0} angle={-15} textAnchor="end" height={60} />
+            <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: c.tick }} />
+            <Tooltip cursor={{ fill: c.cursor }} contentStyle={c.tooltip} />
             <Bar dataKey="value" radius={[4, 4, 0, 0]}>
               {data.map((_, i) => (
                 <Cell key={i} fill={PALETTE[i % PALETTE.length]} />
@@ -64,6 +80,7 @@ export function BarChartCard({ title, data, emptyHint }: ChartCardProps) {
 }
 
 export function LineChartCard({ title, data, emptyHint }: ChartCardProps) {
+  const c = useChartColors();
   return (
     <CardShell title={title}>
       {data.length === 0 ? (
@@ -71,11 +88,11 @@ export function LineChartCard({ title, data, emptyHint }: ChartCardProps) {
       ) : (
         <ResponsiveContainer width="100%" height={240}>
           <LineChart data={data} margin={{ top: 4, right: 8, left: -16, bottom: 4 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-            <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#64748b' }} />
-            <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#64748b' }} />
-            <Tooltip />
-            <Line type="monotone" dataKey="value" stroke="#154273" strokeWidth={2} dot={{ r: 3 }} />
+            <CartesianGrid strokeDasharray="3 3" stroke={c.grid} />
+            <XAxis dataKey="label" tick={{ fontSize: 11, fill: c.tick }} />
+            <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: c.tick }} />
+            <Tooltip contentStyle={c.tooltip} />
+            <Line type="monotone" dataKey="value" stroke="#5377d3" strokeWidth={2} dot={{ r: 3 }} />
           </LineChart>
         </ResponsiveContainer>
       )}
@@ -84,6 +101,7 @@ export function LineChartCard({ title, data, emptyHint }: ChartCardProps) {
 }
 
 export function PieChartCard({ title, data, emptyHint }: ChartCardProps) {
+  const c = useChartColors();
   return (
     <CardShell title={title}>
       {data.length === 0 ? (
@@ -91,12 +109,12 @@ export function PieChartCard({ title, data, emptyHint }: ChartCardProps) {
       ) : (
         <ResponsiveContainer width="100%" height={240}>
           <PieChart>
-            <Pie data={data} dataKey="value" nameKey="label" outerRadius={90} label>
+            <Pie data={data} dataKey="value" nameKey="label" outerRadius={90} label={{ fill: c.tick, fontSize: 11 }}>
               {data.map((_, i) => (
                 <Cell key={i} fill={PALETTE[i % PALETTE.length]} />
               ))}
             </Pie>
-            <Tooltip />
+            <Tooltip contentStyle={c.tooltip} />
           </PieChart>
         </ResponsiveContainer>
       )}

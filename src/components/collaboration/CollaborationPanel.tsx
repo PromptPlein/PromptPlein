@@ -146,7 +146,7 @@ export default function CollaborationPanel({
       <div className="opl-card p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-slate-700">Status</span>
+            <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Status</span>
             <span className={clsx('opl-badge', statusMeta.classes)}>{statusMeta.label}</span>
           </div>
 
@@ -190,15 +190,15 @@ export default function CollaborationPanel({
 
       {/* Medewerkers */}
       <div className="opl-card p-5">
-        <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
+        <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
           <Users size={18} className="text-rijksblauw-500" /> Medewerkers ({collaborators.length})
         </h2>
         <ul className="space-y-2">
           {collaborators.map((c) => (
             <li key={c.id} className="flex items-center justify-between text-sm">
-              <span className="text-slate-700">
+              <span className="text-slate-700 dark:text-slate-200">
                 {authorName(c.profile)}{' '}
-                <span className="text-xs text-slate-400">· {c.role === 'editor' ? 'bewerker' : 'lezer'}</span>
+                <span className="text-xs text-slate-400 dark:text-slate-500">· {c.role === 'editor' ? 'bewerker' : 'lezer'}</span>
               </span>
               {canManageCollaborators && (
                 <button
@@ -206,7 +206,7 @@ export default function CollaborationPanel({
                     await removeCollaborator(c.id);
                     await reload();
                   }}
-                  className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-rijksrood"
+                  className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-rijksrood dark:text-slate-500 dark:hover:bg-red-500/10"
                   aria-label="Verwijderen"
                 >
                   <Trash2 size={14} />
@@ -215,7 +215,7 @@ export default function CollaborationPanel({
             </li>
           ))}
           {collaborators.length === 0 && (
-            <li className="text-sm text-slate-400">Nog geen medewerkers.</li>
+            <li className="text-sm text-slate-400 dark:text-slate-500">Nog geen medewerkers.</li>
           )}
         </ul>
         {canManageCollaborators && (
@@ -237,23 +237,23 @@ export default function CollaborationPanel({
 
       {/* Reacties */}
       <div className="opl-card p-5">
-        <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
+        <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
           <MessageSquare size={18} className="text-rijksblauw-500" /> Reacties ({comments.length})
         </h2>
         <ul className="space-y-3">
           {comments.map((c) => (
-            <li key={c.id} className="rounded-lg bg-slate-50 p-3">
+            <li key={c.id} className="rounded-lg bg-slate-50 p-3 dark:bg-slate-800">
               <div className="mb-1 flex items-center justify-between">
-                <span className="text-xs font-medium text-slate-600">{authorName(c.profile)}</span>
+                <span className="text-xs font-medium text-slate-600 dark:text-slate-300">{authorName(c.profile)}</span>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-400">{formatDate(c.created_at)}</span>
+                  <span className="text-xs text-slate-400 dark:text-slate-500">{formatDate(c.created_at)}</span>
                   {(isAdmin || c.user_id === user?.id) && (
                     <button
                       onClick={async () => {
                         await deleteComment(c.id);
                         await reload();
                       }}
-                      className="text-slate-300 hover:text-rijksrood"
+                      className="text-slate-300 hover:text-rijksrood dark:text-slate-600"
                       aria-label="Reactie verwijderen"
                     >
                       <Trash2 size={13} />
@@ -261,10 +261,10 @@ export default function CollaborationPanel({
                   )}
                 </div>
               </div>
-              <p className="whitespace-pre-wrap text-sm text-slate-700">{c.body}</p>
+              <p className="whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-200">{c.body}</p>
             </li>
           ))}
-          {comments.length === 0 && <li className="text-sm text-slate-400">Nog geen reacties.</li>}
+          {comments.length === 0 && <li className="text-sm text-slate-400 dark:text-slate-500">Nog geen reacties.</li>}
         </ul>
         {isAuthenticated ? (
           <div className="mt-3 flex gap-2">
@@ -280,37 +280,37 @@ export default function CollaborationPanel({
             </button>
           </div>
         ) : (
-          <p className="mt-3 text-xs text-slate-400">Log in om te reageren.</p>
+          <p className="mt-3 text-xs text-slate-400 dark:text-slate-500">Log in om te reageren.</p>
         )}
       </div>
 
       {/* Versiegeschiedenis */}
       <div className="opl-card p-5">
-        <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
+        <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
           <History size={18} className="text-rijksblauw-500" /> Versiegeschiedenis ({versions.length})
         </h2>
-        <ul className="divide-y divide-slate-100">
+        <ul className="divide-y divide-slate-100 dark:divide-slate-800">
           {versions.map((v) => (
             <li key={v.id} className="py-2">
               <button
                 onClick={() => setOpenVersion(openVersion === v.id ? null : v.id)}
                 className="flex w-full items-center justify-between text-left text-sm"
               >
-                <span className="font-medium text-slate-700">
+                <span className="font-medium text-slate-700 dark:text-slate-200">
                   v{v.version}
-                  <span className="ml-2 text-xs font-normal text-slate-400">
+                  <span className="ml-2 text-xs font-normal text-slate-400 dark:text-slate-500">
                     {formatDate(v.created_at)}
                   </span>
                 </span>
                 <ChevronDown
                   size={15}
-                  className={clsx('text-slate-400 transition-transform', openVersion === v.id && 'rotate-180')}
+                  className={clsx('text-slate-400 transition-transform dark:text-slate-500', openVersion === v.id && 'rotate-180')}
                 />
               </button>
               {openVersion === v.id && (
                 <div className="mt-2">
-                  <p className="mb-1 text-xs font-medium text-slate-500">{v.title}</p>
-                  <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-3 font-mono text-xs text-slate-700">
+                  <p className="mb-1 text-xs font-medium text-slate-500 dark:text-slate-400">{v.title}</p>
+                  <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-3 font-mono text-xs text-slate-700 dark:bg-slate-900 dark:text-slate-200">
                     {v.content}
                   </pre>
                 </div>
@@ -318,7 +318,7 @@ export default function CollaborationPanel({
             </li>
           ))}
           {versions.length === 0 && (
-            <li className="py-2 text-sm text-slate-400">Nog geen versies vastgelegd.</li>
+            <li className="py-2 text-sm text-slate-400 dark:text-slate-500">Nog geen versies vastgelegd.</li>
           )}
         </ul>
       </div>

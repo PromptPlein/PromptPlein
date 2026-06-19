@@ -117,8 +117,8 @@ export default function OrganizationManagerPage() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-rijksblauw-700">Organisaties beheren</h1>
-          <p className="text-sm text-slate-500">{orgs.length} organisaties</p>
+          <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Organisaties beheren</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">{orgs.length} organisaties</p>
         </div>
         <button className="opl-btn-primary" onClick={() => setEditor({ ...EMPTY })}>
           <Plus size={18} /> Nieuwe organisatie
@@ -130,7 +130,7 @@ export default function OrganizationManagerPage() {
           <div className="skeleton h-48 w-full" />
         ) : (
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
               <tr>
                 <th className="px-4 py-3 font-medium">Naam</th>
                 <th className="hidden px-4 py-3 font-medium sm:table-cell">Type</th>
@@ -139,24 +139,24 @@ export default function OrganizationManagerPage() {
                 <th className="px-4 py-3 text-right font-medium">Acties</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
               {orgs.map((o) => (
-                <tr key={o.id} className="hover:bg-slate-50">
+                <tr key={o.id} className="hover:bg-slate-50 dark:hover:bg-slate-800">
                   <td className="px-4 py-3">
-                    <div className="font-medium text-slate-800">{o.name}</div>
-                    {o.code && <div className="text-xs text-slate-400">{o.code}</div>}
+                    <div className="font-medium text-slate-800 dark:text-slate-100">{o.name}</div>
+                    {o.code && <div className="text-xs text-slate-400 dark:text-slate-500">{o.code}</div>}
                   </td>
-                  <td className="hidden px-4 py-3 text-slate-500 sm:table-cell">
+                  <td className="hidden px-4 py-3 text-slate-500 sm:table-cell dark:text-slate-400">
                     {ORG_TYPE_LABELS[o.organization_type]}
                   </td>
-                  <td className="hidden px-4 py-3 text-slate-500 md:table-cell">
+                  <td className="hidden px-4 py-3 text-slate-500 md:table-cell dark:text-slate-400">
                     {orgName(o.parent_id)}
                   </td>
                   <td className="px-4 py-3">
                     <span
                       className={clsx(
                         'rounded-full px-2 py-0.5 text-xs font-medium',
-                        o.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500',
+                        o.is_active ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400',
                       )}
                     >
                       {o.is_active ? 'Actief' : 'Inactief'}
@@ -177,14 +177,14 @@ export default function OrganizationManagerPage() {
                             is_active: o.is_active,
                           })
                         }
-                        className="rounded p-1.5 text-rijksblauw-500 hover:bg-rijksblauw-50"
+                        className="rounded p-1.5 text-rijksblauw-500 hover:bg-rijksblauw-50 dark:hover:bg-rijksblauw-500/15"
                         aria-label="Bewerken"
                       >
                         <Pencil size={15} />
                       </button>
                       <button
                         onClick={() => setToDelete(o)}
-                        className="rounded p-1.5 text-rijksrood hover:bg-red-50"
+                        className="rounded p-1.5 text-rijksrood hover:bg-red-50 dark:hover:bg-red-500/10"
                         aria-label="Verwijderen"
                       >
                         <Trash2 size={15} />
@@ -195,7 +195,7 @@ export default function OrganizationManagerPage() {
               ))}
               {orgs.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-sm text-slate-400">
+                  <td colSpan={5} className="px-4 py-8 text-center text-sm text-slate-400 dark:text-slate-500">
                     Nog geen organisaties.
                   </td>
                 </tr>
@@ -283,7 +283,7 @@ export default function OrganizationManagerPage() {
                 />
               </div>
             </div>
-            <label className="flex items-center gap-2 text-sm text-slate-700">
+            <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
               <input
                 type="checkbox"
                 checked={editor.is_active ?? true}

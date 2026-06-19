@@ -115,10 +115,10 @@ export default function OptimizerPage() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-6">
-        <h1 className="flex items-center gap-2 text-2xl font-bold text-rijksblauw-700">
+        <h1 className="flex items-center gap-2 text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
           <Sparkles className="text-rijksoranje" /> Prompt optimaliseren
         </h1>
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-slate-500 dark:text-slate-400">
           Kies een techniek, beantwoord de vervolgvragen en genereer een verbeterde prompt.
         </p>
       </div>
@@ -139,7 +139,7 @@ export default function OptimizerPage() {
               <span className="flex h-6 w-6 items-center justify-center rounded-full bg-rijksblauw-500 text-xs font-bold text-white">
                 1
               </span>
-              <h2 className="font-semibold text-slate-800">Oorspronkelijke prompt</h2>
+              <h2 className="font-semibold text-slate-800 dark:text-slate-100">Oorspronkelijke prompt</h2>
             </div>
             {loadingPrompt ? (
               <div className="skeleton h-32 w-full rounded-lg" />
@@ -155,7 +155,7 @@ export default function OptimizerPage() {
               />
             )}
             {sourcePromptId && (
-              <p className="mt-2 inline-flex items-center gap-1 text-xs text-slate-400">
+              <p className="mt-2 inline-flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
                 <FileText size={12} /> Gekoppeld aan een opgeslagen prompt — de optimalisatie wordt
                 bewaard.
               </p>
@@ -168,7 +168,7 @@ export default function OptimizerPage() {
               <span className="flex h-6 w-6 items-center justify-center rounded-full bg-rijksblauw-500 text-xs font-bold text-white">
                 2
               </span>
-              <h2 className="font-semibold text-slate-800">Kies een techniek</h2>
+              <h2 className="font-semibold text-slate-800 dark:text-slate-100">Kies een techniek</h2>
             </div>
             <TechniqueSelector selectedId={techniqueId} onSelect={handleSelectTechnique} />
           </section>
@@ -180,14 +180,14 @@ export default function OptimizerPage() {
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-rijksblauw-500 text-xs font-bold text-white">
                   3
                 </span>
-                <h2 className="font-semibold text-slate-800">Vervolgvragen</h2>
+                <h2 className="font-semibold text-slate-800 dark:text-slate-100">Vervolgvragen</h2>
               </div>
               <FollowUpQuestions technique={technique} answers={answers} onChange={setAnswers} />
             </section>
           )}
 
           <div className="flex flex-wrap items-center justify-end gap-3">
-            <label className="flex items-center gap-2 text-sm text-slate-600">
+            <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
               <span className="hidden sm:inline">AI-model</span>
               <select
                 className="opl-input w-auto py-2"

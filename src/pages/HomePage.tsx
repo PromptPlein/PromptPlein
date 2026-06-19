@@ -91,17 +91,17 @@ export default function HomePage() {
       <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
         {/* Categorie-grid */}
         <section className="mb-12">
-          <h2 className="mb-4 text-xl font-bold text-rijksblauw-700">Categorieën</h2>
+          <h2 className="mb-4 text-xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Categorieën</h2>
           <CategoryGrid />
         </section>
 
         {/* Recente prompts */}
         <section>
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-xl font-bold text-rijksblauw-700">Recente prompts</h2>
+            <h2 className="text-xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Recente prompts</h2>
             <Link
               to="/zoeken"
-              className="inline-flex items-center gap-1 text-sm font-medium text-rijksblauw-500 hover:text-rijksblauw-700"
+              className="inline-flex items-center gap-1 text-sm font-medium text-rijksblauw-500 hover:text-rijksblauw-700 dark:text-rijksblauw-300 dark:hover:text-rijksblauw-200"
             >
               Alles bekijken <ArrowRight size={16} />
             </Link>
@@ -111,7 +111,7 @@ export default function HomePage() {
             <SkeletonGrid count={6} />
           ) : totalPrompts === 0 ? (
             <div className="opl-card flex flex-col items-center gap-3 p-10 text-center">
-              <p className="text-slate-600">Er zijn nog geen prompts. Voeg de eerste toe!</p>
+              <p className="text-slate-600 dark:text-slate-300">Er zijn nog geen prompts. Voeg de eerste toe!</p>
               <button onClick={() => setUploadOpen(true)} className="opl-btn-primary">
                 <Plus size={18} /> Nieuwe prompt
               </button>
@@ -150,12 +150,12 @@ export default function HomePage() {
               to={`/zoeken?category=${c.id}`}
               className="opl-card group flex items-start gap-3 p-4 hover:shadow-md"
             >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-rijksblauw-50 text-rijksblauw-500 group-hover:bg-rijksblauw-500 group-hover:text-white">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-rijksblauw-50 text-rijksblauw-500 group-hover:bg-rijksblauw-500 group-hover:text-white dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">
                 <Icon size={20} />
               </span>
               <div className="min-w-0">
-                <p className="font-semibold text-slate-800">{c.name}</p>
-                <p className="line-clamp-2 text-xs text-slate-500">{c.description}</p>
+                <p className="font-semibold text-slate-800 dark:text-slate-100">{c.name}</p>
+                <p className="line-clamp-2 text-xs text-slate-500 dark:text-slate-400">{c.description}</p>
               </div>
             </Link>
           );

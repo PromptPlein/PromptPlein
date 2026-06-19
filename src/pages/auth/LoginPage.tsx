@@ -36,14 +36,14 @@ export default function LoginPage() {
       footer={
         <>
           Nog geen account?{' '}
-          <Link to="/auth/registreren" className="font-medium text-rijksblauw-600 hover:underline">
+          <Link to="/auth/registreren" className="font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300">
             Registreren
           </Link>
         </>
       }
     >
       {!configured && (
-        <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">
           Geen Supabase-backend geconfigureerd — authenticatie is uitgeschakeld.
         </p>
       )}
@@ -74,7 +74,7 @@ export default function LoginPage() {
       <div className="mt-3 text-right">
         <Link
           to="/auth/wachtwoord-vergeten"
-          className="text-sm text-slate-500 hover:text-slate-800"
+          className="text-sm text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100"
         >
           Wachtwoord vergeten?
         </Link>

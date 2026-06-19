@@ -52,8 +52,8 @@ export default function ApprovalQueuePage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-bold text-rijksblauw-700">Goedkeuringen</h1>
-        <p className="text-sm text-slate-500">{prompts.length} prompts wachten op beoordeling</p>
+        <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Goedkeuringen</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400">{prompts.length} prompts wachten op beoordeling</p>
       </div>
 
       {loading ? (
@@ -62,8 +62,8 @@ export default function ApprovalQueuePage() {
         </div>
       ) : prompts.length === 0 ? (
         <div className="opl-card flex flex-col items-center gap-2 py-12 text-center">
-          <Inbox size={32} className="text-slate-300" />
-          <p className="text-sm text-slate-500">Geen openstaande aanvragen. Mooi werk!</p>
+          <Inbox size={32} className="text-slate-300 dark:text-slate-600" />
+          <p className="text-sm text-slate-500 dark:text-slate-400">Geen openstaande aanvragen. Mooi werk!</p>
         </div>
       ) : (
         <div className="space-y-4">
@@ -71,24 +71,24 @@ export default function ApprovalQueuePage() {
             <div key={p.id} className="opl-card p-5">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <h2 className="font-semibold text-slate-800">{p.title}</h2>
+                  <h2 className="font-semibold text-slate-800 dark:text-slate-100">{p.title}</h2>
                   {p.description && (
-                    <p className="mt-0.5 line-clamp-2 text-sm text-slate-500">{p.description}</p>
+                    <p className="mt-0.5 line-clamp-2 text-sm text-slate-500 dark:text-slate-400">{p.description}</p>
                   )}
-                  <p className="mt-1 text-xs text-slate-400">
+                  <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
                     Ingediend {p.submitted_at ? formatDate(p.submitted_at) : '—'} · door{' '}
                     {p.created_by}
                   </p>
                 </div>
                 <Link
                   to={`/prompt/${p.id}`}
-                  className="inline-flex shrink-0 items-center gap-1 text-sm text-rijksblauw-600 hover:underline"
+                  className="inline-flex shrink-0 items-center gap-1 text-sm text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
                 >
                   Bekijken <ExternalLink size={14} />
                 </Link>
               </div>
 
-              <pre className="mt-3 max-h-32 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-3 font-mono text-xs text-slate-700">
+              <pre className="mt-3 max-h-32 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-3 font-mono text-xs text-slate-700 dark:bg-slate-900 dark:text-slate-200">
                 {p.content}
               </pre>
 

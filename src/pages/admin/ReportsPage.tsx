@@ -20,12 +20,12 @@ import {
 function Kpi({ icon: Icon, value, label }: { icon: typeof FileText; value: number; label: string }) {
   return (
     <div className="opl-card flex items-center gap-3 p-4">
-      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-rijksblauw-50 text-rijksblauw-600">
+      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-rijksblauw-50 text-rijksblauw-600 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-300">
         <Icon size={20} />
       </span>
       <div>
-        <div className="text-xl font-bold text-slate-800">{value}</div>
-        <div className="text-xs text-slate-500">{label}</div>
+        <div className="text-xl font-bold text-slate-800 dark:text-slate-100">{value}</div>
+        <div className="text-xs text-slate-500 dark:text-slate-400">{label}</div>
       </div>
     </div>
   );
@@ -57,8 +57,8 @@ export default function ReportsPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-rijksblauw-700">Bestuurlijke rapportage</h1>
-          <p className="text-sm text-slate-500">Overzicht van prompts, organisaties en goedkeuringen.</p>
+          <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Bestuurlijke rapportage</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">Overzicht van prompts, organisaties en goedkeuringen.</p>
         </div>
         <div className="flex gap-2">
           <button className="opl-btn-secondary" onClick={() => reportToCsv(data, catName)}>

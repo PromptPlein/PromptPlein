@@ -28,7 +28,7 @@ export default function Modal({ open, onClose, title, children, size = 'max-w-2x
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 p-4 sm:p-8"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 dark:bg-black/60 p-4 sm:p-8"
       role="dialog"
       aria-modal="true"
       aria-label={title}
@@ -36,12 +36,12 @@ export default function Modal({ open, onClose, title, children, size = 'max-w-2x
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className={`mt-6 w-full ${size} animate-fade-in rounded-2xl bg-white shadow-2xl`}>
-        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-          <h2 className="text-lg font-bold text-rijksblauw-700">{title}</h2>
+      <div className={`mt-6 w-full ${size} animate-fade-in rounded-2xl bg-white dark:bg-slate-800 shadow-2xl`}>
+        <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 px-6 py-4">
+          <h2 className="text-lg font-bold text-rijksblauw-700 dark:text-rijksblauw-200">{title}</h2>
           <button
             onClick={onClose}
-            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            className="rounded-lg p-1.5 text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200"
             aria-label="Sluiten"
           >
             <X size={20} />

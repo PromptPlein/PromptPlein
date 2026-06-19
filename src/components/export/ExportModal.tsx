@@ -40,7 +40,7 @@ export default function ExportModal({
 
   return (
     <Modal open={open} onClose={onClose} title="Exporteren" size="max-w-md">
-      <p className="mb-4 text-sm text-slate-500">
+      <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
         Kies een formaat. Het document krijgt een overheidsconforme kop met rubricering.
       </p>
       <div className="grid grid-cols-1 gap-2">
@@ -48,14 +48,14 @@ export default function ExportModal({
           <button
             key={id}
             onClick={() => handle(id)}
-            className="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 text-left transition-colors hover:border-rijksblauw-300 hover:bg-rijksblauw-50"
+            className="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 text-left transition-colors hover:border-rijksblauw-300 hover:bg-rijksblauw-50 dark:border-slate-700 dark:hover:bg-rijksblauw-500/15"
           >
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-rijksblauw-50 text-rijksblauw-600">
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-rijksblauw-50 text-rijksblauw-600 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-300">
               <Icon size={18} />
             </span>
             <span>
-              <span className="block text-sm font-medium text-slate-800">{label}</span>
-              <span className="block text-xs text-slate-400">{hint}</span>
+              <span className="block text-sm font-medium text-slate-800 dark:text-slate-100">{label}</span>
+              <span className="block text-xs text-slate-400 dark:text-slate-500">{hint}</span>
             </span>
           </button>
         ))}

@@ -13,6 +13,7 @@ import {
 import clsx from 'clsx';
 import UserMenu from './UserMenu';
 import NotificationBell from './NotificationBell';
+import ThemeToggle from './ThemeToggle';
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
@@ -25,15 +26,15 @@ const navItems = [
 
 export default function Header() {
   return (
-    <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur">
+    <header className="sticky top-0 z-40 border-b border-slate-200 dark:border-slate-700 bg-white/90 dark:bg-slate-900/90 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <Link to="/" className="flex items-center gap-2.5">
           <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-rijksblauw-500 text-white">
             <Library size={20} />
           </span>
           <div className="leading-tight">
-            <span className="block text-sm font-bold text-rijksblauw-700">Overheid</span>
-            <span className="block text-xs font-medium text-slate-500">Prompt Library</span>
+            <span className="block text-sm font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Overheid</span>
+            <span className="block text-xs font-medium text-slate-500 dark:text-slate-400">Prompt Library</span>
           </div>
         </Link>
 
@@ -47,8 +48,8 @@ export default function Header() {
                 clsx(
                   'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                   isActive
-                    ? 'bg-rijksblauw-50 text-rijksblauw-700'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                    ? 'bg-rijksblauw-50 dark:bg-rijksblauw-500/15 text-rijksblauw-700 dark:text-rijksblauw-200'
+                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100',
                 )
               }
             >
@@ -63,8 +64,8 @@ export default function Header() {
             to="/activiteit"
             className={({ isActive }) =>
               clsx(
-                'rounded-lg p-2 hover:bg-slate-100',
-                isActive ? 'text-rijksblauw-700' : 'text-slate-500',
+                'rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-800',
+                isActive ? 'text-rijksblauw-700 dark:text-rijksblauw-200' : 'text-slate-500 dark:text-slate-400',
               )
             }
             title="Mijn activiteit"
@@ -76,8 +77,8 @@ export default function Header() {
             to="/admin"
             className={({ isActive }) =>
               clsx(
-                'rounded-lg p-2 hover:bg-slate-100',
-                isActive ? 'text-rijksblauw-700' : 'text-slate-500',
+                'rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-800',
+                isActive ? 'text-rijksblauw-700 dark:text-rijksblauw-200' : 'text-slate-500 dark:text-slate-400',
               )
             }
             title="Beheer"
@@ -85,6 +86,7 @@ export default function Header() {
           >
             <ShieldCheck size={18} />
           </NavLink>
+          <ThemeToggle />
           <NotificationBell />
           <UserMenu />
         </div>
@@ -92,7 +94,7 @@ export default function Header() {
 
       {/* Mobiele navigatie */}
       <nav
-        className="flex items-center justify-around border-t border-slate-200 lg:hidden"
+        className="flex items-center justify-around border-t border-slate-200 dark:border-slate-700 lg:hidden"
         aria-label="Mobiele navigatie"
       >
         {navItems.map(({ to, label, icon: Icon, end }) => (
@@ -103,7 +105,7 @@ export default function Header() {
             className={({ isActive }) =>
               clsx(
                 'flex flex-1 flex-col items-center gap-0.5 py-2 text-xs font-medium',
-                isActive ? 'text-rijksblauw-700' : 'text-slate-500',
+                isActive ? 'text-rijksblauw-700 dark:text-rijksblauw-200' : 'text-slate-500 dark:text-slate-400',
               )
             }
           >

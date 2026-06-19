@@ -31,13 +31,13 @@ export default function PasswordResetPage() {
       title="Wachtwoord vergeten"
       subtitle="We sturen je een link om je wachtwoord opnieuw in te stellen."
       footer={
-        <Link to="/auth/login" className="font-medium text-rijksblauw-600 hover:underline">
+        <Link to="/auth/login" className="font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300">
           Terug naar inloggen
         </Link>
       }
     >
       {sent ? (
-        <p className="rounded-lg bg-emerald-50 px-3 py-3 text-sm text-emerald-800">
+        <p className="rounded-lg bg-emerald-50 px-3 py-3 text-sm text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300">
           Controleer je inbox voor de herstellink.
         </p>
       ) : (

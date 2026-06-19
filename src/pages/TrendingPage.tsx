@@ -56,7 +56,7 @@ export default function TrendingPage() {
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-6 flex items-center gap-2">
         <Flame className="text-rijksoranje" />
-        <h1 className="text-2xl font-bold text-rijksblauw-700">Trending</h1>
+        <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Trending</h1>
       </div>
 
       {loading ? (
@@ -64,11 +64,11 @@ export default function TrendingPage() {
       ) : (
         <div className="space-y-8">
           <section>
-            <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold text-slate-700">
+            <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold text-slate-700 dark:text-slate-200">
               <TrendingUp size={18} /> Populairste prompts
             </h2>
             {trending.length === 0 ? (
-              <p className="text-sm text-slate-500">Nog te weinig activiteit om trends te tonen.</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">Nog te weinig activiteit om trends te tonen.</p>
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {trending.map((p) => (
@@ -83,7 +83,7 @@ export default function TrendingPage() {
           </section>
 
           <section>
-            <h2 className="mb-3 text-lg font-semibold text-slate-700">Meest gebruikte technieken</h2>
+            <h2 className="mb-3 text-lg font-semibold text-slate-700 dark:text-slate-200">Meest gebruikte technieken</h2>
             <BarChartCard
               title="Optimalisaties per techniek"
               data={techniqueData}

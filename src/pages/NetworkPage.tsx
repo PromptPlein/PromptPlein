@@ -40,8 +40,8 @@ export default function NetworkPage() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
       <div className="mb-5">
-        <h1 className="text-2xl font-bold text-rijksblauw-700">Netwerkverkenner</h1>
-        <p className="text-sm text-slate-500">
+        <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Netwerkverkenner</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400">
           Interactieve 3D-weergave van organisaties en het promptlandschap. Sleep om te draaien,
           scroll om te zoomen.
         </p>
@@ -54,7 +54,7 @@ export default function NetworkPage() {
             onClick={() => setTab(id)}
             className={clsx(
               'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors',
-              tab === id ? 'bg-rijksblauw-50 text-rijksblauw-700' : 'text-slate-600 hover:bg-slate-100',
+              tab === id ? 'bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800',
             )}
           >
             <Icon size={16} /> {label}
@@ -64,13 +64,13 @@ export default function NetworkPage() {
 
       <div className="opl-card h-[60vh] min-h-[420px] overflow-hidden">
         {loading ? (
-          <div className="flex h-full items-center justify-center text-sm text-slate-400">
+          <div className="flex h-full items-center justify-center text-sm text-slate-400 dark:text-slate-500">
             3D-scène laden…
           </div>
         ) : (
           <Suspense
             fallback={
-              <div className="flex h-full items-center justify-center text-sm text-slate-400">
+              <div className="flex h-full items-center justify-center text-sm text-slate-400 dark:text-slate-500">
                 3D-scène laden…
               </div>
             }
@@ -84,7 +84,7 @@ export default function NetworkPage() {
         )}
       </div>
 
-      <p className="mt-3 text-xs text-slate-400">
+      <p className="mt-3 text-xs text-slate-400 dark:text-slate-500">
         {orgs.length} organisaties · {prompts.length} prompts
       </p>
     </div>

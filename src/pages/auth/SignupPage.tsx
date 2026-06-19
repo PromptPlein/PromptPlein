@@ -38,14 +38,14 @@ export default function SignupPage() {
       footer={
         <>
           Al een account?{' '}
-          <Link to="/auth/login" className="font-medium text-rijksblauw-600 hover:underline">
+          <Link to="/auth/login" className="font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300">
             Inloggen
           </Link>
         </>
       }
     >
       {!configured && (
-        <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">
           Geen Supabase-backend geconfigureerd — registratie is uitgeschakeld.
         </p>
       )}

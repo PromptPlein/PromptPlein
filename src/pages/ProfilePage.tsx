@@ -42,29 +42,29 @@ export default function ProfilePage() {
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6">
       <div className="mb-6 flex items-center gap-3">
-        <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-rijksblauw-50 text-rijksblauw-600">
+        <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-rijksblauw-50 text-rijksblauw-600 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-300">
           <UserCircle2 size={26} />
         </span>
         <div>
-          <h1 className="text-2xl font-bold text-rijksblauw-700">Mijn profiel</h1>
-          <p className="text-sm text-slate-500">Beheer je gegevens en organisatie.</p>
+          <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Mijn profiel</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">Beheer je gegevens en organisatie.</p>
         </div>
       </div>
 
       <div className="opl-card space-y-4 p-5">
         <div>
           <label className="opl-label">E-mailadres</label>
-          <input className="opl-input bg-slate-50 text-slate-500" value={user?.email ?? ''} disabled />
+          <input className="opl-input bg-slate-50 text-slate-500 dark:bg-slate-800/60 dark:text-slate-400" value={user?.email ?? ''} disabled />
         </div>
 
         <div>
           <label className="opl-label">Rol</label>
           <input
-            className="opl-input bg-slate-50 text-slate-500"
+            className="opl-input bg-slate-50 text-slate-500 dark:bg-slate-800/60 dark:text-slate-400"
             value={profile ? APP_ROLE_LABELS[profile.role] : ''}
             disabled
           />
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
             Rollen worden door een beheerder toegekend.
           </p>
         </div>

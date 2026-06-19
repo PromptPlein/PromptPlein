@@ -13,7 +13,7 @@ export default function FollowUpQuestions({
 }: FollowUpQuestionsProps) {
   if (technique.follow_up_questions.length === 0) {
     return (
-      <p className="text-sm text-slate-500">Deze techniek heeft geen vervolgvragen.</p>
+      <p className="text-sm text-slate-500 dark:text-slate-400">Deze techniek heeft geen vervolgvragen.</p>
     );
   }
 

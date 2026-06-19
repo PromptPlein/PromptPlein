@@ -3,6 +3,7 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Billboard, Text } from '@react-three/drei';
 import * as THREE from 'three';
 import type { Category, Prompt } from '@/types';
+import { useTheme } from '@/context/ThemeContext';
 
 const PALETTE = [
   '#154273',
@@ -54,7 +55,19 @@ function satellitePosition(center: THREE.Vector3, index: number, count: number):
   return new THREE.Vector3(center.x + Math.cos(theta) * r, center.y + y * 2.2, center.z + Math.sin(theta) * r);
 }
 
-function PromptNode({ position, color, title }: { position: THREE.Vector3; color: string; title: string }) {
+function PromptNode({
+  position,
+  color,
+  title,
+  labelColor,
+  outline,
+}: {
+  position: THREE.Vector3;
+  color: string;
+  title: string;
+  labelColor: string;
+  outline: string;
+}) {
   const [hovered, setHovered] = useState(false);
   return (
     <group position={position}>
@@ -71,7 +84,7 @@ function PromptNode({ position, color, title }: { position: THREE.Vector3; color
       </mesh>
       {hovered && (
         <Billboard position={[0, 0.4, 0]}>
-          <Text fontSize={0.3} color="#1f2937" anchorX="center" outlineWidth={0.012} outlineColor="#ffffff">
+          <Text fontSize={0.3} color={labelColor} anchorX="center" outlineWidth={0.012} outlineColor={outline}>
             {title}
           </Text>
         </Billboard>
@@ -80,7 +93,15 @@ function PromptNode({ position, color, title }: { position: THREE.Vector3; color
   );
 }
 
-function Scene({ clusters }: { clusters: Cluster[] }) {
+function Scene({
+  clusters,
+  labelColor,
+  outline,
+}: {
+  clusters: Cluster[];
+  labelColor: string;
+  outline: string;
+}) {
   const groupRef = useRef<THREE.Group>(null);
   useFrame((_, delta) => {
     if (groupRef.current) groupRef.current.rotation.y += delta * 0.06;
@@ -94,7 +115,7 @@ function Scene({ clusters }: { clusters: Cluster[] }) {
         {clusters.map((c) => (
           <group key={c.id}>
             <Billboard position={[c.center.x, c.center.y + 3, c.center.z]}>
-              <Text fontSize={0.5} color={c.color} anchorX="center" outlineWidth={0.015} outlineColor="#ffffff">
+              <Text fontSize={0.5} color={c.color} anchorX="center" outlineWidth={0.015} outlineColor={outline}>
                 {`${c.label} (${c.prompts.length})`}
               </Text>
             </Billboard>
@@ -104,6 +125,8 @@ function Scene({ clusters }: { clusters: Cluster[] }) {
                 position={satellitePosition(c.center, i, c.prompts.length)}
                 color={c.color}
                 title={p.title}
+                labelColor={labelColor}
+                outline={outline}
               />
             ))}
           </group>
@@ -121,18 +144,24 @@ export default function PromptEcosystem({
   prompts: Prompt[];
   categories: Category[];
 }) {
+  const { resolvedTheme } = useTheme();
+  const dark = resolvedTheme === 'dark';
+  const bg = dark ? '#0b1220' : '#f8fafc';
+  const labelColor = dark ? '#e2e8f0' : '#1f2937';
+  const outline = dark ? '#0b1220' : '#ffffff';
+
   const clusters = useMemo(() => buildClusters(prompts, categories), [prompts, categories]);
   if (prompts.length === 0) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-slate-400">
+      <div className="flex h-full items-center justify-center text-sm text-slate-400 dark:text-slate-500">
         Nog geen prompts om te tonen.
       </div>
     );
   }
   return (
     <Canvas camera={{ position: [0, 8, 20], fov: 50 }} dpr={[1, 1.5]}>
-      <color attach="background" args={['#f8fafc']} />
-      <Scene clusters={clusters} />
+      <color attach="background" args={[bg]} />
+      <Scene clusters={clusters} labelColor={labelColor} outline={outline} />
     </Canvas>
   );
 }

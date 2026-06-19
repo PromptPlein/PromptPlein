@@ -34,12 +34,12 @@ function StatCard({
 }) {
   return (
     <div className="opl-card flex items-center gap-4 p-5">
-      <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-rijksblauw-50 text-rijksblauw-500">
+      <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-rijksblauw-50 text-rijksblauw-500 dark:bg-rijksblauw-500/15">
         {icon}
       </span>
       <div>
-        <p className="text-2xl font-bold text-rijksblauw-700">{value}</p>
-        <p className="text-xs text-slate-500">{label}</p>
+        <p className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">{value}</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
       </div>
     </div>
   );
@@ -87,8 +87,8 @@ export default function AdminDashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-rijksblauw-700">Admin-dashboard</h1>
-        <p className="text-sm text-slate-500">Overzicht van gebruik en activiteit.</p>
+        <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Admin-dashboard</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400">Overzicht van gebruik en activiteit.</p>
       </div>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -114,18 +114,18 @@ export default function AdminDashboardPage() {
       <LineChartCard title="Activiteit (laatste 14 dagen)" data={trend} />
 
       <div className="opl-card p-5">
-        <h3 className="mb-3 text-sm font-semibold text-slate-700">Recente activiteit</h3>
+        <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">Recente activiteit</h3>
         {recent.length === 0 ? (
-          <p className="text-sm text-slate-400">Nog geen activiteit geregistreerd.</p>
+          <p className="text-sm text-slate-400 dark:text-slate-500">Nog geen activiteit geregistreerd.</p>
         ) : (
-          <ul className="divide-y divide-slate-100">
+          <ul className="divide-y divide-slate-100 dark:divide-slate-700">
             {recent.map((e) => (
               <li key={e.id} className="flex items-center justify-between py-2 text-sm">
-                <span className="text-slate-700">
+                <span className="text-slate-700 dark:text-slate-200">
                   <span className="font-medium">{e.user_identifier || 'Anoniem'}</span>{' '}
                   — {EVENT_LABELS[e.event_type] ?? e.event_type}
                 </span>
-                <span className="text-xs text-slate-400">{formatDate(e.created_at)}</span>
+                <span className="text-xs text-slate-400 dark:text-slate-500">{formatDate(e.created_at)}</span>
               </li>
             ))}
           </ul>

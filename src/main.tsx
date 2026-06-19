@@ -4,20 +4,28 @@ import { BrowserRouter } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import App from './App';
 import { AuthProvider } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
 import './index.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
-      <AuthProvider>
-        <App />
-        <Toaster
-          position="bottom-right"
-          toastOptions={{
-            style: { borderRadius: '10px', fontSize: '14px' },
-          }}
-        />
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <App />
+          <Toaster
+            position="bottom-right"
+            toastOptions={{
+              style: {
+                borderRadius: '10px',
+                fontSize: '14px',
+                background: 'var(--toast-bg)',
+                color: 'var(--toast-fg)',
+              },
+            }}
+          />
+        </AuthProvider>
+      </ThemeProvider>
     </BrowserRouter>
   </StrictMode>,
 );

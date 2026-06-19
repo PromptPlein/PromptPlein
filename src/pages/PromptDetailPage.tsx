@@ -92,7 +92,7 @@ export default function PromptDetailPage() {
   if (!prompt) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-16 text-center">
-        <p className="text-slate-600">Deze prompt bestaat niet (meer).</p>
+        <p className="text-slate-600 dark:text-slate-300">Deze prompt bestaat niet (meer).</p>
         <Link to="/zoeken" className="opl-btn-primary mt-4 inline-flex">
           Terug naar zoeken
         </Link>
@@ -107,30 +107,30 @@ export default function PromptDetailPage() {
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
       <button
         onClick={() => navigate(-1)}
-        className="mb-4 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800"
+        className="mb-4 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100"
       >
         <ArrowLeft size={16} /> Terug
       </button>
 
       <div className="opl-card p-6">
         <div className="mb-4 flex items-start justify-between gap-4">
-          <h1 className="text-2xl font-bold text-rijksblauw-700">{prompt.title}</h1>
+          <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">{prompt.title}</h1>
           <button
             onClick={handleFavorite}
-            className="shrink-0 rounded-md p-2 text-slate-400 hover:bg-amber-50 hover:text-amber-500"
+            className="shrink-0 rounded-md p-2 text-slate-400 hover:bg-amber-50 hover:text-amber-500 dark:text-slate-500 dark:hover:bg-amber-500/10"
             aria-label="Favoriet"
           >
             <Star size={22} className={prompt.is_favorite ? 'fill-amber-400 text-amber-400' : ''} />
           </button>
         </div>
 
-        {prompt.description && <p className="mb-4 text-slate-600">{prompt.description}</p>}
+        {prompt.description && <p className="mb-4 text-slate-600 dark:text-slate-300">{prompt.description}</p>}
 
         <div className="mb-5 flex flex-wrap gap-1.5">
           {category && (
-            <span className="opl-badge bg-rijksblauw-50 text-rijksblauw-700">{category.name}</span>
+            <span className="opl-badge bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">{category.name}</span>
           )}
-          {role && <span className="opl-badge bg-slate-100 text-slate-600">{role.name}</span>}
+          {role && <span className="opl-badge bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300">{role.name}</span>}
           <span className={`opl-badge ${sharingBadgeClasses(prompt.sharing_level)}`}>
             {sharingLabel(prompt.sharing_level)}
           </span>
@@ -142,19 +142,19 @@ export default function PromptDetailPage() {
         </div>
 
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-700">Prompt-inhoud</h2>
+          <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Prompt-inhoud</h2>
           <button
             onClick={() => handleCopy(prompt.content)}
-            className="inline-flex items-center gap-1 text-sm text-rijksblauw-500 hover:text-rijksblauw-700"
+            className="inline-flex items-center gap-1 text-sm text-rijksblauw-500 hover:text-rijksblauw-700 dark:text-rijksblauw-300 dark:hover:text-rijksblauw-200"
           >
             {copied ? <Check size={14} /> : <Copy size={14} />} Kopiëren
           </button>
         </div>
-        <pre className="mb-5 max-h-[360px] overflow-auto whitespace-pre-wrap rounded-xl border border-slate-200 bg-slate-50 p-4 font-mono text-[13px] leading-relaxed text-slate-800">
+        <pre className="mb-5 max-h-[360px] overflow-auto whitespace-pre-wrap rounded-xl border border-slate-200 bg-slate-50 p-4 font-mono text-[13px] leading-relaxed text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
           {prompt.content}
         </pre>
 
-        <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4">
+        <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4 dark:border-slate-800">
           <Link to={`/optimaliseren/${prompt.id}`} className="opl-btn-primary">
             <Sparkles size={16} /> Optimaliseren
           </Link>
@@ -166,13 +166,13 @@ export default function PromptDetailPage() {
           </button>
           <button
             onClick={handleDelete}
-            className="opl-btn-ghost ml-auto text-rijksrood hover:bg-red-50"
+            className="opl-btn-ghost ml-auto text-rijksrood hover:bg-red-50 dark:hover:bg-red-500/10"
           >
             <Trash2 size={16} /> Verwijderen
           </button>
         </div>
 
-        <p className="mt-4 text-xs text-slate-400">
+        <p className="mt-4 text-xs text-slate-400 dark:text-slate-500">
           Aangemaakt door {prompt.created_by || 'onbekend'} op {formatDate(prompt.created_at)}
         </p>
       </div>
@@ -180,7 +180,7 @@ export default function PromptDetailPage() {
       {/* Eerdere optimalisaties */}
       {optimizations.length > 0 && (
         <section className="mt-8">
-          <h2 className="mb-3 flex items-center gap-2 text-lg font-bold text-rijksblauw-700">
+          <h2 className="mb-3 flex items-center gap-2 text-lg font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
             <History size={20} /> Eerdere optimalisaties ({optimizations.length})
           </h2>
           <div className="space-y-3">
@@ -189,21 +189,21 @@ export default function PromptDetailPage() {
               return (
                 <div key={opt.id} className="opl-card p-4">
                   <div className="mb-2 flex items-center justify-between">
-                    <span className="opl-badge bg-rijksblauw-50 text-rijksblauw-700">
+                    <span className="opl-badge bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">
                       {tech?.name ?? 'Techniek'}
                     </span>
                     <button
                       onClick={() => handleCopy(opt.optimized_content)}
-                      className="text-slate-400 hover:text-slate-700"
+                      className="text-slate-400 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-200"
                       aria-label="Kopieer optimalisatie"
                     >
                       <Copy size={15} />
                     </button>
                   </div>
-                  <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-3 font-mono text-xs text-slate-700">
+                  <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-3 font-mono text-xs text-slate-700 dark:bg-slate-900 dark:text-slate-200">
                     {opt.optimized_content}
                   </pre>
-                  <p className="mt-2 text-xs text-slate-400">{formatDate(opt.created_at)}</p>
+                  <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">{formatDate(opt.created_at)}</p>
                 </div>
               );
             })}

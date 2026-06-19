@@ -39,7 +39,7 @@ export default function AdminLayout() {
         <div className="opl-card sticky top-20 p-3">
           <div className="mb-3 flex items-center gap-2 px-2 py-1">
             <ShieldCheck size={18} className="text-rijksblauw-500" />
-            <span className="font-bold text-rijksblauw-700">Beheer</span>
+            <span className="font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Beheer</span>
           </div>
           <nav className="space-y-1">
             {adminNav.map(({ to, label, icon: Icon, end }) => (
@@ -51,8 +51,8 @@ export default function AdminLayout() {
                   clsx(
                     'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                     isActive
-                      ? 'bg-rijksblauw-50 text-rijksblauw-700'
-                      : 'text-slate-600 hover:bg-slate-100',
+                      ? 'bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200'
+                      : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800',
                   )
                 }
               >
@@ -60,13 +60,13 @@ export default function AdminLayout() {
               </NavLink>
             ))}
           </nav>
-          <div className="mt-3 border-t border-slate-100 pt-3">
+          <div className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-800">
             <button
               onClick={() => {
                 void signOut();
                 navigate('/');
               }}
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-red-50 hover:text-rijksrood"
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-red-50 hover:text-rijksrood dark:text-slate-300 dark:hover:bg-red-500/10"
             >
               <LogOut size={16} /> Uitloggen
             </button>
@@ -87,7 +87,9 @@ export default function AdminLayout() {
               className={({ isActive }) =>
                 clsx(
                   'flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium',
-                  isActive ? 'bg-rijksblauw-50 text-rijksblauw-700' : 'bg-white text-slate-600',
+                  isActive
+                    ? 'bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200'
+                    : 'bg-white text-slate-600 dark:bg-slate-900 dark:text-slate-300',
                 )
               }
             >

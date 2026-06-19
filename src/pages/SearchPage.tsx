@@ -80,8 +80,8 @@ export default function SearchPage() {
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-rijksblauw-700">Geavanceerd zoeken</h1>
-          <p className="text-sm text-slate-500">
+          <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Geavanceerd zoeken</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
             Combineer meerdere filters, een datumbereik en sortering.
           </p>
         </div>
@@ -98,12 +98,12 @@ export default function SearchPage() {
         <SkeletonGrid count={6} />
       ) : prompts.length === 0 ? (
         <div className="opl-card flex flex-col items-center gap-3 p-12 text-center">
-          <SearchX size={40} className="text-slate-300" />
-          <p className="text-slate-600">Geen prompts gevonden met deze filters.</p>
+          <SearchX size={40} className="text-slate-300 dark:text-slate-500" />
+          <p className="text-slate-600 dark:text-slate-300">Geen prompts gevonden met deze filters.</p>
         </div>
       ) : (
         <>
-          <p className="mb-3 text-sm text-slate-500">
+          <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
             {prompts.length} resultaat{prompts.length === 1 ? '' : 'en'}
           </p>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

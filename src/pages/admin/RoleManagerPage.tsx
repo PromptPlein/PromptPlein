@@ -96,8 +96,8 @@ export default function RoleManagerPage() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-rijksblauw-700">Rollen beheren</h1>
-          <p className="text-sm text-slate-500">{roles.length} rollen</p>
+          <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Rollen beheren</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">{roles.length} rollen</p>
         </div>
         <div className="flex gap-2">
           <button className="opl-btn-secondary" onClick={() => setCsvOpen(true)}>
@@ -114,30 +114,30 @@ export default function RoleManagerPage() {
           <div className="skeleton h-48 w-full" />
         ) : (
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
               <tr>
                 <th className="px-4 py-3 font-medium">Naam</th>
                 <th className="hidden px-4 py-3 font-medium sm:table-cell">Beschrijving</th>
                 <th className="px-4 py-3 text-right font-medium">Acties</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
               {roles.map((r, i) => (
-                <tr key={r.id} className="hover:bg-slate-50">
-                  <td className="px-4 py-3 font-medium text-slate-800">{r.name}</td>
-                  <td className="hidden px-4 py-3 text-slate-500 sm:table-cell">{r.description}</td>
+                <tr key={r.id} className="hover:bg-slate-50 dark:hover:bg-slate-800">
+                  <td className="px-4 py-3 font-medium text-slate-800 dark:text-slate-100">{r.name}</td>
+                  <td className="hidden px-4 py-3 text-slate-500 sm:table-cell dark:text-slate-400">{r.description}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => move(r, -1)} disabled={i === 0} className="rounded p-1.5 text-slate-400 hover:bg-slate-100 disabled:opacity-30" aria-label="Omhoog">
+                      <button onClick={() => move(r, -1)} disabled={i === 0} className="rounded p-1.5 text-slate-400 hover:bg-slate-100 disabled:opacity-30 dark:text-slate-500 dark:hover:bg-slate-800" aria-label="Omhoog">
                         <ArrowUp size={15} />
                       </button>
-                      <button onClick={() => move(r, 1)} disabled={i === roles.length - 1} className="rounded p-1.5 text-slate-400 hover:bg-slate-100 disabled:opacity-30" aria-label="Omlaag">
+                      <button onClick={() => move(r, 1)} disabled={i === roles.length - 1} className="rounded p-1.5 text-slate-400 hover:bg-slate-100 disabled:opacity-30 dark:text-slate-500 dark:hover:bg-slate-800" aria-label="Omlaag">
                         <ArrowDown size={15} />
                       </button>
-                      <button onClick={() => setEditor({ id: r.id, name: r.name, description: r.description ?? '' })} className="rounded p-1.5 text-rijksblauw-500 hover:bg-rijksblauw-50" aria-label="Bewerken">
+                      <button onClick={() => setEditor({ id: r.id, name: r.name, description: r.description ?? '' })} className="rounded p-1.5 text-rijksblauw-500 hover:bg-rijksblauw-50 dark:hover:bg-rijksblauw-500/15" aria-label="Bewerken">
                         <Pencil size={15} />
                       </button>
-                      <button onClick={() => setToDelete(r)} className="rounded p-1.5 text-rijksrood hover:bg-red-50" aria-label="Verwijderen">
+                      <button onClick={() => setToDelete(r)} className="rounded p-1.5 text-rijksrood hover:bg-red-50 dark:hover:bg-red-500/10" aria-label="Verwijderen">
                         <Trash2 size={15} />
                       </button>
                     </div>
@@ -169,7 +169,7 @@ export default function RoleManagerPage() {
       </Modal>
 
       <Modal open={csvOpen} onClose={() => setCsvOpen(false)} title="CSV-import (rollen)" size="max-w-lg">
-        <p className="mb-2 text-sm text-slate-500">Eén rol per regel, formaat: <code>naam,beschrijving</code></p>
+        <p className="mb-2 text-sm text-slate-500 dark:text-slate-400">Eén rol per regel, formaat: <code>naam,beschrijving</code></p>
         <textarea className="opl-input min-h-[160px] resize-y font-mono text-xs" value={csv} onChange={(e) => setCsv(e.target.value)} placeholder={'Inkoopadviseur,Adviseert over aanbestedingen\nHR-adviseur,Personeelszaken'} />
         <div className="mt-4 flex justify-end gap-3">
           <button className="opl-btn-secondary" onClick={() => setCsvOpen(false)}>Annuleren</button>

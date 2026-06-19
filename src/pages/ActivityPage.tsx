@@ -18,12 +18,12 @@ const EVENT_LABELS: Record<string, string> = {
 function Stat({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) {
   return (
     <div className="opl-card flex items-center gap-3 p-4">
-      <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-rijksblauw-50 text-rijksblauw-500">
+      <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-rijksblauw-50 text-rijksblauw-500 dark:bg-rijksblauw-500/15">
         {icon}
       </span>
       <div>
-        <p className="text-xl font-bold text-rijksblauw-700">{value}</p>
-        <p className="text-xs text-slate-500">{label}</p>
+        <p className="text-xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">{value}</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
       </div>
     </div>
   );
@@ -72,9 +72,9 @@ export default function ActivityPage() {
   if (!user) {
     return (
       <div className="mx-auto max-w-lg px-4 py-20 text-center">
-        <Activity size={40} className="mx-auto mb-3 text-slate-300" />
-        <h1 className="text-xl font-bold text-rijksblauw-700">Stel eerst je naam in</h1>
-        <p className="mt-2 text-sm text-slate-600">
+        <Activity size={40} className="mx-auto mb-3 text-slate-300 dark:text-slate-600" />
+        <h1 className="text-xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Stel eerst je naam in</h1>
+        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
           Klik rechtsboven op het profiel-icoon om je naam in te stellen. Daarna verschijnt hier je
           persoonlijke activiteit.
         </p>
@@ -86,7 +86,7 @@ export default function ActivityPage() {
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-6 flex items-center gap-2">
         <Activity className="text-rijksblauw-500" />
-        <h1 className="text-2xl font-bold text-rijksblauw-700">Mijn activiteit</h1>
+        <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Mijn activiteit</h1>
       </div>
 
       {loading ? (
@@ -101,9 +101,9 @@ export default function ActivityPage() {
           </div>
 
           {topTechnique && (
-            <div className="opl-card p-4 text-sm text-slate-600">
+            <div className="opl-card p-4 text-sm text-slate-600 dark:text-slate-300">
               Je meest gebruikte techniek is{' '}
-              <span className="font-semibold text-rijksblauw-700">{topTechnique}</span>.
+              <span className="font-semibold text-rijksblauw-700 dark:text-rijksblauw-200">{topTechnique}</span>.
             </div>
           )}
 
@@ -114,15 +114,15 @@ export default function ActivityPage() {
           />
 
           <div className="opl-card p-5">
-            <h3 className="mb-3 text-sm font-semibold text-slate-700">Recente activiteit</h3>
+            <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">Recente activiteit</h3>
             {mine.length === 0 ? (
-              <p className="text-sm text-slate-400">Nog geen activiteit.</p>
+              <p className="text-sm text-slate-400 dark:text-slate-500">Nog geen activiteit.</p>
             ) : (
               <ul className="divide-y divide-slate-100">
                 {mine.slice(0, 20).map((e) => (
                   <li key={e.id} className="flex items-center justify-between py-2 text-sm">
-                    <span className="text-slate-700">{EVENT_LABELS[e.event_type] ?? e.event_type}</span>
-                    <span className="text-xs text-slate-400">{formatDate(e.created_at)}</span>
+                    <span className="text-slate-700 dark:text-slate-200">{EVENT_LABELS[e.event_type] ?? e.event_type}</span>
+                    <span className="text-xs text-slate-400 dark:text-slate-500">{formatDate(e.created_at)}</span>
                   </li>
                 ))}
               </ul>

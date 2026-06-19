@@ -46,16 +46,16 @@ export default function ShareModal({ open, onClose, prompt }: ShareModalProps) {
   return (
     <Modal open={open} onClose={onClose} title="Deel via e-mail of link" size="max-w-md">
       {loading || !url ? (
-        <div className="flex h-48 items-center justify-center text-slate-400">
+        <div className="flex h-48 items-center justify-center text-slate-400 dark:text-slate-500">
           <Loader2 className="animate-spin" />
         </div>
       ) : (
         <div className="space-y-5">
           <div className="flex flex-col items-center">
-            <div className="rounded-xl border border-slate-200 bg-white p-3">
+            <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-800">
               <QRCodeSVG value={url} size={160} fgColor="#154273" />
             </div>
-            <p className="mt-2 text-xs text-slate-400">Scan om de prompt te openen</p>
+            <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">Scan om de prompt te openen</p>
           </div>
 
           <div>
@@ -75,7 +75,7 @@ export default function ShareModal({ open, onClose, prompt }: ShareModalProps) {
             <Mail size={16} /> Stuur via e-mail
           </a>
 
-          <p className="text-center text-xs text-slate-400">
+          <p className="text-center text-xs text-slate-400 dark:text-slate-500">
             Weergaven van deze link worden geteld in de analytics.
           </p>
         </div>

@@ -53,8 +53,8 @@ export default function SharePreviewPage() {
   if (!share || !prompt) {
     return (
       <div className="mx-auto max-w-lg px-4 py-20 text-center">
-        <h1 className="text-xl font-bold text-rijksblauw-700">Link niet gevonden</h1>
-        <p className="mt-2 text-slate-600">
+        <h1 className="text-xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Link niet gevonden</h1>
+        <p className="mt-2 text-slate-600 dark:text-slate-300">
           Deze deel-link bestaat niet (meer) of is verlopen.
         </p>
         <Link to="/" className="opl-btn-primary mt-6 inline-flex">
@@ -69,7 +69,7 @@ export default function SharePreviewPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-10 sm:px-6">
-      <div className="mb-4 flex items-center gap-2 text-sm text-slate-500">
+      <div className="mb-4 flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
         <Library size={18} className="text-rijksblauw-500" />
         Gedeelde prompt
         <span className="ml-auto inline-flex items-center gap-1 text-xs">
@@ -78,34 +78,34 @@ export default function SharePreviewPage() {
       </div>
 
       <div className="opl-card p-6">
-        <h1 className="text-2xl font-bold text-rijksblauw-700">{prompt.title}</h1>
-        {prompt.description && <p className="mt-2 text-slate-600">{prompt.description}</p>}
+        <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">{prompt.title}</h1>
+        {prompt.description && <p className="mt-2 text-slate-600 dark:text-slate-300">{prompt.description}</p>}
 
         <div className="mt-4 flex flex-wrap gap-1.5">
-          {category && <span className="opl-badge bg-rijksblauw-50 text-rijksblauw-700">{category.name}</span>}
-          {role && <span className="opl-badge bg-slate-100 text-slate-600">{role.name}</span>}
+          {category && <span className="opl-badge bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">{category.name}</span>}
+          {role && <span className="opl-badge bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300">{role.name}</span>}
           <span className={`opl-badge ${sharingBadgeClasses(prompt.sharing_level)}`}>
             {sharingLabel(prompt.sharing_level)}
           </span>
         </div>
 
         <div className="mt-5 mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-700">Prompt-inhoud</h2>
-          <button onClick={copy} className="inline-flex items-center gap-1 text-sm text-rijksblauw-500 hover:text-rijksblauw-700">
+          <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Prompt-inhoud</h2>
+          <button onClick={copy} className="inline-flex items-center gap-1 text-sm text-rijksblauw-500 hover:text-rijksblauw-700 dark:text-rijksblauw-300 dark:hover:text-rijksblauw-200">
             {copied ? <Check size={14} /> : <Copy size={14} />} Kopiëren
           </button>
         </div>
-        <pre className="max-h-[400px] overflow-auto whitespace-pre-wrap rounded-xl border border-slate-200 bg-slate-50 p-4 font-mono text-[13px] leading-relaxed text-slate-800">
+        <pre className="max-h-[400px] overflow-auto whitespace-pre-wrap rounded-xl border border-slate-200 bg-slate-50 p-4 font-mono text-[13px] leading-relaxed text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
           {prompt.content}
         </pre>
 
-        <p className="mt-4 text-xs text-slate-400">
+        <p className="mt-4 text-xs text-slate-400 dark:text-slate-500">
           Gedeeld door {share.shared_by || 'een collega'} · {formatDate(share.shared_at)}
         </p>
       </div>
 
       <div className="mt-4 text-center">
-        <Link to={`/prompt/${prompt.id}`} className="inline-flex items-center gap-1 text-sm text-rijksblauw-500 hover:text-rijksblauw-700">
+        <Link to={`/prompt/${prompt.id}`} className="inline-flex items-center gap-1 text-sm text-rijksblauw-500 hover:text-rijksblauw-700 dark:text-rijksblauw-300 dark:hover:text-rijksblauw-200">
           Open in de bibliotheek <ExternalLink size={14} />
         </Link>
       </div>

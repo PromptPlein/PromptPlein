@@ -4,6 +4,14 @@
 
 :root {
   color-scheme: light;
+  --toast-bg: #ffffff;
+  --toast-fg: #0e2e51;
+}
+
+html.dark {
+  color-scheme: dark;
+  --toast-bg: #1e293b;
+  --toast-fg: #e2e8f0;
 }
 
 html,
@@ -20,37 +28,47 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+html.dark body {
+  background-color: #0b1220;
+  color: #e2e8f0;
+}
+
 @layer components {
   .opl-card {
-    @apply rounded-xl border border-slate-200 bg-white shadow-sm transition-shadow;
+    @apply rounded-xl border border-slate-200 bg-white shadow-sm transition-shadow
+      dark:border-slate-700 dark:bg-slate-800;
   }
 
   .opl-input {
     @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800
       placeholder:text-slate-400 focus:border-rijksblauw-500 focus:outline-none focus:ring-2
-      focus:ring-rijksblauw-500/20;
+      focus:ring-rijksblauw-500/20
+      dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500;
   }
 
   .opl-label {
-    @apply mb-1 block text-sm font-medium text-slate-700;
+    @apply mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300;
   }
 
   .opl-btn {
     @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold
       transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed
-      disabled:opacity-60;
+      disabled:opacity-60 dark:focus:ring-offset-slate-900;
   }
 
   .opl-btn-primary {
-    @apply opl-btn bg-rijksblauw-500 text-white hover:bg-rijksblauw-600 focus:ring-rijksblauw-500;
+    @apply opl-btn bg-rijksblauw-500 text-white hover:bg-rijksblauw-600 focus:ring-rijksblauw-500
+      dark:bg-rijksblauw-600 dark:hover:bg-rijksblauw-500;
   }
 
   .opl-btn-secondary {
-    @apply opl-btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 focus:ring-rijksblauw-500;
+    @apply opl-btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 focus:ring-rijksblauw-500
+      dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700;
   }
 
   .opl-btn-ghost {
-    @apply opl-btn text-slate-600 hover:bg-slate-100 focus:ring-rijksblauw-500;
+    @apply opl-btn text-slate-600 hover:bg-slate-100 focus:ring-rijksblauw-500
+      dark:text-slate-300 dark:hover:bg-slate-800;
   }
 
   .opl-badge {
@@ -64,6 +82,9 @@ body {
   overflow: hidden;
   background-color: #e2e8f0;
 }
+html.dark .skeleton {
+  background-color: #334155;
+}
 .skeleton::after {
   position: absolute;
   inset: 0;
@@ -76,6 +97,14 @@ body {
   );
   animation: shimmer 1.4s infinite;
   content: '';
+}
+html.dark .skeleton::after {
+  background: linear-gradient(
+    90deg,
+    rgba(148, 163, 184, 0) 0,
+    rgba(148, 163, 184, 0.25) 50%,
+    rgba(148, 163, 184, 0) 100%
+  );
 }
 @keyframes shimmer {
   100% {
