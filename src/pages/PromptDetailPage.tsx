@@ -10,6 +10,8 @@ import {
   Trash2,
   History,
   Download,
+  ThumbsUp,
+  Building2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import ShareModal from '@/components/share/ShareModal';
@@ -17,24 +19,28 @@ import ExportModal from '@/components/export/ExportModal';
 import CollaborationPanel from '@/components/collaboration/CollaborationPanel';
 import { PROMPT_STATUS_META } from '@/services/collaborationService';
 import { useReferenceData } from '@/context/ReferenceDataContext';
+import { useAuth } from '@/context/AuthContext';
 import {
   deletePrompt,
   getPrompt,
   listOptimizations,
   toggleFavorite,
 } from '@/services/repository';
+import { getLikeInfo, toggleLike } from '@/services/likeService';
+import { getPublicProfile, firstName } from '@/services/communityService';
 import {
   copyToClipboard,
   formatDate,
   sharingBadgeClasses,
   sharingLabel,
 } from '@/lib/utils';
-import type { Optimization, Prompt } from '@/types';
+import type { Optimization, Prompt, PublicProfile } from '@/types';
 
 export default function PromptDetailPage() {
   const { promptId } = useParams<{ promptId: string }>();
   const navigate = useNavigate();
-  const { categoryById, roleById, techniqueById } = useReferenceData();
+  const { categoryById, roleById, techniqueById, organizationById } = useReferenceData();
+  const { user, configured } = useAuth();
 
   const [prompt, setPrompt] = useState<Prompt | null>(null);
   const [optimizations, setOptimizations] = useState<Optimization[]>([]);
@@ -42,6 +48,10 @@ export default function PromptDetailPage() {
   const [copied, setCopied] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [author, setAuthor] = useState<PublicProfile | null>(null);
+  const [likeCount, setLikeCount] = useState(0);
+  const [liked, setLiked] = useState(false);
+  const [likeBusy, setLikeBusy] = useState(false);
 
   useEffect(() => {
     if (!promptId) return;
@@ -59,6 +69,32 @@ export default function PromptDetailPage() {
     };
   }, [promptId]);
 
+  // Likes + auteursprofiel laden zodra de prompt bekend is.
+  useEffect(() => {
+    if (!prompt) return;
+    let active = true;
+    getLikeInfo([prompt.id], user?.id)
+      .then((info) => {
+        if (!active) return;
+        const state = info[prompt.id];
+        if (state) {
+          setLikeCount(state.like_count);
+          setLiked(state.liked_by_me);
+        }
+      })
+      .catch(() => undefined);
+    if (prompt.created_by_user) {
+      getPublicProfile(prompt.created_by_user)
+        .then((p) => active && setAuthor(p))
+        .catch(() => active && setAuthor(null));
+    } else {
+      setAuthor(null);
+    }
+    return () => {
+      active = false;
+    };
+  }, [prompt, user?.id]);
+
   async function handleCopy(text: string) {
     await copyToClipboard(text);
     setCopied(true);
@@ -70,6 +106,31 @@ export default function PromptDetailPage() {
     if (!prompt) return;
     const updated = await toggleFavorite(prompt);
     setPrompt(updated);
+  }
+
+  async function handleLike() {
+    if (!prompt) return;
+    if (configured && !user) {
+      toast.error('Log in om een prompt te liken.');
+      navigate('/auth/login');
+      return;
+    }
+    setLikeBusy(true);
+    const prevCount = likeCount;
+    const prevLiked = liked;
+    setLiked(!prevLiked);
+    setLikeCount(prevCount + (prevLiked ? -1 : 1));
+    try {
+      const state = await toggleLike(prompt.id, user?.id ?? 'local-user');
+      setLiked(state.liked_by_me);
+      setLikeCount(state.like_count);
+    } catch {
+      setLiked(prevLiked);
+      setLikeCount(prevCount);
+      toast.error('Liken mislukt');
+    } finally {
+      setLikeBusy(false);
+    }
   }
 
   async function handleDelete() {
@@ -115,13 +176,30 @@ export default function PromptDetailPage() {
       <div className="opl-card p-6">
         <div className="mb-4 flex items-start justify-between gap-4">
           <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">{prompt.title}</h1>
-          <button
-            onClick={handleFavorite}
-            className="shrink-0 rounded-md p-2 text-slate-400 hover:bg-amber-50 hover:text-amber-500 dark:text-slate-500 dark:hover:bg-amber-500/10"
-            aria-label="Favoriet"
-          >
-            <Star size={22} className={prompt.is_favorite ? 'fill-amber-400 text-amber-400' : ''} />
-          </button>
+          <div className="flex shrink-0 items-center gap-1">
+            <button
+              onClick={handleLike}
+              disabled={likeBusy}
+              className={
+                liked
+                  ? 'inline-flex items-center gap-1.5 rounded-md px-2.5 py-2 text-sm font-medium text-rijksblauw-600 dark:text-rijksblauw-300'
+                  : 'inline-flex items-center gap-1.5 rounded-md px-2.5 py-2 text-sm text-slate-400 hover:bg-rijksblauw-50 hover:text-rijksblauw-600 dark:text-slate-500 dark:hover:bg-rijksblauw-500/10 dark:hover:text-rijksblauw-300'
+              }
+              aria-label={liked ? 'Like intrekken' : 'Prompt liken'}
+              aria-pressed={liked}
+              title={liked ? 'Like intrekken' : 'Vind ik goed'}
+            >
+              <ThumbsUp size={20} className={liked ? 'fill-rijksblauw-500/20' : ''} />
+              <span className="tabular-nums">{likeCount}</span>
+            </button>
+            <button
+              onClick={handleFavorite}
+              className="rounded-md p-2 text-slate-400 hover:bg-amber-50 hover:text-amber-500 dark:text-slate-500 dark:hover:bg-amber-500/10"
+              aria-label="Favoriet"
+            >
+              <Star size={22} className={prompt.is_favorite ? 'fill-amber-400 text-amber-400' : ''} />
+            </button>
+          </div>
         </div>
 
         {prompt.description && <p className="mb-4 text-slate-600 dark:text-slate-300">{prompt.description}</p>}
@@ -155,8 +233,8 @@ export default function PromptDetailPage() {
         </pre>
 
         <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4 dark:border-slate-800">
-          <Link to={`/optimaliseren/${prompt.id}`} className="opl-btn-primary">
-            <Sparkles size={16} /> Optimaliseren
+          <Link to={`/genereren/${prompt.id}`} className="opl-btn-primary">
+            <Sparkles size={16} /> Template genereren
           </Link>
           <button onClick={() => setShareOpen(true)} className="opl-btn-secondary">
             <Share2 size={16} /> Delen
@@ -172,8 +250,29 @@ export default function PromptDetailPage() {
           </button>
         </div>
 
-        <p className="mt-4 text-xs text-slate-400 dark:text-slate-500">
-          Aangemaakt door {prompt.created_by || 'onbekend'} op {formatDate(prompt.created_at)}
+        <p className="mt-4 flex flex-wrap items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500">
+          Aangemaakt door{' '}
+          {prompt.created_by_user ? (
+            <Link
+              to={`/community/${prompt.created_by_user}`}
+              className="font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
+            >
+              {author?.full_name ? firstName(author.full_name) : prompt.created_by || 'onbekend'}
+            </Link>
+          ) : (
+            <span className="font-medium text-slate-500 dark:text-slate-400">
+              {prompt.created_by || 'onbekend'}
+            </span>
+          )}
+          {(() => {
+            const org = organizationById(author?.organization_id ?? prompt.organization_id);
+            return org ? (
+              <span className="inline-flex items-center gap-1 text-slate-400 dark:text-slate-500">
+                <Building2 size={12} /> {org.name}
+              </span>
+            ) : null;
+          })()}
+          <span>· {formatDate(prompt.created_at)}</span>
         </p>
       </div>
 

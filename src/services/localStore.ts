@@ -9,6 +9,8 @@ import type {
   Optimization,
   Prompt,
   PromptFilters,
+  PromptLike,
+  PublicProfile,
   Role,
   Technique,
 } from '@/types';
@@ -24,6 +26,11 @@ const TECHNIQUES_KEY = 'opl.techniques';
 const ANALYTICS_KEY = 'opl.analytics';
 const SHARES_KEY = 'opl.shares';
 const AUDIT_KEY = 'opl.audit';
+const LIKES_KEY = 'opl.likes';
+const PROFILES_KEY = 'opl.publicProfiles';
+
+/** Vaste "ik"-gebruiker in mock-modus, zodat liken/community werkt zonder echte auth. */
+const LOCAL_USER_ID = 'local-user';
 
 function read<T>(key: string, fallback: T): T {
   try {
@@ -60,12 +67,58 @@ function ensureRefSeeded(): void {
       TECHNIQUES_KEY,
       SEED_TECHNIQUES.map((t, i) => ({ ...t, sort_order: i, is_active: true })),
     );
+  } else {
+    backfillTechniqueMetadata();
   }
+}
+
+/**
+ * Vult ontbrekende metadata (kracht + gebruikssituaties) aan voor technieken die
+ * vóór deze velden lokaal zijn geseed. Matcht op id en raakt admin-bewerkte
+ * waarden niet aan (alleen lege velden worden ingevuld).
+ */
+function backfillTechniqueMetadata(): void {
+  const techs = read<Technique[]>(TECHNIQUES_KEY, []);
+  let changed = false;
+  const merged = techs.map((t) => {
+    const seed = SEED_TECHNIQUES.find((s) => s.id === t.id);
+    if (!seed) return t;
+    const next = { ...t };
+    if (!next.strength && seed.strength) {
+      next.strength = seed.strength;
+      changed = true;
+    }
+    if ((!next.use_cases || next.use_cases.length === 0) && seed.use_cases?.length) {
+      next.use_cases = seed.use_cases;
+      changed = true;
+    }
+    return next;
+  });
+  if (changed) write(TECHNIQUES_KEY, merged);
+}
+
+// Vaste demo-organisaties (mock-modus) zodat de boomstructuur en ministeries in
+// de community zichtbaar zijn zonder echte backend.
+const LOCAL_ORG_RIJK = 'org-rijk';
+const LOCAL_ORG_BZK = 'org-bzk';
+const LOCAL_ORG_BZK_DIGI = 'org-bzk-digitalisering';
+const LOCAL_ORG_JENV = 'org-jenv';
+
+// Vaste demo-auteurs (mock-modus). De eerste is "ikzelf", zodat liken werkt.
+const LOCAL_PROFILES: PublicProfile[] = [
+  { id: LOCAL_USER_ID, full_name: 'Jij (demo)', organization_id: LOCAL_ORG_BZK_DIGI },
+  { id: 'demo-sanne', full_name: 'Sanne de Vries', organization_id: LOCAL_ORG_BZK },
+  { id: 'demo-mehmet', full_name: 'Mehmet Yıldız', organization_id: LOCAL_ORG_JENV },
+];
+
+function ensureProfilesSeeded(): void {
+  if (!localStorage.getItem(PROFILES_KEY)) write(PROFILES_KEY, LOCAL_PROFILES);
 }
 
 /** Eenmalige seed van voorbeeldprompts zodat de app niet leeg oogt. */
 function ensureSeeded(): void {
   ensureRefSeeded();
+  ensureProfilesSeeded();
   if (localStorage.getItem(PROMPTS_KEY)) return;
   const seeded: Prompt[] = [
     {
@@ -76,8 +129,10 @@ function ensureSeeded(): void {
         'Schrijf een afwijzingsbrief voor een aanvraag van een vergunning. Leg duidelijk uit waarom de aanvraag is afgewezen en welke mogelijkheden de aanvrager nog heeft.',
       category_id: 'cat-burgerbrieven',
       role_id: 'role-klantcontact',
+      organization_id: LOCAL_ORG_BZK_DIGI,
       sharing_level: 'public',
-      created_by: 'Demo Ambtenaar',
+      created_by: 'Jij (demo)',
+      created_by_user: LOCAL_USER_ID,
       is_favorite: true,
       created_at: nowIso(),
       updated_at: nowIso(),
@@ -90,8 +145,10 @@ function ensureSeeded(): void {
         'Vat de bijgevoegde beleidsnota samen in maximaal 10 bullets. Benoem de belangrijkste beslispunten en de financiële gevolgen.',
       category_id: 'cat-beleid',
       role_id: 'role-bestuursadviseur',
+      organization_id: LOCAL_ORG_BZK,
       sharing_level: 'ministry',
-      created_by: 'Demo Ambtenaar',
+      created_by: 'Sanne de Vries',
+      created_by_user: 'demo-sanne',
       is_favorite: false,
       created_at: nowIso(),
       updated_at: nowIso(),
@@ -104,8 +161,10 @@ function ensureSeeded(): void {
         'Schrijf een persbericht over de opening van een nieuw informatiepunt voor burgers. Gebruik een pakkende kop, een sterke openingsalinea en een citaat van de wethouder.',
       category_id: 'cat-communicatie',
       role_id: 'role-communicatie',
+      organization_id: LOCAL_ORG_JENV,
       sharing_level: 'department',
-      created_by: 'Demo Ambtenaar',
+      created_by: 'Mehmet Yıldız',
+      created_by_user: 'demo-mehmet',
       is_favorite: false,
       created_at: nowIso(),
       updated_at: nowIso(),
@@ -160,6 +219,10 @@ export const localStore = {
       prompts = prompts.filter((p) => p.category_id && filters.category_ids!.includes(p.category_id));
     if (filters.role_ids?.length)
       prompts = prompts.filter((p) => p.role_id && filters.role_ids!.includes(p.role_id));
+    if (filters.organization_ids?.length)
+      prompts = prompts.filter(
+        (p) => p.organization_id && filters.organization_ids!.includes(p.organization_id),
+      );
     if (filters.sharing_levels?.length)
       prompts = prompts.filter((p) => filters.sharing_levels!.includes(p.sharing_level));
     if (filters.date_from)
@@ -381,5 +444,67 @@ export const localStore = {
   },
   listAuditEntries(): AuditLogEntry[] {
     return read<AuditLogEntry[]>(AUDIT_KEY, []);
+  },
+
+  // --- Likes (community) ---
+  /** Het vaste "ik" in mock-modus. */
+  currentUserId(): string {
+    return LOCAL_USER_ID;
+  },
+  listLikes(): PromptLike[] {
+    return read<PromptLike[]>(LIKES_KEY, []);
+  },
+  /** Like-telling + of de (mock-)gebruiker zelf heeft geliket, voor een set prompts. */
+  likeInfo(promptIds: string[]): Record<string, { like_count: number; liked_by_me: boolean }> {
+    const likes = read<PromptLike[]>(LIKES_KEY, []);
+    const result: Record<string, { like_count: number; liked_by_me: boolean }> = {};
+    for (const id of promptIds) {
+      const forPrompt = likes.filter((l) => l.prompt_id === id);
+      result[id] = {
+        like_count: forPrompt.length,
+        liked_by_me: forPrompt.some((l) => l.user_id === LOCAL_USER_ID),
+      };
+    }
+    return result;
+  },
+  /** Toggle de like van de mock-gebruiker; geeft de nieuwe staat terug. */
+  toggleLike(promptId: string): { like_count: number; liked_by_me: boolean } {
+    const likes = read<PromptLike[]>(LIKES_KEY, []);
+    const existing = likes.find((l) => l.prompt_id === promptId && l.user_id === LOCAL_USER_ID);
+    let next: PromptLike[];
+    if (existing) {
+      next = likes.filter((l) => l.id !== existing.id);
+    } else {
+      next = [
+        { id: uid('like'), prompt_id: promptId, user_id: LOCAL_USER_ID, created_at: nowIso() },
+        ...likes,
+      ];
+    }
+    write(LIKES_KEY, next);
+    const forPrompt = next.filter((l) => l.prompt_id === promptId);
+    return {
+      like_count: forPrompt.length,
+      liked_by_me: forPrompt.some((l) => l.user_id === LOCAL_USER_ID),
+    };
+  },
+
+  // --- Publieke profielen (community) ---
+  listProfiles(): PublicProfile[] {
+    ensureProfilesSeeded();
+    return read<PublicProfile[]>(PROFILES_KEY, []);
+  },
+  getProfile(id: string): PublicProfile | null {
+    ensureProfilesSeeded();
+    return read<PublicProfile[]>(PROFILES_KEY, []).find((p) => p.id === id) ?? null;
+  },
+  /** Demo-organisaties (mock-modus) — boomstructuur Rijk → ministerie → afdeling. */
+  listOrganizations(): import('@/types').Organization[] {
+    const now = nowIso();
+    return [
+      { id: LOCAL_ORG_RIJK, name: 'Rijksoverheid', code: 'RIJK', parent_id: null, organization_type: 'ministry', is_active: true, created_at: now },
+      { id: LOCAL_ORG_BZK, name: 'Ministerie van Binnenlandse Zaken', code: 'BZK', parent_id: LOCAL_ORG_RIJK, organization_type: 'ministry', is_active: true, created_at: now },
+      { id: LOCAL_ORG_BZK_DIGI, name: 'Afdeling Digitalisering', code: 'BZK-DIGI', parent_id: LOCAL_ORG_BZK, organization_type: 'department', is_active: true, created_at: now },
+      { id: LOCAL_ORG_JENV, name: 'Ministerie van Justitie en Veiligheid', code: 'JenV', parent_id: LOCAL_ORG_RIJK, organization_type: 'ministry', is_active: true, created_at: now },
+    ];
   },
 };

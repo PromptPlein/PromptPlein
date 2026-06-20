@@ -4,6 +4,7 @@ import { Star } from 'lucide-react';
 import PromptCard from '@/components/prompts/PromptCard';
 import { SkeletonGrid } from '@/components/common/Skeleton';
 import { listPrompts } from '@/services/repository';
+import { usePromptCommunity } from '@/hooks/usePromptCommunity';
 import type { Prompt } from '@/types';
 
 export default function FavoritesPage() {
@@ -28,6 +29,8 @@ export default function FavoritesPage() {
     );
   }
 
+  const { enriched, authors } = usePromptCommunity(prompts);
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-6 flex items-center gap-2">
@@ -47,8 +50,13 @@ export default function FavoritesPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {prompts.map((p) => (
-            <PromptCard key={p.id} prompt={p} onChanged={handleChanged} />
+          {enriched.map((p) => (
+            <PromptCard
+              key={p.id}
+              prompt={p}
+              author={p.created_by_user ? authors[p.created_by_user] : null}
+              onChanged={handleChanged}
+            />
           ))}
         </div>
       )}

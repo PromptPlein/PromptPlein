@@ -9,6 +9,7 @@ import {
   Activity,
   ShieldCheck,
   Network,
+  Users,
 } from 'lucide-react';
 import clsx from 'clsx';
 import UserMenu from './UserMenu';
@@ -18,9 +19,10 @@ import ThemeToggle from './ThemeToggle';
 const navItems = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/zoeken', label: 'Zoeken', icon: Search, end: false },
-  { to: '/optimaliseren', label: 'Optimaliseren', icon: Sparkles, end: false },
+  { to: '/genereren', label: 'Genereren', icon: Sparkles, end: false },
   { to: '/trending', label: 'Trending', icon: Flame, end: false },
   { to: '/favorieten', label: 'Favorieten', icon: Star, end: false },
+  { to: '/community', label: 'Community', icon: Users, end: false },
   { to: '/netwerk', label: 'Netwerk', icon: Network, end: false },
 ];
 

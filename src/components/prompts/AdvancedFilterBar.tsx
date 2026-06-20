@@ -50,7 +50,7 @@ function toggle<T>(list: T[] | undefined, value: T): T[] {
 }
 
 export default function AdvancedFilterBar({ filters, onChange }: AdvancedFilterBarProps) {
-  const { categories, roles, techniques } = useReferenceData();
+  const { categories, roles, techniques, organizations } = useReferenceData();
   const [expanded, setExpanded] = useState(true);
 
   function update(patch: Partial<AdvancedPromptFilters>) {
@@ -60,6 +60,7 @@ export default function AdvancedFilterBar({ filters, onChange }: AdvancedFilterB
   const activeCount =
     (filters.category_ids?.length ?? 0) +
     (filters.role_ids?.length ?? 0) +
+    (filters.organization_ids?.length ?? 0) +
     (filters.technique_ids?.length ?? 0) +
     (filters.sharing_levels?.length ?? 0) +
     (filters.date_from ? 1 : 0) +
@@ -117,6 +118,19 @@ export default function AdvancedFilterBar({ filters, onChange }: AdvancedFilterB
               />
             ))}
           </FilterGroup>
+
+          {organizations.length > 0 && (
+            <FilterGroup label="Organisaties">
+              {organizations.map((o) => (
+                <Chip
+                  key={o.id}
+                  label={o.code ? `${o.name} (${o.code})` : o.name}
+                  active={filters.organization_ids?.includes(o.id) ?? false}
+                  onClick={() => update({ organization_ids: toggle(filters.organization_ids, o.id) })}
+                />
+              ))}
+            </FilterGroup>
+          )}
 
           <FilterGroup label="Rollen">
             {roles.map((r) => (

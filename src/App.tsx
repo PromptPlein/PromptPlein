@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { ReferenceDataProvider } from '@/context/ReferenceDataContext';
 import ErrorBoundary from '@/components/common/ErrorBoundary';
 import Header from '@/components/common/Header';
@@ -16,6 +16,8 @@ import SignupPage from '@/pages/auth/SignupPage';
 import PasswordResetPage from '@/pages/auth/PasswordResetPage';
 import ProfilePage from '@/pages/ProfilePage';
 const NetworkPage = lazy(() => import('@/pages/NetworkPage'));
+const CommunityPage = lazy(() => import('@/pages/CommunityPage'));
+const PublicProfilePage = lazy(() => import('@/pages/PublicProfilePage'));
 
 // Chart-/admin-zware pagina's lazy laden (houdt recharts uit de hoofdbundle).
 const TrendingPage = lazy(() => import('@/pages/TrendingPage'));
@@ -31,6 +33,13 @@ const UserManagerPage = lazy(() => import('@/pages/admin/UserManagerPage'));
 const OrganizationManagerPage = lazy(() => import('@/pages/admin/OrganizationManagerPage'));
 const ApprovalQueuePage = lazy(() => import('@/pages/admin/ApprovalQueuePage'));
 const ReportsPage = lazy(() => import('@/pages/admin/ReportsPage'));
+const SettingsPage = lazy(() => import('@/pages/admin/SettingsPage'));
+
+/** Behoudt het promptId bij de redirect van de oude /optimaliseren-URL. */
+function RedirectToGenereren() {
+  const { promptId } = useParams<{ promptId?: string }>();
+  return <Navigate to={`/genereren/${promptId ?? ''}`} replace />;
+}
 
 function PageFallback() {
   return (
@@ -51,13 +60,23 @@ export default function App() {
             <Routes>
               <Route path="/" element={<HomePage />} />
               <Route path="/zoeken" element={<SearchPage />} />
-              <Route path="/optimaliseren" element={<OptimizerPage />} />
-              <Route path="/optimaliseren/:promptId" element={<OptimizerPage />} />
+              <Route path="/genereren" element={<OptimizerPage />} />
+              <Route path="/genereren/:promptId" element={<OptimizerPage />} />
+              {/* Oude URL blijft werken via redirect */}
+              <Route path="/optimaliseren" element={<Navigate to="/genereren" replace />} />
+              <Route
+                path="/optimaliseren/:promptId"
+                element={<RedirectToGenereren />}
+              />
               <Route path="/favorieten" element={<FavoritesPage />} />
               <Route path="/trending" element={<TrendingPage />} />
               <Route path="/activiteit" element={<ActivityPage />} />
               <Route path="/prompt/:promptId" element={<PromptDetailPage />} />
               <Route path="/share/:token" element={<SharePreviewPage />} />
+
+              {/* Community — openbaar: wie maakt de prompts en bij welk ministerie. */}
+              <Route path="/community" element={<CommunityPage />} />
+              <Route path="/community/:userId" element={<PublicProfilePage />} />
 
               {/* Authenticatie */}
               <Route path="/auth/login" element={<LoginPage />} />
@@ -84,6 +103,7 @@ export default function App() {
                   <Route path="analytics" element={<AdminAnalyticsPage />} />
                   <Route path="rapportage" element={<ReportsPage />} />
                   <Route path="audit" element={<AuditLogPage />} />
+                  <Route path="instellingen" element={<SettingsPage />} />
                 </Route>
               </Route>
 

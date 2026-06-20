@@ -30,6 +30,10 @@ export interface Technique {
   id: string;
   name: string;
   description?: string;
+  /** De kracht van deze techniek — waar is hij sterk in? Voedt de AI-aanbeveling. */
+  strength?: string;
+  /** Concrete gebruikssituaties waarvoor de techniek geschikt is. */
+  use_cases?: string[];
   /** Vragen die aan de gebruiker gesteld worden voordat geoptimaliseerd wordt. */
   follow_up_questions: FollowUpQuestion[];
   /** Template met placeholders zoals {{PROMPT}} en {{vraag_id}}. */
@@ -50,6 +54,7 @@ export interface Prompt {
   content: string;
   category_id?: string | null;
   role_id?: string | null;
+  organization_id?: string | null;
   sharing_level: SharingLevel;
   created_by: string;
   is_favorite: boolean;
@@ -60,6 +65,10 @@ export interface Prompt {
   submitted_at?: string | null;
   reviewed_at?: string | null;
   reviewed_by?: string | null;
+  /** Aantal likes (duimpjes). Verrijkt door de likeService, niet in de rij opgeslagen. */
+  like_count?: number;
+  /** Of de huidige gebruiker deze prompt heeft geliket. Verrijkt door de likeService. */
+  liked_by_me?: boolean;
 }
 
 export interface Optimization {
@@ -78,6 +87,7 @@ export interface NewPromptInput {
   content: string;
   category_id?: string | null;
   role_id?: string | null;
+  organization_id?: string | null;
   sharing_level: SharingLevel;
   created_by: string;
 }
@@ -99,6 +109,7 @@ export interface AdvancedPromptFilters {
   query?: string;
   category_ids?: string[];
   role_ids?: string[];
+  organization_ids?: string[];
   sharing_levels?: SharingLevel[];
   technique_ids?: string[];
   date_from?: string | null;
@@ -147,11 +158,30 @@ export interface AuditLogEntry {
   created_at: string;
 }
 
-/** Antwoord van de optimize-prompt service. */
+/** Herkomst van een gegenereerd/aanbevolen resultaat. */
+export type AiProviderResult = 'claude' | 'openai' | 'deepseek' | 'local-template';
+
+/** Antwoord van de optimize-prompt service (generatiemodus). */
 export interface OptimizeResult {
   optimized_content: string;
   success: boolean;
-  provider: 'claude' | 'openai' | 'deepseek' | 'local-template';
+  provider: AiProviderResult;
+  error?: string;
+}
+
+/** Eén techniekaanbeveling bij een door de gebruiker beschreven doel. */
+export interface TechniqueRecommendation {
+  /** Verwijst naar een bestaande Technique.id. */
+  id: string;
+  /** Korte motivatie waarom deze techniek past. */
+  reason: string;
+}
+
+/** Antwoord van de optimize-prompt service (aanbevelingsmodus). */
+export interface RecommendResult {
+  recommendations: TechniqueRecommendation[];
+  success: boolean;
+  provider: AiProviderResult;
   error?: string;
 }
 
@@ -188,6 +218,35 @@ export interface Profile {
   is_active: boolean;
   created_at?: string;
   updated_at?: string;
+}
+
+// --- Community: likes & publieke profielen ---
+
+/** Eén like (duimpje) van een gebruiker op een prompt. */
+export interface PromptLike {
+  id: string;
+  prompt_id: string;
+  user_id: string;
+  created_at: string;
+}
+
+/**
+ * Publiek zichtbare auteursgegevens — bewust beperkt tot naam + organisatie,
+ * zónder privacygevoelige velden zoals e-mail. Voedt de auteurslabels op
+ * prompts en de community-pagina.
+ */
+export interface PublicProfile {
+  id: string;
+  full_name?: string | null;
+  organization_id?: string | null;
+}
+
+/** Een community-lid met afgeleide statistieken voor het overzicht/ranglijst. */
+export interface CommunityMember extends PublicProfile {
+  /** Aantal (openbare) prompts dat dit lid heeft gemaakt. */
+  prompt_count: number;
+  /** Totaal aantal ontvangen likes over alle prompts. */
+  total_likes: number;
 }
 
 // --- Phase 3 samenwerking & goedkeuring ---

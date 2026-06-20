@@ -1,9 +1,10 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Copy, Sparkles, Star, Check, Share2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Copy, Sparkles, Star, Check, Share2, ThumbsUp } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useTilt } from '@/hooks/useTilt';
 import { useReferenceData } from '@/context/ReferenceDataContext';
+import { useAuth } from '@/context/AuthContext';
 import {
   sharingBadgeClasses,
   sharingLabel,
@@ -12,22 +13,46 @@ import {
   getCurrentUser,
 } from '@/lib/utils';
 import { toggleFavorite } from '@/services/repository';
+import { toggleLike } from '@/services/likeService';
+import { firstName } from '@/services/communityService';
 import { trackEvent } from '@/services/analyticsService';
-import type { Prompt } from '@/types';
+import type { Prompt, PublicProfile } from '@/types';
 
 interface PromptCardProps {
   prompt: Prompt;
+  /** Publiek auteursprofiel (naam + organisatie) voor het auteurslabel. */
+  author?: PublicProfile | null;
   onChanged?: (updated: Prompt) => void;
 }
 
-export default function PromptCard({ prompt, onChanged }: PromptCardProps) {
+export default function PromptCard({ prompt, author, onChanged }: PromptCardProps) {
   const tilt = useTilt<HTMLAnchorElement>();
-  const { categoryById, roleById } = useReferenceData();
+  const navigate = useNavigate();
+  const { categoryById, roleById, organizationById } = useReferenceData();
+  const { user, configured } = useAuth();
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [likeBusy, setLikeBusy] = useState(false);
+  const [likeCount, setLikeCount] = useState(prompt.like_count ?? 0);
+  const [liked, setLiked] = useState(prompt.liked_by_me ?? false);
+
+  // Verrijking (like-telling + of ik geliket heb) komt asynchroon binnen via
+  // de props; neem die over zolang we niet zelf midden in een toggle zitten.
+  useEffect(() => {
+    if (likeBusy) return;
+    if (prompt.like_count !== undefined) setLikeCount(prompt.like_count);
+    if (prompt.liked_by_me !== undefined) setLiked(prompt.liked_by_me);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prompt.like_count, prompt.liked_by_me]);
 
   const category = categoryById(prompt.category_id);
   const role = roleById(prompt.role_id);
+  const org = organizationById(author?.organization_id ?? prompt.organization_id);
+
+  const authorId = prompt.created_by_user ?? author?.id ?? null;
+  const authorName = author?.full_name
+    ? firstName(author.full_name)
+    : prompt.created_by || 'Onbekend';
 
   async function handleCopy(e: React.MouseEvent) {
     e.preventDefault();
@@ -54,6 +79,33 @@ export default function PromptCard({ prompt, onChanged }: PromptCardProps) {
       toast.error('Bijwerken mislukt');
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function handleLike(e: React.MouseEvent) {
+    e.preventDefault();
+    // Met echte backend is liken alleen voor ingelogde gebruikers.
+    if (configured && !user) {
+      toast.error('Log in om een prompt te liken.');
+      navigate('/auth/login');
+      return;
+    }
+    setLikeBusy(true);
+    // Optimistische update voor een vlotte UI.
+    const prevCount = likeCount;
+    const prevLiked = liked;
+    setLiked(!prevLiked);
+    setLikeCount(prevCount + (prevLiked ? -1 : 1));
+    try {
+      const state = await toggleLike(prompt.id, user?.id ?? 'local-user');
+      setLiked(state.liked_by_me);
+      setLikeCount(state.like_count);
+    } catch {
+      setLiked(prevLiked);
+      setLikeCount(prevCount);
+      toast.error('Liken mislukt');
+    } finally {
+      setLikeBusy(false);
     }
   }
 
@@ -94,6 +146,38 @@ export default function PromptCard({ prompt, onChanged }: PromptCardProps) {
         <p className="mb-3 line-clamp-2 text-sm text-slate-600 dark:text-slate-300">{prompt.description}</p>
       )}
 
+      {/* Auteur: voornaam + ministerie, klikbaar naar het publieke profiel. */}
+      <div className="mb-3 flex flex-wrap items-center gap-1.5 text-xs">
+        {authorId ? (
+          <span
+            role="link"
+            tabIndex={0}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              navigate(`/community/${authorId}`);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                e.stopPropagation();
+                navigate(`/community/${authorId}`);
+              }
+            }}
+            className="cursor-pointer font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
+          >
+            {authorName}
+          </span>
+        ) : (
+          <span className="font-medium text-slate-500 dark:text-slate-400">{authorName}</span>
+        )}
+        {org && (
+          <span className="opl-badge bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+            {org.name}
+          </span>
+        )}
+      </div>
+
       <div className="mb-4 flex flex-wrap gap-1.5">
         {category && (
           <span className="opl-badge bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">{category.name}</span>
@@ -106,9 +190,24 @@ export default function PromptCard({ prompt, onChanged }: PromptCardProps) {
 
       <div className="flex items-center justify-between border-t border-slate-100 pt-3 dark:border-slate-800">
         <span className="text-xs text-slate-400 dark:text-slate-500">
-          {prompt.created_by || 'Onbekend'} · {formatDate(prompt.created_at)}
+          {formatDate(prompt.created_at)}
         </span>
         <div className="flex items-center gap-1">
+          <button
+            onClick={handleLike}
+            disabled={likeBusy}
+            className={
+              liked
+                ? 'inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-sm font-medium text-rijksblauw-600 dark:text-rijksblauw-300'
+                : 'inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-sm text-slate-400 hover:bg-rijksblauw-50 hover:text-rijksblauw-600 dark:text-slate-500 dark:hover:bg-rijksblauw-500/10 dark:hover:text-rijksblauw-300'
+            }
+            aria-label={liked ? 'Like intrekken' : 'Prompt liken'}
+            aria-pressed={liked}
+            title={liked ? 'Like intrekken' : 'Vind ik goed'}
+          >
+            <ThumbsUp size={16} className={liked ? 'fill-rijksblauw-500/20' : ''} />
+            <span className="tabular-nums">{likeCount}</span>
+          </button>
           <button
             onClick={handleShare}
             className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-200"
@@ -125,15 +224,18 @@ export default function PromptCard({ prompt, onChanged }: PromptCardProps) {
           >
             {copied ? <Check size={16} className="text-rijksgroen" /> : <Copy size={16} />}
           </button>
-          <Link
-            to={`/optimaliseren/${prompt.id}`}
-            onClick={(e) => e.stopPropagation()}
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              navigate(`/genereren/${prompt.id}`);
+            }}
             className="rounded-md p-1.5 text-rijksoranje hover:bg-orange-50"
-            aria-label="Optimaliseer prompt"
-            title="Optimaliseren"
+            aria-label="Prompt-template genereren"
+            title="Template genereren"
           >
             <Sparkles size={16} />
-          </Link>
+          </button>
         </div>
       </div>
     </Link>

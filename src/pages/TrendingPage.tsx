@@ -6,6 +6,7 @@ import { SkeletonGrid } from '@/components/common/Skeleton';
 import { listPrompts } from '@/services/repository';
 import { listEvents, topTechniques } from '@/services/analyticsService';
 import { useReferenceData } from '@/context/ReferenceDataContext';
+import { usePromptCommunity } from '@/hooks/usePromptCommunity';
 import type { AnalyticsEvent, Prompt } from '@/types';
 
 export default function TrendingPage() {
@@ -52,6 +53,8 @@ export default function TrendingPage() {
     [events, techniqueById],
   );
 
+  const { enriched, authors } = usePromptCommunity(trending);
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-6 flex items-center gap-2">
@@ -71,10 +74,11 @@ export default function TrendingPage() {
               <p className="text-sm text-slate-500 dark:text-slate-400">Nog te weinig activiteit om trends te tonen.</p>
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {trending.map((p) => (
+                {enriched.map((p) => (
                   <PromptCard
                     key={p.id}
                     prompt={p}
+                    author={p.created_by_user ? authors[p.created_by_user] : null}
                     onChanged={(u) => setPrompts((prev) => prev.map((x) => (x.id === u.id ? u : x)))}
                   />
                 ))}

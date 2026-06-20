@@ -13,13 +13,14 @@ interface PromptUploadFormProps {
 }
 
 export default function PromptUploadForm({ onCreated, onCancel }: PromptUploadFormProps) {
-  const { categories, roles } = useReferenceData();
+  const { categories, roles, organizations } = useReferenceData();
   const requireAuth = useAuthGuard();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [content, setContent] = useState('');
   const [categoryId, setCategoryId] = useState<string>('');
   const [roleId, setRoleId] = useState<string>('');
+  const [organizationId, setOrganizationId] = useState<string>('');
   const [sharing, setSharing] = useState<SharingLevel>('private');
   const [createdBy, setCreatedBy] = useState(getCurrentUser());
   const [submitting, setSubmitting] = useState(false);
@@ -45,6 +46,7 @@ export default function PromptUploadForm({ onCreated, onCancel }: PromptUploadFo
       content: content.trim(),
       category_id: categoryId || null,
       role_id: roleId || null,
+      organization_id: organizationId || null,
       sharing_level: sharing,
       created_by: createdBy.trim(),
     };
@@ -149,6 +151,30 @@ export default function PromptUploadForm({ onCreated, onCancel }: PromptUploadFo
           </select>
         </div>
       </div>
+
+      {organizations.length > 0 && (
+        <div>
+          <label className="opl-label" htmlFor="up-organization">
+            Organisatie
+          </label>
+          <select
+            id="up-organization"
+            className="opl-input"
+            value={organizationId}
+            onChange={(e) => setOrganizationId(e.target.value)}
+          >
+            <option value="">Geen organisatie</option>
+            {organizations.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.code ? `${o.name} (${o.code})` : o.name}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+            Koppel deze prompt aan een ministerie of afdeling, zodat hij vindbaar is via de netwerkverkenner.
+          </p>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>

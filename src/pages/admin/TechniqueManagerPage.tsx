@@ -18,6 +18,9 @@ interface EditorState {
   id?: string;
   name: string;
   description: string;
+  strength: string;
+  /** Eén gebruikssituatie per regel. */
+  useCasesText: string;
   template: string;
   followUpsJson: string;
   is_active: boolean;
@@ -26,6 +29,8 @@ interface EditorState {
 const EMPTY: EditorState = {
   name: '',
   description: '',
+  strength: '',
+  useCasesText: '',
   template: 'Oorspronkelijke opdracht:\n{{PROMPT}}',
   followUpsJson: '[]',
   is_active: true,
@@ -36,10 +41,20 @@ function toEditor(t: Technique): EditorState {
     id: t.id,
     name: t.name,
     description: t.description ?? '',
+    strength: t.strength ?? '',
+    useCasesText: (t.use_cases ?? []).join('\n'),
     template: t.template,
     followUpsJson: JSON.stringify(t.follow_up_questions, null, 2),
     is_active: t.is_active !== false,
   };
+}
+
+/** Splitst de textarea naar een opgeschoonde lijst gebruikssituaties. */
+function parseUseCases(text: string): string[] {
+  return text
+    .split('\n')
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 export default function TechniqueManagerPage() {
@@ -89,6 +104,8 @@ export default function TechniqueManagerPage() {
     const payload = {
       name: editor.name.trim(),
       description: editor.description.trim(),
+      strength: editor.strength.trim(),
+      use_cases: parseUseCases(editor.useCasesText),
       template: editor.template,
       follow_up_questions: followUps,
       is_active: editor.is_active,
@@ -282,7 +299,7 @@ export default function TechniqueManagerPage() {
                     checked={editor.is_active}
                     onChange={(e) => setEditor({ ...editor, is_active: e.target.checked })}
                   />
-                  Actief (zichtbaar in de optimizer)
+                  Actief (zichtbaar in de promptgenerator)
                 </label>
               </div>
             </div>
@@ -293,6 +310,33 @@ export default function TechniqueManagerPage() {
                 className="opl-input"
                 value={editor.description}
                 onChange={(e) => setEditor({ ...editor, description: e.target.value })}
+              />
+            </div>
+
+            <div>
+              <label className="opl-label">
+                Kracht van de techniek{' '}
+                <span className="font-normal text-slate-400">
+                  (helpt de slimme aanbeveling)
+                </span>
+              </label>
+              <textarea
+                className="opl-input min-h-[64px] resize-y"
+                value={editor.strength}
+                placeholder="Waar is deze techniek sterk in? Bijv. complexe afwegingen onderbouwen."
+                onChange={(e) => setEditor({ ...editor, strength: e.target.value })}
+              />
+            </div>
+
+            <div>
+              <label className="opl-label">
+                Gebruikssituaties <span className="font-normal text-slate-400">(één per regel)</span>
+              </label>
+              <textarea
+                className="opl-input min-h-[80px] resize-y"
+                value={editor.useCasesText}
+                placeholder={'Een beleidskeuze afwegen\nEen risicoanalyse onderbouwen'}
+                onChange={(e) => setEditor({ ...editor, useCasesText: e.target.value })}
               />
             </div>
 

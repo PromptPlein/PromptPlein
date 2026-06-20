@@ -1,4 +1,5 @@
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
+import { localStore } from '@/services/localStore';
 import type { AppRole, Organization, OrganizationType, Profile } from '@/types';
 
 /**
@@ -14,10 +15,47 @@ function requireClient() {
   return supabase;
 }
 
+// --- Logo-uploads (Supabase Storage) ---
+
+const LOGO_BUCKET = 'org-logos';
+
+/**
+ * Upload een (al client-side geoptimaliseerd) logo naar de `org-logos`-bucket
+ * en geef de publieke URL terug. Het bestand is vierkant en klein, zodat de
+ * logo's in het organogram uniform getoond worden.
+ *
+ * @param blob   Het geoptimaliseerde beeld (PNG/WebP).
+ * @param hint   Optionele naamhint (bijv. de organisatiecode) voor leesbaarheid.
+ */
+export async function uploadOrgLogo(blob: Blob, hint?: string): Promise<string> {
+  const client = requireClient();
+  const ext = blob.type === 'image/webp' ? 'webp' : 'png';
+  const slug = (hint ?? 'logo')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 32) || 'logo';
+  // Unieke bestandsnaam → geen cache-problemen bij vervangen.
+  const rand = Math.random().toString(36).slice(2, 10);
+  const path = `${slug}-${Date.now()}-${rand}.${ext}`;
+
+  const { error } = await client.storage.from(LOGO_BUCKET).upload(path, blob, {
+    contentType: blob.type || 'image/png',
+    upsert: false,
+    cacheControl: '31536000',
+  });
+  if (error) throw error;
+
+  const { data } = client.storage.from(LOGO_BUCKET).getPublicUrl(path);
+  return data.publicUrl;
+}
+
 // --- Organisaties ---
 
 export async function listOrganizations(includeInactive = false): Promise<Organization[]> {
-  if (!isSupabaseConfigured || !supabase) return [];
+  // Mock-modus: vaste demo-organisaties zodat de community/het organogram werkt.
+  if (!isSupabaseConfigured || !supabase) return localStore.listOrganizations();
   let query = supabase.from('organizations').select('*').order('name');
   if (!includeInactive) query = query.eq('is_active', true);
   const { data, error } = await query;
@@ -29,6 +67,7 @@ export interface OrganizationInput {
   name: string;
   code?: string | null;
   description?: string | null;
+  logo_url?: string | null;
   parent_id?: string | null;
   organization_type: OrganizationType;
   contact_email?: string | null;

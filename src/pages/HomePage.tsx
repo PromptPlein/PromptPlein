@@ -11,6 +11,7 @@ import {
   Users,
   Search,
   Folder,
+  Sparkles,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -30,6 +31,7 @@ const CATEGORY_ICONS: Record<string, LucideIcon> = {
 const DashboardBackground = lazy(() => import('@/components/three/DashboardBackground'));
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { listPrompts } from '@/services/repository';
+import { usePromptCommunity } from '@/hooks/usePromptCommunity';
 import UploadModal from '@/components/prompts/UploadModal';
 import PromptCard from '@/components/prompts/PromptCard';
 import { SkeletonGrid } from '@/components/common/Skeleton';
@@ -53,6 +55,7 @@ export default function HomePage() {
   }, []);
 
   const totalPrompts = recent.length;
+  const { enriched, authors } = usePromptCommunity(recent);
 
   return (
     <div>
@@ -73,15 +76,26 @@ export default function HomePage() {
               Upload, deel, zoek en optimaliseer AI-prompts op basis van bewezen
               prompting-technieken. Voor ambtenaren, door ambtenaren.
             </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <button onClick={() => setUploadOpen(true)} className="opl-btn-primary bg-white text-rijksblauw-700 hover:bg-rijksblauw-50">
-                <Plus size={18} /> Nieuwe prompt
-              </button>
+            <div className="mt-8 flex flex-col gap-3 sm:max-w-md">
+              <div className="flex flex-wrap gap-3">
+                <button
+                  onClick={() => setUploadOpen(true)}
+                  className="opl-btn border border-white/70 text-white hover:bg-white/10"
+                >
+                  <Plus size={18} /> Nieuwe prompt
+                </button>
+                <Link
+                  to="/zoeken"
+                  className="opl-btn border border-white/70 text-white hover:bg-white/10"
+                >
+                  Verken bibliotheek <ArrowRight size={18} />
+                </Link>
+              </div>
               <Link
-                to="/zoeken"
-                className="opl-btn border border-white/40 text-white hover:bg-white/10"
+                to="/genereren"
+                className="opl-btn justify-center border border-white/70 text-white hover:bg-white/10"
               >
-                Verken bibliotheek <ArrowRight size={18} />
+                <Sparkles size={18} /> Genereer je prompt
               </Link>
             </div>
           </div>
@@ -118,10 +132,11 @@ export default function HomePage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {recent.map((p) => (
+              {enriched.map((p) => (
                 <PromptCard
                   key={p.id}
                   prompt={p}
+                  author={p.created_by_user ? authors[p.created_by_user] : null}
                   onChanged={(u) => setRecent((prev) => prev.map((x) => (x.id === u.id ? u : x)))}
                 />
               ))}

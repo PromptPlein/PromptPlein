@@ -1,14 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Plus, Pencil, Trash2, Upload, ImageOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
 import Modal from '@/components/common/Modal';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
+import LogoCropper from '@/components/common/LogoCropper';
 import {
   createOrganization,
   updateOrganization,
   deleteOrganization,
   listOrganizations,
+  uploadOrgLogo,
   ORG_TYPE_LABELS,
   type OrganizationInput,
 } from '@/services/orgService';
@@ -25,6 +27,7 @@ const EMPTY: Editor = {
   name: '',
   code: '',
   description: '',
+  logo_url: '',
   parent_id: '',
   organization_type: 'ministry',
   contact_email: '',
@@ -36,6 +39,12 @@ export default function OrganizationManagerPage() {
   const [loading, setLoading] = useState(true);
   const [editor, setEditor] = useState<Editor | null>(null);
   const [toDelete, setToDelete] = useState<Organization | null>(null);
+  // Logo-upload: bron-URL van het te bewerken bestand + nog niet-geüploade blob.
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
+  const [pendingLogo, setPendingLogo] = useState<Blob | null>(null);
+  const [savingLogo, setSavingLogo] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const orgName = useMemo(() => {
     const map = new Map(orgs.map((o) => [o.id, o.name]));
@@ -62,10 +71,29 @@ export default function OrganizationManagerPage() {
       toast.error('Naam is verplicht');
       return;
     }
+
+    // Upload een nieuw gekozen logo nu pas (bij opslaan), niet eerder.
+    let logoUrl = editor.logo_url?.trim() || null;
+    if (pendingLogo) {
+      setSavingLogo(true);
+      try {
+        logoUrl = await uploadOrgLogo(pendingLogo, editor.code || editor.name);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Logo uploaden mislukt');
+        setSavingLogo(false);
+        return;
+      }
+      setSavingLogo(false);
+    } else if (logoUrl?.startsWith('data:')) {
+      // Veiligheidsnet: een data-URL (preview) hoort nooit in de database.
+      logoUrl = null;
+    }
+
     const payload: OrganizationInput = {
       name: editor.name.trim(),
       code: editor.code?.trim() || null,
       description: editor.description?.trim() || null,
+      logo_url: logoUrl,
       parent_id: editor.parent_id || null,
       organization_type: editor.organization_type,
       contact_email: editor.contact_email?.trim() || null,
@@ -91,11 +119,45 @@ export default function OrganizationManagerPage() {
         });
         toast.success('Organisatie toegevoegd');
       }
+      setPendingLogo(null);
       setEditor(null);
       await load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Opslaan mislukt');
     }
+  }
+
+  // --- Logo-upload ---
+
+  function closeEditor() {
+    setPendingLogo(null);
+    setEditor(null);
+  }
+
+  function pickFile(file: File | null | undefined) {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('Kies een afbeeldingsbestand.');
+      return;
+    }
+    setCropSrc(URL.createObjectURL(file));
+  }
+
+  function onDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setDragActive(false);
+    pickFile(e.dataTransfer.files?.[0]);
+  }
+
+  function handleCropConfirm(blob: Blob, previewUrl: string) {
+    if (!editor) return;
+    // Alleen een lokale preview tonen + de blob onthouden. De daadwerkelijke
+    // upload naar de bucket gebeurt pas bij "Opslaan", zodat er geen weeslogo's
+    // achterblijven als de bewerking wordt geannuleerd.
+    setPendingLogo(blob);
+    setEditor((prev) => (prev ? { ...prev, logo_url: previewUrl } : prev));
+    if (cropSrc) URL.revokeObjectURL(cropSrc);
+    setCropSrc(null);
   }
 
   async function remove(o: Organization) {
@@ -171,6 +233,7 @@ export default function OrganizationManagerPage() {
                             name: o.name,
                             code: o.code ?? '',
                             description: o.description ?? '',
+                            logo_url: o.logo_url ?? '',
                             parent_id: o.parent_id ?? '',
                             organization_type: o.organization_type,
                             contact_email: o.contact_email ?? '',
@@ -207,7 +270,7 @@ export default function OrganizationManagerPage() {
 
       <Modal
         open={!!editor}
-        onClose={() => setEditor(null)}
+        onClose={closeEditor}
         title={editor?.id ? 'Organisatie bewerken' : 'Nieuwe organisatie'}
         size="max-w-lg"
       >
@@ -247,6 +310,73 @@ export default function OrganizationManagerPage() {
                     </option>
                   ))}
                 </select>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="opl-label">Logo</label>
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setDragActive(true);
+                  }}
+                  onDragLeave={() => setDragActive(false)}
+                  onDrop={onDrop}
+                  className={clsx(
+                    'flex items-center gap-4 rounded-xl border-2 border-dashed p-3 transition-colors',
+                    dragActive
+                      ? 'border-rijksblauw-400 bg-rijksblauw-50/60 dark:bg-rijksblauw-500/10'
+                      : 'border-slate-300 dark:border-slate-600',
+                  )}
+                >
+                  <div className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-600 dark:bg-slate-900">
+                    {savingLogo ? (
+                      <span className="text-[10px] text-slate-400">Uploaden…</span>
+                    ) : editor.logo_url?.trim() ? (
+                      <img src={editor.logo_url.trim()} alt="" className="h-full w-full object-contain" />
+                    ) : (
+                      <span className="text-sm font-bold text-rijksblauw-500">
+                        {(editor.code?.trim() || editor.name.trim().slice(0, 3)).toUpperCase() || (
+                          <ImageOff size={18} className="text-slate-300" />
+                        )}
+                      </span>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="opl-btn-secondary"
+                    >
+                      <Upload size={15} /> Logo uploaden
+                    </button>
+                    {editor.logo_url?.trim() && !savingLogo && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPendingLogo(null);
+                          setEditor({ ...editor, logo_url: '' });
+                        }}
+                        className="ml-2 text-xs text-rijksrood hover:underline"
+                      >
+                        Verwijderen
+                      </button>
+                    )}
+                    <p className="mt-1.5 text-xs text-slate-400 dark:text-slate-500">
+                      Sleep een afbeelding hierheen of klik. Je kunt het logo bijsnijden en zoomen;
+                      het wordt vierkant en geoptimaliseerd opgeslagen. Zonder logo toont het
+                      organogram de code (bijv. OCW, DUO).
+                    </p>
+                  </div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      pickFile(e.target.files?.[0]);
+                      e.target.value = '';
+                    }}
+                  />
+                </div>
               </div>
               <div className="sm:col-span-2">
                 <label className="opl-label">Bovenliggende organisatie</label>
@@ -292,14 +422,35 @@ export default function OrganizationManagerPage() {
               Actief
             </label>
             <div className="flex justify-end gap-3">
-              <button className="opl-btn-secondary" onClick={() => setEditor(null)}>
+              <button className="opl-btn-secondary" onClick={closeEditor}>
                 Annuleren
               </button>
-              <button className="opl-btn-primary" onClick={save}>
-                Opslaan
+              <button className="opl-btn-primary" onClick={save} disabled={savingLogo}>
+                {savingLogo ? 'Logo uploaden…' : 'Opslaan'}
               </button>
             </div>
           </div>
+        )}
+      </Modal>
+
+      <Modal
+        open={!!cropSrc}
+        onClose={() => {
+          if (cropSrc) URL.revokeObjectURL(cropSrc);
+          setCropSrc(null);
+        }}
+        title="Logo bijsnijden"
+        size="max-w-md"
+      >
+        {cropSrc && (
+          <LogoCropper
+            src={cropSrc}
+            onConfirm={handleCropConfirm}
+            onCancel={() => {
+              URL.revokeObjectURL(cropSrc);
+              setCropSrc(null);
+            }}
+          />
         )}
       </Modal>
 

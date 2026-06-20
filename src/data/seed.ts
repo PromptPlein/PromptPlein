@@ -28,12 +28,19 @@ export const SEED_TECHNIQUES: Technique[] = [
     id: 'tech-persona',
     name: 'Persona Prompting',
     description:
-      'Laat de prompt schrijven vanuit het perspectief van een specifieke persoon of doelgroep.',
+      'Laat de prompt schrijven vanuit het perspectief van een specifieke interne rol of expert.',
+    strength:
+      'Sterk in het meenemen van een specifiek deskundig perspectief. Het model neemt de toon, kennis en afwegingen van die rol over, waardoor de output gerichter en geloofwaardiger wordt.',
+    use_cases: [
+      'Een nota of advies beoordelen vanuit een SG, manager of jurist',
+      'Een tekst aanscherpen vanuit het oog van een ervaren beleidsmedewerker',
+      'Een stuk laten toetsen op bestuurlijke of juridische houdbaarheid',
+    ],
     follow_up_questions: [
-      { id: 'persona', label: 'Wie is de persoon?', placeholder: 'Bijv. een 70-jarige burger zonder digitale ervaring' },
-      { id: 'belangrijk', label: 'Wat is belangrijk voor hen?', placeholder: 'Bijv. duidelijkheid en geruststelling' },
-      { id: 'weten', label: 'Wat willen ze graag weten?', placeholder: 'Bijv. welke stappen ze moeten zetten' },
-      { id: 'belangen', label: 'Wat zijn hun belangen?', placeholder: 'Bijv. tijdig de juiste toeslag ontvangen' },
+      { id: 'persona', label: 'Vanuit welke interne rol/expert?', placeholder: 'Bijv. een ervaren beleidsmedewerker of een SG die een nota beoordeelt' },
+      { id: 'belangrijk', label: 'Wat is belangrijk voor deze rol?', placeholder: 'Bijv. juridische houdbaarheid en bestuurlijke afweging' },
+      { id: 'weten', label: 'Waar let deze rol vooral op?', placeholder: 'Bijv. risico’s, draagvlak en uitvoerbaarheid' },
+      { id: 'belangen', label: 'Wat zijn de belangen van deze rol?', placeholder: 'Bijv. een onderbouwd, uitvoerbaar advies opleveren' },
     ],
     template: `Je bent {{persona}}.
 
@@ -50,6 +57,13 @@ Oorspronkelijke opdracht:
     id: 'tech-chain-of-thought',
     name: 'Chain-of-Thought',
     description: 'Laat het model stap voor stap redeneren voor complexere taken.',
+    strength:
+      'Sterk bij complexe afwegingen en analyses. Doordat het model elke tussenstap expliciet maakt, worden conclusies beter onderbouwd en is de redenering controleerbaar.',
+    use_cases: [
+      'Een beleidskeuze of scenario afwegen met meerdere opties',
+      'Een risico- of impactanalyse onderbouwen',
+      'Een complex vraagstuk ontleden voordat je tot een advies komt',
+    ],
     follow_up_questions: [
       { id: 'doel', label: 'Wat is het einddoel?', placeholder: 'Bijv. een onderbouwd advies' },
       { id: 'stappen', label: 'Welke tussenstappen zijn belangrijk?', placeholder: 'Bijv. eerst de feiten, dan de afweging' },
@@ -71,6 +85,13 @@ Oorspronkelijke opdracht:
     id: 'tech-few-shot',
     name: 'Few-Shot Voorbeelden',
     description: 'Geef het model enkele voorbeelden zodat het de gewenste stijl en structuur overneemt.',
+    strength:
+      'Sterk in het reproduceren van een vaste stijl, toon of format. Met een paar goede voorbeelden levert het model consistent werk dat aansluit op je huisstijl of sjabloon.',
+    use_cases: [
+      'Teksten in een vaste huisstijl of toon laten schrijven',
+      'Een bestaand sjabloon (memo, nota, samenvatting) consequent laten volgen',
+      'Output uniform maken over meerdere stukken heen',
+    ],
     follow_up_questions: [
       { id: 'voorbeeld1', label: 'Voorbeeld 1 (gewenste output)', placeholder: 'Plak een goed voorbeeld' },
       { id: 'voorbeeld2', label: 'Voorbeeld 2 (optioneel)', placeholder: 'Nog een voorbeeld' },
@@ -95,6 +116,13 @@ Oorspronkelijke opdracht:
     id: 'tech-structured-output',
     name: 'Gestructureerde Output',
     description: 'Dwing een vast outputformaat af, zoals een tabel, lijst of vaste secties.',
+    strength:
+      'Sterk wanneer de vorm vastligt. Het model levert direct bruikbare output in exact het gevraagde formaat, zonder overbodige inleiding of afsluiting.',
+    use_cases: [
+      'Een overzicht of vergelijking in een tabel laten zetten',
+      'Een samenvatting in vaste secties of bullets opleveren',
+      'Data of bevindingen in een herbruikbaar format gieten',
+    ],
     follow_up_questions: [
       { id: 'formaat', label: 'Welk outputformaat wil je?', placeholder: 'Bijv. tabel met kolommen: onderwerp, advies, risico' },
       { id: 'taalniveau', label: 'Welk taalniveau?', placeholder: 'Bijv. B1 (begrijpelijke taal)' },
@@ -115,7 +143,14 @@ Oorspronkelijke opdracht:
   {
     id: 'tech-multi-persona',
     name: 'Multi-Persona Prompting',
-    description: 'Stem de prompt af op meerdere belanghebbenden tegelijk.',
+    description: 'Stem de prompt af op meerdere interne belanghebbenden tegelijk.',
+    strength:
+      'Sterk wanneer meerdere interne belangen samenkomen. Het model weegt de perspectieven van verschillende rollen tegen elkaar af en adresseert ieders belang expliciet.',
+    use_cases: [
+      'Een stuk dat zowel projectleider, jurist als communicatie moet aanspreken',
+      'Een afweging waarbij meerdere afdelingen een belang hebben',
+      'Een voorstel toetsen op draagvlak bij verschillende stakeholders',
+    ],
     follow_up_questions: [
       { id: 'persona1', label: 'Persona 1 — naam/rol', placeholder: 'Bijv. Projectleider' },
       { id: 'belang1', label: 'Persona 1 — belang & prioriteit', placeholder: 'Bijv. tijdige oplevering' },
@@ -144,8 +179,15 @@ Oorspronkelijke opdracht:
     id: 'tech-socratic',
     name: 'Socratic Prompting',
     description: 'Laat de AI vragen stellen in plaats van direct antwoorden geven (Socratische methode).',
+    strength:
+      'Sterk in het blootleggen van aannames en blinde vlekken. In plaats van een kant-en-klaar antwoord stelt het model kritische vragen die je denken scherper maken.',
+    use_cases: [
+      'Een aanpak of voorstel kritisch tegen het licht houden',
+      'Verborgen aannames in een beleidsstuk opsporen',
+      'Een vraagstuk verkennen voordat je een richting kiest',
+    ],
     follow_up_questions: [
-      { id: 'aannames', label: 'Wat zijn de kern-aannames in de input?', placeholder: 'Bijv. dat de doelgroep digivaardig is' },
+      { id: 'aannames', label: 'Wat zijn de kern-aannames in de input?', placeholder: 'Bijv. dat de aanpak uitvoerbaar is binnen de huidige capaciteit' },
       { id: 'ontdekken', label: 'Wat wil je eigenlijk ontdekken?', placeholder: 'Bijv. of de aanpak wel klopt' },
     ],
     template: `Analyseer de aannames in onderstaande tekst en pas de Socratische methode toe.
@@ -168,6 +210,13 @@ Oorspronkelijke opdracht:
     id: 'tech-meta',
     name: 'Meta Prompting',
     description: 'De AI analyseert en verbetert haar eigen prompting-aanpak.',
+    strength:
+      'Sterk wanneer je niet zeker weet hoe je de opdracht het best formuleert. Het model reflecteert op de aanpak zelf en stelt een verbeterde formulering voor.',
+    use_cases: [
+      'Een vage of brede opdracht scherper laten formuleren',
+      'Leren hoe je een terugkerende taak beter kunt prompten',
+      'Een bestaande prompt laten verbeteren',
+    ],
     follow_up_questions: [],
     template: `Analyseer en verbeter je eigen prompting-benadering voor de onderstaande opdracht.
 
@@ -186,6 +235,13 @@ Oorspronkelijke opdracht:
     id: 'tech-crisp',
     name: 'CRISP',
     description: 'Gestructureerd prompten met Context, Rules, Instructions, Specifics en Pattern.',
+    strength:
+      'Sterk bij complexe opdrachten met veel randvoorwaarden. Door context, regels, instructies, details en patroon te scheiden, krijgt het model maximale sturing.',
+    use_cases: [
+      'Een omvangrijke of gevoelige opdracht met strikte eisen',
+      'Werk waarbij randvoorwaarden (bijv. AVG, kaders) cruciaal zijn',
+      'Een herbruikbare, goed gestructureerde standaardprompt opzetten',
+    ],
     follow_up_questions: [
       { id: 'context', label: 'CONTEXT — achtergrond & situatie', placeholder: 'Waar gaat het over?' },
       { id: 'rules', label: 'RULES — regels & randvoorwaarden', placeholder: 'Bijv. AVG-proof, B1-taalniveau' },
@@ -217,6 +273,13 @@ Geef, gegeven bovenstaande CRISP-structuur, antwoord op:
     id: 'tech-care',
     name: 'CARE',
     description: 'Uitgebreid prompten met Context, Ask, Rules en Examples.',
+    strength:
+      'Sterk als je een duidelijke vraag wilt combineren met context, regels én voorbeelden. Een toegankelijke structuur die snel tot bruikbaar resultaat leidt.',
+    use_cases: [
+      'Een concrete schrijf- of analyseopdracht met een voorbeeld erbij',
+      'Werk waarbij je de gewenste uitkomst kunt illustreren',
+      'Een gestructureerde maar lichte aanpak zonder veel overhead',
+    ],
     follow_up_questions: [
       { id: 'context', label: 'CONTEXT — achtergrond', placeholder: 'Waar gaat het over?' },
       { id: 'ask', label: 'ASK — de concrete vraag', placeholder: 'Wat vraag je precies?' },

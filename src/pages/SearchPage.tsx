@@ -9,6 +9,7 @@ import { searchPrompts } from '@/services/repository';
 import { trackEvent } from '@/services/analyticsService';
 import { getCurrentUser } from '@/lib/utils';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+import { usePromptCommunity } from '@/hooks/usePromptCommunity';
 import type { AdvancedPromptFilters, Prompt, SortOption } from '@/types';
 
 export default function SearchPage() {
@@ -17,6 +18,7 @@ export default function SearchPage() {
   const [filters, setFilters] = useState<AdvancedPromptFilters>(() => ({
     query: searchParams.get('q') ?? '',
     category_ids: searchParams.get('category') ? [searchParams.get('category')!] : [],
+    organization_ids: searchParams.get('org') ? [searchParams.get('org')!] : [],
     role_ids: [],
     technique_ids: [],
     sharing_levels: [],
@@ -35,10 +37,11 @@ export default function SearchPage() {
     const params: Record<string, string> = {};
     if (filters.query) params.q = filters.query;
     if (filters.category_ids?.length === 1) params.category = filters.category_ids[0];
+    if (filters.organization_ids?.length === 1) params.org = filters.organization_ids[0];
     if (filters.sort && filters.sort !== 'newest') params.sort = filters.sort;
     setSearchParams(params, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedQuery, filters.category_ids, filters.sort]);
+  }, [debouncedQuery, filters.category_ids, filters.organization_ids, filters.sort]);
 
   // Data ophalen wanneer filters wijzigen.
   useEffect(() => {
@@ -64,6 +67,7 @@ export default function SearchPage() {
   }, [
     debouncedQuery,
     filters.category_ids,
+    filters.organization_ids,
     filters.role_ids,
     filters.technique_ids,
     filters.sharing_levels,
@@ -75,6 +79,8 @@ export default function SearchPage() {
   function handleChanged(updated: Prompt) {
     setPrompts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
   }
+
+  const { enriched, authors } = usePromptCommunity(prompts);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -107,8 +113,13 @@ export default function SearchPage() {
             {prompts.length} resultaat{prompts.length === 1 ? '' : 'en'}
           </p>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {prompts.map((p) => (
-              <PromptCard key={p.id} prompt={p} onChanged={handleChanged} />
+            {enriched.map((p) => (
+              <PromptCard
+                key={p.id}
+                prompt={p}
+                author={p.created_by_user ? authors[p.created_by_user] : null}
+                onChanged={handleChanged}
+              />
             ))}
           </div>
         </>

@@ -1,17 +1,24 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Sparkles, Loader2, FileText } from 'lucide-react';
+import { Sparkles, Loader2, FileText, Compass, ListChecks } from 'lucide-react';
+import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import TechniqueSelector from '@/components/optimizer/TechniqueSelector';
+import GoalRecommender from '@/components/optimizer/GoalRecommender';
 import FollowUpQuestions from '@/components/optimizer/FollowUpQuestions';
 import OptimizedOutput from '@/components/optimizer/OptimizedOutput';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { getPrompt, saveOptimization } from '@/services/repository';
-import { optimizePrompt } from '@/services/optimizeService';
+import { generatePrompt } from '@/services/optimizeService';
 import { trackEvent } from '@/services/analyticsService';
+import { getAiSettings, DEFAULT_AI_SETTINGS, type AiSettings } from '@/services/settingsService';
+import { detectPii, detectBlockedTopics, type GuardrailFinding } from '@/services/guardrails';
+import GuardrailDialog from '@/components/optimizer/GuardrailDialog';
 import { getCurrentUser } from '@/lib/utils';
-import { AI_MODELS, type AiProvider } from '@/config/aiModels';
 import type { OptimizeResult } from '@/types';
+
+/** Twee instapwijzen: ofwel zelf een techniek kiezen, ofwel laten aanbevelen. */
+type TechniqueMode = 'manual' | 'smart';
 
 export default function OptimizerPage() {
   const { promptId } = useParams<{ promptId?: string }>();
@@ -19,14 +26,18 @@ export default function OptimizerPage() {
 
   const [promptContent, setPromptContent] = useState('');
   const [sourcePromptId, setSourcePromptId] = useState<string | null>(null);
+  const [techniqueMode, setTechniqueMode] = useState<TechniqueMode>('manual');
   const [techniqueId, setTechniqueId] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [loadingPrompt, setLoadingPrompt] = useState(Boolean(promptId));
   const [optimizing, setOptimizing] = useState(false);
-  const [provider, setProvider] = useState<AiProvider>('auto');
+  // Admin-bepaalde AI-instellingen; gebruikers kiezen niet meer zelf.
+  const settingsRef = useRef<AiSettings>(DEFAULT_AI_SETTINGS);
+  const [guardrailFindings, setGuardrailFindings] = useState<GuardrailFinding[] | null>(null);
   const [result, setResult] = useState<OptimizeResult | null>(null);
   // 'input' = invoerpaneel zichtbaar, 'transition' = uitfaden, 'output' = resultaat
   const [phase, setPhase] = useState<'input' | 'transition' | 'output'>('input');
+  const followUpRef = useRef<HTMLElement>(null);
 
   // Laad de bronprompt als er via de URL een prompt is meegegeven.
   useEffect(() => {
@@ -47,30 +58,67 @@ export default function OptimizerPage() {
     };
   }, [promptId]);
 
+  // Laad de door de admin ingestelde AI-instellingen (geldt voor alle gebruikers).
+  useEffect(() => {
+    let active = true;
+    getAiSettings().then((s) => {
+      if (active) settingsRef.current = s;
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const technique = techniques.find((t) => t.id === techniqueId) ?? null;
 
   function handleSelectTechnique(id: string) {
     setTechniqueId(id);
     setAnswers({}); // antwoorden resetten bij nieuwe techniek
+    // Wacht tot het vervolgvragen-paneel is gerenderd en scroll het in beeld.
+    requestAnimationFrame(() => {
+      followUpRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
   }
 
-  async function handleOptimize() {
+  /** Controleert eerst de guardrails; bij een treffer wordt om bevestiging gevraagd. */
+  function handleGenerate() {
     if (!technique) {
       toast.error('Kies eerst een techniek.');
       return;
     }
-    if (!promptContent.trim()) {
-      toast.error('Voer een prompt in om te optimaliseren.');
-      return;
-    }
 
+    // Alleen de meegegeven inhoud op guardrails toetsen (mag leeg zijn:
+    // de generator levert een herbruikbare template met plaatshouders).
+    if (promptContent.trim()) {
+      const s = settingsRef.current;
+      const findings: GuardrailFinding[] = [
+        ...(s.pii.enabled ? detectPii(promptContent) : []),
+        ...detectBlockedTopics(promptContent, s.blockedTopics),
+      ];
+      if (findings.length > 0) {
+        setGuardrailFindings(findings); // toon bevestigingsdialoog; blokkeer tot bevestiging
+        return;
+      }
+    }
+    void runGenerate();
+  }
+
+  async function runGenerate() {
+    if (!technique) return;
+    setGuardrailFindings(null);
     setOptimizing(true);
     try {
-      const res = await optimizePrompt({
+      const s = settingsRef.current;
+      // Leeg = de generator gebruikt een neutrale plaatshouder voor de eigen inhoud.
+      const draft = promptContent.trim() || '[BESCHRIJF HIER WAT JE WILT BEREIKEN]';
+      const res = await generatePrompt({
         technique,
-        promptContent: promptContent.trim(),
+        promptContent: draft,
         followUpAnswers: answers,
-        preferredProvider: provider,
+        preferredProvider: s.provider,
+        systemPrompt: s.systemPrompt.trim() || undefined,
+        toneInstruction: s.toneInstruction.trim() || undefined,
+        temperature: s.temperature,
       });
 
       void trackEvent({
@@ -116,10 +164,11 @@ export default function OptimizerPage() {
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-6">
         <h1 className="flex items-center gap-2 text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
-          <Sparkles className="text-rijksoranje" /> Prompt optimaliseren
+          <Sparkles className="text-rijksoranje" /> Prompt genereren
         </h1>
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          Kies een techniek, beantwoord de vervolgvragen en genereer een verbeterde prompt.
+          Genereer een herbruikbare prompt-template. De inhoud vul je zelf aan in je eigen chat —
+          kopieer en plak de template telkens wanneer je hem nodig hebt.
         </p>
       </div>
 
@@ -133,93 +182,157 @@ export default function OptimizerPage() {
             phase === 'transition' ? 'pointer-events-none opacity-0' : 'opacity-100'
           }`}
         >
-          {/* 1. Bronprompt */}
+          {/* 1. Techniek — zelf kiezen of laten aanbevelen */}
           <section className="opl-card p-6">
-            <div className="mb-3 flex items-center gap-2">
+            <div className="mb-4 flex items-center gap-2">
               <span className="flex h-6 w-6 items-center justify-center rounded-full bg-rijksblauw-500 text-xs font-bold text-white">
                 1
               </span>
-              <h2 className="font-semibold text-slate-800 dark:text-slate-100">Oorspronkelijke prompt</h2>
-            </div>
-            {loadingPrompt ? (
-              <div className="skeleton h-32 w-full rounded-lg" />
-            ) : (
-              <textarea
-                className="opl-input min-h-[140px] resize-y font-mono text-[13px]"
-                value={promptContent}
-                onChange={(e) => {
-                  setPromptContent(e.target.value);
-                  setSourcePromptId(null); // handmatig bewerkt = niet langer gekoppeld
-                }}
-                placeholder="Plak of typ hier je prompt…"
-              />
-            )}
-            {sourcePromptId && (
-              <p className="mt-2 inline-flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
-                <FileText size={12} /> Gekoppeld aan een opgeslagen prompt — de optimalisatie wordt
-                bewaard.
-              </p>
-            )}
-          </section>
-
-          {/* 2. Techniek */}
-          <section className="opl-card p-6">
-            <div className="mb-3 flex items-center gap-2">
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-rijksblauw-500 text-xs font-bold text-white">
-                2
-              </span>
               <h2 className="font-semibold text-slate-800 dark:text-slate-100">Kies een techniek</h2>
             </div>
-            <TechniqueSelector selectedId={techniqueId} onSelect={handleSelectTechnique} />
+
+            {/* Moduskeuze: weet ik al / weet ik nog niet */}
+            <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => setTechniqueMode('manual')}
+                aria-pressed={techniqueMode === 'manual'}
+                className={clsx(
+                  'flex items-start gap-3 rounded-xl border p-4 text-left transition-all',
+                  techniqueMode === 'manual'
+                    ? 'border-rijksblauw-500 bg-rijksblauw-50 ring-2 ring-rijksblauw-500/20 dark:bg-rijksblauw-500/15'
+                    : 'border-slate-200 bg-white hover:border-rijksblauw-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800',
+                )}
+              >
+                <ListChecks size={20} className="mt-0.5 shrink-0 text-rijksblauw-500" />
+                <span>
+                  <span className="block font-semibold text-slate-800 dark:text-slate-100">
+                    Ik weet welke techniek ik wil
+                  </span>
+                  <span className="text-sm text-slate-500 dark:text-slate-400">
+                    Kies zelf direct uit de lijst.
+                  </span>
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setTechniqueMode('smart')}
+                aria-pressed={techniqueMode === 'smart'}
+                className={clsx(
+                  'flex items-start gap-3 rounded-xl border p-4 text-left transition-all',
+                  techniqueMode === 'smart'
+                    ? 'border-rijksblauw-500 bg-rijksblauw-50 ring-2 ring-rijksblauw-500/20 dark:bg-rijksblauw-500/15'
+                    : 'border-slate-200 bg-white hover:border-rijksblauw-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800',
+                )}
+              >
+                <Compass size={20} className="mt-0.5 shrink-0 text-rijksoranje" />
+                <span>
+                  <span className="block font-semibold text-slate-800 dark:text-slate-100">
+                    Ik weet nog niet welke techniek
+                  </span>
+                  <span className="text-sm text-slate-500 dark:text-slate-400">
+                    Beschrijf je doel; wij bevelen een techniek aan.
+                  </span>
+                </span>
+              </button>
+            </div>
+
+            {techniqueMode === 'manual' ? (
+              <TechniqueSelector selectedId={techniqueId} onSelect={handleSelectTechnique} />
+            ) : (
+              <GoalRecommender
+                selectedTechniqueId={techniqueId}
+                onSelectTechnique={handleSelectTechnique}
+              />
+            )}
           </section>
 
-          {/* 3. Vervolgvragen */}
+          {/* 2. Velden invullen — per gekozen techniek */}
           {technique && (
-            <section className="opl-card p-6 animate-fade-in">
-              <div className="mb-3 flex items-center gap-2">
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-rijksblauw-500 text-xs font-bold text-white">
-                  3
-                </span>
-                <h2 className="font-semibold text-slate-800 dark:text-slate-100">Vervolgvragen</h2>
+            <section
+              key={technique.id}
+              ref={followUpRef}
+              className="animate-fade-in scroll-mt-24 overflow-hidden rounded-2xl border border-rijksblauw-200 bg-white shadow-sm dark:border-rijksblauw-500/30 dark:bg-slate-800"
+            >
+              {/* Accentbalk bovenaan */}
+              <div className="h-1 w-full bg-gradient-to-r from-rijksblauw-400 to-rijksblauw-700" />
+              <div className="p-6">
+                <div className="mb-4 flex items-start gap-3">
+                  <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-rijksblauw-500 text-xs font-bold text-white">
+                    2
+                  </span>
+                  <div>
+                    <h2 className="font-semibold text-slate-800 dark:text-slate-100">
+                      Vul de velden in
+                    </h2>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                      Voor techniek{' '}
+                      <span className="font-medium text-rijksblauw-700 dark:text-rijksblauw-200">
+                        {technique.name}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+                <FollowUpQuestions technique={technique} answers={answers} onChange={setAnswers} />
+
+                {/* Optioneel startpunt: eigen tekst die in de template verwerkt wordt */}
+                <div className="mt-5 border-t border-slate-100 pt-5 dark:border-slate-700">
+                  <label className="opl-label" htmlFor="draft-input">
+                    Startpunt of voorbeeldtekst{' '}
+                    <span className="font-normal text-slate-400">(optioneel)</span>
+                  </label>
+                  {loadingPrompt ? (
+                    <div className="skeleton h-24 w-full rounded-lg" />
+                  ) : (
+                    <textarea
+                      id="draft-input"
+                      className="opl-input min-h-[96px] resize-y font-mono text-[13px]"
+                      value={promptContent}
+                      onChange={(e) => {
+                        setPromptContent(e.target.value);
+                        setSourcePromptId(null); // handmatig bewerkt = niet langer gekoppeld
+                      }}
+                      placeholder="Laat leeg voor een lege template, of plak hier een bestaande prompt/tekst als startpunt…"
+                    />
+                  )}
+                  {sourcePromptId && (
+                    <p className="mt-2 inline-flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
+                      <FileText size={12} /> Gekoppeld aan een opgeslagen prompt — de generatie wordt
+                      bewaard.
+                    </p>
+                  )}
+                </div>
               </div>
-              <FollowUpQuestions technique={technique} answers={answers} onChange={setAnswers} />
             </section>
           )}
 
           <div className="flex flex-wrap items-center justify-end gap-3">
-            <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-              <span className="hidden sm:inline">AI-model</span>
-              <select
-                className="opl-input w-auto py-2"
-                value={provider}
-                onChange={(e) => setProvider(e.target.value as AiProvider)}
-                disabled={optimizing}
-                title={AI_MODELS.find((m) => m.id === provider)?.hint}
-              >
-                {AI_MODELS.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.label}
-                  </option>
-                ))}
-              </select>
-            </label>
             <button
               className="opl-btn-primary px-6 py-2.5"
-              onClick={handleOptimize}
+              onClick={handleGenerate}
               disabled={optimizing || !technique}
             >
               {optimizing ? (
                 <>
-                  <Loader2 size={18} className="animate-spin" /> Bezig met optimaliseren…
+                  <Loader2 size={18} className="animate-spin" /> Bezig met genereren…
                 </>
               ) : (
                 <>
-                  <Sparkles size={18} /> Optimaliseer prompt
+                  <Sparkles size={18} /> Genereer prompt
                 </>
               )}
             </button>
           </div>
         </div>
+      )}
+
+      {guardrailFindings && (
+        <GuardrailDialog
+          findings={guardrailFindings}
+          piiWarning={settingsRef.current.pii.warning}
+          onConfirm={() => void runGenerate()}
+          onCancel={() => setGuardrailFindings(null)}
+        />
       )}
     </div>
   );

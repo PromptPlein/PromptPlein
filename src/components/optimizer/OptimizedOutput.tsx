@@ -22,18 +22,25 @@ export default function OptimizedOutput({ result, onReset }: OptimizedOutputProp
   async function handleCopy() {
     await copyToClipboard(result.optimized_content);
     setCopied(true);
-    toast.success('Geoptimaliseerde prompt gekopieerd');
+    toast.success('Prompt-template gekopieerd');
     setTimeout(() => setCopied(false), 1500);
   }
 
   return (
     <div className="space-y-4 animate-fade-in">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Geoptimaliseerde prompt</h3>
+        <h3 className="text-lg font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
+          Gegenereerde prompt-template
+        </h3>
         <span className="opl-badge bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300">
           <Cpu size={12} /> {providerLabel[result.provider]}
         </span>
       </div>
+
+      <p className="text-sm text-slate-500 dark:text-slate-400">
+        Kopieer deze template en plak hem in je eigen AI-chat. Vul de plekken tussen{' '}
+        <span className="font-mono text-xs">[haakjes]</span> zelf aan met je eigen inhoud.
+      </p>
 
       {result.error && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300">

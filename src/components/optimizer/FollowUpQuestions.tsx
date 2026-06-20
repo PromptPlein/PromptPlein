@@ -13,7 +13,9 @@ export default function FollowUpQuestions({
 }: FollowUpQuestionsProps) {
   if (technique.follow_up_questions.length === 0) {
     return (
-      <p className="text-sm text-slate-500 dark:text-slate-400">Deze techniek heeft geen vervolgvragen.</p>
+      <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-600 dark:bg-slate-900/40 dark:text-slate-400">
+        Deze techniek heeft geen vervolgvragen — je kunt direct optimaliseren.
+      </div>
     );
   }
 

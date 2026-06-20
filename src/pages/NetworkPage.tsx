@@ -6,7 +6,7 @@ import { listOrganizations } from '@/services/orgService';
 import { listPrompts } from '@/services/repository';
 import type { Organization, Prompt } from '@/types';
 
-const OrganizationNetwork = lazy(() => import('@/components/three/OrganizationNetwork'));
+const OrgChart = lazy(() => import('@/components/network/OrgChart'));
 const PromptEcosystem = lazy(() => import('@/components/three/PromptEcosystem'));
 
 type Tab = 'organisaties' | 'prompts';
@@ -42,8 +42,9 @@ export default function NetworkPage() {
       <div className="mb-5">
         <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Netwerkverkenner</h1>
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          Interactieve 3D-weergave van organisaties en het promptlandschap. Sleep om te draaien,
-          scroll om te zoomen.
+          {tab === 'organisaties'
+            ? 'Organogram van het organisatienetwerk. Sleep om te verschuiven, scroll of gebruik de knoppen om te zoomen, klik een organisatie aan voor details.'
+            : 'Interactieve weergave van het promptlandschap.'}
         </p>
       </div>
 
@@ -76,7 +77,7 @@ export default function NetworkPage() {
             }
           >
             {tab === 'organisaties' ? (
-              <OrganizationNetwork orgs={orgs} />
+              <OrgChart orgs={orgs} />
             ) : (
               <PromptEcosystem prompts={prompts} categories={categories} />
             )}

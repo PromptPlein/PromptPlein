@@ -36,6 +36,12 @@ export default function TechniqueSelector({ selectedId, onSelect }: TechniqueSel
               )}
             </div>
             <span className="text-sm text-slate-600 dark:text-slate-300">{t.description}</span>
+            {t.strength && (
+              <span className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                <span className="font-medium text-slate-600 dark:text-slate-300">Kracht: </span>
+                {t.strength}
+              </span>
+            )}
             <span className="mt-2 text-xs text-slate-400 dark:text-slate-500">
               {t.follow_up_questions.length} vervolgvraag
               {t.follow_up_questions.length === 1 ? '' : 'en'}

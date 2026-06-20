@@ -149,6 +149,7 @@ export async function searchPrompts(filters: AdvancedPromptFilters = {}): Promis
   if (filters.favorites_only) query = query.eq('is_favorite', true);
   if (filters.category_ids?.length) query = query.in('category_id', filters.category_ids);
   if (filters.role_ids?.length) query = query.in('role_id', filters.role_ids);
+  if (filters.organization_ids?.length) query = query.in('organization_id', filters.organization_ids);
   if (filters.sharing_levels?.length) query = query.in('sharing_level', filters.sharing_levels);
   if (filters.date_from) query = query.gte('created_at', filters.date_from);
   if (filters.date_to) query = query.lte('created_at', `${filters.date_to}T23:59:59`);
