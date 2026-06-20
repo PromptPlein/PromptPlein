@@ -80,10 +80,10 @@ export async function fetchProfile(userId: string): Promise<Profile | null> {
   return (data as Profile | null) ?? null;
 }
 
-/** Werk het eigen profiel bij (naam, organisatie). Rolwijziging blokkeert RLS. */
+/** Werk het eigen profiel bij (naam, organisatie, functie). Rolwijziging blokkeert RLS. */
 export async function updateOwnProfile(
   userId: string,
-  patch: Partial<Pick<Profile, 'full_name' | 'avatar_url' | 'organization_id'>>,
+  patch: Partial<Pick<Profile, 'full_name' | 'avatar_url' | 'organization_id' | 'function_id'>>,
 ): Promise<Profile> {
   const client = requireClient();
   const { data, error } = await client

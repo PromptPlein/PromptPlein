@@ -4,7 +4,6 @@ export const SHARING_LEVELS: { value: SharingLevel; label: string; description: 
   { value: 'private', label: 'Privé', description: 'Alleen voor jezelf zichtbaar.' },
   { value: 'department', label: 'Afdeling', description: 'Zichtbaar binnen je afdeling.' },
   { value: 'ministry', label: 'Ministerie', description: 'Zichtbaar binnen het ministerie.' },
-  { value: 'role', label: 'Rol', description: 'Zichtbaar voor collega’s met dezelfde rol.' },
   { value: 'public', label: 'Openbaar', description: 'Voor alle overheidsmedewerkers.' },
 ];
 
@@ -20,11 +19,10 @@ export function sharingBadgeClasses(level: SharingLevel): string {
       return 'bg-sky-100 text-sky-800';
     case 'ministry':
       return 'bg-indigo-100 text-indigo-800';
-    case 'role':
-      return 'bg-violet-100 text-violet-800';
     case 'public':
       return 'bg-emerald-100 text-emerald-800';
     default:
+      // Vangt ook oudere prompts op met een inmiddels verwijderd deelniveau.
       return 'bg-slate-100 text-slate-700';
   }
 }

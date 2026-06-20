@@ -4,7 +4,9 @@ import {
   ArrowLeft,
   Copy,
   Check,
-  Sparkles,
+  Pencil,
+  Save,
+  X,
   Star,
   Share2,
   Trash2,
@@ -24,6 +26,7 @@ import {
   deletePrompt,
   getPrompt,
   listOptimizations,
+  savePromptEdit,
   toggleFavorite,
 } from '@/services/repository';
 import { getLikeInfo, toggleLike } from '@/services/likeService';
@@ -40,7 +43,7 @@ export default function PromptDetailPage() {
   const { promptId } = useParams<{ promptId: string }>();
   const navigate = useNavigate();
   const { categoryById, roleById, techniqueById, organizationById } = useReferenceData();
-  const { user, configured } = useAuth();
+  const { user, configured, isAdmin } = useAuth();
 
   const [prompt, setPrompt] = useState<Prompt | null>(null);
   const [optimizations, setOptimizations] = useState<Optimization[]>([]);
@@ -52,6 +55,14 @@ export default function PromptDetailPage() {
   const [likeCount, setLikeCount] = useState(0);
   const [liked, setLiked] = useState(false);
   const [likeBusy, setLikeBusy] = useState(false);
+  // Inline bewerken (alleen voor eigenaar/admin).
+  const [editing, setEditing] = useState(false);
+  const [draftTitle, setDraftTitle] = useState('');
+  const [draftDescription, setDraftDescription] = useState('');
+  const [draftContent, setDraftContent] = useState('');
+  const [saving, setSaving] = useState(false);
+  // Verhoogd na een opslag, zodat de versiegeschiedenis ververst.
+  const [versionRefresh, setVersionRefresh] = useState(0);
 
   useEffect(() => {
     if (!promptId) return;
@@ -141,6 +152,42 @@ export default function PromptDetailPage() {
     navigate('/zoeken');
   }
 
+  function startEditing() {
+    if (!prompt) return;
+    setDraftTitle(prompt.title);
+    setDraftDescription(prompt.description ?? '');
+    setDraftContent(prompt.content);
+    setEditing(true);
+  }
+
+  function cancelEditing() {
+    setEditing(false);
+  }
+
+  async function handleSaveEdit() {
+    if (!prompt) return;
+    if (!draftTitle.trim()) {
+      toast.error('Een titel is verplicht.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const updated = await savePromptEdit(
+        prompt,
+        { title: draftTitle, description: draftDescription, content: draftContent },
+        user?.id,
+      );
+      setPrompt(updated);
+      setEditing(false);
+      setVersionRefresh((n) => n + 1); // versiegeschiedenis verversen
+      toast.success('Template opgeslagen');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Opslaan mislukt');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-8">
@@ -163,6 +210,9 @@ export default function PromptDetailPage() {
 
   const category = categoryById(prompt.category_id);
   const role = roleById(prompt.role_id);
+  // Alleen de eigenaar of een admin mag de prompt bewerken of verwijderen.
+  const isOwner = !!user && prompt.created_by_user === user.id;
+  const canManage = isAdmin || isOwner;
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
@@ -175,7 +225,17 @@ export default function PromptDetailPage() {
 
       <div className="opl-card p-6">
         <div className="mb-4 flex items-start justify-between gap-4">
-          <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">{prompt.title}</h1>
+          {editing ? (
+            <input
+              className="opl-input flex-1 text-xl font-bold"
+              value={draftTitle}
+              onChange={(e) => setDraftTitle(e.target.value)}
+              placeholder="Titel van de template"
+              aria-label="Titel"
+            />
+          ) : (
+            <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">{prompt.title}</h1>
+          )}
           <div className="flex shrink-0 items-center gap-1">
             <button
               onClick={handleLike}
@@ -202,7 +262,19 @@ export default function PromptDetailPage() {
           </div>
         </div>
 
-        {prompt.description && <p className="mb-4 text-slate-600 dark:text-slate-300">{prompt.description}</p>}
+        {editing ? (
+          <textarea
+            className="opl-input mb-4 min-h-[60px] resize-y"
+            value={draftDescription}
+            onChange={(e) => setDraftDescription(e.target.value)}
+            placeholder="Korte omschrijving (optioneel)"
+            aria-label="Omschrijving"
+          />
+        ) : (
+          prompt.description && (
+            <p className="mb-4 text-slate-600 dark:text-slate-300">{prompt.description}</p>
+          )
+        )}
 
         <div className="mb-5 flex flex-wrap gap-1.5">
           {category && (
@@ -221,33 +293,63 @@ export default function PromptDetailPage() {
 
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Prompt-inhoud</h2>
-          <button
-            onClick={() => handleCopy(prompt.content)}
-            className="inline-flex items-center gap-1 text-sm text-rijksblauw-500 hover:text-rijksblauw-700 dark:text-rijksblauw-300 dark:hover:text-rijksblauw-200"
-          >
-            {copied ? <Check size={14} /> : <Copy size={14} />} Kopiëren
-          </button>
+          {!editing && (
+            <button
+              onClick={() => handleCopy(prompt.content)}
+              className="inline-flex items-center gap-1 text-sm text-rijksblauw-500 hover:text-rijksblauw-700 dark:text-rijksblauw-300 dark:hover:text-rijksblauw-200"
+            >
+              {copied ? <Check size={14} /> : <Copy size={14} />} Kopiëren
+            </button>
+          )}
         </div>
-        <pre className="mb-5 max-h-[360px] overflow-auto whitespace-pre-wrap rounded-xl border border-slate-200 bg-slate-50 p-4 font-mono text-[13px] leading-relaxed text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
-          {prompt.content}
-        </pre>
+        {editing ? (
+          <textarea
+            className="mb-5 min-h-[280px] w-full resize-y rounded-xl border border-rijksblauw-300 bg-white p-4 font-mono text-[13px] leading-relaxed text-slate-800 focus:outline-none focus:ring-2 focus:ring-rijksblauw-500/30 dark:border-rijksblauw-500/40 dark:bg-slate-900 dark:text-slate-200"
+            value={draftContent}
+            onChange={(e) => setDraftContent(e.target.value)}
+            aria-label="Prompt-inhoud"
+          />
+        ) : (
+          <pre className="mb-5 max-h-[360px] overflow-auto whitespace-pre-wrap rounded-xl border border-slate-200 bg-slate-50 p-4 font-mono text-[13px] leading-relaxed text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+            {prompt.content}
+          </pre>
+        )}
 
         <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4 dark:border-slate-800">
-          <Link to={`/genereren/${prompt.id}`} className="opl-btn-primary">
-            <Sparkles size={16} /> Template genereren
-          </Link>
-          <button onClick={() => setShareOpen(true)} className="opl-btn-secondary">
-            <Share2 size={16} /> Delen
-          </button>
-          <button onClick={() => setExportOpen(true)} className="opl-btn-secondary">
-            <Download size={16} /> Exporteren
-          </button>
-          <button
-            onClick={handleDelete}
-            className="opl-btn-ghost ml-auto text-rijksrood hover:bg-red-50 dark:hover:bg-red-500/10"
-          >
-            <Trash2 size={16} /> Verwijderen
-          </button>
+          {editing ? (
+            <>
+              <button onClick={handleSaveEdit} disabled={saving} className="opl-btn-primary">
+                <Save size={16} /> {saving ? 'Opslaan…' : 'Template opslaan'}
+              </button>
+              <button onClick={cancelEditing} disabled={saving} className="opl-btn-secondary">
+                <X size={16} /> Annuleren
+              </button>
+            </>
+          ) : (
+            <>
+              {/* Bewerken alleen voor eigenaar/admin. */}
+              {canManage && (
+                <button onClick={startEditing} className="opl-btn-primary">
+                  <Pencil size={16} /> Bewerken
+                </button>
+              )}
+              <button onClick={() => setShareOpen(true)} className="opl-btn-secondary">
+                <Share2 size={16} /> Delen
+              </button>
+              <button onClick={() => setExportOpen(true)} className="opl-btn-secondary">
+                <Download size={16} /> Exporteren
+              </button>
+              {/* Verwijderen alleen voor eigenaar/admin. */}
+              {canManage && (
+                <button
+                  onClick={handleDelete}
+                  className="opl-btn-ghost ml-auto text-rijksrood hover:bg-red-50 dark:hover:bg-red-500/10"
+                >
+                  <Trash2 size={16} /> Verwijderen
+                </button>
+              )}
+            </>
+          )}
         </div>
 
         <p className="mt-4 flex flex-wrap items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500">
@@ -310,7 +412,7 @@ export default function PromptDetailPage() {
         </section>
       )}
 
-      <CollaborationPanel prompt={prompt} onUpdated={setPrompt} />
+      <CollaborationPanel prompt={prompt} onUpdated={setPrompt} refreshKey={versionRefresh} />
 
       <ShareModal open={shareOpen} onClose={() => setShareOpen(false)} prompt={prompt} />
       <ExportModal

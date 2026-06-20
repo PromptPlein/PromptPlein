@@ -1,16 +1,14 @@
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import type {
-  CollaboratorRole,
   Profile,
   Prompt,
   PromptApproval,
   PromptComment,
-  PromptCollaborator,
   PromptVersion,
 } from '@/types';
 
 /**
- * Samenwerking & goedkeuring rond prompts: versies, medewerkers, reacties en de
+ * Samenwerking & goedkeuring rond prompts: versies, reacties en de
  * draft→ingediend→goedgekeurd/afgewezen-workflow. RLS dwingt de rechten af.
  */
 
@@ -81,55 +79,6 @@ export async function addComment(
 export async function deleteComment(id: string): Promise<void> {
   const client = requireClient();
   const { error } = await client.from('prompt_comments').delete().eq('id', id);
-  if (error) throw error;
-}
-
-// --- Medewerkers ---
-
-export async function listCollaborators(promptId: string): Promise<PromptCollaborator[]> {
-  if (!isSupabaseConfigured || !supabase) return [];
-  const { data, error } = await supabase
-    .from('prompt_collaborators')
-    .select('*')
-    .eq('prompt_id', promptId)
-    .order('created_at', { ascending: true });
-  if (error) throw error;
-  const collabs = (data as PromptCollaborator[]) ?? [];
-  const profiles = await profilesByIds(collabs.map((c) => c.user_id));
-  return collabs.map((c) => ({ ...c, profile: profiles.get(c.user_id) ?? null }));
-}
-
-export async function addCollaboratorByEmail(
-  promptId: string,
-  email: string,
-  addedBy: string,
-  role: CollaboratorRole = 'editor',
-): Promise<void> {
-  const client = requireClient();
-  const { data: profile, error: lookupError } = await client
-    .from('profiles')
-    .select('id')
-    .eq('email', email.trim().toLowerCase())
-    .maybeSingle();
-  if (lookupError) throw lookupError;
-  if (!profile) {
-    throw new Error('Geen gebruiker met dit e-mailadres gevonden (of geen toegang tot dit profiel).');
-  }
-  const { error } = await client.from('prompt_collaborators').insert({
-    prompt_id: promptId,
-    user_id: (profile as { id: string }).id,
-    role,
-    added_by: addedBy,
-  });
-  if (error) {
-    if (error.code === '23505') throw new Error('Deze gebruiker is al medewerker.');
-    throw error;
-  }
-}
-
-export async function removeCollaborator(id: string): Promise<void> {
-  const client = requireClient();
-  const { error } = await client.from('prompt_collaborators').delete().eq('id', id);
   if (error) throw error;
 }
 

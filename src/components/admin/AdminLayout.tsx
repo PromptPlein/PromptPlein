@@ -13,6 +13,7 @@ import {
   ClipboardCheck,
   PieChart,
   Bot,
+  Briefcase,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '@/context/AuthContext';
@@ -23,7 +24,8 @@ const adminNav = [
   { to: '/admin/gebruikers', label: 'Gebruikers', icon: UserCog, end: false },
   { to: '/admin/organisaties', label: 'Organisaties', icon: Building2, end: false },
   { to: '/admin/technieken', label: 'Technieken', icon: Sparkles, end: false },
-  { to: '/admin/rollen', label: 'Rollen', icon: Users, end: false },
+  { to: '/admin/rollen', label: 'Functies', icon: Users, end: false },
+  { to: '/admin/functie-aanvragen', label: 'Functie-aanvragen', icon: Briefcase, end: false },
   { to: '/admin/categorieen', label: 'Categorieën', icon: FolderTree, end: false },
   { to: '/admin/analytics', label: 'Analytics', icon: BarChart3, end: false },
   { to: '/admin/rapportage', label: 'Rapportage', icon: PieChart, end: false },

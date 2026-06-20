@@ -23,7 +23,6 @@ const CLASSIFICATION: Record<SharingLevel, string> = {
   private: 'Vertrouwelijk — persoonlijk',
   department: 'Intern — afdeling',
   ministry: 'Intern — ministerie',
-  role: 'Intern — functiegroep',
   public: 'Openbaar',
 };
 

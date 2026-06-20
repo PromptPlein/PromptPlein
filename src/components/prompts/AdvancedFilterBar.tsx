@@ -132,7 +132,7 @@ export default function AdvancedFilterBar({ filters, onChange }: AdvancedFilterB
             </FilterGroup>
           )}
 
-          <FilterGroup label="Rollen">
+          <FilterGroup label="Functies">
             {roles.map((r) => (
               <Chip
                 key={r.id}

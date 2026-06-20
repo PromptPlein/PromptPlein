@@ -5,9 +5,11 @@ import { Link } from 'react-router-dom';
 import { copyToClipboard, getCurrentUser, SHARING_LEVELS } from '@/lib/utils';
 import { createPrompt } from '@/services/repository';
 import { generateTitle } from '@/services/optimizeService';
+import { requestFunction } from '@/services/functionRequestService';
 import { useAuth } from '@/context/AuthContext';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import ShareModal from '@/components/share/ShareModal';
+import SearchableSelect from '@/components/common/SearchableSelect';
 import type { OptimizeResult, Prompt, SharingLevel, Technique } from '@/types';
 
 interface OptimizedOutputProps {
@@ -20,8 +22,8 @@ interface OptimizedOutputProps {
 }
 
 export default function OptimizedOutput({ result, technique, goal, onReset }: OptimizedOutputProps) {
-  const { profile } = useAuth();
-  const { categories } = useReferenceData();
+  const { profile, user } = useAuth();
+  const { categories, roles } = useReferenceData();
   const [copied, setCopied] = useState(false);
 
   // Opslaan-formulier
@@ -29,6 +31,10 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
   // Start leeg: tijdens het laden zien we alleen het laadscherm, geen oude
   // standaardtitel die later "verspringt" naar de AI-suggestie.
   const [title, setTitle] = useState('');
+  // Voorgevuld met de functie uit het profiel; de maker kan hem aanpassen.
+  const [functionId, setFunctionId] = useState<string | null>(profile?.function_id ?? null);
+  // Of de gebruiker de functie zelf koos, zodat een laat geladen profiel die niet overschrijft.
+  const [functionTouched, setFunctionTouched] = useState(false);
   const [sharing, setSharing] = useState<SharingLevel>('public');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<Prompt | null>(null);
@@ -43,6 +49,11 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
   /** Open het opslaan-formulier en haal eenmalig een AI-titel op uit de inhoud. */
   function openSave() {
     setShowSave(true);
+    // Vul de functie alsnog uit het profiel als de gebruiker nog niets koos
+    // (het profiel kan na de eerste render geladen zijn).
+    if (!functionTouched && !functionId && profile?.function_id) {
+      setFunctionId(profile.function_id);
+    }
     if (titleSuggested || titleLoading) return;
     setTitleSuggested(true);
     setTitleLoading(true);
@@ -80,6 +91,7 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
         description: goal?.trim() ? `Doel: ${goal.trim()}` : undefined,
         content: result.optimized_content,
         category_id: categories[0]?.id ?? null,
+        role_id: functionId,
         sharing_level: sharing,
         created_by: profile?.full_name || getCurrentUser() || 'Onbekend',
       });
@@ -166,6 +178,39 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
               {titleLoading
                 ? 'AI bedenkt een passende titel op basis van de inhoud…'
                 : 'Titel voorgesteld op basis van de inhoud — pas hem gerust aan.'}
+            </p>
+          </div>
+          <div>
+            <label className="opl-label" htmlFor="tpl-function">
+              Functie
+            </label>
+            <SearchableSelect
+              id="tpl-function"
+              options={roles.map((r) => ({ id: r.id, label: r.name, hint: r.description }))}
+              value={functionId}
+              onChange={(id) => {
+                setFunctionTouched(true);
+                setFunctionId(id);
+              }}
+              placeholder="Voor welke functie is deze prompt?"
+              clearLabel="Geen functie"
+              searchPlaceholder="Zoek een functie…"
+              onRequestNew={
+                user
+                  ? async (term) => {
+                      try {
+                        await requestFunction({ name: term, requestedBy: user.id });
+                        toast.success(`Aanvraag voor “${term}” verstuurd — een beheerder beoordeelt hem.`);
+                      } catch (err) {
+                        toast.error(err instanceof Error ? err.message : 'Aanvraag mislukt');
+                      }
+                    }
+                  : undefined
+              }
+              requestNewLabel={(term) => `“${term}” als nieuwe functie aanvragen`}
+            />
+            <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+              Zo vinden collega&apos;s met dezelfde functie deze template makkelijker terug.
             </p>
           </div>
           <div>

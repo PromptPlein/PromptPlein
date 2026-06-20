@@ -7,6 +7,7 @@ import type {
   Optimization,
   Prompt,
   PromptFilters,
+  PromptVersion,
   Role,
   Technique,
 } from '@/types';
@@ -216,6 +217,91 @@ export async function deletePrompt(id: string): Promise<void> {
   if (local) return localStore.deletePrompt(id);
   const { error } = await supabase!.from('prompts').delete().eq('id', id);
   if (error) throw error;
+}
+
+/** De bewerkbare velden van een opgeslagen prompt (inline bewerken). */
+export interface PromptEdit {
+  title: string;
+  description: string;
+  content: string;
+}
+
+/** Vat samen welke velden zijn gewijzigd, voor de versiegeschiedenis. */
+function summarizeChanges(before: Prompt, after: PromptEdit): string {
+  const changed: string[] = [];
+  if ((before.title ?? '') !== after.title) changed.push('titel');
+  if ((before.description ?? '') !== after.description) changed.push('omschrijving');
+  if ((before.content ?? '') !== after.content) changed.push('prompt-inhoud');
+  return changed.length ? `Aangepast: ${changed.join(', ')}.` : 'Opgeslagen zonder inhoudelijke wijziging.';
+}
+
+/**
+ * Slaat een handmatige bewerking van een opgeslagen prompt op (titel,
+ * omschrijving, inhoud) en legt een versie vast met een samenvatting van wat er
+ * is aangepast. Alleen de eigenaar of een admin mag dit (RLS dwingt dit af).
+ * `editorId` is de auth-gebruiker die opslaat (voor `prompt_versions.created_by`).
+ */
+export async function savePromptEdit(
+  before: Prompt,
+  edit: PromptEdit,
+  editorId?: string,
+): Promise<Prompt> {
+  const patch = {
+    title: edit.title.trim(),
+    description: edit.description.trim(),
+    content: edit.content,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (local) {
+    // Lokale modus heeft geen versiegeschiedenis; alleen de prompt bijwerken.
+    return localStore.updatePrompt(before.id, patch);
+  }
+
+  const { data, error } = await supabase!
+    .from('prompts')
+    .update(patch)
+    .eq('id', before.id)
+    .select('*')
+    .single();
+  if (error) throw error;
+  const updated = data as Prompt;
+
+  // Versie vastleggen (best-effort: faal de opslag-UX niet als dit misgaat).
+  try {
+    const { data: maxRow } = await supabase!
+      .from('prompt_versions')
+      .select('version')
+      .eq('prompt_id', before.id)
+      .order('version', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const nextVersion = ((maxRow as { version?: number } | null)?.version ?? 0) + 1;
+    await supabase!.from('prompt_versions').insert({
+      prompt_id: before.id,
+      version: nextVersion,
+      title: updated.title,
+      content: updated.content,
+      change_summary: summarizeChanges(before, edit),
+      created_by: editorId ?? null,
+    });
+  } catch {
+    /* versie-logging is best-effort */
+  }
+
+  return updated;
+}
+
+/** Haalt de versiegeschiedenis van een prompt op (nieuwste eerst). */
+export async function listPromptVersions(promptId: string): Promise<PromptVersion[]> {
+  if (local) return [];
+  const { data, error } = await supabase!
+    .from('prompt_versions')
+    .select('*')
+    .eq('prompt_id', promptId)
+    .order('version', { ascending: false });
+  if (error) throw error;
+  return (data as PromptVersion[]) ?? [];
 }
 
 // --- Optimizations ---

@@ -1,6 +1,6 @@
 // Domeinmodellen voor de Overheid Prompt Library (Phase 1).
 
-export type SharingLevel = 'private' | 'department' | 'ministry' | 'role' | 'public';
+export type SharingLevel = 'private' | 'department' | 'ministry' | 'public';
 
 export interface Role {
   id: string;
@@ -264,6 +264,8 @@ export interface Profile {
   full_name?: string | null;
   avatar_url?: string | null;
   organization_id?: string | null;
+  /** De functie/het vakgebied van de gebruiker (verwijst naar de roles-tabel). */
+  function_id?: string | null;
   role: AppRole;
   is_active: boolean;
   created_at?: string;
@@ -312,19 +314,6 @@ export interface PromptVersion {
   created_at: string;
 }
 
-export type CollaboratorRole = 'editor' | 'viewer';
-
-export interface PromptCollaborator {
-  id: string;
-  prompt_id: string;
-  user_id: string;
-  role: CollaboratorRole;
-  added_by?: string | null;
-  created_at: string;
-  /** Verrijkt vanuit het profiel (optioneel). */
-  profile?: Pick<Profile, 'email' | 'full_name'> | null;
-}
-
 export interface PromptComment {
   id: string;
   prompt_id: string;
@@ -341,6 +330,25 @@ export interface PromptApproval {
   reviewer_id?: string | null;
   note?: string | null;
   created_at: string;
+}
+
+/** Status van een functie-aanvraag in de goedkeuringswachtrij. */
+export type FunctionRequestStatus = 'pending' | 'approved' | 'rejected';
+
+/** Een door een gebruiker aangevraagde (nog) niet-bestaande functie. */
+export interface FunctionRequest {
+  id: string;
+  name: string;
+  motivation?: string | null;
+  status: FunctionRequestStatus;
+  requested_by?: string | null;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  review_note?: string | null;
+  created_role_id?: string | null;
+  created_at: string;
+  /** Verrijkt vanuit het profiel van de aanvrager (optioneel). */
+  requester?: Pick<Profile, 'email' | 'full_name'> | null;
 }
 
 export type NotificationType = 'approval' | 'comment' | 'collaborator' | 'system';

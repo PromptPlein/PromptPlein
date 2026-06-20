@@ -41,11 +41,11 @@ export default function RoleManagerPage() {
     if (editor.id) {
       await updateRole(editor.id, payload);
       await logAdminAction({ action: 'update_role', entity_type: 'role', entity_id: editor.id, changes: payload });
-      toast.success('Rol bijgewerkt');
+      toast.success('Functie bijgewerkt');
     } else {
       const created = await createRole(payload);
       await logAdminAction({ action: 'create_role', entity_type: 'role', entity_id: created.id, changes: payload });
-      toast.success('Rol toegevoegd');
+      toast.success('Functie toegevoegd');
     }
     setEditor(null);
     await load();
@@ -55,7 +55,7 @@ export default function RoleManagerPage() {
   async function remove(r: Role) {
     await deleteRole(r.id);
     await logAdminAction({ action: 'delete_role', entity_type: 'role', entity_id: r.id });
-    toast.success('Rol verwijderd');
+    toast.success('Functie verwijderd');
     await load();
     await refresh();
   }
@@ -85,7 +85,7 @@ export default function RoleManagerPage() {
       count++;
     }
     await logAdminAction({ action: 'bulk_import_roles', entity_type: 'role', changes: { count } });
-    toast.success(`${count} rollen geïmporteerd`);
+    toast.success(`${count} functies geïmporteerd`);
     setCsv('');
     setCsvOpen(false);
     await load();
@@ -96,15 +96,15 @@ export default function RoleManagerPage() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Rollen beheren</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">{roles.length} rollen</p>
+          <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Functies beheren</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">{roles.length} functies</p>
         </div>
         <div className="flex gap-2">
           <button className="opl-btn-secondary" onClick={() => setCsvOpen(true)}>
             <Upload size={16} /> CSV import
           </button>
           <button className="opl-btn-primary" onClick={() => setEditor({ name: '', description: '' })}>
-            <Plus size={18} /> Nieuwe rol
+            <Plus size={18} /> Nieuwe functie
           </button>
         </div>
       </div>
@@ -149,7 +149,7 @@ export default function RoleManagerPage() {
         )}
       </div>
 
-      <Modal open={!!editor} onClose={() => setEditor(null)} title={editor?.id ? 'Rol bewerken' : 'Nieuwe rol'} size="max-w-md">
+      <Modal open={!!editor} onClose={() => setEditor(null)} title={editor?.id ? 'Functie bewerken' : 'Nieuwe functie'} size="max-w-md">
         {editor && (
           <div className="space-y-4">
             <div>
@@ -168,8 +168,8 @@ export default function RoleManagerPage() {
         )}
       </Modal>
 
-      <Modal open={csvOpen} onClose={() => setCsvOpen(false)} title="CSV-import (rollen)" size="max-w-lg">
-        <p className="mb-2 text-sm text-slate-500 dark:text-slate-400">Eén rol per regel, formaat: <code>naam,beschrijving</code></p>
+      <Modal open={csvOpen} onClose={() => setCsvOpen(false)} title="CSV-import (functies)" size="max-w-lg">
+        <p className="mb-2 text-sm text-slate-500 dark:text-slate-400">Eén functie per regel, formaat: <code>naam,beschrijving</code></p>
         <textarea className="opl-input min-h-[160px] resize-y font-mono text-xs" value={csv} onChange={(e) => setCsv(e.target.value)} placeholder={'Inkoopadviseur,Adviseert over aanbestedingen\nHR-adviseur,Personeelszaken'} />
         <div className="mt-4 flex justify-end gap-3">
           <button className="opl-btn-secondary" onClick={() => setCsvOpen(false)}>Annuleren</button>
@@ -179,7 +179,7 @@ export default function RoleManagerPage() {
 
       <ConfirmDialog
         open={!!toDelete}
-        title="Rol verwijderen"
+        title="Functie verwijderen"
         message={`Weet je zeker dat je "${toDelete?.name}" wilt verwijderen?`}
         destructive
         confirmLabel="Verwijderen"

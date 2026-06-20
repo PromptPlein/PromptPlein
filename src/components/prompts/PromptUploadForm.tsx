@@ -1,10 +1,13 @@
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { useReferenceData } from '@/context/ReferenceDataContext';
+import { useAuth } from '@/context/AuthContext';
 import { useAuthGuard } from '@/hooks/useAuthGuard';
 import { createPrompt } from '@/services/repository';
 import { trackEvent } from '@/services/analyticsService';
+import { requestFunction } from '@/services/functionRequestService';
 import { getCurrentUser, SHARING_LEVELS } from '@/lib/utils';
+import SearchableSelect from '@/components/common/SearchableSelect';
 import type { NewPromptInput, Prompt, SharingLevel } from '@/types';
 
 interface PromptUploadFormProps {
@@ -14,12 +17,14 @@ interface PromptUploadFormProps {
 
 export default function PromptUploadForm({ onCreated, onCancel }: PromptUploadFormProps) {
   const { categories, roles, organizations } = useReferenceData();
+  const { profile, user } = useAuth();
   const requireAuth = useAuthGuard();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [content, setContent] = useState('');
   const [categoryId, setCategoryId] = useState<string>('');
-  const [roleId, setRoleId] = useState<string>('');
+  // Voorgevuld met de functie uit het profiel; de maker kan hem aanpassen.
+  const [roleId, setRoleId] = useState<string>(profile?.function_id ?? '');
   const [organizationId, setOrganizationId] = useState<string>('');
   const [sharing, setSharing] = useState<SharingLevel>('private');
   const [createdBy, setCreatedBy] = useState(getCurrentUser());
@@ -134,21 +139,30 @@ export default function PromptUploadForm({ onCreated, onCancel }: PromptUploadFo
 
         <div>
           <label className="opl-label" htmlFor="up-role">
-            Rol
+            Functie
           </label>
-          <select
+          <SearchableSelect
             id="up-role"
-            className="opl-input"
-            value={roleId}
-            onChange={(e) => setRoleId(e.target.value)}
-          >
-            <option value="">Geen rol</option>
-            {roles.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name}
-              </option>
-            ))}
-          </select>
+            options={roles.map((r) => ({ id: r.id, label: r.name, hint: r.description }))}
+            value={roleId || null}
+            onChange={(id) => setRoleId(id ?? '')}
+            placeholder="Voor welke functie is deze prompt?"
+            clearLabel="Geen functie"
+            searchPlaceholder="Zoek een functie…"
+            onRequestNew={
+              user
+                ? async (term) => {
+                    try {
+                      await requestFunction({ name: term, requestedBy: user.id });
+                      toast.success(`Aanvraag voor “${term}” verstuurd — een beheerder beoordeelt hem.`);
+                    } catch (err) {
+                      toast.error(err instanceof Error ? err.message : 'Aanvraag mislukt');
+                    }
+                  }
+                : undefined
+            }
+            requestNewLabel={(term) => `“${term}” als nieuwe functie aanvragen`}
+          />
         </div>
       </div>
 

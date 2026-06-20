@@ -1,13 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Send,
   Check,
   X,
-  Users,
   MessageSquare,
   History,
   Trash2,
-  UserPlus,
   ChevronDown,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -15,23 +13,23 @@ import clsx from 'clsx';
 import { useAuth } from '@/context/AuthContext';
 import { formatDate } from '@/lib/utils';
 import {
-  addCollaboratorByEmail,
   addComment,
   decide,
   deleteComment,
-  listCollaborators,
   listComments,
   listVersions,
-  removeCollaborator,
   submitForApproval,
   PROMPT_STATUS_META,
 } from '@/services/collaborationService';
-import type {
-  Prompt,
-  PromptCollaborator,
-  PromptComment,
-  PromptVersion,
-} from '@/types';
+import type { Prompt, PromptComment, PromptVersion } from '@/types';
+
+/**
+ * Reacties (comments) zijn uitgeschakeld: prompts zijn alleen te raadplegen en
+ * te liken, niet te becommentariëren (dat zou moderatie vragen). Bestaande
+ * reacties blijven in de database bewaard. Zet op `true` om de functie weer aan
+ * te zetten — dan verschijnt het reactie-blok en worden reacties weer geladen.
+ */
+const COMMENTS_ENABLED = false;
 
 function authorName(profile?: { full_name?: string | null; email?: string } | null): string {
   return profile?.full_name || profile?.email || 'Gebruiker';
@@ -40,16 +38,17 @@ function authorName(profile?: { full_name?: string | null; email?: string } | nu
 export default function CollaborationPanel({
   prompt,
   onUpdated,
+  refreshKey,
 }: {
   prompt: Prompt;
   onUpdated: (p: Prompt) => void;
+  /** Verhoog deze waarde om versies/reacties opnieuw te laden (bijv. na opslaan). */
+  refreshKey?: number;
 }) {
   const { user, isAuthenticated, isAdmin } = useAuth();
-  const [collaborators, setCollaborators] = useState<PromptCollaborator[]>([]);
   const [comments, setComments] = useState<PromptComment[]>([]);
   const [versions, setVersions] = useState<PromptVersion[]>([]);
   const [newComment, setNewComment] = useState('');
-  const [collabEmail, setCollabEmail] = useState('');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [openVersion, setOpenVersion] = useState<string | null>(null);
@@ -58,21 +57,14 @@ export default function CollaborationPanel({
   const statusMeta = PROMPT_STATUS_META[status];
 
   const isOwner = !!user && prompt.created_by_user === user.id;
-  const isEditorCollab = useMemo(
-    () => !!user && collaborators.some((c) => c.user_id === user.id && c.role === 'editor'),
-    [collaborators, user],
-  );
-  const canEdit = isAdmin || isOwner || isEditorCollab;
-  const canManageCollaborators = isAdmin || isOwner;
+  const canEdit = isAdmin || isOwner;
 
   async function reload() {
     try {
-      const [c, m, v] = await Promise.all([
-        listCollaborators(prompt.id),
-        listComments(prompt.id),
+      const [m, v] = await Promise.all([
+        COMMENTS_ENABLED ? listComments(prompt.id) : Promise.resolve([]),
         listVersions(prompt.id),
       ]);
-      setCollaborators(c);
       setComments(m);
       setVersions(v);
     } catch {
@@ -83,7 +75,7 @@ export default function CollaborationPanel({
   useEffect(() => {
     void reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prompt.id]);
+  }, [prompt.id, refreshKey]);
 
   async function handleSubmit() {
     setBusy(true);
@@ -120,21 +112,6 @@ export default function CollaborationPanel({
       await reload();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Reactie plaatsen mislukt');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleAddCollaborator() {
-    if (!user || !collabEmail.trim()) return;
-    setBusy(true);
-    try {
-      await addCollaboratorByEmail(prompt.id, collabEmail, user.id);
-      setCollabEmail('');
-      await reload();
-      toast.success('Medewerker toegevoegd');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Toevoegen mislukt');
     } finally {
       setBusy(false);
     }
@@ -188,54 +165,8 @@ export default function CollaborationPanel({
         )}
       </div>
 
-      {/* Medewerkers */}
-      <div className="opl-card p-5">
-        <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
-          <Users size={18} className="text-rijksblauw-500" /> Medewerkers ({collaborators.length})
-        </h2>
-        <ul className="space-y-2">
-          {collaborators.map((c) => (
-            <li key={c.id} className="flex items-center justify-between text-sm">
-              <span className="text-slate-700 dark:text-slate-200">
-                {authorName(c.profile)}{' '}
-                <span className="text-xs text-slate-400 dark:text-slate-500">· {c.role === 'editor' ? 'bewerker' : 'lezer'}</span>
-              </span>
-              {canManageCollaborators && (
-                <button
-                  onClick={async () => {
-                    await removeCollaborator(c.id);
-                    await reload();
-                  }}
-                  className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-rijksrood dark:text-slate-500 dark:hover:bg-red-500/10"
-                  aria-label="Verwijderen"
-                >
-                  <Trash2 size={14} />
-                </button>
-              )}
-            </li>
-          ))}
-          {collaborators.length === 0 && (
-            <li className="text-sm text-slate-400 dark:text-slate-500">Nog geen medewerkers.</li>
-          )}
-        </ul>
-        {canManageCollaborators && (
-          <div className="mt-3 flex gap-2">
-            <input
-              type="email"
-              className="opl-input"
-              placeholder="E-mailadres van collega"
-              value={collabEmail}
-              onChange={(e) => setCollabEmail(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleAddCollaborator()}
-            />
-            <button onClick={handleAddCollaborator} disabled={busy} className="opl-btn-secondary shrink-0">
-              <UserPlus size={16} /> Toevoegen
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Reacties */}
+      {/* Reacties — uitgeschakeld via COMMENTS_ENABLED (alleen raadplegen + liken). */}
+      {COMMENTS_ENABLED && (
       <div className="opl-card p-5">
         <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
           <MessageSquare size={18} className="text-rijksblauw-500" /> Reacties ({comments.length})
@@ -283,6 +214,7 @@ export default function CollaborationPanel({
           <p className="mt-3 text-xs text-slate-400 dark:text-slate-500">Log in om te reageren.</p>
         )}
       </div>
+      )}
 
       {/* Versiegeschiedenis */}
       <div className="opl-card p-5">
@@ -307,6 +239,9 @@ export default function CollaborationPanel({
                   className={clsx('text-slate-400 transition-transform dark:text-slate-500', openVersion === v.id && 'rotate-180')}
                 />
               </button>
+              {v.change_summary && (
+                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{v.change_summary}</p>
+              )}
               {openVersion === v.id && (
                 <div className="mt-2">
                   <p className="mb-1 text-xs font-medium text-slate-500 dark:text-slate-400">{v.title}</p>

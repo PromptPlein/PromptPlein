@@ -27,6 +27,7 @@ const AdminLayout = lazy(() => import('@/components/admin/AdminLayout'));
 const AdminDashboardPage = lazy(() => import('@/pages/admin/AdminDashboardPage'));
 const TechniqueManagerPage = lazy(() => import('@/pages/admin/TechniqueManagerPage'));
 const RoleManagerPage = lazy(() => import('@/pages/admin/RoleManagerPage'));
+const FunctionRequestQueuePage = lazy(() => import('@/pages/admin/FunctionRequestQueuePage'));
 const CategoryManagerPage = lazy(() => import('@/pages/admin/CategoryManagerPage'));
 const AdminAnalyticsPage = lazy(() => import('@/pages/admin/AdminAnalyticsPage'));
 const AuditLogPage = lazy(() => import('@/pages/admin/AuditLogPage'));
@@ -101,6 +102,7 @@ export default function App() {
                   <Route path="organisaties" element={<OrganizationManagerPage />} />
                   <Route path="technieken" element={<TechniqueManagerPage />} />
                   <Route path="rollen" element={<RoleManagerPage />} />
+                  <Route path="functie-aanvragen" element={<FunctionRequestQueuePage />} />
                   <Route path="categorieen" element={<CategoryManagerPage />} />
                   <Route path="analytics" element={<AdminAnalyticsPage />} />
                   <Route path="rapportage" element={<ReportsPage />} />
