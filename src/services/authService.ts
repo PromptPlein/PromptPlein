@@ -51,8 +51,20 @@ export async function signOut(): Promise<void> {
 export async function requestPasswordReset(email: string): Promise<void> {
   const client = requireClient();
   const { error } = await client.auth.resetPasswordForEmail(email, {
-    redirectTo: `${window.location.origin}/auth/login`,
+    // Verwijs naar de pagina die het recovery-token afhandelt en een
+    // 'nieuw wachtwoord'-formulier toont.
+    redirectTo: `${window.location.origin}/auth/nieuw-wachtwoord`,
   });
+  if (error) throw error;
+}
+
+/**
+ * Stel een nieuw wachtwoord in voor de huidige (recovery- of ingelogde) sessie.
+ * Werkt nadat supabase-js het recovery-token uit de URL heeft opgepikt.
+ */
+export async function updatePassword(newPassword: string): Promise<void> {
+  const client = requireClient();
+  const { error } = await client.auth.updateUser({ password: newPassword });
   if (error) throw error;
 }
 

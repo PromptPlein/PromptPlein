@@ -92,6 +92,10 @@ function backfillTechniqueMetadata(): void {
       next.use_cases = seed.use_cases;
       changed = true;
     }
+    if (!next.family && seed.family) {
+      next.family = seed.family;
+      changed = true;
+    }
     return next;
   });
   if (changed) write(TECHNIQUES_KEY, merged);

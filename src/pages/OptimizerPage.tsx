@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Sparkles, Loader2, FileText, Compass, ListChecks } from 'lucide-react';
+import { Sparkles, Loader2, FileText, Compass, ListChecks, ChevronDown, Check } from 'lucide-react';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import TechniqueSelector from '@/components/optimizer/TechniqueSelector';
@@ -26,6 +26,7 @@ export default function OptimizerPage() {
 
   const [promptContent, setPromptContent] = useState('');
   const [sourcePromptId, setSourcePromptId] = useState<string | null>(null);
+  const [goal, setGoal] = useState('');
   const [techniqueMode, setTechniqueMode] = useState<TechniqueMode>('manual');
   const [techniqueId, setTechniqueId] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -167,14 +168,19 @@ export default function OptimizerPage() {
           <Sparkles className="text-rijksoranje" /> Prompt genereren
         </h1>
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          Genereer een herbruikbare prompt-template. De inhoud vul je zelf aan in je eigen chat —
-          kopieer en plak de template telkens wanneer je hem nodig hebt.
+          Genereer een herbruikbare prompt-template. De inhoud vul je zelf aan in je eigen chat.
+          Kopieer en plak de template telkens wanneer je hem nodig hebt.
         </p>
       </div>
 
       {phase === 'output' && result ? (
         <div className="opl-card p-6">
-          <OptimizedOutput result={result} onReset={handleReset} />
+          <OptimizedOutput
+            result={result}
+            technique={technique}
+            goal={goal}
+            onReset={handleReset}
+          />
         </div>
       ) : (
         <div
@@ -182,72 +188,70 @@ export default function OptimizerPage() {
             phase === 'transition' ? 'pointer-events-none opacity-0' : 'opacity-100'
           }`}
         >
-          {/* 1. Techniek — zelf kiezen of laten aanbevelen */}
-          <section className="opl-card p-6">
-            <div className="mb-4 flex items-center gap-2">
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-rijksblauw-500 text-xs font-bold text-white">
-                1
-              </span>
-              <h2 className="font-semibold text-slate-800 dark:text-slate-100">Kies een techniek</h2>
-            </div>
-
-            {/* Moduskeuze: weet ik al / weet ik nog niet */}
-            <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <button
-                type="button"
-                onClick={() => setTechniqueMode('manual')}
-                aria-pressed={techniqueMode === 'manual'}
-                className={clsx(
-                  'flex items-start gap-3 rounded-xl border p-4 text-left transition-all',
-                  techniqueMode === 'manual'
-                    ? 'border-rijksblauw-500 bg-rijksblauw-50 ring-2 ring-rijksblauw-500/20 dark:bg-rijksblauw-500/15'
-                    : 'border-slate-200 bg-white hover:border-rijksblauw-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800',
-                )}
-              >
-                <ListChecks size={20} className="mt-0.5 shrink-0 text-rijksblauw-500" />
-                <span>
-                  <span className="block font-semibold text-slate-800 dark:text-slate-100">
-                    Ik weet welke techniek ik wil
-                  </span>
-                  <span className="text-sm text-slate-500 dark:text-slate-400">
-                    Kies zelf direct uit de lijst.
-                  </span>
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setTechniqueMode('smart')}
-                aria-pressed={techniqueMode === 'smart'}
-                className={clsx(
-                  'flex items-start gap-3 rounded-xl border p-4 text-left transition-all',
-                  techniqueMode === 'smart'
-                    ? 'border-rijksblauw-500 bg-rijksblauw-50 ring-2 ring-rijksblauw-500/20 dark:bg-rijksblauw-500/15'
-                    : 'border-slate-200 bg-white hover:border-rijksblauw-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800',
-                )}
-              >
-                <Compass size={20} className="mt-0.5 shrink-0 text-rijksoranje" />
-                <span>
-                  <span className="block font-semibold text-slate-800 dark:text-slate-100">
-                    Ik weet nog niet welke techniek
-                  </span>
-                  <span className="text-sm text-slate-500 dark:text-slate-400">
-                    Beschrijf je doel; wij bevelen een techniek aan.
-                  </span>
-                </span>
-              </button>
-            </div>
-
-            {techniqueMode === 'manual' ? (
-              <TechniqueSelector selectedId={techniqueId} onSelect={handleSelectTechnique} />
-            ) : (
-              <GoalRecommender
-                selectedTechniqueId={techniqueId}
-                onSelectTechnique={handleSelectTechnique}
-              />
+          {/* 1. Prominente instap: "Ik weet nog niet welke techniek" */}
+          <div
+            className={clsx(
+              'overflow-hidden rounded-2xl border-2 shadow-sm transition-all',
+              techniqueMode === 'smart'
+                ? 'border-rijksblauw-500 bg-gradient-to-br from-rijksblauw-50 to-white ring-2 ring-rijksblauw-500/30 dark:from-rijksblauw-500/15 dark:to-slate-800'
+                : 'border-rijksblauw-400/60 bg-gradient-to-br from-rijksblauw-50/70 to-white dark:border-rijksblauw-500/40 dark:from-rijksblauw-500/10 dark:to-slate-800',
             )}
+          >
+            <button
+              type="button"
+              onClick={() => setTechniqueMode((m) => (m === 'smart' ? 'manual' : 'smart'))}
+              aria-expanded={techniqueMode === 'smart'}
+              className="group flex w-full items-start gap-4 p-5 text-left transition-colors hover:bg-rijksblauw-500/5 sm:p-6"
+            >
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-rijksblauw-500 text-white shadow-sm">
+                <Compass size={24} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">
+                  Weet je nog niet welke prompttechniek je doel kan bereiken?
+                </h2>
+                <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                  Beschrijf in je eigen woorden wat je wilt bereiken. Wij bevelen automatisch de
+                  best passende techniek aan.
+                </p>
+              </div>
+              <ChevronDown
+                size={22}
+                className={clsx(
+                  'mt-1 hidden shrink-0 text-rijksblauw-500 transition-transform dark:text-rijksblauw-300 sm:block',
+                  techniqueMode === 'smart' && 'rotate-180',
+                )}
+              />
+            </button>
+
+            {techniqueMode === 'smart' && (
+              <div className="border-t border-rijksblauw-500/20 p-5 pt-5 sm:px-6">
+                <GoalRecommender
+                  selectedTechniqueId={techniqueId}
+                  onSelectTechnique={handleSelectTechnique}
+                  goal={goal}
+                  onGoalChange={setGoal}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* 2. Of kies zelf — contextprompts + prompttechnieken */}
+          <section className="opl-card p-6">
+            <div className="mb-1 flex items-center gap-2">
+              <ListChecks size={18} className="text-rijksblauw-500" />
+              <h2 className="font-semibold text-slate-800 dark:text-slate-100">
+                Of kies zelf een techniek
+              </h2>
+            </div>
+            <p className="mb-5 pl-7 text-sm text-slate-500 dark:text-slate-400">
+              Weet je al wat je wilt? Kies direct een contextprompt of prompttechniek.
+            </p>
+
+            <TechniqueSelector selectedId={techniqueId} onSelect={handleSelectTechnique} />
           </section>
 
-          {/* 2. Velden invullen — per gekozen techniek */}
+          {/* 2. Velden invullen: stap voor stap de template bouwen */}
           {technique && (
             <section
               key={technique.id}
@@ -258,18 +262,20 @@ export default function OptimizerPage() {
               <div className="h-1 w-full bg-gradient-to-r from-rijksblauw-400 to-rijksblauw-700" />
               <div className="p-6">
                 <div className="mb-4 flex items-start gap-3">
-                  <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-rijksblauw-500 text-xs font-bold text-white">
-                    2
+                  <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-rijksblauw-500 text-white">
+                    <Check size={14} />
                   </span>
                   <div>
                     <h2 className="font-semibold text-slate-800 dark:text-slate-100">
-                      Vul de velden in
+                      Bouw je template
                     </h2>
                     <p className="text-sm text-slate-500 dark:text-slate-400">
-                      Voor techniek{' '}
+                      Beantwoord de vragen voor{' '}
                       <span className="font-medium text-rijksblauw-700 dark:text-rijksblauw-200">
                         {technique.name}
                       </span>
+                      . Zo ontstaat een herbruikbare template die collega&apos;s opnieuw kunnen
+                      invullen.
                     </p>
                   </div>
                 </div>
@@ -297,7 +303,7 @@ export default function OptimizerPage() {
                   )}
                   {sourcePromptId && (
                     <p className="mt-2 inline-flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
-                      <FileText size={12} /> Gekoppeld aan een opgeslagen prompt — de generatie wordt
+                      <FileText size={12} /> Gekoppeld aan een opgeslagen prompt. De generatie wordt
                       bewaard.
                     </p>
                   )}
@@ -314,11 +320,11 @@ export default function OptimizerPage() {
             >
               {optimizing ? (
                 <>
-                  <Loader2 size={18} className="animate-spin" /> Bezig met genereren…
+                  <Loader2 size={18} className="animate-spin" /> Template bouwen…
                 </>
               ) : (
                 <>
-                  <Sparkles size={18} /> Genereer prompt
+                  <Sparkles size={18} /> Bouw template
                 </>
               )}
             </button>

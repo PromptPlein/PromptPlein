@@ -26,10 +26,19 @@ export interface FollowUpQuestion {
   placeholder?: string;
 }
 
+/**
+ * Soort techniek. 'context' = een compleet raamwerk dat de hele prompt
+ * structureert (bijv. CRISP, CARE); 'technique' = een losse prompttechniek
+ * (bijv. Persona, Chain-of-Thought). Bepaalt de groepering in de UI.
+ */
+export type TechniqueFamily = 'context' | 'technique';
+
 export interface Technique {
   id: string;
   name: string;
   description?: string;
+  /** Groepering in de generator: contextprompt of losse techniek. Default 'technique'. */
+  family?: TechniqueFamily;
   /** De kracht van deze techniek — waar is hij sterk in? Voedt de AI-aanbeveling. */
   strength?: string;
   /** Concrete gebruikssituaties waarvoor de techniek geschikt is. */

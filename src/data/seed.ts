@@ -28,7 +28,7 @@ export const SEED_TECHNIQUES: Technique[] = [
     id: 'tech-persona',
     name: 'Persona Prompting',
     description:
-      'Laat de prompt schrijven vanuit het perspectief van een specifieke interne rol of expert.',
+      'Laat de prompt schrijven vanuit het perspectief van een specifieke interne persona.',
     strength:
       'Sterk in het meenemen van een specifiek deskundig perspectief. Het model neemt de toon, kennis en afwegingen van die rol over, waardoor de output gerichter en geloofwaardiger wordt.',
     use_cases: [
@@ -37,18 +37,21 @@ export const SEED_TECHNIQUES: Technique[] = [
       'Een stuk laten toetsen op bestuurlijke of juridische houdbaarheid',
     ],
     follow_up_questions: [
-      { id: 'persona', label: 'Vanuit welke interne rol/expert?', placeholder: 'Bijv. een ervaren beleidsmedewerker of een SG die een nota beoordeelt' },
-      { id: 'belangrijk', label: 'Wat is belangrijk voor deze rol?', placeholder: 'Bijv. juridische houdbaarheid en bestuurlijke afweging' },
-      { id: 'weten', label: 'Waar let deze rol vooral op?', placeholder: 'Bijv. risico’s, draagvlak en uitvoerbaarheid' },
-      { id: 'belangen', label: 'Wat zijn de belangen van deze rol?', placeholder: 'Bijv. een onderbouwd, uitvoerbaar advies opleveren' },
+      { id: 'gewenst_doel', label: 'Gewenst doel — wat wil je bereiken?', placeholder: 'Bijv. een onderbouwd advies dat mijn manager direct kan gebruiken' },
+      { id: 'persona', label: 'Vanuit welke interne persona?', placeholder: 'Bijv. een ervaren beleidsmedewerker, een communicatieadviseur, een projectleider, een DT-lid of een manager' },
+      { id: 'belangrijk', label: 'Wat is belangrijk voor deze persona?', placeholder: 'Bijv. juridische houdbaarheid en bestuurlijke afweging (jurist), of een heldere kernboodschap (communicatieadviseur)' },
+      { id: 'weten', label: 'Waar let deze persona vooral op?', placeholder: 'Bijv. risico’s en draagvlak (manager), haalbaarheid en planning (projectleider), of de rode draad (DT-lid)' },
+      { id: 'belangen', label: 'Wat zijn de belangen van deze persona?', placeholder: 'Bijv. een onderbouwd, uitvoerbaar advies (beleidsmedewerker) of een consistent verhaal naar buiten (communicatieadviseur)' },
     ],
-    template: `Je bent {{persona}}.
+    template: `Gewenst doel: {{gewenst_doel}}
+
+Je bent {{persona}}.
 
 Belangrijk voor jou: {{belangrijk}}
-Je wilt graag weten: {{weten}}
+Je let vooral op: {{weten}}
 Jouw belangen: {{belangen}}
 
-Beantwoord, schrijf of voer de volgende opdracht uit volledig vanuit dit perspectief. Houd rekening met de toon, taal en behoeften die bij deze persoon passen.
+Beantwoord, schrijf of voer de volgende opdracht uit volledig vanuit dit perspectief. Houd rekening met de toon, taal en behoeften die bij deze persona passen.
 
 Oorspronkelijke opdracht:
 {{PROMPT}}`,
@@ -65,7 +68,7 @@ Oorspronkelijke opdracht:
       'Een complex vraagstuk ontleden voordat je tot een advies komt',
     ],
     follow_up_questions: [
-      { id: 'doel', label: 'Wat is het einddoel?', placeholder: 'Bijv. een onderbouwd advies' },
+      { id: 'doel', label: 'Gewenst doel — wat wil je bereiken?', placeholder: 'Bijv. een onderbouwd advies waarin de afweging navolgbaar is' },
       { id: 'stappen', label: 'Welke tussenstappen zijn belangrijk?', placeholder: 'Bijv. eerst de feiten, dan de afweging' },
     ],
     template: `Voer de volgende opdracht stap voor stap uit. Redeneer hardop en maak elke tussenstap expliciet voordat je tot een conclusie komt.
@@ -93,11 +96,14 @@ Oorspronkelijke opdracht:
       'Output uniform maken over meerdere stukken heen',
     ],
     follow_up_questions: [
+      { id: 'gewenst_doel', label: 'Gewenst doel — wat wil je bereiken?', placeholder: 'Bijv. notities consistent in onze huisstijl laten herschrijven' },
       { id: 'voorbeeld1', label: 'Voorbeeld 1 (gewenste output)', placeholder: 'Plak een goed voorbeeld' },
       { id: 'voorbeeld2', label: 'Voorbeeld 2 (optioneel)', placeholder: 'Nog een voorbeeld' },
       { id: 'stijl', label: 'Wat kenmerkt de gewenste stijl?', placeholder: 'Bijv. formeel, beknopt, B1-taalniveau' },
     ],
-    template: `Gebruik onderstaande voorbeelden als referentie voor toon, stijl en structuur.
+    template: `Gewenst doel: {{gewenst_doel}}
+
+Gebruik onderstaande voorbeelden als referentie voor toon, stijl en structuur.
 
 Voorbeeld 1:
 {{voorbeeld1}}
@@ -124,11 +130,14 @@ Oorspronkelijke opdracht:
       'Data of bevindingen in een herbruikbaar format gieten',
     ],
     follow_up_questions: [
+      { id: 'gewenst_doel', label: 'Gewenst doel — wat wil je bereiken?', placeholder: 'Bijv. een overzicht dat ik direct in een nota kan plakken' },
       { id: 'formaat', label: 'Welk outputformaat wil je?', placeholder: 'Bijv. tabel met kolommen: onderwerp, advies, risico' },
       { id: 'taalniveau', label: 'Welk taalniveau?', placeholder: 'Bijv. B1 (begrijpelijke taal)' },
       { id: 'lengte', label: 'Gewenste lengte?', placeholder: 'Bijv. maximaal 1 A4' },
     ],
-    template: `Lever het resultaat aan in het volgende formaat: {{formaat}}.
+    template: `Gewenst doel: {{gewenst_doel}}
+
+Lever het resultaat aan in het volgende formaat: {{formaat}}.
 
 Eisen aan de output:
 - Taalniveau: {{taalniveau}}
@@ -152,14 +161,17 @@ Oorspronkelijke opdracht:
       'Een voorstel toetsen op draagvlak bij verschillende stakeholders',
     ],
     follow_up_questions: [
+      { id: 'gewenst_doel', label: 'Gewenst doel — wat wil je bereiken?', placeholder: 'Bijv. een voorstel dat bij projectleider, jurist én communicatie draagvlak heeft' },
       { id: 'persona1', label: 'Persona 1 — naam/rol', placeholder: 'Bijv. Projectleider' },
       { id: 'belang1', label: 'Persona 1 — belang & prioriteit', placeholder: 'Bijv. tijdige oplevering' },
       { id: 'persona2', label: 'Persona 2 — naam/rol', placeholder: 'Bijv. Jurist' },
       { id: 'belang2', label: 'Persona 2 — belang & prioriteit', placeholder: 'Bijv. juridische houdbaarheid' },
       { id: 'persona3', label: 'Persona 3 — naam/rol (optioneel)', placeholder: 'Bijv. Communicatieadviseur' },
-      { id: 'belang3', label: 'Persona 3 — belang & prioriteit (optioneel)', placeholder: 'Bijv. begrijpelijke boodschap' },
+      { id: 'belang3', label: 'Persona 3 — belang & prioriteit (optioneel)', placeholder: 'Bijv. een heldere kernboodschap' },
     ],
-    template: `Je gaat deze tekst schrijven voor meerdere doelgroepen tegelijk.
+    template: `Gewenst doel: {{gewenst_doel}}
+
+Je gaat deze tekst schrijven voor meerdere interne belanghebbenden tegelijk.
 
 PERSONA 1 — {{persona1}}:
 - Belang en prioriteit: {{belang1}}
@@ -187,10 +199,13 @@ Oorspronkelijke opdracht:
       'Een vraagstuk verkennen voordat je een richting kiest',
     ],
     follow_up_questions: [
-      { id: 'aannames', label: 'Wat zijn de kern-aannames in de input?', placeholder: 'Bijv. dat de aanpak uitvoerbaar is binnen de huidige capaciteit' },
+      { id: 'gewenst_doel', label: 'Gewenst doel — wat wil je bereiken?', placeholder: 'Bijv. blinde vlekken in mijn aanpak blootleggen voordat ik verderga' },
+      { id: 'aannames', label: 'Wat zijn de kern-aannames in de input?', placeholder: 'Bijv. dat de aanpak uitvoerbaar is binnen de huidige capaciteit van het team' },
       { id: 'ontdekken', label: 'Wat wil je eigenlijk ontdekken?', placeholder: 'Bijv. of de aanpak wel klopt' },
     ],
-    template: `Analyseer de aannames in onderstaande tekst en pas de Socratische methode toe.
+    template: `Gewenst doel: {{gewenst_doel}}
+
+Analyseer de aannames in onderstaande tekst en pas de Socratische methode toe.
 
 Bekende aannames: {{aannames}}
 Wat we willen ontdekken: {{ontdekken}}
@@ -234,6 +249,7 @@ Oorspronkelijke opdracht:
   {
     id: 'tech-crisp',
     name: 'CRISP',
+    family: 'context',
     description: 'Gestructureerd prompten met Context, Rules, Instructions, Specifics en Pattern.',
     strength:
       'Sterk bij complexe opdrachten met veel randvoorwaarden. Door context, regels, instructies, details en patroon te scheiden, krijgt het model maximale sturing.',
@@ -272,6 +288,7 @@ Geef, gegeven bovenstaande CRISP-structuur, antwoord op:
   {
     id: 'tech-care',
     name: 'CARE',
+    family: 'context',
     description: 'Uitgebreid prompten met Context, Ask, Rules en Examples.',
     strength:
       'Sterk als je een duidelijke vraag wilt combineren met context, regels én voorbeelden. Een toegankelijke structuur die snel tot bruikbaar resultaat leidt.',

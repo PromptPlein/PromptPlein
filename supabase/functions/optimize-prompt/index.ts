@@ -39,6 +39,13 @@ interface TechniqueSummary {
   use_cases?: string[];
 }
 
+/** Eén ingevuld veld met het label en het antwoord van de gebruiker. */
+interface AnsweredField {
+  id: string;
+  label: string;
+  answer: string;
+}
+
 interface RequestBody {
   mode?: Mode;
   techniqueId?: string;
@@ -46,6 +53,26 @@ interface RequestBody {
   template?: string;
   promptContent?: string;
   followUpAnswers?: Record<string, string>;
+  // Verrijkende context zodat het model kan synthetiseren i.p.v. invullen.
+  techniqueName?: string;
+  techniqueDescription?: string;
+  techniqueStrength?: string;
+  /**
+   * Is de gekozen techniek een context-raamwerk (CARE, CRISP, …) dat de hele
+   * prompt opbouwt? Behouden voor terugwaartse compatibiliteit; nieuwe clients
+   * sturen liever `structureFormat`.
+   */
+  isContextPrompt?: boolean;
+  /**
+   * Welke vaste uitvoerstructuur de generator moet afdwingen:
+   *  - 'care'             → #-koppen (Rol, Context, Taak/vraag, …).
+   *  - 'few-shot'         → rol/taak + Voorbeeld-blokken (Input/Output) + Nieuwe taak.
+   *  - 'chain-of-thought' → rol/taak + interactieve stap-voor-stap-werkwijze + stapvragen.
+   * Ontbreekt dit, dan valt 'care' terug op `isContextPrompt` (oude clients).
+   */
+  structureFormat?: 'care' | 'few-shot' | 'chain-of-thought';
+  /** De ingevulde velden mét hun labels, voor analyse. */
+  answeredFields?: AnsweredField[];
   // 'recommend'-velden
   goal?: string;
   techniques?: TechniqueSummary[];
@@ -60,8 +87,76 @@ const CLAUDE_MODEL = 'claude-opus-4-8';
 const OPENAI_MODEL = 'gpt-4o';
 const DEEPSEEK_MODEL = 'deepseek-chat';
 
-const GENERATE_USER_PROMPT = (filled: string) =>
-  `Hier is de ingevulde prompt-template. Lever de herbruikbare prompt-template:\n\n${filled}`;
+/**
+ * Bouwt de gebruikersprompt voor generatie: techniekcontext + de losse,
+ * gelabelde antwoorden van de gebruiker + de gevulde template als structuur.
+ * Zo kan het model de antwoorden analyseren en uitschrijven i.p.v. invullen.
+ */
+const GENERATE_USER_PROMPT = (args: {
+  filled: string;
+  techniqueName?: string;
+  techniqueDescription?: string;
+  techniqueStrength?: string;
+  answeredFields?: AnsweredField[];
+  promptContent?: string;
+  structureFormat?: 'care' | 'few-shot' | 'chain-of-thought';
+}) => {
+  const parts: string[] = [];
+
+  const techLines = [
+    args.techniqueName ? `Naam: ${args.techniqueName}` : '',
+    args.techniqueDescription ? `Beschrijving: ${args.techniqueDescription}` : '',
+    args.techniqueStrength ? `Doel/kracht: ${args.techniqueStrength}` : '',
+  ].filter(Boolean);
+  if (techLines.length > 0) {
+    parts.push(`GEKOZEN TECHNIEK:\n${techLines.join('\n')}`);
+  }
+
+  const answered = (args.answeredFields ?? []).filter((f) => f.answer?.trim());
+  if (answered.length > 0) {
+    parts.push(
+      `ANTWOORDEN VAN DE GEBRUIKER (analyseer en verwerk deze, neem ze niet letterlijk over):\n` +
+        answered.map((f) => `- ${f.label}: ${f.answer.trim()}`).join('\n'),
+    );
+  }
+
+  if (args.promptContent?.trim() && args.promptContent.trim() !== '[BESCHRIJF HIER WAT JE WILT BEREIKEN]') {
+    parts.push(`STARTPUNT / EIGEN TEKST VAN DE GEBRUIKER:\n${args.promptContent.trim()}`);
+  }
+
+  parts.push(
+    `STRUCTUUR-REFERENTIE (de techniek-template, alleen ter ondersteuning van de opbouw):\n${args.filled}`,
+  );
+
+  parts.push(
+    `Schrijf nu één rijke, volledig uitgewerkte en direct bruikbare prompt-template die alle ` +
+      `bovenstaande antwoorden combineert. Laat het doel${args.answeredFields?.some((f) => /persona/i.test(f.label)) ? ' en de persona' : ''} duidelijk naar voren komen.`,
+  );
+
+  if (args.structureFormat === 'care') {
+    parts.push(
+      `Houd je strikt aan de verplichte uitvoerstructuur met #-koppen (#Rol:, #Context:, ` +
+        `#Taak/vraag:, #Stijl:, #Structuur/regels:, #Randvoorwaarden: en optioneel #Voorbeeld:). ` +
+        `Elke kop begint met een hekje en eindigt op een dubbele punt, met de inhoud eronder.`,
+    );
+  } else if (args.structureFormat === 'few-shot') {
+    parts.push(
+      `Houd je strikt aan de verplichte Few-Shot-structuur: een korte rol/taak-intro, daarna ` +
+        `2 à 3 genummerde voorbeelden met telkens een regel "Input:" en een regel "Output:", en ` +
+        `tot slot een blok "Nieuwe taak:" met "Input: [plak hier je eigen invoer]" en een lege "Output:".`,
+    );
+  } else if (args.structureFormat === 'chain-of-thought') {
+    parts.push(
+      `Houd je strikt aan de verplichte Chain-of-Thought-structuur. Cruciaal: de gegenereerde prompt ` +
+        `moet de AI laten werken via een interactieve dialoog — telkens MAAR ÉÉN vraag tegelijk, wachten ` +
+        `op het antwoord, en op basis daarvan een vervolg-/wedervraag stellen, net zo lang tot de kern ` +
+        `van het vraagstuk helder is. De genummerde stappen zijn een MINIMUM; de AI mag zelf aanvullende ` +
+        `vervolgvragen bedenken. Het eindproduct komt PAS nadat alle stappen zijn doorlopen.`,
+    );
+  }
+
+  return parts.join('\n\n');
+};
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -85,25 +180,35 @@ function fillTemplate(
 }
 
 const DEFAULT_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse rijksoverheid.
-Je krijgt een ingevulde prompt-template die een specifieke prompting-techniek toepast.
-Je levert een HERBRUIKBARE prompt-template op in het Nederlands: een sjabloon dat de gebruiker
-telkens kan kopiëren en plakken in hun eigen AI-chat.
+Een interne overheidsmedewerker heeft losse antwoorden gegeven via een prompting-techniek.
+Jouw taak: ANALYSEER al die antwoorden en SCHRIJF op basis daarvan één rijke, volledig
+uitgewerkte, direct bruikbare prompt-template in het Nederlands die de gebruiker in hun eigen
+AI-chat kan plakken.
 
-BELANGRIJK — interne doelgroep:
+WERKWIJZE — analyseren en uitschrijven (niet letterlijk overnemen):
+- Neem de antwoorden NIET één-op-één over. Combineer ze tot vloeiende, samenhangende instructies.
+- Verwerk elk antwoord betekenisvol: leid uit de losse antwoorden een compleet beeld af van de
+  persona, de context, het doel en de gewenste uitkomst, en schrijf dat volledig uit.
+- Laat het specifieke doel en (waar van toepassing) de persona duidelijk en expliciet naar voren komen.
+- Maak de prompt uitgebreider en concreter dan de input: voeg passende structuur, duidelijke
+  instructies en waar nuttig een gewenst format toe — zonder de intentie van de gebruiker te veranderen.
+- Pas de gekozen techniek consequent en herkenbaar toe (bijv. echt redeneren bij Chain-of-Thought,
+  echt vanuit de persona schrijven bij Persona Prompting).
+
+PLAATSHOUDERS:
+- Laat ALLEEN de plekken die de gebruiker écht per keer zelf moet aanvullen staan als duidelijke
+  plaatshouder tussen rechte haken, bijv. [PLAK HIER DE NOTITIE] of [BESCHRIJF DE CASUS].
+- Verzín geen concrete inhoud voor die plekken; maar schrijf de omliggende instructies wél volledig uit.
+- Behoud bestaande [plaatshouders] die al in de input staan.
+
+INTERNE DOELGROEP:
 - De gebruiker is een interne overheidsmedewerker (bijv. beleidsmedewerker, projectleider,
   manager, communicatieadviseur, Secretaris-Generaal (SG) of SGO).
-- De prompts zijn UITSLUITEND voor INTERN gebruik binnen de overheid. Richt ze nooit op het
-  schrijven vóór of de communicatie náár burgers of externe partijen.
-- Gebruik waar passend interne voorbeelden en interne rollen/personas, geen burger-personas.
+- De prompts zijn UITSLUITEND voor INTERN gebruik. Richt ze nooit op het schrijven vóór of de
+  communicatie náár burgers of externe partijen. Gebruik interne personas, geen burger-personas.
 
-Richtlijnen:
-- Pas de gekozen techniek consequent en herkenbaar toe.
-- De velden die de gebruiker heeft ingevuld vormen de STRUCTUUR van de template.
-- Laat de plekken waar de gebruiker zélf nog inhoud moet leveren staan als duidelijke
-  plaatshouders tussen rechte haken, bijvoorbeeld [PLAATS HIER JE TEKST] of [BESCHRIJF JE SITUATIE].
-  Verzín die inhoud NIET; de gebruiker vult dat later zelf in.
-- Behoud bestaande [plaatshouders] die al in de input staan; verwijder ze niet.
-- Schrijf in duidelijke, professionele taal.
+UITVOER:
+- Schrijf in duidelijke, professionele taal (waar passend B1-taalniveau).
 - Geef ALLEEN de prompt-template terug, zonder inleiding, uitleg of opmaak-markeringen.`;
 
 const RECOMMEND_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse rijksoverheid.
@@ -132,10 +237,111 @@ const RECOMMEND_USER_PROMPT = (goal: string, techniques: TechniqueSummary[]) =>
     })
     .join('\n')}`;
 
-/** Bouw de systeemprompt uit de admin-hoofdprompt (of default) + toon-instructie. */
-function buildSystemPrompt(systemPrompt?: string, tone?: string): string {
+/**
+ * Verplichte uitvoerstructuur voor context-raamwerken (CARE, CRISP, …).
+ * Het model moet de prompt ALTIJD opbouwen met deze #-koppen, elk gevolgd door
+ * een dubbele punt en de inhoud op de regel(s) eronder. Dit overschrijft de
+ * regel "zonder opmaak-markeringen" uit de hoofd-systeemprompt.
+ */
+const CONTEXT_STRUCTURE_INSTRUCTION = `VERPLICHTE UITVOERSTRUCTUUR (geldt voor dit context-raamwerk):
+Bouw de prompt ALTIJD op met de onderstaande koppen, in deze volgorde. Begin elke
+kop met een hekje (#), direct gevolgd door de naam en een dubbele punt. Zet de
+inhoud op de regel(s) eronder. Laat een lege regel tussen de blokken.
+
+#Rol:
+[wie de AI is — leid dit af uit de antwoorden]
+
+#Context:
+[korte achtergrond van de situatie]
+
+#Taak/vraag:
+[wat er precies gedaan moet worden; gebruik genummerde stappen waar dat helpt]
+
+#Stijl:
+[hoe het moet klinken — toon, taalniveau, wat te vermijden]
+
+#Structuur/regels:
+[gewenste opbouw en harde regels voor het resultaat]
+
+#Randvoorwaarden:
+[limieten en voorwaarden, bijv. lengte of wat niet vermeld mag worden]
+
+#Voorbeeld:
+[optioneel; alleen opnemen als er een voorbeeld of format is — anders deze kop weglaten]
+
+Vul elke kop met volledig uitgeschreven instructies op basis van de antwoorden.
+Laat alleen écht per keer in te vullen plekken staan als [plaatshouder]. Geef geen
+extra tekst buiten deze koppen en plaats GEEN codeblok-tekens (\`\`\`) om de prompt.`;
+
+/**
+ * Verplichte uitvoerstructuur voor de Few-Shot-techniek: een rol/taak-intro,
+ * 2 à 3 voorbeeldblokken met Input/Output, en een afsluitend "Nieuwe taak"-blok
+ * waar de gebruiker zijn eigen invoer plakt. Het model leert het patroon uit de
+ * voorbeelden en voert daarna in dezelfde stijl de nieuwe taak uit.
+ */
+const FEW_SHOT_STRUCTURE_INSTRUCTION = `VERPLICHTE UITVOERSTRUCTUUR (Few-Shot / voorbeeldgestuurd prompten):
+Bouw de prompt ALTIJD op in deze volgorde. Schrijf de voorbeelden volledig uit op
+basis van de antwoorden; gebruik dezelfde doelgroep, toon en soort tekst als de taak.
+
+1. Een korte rol/taak-intro (1-3 zinnen): wie de AI is en wat de taak is, met de
+   expliciete instructie om de stijl en structuur van de onderstaande voorbeelden te volgen.
+2. Twee à drie genummerde voorbeelden, elk in dit formaat:
+   Voorbeeld 1:
+   Input: "[voorbeeld van de invoer]"
+   Output: "[de gewenste, voorbeeldige uitvoer]"
+3. Een afsluitend blok:
+   Nieuwe taak:
+   Input: "[plak hier je eigen invoer]"
+   Output:
+   (laat Output bewust leeg zodat het model die invult)
+
+Houd Input/Output-paren consistent qua toon, lengte en niveau. Laat alleen écht per
+keer in te vullen plekken staan als [plaatshouder]. Plaats GEEN codeblok-tekens (\`\`\`).`;
+
+/**
+ * Verplichte uitvoerstructuur voor Chain-of-Thought (stapsgewijs redeneren).
+ * De prompt laat de AI NIET meteen het eindproduct maken, maar eerst stap voor
+ * stap vragen stellen — de gebruiker antwoordt, en pas daarna stelt de AI het
+ * resultaat op. Zo wordt zichtbaar welke keuzes, aannames en afwegingen nodig
+ * zijn en of er informatie ontbreekt.
+ */
+const CHAIN_OF_THOUGHT_STRUCTURE_INSTRUCTION = `VERPLICHTE UITVOERSTRUCTUUR (Chain-of-Thought / stapsgewijs redeneren):
+Bouw de prompt ALTIJD op in deze volgorde. Schrijf alles volledig uit op basis van de antwoorden.
+Het allerbelangrijkste: de gegenereerde prompt moet de AI laten WERKEN via een interactieve
+één-vraag-per-keer-dialoog. De AI maakt NIET meteen het eindproduct.
+
+1. Een rol-zin: wie de AI is (bijv. een ervaren beleidsmedewerker die goed onderbouwde stukken maakt).
+2. Een taak-zin: waar de AI bij helpt, met een [plaatshouder] voor het concrete onderwerp.
+3. Een interactieve werkwijze, expliciet en dwingend uitgeschreven in de prompt zelf. Neem deze regels
+   letterlijk en volledig op (herformuleren mag, betekenis behouden):
+   - "Neem mij stap voor stap mee. Stel telkens MAAR ÉÉN vraag tegelijk en wacht op mijn antwoord
+     voordat je verder gaat."
+   - "Stel op basis van mijn antwoord zo nodig een vervolg-/wedervraag, en blijf doorvragen tot de
+     kern van het vraagstuk helder is. Vraag dus door totdat je voldoende scherp hebt wat ik precies wil."
+   - "Maak of schrijf het eindproduct PAS nadat alle stappen zijn doorlopen en de inhoud compleet is."
+4. Een genummerde lijst met de minimale onderwerpen/vragen die in elk geval aan bod komen
+   (uit de antwoorden van de gebruiker). Instrueer de AI expliciet dat dit een MINIMUM is en dat de AI
+   zelf aanvullende, scherpere vervolgvragen mag bedenken om tot de kern te komen.
+5. Een korte slotinstructie dat de AI de feiten controleert en aangeeft waar informatie ontbreekt.
+
+Laat alleen écht per keer in te vullen plekken staan als [plaatshouder]. Plaats GEEN codeblok-tekens (\`\`\`).`;
+
+type StructureFormat = 'care' | 'few-shot' | 'chain-of-thought';
+
+/** Kies de juiste structuur-instructie (of geen) op basis van de techniek. */
+function structureInstruction(format?: StructureFormat): string | null {
+  if (format === 'care') return CONTEXT_STRUCTURE_INSTRUCTION;
+  if (format === 'few-shot') return FEW_SHOT_STRUCTURE_INSTRUCTION;
+  if (format === 'chain-of-thought') return CHAIN_OF_THOUGHT_STRUCTURE_INSTRUCTION;
+  return null;
+}
+
+/** Bouw de systeemprompt uit de admin-hoofdprompt (of default) + structuur + toon. */
+function buildSystemPrompt(systemPrompt?: string, tone?: string, format?: StructureFormat): string {
   const base = systemPrompt?.trim() ? systemPrompt.trim() : DEFAULT_SYSTEM_PROMPT;
-  return tone?.trim() ? `${base}\n\nToon en schrijfstijl: ${tone.trim()}` : base;
+  const instruction = structureInstruction(format);
+  const withStructure = instruction ? `${base}\n\n${instruction}` : base;
+  return tone?.trim() ? `${withStructure}\n\nToon en schrijfstijl: ${tone.trim()}` : withStructure;
 }
 
 /** Begrens de temperature tot een veilig bereik; default 0.4. */
@@ -372,9 +578,21 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // Nieuwe clients sturen `structureFormat`; oude clients alleen `isContextPrompt`.
+    const format: StructureFormat | undefined =
+      body.structureFormat ?? (body.isContextPrompt ? 'care' : undefined);
+
     const filled = fillTemplate(body.template, body.promptContent, body.followUpAnswers ?? {});
-    const system = buildSystemPrompt(body.systemPrompt, body.toneInstruction);
-    const userMessage = GENERATE_USER_PROMPT(filled);
+    const system = buildSystemPrompt(body.systemPrompt, body.toneInstruction, format);
+    const userMessage = GENERATE_USER_PROMPT({
+      filled,
+      techniqueName: body.techniqueName,
+      techniqueDescription: body.techniqueDescription,
+      techniqueStrength: body.techniqueStrength,
+      answeredFields: body.answeredFields,
+      promptContent: body.promptContent,
+      structureFormat: format,
+    });
 
     // Doorloop de providers in voorkeursvolgorde; eerste succes wint.
     // Faalt alles (of ontbreken alle keys), dan de ruwe template.

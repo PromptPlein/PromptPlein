@@ -86,7 +86,7 @@ export default function SettingsPage() {
         /* audit is best-effort */
       });
       setInitial(settings);
-      toast.success('AI-instellingen opgeslagen — gelden voor alle optimalisaties.');
+      toast.success('AI-instellingen opgeslagen. Gelden voor alle optimalisaties.');
     } catch {
       toast.error('Opslaan mislukt. Probeer het opnieuw.');
     } finally {

@@ -14,6 +14,7 @@ import RequireAuth from '@/components/auth/RequireAuth';
 import LoginPage from '@/pages/auth/LoginPage';
 import SignupPage from '@/pages/auth/SignupPage';
 import PasswordResetPage from '@/pages/auth/PasswordResetPage';
+import UpdatePasswordPage from '@/pages/auth/UpdatePasswordPage';
 import ProfilePage from '@/pages/ProfilePage';
 const NetworkPage = lazy(() => import('@/pages/NetworkPage'));
 const CommunityPage = lazy(() => import('@/pages/CommunityPage'));
@@ -82,6 +83,7 @@ export default function App() {
               <Route path="/auth/login" element={<LoginPage />} />
               <Route path="/auth/registreren" element={<SignupPage />} />
               <Route path="/auth/wachtwoord-vergeten" element={<PasswordResetPage />} />
+              <Route path="/auth/nieuw-wachtwoord" element={<UpdatePasswordPage />} />
 
               {/* Vereist een ingelogde gebruiker */}
               <Route element={<RequireAuth />}>

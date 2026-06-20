@@ -1,4 +1,5 @@
 import { getAnonKey, getFunctionUrl, isSupabaseConfigured } from '@/lib/supabase';
+import { isContextPrompt, structureFormat } from '@/lib/techniques';
 import type { AiProvider } from '@/config/aiModels';
 import type {
   OptimizeResult,
@@ -70,6 +71,24 @@ export async function optimizePrompt(args: {
           template: technique.template,
           promptContent,
           followUpAnswers,
+          // Verrijkende context zodat het model de antwoorden kan analyseren
+          // en uitschrijven i.p.v. de template letterlijk in te vullen.
+          techniqueName: technique.name,
+          techniqueDescription: technique.description,
+          techniqueStrength: technique.strength,
+          // Context-raamwerken (CARE, CRISP, …) krijgen server-side de vaste
+          // #-koppenstructuur opgelegd; losse technieken houden hun eigen vorm.
+          isContextPrompt: isContextPrompt(technique),
+          // Welke vaste uitvoerstructuur de generator moet afdwingen (CARE-koppen,
+          // Few-Shot-blokken, …). Undefined = de AI bepaalt zelf de vorm.
+          structureFormat: structureFormat(technique),
+          answeredFields: technique.follow_up_questions
+            .map((q) => ({
+              id: q.id,
+              label: q.label,
+              answer: followUpAnswers[q.id] ?? '',
+            }))
+            .filter((f) => f.answer.trim()),
           preferredProvider: preferredProvider ?? 'auto',
           systemPrompt,
           toneInstruction,
@@ -124,18 +143,49 @@ function localRecommend(goal: string, techniques: Technique[]): TechniqueRecomme
       .split(/[^a-zà-ÿ0-9]+/)
       .filter((w) => w.length > 3),
   );
+
   const scored = techniques
     .map((t) => {
+      // Welke gebruikssituaties van de techniek raken het doel van de gebruiker?
+      const matchedUseCases = (t.use_cases ?? []).filter((uc) => {
+        const lc = uc.toLowerCase();
+        return [...words].some((w) => lc.includes(w));
+      });
       const haystack =
         `${t.name} ${t.description ?? ''} ${t.strength ?? ''} ${(t.use_cases ?? []).join(' ')}`.toLowerCase();
       let score = 0;
       for (const w of words) if (haystack.includes(w)) score += 1;
-      return { t, score };
+      return { t, score, matchedUseCases };
     })
     .sort((a, b) => b.score - a.score);
+
   const top = scored.filter((s) => s.score > 0).slice(0, 3);
   const chosen = top.length > 0 ? top : scored.slice(0, 2);
-  return chosen.map(({ t }) => ({ id: t.id, reason: 'Mogelijk passend op basis van je doel.' }));
+
+  return chosen.map(({ t, score, matchedUseCases }) => ({
+    id: t.id,
+    reason: buildLocalReason(t, score, matchedUseCases),
+  }));
+}
+
+/** Bouw een doel-specifieke motivatie zonder AI: koppel het doel aan de techniek. */
+function buildLocalReason(
+  technique: Technique,
+  score: number,
+  matchedUseCases: string[],
+): string {
+  if (matchedUseCases.length > 0) {
+    return `Past bij je doel: deze techniek is sterk voor "${matchedUseCases[0].toLowerCase()}".`;
+  }
+  if (score > 0 && technique.strength) {
+    // Eerste zin van de kracht als beknopte motivatie.
+    const firstSentence = technique.strength.split(/(?<=[.!?])\s/)[0];
+    return `Sluit aan op je doel. ${firstSentence}`;
+  }
+  if (technique.strength) {
+    return `Breed inzetbaar voor jouw vraag. ${technique.strength.split(/(?<=[.!?])\s/)[0]}`;
+  }
+  return 'Mogelijk passend op basis van je doel.';
 }
 
 /**

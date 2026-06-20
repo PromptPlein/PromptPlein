@@ -28,10 +28,10 @@ export async function getPublicProfiles(userIds: string[]): Promise<Record<strin
     return result;
   }
 
-  const { data, error } = await supabase!
-    .from('public_profiles')
-    .select('id, full_name, organization_id')
-    .in('id', ids);
+  // Publieke (niet-gevoelige) profielvelden via een SECURITY DEFINER RPC.
+  // De functie geeft bewust alleen id + naam + organisatie terug, zodat
+  // privacygevoelige velden (e-mail) niet kunnen lekken.
+  const { data, error } = await supabase!.rpc('get_public_profiles', { p_ids: ids });
   if (error) throw error;
   for (const row of (data ?? []) as PublicProfile[]) result[row.id] = row;
   return result;

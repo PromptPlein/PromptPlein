@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2, Eye, EyeOff, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, Pencil, Trash2, Eye, EyeOff, ArrowUp, ArrowDown, GripVertical, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Modal from '@/components/common/Modal';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
@@ -22,7 +22,8 @@ interface EditorState {
   /** Eén gebruikssituatie per regel. */
   useCasesText: string;
   template: string;
-  followUpsJson: string;
+  /** Vervolgvragen als gestructureerde lijst (per vraag: id, label, placeholder). */
+  followUps: FollowUpQuestion[];
   is_active: boolean;
 }
 
@@ -32,7 +33,7 @@ const EMPTY: EditorState = {
   strength: '',
   useCasesText: '',
   template: 'Oorspronkelijke opdracht:\n{{PROMPT}}',
-  followUpsJson: '[]',
+  followUps: [],
   is_active: true,
 };
 
@@ -44,9 +45,24 @@ function toEditor(t: Technique): EditorState {
     strength: t.strength ?? '',
     useCasesText: (t.use_cases ?? []).join('\n'),
     template: t.template,
-    followUpsJson: JSON.stringify(t.follow_up_questions, null, 2),
+    followUps: t.follow_up_questions.map((q) => ({ ...q })),
     is_active: t.is_active !== false,
   };
+}
+
+/** Maak een veilige, korte id op basis van een label (voor de template-placeholders). */
+function slugifyId(label: string, existing: string[]): string {
+  const base =
+    label
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 24) || 'veld';
+  let id = base;
+  let n = 2;
+  while (existing.includes(id)) id = `${base}_${n++}`;
+  return id;
 }
 
 /** Splitst de textarea naar een opgeschoonde lijst gebruikssituaties. */
@@ -62,7 +78,6 @@ export default function TechniqueManagerPage() {
   const [techniques, setTechniques] = useState<Technique[]>([]);
   const [loading, setLoading] = useState(true);
   const [editor, setEditor] = useState<EditorState | null>(null);
-  const [jsonError, setJsonError] = useState<string | null>(null);
   const [toDelete, setToDelete] = useState<Technique | null>(null);
 
   async function load() {
@@ -75,15 +90,40 @@ export default function TechniqueManagerPage() {
     load();
   }, []);
 
-  function parseFollowUps(json: string): FollowUpQuestion[] {
-    const parsed = JSON.parse(json);
-    if (!Array.isArray(parsed)) throw new Error('Vervolgvragen moeten een JSON-array zijn');
-    for (const q of parsed) {
-      if (typeof q.id !== 'string' || typeof q.label !== 'string') {
-        throw new Error('Elke vraag heeft minimaal een "id" en "label" (strings)');
+  // --- Vervolgvragen bewerken (gestructureerd) ---
+  function addFollowUp() {
+    if (!editor) return;
+    const existing = editor.followUps.map((q) => q.id);
+    setEditor({
+      ...editor,
+      followUps: [...editor.followUps, { id: slugifyId('', existing), label: '', placeholder: '' }],
+    });
+  }
+  function updateFollowUp(index: number, patch: Partial<FollowUpQuestion>) {
+    if (!editor) return;
+    const next = editor.followUps.map((q, i) => {
+      if (i !== index) return q;
+      const merged = { ...q, ...patch };
+      // Als het label verandert en het id nog leeg/auto is, leid een net id af.
+      if (patch.label !== undefined && (!q.id || q.id.startsWith('veld'))) {
+        const others = editor.followUps.filter((_, j) => j !== index).map((o) => o.id);
+        merged.id = slugifyId(patch.label, others);
       }
-    }
-    return parsed as FollowUpQuestion[];
+      return merged;
+    });
+    setEditor({ ...editor, followUps: next });
+  }
+  function removeFollowUp(index: number) {
+    if (!editor) return;
+    setEditor({ ...editor, followUps: editor.followUps.filter((_, i) => i !== index) });
+  }
+  function moveFollowUp(index: number, dir: -1 | 1) {
+    if (!editor) return;
+    const swap = index + dir;
+    if (swap < 0 || swap >= editor.followUps.length) return;
+    const next = [...editor.followUps];
+    [next[index], next[swap]] = [next[swap], next[index]];
+    setEditor({ ...editor, followUps: next });
   }
 
   async function handleSave() {
@@ -92,12 +132,18 @@ export default function TechniqueManagerPage() {
       toast.error('Naam is verplicht');
       return;
     }
-    let followUps: FollowUpQuestion[];
-    try {
-      followUps = parseFollowUps(editor.followUpsJson);
-      setJsonError(null);
-    } catch (err) {
-      setJsonError(err instanceof Error ? err.message : 'Ongeldige JSON');
+    // Lege vragen (zonder label) eruit filteren; placeholder is optioneel.
+    const followUps: FollowUpQuestion[] = editor.followUps
+      .filter((q) => q.label.trim())
+      .map((q) => ({
+        id: q.id,
+        label: q.label.trim(),
+        placeholder: q.placeholder?.trim() || undefined,
+      }));
+
+    const ids = followUps.map((q) => q.id);
+    if (new Set(ids).size !== ids.length) {
+      toast.error('Elke vraag moet een uniek veld-id hebben.');
       return;
     }
 
@@ -169,15 +215,13 @@ export default function TechniqueManagerPage() {
   }
 
   const preview =
-    editor && (() => {
-      try {
-        const followUps = parseFollowUps(editor.followUpsJson);
-        const sample: Record<string, string> = {};
-        followUps.forEach((q) => (sample[q.id] = `[${q.label}]`));
-        return fillTemplate(editor.template, '[Jouw oorspronkelijke prompt]', sample);
-      } catch {
-        return 'Kan geen preview maken — controleer de JSON van de vervolgvragen.';
-      }
+    editor &&
+    (() => {
+      const sample: Record<string, string> = {};
+      editor.followUps
+        .filter((q) => q.label.trim())
+        .forEach((q) => (sample[q.id] = `[${q.label}]`));
+      return fillTemplate(editor.template, '[Jouw oorspronkelijke prompt]', sample);
     })();
 
   return (
@@ -315,7 +359,7 @@ export default function TechniqueManagerPage() {
 
             <div>
               <label className="opl-label">
-                Kracht van de techniek{' '}
+                Doel van de techniek{' '}
                 <span className="font-normal text-slate-400">
                   (helpt de slimme aanbeveling)
                 </span>
@@ -342,15 +386,99 @@ export default function TechniqueManagerPage() {
 
             <div>
               <label className="opl-label">
-                Vervolgvragen (JSON-array van {`{ id, label, placeholder? }`})
+                Vervolgvragen{' '}
+                <span className="font-normal text-slate-400">
+                  (de velden die de gebruiker invult om de template te bouwen)
+                </span>
               </label>
-              <textarea
-                className="opl-input min-h-[120px] resize-y font-mono text-xs"
-                value={editor.followUpsJson}
-                onChange={(e) => setEditor({ ...editor, followUpsJson: e.target.value })}
-                spellCheck={false}
-              />
-              {jsonError && <p className="mt-1 text-xs text-rijksrood">{jsonError}</p>}
+
+              {editor.followUps.length === 0 ? (
+                <p className="mb-2 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-4 text-center text-sm text-slate-500 dark:border-slate-600 dark:bg-slate-900/40 dark:text-slate-400">
+                  Nog geen vragen. Voeg er één toe om de gebruiker te begeleiden.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {editor.followUps.map((q, i) => (
+                    <div
+                      key={i}
+                      className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900/40"
+                    >
+                      <div className="mb-2 flex items-center justify-between">
+                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                          <GripVertical size={14} /> Vraag {i + 1}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => moveFollowUp(i, -1)}
+                            disabled={i === 0}
+                            className="rounded p-1 text-slate-400 hover:bg-slate-200 disabled:opacity-30 dark:hover:bg-slate-700"
+                            aria-label="Omhoog"
+                          >
+                            <ArrowUp size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => moveFollowUp(i, 1)}
+                            disabled={i === editor.followUps.length - 1}
+                            className="rounded p-1 text-slate-400 hover:bg-slate-200 disabled:opacity-30 dark:hover:bg-slate-700"
+                            aria-label="Omlaag"
+                          >
+                            <ArrowDown size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeFollowUp(i)}
+                            className="rounded p-1 text-rijksrood hover:bg-red-50 dark:hover:bg-red-500/10"
+                            aria-label="Vraag verwijderen"
+                          >
+                            <X size={15} />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <input
+                          className="opl-input"
+                          value={q.label}
+                          placeholder="Vraag aan de gebruiker, bijv. Vanuit welke interne rol/expert?"
+                          onChange={(e) => updateFollowUp(i, { label: e.target.value })}
+                        />
+                        <input
+                          className="opl-input"
+                          value={q.placeholder ?? ''}
+                          placeholder="Placeholder / voorbeeld, bijv. Bijv. een ervaren beleidsmedewerker of een manager"
+                          onChange={(e) => updateFollowUp(i, { placeholder: e.target.value })}
+                        />
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-slate-400 dark:text-slate-500">Veld-id:</span>
+                          <input
+                            className="opl-input h-8 max-w-[200px] font-mono text-xs"
+                            value={q.id}
+                            placeholder="veld_id"
+                            onChange={(e) =>
+                              updateFollowUp(i, {
+                                id: e.target.value.replace(/[^a-zA-Z0-9_]/g, '_'),
+                              })
+                            }
+                          />
+                          <span className="text-xs text-slate-400 dark:text-slate-500">
+                            gebruikt als <code>{`{{${q.id || 'veld_id'}}}`}</code> in de template
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={addFollowUp}
+                className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-dashed border-rijksblauw-300 px-3 py-2 text-sm font-medium text-rijksblauw-600 hover:bg-rijksblauw-50 dark:border-rijksblauw-500/40 dark:text-rijksblauw-300 dark:hover:bg-rijksblauw-500/10"
+              >
+                <Plus size={15} /> Vraag toevoegen
+              </button>
             </div>
 
             <div>

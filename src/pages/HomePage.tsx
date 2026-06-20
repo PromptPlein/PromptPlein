@@ -66,34 +66,31 @@ export default function HomePage() {
         </Suspense>
         <div className="relative mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
           <div className="max-w-2xl">
-            <span className="opl-badge bg-white/15 text-white backdrop-blur">
-              Phase 1 · MVP
-            </span>
-            <h1 className="mt-4 text-4xl font-extrabold leading-tight text-white sm:text-5xl">
+            <h1 className="text-4xl font-extrabold leading-tight text-white sm:text-5xl">
               Prompt Library voor de Nederlandse overheid
             </h1>
             <p className="mt-4 text-lg text-rijksblauw-50/90">
               Upload, deel, zoek en optimaliseer AI-prompts op basis van bewezen
               prompting-technieken. Voor ambtenaren, door ambtenaren.
             </p>
-            <div className="mt-8 flex flex-col gap-3 sm:max-w-md">
-              <div className="flex flex-wrap gap-3">
+            <div className="mt-8 flex w-full max-w-md flex-col gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row">
                 <button
                   onClick={() => setUploadOpen(true)}
-                  className="opl-btn border border-white/70 text-white hover:bg-white/10"
+                  className="opl-btn flex-1 justify-center border border-white/70 text-white hover:bg-white/10"
                 >
                   <Plus size={18} /> Nieuwe prompt
                 </button>
                 <Link
                   to="/zoeken"
-                  className="opl-btn border border-white/70 text-white hover:bg-white/10"
+                  className="opl-btn flex-1 justify-center border border-white/70 text-white hover:bg-white/10"
                 >
                   Verken bibliotheek <ArrowRight size={18} />
                 </Link>
               </div>
               <Link
                 to="/genereren"
-                className="opl-btn justify-center border border-white/70 text-white hover:bg-white/10"
+                className="opl-btn w-full justify-center border border-white/70 text-white hover:bg-white/10"
               >
                 <Sparkles size={18} /> Genereer je prompt
               </Link>

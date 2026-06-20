@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { FileText, Users, Sparkles, Share2 } from 'lucide-react';
 import { BarChartCard, LineChartCard } from '@/components/analytics/Charts';
+import SystemStatus from '@/components/admin/SystemStatus';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { listPrompts } from '@/services/repository';
 import {
@@ -90,6 +91,8 @@ export default function AdminDashboardPage() {
         <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Admin-dashboard</h1>
         <p className="text-sm text-slate-500 dark:text-slate-400">Overzicht van gebruik en activiteit.</p>
       </div>
+
+      <SystemStatus />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard icon={<FileText size={20} />} label="Totaal prompts" value={prompts.length} />

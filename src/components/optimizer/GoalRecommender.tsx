@@ -11,6 +11,10 @@ interface GoalRecommenderProps {
   selectedTechniqueId: string | null;
   /** Aangeroepen wanneer de gebruiker een aanbevolen techniek kiest. */
   onSelectTechnique: (id: string) => void;
+  /** Huidige doelomschrijving (gecontroleerd door de pagina, voor de templatetitel). */
+  goal: string;
+  /** Aangeroepen wanneer de doelomschrijving wijzigt. */
+  onGoalChange: (goal: string) => void;
 }
 
 /**
@@ -21,9 +25,10 @@ interface GoalRecommenderProps {
 export default function GoalRecommender({
   selectedTechniqueId,
   onSelectTechnique,
+  goal,
+  onGoalChange,
 }: GoalRecommenderProps) {
   const { techniques, techniqueById } = useReferenceData();
-  const [goal, setGoal] = useState('');
   const [loading, setLoading] = useState(false);
   const [recommendations, setRecommendations] = useState<TechniqueRecommendation[] | null>(null);
 
@@ -38,7 +43,7 @@ export default function GoalRecommender({
       setRecommendations(res.recommendations);
       if (res.error) toast(res.error, { icon: '⚠️' });
       if (res.recommendations.length === 0) {
-        toast('Geen duidelijke match — kies hieronder zelf een techniek.', { icon: 'ℹ️' });
+        toast('Geen duidelijke match. Kies hieronder zelf een techniek.', { icon: 'ℹ️' });
       }
     } catch {
       toast.error('Aanbeveling mislukt. Probeer het opnieuw.');
@@ -58,7 +63,7 @@ export default function GoalRecommender({
           className="opl-input min-h-[88px] resize-y"
           value={goal}
           placeholder="Bijv. ik wil een formele e-mail aan een burger vriendelijker en duidelijker laten schrijven"
-          onChange={(e) => setGoal(e.target.value)}
+          onChange={(e) => onGoalChange(e.target.value)}
         />
         <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
           We zoeken op basis van je doel de best passende prompttechniek(en) voor je uit.
@@ -85,7 +90,7 @@ export default function GoalRecommender({
       {recommendations && recommendations.length > 0 && (
         <div className="space-y-3">
           <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
-            Aanbevolen technieken — kies welke je wilt toepassen:
+            Aanbevolen technieken. Kies welke je wilt toepassen:
           </p>
           {recommendations.map((rec, idx) => {
             const technique = techniqueById(rec.id);
@@ -125,7 +130,7 @@ export default function GoalRecommender({
                 )}
                 {technique.strength && (
                   <span className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                    <span className="font-medium text-slate-600 dark:text-slate-300">Kracht: </span>
+                    <span className="font-medium text-slate-600 dark:text-slate-300">Doel: </span>
                     {technique.strength}
                   </span>
                 )}
