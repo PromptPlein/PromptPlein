@@ -14,8 +14,9 @@ import {
 } from 'recharts';
 import type { CountByLabel } from '@/services/analyticsService';
 import { useTheme } from '@/context/ThemeContext';
+import { categoryPalette, rijksblauw } from '@/config/brandColors';
 
-const PALETTE = ['#154273', '#e17000', '#39870c', '#d52b1e', '#5377d3', '#a9bbe9', '#0e2e51', '#e8a33d'];
+const PALETTE = categoryPalette;
 
 interface ChartCardProps {
   title: string;
@@ -92,7 +93,7 @@ export function LineChartCard({ title, data, emptyHint }: ChartCardProps) {
             <XAxis dataKey="label" tick={{ fontSize: 11, fill: c.tick }} />
             <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: c.tick }} />
             <Tooltip contentStyle={c.tooltip} />
-            <Line type="monotone" dataKey="value" stroke="#5377d3" strokeWidth={2} dot={{ r: 3 }} />
+            <Line type="monotone" dataKey="value" stroke={rijksblauw[400]} strokeWidth={2} dot={{ r: 3 }} />
           </LineChart>
         </ResponsiveContainer>
       )}

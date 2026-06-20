@@ -1,10 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Sparkles, Loader2, FileText, Compass, ListChecks, ChevronDown, Check } from 'lucide-react';
-import clsx from 'clsx';
+import {
+  Sparkles,
+  Loader2,
+  FileText,
+  Compass,
+  Check,
+  Wand2,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import TechniqueSelector from '@/components/optimizer/TechniqueSelector';
 import GoalRecommender from '@/components/optimizer/GoalRecommender';
+import EntryOptionCard from '@/components/optimizer/EntryOptionCard';
+import OwnPromptOptimizer from '@/components/optimizer/OwnPromptOptimizer';
 import FollowUpQuestions from '@/components/optimizer/FollowUpQuestions';
 import OptimizedOutput from '@/components/optimizer/OptimizedOutput';
 import { useReferenceData } from '@/context/ReferenceDataContext';
@@ -15,10 +23,12 @@ import { getAiSettings, DEFAULT_AI_SETTINGS, type AiSettings } from '@/services/
 import { detectPii, detectBlockedTopics, type GuardrailFinding } from '@/services/guardrails';
 import GuardrailDialog from '@/components/optimizer/GuardrailDialog';
 import { getCurrentUser } from '@/lib/utils';
-import type { OptimizeResult } from '@/types';
+import type { OptimizeResult, Technique } from '@/types';
 
-/** Twee instapwijzen: ofwel zelf een techniek kiezen, ofwel laten aanbevelen. */
+/** Instapwijze: zelf kiezen/aanbevelen, óf de eigen prompt optimaliseren. */
 type TechniqueMode = 'manual' | 'smart';
+/** Welke flow er actief is: de techniek-keuze, of het optimaliseren van een eigen prompt. */
+type EntryMode = 'techniques' | 'own-prompt';
 
 export default function OptimizerPage() {
   const { promptId } = useParams<{ promptId?: string }>();
@@ -28,6 +38,7 @@ export default function OptimizerPage() {
   const [sourcePromptId, setSourcePromptId] = useState<string | null>(null);
   const [goal, setGoal] = useState('');
   const [techniqueMode, setTechniqueMode] = useState<TechniqueMode>('manual');
+  const [entryMode, setEntryMode] = useState<EntryMode>('techniques');
   const [techniqueId, setTechniqueId] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [loadingPrompt, setLoadingPrompt] = useState(Boolean(promptId));
@@ -156,6 +167,23 @@ export default function OptimizerPage() {
     }
   }
 
+  /** Resultaat van de eigen-prompt-flow: toon het via dezelfde uitvoer-fase. */
+  function handleOwnPromptResult(res: OptimizeResult, usedTechnique: Technique) {
+    void trackEvent({
+      event_type: 'optimization_run',
+      user_identifier: getCurrentUser(),
+      prompt_id: null,
+      technique_id: usedTechnique.id,
+      metadata: { provider: res.provider, flow: 'own-prompt' },
+    });
+    setTechniqueId(usedTechnique.id); // zodat OptimizedOutput de juiste techniek toont
+    setPhase('transition');
+    setTimeout(() => {
+      setResult(res);
+      setPhase('output');
+    }, 400);
+  }
+
   function handleReset() {
     setResult(null);
     setPhase('input');
@@ -188,71 +216,64 @@ export default function OptimizerPage() {
             phase === 'transition' ? 'pointer-events-none opacity-0' : 'opacity-100'
           }`}
         >
-          {/* 1. Prominente instap: "Ik weet nog niet welke techniek" */}
-          <div
-            className={clsx(
-              'overflow-hidden rounded-2xl border-2 shadow-sm transition-all',
-              techniqueMode === 'smart'
-                ? 'border-rijksblauw-500 bg-gradient-to-br from-rijksblauw-50 to-white ring-2 ring-rijksblauw-500/30 dark:from-rijksblauw-500/15 dark:to-slate-800'
-                : 'border-rijksblauw-400/60 bg-gradient-to-br from-rijksblauw-50/70 to-white dark:border-rijksblauw-500/40 dark:from-rijksblauw-500/10 dark:to-slate-800',
-            )}
-          >
-            <button
-              type="button"
-              onClick={() => setTechniqueMode((m) => (m === 'smart' ? 'manual' : 'smart'))}
-              aria-expanded={techniqueMode === 'smart'}
-              className="group flex w-full items-start gap-4 p-5 text-left transition-colors hover:bg-rijksblauw-500/5 sm:p-6"
-            >
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-rijksblauw-500 text-white shadow-sm">
-                <Compass size={24} />
-              </span>
-              <div className="min-w-0 flex-1">
-                <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">
-                  Weet je nog niet welke prompttechniek je doel kan bereiken?
-                </h2>
-                <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-                  Beschrijf in je eigen woorden wat je wilt bereiken. Wij bevelen automatisch de
-                  best passende techniek aan.
-                </p>
-              </div>
-              <ChevronDown
-                size={22}
-                className={clsx(
-                  'mt-1 hidden shrink-0 text-rijksblauw-500 transition-transform dark:text-rijksblauw-300 sm:block',
-                  techniqueMode === 'smart' && 'rotate-180',
-                )}
-              />
-            </button>
+          {/* 1. Twee gelijkwaardige instapopties, naast elkaar (met 3D-effect). */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {/* Optie A (links): optimaliseer je eigen prompt (altijd een contextprompt) */}
+            <EntryOptionCard
+              active={entryMode === 'own-prompt'}
+              onClick={() => setEntryMode('own-prompt')}
+              icon={<Wand2 size={24} />}
+              title="Optimaliseer jouw eigen prompt"
+              description="Heb je al een prompt? Kies een contextprompt, laat hem analyseren en vul aan wat nog ontbreekt."
+            />
 
-            {techniqueMode === 'smart' && (
-              <div className="border-t border-rijksblauw-500/20 p-5 pt-5 sm:px-6">
-                <GoalRecommender
-                  selectedTechniqueId={techniqueId}
-                  onSelectTechnique={handleSelectTechnique}
-                  goal={goal}
-                  onGoalChange={setGoal}
-                />
-              </div>
-            )}
+            {/* Optie B (rechts): complex vraagstuk → laat een techniek aanbevelen */}
+            <EntryOptionCard
+              active={entryMode === 'techniques' && techniqueMode === 'smart'}
+              onClick={() => {
+                setEntryMode('techniques');
+                setTechniqueMode('smart');
+              }}
+              icon={<Compass size={24} />}
+              title="Heb je een complex vraagstuk?"
+              description="Beschrijf in je eigen woorden wat je wilt bereiken. Wij bevelen automatisch de best passende prompttechniek aan."
+            />
           </div>
 
-          {/* 2. Of kies zelf — contextprompts + prompttechnieken */}
-          <section className="opl-card p-6">
-            <div className="mb-1 flex items-center gap-2">
-              <ListChecks size={18} className="text-rijksblauw-500" />
-              <h2 className="font-semibold text-slate-800 dark:text-slate-100">
-                Of kies zelf een techniek
-              </h2>
+          {/* Uitklap-paneel van de gekozen instapoptie. */}
+          {entryMode === 'techniques' && techniqueMode === 'smart' && (
+            <div className="opl-card p-5 sm:p-6">
+              <GoalRecommender
+                selectedTechniqueId={techniqueId}
+                onSelectTechnique={handleSelectTechnique}
+                goal={goal}
+                onGoalChange={setGoal}
+              />
             </div>
-            <p className="mb-5 pl-7 text-sm text-slate-500 dark:text-slate-400">
-              Weet je al wat je wilt? Kies direct een contextprompt of prompttechniek.
-            </p>
+          )}
 
-            <TechniqueSelector selectedId={techniqueId} onSelect={handleSelectTechnique} />
-          </section>
+          {/* Eigen-prompt-flow: plak prompt, kies contextprompt, analyseer, vul aan, optimaliseer */}
+          {entryMode === 'own-prompt' && (
+            <div className="opl-card p-5 sm:p-6">
+              <OwnPromptOptimizer settings={settingsRef.current} onResult={handleOwnPromptResult} />
+            </div>
+          )}
+
+          {/* 2. Of kies zelf — contextprompts + prompttechnieken. In de
+              "complex vraagstuk"-flow (smart) vervallen de contextprompts;
+              die horen bij "Optimaliseer jouw eigen prompt". */}
+          {entryMode === 'techniques' && (
+            <section className="opl-card p-6">
+              <TechniqueSelector
+                selectedId={techniqueId}
+                onSelect={handleSelectTechnique}
+                showContextPrompts={techniqueMode !== 'smart'}
+              />
+            </section>
+          )}
 
           {/* 2. Velden invullen: stap voor stap de template bouwen */}
-          {technique && (
+          {entryMode === 'techniques' && technique && (
             <section
               key={technique.id}
               ref={followUpRef}
@@ -312,23 +333,26 @@ export default function OptimizerPage() {
             </section>
           )}
 
-          <div className="flex flex-wrap items-center justify-end gap-3">
-            <button
-              className="opl-btn-primary px-6 py-2.5"
-              onClick={handleGenerate}
-              disabled={optimizing || !technique}
-            >
-              {optimizing ? (
-                <>
-                  <Loader2 size={18} className="animate-spin" /> Template bouwen…
-                </>
-              ) : (
-                <>
-                  <Sparkles size={18} /> Bouw template
-                </>
-              )}
-            </button>
-          </div>
+          {/* De eigen-prompt-flow heeft een eigen genereerknop; deze geldt voor de techniek-flow. */}
+          {entryMode === 'techniques' && (
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              <button
+                className="opl-btn-primary px-6 py-2.5"
+                onClick={handleGenerate}
+                disabled={optimizing || !technique}
+              >
+                {optimizing ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin" /> Template bouwen…
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={18} /> Bouw template
+                  </>
+                )}
+              </button>
+            </div>
+          )}
         </div>
       )}
 

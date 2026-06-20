@@ -7,9 +7,19 @@ import type { Technique } from '@/types';
 interface TechniqueSelectorProps {
   selectedId: string | null;
   onSelect: (id: string) => void;
+  /**
+   * Toon ook de contextprompt-groep (raamwerken zoals CARE/CRISP). Standaard true.
+   * In de techniek-aanbevelingsflow staat dit op false: daar zijn alleen de losse
+   * prompttechnieken bedoeld; de contextprompts horen bij de eigen-prompt-flow.
+   */
+  showContextPrompts?: boolean;
 }
 
-export default function TechniqueSelector({ selectedId, onSelect }: TechniqueSelectorProps) {
+export default function TechniqueSelector({
+  selectedId,
+  onSelect,
+  showContextPrompts = true,
+}: TechniqueSelectorProps) {
   const { techniques } = useReferenceData();
 
   // Contextprompts (complete raamwerken, bijv. CRISP/CARE) los van de
@@ -18,12 +28,13 @@ export default function TechniqueSelector({ selectedId, onSelect }: TechniqueSel
   const promptTechniques = techniques.filter((t) => !isContextPrompt(t));
 
   return (
-    <div className="space-y-6">
-      {contextPrompts.length > 0 && (
+    <div className="space-y-8">
+      {showContextPrompts && contextPrompts.length > 0 && (
         <Group
-          icon={<Layers size={16} className="text-rijksoranje" />}
+          icon={<Layers size={16} />}
           title="Contextprompts"
           subtitle="Complete raamwerken die je hele prompt structureren."
+          accent="oranje"
           techniques={contextPrompts}
           selectedId={selectedId}
           onSelect={onSelect}
@@ -31,9 +42,10 @@ export default function TechniqueSelector({ selectedId, onSelect }: TechniqueSel
       )}
 
       <Group
-        icon={<Wrench size={16} className="text-rijksblauw-500" />}
+        icon={<Wrench size={16} />}
         title="Prompttechnieken"
         subtitle="Gerichte technieken voor een specifiek effect."
+        accent="blauw"
         techniques={promptTechniques}
         selectedId={selectedId}
         onSelect={onSelect}
@@ -42,10 +54,34 @@ export default function TechniqueSelector({ selectedId, onSelect }: TechniqueSel
   );
 }
 
+/** Accentkleur per groep: oranje voor contextprompts, blauw voor prompttechnieken. */
+type Accent = 'oranje' | 'blauw';
+
+const ACCENT_STYLES: Record<
+  Accent,
+  { badge: string; icon: string; rule: string }
+> = {
+  oranje: {
+    // Titel-badge: getinte achtergrond + accentrand links, zodat de kop opvalt.
+    badge:
+      'border-rijksoranje/30 bg-rijksoranje/10 text-rijksoranje dark:border-rijksoranje/40 dark:bg-rijksoranje/15',
+    icon: 'text-rijksoranje',
+    // Volledige scheidingslijn onder de kop, in de accentkleur, vervagend.
+    rule: 'from-rijksoranje/50 via-rijksoranje/20',
+  },
+  blauw: {
+    badge:
+      'border-rijksblauw-500/30 bg-rijksblauw-50 text-rijksblauw-700 dark:border-rijksblauw-500/40 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200',
+    icon: 'text-rijksblauw-500',
+    rule: 'from-rijksblauw-500/50 via-rijksblauw-500/20',
+  },
+};
+
 function Group({
   icon,
   title,
   subtitle,
+  accent,
   techniques,
   selectedId,
   onSelect,
@@ -53,24 +89,35 @@ function Group({
   icon: React.ReactNode;
   title: string;
   subtitle: string;
+  accent: Accent;
   techniques: Technique[];
   selectedId: string | null;
   onSelect: (id: string) => void;
 }) {
   if (techniques.length === 0) return null;
+  const styles = ACCENT_STYLES[accent];
   return (
     <div>
-      <div className="mb-3 flex items-center gap-2">
-        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800">
-          {icon}
+      {/* Sectiekop: een opvallende, omkaderde titel-badge met icoon + subtitel. */}
+      <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span
+          className={clsx(
+            'inline-flex items-center gap-2 rounded-lg border-l-4 border px-3 py-1.5 text-sm font-bold uppercase tracking-wide shadow-sm',
+            styles.badge,
+          )}
+        >
+          <span className={styles.icon}>{icon}</span>
+          {title}
         </span>
-        <div>
-          <h3 className="text-sm font-bold uppercase tracking-wide text-slate-700 dark:text-slate-200">
-            {title}
-          </h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400">{subtitle}</p>
-        </div>
+        <p className="text-xs text-slate-500 dark:text-slate-400">{subtitle}</p>
       </div>
+
+      {/* Volledige scheidingslijn onder de kop: markeert de grens van deze sectie. */}
+      <div
+        className={clsx('mb-4 h-px w-full bg-gradient-to-r to-transparent', styles.rule)}
+        aria-hidden="true"
+      />
+
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {techniques.map((t) => (
           <TechniqueCard

@@ -2,6 +2,8 @@ import { getAnonKey, getFunctionUrl, isSupabaseConfigured } from '@/lib/supabase
 import { isContextPrompt, structureFormat } from '@/lib/techniques';
 import type { AiProvider } from '@/config/aiModels';
 import type {
+  AnalyzeResult,
+  MissingField,
   OptimizeResult,
   RecommendResult,
   Technique,
@@ -254,6 +256,109 @@ export async function recommendTechniques(args: {
 
   return {
     recommendations: localRecommend(goal, techniques),
+    success: true,
+    provider: 'local-template',
+  };
+}
+
+/**
+ * Lokale fallback voor de prompt-analyse: markeer een veld als ontbrekend
+ * wanneer geen van de trefwoorden uit het label/placeholder in de prompt
+ * voorkomt. Grof, maar werkt zonder backend.
+ */
+function localAnalyze(ownPrompt: string, technique: Technique): MissingField[] {
+  const haystack = ownPrompt.toLowerCase();
+  return technique.follow_up_questions
+    .filter((q) => {
+      const cues = `${q.label} ${q.placeholder ?? ''}`
+        .toLowerCase()
+        .split(/[^a-zà-ÿ0-9]+/)
+        .filter((w) => w.length > 3);
+      return cues.length > 0 && !cues.some((w) => haystack.includes(w));
+    })
+    .map((q) => ({
+      id: q.id,
+      label: q.label,
+      question: `Voeg informatie toe voor "${q.label}".`,
+    }));
+}
+
+/**
+ * Analyseert de eigen prompt van de gebruiker tegen de vereiste velden van de
+ * gekozen contextprompt (CARE, CRISP, …) en geeft terug welke onderdelen nog
+ * ontbreken. Roept de edge function in 'analyze'-modus aan; faalt dat, dan
+ * lokale trefwoord-matching.
+ */
+export async function analyzePrompt(args: {
+  ownPrompt: string;
+  technique: Technique;
+  preferredProvider?: AiProvider;
+}): Promise<AnalyzeResult> {
+  const { ownPrompt, technique, preferredProvider } = args;
+  const functionUrl = getFunctionUrl('optimize-prompt');
+
+  if (isSupabaseConfigured && functionUrl) {
+    try {
+      const anonKey = getAnonKey();
+      const response = await fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(anonKey ? { Authorization: `Bearer ${anonKey}`, apikey: anonKey } : {}),
+        },
+        body: JSON.stringify({
+          mode: 'analyze',
+          ownPrompt,
+          techniqueName: technique.name,
+          analyzeFields: technique.follow_up_questions.map((q) => ({
+            id: q.id,
+            label: q.label,
+            placeholder: q.placeholder,
+          })),
+          preferredProvider: preferredProvider ?? 'auto',
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Edge function gaf status ${response.status}`);
+      }
+
+      const data = (await response.json()) as Partial<AnalyzeResult>;
+      if (data.success && Array.isArray(data.missing)) {
+        // Behoud alleen verwijzingen naar bestaande velden van de techniek.
+        const valid = new Set(technique.follow_up_questions.map((q) => q.id));
+        const missing = data.missing.filter((m) => valid.has(m.id));
+        return {
+          summary: data.summary ?? '',
+          missing,
+          success: true,
+          provider: (data.provider as AnalyzeResult['provider']) ?? 'claude',
+        };
+      }
+      throw new Error(data.error ?? 'Analyse gaf geen bruikbaar resultaat');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Onbekende fout';
+      const missing = localAnalyze(ownPrompt, technique);
+      return {
+        summary:
+          missing.length === 0
+            ? 'Je prompt lijkt de belangrijkste onderdelen al te bevatten.'
+            : `Er ${missing.length === 1 ? 'lijkt 1 onderdeel' : `lijken ${missing.length} onderdelen`} nog te ontbreken.`,
+        missing,
+        success: true,
+        provider: 'local-template',
+        error: `Slimme analyse mislukt (${message}); lokale controle gebruikt.`,
+      };
+    }
+  }
+
+  const missing = localAnalyze(ownPrompt, technique);
+  return {
+    summary:
+      missing.length === 0
+        ? 'Je prompt lijkt de belangrijkste onderdelen al te bevatten.'
+        : `Er ${missing.length === 1 ? 'lijkt 1 onderdeel' : `lijken ${missing.length} onderdelen`} nog te ontbreken.`,
+    missing,
     success: true,
     provider: 'local-template',
   };

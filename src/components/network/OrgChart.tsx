@@ -11,6 +11,7 @@ import { Minus, Plus, Maximize2, Building2, Search, X, ArrowRight } from 'lucide
 import clsx from 'clsx';
 import type { Organization, OrganizationType } from '@/types';
 import { useTheme } from '@/context/ThemeContext';
+import { orgTypeColor } from '@/config/brandColors';
 
 /**
  * Stil, professioneel 2D-organogram (SVG) van het organisatienetwerk.
@@ -46,11 +47,7 @@ const TYPE_LABEL: Record<OrganizationType, string> = {
   agency: 'Dienstonderdeel',
 };
 
-const TYPE_ACCENT: Record<OrganizationType, string> = {
-  ministry: '#154273',
-  department: '#2f6db3',
-  agency: '#3f9d6b',
-};
+const TYPE_ACCENT: Record<OrganizationType, string> = orgTypeColor;
 
 interface LaidOutNode {
   org: Organization;

@@ -1,6 +1,5 @@
 import { NavLink, Link } from 'react-router-dom';
 import {
-  Library,
   LayoutDashboard,
   Search,
   Sparkles,
@@ -31,9 +30,13 @@ export default function Header() {
     <header className="sticky top-0 z-40 border-b border-slate-200 dark:border-slate-700 bg-white/90 dark:bg-slate-900/90 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <Link to="/" className="flex items-center gap-2.5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-rijksblauw-500 text-white">
-            <Library size={20} />
-          </span>
+          <img
+            src="/logo-rijksoverheid.webp"
+            alt="Rijksoverheid"
+            className="h-9 w-9 shrink-0 rounded-lg object-cover"
+            width={36}
+            height={36}
+          />
           <div className="leading-tight">
             <span className="block text-sm font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Overheid</span>
             <span className="block text-xs font-medium text-slate-500 dark:text-slate-400">Prompt Library</span>

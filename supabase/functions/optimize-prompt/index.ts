@@ -26,7 +26,14 @@ import Anthropic from 'npm:@anthropic-ai/sdk@^0.65.0';
 
 type Provider = 'claude' | 'openai' | 'deepseek';
 type PreferredProvider = 'auto' | Provider;
-type Mode = 'generate' | 'recommend';
+type Mode = 'generate' | 'recommend' | 'analyze';
+
+/** Eén veld van de gekozen contextprompt waar de analyse op toetst. */
+interface AnalyzeField {
+  id: string;
+  label: string;
+  placeholder?: string;
+}
 
 /** Beknopte techniekbeschrijving voor de aanbevelingsmodus. */
 interface TechniqueSummary {
@@ -76,6 +83,9 @@ interface RequestBody {
   // 'recommend'-velden
   goal?: string;
   techniques?: TechniqueSummary[];
+  // 'analyze'-velden: toets de eigen prompt aan de eisen van de contextprompt.
+  ownPrompt?: string;
+  analyzeFields?: AnalyzeField[];
   preferredProvider?: PreferredProvider;
   // Admin-bestuurde AI-instellingen (optioneel; anders defaults).
   systemPrompt?: string;
@@ -236,6 +246,38 @@ const RECOMMEND_USER_PROMPT = (goal: string, techniques: TechniqueSummary[]) =>
       return parts.join(' | ');
     })
     .join('\n')}`;
+
+const ANALYZE_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse rijksoverheid.
+Een interne overheidsmedewerker heeft een eigen prompt geschreven en wil die optimaliseren met een
+contextprompt-raamwerk (bijv. CARE of CRISP). Elk raamwerk vereist bepaalde bouwstenen (velden).
+
+Jouw taak: ANALYSEER de prompt van de gebruiker en bepaal PER VEREIST VELD of de prompt daar al
+voldoende informatie voor bevat. Voor elk veld dat ONTBREEKT of te vaag is, formuleer je een korte,
+concrete vraag die de gebruiker helpt die informatie alsnog aan te leveren.
+
+REGELS:
+- Beoordeel mild maar eerlijk: alleen velden waar de prompt echt te weinig over zegt markeer je als ontbrekend.
+- Een veld dat de prompt al goed dekt, markeer je NIET als ontbrekend.
+- Schrijf de vraag/hint in het Nederlands, vriendelijk en concreet (B1-taalniveau waar passend).
+- Houd het intern gericht: de doelgroep is een overheidsmedewerker, niet de burger.
+
+Geef UITSLUITEND geldige JSON terug, zonder codeblok of extra tekst, in dit formaat:
+{"summary":"<1 zin: hoe compleet is de prompt al, in het Nederlands>","missing":[{"id":"<veld-id>","label":"<veld-label>","question":"<korte vraag die de gebruiker helpt dit aan te vullen>"}]}
+
+Gebruik alleen veld-id's die exact in de lijst voorkomen. Laat "missing" leeg ([]) als de prompt alle velden al goed dekt.`;
+
+/** Bouw de gebruikersprompt voor de analysemodus. */
+const ANALYZE_USER_PROMPT = (
+  ownPrompt: string,
+  techniqueName: string | undefined,
+  fields: AnalyzeField[],
+) =>
+  `Gekozen contextprompt: ${techniqueName ?? 'onbekend'}\n\n` +
+  `VEREISTE VELDEN van dit raamwerk:\n` +
+  fields
+    .map((f) => `- id: ${f.id} | label: ${f.label}${f.placeholder ? ` | bedoeld voor: ${f.placeholder}` : ''}`)
+    .join('\n') +
+  `\n\nPROMPT VAN DE GEBRUIKER (analyseer deze):\n"""\n${ownPrompt}\n"""`;
 
 /**
  * Verplichte uitvoerstructuur voor context-raamwerken (CARE, CRISP, …).
@@ -486,6 +528,72 @@ function parseRecommendations(raw: string, valid: Set<string>): Recommendation[]
   }
 }
 
+/** Eén ontbrekend veld uit de analyse: wat mist er en welke vraag helpt de gebruiker. */
+interface MissingField {
+  id: string;
+  label: string;
+  question: string;
+}
+
+/** Parseert het JSON-antwoord van de analysemodus robuust. */
+function parseAnalysis(
+  raw: string,
+  fields: AnalyzeField[],
+): { summary: string; missing: MissingField[] } {
+  const byId = new Map(fields.map((f) => [f.id, f]));
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) return { summary: '', missing: [] };
+  try {
+    const parsed = JSON.parse(match[0]) as {
+      summary?: string;
+      missing?: Array<{ id?: string; label?: string; question?: string }>;
+    };
+    const missing = (Array.isArray(parsed.missing) ? parsed.missing : [])
+      .filter((m) => m && typeof m.id === 'string' && byId.has(m.id))
+      .map((m) => ({
+        id: m.id as string,
+        label: typeof m.label === 'string' && m.label.trim() ? m.label : byId.get(m.id as string)!.label,
+        question: typeof m.question === 'string' ? m.question : '',
+      }));
+    return { summary: typeof parsed.summary === 'string' ? parsed.summary : '', missing };
+  } catch {
+    return { summary: '', missing: [] };
+  }
+}
+
+/**
+ * Lokale fallback voor de analyse: markeer een veld als ontbrekend wanneer geen
+ * van de woorden uit het label (of placeholder) in de prompt voorkomt. Grof,
+ * maar werkt zonder AI of backend.
+ */
+function localAnalyze(
+  ownPrompt: string,
+  fields: AnalyzeField[],
+): { summary: string; missing: MissingField[] } {
+  const haystack = ownPrompt.toLowerCase();
+  const missing = fields
+    .filter((f) => {
+      const cues = `${f.label} ${f.placeholder ?? ''}`
+        .toLowerCase()
+        .split(/[^a-zà-ÿ0-9]+/)
+        .filter((w) => w.length > 3);
+      // Geen enkele aanwijzing uit het label terug te vinden → waarschijnlijk niet gedekt.
+      return cues.length > 0 && !cues.some((w) => haystack.includes(w));
+    })
+    .map((f) => ({
+      id: f.id,
+      label: f.label,
+      question: `Voeg informatie toe voor "${f.label}".`,
+    }));
+  return {
+    summary:
+      missing.length === 0
+        ? 'Je prompt lijkt de belangrijkste onderdelen al te bevatten.'
+        : `Er ${missing.length === 1 ? 'lijkt 1 onderdeel' : `lijken ${missing.length} onderdelen`} nog te ontbreken.`,
+    missing,
+  };
+}
+
 /** Lokale trefwoord-fallback: rangschik technieken op overlap met het doel. */
 function localRecommend(goal: string, techniques: TechniqueSummary[]): Recommendation[] {
   const words = new Set(
@@ -526,9 +634,44 @@ Deno.serve(async (req: Request) => {
 
   try {
     const body = (await req.json()) as RequestBody;
-    const mode: Mode = body.mode === 'recommend' ? 'recommend' : 'generate';
+    const mode: Mode =
+      body.mode === 'recommend' ? 'recommend' : body.mode === 'analyze' ? 'analyze' : 'generate';
     const order = buildOrder(body.preferredProvider);
     const temperature = clampTemp(body.temperature);
+
+    // --- Analysemodus: toets de eigen prompt aan de velden van de contextprompt ---
+    if (mode === 'analyze') {
+      const ownPrompt = body.ownPrompt?.trim();
+      const fields = Array.isArray(body.analyzeFields) ? body.analyzeFields : [];
+      if (!ownPrompt || fields.length === 0) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'ownPrompt en analyzeFields zijn verplicht' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      const userMessage = ANALYZE_USER_PROMPT(ownPrompt, body.techniqueName, fields);
+      let analysis: { summary: string; missing: MissingField[] } | null = null;
+      let provider: Provider | 'local-template' = 'local-template';
+
+      for (const candidate of order) {
+        try {
+          const raw = await PROVIDERS[candidate](userMessage, ANALYZE_SYSTEM_PROMPT, 0.2);
+          analysis = parseAnalysis(raw, fields);
+          provider = candidate;
+          break;
+        } catch (providerErr) {
+          console.error(`${candidate} (analyze) mislukt, probeer volgende:`, providerErr);
+        }
+      }
+
+      if (!analysis) analysis = localAnalyze(ownPrompt, fields);
+
+      return new Response(
+        JSON.stringify({ success: true, ...analysis, provider }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
 
     // --- Aanbevelingsmodus: kies passende technieken bij een doel ---
     if (mode === 'recommend') {

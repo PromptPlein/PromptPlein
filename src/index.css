@@ -5,7 +5,8 @@
 :root {
   color-scheme: light;
   --toast-bg: #ffffff;
-  --toast-fg: #0e2e51;
+  /* theme() leest de waarde uit tailwind.config.js → src/config/brandColors.js */
+  --toast-fg: theme('colors.rijksblauw.700');
 }
 
 html.dark {
@@ -23,7 +24,7 @@ body,
 body {
   margin: 0;
   background-color: #f6f8fb;
-  color: #0e2e51;
+  color: theme('colors.rijksblauw.700');
   font-family: 'Inter', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }

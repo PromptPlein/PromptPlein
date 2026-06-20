@@ -4,17 +4,9 @@ import { OrbitControls, Billboard, Text } from '@react-three/drei';
 import * as THREE from 'three';
 import type { Category, Prompt } from '@/types';
 import { useTheme } from '@/context/ThemeContext';
+import { ecosystemPalette } from '@/config/brandColors';
 
-const PALETTE = [
-  '#154273',
-  '#2f6db3',
-  '#3f9d6b',
-  '#c0792b',
-  '#8a4fbd',
-  '#1f9aa6',
-  '#b8456b',
-  '#5a7d2a',
-];
+const PALETTE = ecosystemPalette;
 
 interface Cluster {
   id: string;

@@ -4,12 +4,9 @@ import { OrbitControls, Line, Billboard, Text } from '@react-three/drei';
 import * as THREE from 'three';
 import type { Organization, OrganizationType } from '@/types';
 import { useTheme } from '@/context/ThemeContext';
+import { orgTypeColor, rijksblauw } from '@/config/brandColors';
 
-const TYPE_COLOR: Record<OrganizationType, string> = {
-  ministry: '#154273',
-  department: '#2f6db3',
-  agency: '#3f9d6b',
-};
+const TYPE_COLOR: Record<OrganizationType, string> = orgTypeColor;
 
 interface Node {
   org: Organization;
@@ -61,7 +58,7 @@ function layout(orgs: Organization[]): { nodes: Node[]; edges: [THREE.Vector3, T
 
 function OrgNode({ node, labelColor, outline }: { node: Node; labelColor: string; outline: string }) {
   const [hovered, setHovered] = useState(false);
-  const color = TYPE_COLOR[node.org.organization_type] ?? '#154273';
+  const color = TYPE_COLOR[node.org.organization_type] ?? rijksblauw[500];
   const radius = node.org.organization_type === 'ministry' ? 0.55 : 0.38;
 
   return (

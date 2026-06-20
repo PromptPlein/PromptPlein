@@ -1,5 +1,6 @@
 import { downloadText } from '@/lib/download';
 import { PROMPT_STATUS_META } from '@/services/collaborationService';
+import { brand, backgroundGradient } from '@/config/brandColors';
 import type { Prompt, SharingLevel } from '@/types';
 
 /**
@@ -72,11 +73,11 @@ export function buildPromptHtml(prompt: Prompt, meta: ExportMeta = {}): string {
 <style>
   @page { margin: 25mm 20mm; }
   body { font-family: "Segoe UI", Arial, sans-serif; color: #1f2937; line-height: 1.55; max-width: 800px; margin: 0 auto; padding: 24px; }
-  .classification { text-align: center; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #154273; border-top: 2px solid #154273; border-bottom: 2px solid #154273; padding: 6px 0; font-size: 12px; }
+  .classification { text-align: center; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: ${brand.primary}; border-top: 2px solid ${brand.primary}; border-bottom: 2px solid ${brand.primary}; padding: 6px 0; font-size: 12px; }
   header { display: flex; align-items: baseline; justify-content: space-between; margin-top: 18px; }
-  .brand { font-weight: 700; color: #154273; font-size: 18px; }
+  .brand { font-weight: 700; color: ${brand.primary}; font-size: 18px; }
   .brand small { display:block; font-weight: 400; color:#64748b; font-size: 11px; letter-spacing: .04em; }
-  h1 { font-size: 24px; color: #0a2851; margin: 24px 0 4px; }
+  h1 { font-size: 24px; color: ${backgroundGradient.deep}; margin: 24px 0 4px; }
   .description { color: #475569; margin: 0 0 18px; }
   table.meta { width: 100%; border-collapse: collapse; margin: 12px 0 24px; font-size: 13px; }
   table.meta th { text-align: left; width: 180px; color: #64748b; font-weight: 600; padding: 4px 8px; vertical-align: top; }

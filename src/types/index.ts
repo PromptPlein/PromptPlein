@@ -194,6 +194,27 @@ export interface RecommendResult {
   error?: string;
 }
 
+/** Eén ontbrekend onderdeel uit de prompt-analyse (eigen-prompt-flow). */
+export interface MissingField {
+  /** Verwijst naar een FollowUpQuestion.id van de gekozen contextprompt. */
+  id: string;
+  /** Het label van het veld (bijv. "CONTEXT — achtergrond"). */
+  label: string;
+  /** Korte vraag die de gebruiker helpt dit veld aan te vullen. */
+  question: string;
+}
+
+/** Antwoord van de optimize-prompt service (analysemodus, eigen-prompt-flow). */
+export interface AnalyzeResult {
+  /** Korte samenvatting hoe compleet de prompt al is. */
+  summary: string;
+  /** De velden die nog ontbreken of te vaag zijn. */
+  missing: MissingField[];
+  success: boolean;
+  provider: AiProviderResult;
+  error?: string;
+}
+
 // --- Phase 3 entiteiten (authenticatie, organisaties & RBAC) ---
 
 /** Applicatierollen voor rolgebaseerde toegang (RBAC). */

@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import Modal from '@/components/common/Modal';
 import { buildMailto, createShareLink, shareUrl } from '@/services/shareService';
 import { copyToClipboard, getCurrentUser } from '@/lib/utils';
+import { brand } from '@/config/brandColors';
 import type { Prompt } from '@/types';
 
 interface ShareModalProps {
@@ -53,7 +54,7 @@ export default function ShareModal({ open, onClose, prompt }: ShareModalProps) {
         <div className="space-y-5">
           <div className="flex flex-col items-center">
             <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-800">
-              <QRCodeSVG value={url} size={160} fgColor="#154273" />
+              <QRCodeSVG value={url} size={160} fgColor={brand.primary} />
             </div>
             <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">Scan om de prompt te openen</p>
           </div>

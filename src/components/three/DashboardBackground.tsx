@@ -1,6 +1,7 @@
 import { useMemo, useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { backgroundGradient, hexToVec3 } from '@/config/brandColors';
 
 // Vloeiend morphende achtergrond met Perlin-achtige noise in een fragment shader.
 // Subtiel rijksblauw verloop, ~30+ FPS, decoratief (pointer-events: none in de wrapper).
@@ -62,9 +63,10 @@ const fragmentShader = /* glsl */ `
     n = n * 0.5 + 0.5;
 
     // Verloop van diep rijksblauw naar een lichtere blauwe tint.
-    vec3 deep = vec3(0.039, 0.157, 0.318);   // #0a2851
-    vec3 mid  = vec3(0.082, 0.259, 0.451);   // #154273
-    vec3 light = vec3(0.255, 0.404, 0.643);  // #4167a4
+    // Kleuren komen uit src/config/brandColors.js (backgroundGradient).
+    vec3 deep = ${hexToVec3(backgroundGradient.deep)};
+    vec3 mid  = ${hexToVec3(backgroundGradient.mid)};
+    vec3 light = ${hexToVec3(backgroundGradient.light)};
 
     vec3 color = mix(deep, mid, smoothstep(0.2, 0.6, n));
     color = mix(color, light, smoothstep(0.6, 0.95, n) * 0.6);

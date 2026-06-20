@@ -3,6 +3,7 @@ import { listPrompts } from '@/services/repository';
 import { listOrganizations, listProfiles } from '@/services/orgService';
 import { PROMPT_STATUS_META } from '@/services/collaborationService';
 import { downloadText } from '@/lib/download';
+import { brand, backgroundGradient } from '@/config/brandColors';
 import type { CountByLabel } from '@/services/analyticsService';
 import type { Organization, Profile, Prompt, PromptApproval, PromptStatus } from '@/types';
 
@@ -157,13 +158,13 @@ export function printReport(data: ReportData, catName: (id: string) => string): 
   <style>
     @page { margin: 22mm 18mm; }
     body { font-family: "Segoe UI", Arial, sans-serif; color:#1f2937; max-width:800px; margin:0 auto; }
-    .classification { text-align:center; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#154273; border-top:2px solid #154273; border-bottom:2px solid #154273; padding:6px 0; font-size:12px; }
-    .brand { font-weight:700; color:#154273; font-size:18px; margin-top:16px; }
-    h1 { color:#0a2851; font-size:22px; }
-    h2 { color:#154273; font-size:15px; margin-top:24px; border-bottom:1px solid #e2e8f0; padding-bottom:4px; }
+    .classification { text-align:center; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:${brand.primary}; border-top:2px solid ${brand.primary}; border-bottom:2px solid ${brand.primary}; padding:6px 0; font-size:12px; }
+    .brand { font-weight:700; color:${brand.primary}; font-size:18px; margin-top:16px; }
+    h1 { color:${backgroundGradient.deep}; font-size:22px; }
+    h2 { color:${brand.primary}; font-size:15px; margin-top:24px; border-bottom:1px solid #e2e8f0; padding-bottom:4px; }
     .kpis { display:flex; flex-wrap:wrap; gap:12px; margin:16px 0; }
     .kpi { flex:1 1 120px; border:1px solid #e2e8f0; border-radius:8px; padding:12px; text-align:center; }
-    .kpi b { display:block; font-size:24px; color:#154273; }
+    .kpi b { display:block; font-size:24px; color:${brand.primary}; }
     .kpi span { font-size:12px; color:#64748b; }
     table { width:100%; border-collapse:collapse; font-size:13px; }
     td { padding:4px 8px; border-bottom:1px solid #f1f5f9; }
