@@ -17,7 +17,7 @@ interface OwnPromptOptimizerProps {
 
 /**
  * Flow om een EIGEN prompt te optimaliseren. De gebruiker plakt zijn prompt en
- * kiest een contextprompt-raamwerk (CARE, CRISP, …). Vervolgens analyseren we de
+ * kiest een prompt framework (CARE, CRISP, …). Vervolgens analyseren we de
  * prompt tegen de eisen van dat raamwerk, tonen we wat nog ontbreekt als extra
  * invulvelden, en genereren we daarna de volledig geoptimaliseerde prompt.
  */
@@ -47,7 +47,7 @@ export default function OwnPromptOptimizer({ settings, onResult }: OwnPromptOpti
       return;
     }
     if (!technique) {
-      toast.error('Kies eerst een contextprompt.');
+      toast.error('Kies eerst een prompt framework.');
       return;
     }
     setAnalyzing(true);
@@ -92,7 +92,7 @@ export default function OwnPromptOptimizer({ settings, onResult }: OwnPromptOpti
   if (contextPrompts.length === 0) {
     return (
       <p className="text-sm text-slate-500 dark:text-slate-400">
-        Er zijn nog geen contextprompts beschikbaar. Vraag een beheerder er één toe te voegen.
+        Er zijn nog geen prompt frameworks beschikbaar. Vraag een beheerder er één toe te voegen.
       </p>
     );
   }
@@ -115,16 +115,16 @@ export default function OwnPromptOptimizer({ settings, onResult }: OwnPromptOpti
           }}
         />
         <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-          We optimaliseren je prompt altijd met een contextprompt-raamwerk.
+          We optimaliseren je prompt altijd met een prompt framework.
         </p>
       </div>
 
-      {/* 2. Contextprompt kiezen — met de kracht van elke optie */}
+      {/* 2. Prompt framework kiezen — met de kracht van elke optie */}
       <div>
         <div className="mb-3 flex items-center gap-2">
           <Layers size={16} className="text-rijksoranje" />
           <h3 className="text-sm font-bold uppercase tracking-wide text-slate-700 dark:text-slate-200">
-            Kies een contextprompt
+            Kies een prompt framework
           </h3>
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

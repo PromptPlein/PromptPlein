@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Copy, Check, RotateCcw, Save, Share2, Loader2, FolderCheck } from 'lucide-react';
+import { Copy, Check, RotateCcw, Save, Share2, Loader2, FolderCheck, Sparkles } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Link } from 'react-router-dom';
 import { copyToClipboard, getCurrentUser, SHARING_LEVELS } from '@/lib/utils';
 import { createPrompt } from '@/services/repository';
+import { generateTitle } from '@/services/optimizeService';
 import { useAuth } from '@/context/AuthContext';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import ShareModal from '@/components/share/ShareModal';
@@ -30,6 +31,29 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<Prompt | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
+  // AI-titelsuggestie op basis van de inhoud (één keer ophalen bij openen).
+  const [titleLoading, setTitleLoading] = useState(false);
+  const [titleSuggested, setTitleSuggested] = useState(false);
+  // Bewaak of de gebruiker de titel zelf heeft aangepast, zodat de AI-suggestie
+  // hun invoer niet overschrijft als die later binnenkomt.
+  const [titleTouched, setTitleTouched] = useState(false);
+
+  /** Open het opslaan-formulier en haal eenmalig een AI-titel op uit de inhoud. */
+  function openSave() {
+    setShowSave(true);
+    if (titleSuggested || titleLoading) return;
+    setTitleSuggested(true);
+    setTitleLoading(true);
+    generateTitle({ templateContent: result.optimized_content })
+      .then((suggested) => {
+        // Alleen overnemen als de gebruiker nog niet zelf heeft getypt.
+        if (suggested && !titleTouched) setTitle(suggested);
+      })
+      .catch(() => {
+        /* Suggestie is optioneel; de standaardtitel blijft staan. */
+      })
+      .finally(() => setTitleLoading(false));
+  }
 
   async function handleCopy() {
     await copyToClipboard(result.optimized_content);
@@ -107,13 +131,31 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
             <label className="opl-label" htmlFor="tpl-title">
               Titel van de template
             </label>
-            <input
-              id="tpl-title"
-              className="opl-input"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Bijv. Vriendelijke afwijzingsbrief aan burger"
-            />
+            <div className="relative">
+              <input
+                id="tpl-title"
+                className="opl-input pr-10"
+                value={title}
+                onChange={(e) => {
+                  setTitleTouched(true);
+                  setTitle(e.target.value);
+                }}
+                placeholder="Bijv. Vriendelijke afwijzingsbrief aan burger"
+              />
+              {titleLoading && (
+                <Loader2
+                  size={16}
+                  className="animate-spin absolute right-3 top-1/2 -translate-y-1/2 text-rijksblauw-400"
+                  aria-hidden
+                />
+              )}
+            </div>
+            <p className="mt-1 flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
+              <Sparkles size={12} />
+              {titleLoading
+                ? 'AI bedenkt een passende titel op basis van de inhoud…'
+                : 'Titel voorgesteld op basis van de inhoud — pas hem gerust aan.'}
+            </p>
           </div>
           <div>
             <label className="opl-label" htmlFor="tpl-sharing">
@@ -157,7 +199,7 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
             <Share2 size={16} /> Delen met collega&apos;s
           </button>
         ) : (
-          <button className="opl-btn-secondary" onClick={() => setShowSave((s) => !s)}>
+          <button className="opl-btn-secondary" onClick={() => (showSave ? setShowSave(false) : openSave())}>
             <Save size={16} /> Opslaan in bibliotheek
           </button>
         )}

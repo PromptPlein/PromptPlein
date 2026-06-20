@@ -320,4 +320,262 @@ Geef, gegeven bovenstaande CRISP-structuur, antwoord op:
 Genereer, gegeven bovenstaande CARE-structuur, het volgende:
 {{PROMPT}}`,
   },
+  {
+    id: 'tech-crispe',
+    name: 'CRISPE',
+    family: 'context',
+    description:
+      'Uitgebreid framework voor complexe opdrachten waarbij context, rol, instructies, stappen, randvoorwaarden en einddoel expliciet worden gemaakt.',
+    strength:
+      'Het doel van CRISPE is om AI gericht en gestructureerd te laten werken aan een complexe taak, met duidelijke kaders, processtappen en een concreet eindresultaat.',
+    use_cases: [
+      'Gebruik CRISPE wanneer een gebruiker een strategisch advies, analyse of uitgebreid plan wil laten maken.',
+      'Gebruik CRISPE wanneer de uitkomst afhankelijk is van context, rol, beperkingen en een duidelijk einddoel.',
+      'Gebruik CRISPE wanneer de AI niet alleen antwoord moet geven, maar ook volgens een bepaalde aanpak moet werken.',
+      'Gebruik CRISPE wanneer de gebruiker controle wil over toon, proces, diepgang en outputvorm.',
+    ],
+    follow_up_questions: [
+      { id: 'context', label: 'CONTEXT — achtergrond en situatie', placeholder: 'Beschrijf de situatie, achtergrond, doelgroep, organisatie of het probleem waar de prompt over gaat.' },
+      { id: 'role', label: 'ROLE — rol of expertise', placeholder: 'Bijvoorbeeld: senior strateeg, beleidsadviseur, copywriter, coach, jurist of productmanager.' },
+      { id: 'instructions', label: 'INSTRUCTIONS — concrete opdracht', placeholder: 'Beschrijf precies wat de AI moet doen.' },
+      { id: 'steps', label: 'STEPS — gewenste werkwijze', placeholder: 'Beschrijf welke stappen de AI moet volgen, bijvoorbeeld analyseren, structureren, adviseren en samenvatten.' },
+      { id: 'parameters', label: 'PARAMETERS — randvoorwaarden', placeholder: 'Bijvoorbeeld: AVG-proof, B1-taalniveau, maximaal 500 woorden, zakelijke toon, geen jargon.' },
+      { id: 'end_goal', label: 'END GOAL — gewenste uitkomst', placeholder: 'Beschrijf wat het eindresultaat moet opleveren voor de gebruiker.' },
+    ],
+    template: `# CONTEXT:
+{{context}}
+
+# ROLE:
+{{role}}
+
+# INSTRUCTIONS:
+{{instructions}}
+
+# STEPS:
+{{steps}}
+
+# PARAMETERS:
+{{parameters}}
+
+# END GOAL:
+{{end_goal}}
+
+---
+
+Geef, gegeven bovenstaande CRISPE-structuur, antwoord op:
+{{PROMPT}}`,
+  },
+  {
+    id: 'tech-raise',
+    name: 'RAISE',
+    family: 'context',
+    description:
+      'Taakgericht framework waarmee je snel aangeeft wie de AI moet zijn, welke actie nodig is, welke input gebruikt wordt, welke details belangrijk zijn en wat het gewenste resultaat is.',
+    strength:
+      'Het doel van RAISE is om praktische en uitvoerbare prompts te maken voor concrete taken waarbij snelheid, duidelijkheid en resultaatgerichtheid belangrijk zijn.',
+    use_cases: [
+      'Gebruik RAISE wanneer een gebruiker snel een duidelijke taak aan AI wil geven.',
+      'Gebruik RAISE wanneer de opdracht praktisch, concreet en actiegericht is.',
+      'Gebruik RAISE wanneer de gebruiker bestaande input wil laten verwerken tot een bruikbaar resultaat.',
+      'Gebruik RAISE wanneer de AI output moet leveren zonder een te uitgebreid analyseproces.',
+    ],
+    follow_up_questions: [
+      { id: 'role', label: 'ROLE — rol of perspectief', placeholder: 'Bijvoorbeeld: projectleider, tekstschrijver, onderzoeker, marketeer of trainer.' },
+      { id: 'action', label: 'ACTION — gewenste actie', placeholder: 'Bijvoorbeeld: herschrijf, analyseer, vat samen, verbeter, vergelijk, maak of controleer.' },
+      { id: 'input', label: 'INPUT — bronmateriaal of informatie', placeholder: 'Plak hier de tekst, data, notities, briefing of informatie die gebruikt moet worden.' },
+      { id: 'specifics', label: 'SPECIFICS — specifieke eisen', placeholder: 'Bijvoorbeeld: doelgroep, toon, lengte, format, taalniveau, stijl of onderwerpen die wel/niet genoemd mogen worden.' },
+      { id: 'end_goal', label: 'END GOAL — gewenst resultaat', placeholder: 'Beschrijf waarvoor de output gebruikt wordt en wat het moet opleveren.' },
+    ],
+    template: `# ROLE:
+{{role}}
+
+# ACTION:
+{{action}}
+
+# INPUT:
+{{input}}
+
+# SPECIFICS:
+{{specifics}}
+
+# END GOAL:
+{{end_goal}}
+
+---
+
+Voer de taak uit op basis van bovenstaande RAISE-structuur:
+{{PROMPT}}`,
+  },
+  {
+    id: 'tech-co-star',
+    name: 'CO-STAR',
+    family: 'context',
+    description:
+      'Framework voor communicatie, marketing en contentcreatie waarbij context, doel, stijl, toon, doelgroep en gewenste respons expliciet worden gemaakt.',
+    strength:
+      'Het doel van CO-STAR is om AI communicatie te laten maken die inhoudelijk klopt, goed aansluit op de doelgroep en past bij de gewenste stijl en toon.',
+    use_cases: [
+      'Gebruik CO-STAR wanneer een gebruiker marketingtekst, websitecopy, e-mails of social posts wil laten maken.',
+      'Gebruik CO-STAR wanneer doelgroep, toon en stijl belangrijk zijn voor de kwaliteit van de output.',
+      'Gebruik CO-STAR wanneer communicatie moet overtuigen, informeren of activeren.',
+      'Gebruik CO-STAR wanneer de gebruiker de vorm en het effect van de tekst duidelijk wil sturen.',
+    ],
+    follow_up_questions: [
+      { id: 'context', label: 'CONTEXT — achtergrond en situatie', placeholder: 'Beschrijf waar de communicatie over gaat, wat de aanleiding is en in welke situatie de tekst gebruikt wordt.' },
+      { id: 'objective', label: 'OBJECTIVE — communicatiedoel', placeholder: 'Bijvoorbeeld: informeren, overtuigen, activeren, uitnodigen, verkopen of vertrouwen opbouwen.' },
+      { id: 'style', label: 'STYLE — schrijfstijl', placeholder: 'Bijvoorbeeld: professioneel, helder, compact, verhalend, activerend, zakelijk of toegankelijk.' },
+      { id: 'tone', label: 'TONE — toon', placeholder: 'Bijvoorbeeld: warm, direct, rustig, deskundig, uitnodigend, nuchter of energiek.' },
+      { id: 'audience', label: 'AUDIENCE — doelgroep', placeholder: 'Beschrijf voor wie de tekst bedoeld is, inclusief kennisniveau, behoefte, bezwaar of context.' },
+      { id: 'response', label: 'RESPONSE — gewenste outputvorm', placeholder: 'Bijvoorbeeld: e-mail, landingspagina, advertentietekst, social post, tagline, nieuwsbrief of call-to-action.' },
+    ],
+    template: `# CONTEXT:
+{{context}}
+
+# OBJECTIVE:
+{{objective}}
+
+# STYLE:
+{{style}}
+
+# TONE:
+{{tone}}
+
+# AUDIENCE:
+{{audience}}
+
+# RESPONSE:
+{{response}}
+
+---
+
+Maak de communicatie-uiting op basis van bovenstaande CO-STAR-structuur:
+{{PROMPT}}`,
+  },
+  {
+    id: 'tech-craft',
+    name: 'CRAFT',
+    family: 'context',
+    description:
+      'Zakelijk framework waarmee je heldere output kunt laten maken op basis van context, rol, actie, format en doelgroep.',
+    strength:
+      'Het doel van CRAFT is om AI zakelijke documenten, plannen, adviezen en berichten te laten maken die duidelijk gestructureerd zijn en aansluiten op de doelgroep.',
+    use_cases: [
+      'Gebruik CRAFT wanneer een gebruiker een zakelijke tekst, memo, voorstel, plan of advies wil laten maken.',
+      'Gebruik CRAFT wanneer de output professioneel, bruikbaar en overzichtelijk moet zijn.',
+      'Gebruik CRAFT wanneer het format en de doelgroep belangrijk zijn voor de structuur van het antwoord.',
+      'Gebruik CRAFT wanneer een zakelijke opdracht snel moet worden vertaald naar concrete output.',
+    ],
+    follow_up_questions: [
+      { id: 'context', label: 'CONTEXT — zakelijke achtergrond', placeholder: 'Beschrijf de zakelijke situatie, aanleiding, organisatie, vraag of uitdaging.' },
+      { id: 'role', label: 'ROLE — professionele rol', placeholder: 'Bijvoorbeeld: projectmanager, beleidsadviseur, business consultant, HR-adviseur of teamleider.' },
+      { id: 'action', label: 'ACTION — gewenste taak', placeholder: 'Bijvoorbeeld: schrijf, formuleer, analyseer, adviseer, structureer, verbeter of maak een voorstel.' },
+      { id: 'format', label: 'FORMAT — gewenste vorm', placeholder: 'Bijvoorbeeld: memo, adviesnota, e-mail, managementsamenvatting, projectplan, tabel of bulletlijst.' },
+      { id: 'target_audience', label: 'TARGET AUDIENCE — doelgroep', placeholder: 'Bijvoorbeeld: directie, managementteam, collega’s, opdrachtgever, klant, medewerkers of stakeholders.' },
+    ],
+    template: `# CONTEXT:
+{{context}}
+
+# ROLE:
+{{role}}
+
+# ACTION:
+{{action}}
+
+# FORMAT:
+{{format}}
+
+# TARGET AUDIENCE:
+{{target_audience}}
+
+---
+
+Maak de zakelijke output op basis van bovenstaande CRAFT-structuur:
+{{PROMPT}}`,
+  },
+  {
+    id: 'tech-create',
+    name: 'CREATE',
+    family: 'context',
+    description:
+      'Framework voor creatieve en contentgerichte opdrachten waarbij context, rol, voorbeelden, actie, toon en eindresultaat samen richting geven aan de output.',
+    strength:
+      'Het doel van CREATE is om AI creatieve, originele en bruikbare content te laten maken die past bij de context, toon, voorbeelden en gewenste toepassing.',
+    use_cases: [
+      'Gebruik CREATE wanneer een gebruiker creatieve concepten, campagnes, scripts, posts of ideeën wil laten maken.',
+      'Gebruik CREATE wanneer voorbeelden belangrijk zijn om stijl, niveau of richting te bepalen.',
+      'Gebruik CREATE wanneer de output origineel moet zijn, maar wel binnen duidelijke kaders moet blijven.',
+      'Gebruik CREATE wanneer de gebruiker meerdere creatieve varianten of invalshoeken wil verkennen.',
+    ],
+    follow_up_questions: [
+      { id: 'context', label: 'CONTEXT — creatieve achtergrond', placeholder: 'Beschrijf het onderwerp, de aanleiding, het merk, de campagne of het creatieve probleem.' },
+      { id: 'role', label: 'ROLE — creatieve rol', placeholder: 'Bijvoorbeeld: creatief strateeg, copywriter, scriptschrijver, conceptontwikkelaar of contentmarketeer.' },
+      { id: 'examples', label: 'EXAMPLES — voorbeelden of inspiratie', placeholder: 'Voeg voorbeelden toe van stijl, toon, structuur, ideeën of content die als richting mogen dienen.' },
+      { id: 'action', label: 'ACTION — creatieve opdracht', placeholder: 'Bijvoorbeeld: bedenk, schrijf, ontwikkel, herschrijf, maak varianten, verbeter of combineer ideeën.' },
+      { id: 'tone', label: 'TONE — gewenste toon', placeholder: 'Bijvoorbeeld: speels, scherp, warm, professioneel, verrassend, activerend of toegankelijk.' },
+      { id: 'end_result', label: 'END RESULT — gewenste creatieve output', placeholder: 'Bijvoorbeeld: 10 ideeën, 3 concepten, een script, een campagneboodschap, een social post of een headline-set.' },
+    ],
+    template: `# CONTEXT:
+{{context}}
+
+# ROLE:
+{{role}}
+
+# EXAMPLES:
+{{examples}}
+
+# ACTION:
+{{action}}
+
+# TONE:
+{{tone}}
+
+# END RESULT:
+{{end_result}}
+
+---
+
+Maak de creatieve output op basis van bovenstaande CREATE-structuur:
+{{PROMPT}}`,
+  },
+  {
+    id: 'tech-react',
+    name: 'REACT',
+    family: 'context',
+    description:
+      'Framework voor agent-achtige workflows waarbij de AI redeneert, keuzes evalueert, acties uitvoert, resultaten controleert en helder terugkoppelt.',
+    strength:
+      'Het doel van REACT is om AI gestructureerd te laten werken aan taken die meerdere stappen, beslissingen, controles of tool-acties vereisen.',
+    use_cases: [
+      'Gebruik REACT wanneer een AI-agent een taak in meerdere stappen moet uitvoeren.',
+      'Gebruik REACT wanneer de AI informatie moet analyseren, daarna actie moet ondernemen en vervolgens het resultaat moet controleren.',
+      'Gebruik REACT wanneer betrouwbaarheid, terugkoppeling en controle belangrijk zijn.',
+      'Gebruik REACT wanneer een workflow afhankelijk is van redeneren, uitvoeren, valideren en rapporteren.',
+    ],
+    follow_up_questions: [
+      { id: 'reason', label: 'REASON — analyse en redenering', placeholder: 'Beschrijf wat de AI eerst moet begrijpen, analyseren of afwegen voordat er actie wordt ondernomen.' },
+      { id: 'evaluate', label: 'EVALUATE — keuze en beoordeling', placeholder: 'Beschrijf welke opties, risico’s, beperkingen of criteria de AI moet beoordelen.' },
+      { id: 'act', label: 'ACT — actie of uitvoering', placeholder: 'Beschrijf welke actie de AI moet uitvoeren, bijvoorbeeld zoeken, schrijven, aanpassen, controleren of structureren.' },
+      { id: 'check', label: 'CHECK — controle en validatie', placeholder: 'Beschrijf hoe de AI moet controleren of de actie goed is uitgevoerd.' },
+      { id: 'tell', label: 'TELL — terugkoppeling', placeholder: 'Beschrijf hoe de AI het resultaat moet rapporteren, inclusief bevindingen, gemaakte keuzes en eventuele vervolgstappen.' },
+    ],
+    template: `# REASON:
+{{reason}}
+
+# EVALUATE:
+{{evaluate}}
+
+# ACT:
+{{act}}
+
+# CHECK:
+{{check}}
+
+# TELL:
+{{tell}}
+
+---
+
+Voer de agent-workflow uit op basis van bovenstaande REACT-structuur:
+{{PROMPT}}`,
+  },
 ];

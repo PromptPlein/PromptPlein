@@ -8,9 +8,9 @@ interface TechniqueSelectorProps {
   selectedId: string | null;
   onSelect: (id: string) => void;
   /**
-   * Toon ook de contextprompt-groep (raamwerken zoals CARE/CRISP). Standaard true.
+   * Toon ook de prompt frameworks-groep (raamwerken zoals CARE/CRISP). Standaard true.
    * In de techniek-aanbevelingsflow staat dit op false: daar zijn alleen de losse
-   * prompttechnieken bedoeld; de contextprompts horen bij de eigen-prompt-flow.
+   * prompttechnieken bedoeld; de prompt frameworks horen bij de eigen-prompt-flow.
    */
   showContextPrompts?: boolean;
 }
@@ -22,7 +22,7 @@ export default function TechniqueSelector({
 }: TechniqueSelectorProps) {
   const { techniques } = useReferenceData();
 
-  // Contextprompts (complete raamwerken, bijv. CRISP/CARE) los van de
+  // Prompt frameworks (complete raamwerken, bijv. CRISP/CARE) los van de
   // losse prompttechnieken tonen, elk in een eigen, duidelijk afgebakende groep.
   const contextPrompts = techniques.filter(isContextPrompt);
   const promptTechniques = techniques.filter((t) => !isContextPrompt(t));
@@ -32,7 +32,7 @@ export default function TechniqueSelector({
       {showContextPrompts && contextPrompts.length > 0 && (
         <Group
           icon={<Layers size={16} />}
-          title="Contextprompts"
+          title="Prompt frameworks"
           subtitle="Complete raamwerken die je hele prompt structureren."
           accent="oranje"
           techniques={contextPrompts}
@@ -54,7 +54,7 @@ export default function TechniqueSelector({
   );
 }
 
-/** Accentkleur per groep: oranje voor contextprompts, blauw voor prompttechnieken. */
+/** Accentkleur per groep: oranje voor prompt frameworks, blauw voor prompttechnieken. */
 type Accent = 'oranje' | 'blauw';
 
 const ACCENT_STYLES: Record<

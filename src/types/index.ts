@@ -37,7 +37,7 @@ export interface Technique {
   id: string;
   name: string;
   description?: string;
-  /** Groepering in de generator: contextprompt of losse techniek. Default 'technique'. */
+  /** Groepering in de generator: prompt framework of losse techniek. Default 'technique'. */
   family?: TechniqueFamily;
   /** De kracht van deze techniek — waar is hij sterk in? Voedt de AI-aanbeveling. */
   strength?: string;
@@ -196,7 +196,7 @@ export interface RecommendResult {
 
 /** Eén ontbrekend onderdeel uit de prompt-analyse (eigen-prompt-flow). */
 export interface MissingField {
-  /** Verwijst naar een FollowUpQuestion.id van de gekozen contextprompt. */
+  /** Verwijst naar een FollowUpQuestion.id van het gekozen prompt framework. */
   id: string;
   /** Het label van het veld (bijv. "CONTEXT — achtergrond"). */
   label: string;

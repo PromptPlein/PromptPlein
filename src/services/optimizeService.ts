@@ -285,7 +285,7 @@ function localAnalyze(ownPrompt: string, technique: Technique): MissingField[] {
 
 /**
  * Analyseert de eigen prompt van de gebruiker tegen de vereiste velden van de
- * gekozen contextprompt (CARE, CRISP, …) en geeft terug welke onderdelen nog
+ * gekozen prompt framework (CARE, CRISP, …) en geeft terug welke onderdelen nog
  * ontbreken. Roept de edge function in 'analyze'-modus aan; faalt dat, dan
  * lokale trefwoord-matching.
  */
@@ -362,4 +362,79 @@ export async function analyzePrompt(args: {
     success: true,
     provider: 'local-template',
   };
+}
+
+/**
+ * Lokale fallback voor de titel: leid een korte titel af uit de gegenereerde
+ * template zonder AI. Pak bij voorkeur de #Taak/vraag:-, #Rol:- of #Context:-kop,
+ * anders de eerste zinvolle regel. Spiegelt de server-side `localTitle`.
+ */
+function localTitle(templateContent: string): string {
+  const text = templateContent.trim();
+  const clean = (s: string) => {
+    const v = s
+      .replace(/^["'“”‘’]+|["'“”‘’]+$/g, '')
+      .replace(/[.\s]+$/, '')
+      .trim();
+    return v.length > 70 ? `${v.slice(0, 67)}…` : v;
+  };
+  for (const key of ['taak', 'rol', 'context']) {
+    const m = text.match(new RegExp(`#\\s*${key}[^:\\n]*:\\s*([^\\n]+)`, 'i'));
+    if (m && m[1].trim()) return clean(m[1]);
+  }
+  const firstLine = text
+    .split('\n')
+    .map((l) => l.trim())
+    .find((l) => l && !l.startsWith('#'));
+  if (firstLine) return clean(firstLine.split(/(?<=[.!?])\s/)[0]);
+  return 'Nieuwe template';
+}
+
+/**
+ * Bedenkt een korte, beschrijvende titel voor een gegenereerde prompt-template
+ * door de edge function in 'title'-modus aan te roepen. Faalt dat (of geen
+ * backend), dan een lokale samenvatting uit de inhoud.
+ */
+export async function generateTitle(args: {
+  templateContent: string;
+  preferredProvider?: AiProvider;
+}): Promise<string> {
+  const { templateContent, preferredProvider } = args;
+  const content = templateContent.trim();
+  if (!content) return 'Nieuwe template';
+
+  const functionUrl = getFunctionUrl('optimize-prompt');
+
+  if (isSupabaseConfigured && functionUrl) {
+    try {
+      const anonKey = getAnonKey();
+      const response = await fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(anonKey ? { Authorization: `Bearer ${anonKey}`, apikey: anonKey } : {}),
+        },
+        body: JSON.stringify({
+          mode: 'title',
+          templateContent: content,
+          preferredProvider: preferredProvider ?? 'auto',
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Edge function gaf status ${response.status}`);
+      }
+
+      const data = (await response.json()) as { success?: boolean; title?: string };
+      if (data.success && data.title?.trim()) {
+        return data.title.trim();
+      }
+      throw new Error('Geen titel ontvangen');
+    } catch {
+      // Stilletjes terugvallen op een lokale titel; dit is een hulpsuggestie.
+      return localTitle(content);
+    }
+  }
+
+  return localTitle(content);
 }

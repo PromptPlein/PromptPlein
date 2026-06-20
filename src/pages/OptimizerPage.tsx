@@ -218,13 +218,13 @@ export default function OptimizerPage() {
         >
           {/* 1. Twee gelijkwaardige instapopties, naast elkaar (met 3D-effect). */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {/* Optie A (links): optimaliseer je eigen prompt (altijd een contextprompt) */}
+            {/* Optie A (links): optimaliseer je eigen prompt (altijd een prompt framework) */}
             <EntryOptionCard
               active={entryMode === 'own-prompt'}
               onClick={() => setEntryMode('own-prompt')}
               icon={<Wand2 size={24} />}
               title="Optimaliseer jouw eigen prompt"
-              description="Heb je al een prompt? Kies een contextprompt, laat hem analyseren en vul aan wat nog ontbreekt."
+              description="Heb je al een prompt? Kies een prompt framework, laat hem analyseren en vul aan wat nog ontbreekt."
             />
 
             {/* Optie B (rechts): complex vraagstuk → laat een techniek aanbevelen */}
@@ -252,15 +252,15 @@ export default function OptimizerPage() {
             </div>
           )}
 
-          {/* Eigen-prompt-flow: plak prompt, kies contextprompt, analyseer, vul aan, optimaliseer */}
+          {/* Eigen-prompt-flow: plak prompt, kies prompt framework, analyseer, vul aan, optimaliseer */}
           {entryMode === 'own-prompt' && (
             <div className="opl-card p-5 sm:p-6">
               <OwnPromptOptimizer settings={settingsRef.current} onResult={handleOwnPromptResult} />
             </div>
           )}
 
-          {/* 2. Of kies zelf — contextprompts + prompttechnieken. In de
-              "complex vraagstuk"-flow (smart) vervallen de contextprompts;
+          {/* 2. Of kies zelf — prompt frameworks + prompttechnieken. In de
+              "complex vraagstuk"-flow (smart) vervallen de prompt frameworks;
               die horen bij "Optimaliseer jouw eigen prompt". */}
           {entryMode === 'techniques' && (
             <section className="opl-card p-6">
