@@ -26,7 +26,9 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
 
   // Opslaan-formulier
   const [showSave, setShowSave] = useState(false);
-  const [title, setTitle] = useState(defaultTitle(technique, goal));
+  // Start leeg: tijdens het laden zien we alleen het laadscherm, geen oude
+  // standaardtitel die later "verspringt" naar de AI-suggestie.
+  const [title, setTitle] = useState('');
   const [sharing, setSharing] = useState<SharingLevel>('public');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<Prompt | null>(null);
@@ -47,10 +49,14 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
     generateTitle({ templateContent: result.optimized_content })
       .then((suggested) => {
         // Alleen overnemen als de gebruiker nog niet zelf heeft getypt.
-        if (suggested && !titleTouched) setTitle(suggested);
+        if (titleTouched) return;
+        // AI-titel als die er is, anders een zinvolle standaardtitel.
+        setTitle(suggested || defaultTitle(technique, goal));
       })
       .catch(() => {
-        /* Suggestie is optioneel; de standaardtitel blijft staan. */
+        // Suggestie mislukt: val terug op een standaardtitel, tenzij de
+        // gebruiker ondertussen zelf heeft getypt.
+        if (!titleTouched) setTitle(defaultTitle(technique, goal));
       })
       .finally(() => setTitleLoading(false));
   }
@@ -135,12 +141,17 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
               <input
                 id="tpl-title"
                 className="opl-input pr-10"
-                value={title}
+                value={titleLoading ? '' : title}
+                disabled={titleLoading}
                 onChange={(e) => {
                   setTitleTouched(true);
                   setTitle(e.target.value);
                 }}
-                placeholder="Bijv. Vriendelijke afwijzingsbrief aan burger"
+                placeholder={
+                  titleLoading
+                    ? 'Titel wordt bedacht…'
+                    : 'Bijv. Vriendelijke afwijzingsbrief aan burger'
+                }
               />
               {titleLoading && (
                 <Loader2

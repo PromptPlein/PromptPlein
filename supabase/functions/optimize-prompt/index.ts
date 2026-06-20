@@ -113,6 +113,28 @@ const OPENAI_MODEL = 'gpt-4o';
 const DEEPSEEK_MODEL = 'deepseek-chat';
 
 /**
+ * Haalt de #-koppen uit een raamwerk-template, in volgorde van voorkomen.
+ * Bijv. "# CONTEXT:\n..." → "CONTEXT". Zo kan de generator de EIGEN koppen van
+ * het gekozen raamwerk afdwingen (CARE, CRISPE, CO-STAR, … hebben elk andere).
+ */
+function extractHeadings(template: string): string[] {
+  const headings: string[] = [];
+  const seen = new Set<string>();
+  // Match regels die met één of meer hekjes beginnen en op een dubbele punt eindigen.
+  const re = /^#+\s*([^\n:]+?)\s*:/gm;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(template)) !== null) {
+    const name = m[1].trim();
+    const key = name.toLowerCase();
+    if (name && !seen.has(key)) {
+      seen.add(key);
+      headings.push(name);
+    }
+  }
+  return headings;
+}
+
+/**
  * Bouwt de gebruikersprompt voor generatie: techniekcontext + de losse,
  * gelabelde antwoorden van de gebruiker + de gevulde template als structuur.
  * Zo kan het model de antwoorden analyseren en uitschrijven i.p.v. invullen.
@@ -167,11 +189,19 @@ const GENERATE_USER_PROMPT = (args: {
   );
 
   if (args.structureFormat === 'care') {
-    parts.push(
-      `Houd je strikt aan de verplichte uitvoerstructuur met #-koppen (#Rol:, #Context:, ` +
-        `#Taak/vraag:, #Stijl:, #Structuur/regels:, #Randvoorwaarden: en optioneel #Voorbeeld:). ` +
-        `Elke kop begint met een hekje en eindigt op een dubbele punt, met de inhoud eronder.`,
-    );
+    // De koppen verschillen per raamwerk (CARE: Context/Ask/Rules/Examples;
+    // CRISPE: Context/Role/Instructions/…; CO-STAR: Context/Objective/…).
+    // Leid ze af uit de template van het GEKOZEN raamwerk i.p.v. vaste koppen.
+    const headings = extractHeadings(args.filled);
+    if (headings.length > 0) {
+      parts.push(
+        `Houd je STRIKT aan de koppen van het gekozen raamwerk, in deze exacte volgorde:\n` +
+          headings.map((h) => `#${h}:`).join('\n') +
+          `\n\nGebruik PRECIES deze koppen — niet meer, niet minder, en geen andere namen. Begin elke ` +
+          `kop met een hekje (#), de naam en een dubbele punt; zet de inhoud op de regel(s) eronder, ` +
+          `met een lege regel tussen de blokken. Vul elke kop volledig uit op basis van de antwoorden.`,
+      );
+    }
   } else if (args.structureFormat === 'few-shot') {
     parts.push(
       `Houd je strikt aan de verplichte Few-Shot-structuur: een korte rol/taak-intro, daarna ` +
@@ -432,40 +462,32 @@ function localTitle(templateContent: string): string {
 }
 
 /**
- * Verplichte uitvoerstructuur voor context-raamwerken (CARE, CRISP, …).
- * Het model moet de prompt ALTIJD opbouwen met deze #-koppen, elk gevolgd door
- * een dubbele punt en de inhoud op de regel(s) eronder. Dit overschrijft de
- * regel "zonder opmaak-markeringen" uit de hoofd-systeemprompt.
+ * Verplichte uitvoerstructuur voor context-raamwerken (CARE, CRISPE, CO-STAR, …).
+ * Cruciaal: elk raamwerk heeft ZIJN EIGEN koppen — de letters in de naam staan
+ * voor de koppen (CARE = Context/Ask/Rules/Examples; CO-STAR = Context/Objective/
+ * Style/Tone/Audience/Response; …). We leiden die koppen af uit de template van
+ * het gekozen raamwerk en dwingen PRECIES die af, in plaats van vaste koppen.
+ * Valt het afleiden weg, dan een generieke instructie die de template volgt.
  */
-const CONTEXT_STRUCTURE_INSTRUCTION = `VERPLICHTE UITVOERSTRUCTUUR (geldt voor dit context-raamwerk):
-Bouw de prompt ALTIJD op met de onderstaande koppen, in deze volgorde. Begin elke
-kop met een hekje (#), direct gevolgd door de naam en een dubbele punt. Zet de
-inhoud op de regel(s) eronder. Laat een lege regel tussen de blokken.
+function contextStructureInstruction(headings: string[]): string {
+  const header = `VERPLICHTE UITVOERSTRUCTUUR (geldt voor dit specifieke prompt framework):
+Elk prompt framework heeft zijn EIGEN koppen; de letters van de naam staan voor die koppen.`;
 
-#Rol:
-[wie de AI is — leid dit af uit de antwoorden]
+  const footer = `Begin elke kop met een hekje (#), direct gevolgd door de naam van de kop en een
+dubbele punt. Zet daaronder, op een nieuwe regel, de volledig uitgeschreven inhoud voor die kop op
+basis van de antwoorden van de gebruiker. Laat een lege regel tussen de blokken.
+Gebruik UITSLUITEND deze koppen — voeg geen eigen koppen toe (zoals Rol, Stijl of Randvoorwaarden)
+tenzij die hierboven staan, en laat geen kop weg. Laat alleen écht per keer in te vullen plekken
+staan als [plaatshouder]. Geef geen tekst buiten deze koppen en plaats GEEN codeblok-tekens (\`\`\`).`;
 
-#Context:
-[korte achtergrond van de situatie]
+  if (headings.length > 0) {
+    const list = headings.map((h) => `#${h}:\n[volledig uitgeschreven inhoud voor "${h}"]`).join('\n\n');
+    return `${header}\n\nBouw de prompt op met PRECIES deze koppen van het gekozen raamwerk, in deze exacte volgorde:\n\n${list}\n\n${footer}`;
+  }
 
-#Taak/vraag:
-[wat er precies gedaan moet worden; gebruik genummerde stappen waar dat helpt]
-
-#Stijl:
-[hoe het moet klinken — toon, taalniveau, wat te vermijden]
-
-#Structuur/regels:
-[gewenste opbouw en harde regels voor het resultaat]
-
-#Randvoorwaarden:
-[limieten en voorwaarden, bijv. lengte of wat niet vermeld mag worden]
-
-#Voorbeeld:
-[optioneel; alleen opnemen als er een voorbeeld of format is — anders deze kop weglaten]
-
-Vul elke kop met volledig uitgeschreven instructies op basis van de antwoorden.
-Laat alleen écht per keer in te vullen plekken staan als [plaatshouder]. Geef geen
-extra tekst buiten deze koppen en plaats GEEN codeblok-tekens (\`\`\`) om de prompt.`;
+  // Geen koppen afleidbaar: volg de structuur van de meegestuurde template.
+  return `${header}\n\nBouw de prompt op met exact de #-koppen die in de meegestuurde STRUCTUUR-REFERENTIE (de raamwerk-template) staan, in dezelfde volgorde en met dezelfde namen.\n\n${footer}`;
+}
 
 /**
  * Verplichte uitvoerstructuur voor de Few-Shot-techniek: een rol/taak-intro,
@@ -650,9 +672,13 @@ type StructureFormat =
   | 'meta'
   | 'socratic';
 
-/** Kies de juiste structuur-instructie (of geen) op basis van de techniek. */
-function structureInstruction(format?: StructureFormat): string | null {
-  if (format === 'care') return CONTEXT_STRUCTURE_INSTRUCTION;
+/**
+ * Kies de juiste structuur-instructie (of geen) op basis van de techniek.
+ * Voor context-raamwerken (`care`) zijn de koppen raamwerk-specifiek; die
+ * worden uit de template afgeleid en als `headings` doorgegeven.
+ */
+function structureInstruction(format?: StructureFormat, headings: string[] = []): string | null {
+  if (format === 'care') return contextStructureInstruction(headings);
   if (format === 'few-shot') return FEW_SHOT_STRUCTURE_INSTRUCTION;
   if (format === 'chain-of-thought') return CHAIN_OF_THOUGHT_STRUCTURE_INSTRUCTION;
   if (format === 'persona') return PERSONA_STRUCTURE_INSTRUCTION;
@@ -664,9 +690,14 @@ function structureInstruction(format?: StructureFormat): string | null {
 }
 
 /** Bouw de systeemprompt uit de admin-hoofdprompt (of default) + structuur + toon. */
-function buildSystemPrompt(systemPrompt?: string, tone?: string, format?: StructureFormat): string {
+function buildSystemPrompt(
+  systemPrompt?: string,
+  tone?: string,
+  format?: StructureFormat,
+  headings: string[] = [],
+): string {
   const base = systemPrompt?.trim() ? systemPrompt.trim() : DEFAULT_SYSTEM_PROMPT;
-  const instruction = structureInstruction(format);
+  const instruction = structureInstruction(format, headings);
   const withStructure = instruction ? `${base}\n\n${instruction}` : base;
   return tone?.trim() ? `${withStructure}\n\nToon en schrijfstijl: ${tone.trim()}` : withStructure;
 }
@@ -1135,7 +1166,10 @@ Deno.serve(async (req: Request) => {
       body.structureFormat ?? (body.isContextPrompt ? 'care' : undefined);
 
     const filled = fillTemplate(body.template, body.promptContent, body.followUpAnswers ?? {});
-    const system = buildSystemPrompt(body.systemPrompt, body.toneInstruction, format);
+    // Koppen van DIT raamwerk afleiden uit de template, zodat de generator de
+    // raamwerk-eigen koppen (CARE, CRISPE, CO-STAR, …) afdwingt i.p.v. vaste.
+    const headings = extractHeadings(body.template);
+    const system = buildSystemPrompt(body.systemPrompt, body.toneInstruction, format, headings);
     const userMessage = GENERATE_USER_PROMPT({
       filled,
       techniqueName: body.techniqueName,
