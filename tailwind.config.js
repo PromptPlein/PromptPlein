@@ -36,10 +36,17 @@ export default {
         shimmer: {
           '100%': { transform: 'translateX(100%)' },
         },
+        // Onbepaalde voortgangsbalk: schuift heen en weer over de volle breedte.
+        'loading-bar': {
+          '0%': { transform: 'translateX(-100%)' },
+          '50%': { transform: 'translateX(150%)' },
+          '100%': { transform: 'translateX(450%)' },
+        },
       },
       animation: {
         'fade-in': 'fade-in 0.4s ease-out',
         'fade-out': 'fade-out 0.4s ease-out',
+        'loading-bar': 'loading-bar 1.4s ease-in-out infinite',
       },
     },
   },

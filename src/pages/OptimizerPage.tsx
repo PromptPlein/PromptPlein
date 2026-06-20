@@ -224,7 +224,7 @@ export default function OptimizerPage() {
               onClick={() => setEntryMode('own-prompt')}
               icon={<Wand2 size={24} />}
               title="Optimaliseer jouw eigen prompt"
-              description="Heb je al een prompt? Kies een prompt framework, laat hem analyseren en vul aan wat nog ontbreekt."
+              description="Heb je al een prompt? Wij zoeken het best passende prompt framework, analyseren je prompt en vullen aan wat nog ontbreekt."
             />
 
             {/* Optie B (rechts): complex vraagstuk → laat een techniek aanbevelen */}

@@ -26,7 +26,7 @@ import Anthropic from 'npm:@anthropic-ai/sdk@^0.65.0';
 
 type Provider = 'claude' | 'openai' | 'deepseek';
 type PreferredProvider = 'auto' | Provider;
-type Mode = 'generate' | 'recommend' | 'analyze' | 'title';
+type Mode = 'generate' | 'recommend' | 'recommend-framework' | 'analyze' | 'title';
 
 /** Eén veld van het gekozen prompt framework waar de analyse op toetst. */
 interface AnalyzeField {
@@ -297,6 +297,40 @@ Gebruik alleen id's die exact in de lijst voorkomen. Geef minstens 1 en maximaal
 /** Bouw de gebruikersprompt voor de aanbevelingsmodus. */
 const RECOMMEND_USER_PROMPT = (goal: string, techniques: TechniqueSummary[]) =>
   `Doel van de gebruiker:\n${goal}\n\nBeschikbare technieken:\n${techniques
+    .map((t) => {
+      const parts = [`- id: ${t.id}`, `naam: ${t.name}`];
+      if (t.description) parts.push(`uitleg: ${t.description}`);
+      if (t.strength) parts.push(`kracht: ${t.strength}`);
+      if (t.use_cases && t.use_cases.length > 0)
+        parts.push(`gebruik voor: ${t.use_cases.join('; ')}`);
+      return parts.join(' | ');
+    })
+    .join('\n')}`;
+
+const RECOMMEND_FRAMEWORK_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse rijksoverheid.
+Een interne overheidsmedewerker heeft een EIGEN prompt geschreven en wil die optimaliseren met een
+prompt framework (een compleet raamwerk dat de hele prompt structureert, bijv. CARE, CRISP, CO-STAR).
+
+Analyseer de geschreven prompt: wat is het doel, wat voor soort tekst/taak is het, wat ontbreekt er
+nog aan structuur? Kies daarna de best passende prompt frameworks (maximaal 3), gerangschikt van
+meest naar minst geschikt. Baseer je motivatie expliciet op de inhoud van de prompt in relatie tot
+waar het raamwerk sterk in is.
+
+Geef per aanbeveling TWEE dingen:
+- "reason": één korte zin die de kracht van het raamwerk koppelt aan deze prompt.
+- "value": één KORTE, bondige zin (max. ~20 woorden) die concreet zegt waarom dit raamwerk nuttig
+  is voor precies DIT vraagstuk. Verwijs kort naar de case (het onderwerp/de doelgroep/het soort tekst),
+  geen opsomming, geen algemeenheden, niet uitweiden.
+
+Geef UITSLUITEND geldige JSON terug, zonder codeblok of extra tekst, in dit formaat:
+{"summary":"<1 zin: wat voor prompt dit is en wat het beste raamwerk eraan toevoegt, in het Nederlands>","recommendations":[{"id":"<framework-id>","reason":"<korte motivatie in 1 zin die de kracht van het raamwerk koppelt aan deze prompt, in het Nederlands>","value":"<1 korte zin (max ~20 woorden) waarom dit raamwerk nuttig is voor precies dit vraagstuk, in het Nederlands>"}]}
+
+Gebruik alleen id's die exact in de lijst voorkomen. Geef minstens 1 en maximaal 3 aanbevelingen.`;
+
+/** Bouw de gebruikersprompt voor de framework-aanbevelingsmodus (eigen-prompt-flow). */
+const RECOMMEND_FRAMEWORK_USER_PROMPT = (ownPrompt: string, frameworks: TechniqueSummary[]) =>
+  `PROMPT VAN DE GEBRUIKER (analyseer deze):\n"""\n${ownPrompt}\n"""\n\n` +
+  `Beschikbare prompt frameworks:\n${frameworks
     .map((t) => {
       const parts = [`- id: ${t.id}`, `naam: ${t.name}`];
       if (t.description) parts.push(`uitleg: ${t.description}`);
@@ -760,6 +794,8 @@ function buildOrder(preferred?: PreferredProvider): Provider[] {
 interface Recommendation {
   id: string;
   reason: string;
+  /** Uitgebreidere onderbouwing van de toegevoegde waarde (framework-modus). */
+  value?: string;
 }
 
 /** Parseert het JSON-antwoord van de aanbevelingsmodus robuust. */
@@ -776,6 +812,38 @@ function parseRecommendations(raw: string, valid: Set<string>): Recommendation[]
       .map((r) => ({ id: r.id, reason: typeof r.reason === 'string' ? r.reason : '' }));
   } catch {
     return [];
+  }
+}
+
+/**
+ * Parseert het JSON-antwoord van de framework-aanbevelingsmodus robuust.
+ * Verschilt van `parseRecommendations` doordat er ook een `summary` meekomt.
+ */
+function parseFrameworkRecommendations(
+  raw: string,
+  valid: Set<string>,
+): { summary: string; recommendations: Recommendation[] } {
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) return { summary: '', recommendations: [] };
+  try {
+    const parsed = JSON.parse(match[0]) as {
+      summary?: string;
+      recommendations?: Recommendation[];
+    };
+    const recommendations = (Array.isArray(parsed.recommendations) ? parsed.recommendations : [])
+      .filter((r) => r && typeof r.id === 'string' && valid.has(r.id))
+      .slice(0, 3)
+      .map((r) => ({
+        id: r.id,
+        reason: typeof r.reason === 'string' ? r.reason : '',
+        value: typeof r.value === 'string' ? r.value : '',
+      }));
+    return {
+      summary: typeof parsed.summary === 'string' ? parsed.summary : '',
+      recommendations,
+    };
+  } catch {
+    return { summary: '', recommendations: [] };
   }
 }
 
@@ -888,11 +956,13 @@ Deno.serve(async (req: Request) => {
     const mode: Mode =
       body.mode === 'recommend'
         ? 'recommend'
-        : body.mode === 'analyze'
-          ? 'analyze'
-          : body.mode === 'title'
-            ? 'title'
-            : 'generate';
+        : body.mode === 'recommend-framework'
+          ? 'recommend-framework'
+          : body.mode === 'analyze'
+            ? 'analyze'
+            : body.mode === 'title'
+              ? 'title'
+              : 'generate';
     const order = buildOrder(body.preferredProvider);
     const temperature = clampTemp(body.temperature);
 
@@ -962,6 +1032,52 @@ Deno.serve(async (req: Request) => {
 
       return new Response(
         JSON.stringify({ success: true, title, provider }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    // --- Framework-aanbevelingsmodus: kies het best passende prompt framework
+    //     op basis van de EIGEN prompt van de gebruiker (eigen-prompt-flow) ---
+    if (mode === 'recommend-framework') {
+      const ownPrompt = body.ownPrompt?.trim();
+      const frameworks = Array.isArray(body.techniques) ? body.techniques : [];
+      if (!ownPrompt || frameworks.length === 0) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'ownPrompt en techniques zijn verplicht' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      const validIds = new Set(frameworks.map((t) => t.id));
+      const userMessage = RECOMMEND_FRAMEWORK_USER_PROMPT(ownPrompt, frameworks);
+      let result: { summary: string; recommendations: Recommendation[] } | null = null;
+      let provider: Provider | 'local-template' = 'local-template';
+
+      for (const candidate of order) {
+        try {
+          const raw = await PROVIDERS[candidate](
+            userMessage,
+            RECOMMEND_FRAMEWORK_SYSTEM_PROMPT,
+            0.2,
+          );
+          const parsed = parseFrameworkRecommendations(raw, validIds);
+          if (parsed.recommendations.length > 0) {
+            result = parsed;
+            provider = candidate;
+            break;
+          }
+        } catch (providerErr) {
+          console.error(`${candidate} (recommend-framework) mislukt, probeer volgende:`, providerErr);
+        }
+      }
+
+      // Geen AI-resultaat: val terug op trefwoord-matching over de eigen prompt.
+      if (!result) {
+        result = { summary: '', recommendations: localRecommend(ownPrompt, frameworks) };
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, ...result, provider }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }

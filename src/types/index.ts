@@ -184,10 +184,30 @@ export interface TechniqueRecommendation {
   id: string;
   /** Korte motivatie waarom deze techniek past. */
   reason: string;
+  /**
+   * Uitgebreidere onderbouwing van de toegevoegde waarde: waarom dit raamwerk/
+   * deze techniek slim is voor precies dít vraagstuk. Gekoppeld aan de inhoud
+   * van de geplakte prompt (eigen-prompt-flow). Optioneel.
+   */
+  value?: string;
 }
 
 /** Antwoord van de optimize-prompt service (aanbevelingsmodus). */
 export interface RecommendResult {
+  recommendations: TechniqueRecommendation[];
+  success: boolean;
+  provider: AiProviderResult;
+  error?: string;
+}
+
+/**
+ * Antwoord van de optimize-prompt service (framework-aanbevelingsmodus,
+ * eigen-prompt-flow). Beveelt het best passende prompt framework aan op basis
+ * van de geplakte prompt, met een korte samenvatting van de analyse.
+ */
+export interface FrameworkRecommendResult {
+  /** Korte samenvatting: wat voor prompt dit is en wat het raamwerk toevoegt. */
+  summary: string;
   recommendations: TechniqueRecommendation[];
   success: boolean;
   provider: AiProviderResult;

@@ -3,6 +3,7 @@ import { isContextPrompt, structureFormat } from '@/lib/techniques';
 import type { AiProvider } from '@/config/aiModels';
 import type {
   AnalyzeResult,
+  FrameworkRecommendResult,
   MissingField,
   OptimizeResult,
   RecommendResult,
@@ -256,6 +257,80 @@ export async function recommendTechniques(args: {
 
   return {
     recommendations: localRecommend(goal, techniques),
+    success: true,
+    provider: 'local-template',
+  };
+}
+
+/**
+ * Beveelt het best passende prompt framework (CARE, CRISP, …) aan op basis van
+ * de EIGEN prompt van de gebruiker. Roept de edge function in
+ * 'recommend-framework'-modus aan; faalt dat, dan lokale trefwoord-matching.
+ */
+export async function recommendFramework(args: {
+  ownPrompt: string;
+  frameworks: Technique[];
+  preferredProvider?: AiProvider;
+}): Promise<FrameworkRecommendResult> {
+  const { ownPrompt, frameworks, preferredProvider } = args;
+  const functionUrl = getFunctionUrl('optimize-prompt');
+
+  if (isSupabaseConfigured && functionUrl) {
+    try {
+      const anonKey = getAnonKey();
+      const response = await fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(anonKey ? { Authorization: `Bearer ${anonKey}`, apikey: anonKey } : {}),
+        },
+        body: JSON.stringify({
+          mode: 'recommend-framework',
+          ownPrompt,
+          techniques: frameworks.map((t) => ({
+            id: t.id,
+            name: t.name,
+            description: t.description,
+            strength: t.strength,
+            use_cases: t.use_cases,
+          })),
+          preferredProvider: preferredProvider ?? 'auto',
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Edge function gaf status ${response.status}`);
+      }
+
+      const data = (await response.json()) as Partial<FrameworkRecommendResult>;
+      if (data.success && Array.isArray(data.recommendations)) {
+        const valid = new Set(frameworks.map((t) => t.id));
+        const recommendations = data.recommendations.filter((r) => valid.has(r.id));
+        if (recommendations.length > 0) {
+          return {
+            summary: data.summary ?? '',
+            recommendations,
+            success: true,
+            provider: (data.provider as FrameworkRecommendResult['provider']) ?? 'claude',
+          };
+        }
+      }
+      throw new Error(data.error ?? 'Geen passend prompt framework gevonden');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Onbekende fout';
+      return {
+        summary: '',
+        recommendations: localRecommend(ownPrompt, frameworks),
+        success: true,
+        provider: 'local-template',
+        error: `Slimme aanbeveling mislukt (${message}); lokale suggestie gebruikt.`,
+      };
+    }
+  }
+
+  return {
+    summary: '',
+    recommendations: localRecommend(ownPrompt, frameworks),
     success: true,
     provider: 'local-template',
   };
