@@ -13,12 +13,18 @@ interface TechniqueSelectorProps {
    * prompttechnieken bedoeld; de prompt frameworks horen bij de eigen-prompt-flow.
    */
   showContextPrompts?: boolean;
+  /**
+   * Toon ook de losse prompttechnieken-groep. Standaard true. In de eigen-prompt-flow
+   * staat dit op false: daar zijn alleen de complete prompt frameworks bedoeld.
+   */
+  showTechniques?: boolean;
 }
 
 export default function TechniqueSelector({
   selectedId,
   onSelect,
   showContextPrompts = true,
+  showTechniques = true,
 }: TechniqueSelectorProps) {
   const { techniques } = useReferenceData();
 
@@ -41,15 +47,17 @@ export default function TechniqueSelector({
         />
       )}
 
-      <Group
-        icon={<Wrench size={16} />}
-        title="Prompttechnieken"
-        subtitle="Gerichte technieken voor een specifiek effect."
-        accent="blauw"
-        techniques={promptTechniques}
-        selectedId={selectedId}
-        onSelect={onSelect}
-      />
+      {showTechniques && (
+        <Group
+          icon={<Wrench size={16} />}
+          title="Prompttechnieken"
+          subtitle="Gerichte technieken voor een specifiek effect."
+          accent="blauw"
+          techniques={promptTechniques}
+          selectedId={selectedId}
+          onSelect={onSelect}
+        />
+      )}
     </div>
   );
 }

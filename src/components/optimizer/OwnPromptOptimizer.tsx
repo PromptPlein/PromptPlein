@@ -17,6 +17,7 @@ import { isContextPrompt } from '@/lib/techniques';
 import { generatePrompt, prefillFields, recommendFramework } from '@/services/optimizeService';
 import OptimizingLoader from './OptimizingLoader';
 import FollowUpQuestions, { type FieldMeta } from './FollowUpQuestions';
+import TechniqueSelector from './TechniqueSelector';
 import type { AiSettings } from '@/services/settingsService';
 import type {
   OptimizeResult,
@@ -414,6 +415,22 @@ export default function OwnPromptOptimizer({ settings, onResult }: OwnPromptOpti
           })}
         </div>
       )}
+
+      {/* Volledige lijst met prompt frameworks — altijd zichtbaar, ook na een keuze,
+          zodat de gebruiker alle raamwerken ziet en op elk moment kan wisselen. Een
+          andere keuze hier vult de velden opnieuw voor (handleSelectFramework). */}
+      <div className="rounded-2xl border border-slate-200 p-5 dark:border-slate-700 sm:p-6">
+        <p className="mb-4 text-sm text-slate-600 dark:text-slate-300">
+          {recommendations
+            ? 'Of kies zelf een ander prompt framework uit de volledige lijst:'
+            : 'Of kies direct zelf een prompt framework uit de volledige lijst:'}
+        </p>
+        <TechniqueSelector
+          selectedId={techniqueId}
+          onSelect={(id) => void handleSelectFramework(id)}
+          showTechniques={false}
+        />
+      </div>
 
       {/* Anker voor het laad-/voor-invulblok; hier scrollen we na een keuze naartoe. */}
       <div ref={analysisRef} className="scroll-mt-24">
