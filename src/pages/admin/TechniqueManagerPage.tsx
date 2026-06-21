@@ -12,12 +12,14 @@ import {
 } from '@/services/repository';
 import { logAdminAction } from '@/services/adminService';
 import { fillTemplate } from '@/services/optimizeService';
-import type { FollowUpQuestion, Technique } from '@/types';
+import type { FollowUpQuestion, Technique, TechniqueFamily } from '@/types';
 
 interface EditorState {
   id?: string;
   name: string;
   description: string;
+  /** 'technique' = losse prompttechniek, 'context' = compleet prompt framework. */
+  family: TechniqueFamily;
   strength: string;
   /** Eén gebruikssituatie per regel. */
   useCasesText: string;
@@ -30,6 +32,7 @@ interface EditorState {
 const EMPTY: EditorState = {
   name: '',
   description: '',
+  family: 'technique',
   strength: '',
   useCasesText: '',
   template: 'Oorspronkelijke opdracht:\n{{PROMPT}}',
@@ -42,6 +45,7 @@ function toEditor(t: Technique): EditorState {
     id: t.id,
     name: t.name,
     description: t.description ?? '',
+    family: t.family ?? 'technique',
     strength: t.strength ?? '',
     useCasesText: (t.use_cases ?? []).join('\n'),
     template: t.template,
@@ -150,6 +154,7 @@ export default function TechniqueManagerPage() {
     const payload = {
       name: editor.name.trim(),
       description: editor.description.trim(),
+      family: editor.family,
       strength: editor.strength.trim(),
       use_cases: parseUseCases(editor.useCasesText),
       template: editor.template,
@@ -244,6 +249,7 @@ export default function TechniqueManagerPage() {
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
               <tr>
                 <th className="px-4 py-3 font-medium">Naam</th>
+                <th className="hidden px-4 py-3 font-medium md:table-cell">Soort</th>
                 <th className="hidden px-4 py-3 font-medium sm:table-cell">Vervolgvragen</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 text-right font-medium">Acties</th>
@@ -255,6 +261,17 @@ export default function TechniqueManagerPage() {
                   <td className="px-4 py-3">
                     <p className="font-medium text-slate-800 dark:text-slate-100">{t.name}</p>
                     <p className="line-clamp-1 text-xs text-slate-400 dark:text-slate-500">{t.description}</p>
+                  </td>
+                  <td className="hidden px-4 py-3 md:table-cell">
+                    <span
+                      className={`opl-badge ${
+                        (t.family ?? 'technique') === 'context'
+                          ? 'bg-rijksblauw-100 text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200'
+                          : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
+                      }`}
+                    >
+                      {(t.family ?? 'technique') === 'context' ? 'Framework' : 'Techniek'}
+                    </span>
                   </td>
                   <td className="hidden px-4 py-3 text-slate-600 sm:table-cell dark:text-slate-300">
                     {t.follow_up_questions.length}
@@ -336,16 +353,30 @@ export default function TechniqueManagerPage() {
                   onChange={(e) => setEditor({ ...editor, name: e.target.value })}
                 />
               </div>
-              <div className="flex items-end">
-                <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
-                  <input
-                    type="checkbox"
-                    checked={editor.is_active}
-                    onChange={(e) => setEditor({ ...editor, is_active: e.target.checked })}
-                  />
-                  Actief (zichtbaar in de promptgenerator)
-                </label>
+              <div>
+                <label className="opl-label">Soort</label>
+                <select
+                  className="opl-input"
+                  value={editor.family}
+                  onChange={(e) =>
+                    setEditor({ ...editor, family: e.target.value as TechniqueFamily })
+                  }
+                >
+                  <option value="technique">Prompttechniek</option>
+                  <option value="context">Prompt framework</option>
+                </select>
               </div>
+            </div>
+
+            <div>
+              <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+                <input
+                  type="checkbox"
+                  checked={editor.is_active}
+                  onChange={(e) => setEditor({ ...editor, is_active: e.target.checked })}
+                />
+                Actief (zichtbaar in de promptgenerator)
+              </label>
             </div>
 
             <div>
