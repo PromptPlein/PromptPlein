@@ -7,7 +7,7 @@ import Footer from '@/components/common/Footer';
 import HomePage from '@/pages/HomePage';
 import SearchPage from '@/pages/SearchPage';
 import OptimizerPage from '@/pages/OptimizerPage';
-import FavoritesPage from '@/pages/FavoritesPage';
+import MyLibraryPage from '@/pages/MyLibraryPage';
 import PromptDetailPage from '@/pages/PromptDetailPage';
 import SharePreviewPage from '@/pages/SharePreviewPage';
 import RequireAuth from '@/components/auth/RequireAuth';
@@ -72,7 +72,8 @@ export default function App() {
                 path="/optimaliseren/:promptId"
                 element={<RedirectToGenereren />}
               />
-              <Route path="/favorieten" element={<FavoritesPage />} />
+              {/* Oude favorieten-URL blijft werken → favorieten-tab in de bibliotheek. */}
+              <Route path="/favorieten" element={<Navigate to="/bibliotheek" replace />} />
               <Route path="/trending" element={<TrendingPage />} />
               <Route path="/activiteit" element={<ActivityPage />} />
               <Route path="/prompt/:promptId" element={<PromptDetailPage />} />
@@ -90,6 +91,7 @@ export default function App() {
 
               {/* Vereist een ingelogde gebruiker */}
               <Route element={<RequireAuth />}>
+                <Route path="/bibliotheek" element={<MyLibraryPage />} />
                 <Route path="/profiel" element={<ProfilePage />} />
                 <Route path="/netwerk" element={<NetworkPage />} />
               </Route>

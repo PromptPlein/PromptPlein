@@ -9,7 +9,11 @@ import { useReferenceData } from '@/context/ReferenceDataContext';
 import { usePromptCommunity } from '@/hooks/usePromptCommunity';
 import type { AnalyticsEvent, Prompt } from '@/types';
 
-export default function TrendingPage() {
+/**
+ * `embedded` laat de eigen paginakop weg en de buitenmarges versmallen, zodat
+ * de inhoud netjes als tabblad binnen een andere pagina (Community) past.
+ */
+export default function TrendingPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { techniqueById } = useReferenceData();
   const [prompts, setPrompts] = useState<Prompt[]>([]);
   const [events, setEvents] = useState<AnalyticsEvent[]>([]);
@@ -56,11 +60,13 @@ export default function TrendingPage() {
   const { enriched, authors } = usePromptCommunity(trending);
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mb-6 flex items-center gap-2">
-        <Flame className="text-rijksoranje" />
-        <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Trending</h1>
-      </div>
+    <div className={embedded ? '' : 'mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8'}>
+      {!embedded && (
+        <div className="mb-6 flex items-center gap-2">
+          <Flame className="text-rijksoranje" />
+          <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Trending</h1>
+        </div>
+      )}
 
       {loading ? (
         <SkeletonGrid count={6} />

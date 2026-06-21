@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Copy, Sparkles, Star, Check, Share2, ThumbsUp } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useTilt } from '@/hooks/useTilt';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { useAuth } from '@/context/AuthContext';
 import {
@@ -26,7 +25,6 @@ interface PromptCardProps {
 }
 
 export default function PromptCard({ prompt, author, onChanged }: PromptCardProps) {
-  const tilt = useTilt<HTMLAnchorElement>();
   const navigate = useNavigate();
   const { categoryById, roleById, organizationById } = useReferenceData();
   const { user, configured } = useAuth();
@@ -118,12 +116,8 @@ export default function PromptCard({ prompt, author, onChanged }: PromptCardProp
 
   return (
     <Link
-      ref={tilt.ref}
       to={`/prompt/${prompt.id}`}
-      onMouseMove={tilt.onMouseMove}
-      onMouseLeave={tilt.onMouseLeave}
-      style={tilt.style}
-      className="opl-card group block p-5 will-change-transform"
+      className="opl-card group block p-5 transition-shadow duration-200 hover:shadow-md"
     >
       <div className="mb-2 flex items-start justify-between gap-2">
         <h3 className="line-clamp-2 font-semibold text-rijksblauw-700 group-hover:text-rijksblauw-500 dark:text-rijksblauw-200">

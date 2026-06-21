@@ -3,8 +3,7 @@ import {
   LayoutDashboard,
   Search,
   Sparkles,
-  Star,
-  Flame,
+  Library,
   Activity,
   ShieldCheck,
   ClipboardCheck,
@@ -21,8 +20,7 @@ const navItems = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/zoeken', label: 'Zoeken', icon: Search, end: false },
   { to: '/genereren', label: 'Genereren', icon: Sparkles, end: false },
-  { to: '/trending', label: 'Trending', icon: Flame, end: false },
-  { to: '/favorieten', label: 'Favorieten', icon: Star, end: false },
+  { to: '/bibliotheek', label: 'Mijn prompts', icon: Library, end: false },
   { to: '/community', label: 'Community', icon: Users, end: false },
   { to: '/netwerk', label: 'Netwerk', icon: Network, end: false },
 ];
@@ -54,7 +52,7 @@ export default function Header() {
               end={end}
               className={({ isActive }) =>
                 clsx(
-                  'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                  'flex items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                   isActive
                     ? 'bg-rijksblauw-50 dark:bg-rijksblauw-500/15 text-rijksblauw-700 dark:text-rijksblauw-200'
                     : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100',

@@ -1,12 +1,83 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Users, Trophy, ThumbsUp, FileText, Building2, ChevronRight } from 'lucide-react';
+import { Users, Trophy, ThumbsUp, FileText, Building2, ChevronRight, Flame } from 'lucide-react';
+import clsx from 'clsx';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { listCommunityMembers, firstName } from '@/services/communityService';
 import { ORG_TYPE_LABELS } from '@/services/orgService';
+import TrendingPage from '@/pages/TrendingPage';
 import type { CommunityMember, Organization } from '@/types';
 
+type Tab = 'community' | 'trending';
+
 export default function CommunityPage() {
+  const [tab, setTab] = useState<Tab>('community');
+
+  return (
+    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+      <div className="mb-6 flex items-center gap-3">
+        <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-rijksblauw-50 text-rijksblauw-600 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-300">
+          <Users size={26} />
+        </span>
+        <div>
+          <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Community</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Wie maakt de prompts, bij welk ministerie horen ze, en welke prompts waarderen collega’s het meest.
+          </p>
+        </div>
+      </div>
+
+      {/* Tabbladen */}
+      <div className="mb-6 flex gap-1 border-b border-slate-200 dark:border-slate-700">
+        <TabButton
+          active={tab === 'community'}
+          onClick={() => setTab('community')}
+          icon={<Users size={16} />}
+          label="Community"
+        />
+        <TabButton
+          active={tab === 'trending'}
+          onClick={() => setTab('trending')}
+          icon={<Flame size={16} />}
+          label="Trending"
+        />
+      </div>
+
+      {tab === 'community' ? <CommunityTab /> : <TrendingPage embedded />}
+    </div>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  icon,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={clsx(
+        '-mb-px flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors',
+        active
+          ? 'border-rijksblauw-600 text-rijksblauw-700 dark:border-rijksblauw-300 dark:text-rijksblauw-200'
+          : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200',
+      )}
+      aria-current={active ? 'page' : undefined}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+}
+
+function CommunityTab() {
   const { organizations, organizationById } = useReferenceData();
   const [members, setMembers] = useState<CommunityMember[]>([]);
   const [loading, setLoading] = useState(true);
@@ -26,19 +97,7 @@ export default function CommunityPage() {
   const totalLikes = members.reduce((n, m) => n + m.total_likes, 0);
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
-      <div className="mb-6 flex items-center gap-3">
-        <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-rijksblauw-50 text-rijksblauw-600 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-300">
-          <Users size={26} />
-        </span>
-        <div>
-          <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Community</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Wie maakt de prompts, bij welk ministerie horen ze, en welke prompts waarderen collega’s het meest.
-          </p>
-        </div>
-      </div>
-
+    <>
       <div className="mb-8 grid grid-cols-3 gap-3">
         <Stat icon={<Users size={18} />} value={members.length} label="Makers" />
         <Stat icon={<FileText size={18} />} value={totalPrompts} label="Prompts" />
@@ -108,7 +167,7 @@ export default function CommunityPage() {
           </div>
         </section>
       </div>
-    </div>
+    </>
   );
 }
 
