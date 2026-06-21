@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, ArrowRight, Check, Loader2, Pencil, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Loader2, Pencil, Search, Sparkles } from 'lucide-react';
 import clsx from 'clsx';
 import PrefillBadge from './PrefillBadge';
+import FieldLayoutToggle from './FieldLayoutToggle';
+import { useFieldLayout } from '@/lib/useFieldLayout';
 import type { PrefillSource, Technique } from '@/types';
 
 /** Herkomst + toelichting van een voor-ingevuld veld, per veld-id. */
@@ -40,6 +42,8 @@ export default function FollowUpQuestions({
   const total = questions.length;
   const [step, setStep] = useState(0);
   const [reviewing, setReviewing] = useState(false);
+  // Persoonlijke voorkeur: stap voor stap (default) of alle velden tegelijk.
+  const [layout, setLayout] = useFieldLayout();
 
   // Reset de wizard wanneer er een andere techniek wordt gekozen.
   useEffect(() => {
@@ -47,21 +51,45 @@ export default function FollowUpQuestions({
     setReviewing(false);
   }, [technique.id]);
 
-  // Laadstaat tijdens het voor-invullen: skeletten i.p.v. lege velden.
+  // Laadstaat tijdens het voor-invullen: dezelfde geanimeerde accentbalk +
+  // pulserend icoon als de eigen-prompt-flow, met skeletten i.p.v. lege velden.
   if (prefilling) {
     return (
-      <div className="space-y-4">
-        <p className="inline-flex items-center gap-2 text-sm font-medium text-rijksblauw-700 dark:text-rijksblauw-200">
-          <Loader2 size={15} className="animate-spin" />
-          We vullen de velden alvast voor op basis van je prompt…
-        </p>
-        <div className="space-y-4">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="space-y-2">
-              <div className="skeleton h-3.5 w-1/3 rounded" />
-              <div className="skeleton h-16 w-full rounded-lg" />
+      <div className="animate-fade-in overflow-hidden rounded-2xl border border-rijksblauw-200 bg-white shadow-sm dark:border-rijksblauw-500/30 dark:bg-slate-800">
+        {/* Geanimeerde accentbalk bovenaan */}
+        <div className="h-1 w-full overflow-hidden bg-rijksblauw-100 dark:bg-rijksblauw-500/20">
+          <div className="h-full w-1/3 animate-loading-bar bg-gradient-to-r from-rijksblauw-400 via-rijksoranje to-rijksblauw-600" />
+        </div>
+        <div className="p-5 sm:p-6">
+          <div className="flex items-center gap-3">
+            <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-rijksblauw-50 text-rijksblauw-600 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rijksblauw-400/30" />
+              <Search size={18} className="relative" />
+            </span>
+            <div>
+              <p className="flex items-center gap-2 font-semibold text-slate-800 dark:text-slate-100">
+                We vullen de velden alvast voor
+                <Loader2 size={15} className="animate-spin text-rijksblauw-500" />
+              </p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                We ontleden je vraagstuk en verdelen de inhoud over de velden van{' '}
+                <span className="font-medium text-rijksblauw-700 dark:text-rijksblauw-200">
+                  {technique.name}
+                </span>
+                …
+              </p>
             </div>
-          ))}
+          </div>
+
+          {/* Skeleton-placeholders: suggereren de velden die zo verschijnen. */}
+          <div className="mt-5 space-y-4">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="space-y-2">
+                <div className="skeleton h-3.5 w-1/3 rounded" />
+                <div className="skeleton h-16 w-full rounded-lg" />
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -75,6 +103,54 @@ export default function FollowUpQuestions({
     );
   }
 
+  /** Werk één veld bij (gebruikt door de "alles tegelijk"-indeling). */
+  function editField(id: string, value: string) {
+    onChange({ ...answers, [id]: value });
+    // Zodra de gebruiker zelf typt, is de herkomst-badge niet meer accuraat.
+    onUserEdit?.(id);
+  }
+
+  // --- Indeling "alles tegelijk": alle velden onder elkaar ---
+  if (layout === 'stacked') {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-end">
+          <FieldLayoutToggle layout={layout} onChange={setLayout} />
+        </div>
+        {questions.map((q) => {
+          const meta = fieldMeta?.[q.id];
+          const value = answers[q.id] ?? '';
+          return (
+            <div key={q.id}>
+              <div className="mb-1 flex flex-wrap items-center gap-2">
+                <label className="opl-label mb-0" htmlFor={`fu-stacked-${q.id}`}>
+                  {q.label}
+                </label>
+                {meta && value.trim() && <PrefillBadge source={meta.source} note={meta.note} />}
+              </div>
+              <textarea
+                id={`fu-stacked-${q.id}`}
+                className="opl-input min-h-[80px] resize-y"
+                value={value}
+                placeholder={q.placeholder}
+                onChange={(e) => editField(q.id, e.target.value)}
+              />
+              {meta?.note && value.trim() ? (
+                <p className="mt-1 flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
+                  <Sparkles size={12} /> {meta.note}
+                </p>
+              ) : (
+                <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+                  Optioneel. Wat je leeg laat, wordt een invulbare plaatshouder in de template.
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
   const current = questions[step];
   const answeredCount = questions.filter((q) => (answers[q.id] ?? '').trim()).length;
   const isLast = step === total - 1;
@@ -82,9 +158,7 @@ export default function FollowUpQuestions({
   const currentMeta = fieldMeta?.[current?.id ?? ''];
 
   function update(value: string) {
-    onChange({ ...answers, [current.id]: value });
-    // Zodra de gebruiker zelf typt, is de herkomst-badge niet meer accuraat.
-    onUserEdit?.(current.id);
+    editField(current.id, value);
   }
 
   function next() {
@@ -101,8 +175,11 @@ export default function FollowUpQuestions({
   if (reviewing) {
     return (
       <div className="space-y-4">
-        <div className="flex items-center gap-2 text-sm font-medium text-rijksblauw-700 dark:text-rijksblauw-200">
-          <Check size={16} /> Overzicht — controleer je antwoorden
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-sm font-medium text-rijksblauw-700 dark:text-rijksblauw-200">
+            <Check size={16} /> Overzicht — controleer je antwoorden
+          </div>
+          <FieldLayoutToggle layout={layout} onChange={setLayout} />
         </div>
         <p className="text-sm text-slate-500 dark:text-slate-400">
           {hasPrefill
@@ -159,6 +236,9 @@ export default function FollowUpQuestions({
   // --- Stapsgewijze vraagweergave ---
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-end">
+        <FieldLayoutToggle layout={layout} onChange={setLayout} />
+      </div>
       {/* Voortgang */}
       <div>
         <div className="mb-1.5 flex items-center justify-between text-xs font-medium text-slate-500 dark:text-slate-400">

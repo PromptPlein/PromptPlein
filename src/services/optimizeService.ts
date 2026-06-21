@@ -182,7 +182,23 @@ function localRecommend(goal: string, techniques: Technique[]): TechniqueRecomme
   return chosen.map(({ t, score, matchedUseCases }) => ({
     id: t.id,
     reason: buildLocalReason(t, score, matchedUseCases),
+    value: buildLocalValue(t, matchedUseCases),
   }));
+}
+
+/**
+ * Bouw een korte "waarom dit de beste optie is"-zin zonder AI. Koppelt de
+ * gematchte gebruikssituatie of de kracht aan het doel, zodat de oranje
+ * onderbouwing ook offline gevuld is.
+ */
+function buildLocalValue(technique: Technique, matchedUseCases: string[]): string {
+  if (matchedUseCases.length > 0) {
+    return `Goede keuze omdat je doel aansluit op "${matchedUseCases[0].toLowerCase()}".`;
+  }
+  if (technique.strength) {
+    return technique.strength.split(/(?<=[.!?])\s/)[0];
+  }
+  return '';
 }
 
 /** Bouw een doel-specifieke motivatie zonder AI: koppel het doel aan de techniek. */

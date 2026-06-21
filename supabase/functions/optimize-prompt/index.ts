@@ -372,10 +372,16 @@ Analyseer het doel en weeg het af tegen de KRACHT en gebruikssituaties van elke 
 Kies de best passende technieken (maximaal 3), gerangschikt van meest naar minst geschikt.
 Baseer je motivatie expliciet op waar de techniek sterk in is in relatie tot het doel.
 
+Geef per aanbeveling TWEE dingen:
+- "reason": één korte zin die de kracht van de techniek koppelt aan het doel.
+- "value": één KORTE, bondige zin (max. ~20 woorden) die concreet zegt waarom dit precies de
+  beste optie is voor DIT vraagstuk. Verwijs kort naar de case (het onderwerp/de doelgroep/het
+  soort taak uit het doel), geen opsomming, geen algemeenheden, niet uitweiden.
+
 ${CLARITY_GATE_JSON_INSTRUCTION}
 
 Anders geef je UITSLUITEND geldige JSON terug, zonder codeblok of extra tekst, in dit formaat:
-{"recommendations":[{"id":"<techniek-id>","reason":"<korte motivatie in 1 zin die de kracht koppelt aan het doel, in het Nederlands>"}]}
+{"recommendations":[{"id":"<techniek-id>","reason":"<korte motivatie in 1 zin die de kracht koppelt aan het doel, in het Nederlands>","value":"<1 korte zin (max ~20 woorden) waarom dit de beste optie is voor precies dit vraagstuk, in het Nederlands>"}]}
 
 Gebruik alleen id's die exact in de lijst voorkomen. Geef minstens 1 en maximaal 3 aanbevelingen.`;
 
@@ -1050,7 +1056,11 @@ function parseRecommendations(raw: string, valid: Set<string>): Recommendation[]
     return recs
       .filter((r) => r && typeof r.id === 'string' && valid.has(r.id))
       .slice(0, 3)
-      .map((r) => ({ id: r.id, reason: typeof r.reason === 'string' ? r.reason : '' }));
+      .map((r) => ({
+        id: r.id,
+        reason: typeof r.reason === 'string' ? r.reason : '',
+        value: typeof r.value === 'string' ? r.value : '',
+      }));
   } catch {
     return [];
   }
@@ -1218,6 +1228,7 @@ function localRecommend(goal: string, techniques: TechniqueSummary[]): Recommend
   return chosen.map(({ t }) => ({
     id: t.id,
     reason: 'Mogelijk passend op basis van je doel.',
+    value: t.strength ? t.strength.split(/(?<=[.!?])\s/)[0] : '',
   }));
 }
 

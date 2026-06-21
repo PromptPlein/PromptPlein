@@ -15,9 +15,8 @@ import toast from 'react-hot-toast';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { isContextPrompt } from '@/lib/techniques';
 import { generatePrompt, prefillFields, recommendFramework } from '@/services/optimizeService';
-import PrefillBadge from './PrefillBadge';
 import OptimizingLoader from './OptimizingLoader';
-import type { FieldMeta } from './FollowUpQuestions';
+import FollowUpQuestions, { type FieldMeta } from './FollowUpQuestions';
 import type { AiSettings } from '@/services/settingsService';
 import type {
   OptimizeResult,
@@ -107,17 +106,6 @@ export default function OwnPromptOptimizer({ settings, onResult }: OwnPromptOpti
     setAnswers({});
     setFieldMeta({});
     setUnclearReason(null);
-  }
-
-  /** Laat de herkomst-badge vervallen zodra de gebruiker een veld zelf aanpast. */
-  function handleFieldEdit(id: string, value: string) {
-    setAnswers((a) => ({ ...a, [id]: value }));
-    setFieldMeta((prev) => {
-      if (!prev[id]) return prev;
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
   }
 
   /** Kopieer een voorbeeldprompt naar het klembord. */
@@ -473,7 +461,8 @@ export default function OwnPromptOptimizer({ settings, onResult }: OwnPromptOpti
         {/* Mooi laadscherm tijdens het genereren van de uiteindelijke prompt. */}
         {generating && <OptimizingLoader techniqueName={technique?.name} />}
 
-        {/* 5. Voor-ingevulde velden — controleer en pas aan */}
+        {/* 5. Voor-ingevulde velden — controleer en pas aan. Indeling (stap voor
+            stap of alles tegelijk) is een persoonlijke voorkeur in FollowUpQuestions. */}
         {prefill && !prefilling && !generating && technique && (
           <div className="animate-fade-in space-y-4 rounded-xl border border-rijksblauw-200 bg-rijksblauw-50/40 p-4 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10">
             <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
@@ -485,32 +474,20 @@ export default function OwnPromptOptimizer({ settings, onResult }: OwnPromptOpti
               <span className="font-medium">Controleren</span>. Wat je leeg laat, blijft een
               plaatshouder in de uiteindelijke prompt.
             </p>
-            {technique.follow_up_questions.map((q) => {
-              const meta = fieldMeta[q.id];
-              const value = answers[q.id] ?? '';
-              return (
-                <div key={q.id}>
-                  <div className="mb-1 flex flex-wrap items-center gap-2">
-                    <label className="opl-label mb-0" htmlFor={`prefill-${q.id}`}>
-                      {q.label}
-                    </label>
-                    {meta && value.trim() && <PrefillBadge source={meta.source} note={meta.note} />}
-                  </div>
-                  <textarea
-                    id={`prefill-${q.id}`}
-                    className="opl-input min-h-[80px] resize-y"
-                    value={value}
-                    placeholder={q.placeholder}
-                    onChange={(e) => handleFieldEdit(q.id, e.target.value)}
-                  />
-                  {meta?.note && value.trim() && (
-                    <p className="mt-1 flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
-                      <Sparkles size={12} /> {meta.note}
-                    </p>
-                  )}
-                </div>
-              );
-            })}
+            <FollowUpQuestions
+              technique={technique}
+              answers={answers}
+              onChange={setAnswers}
+              fieldMeta={fieldMeta}
+              onUserEdit={(id) =>
+                setFieldMeta((prev) => {
+                  if (!prev[id]) return prev;
+                  const next = { ...prev };
+                  delete next[id];
+                  return next;
+                })
+              }
+            />
           </div>
         )}
       </div>

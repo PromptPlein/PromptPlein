@@ -1,10 +1,47 @@
 import { useState } from 'react';
-import { AlertTriangle, Check, Loader2, Sparkles, Wand2 } from 'lucide-react';
+import { AlertTriangle, Check, ClipboardCopy, Info, Loader2, Sparkles, Wand2 } from 'lucide-react';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { recommendTechniques } from '@/services/optimizeService';
+import { isContextPrompt } from '@/lib/techniques';
 import type { TechniqueRecommendation } from '@/types';
+
+/**
+ * Voorbeeldantwoorden op "Wat wil je graag bereiken?", elk gekoppeld aan de
+ * prompttechniek waar die omschrijving doorgaans op uitkomt. Dient als hulp/
+ * inspiratie zodat de gebruiker zijn doel concreet leert formuleren.
+ */
+const GOAL_EXAMPLES: { technique: string; goal: string }[] = [
+  {
+    technique: 'Persona Prompting',
+    goal: 'Ik zoek een antwoord vanuit de rol van een ervaren beleidsadviseur die bekend is met veilig en verantwoord AI-gebruik binnen de overheid.',
+  },
+  {
+    technique: 'Multi-Persona Prompting',
+    goal: 'Ik wil mijn vraag vanuit meerdere perspectieven laten bekijken, bijvoorbeeld vanuit beleid, privacy, uitvoering en management.',
+  },
+  {
+    technique: 'Few-Shot Voorbeelden',
+    goal: 'Ik heb een paar voorbeeldteksten die goed passen bij de stijl die ik zoek en wil op basis daarvan een nieuwe tekst laten maken.',
+  },
+  {
+    technique: 'Template-based Output',
+    goal: 'Ik wil het antwoord graag ontvangen in een vaste structuur met duidelijke onderdelen zoals aanleiding, analyse, advies en vervolgstappen.',
+  },
+  {
+    technique: 'Chain-of-Thought',
+    goal: 'Ik wil begrijpen welke stappen en afwegingen nodig zijn voordat een gemeente een AI-tool verantwoord kan invoeren.',
+  },
+  {
+    technique: 'Meta Prompting',
+    goal: 'Mijn vraag is nog te vaag en ik wil er een duidelijke prompt van maken die betere antwoorden oplevert.',
+  },
+  {
+    technique: 'Socratic Prompting',
+    goal: 'Ik wil door verdiepende vragen scherper krijgen wat het echte probleem is en welke keuze het meest logisch is.',
+  },
+];
 
 interface GoalRecommenderProps {
   /** Huidig geselecteerde techniek (zodat de gekozen kaart actief blijft). */
@@ -30,9 +67,27 @@ export default function GoalRecommender({
 }: GoalRecommenderProps) {
   const { techniques, techniqueById } = useReferenceData();
   const [loading, setLoading] = useState(false);
+  const [showExamples, setShowExamples] = useState(false);
   const [recommendations, setRecommendations] = useState<TechniqueRecommendation[] | null>(null);
   // Terugkoppeling bij onzin-input: geen aanbevelingen, wél uitleg.
   const [unclearReason, setUnclearReason] = useState<string | null>(null);
+
+  /** Kopieer een voorbeelddoel naar het klembord. */
+  async function copyExample(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success('Voorbeeld gekopieerd.');
+    } catch {
+      toast.error('Kopiëren mislukt.');
+    }
+  }
+
+  /** Zet een voorbeelddoel direct in het invoerveld om te testen. */
+  function useExample(text: string) {
+    onGoalChange(text);
+    setShowExamples(false);
+    toast.success('Voorbeeld ingevuld.');
+  }
 
   async function handleRecommend() {
     if (!goal.trim()) {
@@ -42,7 +97,10 @@ export default function GoalRecommender({
     setLoading(true);
     setUnclearReason(null); // nieuwe poging: oude onduidelijk-melding wissen
     try {
-      const res = await recommendTechniques({ goal: goal.trim(), techniques });
+      // Complex-vraagstuk-flow beveelt alleen losse prompttechnieken aan; complete
+      // prompt frameworks (family 'context') horen bij de eigen-prompt-flow.
+      const candidates = techniques.filter((t) => !isContextPrompt(t));
+      const res = await recommendTechniques({ goal: goal.trim(), techniques: candidates });
       // Clarity-gate: het doel was onzin → toon uitleg i.p.v. willekeurige technieken.
       if (res.unclear) {
         setRecommendations(null);
@@ -67,9 +125,72 @@ export default function GoalRecommender({
   return (
     <div className="space-y-5">
       <div>
-        <label className="opl-label" htmlFor="goal-input">
-          Wat wil je graag bereiken?
-        </label>
+        <div className="mb-1 flex items-center gap-1.5">
+          <label className="opl-label mb-0" htmlFor="goal-input">
+            Wat wil je graag bereiken?
+          </label>
+          <button
+            type="button"
+            onClick={() => setShowExamples((v) => !v)}
+            aria-expanded={showExamples}
+            aria-controls="goal-examples"
+            title="Bekijk voorbeelden"
+            className={clsx(
+              'inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-medium transition-colors',
+              showExamples
+                ? 'text-rijksblauw-700 dark:text-rijksblauw-200'
+                : 'text-slate-400 hover:text-rijksblauw-600 dark:text-slate-500 dark:hover:text-rijksblauw-300',
+            )}
+          >
+            <Info size={15} />
+            <span>Voorbeelden</span>
+          </button>
+        </div>
+
+        {/* Uitklapbaar paneel met voorbeelddoelen per prompttechniek. */}
+        {showExamples && (
+          <div
+            id="goal-examples"
+            className="animate-fade-in mb-3 space-y-2 rounded-xl border border-rijksblauw-200 bg-rijksblauw-50/40 p-3 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10"
+          >
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Voorbeelden van hoe je je doel kunt omschrijven. Klik op een voorbeeld om het in te
+              vullen, of kopieer het.
+            </p>
+            {GOAL_EXAMPLES.map((ex) => (
+              <div
+                key={ex.technique}
+                className="group rounded-lg border border-slate-200 bg-white p-2.5 dark:border-slate-700 dark:bg-slate-800"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <span className="opl-badge bg-rijksoranje/15 text-rijksoranje">{ex.technique}</span>
+                  <div className="flex shrink-0 gap-1">
+                    <button
+                      type="button"
+                      onClick={() => void copyExample(ex.goal)}
+                      title="Kopieer voorbeeld"
+                      className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs text-slate-500 transition-colors hover:bg-slate-100 hover:text-rijksblauw-600 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-rijksblauw-300"
+                    >
+                      <ClipboardCopy size={13} /> Kopieer
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => useExample(ex.goal)}
+                      title="Gebruik dit voorbeeld in het invoerveld"
+                      className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-rijksblauw-600 transition-colors hover:bg-rijksblauw-50 dark:text-rijksblauw-300 dark:hover:bg-rijksblauw-500/15"
+                    >
+                      <Wand2 size={13} /> Gebruik
+                    </button>
+                  </div>
+                </div>
+                <p className="mt-1.5 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+                  {ex.goal}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+
         <textarea
           id="goal-input"
           className="opl-input min-h-[88px] resize-y"
@@ -152,6 +273,12 @@ export default function GoalRecommender({
                 </div>
                 {rec.reason && (
                   <span className="text-sm text-slate-600 dark:text-slate-300">{rec.reason}</span>
+                )}
+                {rec.value && (
+                  <span className="mt-2 rounded-lg border border-rijksoranje/30 bg-rijksoranje/5 p-2.5 text-xs leading-relaxed text-slate-600 dark:border-rijksoranje/20 dark:bg-rijksoranje/10 dark:text-slate-300">
+                    <span className="font-semibold text-rijksoranje">Waarom voor jouw vraagstuk: </span>
+                    {rec.value}
+                  </span>
                 )}
                 {technique.strength && (
                   <span className="mt-2 text-xs text-slate-500 dark:text-slate-400">
