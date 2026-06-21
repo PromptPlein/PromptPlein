@@ -17,7 +17,14 @@ import {
 import { logAdminAction } from '@/services/adminService';
 import type { Organization, OrganizationType } from '@/types';
 
-const TYPES: OrganizationType[] = ['ministry', 'department', 'agency'];
+const TYPES: OrganizationType[] = [
+  'government',
+  'ministry',
+  'directorate_general',
+  'directorate',
+  'agency',
+  'department',
+];
 
 interface Editor extends OrganizationInput {
   id?: string;

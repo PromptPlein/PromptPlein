@@ -14,9 +14,19 @@ function AuthLoading() {
 /**
  * Routebeveiliging: vereist een ingelogde gebruiker en optioneel een minimale
  * rol. Gebruik als wrapper-route met <Outlet/>-kinderen.
+ *
+ * `allowModerator`: sta de route ook toe voor moderatoren (gebruikers met een
+ * koppeling in organization_moderators), ook al hebben zij niet de gevraagde
+ * rol. Zo kan de goedkeuringswachtrij gedeeld worden door admins én moderatoren.
  */
-export default function RequireAuth({ role }: { role?: AppRole }) {
-  const { loading, isAuthenticated, hasRole } = useAuth();
+export default function RequireAuth({
+  role,
+  allowModerator = false,
+}: {
+  role?: AppRole;
+  allowModerator?: boolean;
+}) {
+  const { loading, isAuthenticated, hasRole, isModerator } = useAuth();
   const location = useLocation();
 
   if (loading) return <AuthLoading />;
@@ -26,6 +36,8 @@ export default function RequireAuth({ role }: { role?: AppRole }) {
   }
 
   if (role && !hasRole(role)) {
+    // Moderatoren mogen erin als de route dat expliciet toestaat.
+    if (allowModerator && isModerator) return <Outlet />;
     return <Navigate to="/" replace />;
   }
 

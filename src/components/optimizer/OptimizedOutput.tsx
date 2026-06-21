@@ -1,16 +1,17 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Copy, Check, RotateCcw, Save, Share2, Loader2, FolderCheck, Sparkles } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Link } from 'react-router-dom';
-import { copyToClipboard, getCurrentUser, SHARING_LEVELS } from '@/lib/utils';
+import { copyToClipboard, getCurrentUser } from '@/lib/utils';
 import { createPrompt } from '@/services/repository';
-import { generateTitle } from '@/services/optimizeService';
-import { requestFunction } from '@/services/functionRequestService';
+import { generateMetadata } from '@/services/optimizeService';
+import { requestCategory } from '@/services/categoryRequestService';
 import { useAuth } from '@/context/AuthContext';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import ShareModal from '@/components/share/ShareModal';
 import SearchableSelect from '@/components/common/SearchableSelect';
-import type { OptimizeResult, Prompt, SharingLevel, Technique } from '@/types';
+import VisibilityPicker from '@/components/prompts/VisibilityPicker';
+import type { OptimizeResult, Prompt, Technique, VisibilityLevel } from '@/types';
 
 interface OptimizedOutputProps {
   result: OptimizeResult;
@@ -23,7 +24,7 @@ interface OptimizedOutputProps {
 
 export default function OptimizedOutput({ result, technique, goal, onReset }: OptimizedOutputProps) {
   const { profile, user } = useAuth();
-  const { categories, roles } = useReferenceData();
+  const { categories, organizations } = useReferenceData();
   const [copied, setCopied] = useState(false);
 
   // Opslaan-formulier
@@ -31,45 +32,81 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
   // Start leeg: tijdens het laden zien we alleen het laadscherm, geen oude
   // standaardtitel die later "verspringt" naar de AI-suggestie.
   const [title, setTitle] = useState('');
-  // Voorgevuld met de functie uit het profiel; de maker kan hem aanpassen.
-  const [functionId, setFunctionId] = useState<string | null>(profile?.function_id ?? null);
-  // Of de gebruiker de functie zelf koos, zodat een laat geladen profiel die niet overschrijft.
-  const [functionTouched, setFunctionTouched] = useState(false);
-  const [sharing, setSharing] = useState<SharingLevel>('public');
+  const [description, setDescription] = useState('');
+  // Categorie en organisatie moeten net als bij het uploaden gekozen kunnen worden.
+  const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [organizationId, setOrganizationId] = useState<string>('');
+  // Vanuit de generator standaard Rijksbreed delen — daar zijn templates meestal
+  // breed bruikbaar. De maker kan dit aanpassen of meerdere niveaus aanvinken.
+  const [sharingLevels, setSharingLevels] = useState<VisibilityLevel[]>(['public']);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<Prompt | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
-  // AI-titelsuggestie op basis van de inhoud (één keer ophalen bij openen).
-  const [titleLoading, setTitleLoading] = useState(false);
-  const [titleSuggested, setTitleSuggested] = useState(false);
-  // Bewaak of de gebruiker de titel zelf heeft aangepast, zodat de AI-suggestie
-  // hun invoer niet overschrijft als die later binnenkomt.
-  const [titleTouched, setTitleTouched] = useState(false);
+  // AI-suggestie (titel + omschrijving + categorie) op basis van de inhoud,
+  // één keer ophalen bij openen van het formulier.
+  const [metaLoading, setMetaLoading] = useState(false);
+  const [metaRequested, setMetaRequested] = useState(false);
+  // Refs bewaken of de gebruiker een veld zelf heeft aangepast, zodat een laat
+  // binnenkomende AI-suggestie hun invoer niet overschrijft (geen stale closure).
+  const titleTouched = useRef(false);
+  const descTouched = useRef(false);
+  const categoryTouched = useRef(false);
+  // Categorie-aanvraag: paneel om een ontbrekende categorie aan te vragen.
+  const [showCatRequest, setShowCatRequest] = useState(false);
+  const [catRequestName, setCatRequestName] = useState('');
+  const [catRequestBusy, setCatRequestBusy] = useState(false);
+  // Naam van de aangevraagde categorie zodra de aanvraag is verstuurd (pending).
+  const [pendingCategory, setPendingCategory] = useState<string | null>(null);
 
-  /** Open het opslaan-formulier en haal eenmalig een AI-titel op uit de inhoud. */
+  /** Open het opslaan-formulier en haal eenmalig titel + omschrijving + categorie op. */
   function openSave() {
     setShowSave(true);
-    // Vul de functie alsnog uit het profiel als de gebruiker nog niets koos
-    // (het profiel kan na de eerste render geladen zijn).
-    if (!functionTouched && !functionId && profile?.function_id) {
-      setFunctionId(profile.function_id);
-    }
-    if (titleSuggested || titleLoading) return;
-    setTitleSuggested(true);
-    setTitleLoading(true);
-    generateTitle({ templateContent: result.optimized_content })
-      .then((suggested) => {
-        // Alleen overnemen als de gebruiker nog niet zelf heeft getypt.
-        if (titleTouched) return;
-        // AI-titel als die er is, anders een zinvolle standaardtitel.
-        setTitle(suggested || defaultTitle(technique, goal));
+    if (metaRequested || metaLoading) return;
+    setMetaRequested(true);
+    setMetaLoading(true);
+    generateMetadata({
+      templateContent: result.optimized_content,
+      categories: categories.map((c) => ({ id: c.id, name: c.name, description: c.description })),
+    })
+      .then((meta) => {
+        // Elk veld alleen voorvullen als de gebruiker het nog niet zelf raakte.
+        if (!titleTouched.current) setTitle(meta.title || defaultTitle(technique, goal));
+        if (!descTouched.current && meta.description) setDescription(meta.description);
+        if (!categoryTouched.current && meta.category_id) setCategoryId(meta.category_id);
       })
       .catch(() => {
-        // Suggestie mislukt: val terug op een standaardtitel, tenzij de
-        // gebruiker ondertussen zelf heeft getypt.
-        if (!titleTouched) setTitle(defaultTitle(technique, goal));
+        if (!titleTouched.current) setTitle(defaultTitle(technique, goal));
       })
-      .finally(() => setTitleLoading(false));
+      .finally(() => setMetaLoading(false));
+  }
+
+  /** Dien een aanvraag in voor een ontbrekende categorie. */
+  async function submitCategoryRequest() {
+    const name = catRequestName.trim();
+    if (!name) {
+      toast.error('Geef de categorie een naam.');
+      return;
+    }
+    if (!user) {
+      toast.error('Log in om een categorie aan te vragen.');
+      return;
+    }
+    setCatRequestBusy(true);
+    try {
+      await requestCategory({ name, requestedBy: user.id });
+      // Categorie nog niet beschikbaar: laat de keuze leeg (status blijft 'anders'
+      // tot een beheerder de categorie goedkeurt) en toon de aanvraag als pending.
+      categoryTouched.current = true;
+      setCategoryId(null);
+      setPendingCategory(name);
+      setShowCatRequest(false);
+      setCatRequestName('');
+      toast.success(`Aanvraag voor “${name}” verstuurd — een beheerder beoordeelt hem.`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Aanvraag mislukt');
+    } finally {
+      setCatRequestBusy(false);
+    }
   }
 
   async function handleCopy() {
@@ -88,11 +125,11 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
     try {
       const prompt = await createPrompt({
         title: title.trim(),
-        description: goal?.trim() ? `Doel: ${goal.trim()}` : undefined,
+        description: description.trim() || undefined,
         content: result.optimized_content,
-        category_id: categories[0]?.id ?? null,
-        role_id: functionId,
-        sharing_level: sharing,
+        category_id: categoryId,
+        organization_id: organizationId || null,
+        sharing_levels: sharingLevels,
         created_by: profile?.full_name || getCurrentUser() || 'Onbekend',
       });
       setSaved(prompt);
@@ -153,19 +190,19 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
               <input
                 id="tpl-title"
                 className="opl-input pr-10"
-                value={titleLoading ? '' : title}
-                disabled={titleLoading}
+                value={metaLoading ? '' : title}
+                disabled={metaLoading}
                 onChange={(e) => {
-                  setTitleTouched(true);
+                  titleTouched.current = true;
                   setTitle(e.target.value);
                 }}
                 placeholder={
-                  titleLoading
+                  metaLoading
                     ? 'Titel wordt bedacht…'
                     : 'Bijv. Vriendelijke afwijzingsbrief aan burger'
                 }
               />
-              {titleLoading && (
+              {metaLoading && (
                 <Loader2
                   size={16}
                   className="animate-spin absolute right-3 top-1/2 -translate-y-1/2 text-rijksblauw-400"
@@ -175,64 +212,134 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
             </div>
             <p className="mt-1 flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
               <Sparkles size={12} />
-              {titleLoading
-                ? 'AI bedenkt een passende titel op basis van de inhoud…'
-                : 'Titel voorgesteld op basis van de inhoud — pas hem gerust aan.'}
+              {metaLoading
+                ? 'AI bedenkt een titel, omschrijving en categorie op basis van de inhoud…'
+                : 'Voorgesteld op basis van de inhoud — pas alles gerust aan.'}
             </p>
           </div>
           <div>
-            <label className="opl-label" htmlFor="tpl-function">
-              Functie
+            <label className="opl-label" htmlFor="tpl-desc">
+              Omschrijving
+            </label>
+            <input
+              id="tpl-desc"
+              className="opl-input"
+              value={metaLoading ? '' : description}
+              disabled={metaLoading}
+              onChange={(e) => {
+                descTouched.current = true;
+                setDescription(e.target.value);
+              }}
+              placeholder={
+                metaLoading ? 'Omschrijving wordt bedacht…' : 'Korte uitleg over wat deze template doet'
+              }
+            />
+          </div>
+          <div>
+            <label className="opl-label" htmlFor="tpl-category">
+              Categorie
             </label>
             <SearchableSelect
-              id="tpl-function"
-              options={roles.map((r) => ({ id: r.id, label: r.name, hint: r.description }))}
-              value={functionId}
+              id="tpl-category"
+              options={categories.map((c) => ({ id: c.id, label: c.name, hint: c.description }))}
+              value={categoryId}
               onChange={(id) => {
-                setFunctionTouched(true);
-                setFunctionId(id);
+                categoryTouched.current = true;
+                setCategoryId(id);
+                if (id) setPendingCategory(null); // echte keuze vervangt een aanvraag
               }}
-              placeholder="Voor welke functie is deze prompt?"
-              clearLabel="Geen functie"
-              searchPlaceholder="Zoek een functie…"
-              onRequestNew={
-                user
-                  ? async (term) => {
-                      try {
-                        await requestFunction({ name: term, requestedBy: user.id });
-                        toast.success(`Aanvraag voor “${term}” verstuurd — een beheerder beoordeelt hem.`);
-                      } catch (err) {
-                        toast.error(err instanceof Error ? err.message : 'Aanvraag mislukt');
-                      }
-                    }
-                  : undefined
-              }
-              requestNewLabel={(term) => `“${term}” als nieuwe functie aanvragen`}
+              placeholder="Waar is deze prompt voor bedoeld?"
+              clearLabel="Geen categorie"
+              searchPlaceholder="Zoek een categorie…"
             />
+
+            {/* Aangevraagde (nog niet goedgekeurde) categorie — status blijft 'anders'. */}
+            {pendingCategory && (
+              <p className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-2.5 py-1.5 text-xs text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">
+                <Loader2 size={12} className="animate-spin" />
+                Categorie “{pendingCategory}” aangevraagd — in afwachting van goedkeuring.
+              </p>
+            )}
+
+            {/* Expliciete knop: mijn categorie zit er niet tussen → aanvragen. */}
+            {!showCatRequest ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCatRequest(true);
+                  setCatRequestName('');
+                }}
+                className="mt-2 text-xs font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
+              >
+                Mijn categorie zit er niet tussen
+              </button>
+            ) : (
+              <div className="mt-2 space-y-2 rounded-lg border border-rijksblauw-200 bg-white p-2.5 dark:border-rijksblauw-500/30 dark:bg-slate-800">
+                <label className="opl-label text-xs" htmlFor="tpl-cat-request">
+                  Nieuwe categorie aanvragen
+                </label>
+                <input
+                  id="tpl-cat-request"
+                  className="opl-input"
+                  value={catRequestName}
+                  onChange={(e) => setCatRequestName(e.target.value)}
+                  placeholder="Naam van de categorie, bijv. Inkoop & Aanbesteding"
+                  onKeyDown={(e) => e.key === 'Enter' && submitCategoryRequest()}
+                  autoFocus
+                />
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    className="opl-btn-secondary px-3 py-1.5 text-xs"
+                    onClick={() => setShowCatRequest(false)}
+                    disabled={catRequestBusy}
+                  >
+                    Annuleren
+                  </button>
+                  <button
+                    type="button"
+                    className="opl-btn-primary px-3 py-1.5 text-xs"
+                    onClick={submitCategoryRequest}
+                    disabled={catRequestBusy}
+                  >
+                    {catRequestBusy ? 'Versturen…' : 'Aanvragen'}
+                  </button>
+                </div>
+                <p className="text-xs text-slate-400 dark:text-slate-500">
+                  Een beheerder beoordeelt je aanvraag. Tot die tijd blijft de categorie op
+                  &ldquo;anders&rdquo;.
+                </p>
+              </div>
+            )}
             <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-              Zo vinden collega&apos;s met dezelfde functie deze template makkelijker terug.
+              Zo vinden collega&apos;s waar deze prompt voor bedoeld is.
             </p>
           </div>
-          <div>
-            <label className="opl-label" htmlFor="tpl-sharing">
-              Wie mag hem zien?
-            </label>
-            <select
-              id="tpl-sharing"
-              className="opl-input"
-              value={sharing}
-              onChange={(e) => setSharing(e.target.value as SharingLevel)}
-            >
-              {SHARING_LEVELS.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-            <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-              {SHARING_LEVELS.find((s) => s.value === sharing)?.description}
-            </p>
-          </div>
+          {organizations.length > 0 && (
+            <div>
+              <label className="opl-label" htmlFor="tpl-organization">
+                Organisatie
+              </label>
+              <select
+                id="tpl-organization"
+                className="opl-input"
+                value={organizationId}
+                onChange={(e) => setOrganizationId(e.target.value)}
+              >
+                <option value="">Geen organisatie</option>
+                {organizations.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.code ? `${o.name} (${o.code})` : o.name}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+                Koppel deze template aan een ministerie of afdeling, zodat hij vindbaar is via de
+                netwerkverkenner.
+              </p>
+            </div>
+          )}
+          <VisibilityPicker idPrefix="tpl" value={sharingLevels} onChange={setSharingLevels} />
           <div className="flex justify-end gap-2">
             <button className="opl-btn-secondary" onClick={() => setShowSave(false)} disabled={saving}>
               Annuleren

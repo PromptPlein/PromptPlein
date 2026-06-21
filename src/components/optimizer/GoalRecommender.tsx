@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Check, Loader2, Sparkles, Wand2 } from 'lucide-react';
+import { AlertTriangle, Check, Loader2, Sparkles, Wand2 } from 'lucide-react';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import { useReferenceData } from '@/context/ReferenceDataContext';
@@ -31,6 +31,8 @@ export default function GoalRecommender({
   const { techniques, techniqueById } = useReferenceData();
   const [loading, setLoading] = useState(false);
   const [recommendations, setRecommendations] = useState<TechniqueRecommendation[] | null>(null);
+  // Terugkoppeling bij onzin-input: geen aanbevelingen, wél uitleg.
+  const [unclearReason, setUnclearReason] = useState<string | null>(null);
 
   async function handleRecommend() {
     if (!goal.trim()) {
@@ -38,8 +40,18 @@ export default function GoalRecommender({
       return;
     }
     setLoading(true);
+    setUnclearReason(null); // nieuwe poging: oude onduidelijk-melding wissen
     try {
       const res = await recommendTechniques({ goal: goal.trim(), techniques });
+      // Clarity-gate: het doel was onzin → toon uitleg i.p.v. willekeurige technieken.
+      if (res.unclear) {
+        setRecommendations(null);
+        setUnclearReason(
+          res.reason?.trim() ||
+            'Je omschrijving is nog niet duidelijk genoeg. Beschrijf concreet wat je wilt bereiken.',
+        );
+        return;
+      }
       setRecommendations(res.recommendations);
       if (res.error) toast(res.error, { icon: '⚠️' });
       if (res.recommendations.length === 0) {
@@ -86,6 +98,19 @@ export default function GoalRecommender({
           </>
         )}
       </button>
+
+      {unclearReason && (
+        <div
+          role="alert"
+          className="animate-fade-in flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-200"
+        >
+          <AlertTriangle size={18} className="mt-0.5 shrink-0" />
+          <div>
+            <p className="font-medium">Je omschrijving is nog niet duidelijk genoeg</p>
+            <p className="mt-0.5 text-amber-700 dark:text-amber-300/90">{unclearReason}</p>
+          </div>
+        </div>
+      )}
 
       {recommendations && recommendations.length > 0 && (
         <div className="space-y-3">

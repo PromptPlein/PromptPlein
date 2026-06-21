@@ -29,9 +29,11 @@ const TechniqueManagerPage = lazy(() => import('@/pages/admin/TechniqueManagerPa
 const RoleManagerPage = lazy(() => import('@/pages/admin/RoleManagerPage'));
 const FunctionRequestQueuePage = lazy(() => import('@/pages/admin/FunctionRequestQueuePage'));
 const CategoryManagerPage = lazy(() => import('@/pages/admin/CategoryManagerPage'));
+const CategoryRequestQueuePage = lazy(() => import('@/pages/admin/CategoryRequestQueuePage'));
 const AdminAnalyticsPage = lazy(() => import('@/pages/admin/AdminAnalyticsPage'));
 const AuditLogPage = lazy(() => import('@/pages/admin/AuditLogPage'));
 const UserManagerPage = lazy(() => import('@/pages/admin/UserManagerPage'));
+const ModeratorManagerPage = lazy(() => import('@/pages/admin/ModeratorManagerPage'));
 const OrganizationManagerPage = lazy(() => import('@/pages/admin/OrganizationManagerPage'));
 const ApprovalQueuePage = lazy(() => import('@/pages/admin/ApprovalQueuePage'));
 const ReportsPage = lazy(() => import('@/pages/admin/ReportsPage'));
@@ -92,6 +94,19 @@ export default function App() {
                 <Route path="/netwerk" element={<NetworkPage />} />
               </Route>
 
+              {/* Goedkeuringen — toegankelijk voor admins én moderatoren.
+                  De wachtrij filtert via RLS automatisch op wat jíj mag beoordelen. */}
+              <Route element={<RequireAuth role="admin" allowModerator />}>
+                <Route
+                  path="/goedkeuringen"
+                  element={
+                    <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 lg:px-8">
+                      <ApprovalQueuePage />
+                    </div>
+                  }
+                />
+              </Route>
+
               {/* Admin panel */}
               {/* Beheerpaneel — vereist een ingelogde admin/super_admin */}
               <Route element={<RequireAuth role="admin" />}>
@@ -99,11 +114,13 @@ export default function App() {
                   <Route index element={<AdminDashboardPage />} />
                   <Route path="goedkeuringen" element={<ApprovalQueuePage />} />
                   <Route path="gebruikers" element={<UserManagerPage />} />
+                  <Route path="moderatoren" element={<ModeratorManagerPage />} />
                   <Route path="organisaties" element={<OrganizationManagerPage />} />
                   <Route path="technieken" element={<TechniqueManagerPage />} />
                   <Route path="rollen" element={<RoleManagerPage />} />
                   <Route path="functie-aanvragen" element={<FunctionRequestQueuePage />} />
                   <Route path="categorieen" element={<CategoryManagerPage />} />
+                  <Route path="categorie-aanvragen" element={<CategoryRequestQueuePage />} />
                   <Route path="analytics" element={<AdminAnalyticsPage />} />
                   <Route path="rapportage" element={<ReportsPage />} />
                   <Route path="audit" element={<AuditLogPage />} />

@@ -5,10 +5,11 @@ import { useAuth } from '@/context/AuthContext';
 import { useAuthGuard } from '@/hooks/useAuthGuard';
 import { createPrompt } from '@/services/repository';
 import { trackEvent } from '@/services/analyticsService';
-import { requestFunction } from '@/services/functionRequestService';
-import { getCurrentUser, SHARING_LEVELS } from '@/lib/utils';
+import { requestCategory } from '@/services/categoryRequestService';
+import { getCurrentUser } from '@/lib/utils';
 import SearchableSelect from '@/components/common/SearchableSelect';
-import type { NewPromptInput, Prompt, SharingLevel } from '@/types';
+import VisibilityPicker from '@/components/prompts/VisibilityPicker';
+import type { NewPromptInput, Prompt, VisibilityLevel } from '@/types';
 
 interface PromptUploadFormProps {
   onCreated: (prompt: Prompt) => void;
@@ -16,17 +17,15 @@ interface PromptUploadFormProps {
 }
 
 export default function PromptUploadForm({ onCreated, onCancel }: PromptUploadFormProps) {
-  const { categories, roles, organizations } = useReferenceData();
-  const { profile, user } = useAuth();
+  const { categories, organizations } = useReferenceData();
+  const { user } = useAuth();
   const requireAuth = useAuthGuard();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [content, setContent] = useState('');
-  const [categoryId, setCategoryId] = useState<string>('');
-  // Voorgevuld met de functie uit het profiel; de maker kan hem aanpassen.
-  const [roleId, setRoleId] = useState<string>(profile?.function_id ?? '');
+  const [categoryId, setCategoryId] = useState<string | null>(null);
   const [organizationId, setOrganizationId] = useState<string>('');
-  const [sharing, setSharing] = useState<SharingLevel>('private');
+  const [sharingLevels, setSharingLevels] = useState<VisibilityLevel[]>([]);
   const [createdBy, setCreatedBy] = useState(getCurrentUser());
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -49,10 +48,9 @@ export default function PromptUploadForm({ onCreated, onCancel }: PromptUploadFo
       title: title.trim(),
       description: description.trim() || undefined,
       content: content.trim(),
-      category_id: categoryId || null,
-      role_id: roleId || null,
+      category_id: categoryId,
       organization_id: organizationId || null,
-      sharing_level: sharing,
+      sharing_levels: sharingLevels,
       created_by: createdBy.trim(),
     };
     try {
@@ -117,53 +115,35 @@ export default function PromptUploadForm({ onCreated, onCancel }: PromptUploadFo
         {errors.content && <p className="mt-1 text-xs text-rijksrood">{errors.content}</p>}
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div>
-          <label className="opl-label" htmlFor="up-category">
-            Categorie
-          </label>
-          <select
-            id="up-category"
-            className="opl-input"
-            value={categoryId}
-            onChange={(e) => setCategoryId(e.target.value)}
-          >
-            <option value="">Geen categorie</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="opl-label" htmlFor="up-role">
-            Functie
-          </label>
-          <SearchableSelect
-            id="up-role"
-            options={roles.map((r) => ({ id: r.id, label: r.name, hint: r.description }))}
-            value={roleId || null}
-            onChange={(id) => setRoleId(id ?? '')}
-            placeholder="Voor welke functie is deze prompt?"
-            clearLabel="Geen functie"
-            searchPlaceholder="Zoek een functie…"
-            onRequestNew={
-              user
-                ? async (term) => {
-                    try {
-                      await requestFunction({ name: term, requestedBy: user.id });
-                      toast.success(`Aanvraag voor “${term}” verstuurd — een beheerder beoordeelt hem.`);
-                    } catch (err) {
-                      toast.error(err instanceof Error ? err.message : 'Aanvraag mislukt');
-                    }
+      <div>
+        <label className="opl-label" htmlFor="up-category">
+          Categorie
+        </label>
+        <SearchableSelect
+          id="up-category"
+          options={categories.map((c) => ({ id: c.id, label: c.name, hint: c.description }))}
+          value={categoryId}
+          onChange={(id) => setCategoryId(id)}
+          placeholder="Waar is deze prompt voor bedoeld?"
+          clearLabel="Geen categorie"
+          searchPlaceholder="Zoek een categorie…"
+          onRequestNew={
+            user
+              ? async (term) => {
+                  try {
+                    await requestCategory({ name: term, requestedBy: user.id });
+                    toast.success(`Aanvraag voor “${term}” verstuurd — een beheerder beoordeelt hem.`);
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : 'Aanvraag mislukt');
                   }
-                : undefined
-            }
-            requestNewLabel={(term) => `“${term}” als nieuwe functie aanvragen`}
-          />
-        </div>
+                }
+              : undefined
+          }
+          requestNewLabel={(term) => `“${term}” als nieuwe categorie aanvragen`}
+        />
+        <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+          Waar is deze prompt voor bedoeld? Staat de juiste categorie er niet bij? Vraag hem aan.
+        </p>
       </div>
 
       {organizations.length > 0 && (
@@ -190,39 +170,21 @@ export default function PromptUploadForm({ onCreated, onCancel }: PromptUploadFo
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div>
-          <label className="opl-label" htmlFor="up-sharing">
-            Deelniveau
-          </label>
-          <select
-            id="up-sharing"
-            className="opl-input"
-            value={sharing}
-            onChange={(e) => setSharing(e.target.value as SharingLevel)}
-          >
-            {SHARING_LEVELS.map((s) => (
-              <option key={s.value} value={s.value}>
-                {s.label} — {s.description}
-              </option>
-            ))}
-          </select>
-        </div>
+      <VisibilityPicker idPrefix="up" value={sharingLevels} onChange={setSharingLevels} />
 
-        <div>
-          <label className="opl-label" htmlFor="up-author">
-            Jouw naam <span className="text-rijksrood">*</span>
-          </label>
-          <input
-            id="up-author"
-            className="opl-input"
-            value={createdBy}
-            onChange={(e) => setCreatedBy(e.target.value)}
-            placeholder="Voor- en achternaam"
-            aria-invalid={!!errors.createdBy}
-          />
-          {errors.createdBy && <p className="mt-1 text-xs text-rijksrood">{errors.createdBy}</p>}
-        </div>
+      <div>
+        <label className="opl-label" htmlFor="up-author">
+          Jouw naam <span className="text-rijksrood">*</span>
+        </label>
+        <input
+          id="up-author"
+          className="opl-input"
+          value={createdBy}
+          onChange={(e) => setCreatedBy(e.target.value)}
+          placeholder="Voor- en achternaam"
+          aria-invalid={!!errors.createdBy}
+        />
+        {errors.createdBy && <p className="mt-1 text-xs text-rijksrood">{errors.createdBy}</p>}
       </div>
 
       <div className="flex items-center justify-end gap-3 pt-2">

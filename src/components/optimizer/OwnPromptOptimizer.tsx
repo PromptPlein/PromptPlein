@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import {
+  AlertTriangle,
   Check,
   ClipboardCopy,
   Compass,
@@ -13,11 +14,13 @@ import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { isContextPrompt } from '@/lib/techniques';
-import { analyzePrompt, generatePrompt, recommendFramework } from '@/services/optimizeService';
+import { generatePrompt, prefillFields, recommendFramework } from '@/services/optimizeService';
+import PrefillBadge from './PrefillBadge';
+import type { FieldMeta } from './FollowUpQuestions';
 import type { AiSettings } from '@/services/settingsService';
 import type {
-  AnalyzeResult,
   OptimizeResult,
+  PrefillResult,
   Technique,
   TechniqueRecommendation,
 } from '@/types';
@@ -80,22 +83,40 @@ export default function OwnPromptOptimizer({ settings, onResult }: OwnPromptOpti
   const [recommendations, setRecommendations] = useState<TechniqueRecommendation[] | null>(null);
   const [recommendSummary, setRecommendSummary] = useState('');
   const [techniqueId, setTechniqueId] = useState<string | null>(null);
-  const [analysis, setAnalysis] = useState<AnalyzeResult | null>(null);
+  // Voor-invulling van de velden op basis van de eigen prompt (null = nog niet gedaan).
+  const [prefill, setPrefill] = useState<PrefillResult | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [analyzing, setAnalyzing] = useState(false);
+  // Herkomst per voor-ingevuld veld (origin-badges); vervalt zodra de gebruiker zelf typt.
+  const [fieldMeta, setFieldMeta] = useState<FieldMeta>({});
+  const [prefilling, setPrefilling] = useState(false);
   const [generating, setGenerating] = useState(false);
-  // Anker voor het analyse-/laadblok zodat we er na een keuze naartoe scrollen.
+  // Terugkoppeling bij onzin-input: geen resultaat, wél uitleg.
+  const [unclearReason, setUnclearReason] = useState<string | null>(null);
+  // Anker voor het voor-invul-/laadblok zodat we er na een keuze naartoe scrollen.
   const analysisRef = useRef<HTMLDivElement>(null);
 
   const technique = frameworks.find((t) => t.id === techniqueId) ?? null;
 
-  /** Reset alles wat van de (oude) prompt afhangt: aanbevelingen, keuze, analyse. */
+  /** Reset alles wat van de (oude) prompt afhangt: aanbevelingen, keuze, voor-invulling. */
   function resetDownstream() {
     setRecommendations(null);
     setRecommendSummary('');
     setTechniqueId(null);
-    setAnalysis(null);
+    setPrefill(null);
     setAnswers({});
+    setFieldMeta({});
+    setUnclearReason(null);
+  }
+
+  /** Laat de herkomst-badge vervallen zodra de gebruiker een veld zelf aanpast. */
+  function handleFieldEdit(id: string, value: string) {
+    setAnswers((a) => ({ ...a, [id]: value }));
+    setFieldMeta((prev) => {
+      if (!prev[id]) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
   }
 
   /** Kopieer een voorbeeldprompt naar het klembord. */
@@ -123,10 +144,12 @@ export default function OwnPromptOptimizer({ settings, onResult }: OwnPromptOpti
       return;
     }
     setRecommending(true);
-    // Een nieuwe zoekopdracht maakt de vorige keuze en analyse ongeldig.
+    // Een nieuwe zoekopdracht maakt de vorige keuze en voor-invulling ongeldig.
     setTechniqueId(null);
-    setAnalysis(null);
+    setPrefill(null);
     setAnswers({});
+    setFieldMeta({});
+    setUnclearReason(null);
     try {
       const res = await recommendFramework({
         ownPrompt: ownPrompt.trim(),
@@ -146,37 +169,50 @@ export default function OwnPromptOptimizer({ settings, onResult }: OwnPromptOpti
     }
   }
 
-  /** Stap 2: gebruiker kiest één aanbevolen framework → meteen analyseren. */
+  /** Stap 2: gebruiker kiest één aanbevolen framework → velden alvast voor-invullen. */
   async function handleSelectFramework(id: string) {
     setTechniqueId(id);
-    setAnalysis(null);
+    setPrefill(null);
     setAnswers({});
+    setFieldMeta({});
+    setUnclearReason(null);
     const chosen = frameworks.find((t) => t.id === id);
     if (!chosen) return;
     // Wacht tot het laadblok is gerenderd en scroll het rustig in beeld.
     requestAnimationFrame(() => {
       analysisRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
-    void runAnalyze(chosen);
+    void runPrefill(chosen);
   }
 
-  /** Stap 3: toets de eigen prompt aan de velden van het gekozen framework. */
-  async function runAnalyze(chosen: Technique) {
-    setAnalyzing(true);
+  /** Stap 3: ontleed de eigen prompt en vul de velden van het framework alvast voor. */
+  async function runPrefill(chosen: Technique) {
+    setPrefilling(true);
     try {
-      const res = await analyzePrompt({
+      const res = await prefillFields({
         ownPrompt: ownPrompt.trim(),
         technique: chosen,
         preferredProvider: settings.provider,
       });
-      setAnalysis(res);
-      // Begin met lege antwoorden voor elk ontbrekend veld.
-      setAnswers(Object.fromEntries(res.missing.map((m) => [m.id, ''])));
-      if (res.error) toast(res.error, { icon: '⚠️' });
+      // De prompt was onzin → toon de terugkoppeling i.p.v. velden voor te vullen.
+      if (res.unclear) {
+        setPrefill(null);
+        setUnclearReason(
+          res.reason?.trim() ||
+            'Je prompt is nog niet duidelijk genoeg om de velden voor te vullen. Beschrijf concreet wat je wilt bereiken.',
+        );
+        return;
+      }
+      setPrefill(res);
+      setAnswers(Object.fromEntries(res.fields.map((f) => [f.id, f.value])));
+      setFieldMeta(
+        Object.fromEntries(res.fields.map((f) => [f.id, { source: f.source, note: f.note }])),
+      );
+      if (res.error) toast(res.error, { icon: 'ℹ️' });
     } catch {
-      toast.error('Analyse mislukt. Probeer het opnieuw.');
+      toast.error('Voor-invullen mislukt. Probeer het opnieuw.');
     } finally {
-      setAnalyzing(false);
+      setPrefilling(false);
     }
   }
 
@@ -184,6 +220,7 @@ export default function OwnPromptOptimizer({ settings, onResult }: OwnPromptOpti
   async function handleGenerate() {
     if (!technique) return;
     setGenerating(true);
+    setUnclearReason(null); // nieuwe poging: oude onduidelijk-melding wissen
     try {
       const res = await generatePrompt({
         technique,
@@ -194,6 +231,14 @@ export default function OwnPromptOptimizer({ settings, onResult }: OwnPromptOpti
         toneInstruction: settings.toneInstruction.trim() || undefined,
         temperature: settings.temperature,
       });
+      // Clarity-gate: de AI vond de input onzin en maakte bewust geen prompt.
+      if (res.unclear) {
+        setUnclearReason(
+          res.reason?.trim() ||
+            'Je prompt is nog niet duidelijk genoeg om te optimaliseren. Beschrijf concreet wat je wilt bereiken.',
+        );
+        return;
+      }
       onResult(res, technique);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Optimaliseren mislukt');
@@ -301,7 +346,7 @@ export default function OwnPromptOptimizer({ settings, onResult }: OwnPromptOpti
         type="button"
         className="opl-btn-primary"
         onClick={handleRecommend}
-        disabled={recommending || analyzing || !ownPrompt.trim()}
+        disabled={recommending || prefilling || !ownPrompt.trim()}
       >
         {recommending ? (
           <>
@@ -381,10 +426,10 @@ export default function OwnPromptOptimizer({ settings, onResult }: OwnPromptOpti
         </div>
       )}
 
-      {/* Anker voor het laad-/analyseblok; hier scrollen we na een keuze naartoe. */}
+      {/* Anker voor het laad-/voor-invulblok; hier scrollen we na een keuze naartoe. */}
       <div ref={analysisRef} className="scroll-mt-24">
-        {/* 4. Mooi laadscherm: de AI denkt na over wat de prompt nog mist. */}
-        {analyzing && (
+        {/* 4. Mooi laadscherm: de AI ontleedt de prompt en vult de velden voor. */}
+        {prefilling && (
           <div className="animate-fade-in overflow-hidden rounded-2xl border border-rijksblauw-200 bg-white shadow-sm dark:border-rijksblauw-500/30 dark:bg-slate-800">
             {/* Geanimeerde accentbalk bovenaan */}
             <div className="h-1 w-full overflow-hidden bg-rijksblauw-100 dark:bg-rijksblauw-500/20">
@@ -398,20 +443,20 @@ export default function OwnPromptOptimizer({ settings, onResult }: OwnPromptOpti
                 </span>
                 <div>
                   <p className="flex items-center gap-2 font-semibold text-slate-800 dark:text-slate-100">
-                    Je prompt wordt geanalyseerd
+                    We vullen de velden alvast voor
                     <Loader2 size={15} className="animate-spin text-rijksblauw-500" />
                   </p>
                   <p className="text-sm text-slate-500 dark:text-slate-400">
-                    We kijken welke onderdelen van{' '}
+                    We ontleden je prompt en verdelen de inhoud over de velden van{' '}
                     <span className="font-medium text-rijksblauw-700 dark:text-rijksblauw-200">
                       {technique?.name}
-                    </span>{' '}
-                    nog ontbreken in je prompt…
+                    </span>
+                    …
                   </p>
                 </div>
               </div>
 
-              {/* Skeleton-placeholders: suggereren de vragen die zo verschijnen. */}
+              {/* Skeleton-placeholders: suggereren de velden die zo verschijnen. */}
               <div className="mt-5 space-y-4">
                 {[0, 1, 2].map((i) => (
                   <div key={i} className="space-y-2">
@@ -424,50 +469,65 @@ export default function OwnPromptOptimizer({ settings, onResult }: OwnPromptOpti
           </div>
         )}
 
-        {/* 5. Feedback + ontbrekende velden */}
-        {analysis && !analyzing && (
+        {/* 5. Voor-ingevulde velden — controleer en pas aan */}
+        {prefill && !prefilling && technique && (
           <div className="animate-fade-in space-y-4 rounded-xl border border-rijksblauw-200 bg-rijksblauw-50/40 p-4 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10">
-          {analysis.summary && (
             <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
-              {analysis.summary}
+              {prefill.summary ||
+                'We hebben de velden alvast voor je ingevuld op basis van je prompt.'}
             </p>
-          )}
-
-          {analysis.missing.length === 0 ? (
-            <p className="inline-flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-300">
-              <Check size={16} /> Je prompt bevat alle benodigde onderdelen voor{' '}
-              {technique?.name}. Je kunt direct optimaliseren.
+            <p className="text-sm text-slate-600 dark:text-slate-300">
+              Controleer en pas aan waar nodig — vooral de oranje{' '}
+              <span className="font-medium">AI-suggesties</span>. Wat je leeg laat, blijft een
+              plaatshouder in de uiteindelijke prompt.
             </p>
-          ) : (
-            <div className="space-y-4">
-              <p className="text-sm text-slate-600 dark:text-slate-300">
-                Vul hieronder de ontbrekende informatie aan. Wat je leeg laat, blijft een
-                plaatshouder in de uiteindelijke prompt.
-              </p>
-              {analysis.missing.map((m) => (
-                <div key={m.id}>
-                  <label className="opl-label" htmlFor={`missing-${m.id}`}>
-                    {m.label}
-                  </label>
-                  {m.question && (
-                    <p className="mb-1.5 text-xs text-slate-500 dark:text-slate-400">{m.question}</p>
-                  )}
+            {technique.follow_up_questions.map((q) => {
+              const meta = fieldMeta[q.id];
+              const value = answers[q.id] ?? '';
+              return (
+                <div key={q.id}>
+                  <div className="mb-1 flex flex-wrap items-center gap-2">
+                    <label className="opl-label mb-0" htmlFor={`prefill-${q.id}`}>
+                      {q.label}
+                    </label>
+                    {meta && value.trim() && <PrefillBadge source={meta.source} note={meta.note} />}
+                  </div>
                   <textarea
-                    id={`missing-${m.id}`}
+                    id={`prefill-${q.id}`}
                     className="opl-input min-h-[80px] resize-y"
-                    value={answers[m.id] ?? ''}
-                    onChange={(e) => setAnswers((a) => ({ ...a, [m.id]: e.target.value }))}
+                    value={value}
+                    placeholder={q.placeholder}
+                    onChange={(e) => handleFieldEdit(q.id, e.target.value)}
                   />
+                  {meta?.note && value.trim() && (
+                    <p className="mt-1 flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
+                      <Sparkles size={12} /> {meta.note}
+                    </p>
+                  )}
                 </div>
-              ))}
-            </div>
-          )}
+              );
+            })}
           </div>
         )}
       </div>
 
-      {/* 6. Genereren — pas zichtbaar na een analyse */}
-      {analysis && !analyzing && (
+      {/* Onduidelijke-invoer-melding: de AI nam de input serieus en kon er geen
+          zinvolle prompt van maken. Geen verzonnen casus, wél uitleg. */}
+      {unclearReason && (
+        <div
+          role="alert"
+          className="animate-fade-in flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-200"
+        >
+          <AlertTriangle size={18} className="mt-0.5 shrink-0" />
+          <div>
+            <p className="font-medium">Je invoer is nog niet duidelijk genoeg</p>
+            <p className="mt-0.5 text-amber-700 dark:text-amber-300/90">{unclearReason}</p>
+          </div>
+        </div>
+      )}
+
+      {/* 6. Genereren — pas zichtbaar nadat de velden zijn voor-ingevuld */}
+      {prefill && !prefilling && (
         <div className="flex justify-end">
           <button
             type="button"

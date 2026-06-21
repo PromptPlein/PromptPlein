@@ -26,7 +26,14 @@ import Anthropic from 'npm:@anthropic-ai/sdk@^0.65.0';
 
 type Provider = 'claude' | 'openai' | 'deepseek';
 type PreferredProvider = 'auto' | Provider;
-type Mode = 'generate' | 'recommend' | 'recommend-framework' | 'analyze' | 'title';
+type Mode =
+  | 'generate'
+  | 'recommend'
+  | 'recommend-framework'
+  | 'analyze'
+  | 'prefill'
+  | 'title'
+  | 'metadata';
 
 /** Eén veld van het gekozen prompt framework waar de analyse op toetst. */
 interface AnalyzeField {
@@ -101,6 +108,8 @@ interface RequestBody {
   analyzeFields?: AnalyzeField[];
   // 'title'-velden: vat een gegenereerde template samen tot een korte titel.
   templateContent?: string;
+  // 'metadata'-velden: stel titel + omschrijving + best passende categorie voor.
+  metaCategories?: { id: string; name: string; description?: string }[];
   preferredProvider?: PreferredProvider;
   // Admin-bestuurde AI-instellingen (optioneel; anders defaults).
   systemPrompt?: string;
@@ -279,6 +288,50 @@ function fillTemplate(
   return result.replace(/\{\{\s*([\w-]+)\s*\}\}/g, '[$1]').trim();
 }
 
+/**
+ * Sentinel waarmee het model aangeeft dat de input onbegrijpelijk/onsamenhangend
+ * is en het er GEEN zinnige prompt van kan maken. Het model zet deze regel als
+ * ALLEREERSTE regel van zijn antwoord, gevolgd door een korte uitleg. De server
+ * detecteert dit en blokkeert het genereren i.p.v. een verzonnen casus terug te geven.
+ */
+const UNCLEAR_SENTINEL = 'ONDUIDELIJKE_INVOER';
+
+/**
+ * Instructie die aan ELKE generatie-systeemprompt wordt toegevoegd: koppel
+ * eerlijk terug wanneer de input nergens op slaat, in plaats van een casus te
+ * verzinnen. Dit is bewust streng — de gebruiker wil dat zijn exacte input
+ * serieus wordt genomen, niet dat de AI er zelf iets bij bedenkt.
+ */
+const CLARITY_GATE_INSTRUCTION = `EERST CONTROLEREN — neem de input van de gebruiker letterlijk serieus:
+Beoordeel, vóór je iets schrijft, of de antwoorden en/of de eigen tekst van de gebruiker
+samen een herkenbare, echte bedoeling vormen. Verzin NOOIT zelf een onderwerp, doel,
+casus, doelgroep of inhoud die de gebruiker niet heeft aangeleverd.
+
+Als de input onsamenhangend, betekenisloos of pure onzin is — bijvoorbeeld losse letters,
+herhaalde tekens of toetsaanslagen ("A-B-B", "C-C-C", "asdf", "test test"), of antwoorden
+die niets met elkaar of met de vraag te maken hebben — dan mag je GEEN prompt-template maken.
+Geef in dat geval UITSLUITEND dit terug, zonder iets anders:
+${UNCLEAR_SENTINEL}
+<één korte, vriendelijke zin in het Nederlands die uitlegt wat er onduidelijk is en wat de
+gebruiker kan aanvullen of verduidelijken>
+
+Twijfel je of de input zinnig is maar zit er een herkenbare kern in? Bouw dan gewoon de
+template op basis van wat de gebruiker écht heeft gegeven, zonder de ontbrekende delen te
+verzinnen — laat die als [plaatshouder] staan. Gebruik de ${UNCLEAR_SENTINEL}-regel alleen
+als er echt geen bruikbare bedoeling uit de input te halen valt.`;
+
+/**
+ * JSON-variant van de clarity-gate voor modi die al JSON teruggeven (recommend,
+ * prefill). Het model geeft dan {"unclear":true,"reason":"…"} i.p.v. de normale
+ * payload. `detectUnclearJson` vangt dit server-side af.
+ */
+const CLARITY_GATE_JSON_INSTRUCTION = `EERST CONTROLEREN: beoordeel of de tekst van de gebruiker een herkenbare, echte bedoeling bevat.
+Verzin zelf NOOIT een onderwerp of bedoeling die de gebruiker niet heeft aangeleverd. Is de tekst
+onsamenhangend, betekenisloos of pure onzin (losse letters, herhaalde tekens of toetsaanslagen zoals
+"A-B-B", "C-C-C", "asdf", "test test"), doe dan NIETS van het bovenstaande en geef in plaats daarvan
+uitsluitend dit terug:
+{"unclear":true,"reason":"<één korte, vriendelijke zin in het Nederlands die uitlegt wat onduidelijk is en wat de gebruiker kan verduidelijken>"}`;
+
 const DEFAULT_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse rijksoverheid.
 Een interne overheidsmedewerker heeft losse antwoorden gegeven via een prompting-techniek.
 Jouw taak: ANALYSEER al die antwoorden en SCHRIJF op basis daarvan één rijke, volledig
@@ -319,7 +372,9 @@ Analyseer het doel en weeg het af tegen de KRACHT en gebruikssituaties van elke 
 Kies de best passende technieken (maximaal 3), gerangschikt van meest naar minst geschikt.
 Baseer je motivatie expliciet op waar de techniek sterk in is in relatie tot het doel.
 
-Geef UITSLUITEND geldige JSON terug, zonder codeblok of extra tekst, in dit formaat:
+${CLARITY_GATE_JSON_INSTRUCTION}
+
+Anders geef je UITSLUITEND geldige JSON terug, zonder codeblok of extra tekst, in dit formaat:
 {"recommendations":[{"id":"<techniek-id>","reason":"<korte motivatie in 1 zin die de kracht koppelt aan het doel, in het Nederlands>"}]}
 
 Gebruik alleen id's die exact in de lijst voorkomen. Geef minstens 1 en maximaal 3 aanbevelingen.`;
@@ -403,6 +458,48 @@ const ANALYZE_USER_PROMPT = (
     .join('\n') +
   `\n\nPROMPT VAN DE GEBRUIKER (analyseer deze):\n"""\n${ownPrompt}\n"""`;
 
+const PREFILL_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse rijksoverheid.
+Een interne overheidsmedewerker heeft een eigen prompt/tekst geschreven en een prompttechniek of
+prompt framework gekozen. Dat raamwerk bestaat uit een aantal VELDEN (bouwstenen).
+
+Jouw taak: ontleed de tekst van de gebruiker en VUL PER VELD alvast een voorstel in, zodat de
+gebruiker niet met lege velden begint maar met een ingevulde, controleerbare basis.
+
+WERKWIJZE PER VELD:
+1. Zoek eerst in de tekst van de gebruiker naar inhoud die bij dit veld hoort (bijv. een beschreven
+   rol → het rol-veld, achtergrond/situatie → het context-veld, de opdracht → het taak-veld).
+   Vind je die? Vat die inhoud kort en bruikbaar samen in je eigen woorden en zet "source":"prompt".
+2. Staat er in de tekst niets voor dit veld? Bedenk dan zelf een passend, plausibel voorstel dat
+   logisch aansluit op de rest van de tekst, en zet "source":"ai". Verzin GEEN feiten die de
+   bedoeling van de gebruiker veranderen; blijf dicht bij wat de tekst impliceert en houd het
+   algemeen waar je het niet zeker weet (gebruik desnoods een [plaatshouder] in de waarde).
+
+REGELS:
+- Vul ELK veld in (laat "value" nooit leeg): of afgeleid uit de tekst ("prompt"), of als suggestie ("ai").
+- Schrijf in helder Nederlands (B1-taalniveau waar passend). Houd het intern gericht: de doelgroep
+  is een overheidsmedewerker, niet de burger.
+- "note": één heel korte toelichting (max ~12 woorden) per veld, bijv. "Afgeleid uit je prompt" of
+  "Suggestie — controleer of dit klopt".
+${CLARITY_GATE_JSON_INSTRUCTION}
+
+Geef UITSLUITEND geldige JSON terug, zonder codeblok of extra tekst, in dit formaat:
+{"summary":"<1 zin: wat je uit de prompt hebt gehaald en wat je hebt aangevuld, in het Nederlands>","fields":[{"id":"<veld-id>","value":"<voorgestelde inhoud voor dit veld>","source":"prompt|ai","note":"<korte toelichting>"}]}
+
+Gebruik alleen veld-id's die exact in de lijst voorkomen.`;
+
+/** Bouw de gebruikersprompt voor de prefill-modus. */
+const PREFILL_USER_PROMPT = (
+  ownPrompt: string,
+  techniqueName: string | undefined,
+  fields: AnalyzeField[],
+) =>
+  `Gekozen techniek/raamwerk: ${techniqueName ?? 'onbekend'}\n\n` +
+  `IN TE VULLEN VELDEN van dit raamwerk:\n` +
+  fields
+    .map((f) => `- id: ${f.id} | label: ${f.label}${f.placeholder ? ` | bedoeld voor: ${f.placeholder}` : ''}`)
+    .join('\n') +
+  `\n\nTEKST/PROMPT VAN DE GEBRUIKER (ontleed deze en vul de velden voor):\n"""\n${ownPrompt}\n"""`;
+
 const TITLE_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse rijksoverheid.
 Een interne overheidsmedewerker heeft een herbruikbare prompt-template gemaakt en wil die opslaan
 in een gedeelde bibliotheek. Jouw taak: bedenk één korte, beschrijvende titel die meteen duidelijk
@@ -420,6 +517,67 @@ Geef UITSLUITEND de titel terug, op één regel, zonder enige andere tekst.`;
 /** Bouw de gebruikersprompt voor de titelmodus. */
 const TITLE_USER_PROMPT = (templateContent: string) =>
   `Bedenk een korte, beschrijvende titel voor deze prompt-template:\n"""\n${templateContent}\n"""`;
+
+const METADATA_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse rijksoverheid.
+Een interne overheidsmedewerker heeft een herbruikbare prompt-template gemaakt en wil die opslaan in
+een gedeelde bibliotheek. Jouw taak: stel op basis van de inhoud DRIE dingen voor:
+
+1. "title" — één korte, beschrijvende titel (in het Nederlands, max. ~8 woorden, geen punt aan het
+   einde, geen aanhalingstekens, geen techniek-naam). Beschrijf het concrete onderwerp/doel.
+2. "description" — één korte omschrijving (1 zin, max. ~20 woorden) die duidelijk maakt wat de
+   template doet en oplevert. Begrijpelijk voor een overheidscollega die hem in een lijst ziet.
+3. "category_id" — kies de id van de BEST passende categorie uit de meegegeven lijst, ALLEEN als er
+   een duidelijke match is. Is er geen goede match, gebruik dan null.
+
+Geef UITSLUITEND geldige JSON terug, zonder codeblok of extra tekst, in dit formaat:
+{"title":"<titel>","description":"<omschrijving>","category_id":"<categorie-id of null>"}
+
+Gebruik voor category_id alleen een id die exact in de lijst voorkomt, of null.`;
+
+/** Bouw de gebruikersprompt voor de metadata-modus (titel + omschrijving + categorie). */
+const METADATA_USER_PROMPT = (
+  templateContent: string,
+  categories: { id: string; name: string; description?: string }[],
+) =>
+  `PROMPT-TEMPLATE (analyseer deze):\n"""\n${templateContent}\n"""\n\n` +
+  `Beschikbare categorieën:\n${
+    categories.length
+      ? categories
+          .map((c) => `- id: ${c.id} | naam: ${c.name}${c.description ? ` | ${c.description}` : ''}`)
+          .join('\n')
+      : '(geen categorieën beschikbaar — gebruik null voor category_id)'
+  }`;
+
+/** Eén metadata-suggestie: titel, omschrijving en (optioneel) een categorie-id. */
+interface MetadataSuggestion {
+  title: string;
+  description: string;
+  category_id: string | null;
+}
+
+/** Parseert het JSON-antwoord van de metadata-modus robuust. */
+function parseMetadata(raw: string, validCategoryIds: Set<string>): MetadataSuggestion {
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) return { title: '', description: '', category_id: null };
+  try {
+    const parsed = JSON.parse(match[0]) as {
+      title?: string;
+      description?: string;
+      category_id?: string | null;
+    };
+    const catId =
+      typeof parsed.category_id === 'string' && validCategoryIds.has(parsed.category_id)
+        ? parsed.category_id
+        : null;
+    return {
+      title: typeof parsed.title === 'string' ? cleanTitle(parsed.title) : '',
+      description: typeof parsed.description === 'string' ? parsed.description.trim() : '',
+      category_id: catId,
+    };
+  } catch {
+    return { title: '', description: '', category_id: null };
+  }
+}
 
 /**
  * Maak het AI-antwoord schoon tot een bruikbare titel: één regel, geen
@@ -699,7 +857,36 @@ function buildSystemPrompt(
   const base = systemPrompt?.trim() ? systemPrompt.trim() : DEFAULT_SYSTEM_PROMPT;
   const instruction = structureInstruction(format, headings);
   const withStructure = instruction ? `${base}\n\n${instruction}` : base;
-  return tone?.trim() ? `${withStructure}\n\nToon en schrijfstijl: ${tone.trim()}` : withStructure;
+  const withTone = tone?.trim() ? `${withStructure}\n\nToon en schrijfstijl: ${tone.trim()}` : withStructure;
+  // De clarity-gate komt als laatste, zodat hij ook geldt bij een aangepaste admin-systeemprompt.
+  return `${withTone}\n\n${CLARITY_GATE_INSTRUCTION}`;
+}
+
+/**
+ * Detecteert of het model de input als onbruikbaar heeft beoordeeld (zie
+ * UNCLEAR_SENTINEL). Geeft de uitlegregel terug als de sentinel is aangetroffen,
+ * anders null. Tolerant voor opmaak (codeblok-randen, hekjes, vetgedrukt).
+ */
+function detectUnclear(raw: string): string | null {
+  // Eerste niet-lege regel pakken en opmaak/markeringen eraf strippen.
+  const lines = raw.split('\n');
+  const firstIdx = lines.findIndex((l) => l.trim());
+  if (firstIdx === -1) return null;
+  const firstLine = lines[firstIdx]
+    .replace(/[`*_#>\s]/g, '') // codeblok, vet, kop-hekjes, witruimte
+    .toUpperCase();
+  if (!firstLine.startsWith(UNCLEAR_SENTINEL)) return null;
+  // De uitleg is alles ná de sentinel-regel; val terug op een nette standaardtekst.
+  const reason = lines
+    .slice(firstIdx + 1)
+    .join('\n')
+    .replace(/^[`*_#>\s]+|[`*_#>\s]+$/g, '')
+    .trim();
+  return (
+    reason ||
+    'Je invoer is op dit moment niet duidelijk genoeg om er een zinvolle prompt van te maken. ' +
+      'Beschrijf in je eigen woorden wat je wilt bereiken en vul de velden concreet in.'
+  );
 }
 
 /** Begrens de temperature tot een veilig bereik; default 0.4. */
@@ -829,6 +1016,29 @@ interface Recommendation {
   value?: string;
 }
 
+/**
+ * Detecteert een {"unclear":true,"reason":"…"}-verdict in een JSON-antwoord.
+ * Gebruikt door de aanbevelingsmodi om eerlijk terug te koppelen bij onzin-input
+ * i.p.v. willekeurige technieken aan te bevelen. Geeft de reason terug of null.
+ */
+function detectUnclearJson(raw: string): string | null {
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  try {
+    const parsed = JSON.parse(match[0]) as { unclear?: boolean; reason?: unknown };
+    if (parsed.unclear === true) {
+      const reason = typeof parsed.reason === 'string' ? parsed.reason.trim() : '';
+      return (
+        reason ||
+        'Je invoer is op dit moment niet duidelijk genoeg. Beschrijf in je eigen woorden wat je wilt bereiken.'
+      );
+    }
+  } catch {
+    /* geen geldige JSON → niet als onduidelijk behandelen */
+  }
+  return null;
+}
+
 /** Parseert het JSON-antwoord van de aanbevelingsmodus robuust. */
 function parseRecommendations(raw: string, valid: Set<string>): Recommendation[] {
   // Pak het eerste JSON-object uit de respons (verwijdert eventuele codeblok-randen).
@@ -908,6 +1118,47 @@ function parseAnalysis(
     return { summary: typeof parsed.summary === 'string' ? parsed.summary : '', missing };
   } catch {
     return { summary: '', missing: [] };
+  }
+}
+
+/** Eén voor-ingevuld veld: voorgestelde inhoud + herkomst + korte toelichting. */
+interface PrefilledField {
+  id: string;
+  value: string;
+  /** 'prompt' = afgeleid uit de tekst van de gebruiker; 'ai' = AI-suggestie. */
+  source: 'prompt' | 'ai';
+  note: string;
+}
+
+/** Parseert het JSON-antwoord van de prefill-modus robuust. */
+function parsePrefill(
+  raw: string,
+  fields: AnalyzeField[],
+): { summary: string; fields: PrefilledField[] } {
+  const byId = new Map(fields.map((f) => [f.id, f]));
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) return { summary: '', fields: [] };
+  try {
+    const parsed = JSON.parse(match[0]) as {
+      summary?: string;
+      fields?: Array<{ id?: string; value?: string; source?: string; note?: string }>;
+    };
+    const prefilled = (Array.isArray(parsed.fields) ? parsed.fields : [])
+      .filter((f) => f && typeof f.id === 'string' && byId.has(f.id) && typeof f.value === 'string')
+      .map((f) => ({
+        id: f.id as string,
+        value: (f.value as string).trim(),
+        source: f.source === 'ai' ? ('ai' as const) : ('prompt' as const),
+        note: typeof f.note === 'string' ? f.note.trim() : '',
+      }))
+      // Lege voorstellen zijn nutteloos; die laten we als leeg veld over.
+      .filter((f) => f.value);
+    return {
+      summary: typeof parsed.summary === 'string' ? parsed.summary : '',
+      fields: prefilled,
+    };
+  } catch {
+    return { summary: '', fields: [] };
   }
 }
 
@@ -993,7 +1244,9 @@ Deno.serve(async (req: Request) => {
             ? 'analyze'
             : body.mode === 'title'
               ? 'title'
-              : 'generate';
+              : body.mode === 'metadata'
+                ? 'metadata'
+                : 'generate';
     const order = buildOrder(body.preferredProvider);
     const temperature = clampTemp(body.temperature);
 
@@ -1031,6 +1284,53 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // --- Prefill-modus: ontleed de eigen prompt en vul de velden van het gekozen
+    //     raamwerk alvast voor (afgeleid uit de prompt of als AI-suggestie) ---
+    if (mode === 'prefill') {
+      const ownPrompt = body.ownPrompt?.trim();
+      const fields = Array.isArray(body.analyzeFields) ? body.analyzeFields : [];
+      if (!ownPrompt || fields.length === 0) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'ownPrompt en analyzeFields zijn verplicht' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      const userMessage = PREFILL_USER_PROMPT(ownPrompt, body.techniqueName, fields);
+      let result: { summary: string; fields: PrefilledField[] } | null = null;
+      let provider: Provider | 'local-template' = 'local-template';
+
+      for (const candidate of order) {
+        try {
+          const raw = await PROVIDERS[candidate](userMessage, PREFILL_SYSTEM_PROMPT, 0.3);
+          // Clarity-gate: is de prompt zelf onzin? Dan eerlijk terugkoppelen.
+          const unclear = detectUnclearJson(raw);
+          if (unclear) {
+            return new Response(
+              JSON.stringify({ success: false, unclear: true, reason: unclear, provider: candidate }),
+              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            );
+          }
+          const parsed = parsePrefill(raw, fields);
+          if (parsed.fields.length > 0) {
+            result = parsed;
+            provider = candidate;
+            break;
+          }
+        } catch (providerErr) {
+          console.error(`${candidate} (prefill) mislukt, probeer volgende:`, providerErr);
+        }
+      }
+
+      // Geen AI-resultaat: lege voor-invulling (de UI toont dan gewoon lege velden).
+      if (!result) result = { summary: '', fields: [] };
+
+      return new Response(
+        JSON.stringify({ success: true, ...result, provider }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
     // --- Titelmodus: vat een gegenereerde template samen tot een korte titel ---
     if (mode === 'title') {
       const templateContent = body.templateContent?.trim();
@@ -1063,6 +1363,47 @@ Deno.serve(async (req: Request) => {
 
       return new Response(
         JSON.stringify({ success: true, title, provider }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    // --- Metadata-modus: stel titel + omschrijving + best passende categorie voor ---
+    if (mode === 'metadata') {
+      const templateContent = body.templateContent?.trim();
+      if (!templateContent) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'templateContent is verplicht' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      const categories = Array.isArray(body.metaCategories) ? body.metaCategories : [];
+      const validCatIds = new Set(categories.map((c) => c.id));
+      const userMessage = METADATA_USER_PROMPT(templateContent, categories);
+      let meta: MetadataSuggestion | null = null;
+      let provider: Provider | 'local-template' = 'local-template';
+
+      for (const candidate of order) {
+        try {
+          const raw = await PROVIDERS[candidate](userMessage, METADATA_SYSTEM_PROMPT, 0.3);
+          const parsed = parseMetadata(raw, validCatIds);
+          if (parsed.title) {
+            meta = parsed;
+            provider = candidate;
+            break;
+          }
+        } catch (providerErr) {
+          console.error(`${candidate} (metadata) mislukt, probeer volgende:`, providerErr);
+        }
+      }
+
+      // Geen AI-resultaat: val terug op een lokale titel, lege omschrijving, geen categorie.
+      if (!meta) {
+        meta = { title: localTitle(templateContent), description: '', category_id: null };
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, ...meta, provider }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
@@ -1132,6 +1473,14 @@ Deno.serve(async (req: Request) => {
       for (const candidate of order) {
         try {
           const raw = await PROVIDERS[candidate](userMessage, RECOMMEND_SYSTEM_PROMPT, 0.2);
+          // Clarity-gate: heeft het model het doel als onzin beoordeeld?
+          const unclear = detectUnclearJson(raw);
+          if (unclear) {
+            return new Response(
+              JSON.stringify({ success: false, unclear: true, reason: unclear, provider: candidate }),
+              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            );
+          }
           const parsed = parseRecommendations(raw, validIds);
           if (parsed.length > 0) {
             recommendations = parsed;
@@ -1187,7 +1536,17 @@ Deno.serve(async (req: Request) => {
 
     for (const candidate of order) {
       try {
-        optimized = await PROVIDERS[candidate](userMessage, system, temperature);
+        const raw = await PROVIDERS[candidate](userMessage, system, temperature);
+        // Clarity-gate: heeft het model de input als onbruikbaar beoordeeld?
+        // Dan geen verzonnen casus teruggeven, maar eerlijk terugkoppelen.
+        const unclear = detectUnclear(raw);
+        if (unclear) {
+          return new Response(
+            JSON.stringify({ success: false, unclear: true, reason: unclear, provider: candidate }),
+            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          );
+        }
+        optimized = raw;
         provider = candidate;
         break;
       } catch (providerErr) {

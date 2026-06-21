@@ -7,10 +7,12 @@ import {
   Flame,
   Activity,
   ShieldCheck,
+  ClipboardCheck,
   Network,
   Users,
 } from 'lucide-react';
 import clsx from 'clsx';
+import { useAuth } from '@/context/AuthContext';
 import UserMenu from './UserMenu';
 import NotificationBell from './NotificationBell';
 import ThemeToggle from './ThemeToggle';
@@ -26,6 +28,7 @@ const navItems = [
 ];
 
 export default function Header() {
+  const { isAdmin, isModerator } = useAuth();
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200 dark:border-slate-700 bg-white/90 dark:bg-slate-900/90 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
@@ -78,6 +81,21 @@ export default function Header() {
           >
             <Activity size={18} />
           </NavLink>
+          {(isModerator || isAdmin) && (
+            <NavLink
+              to="/goedkeuringen"
+              className={({ isActive }) =>
+                clsx(
+                  'rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-800',
+                  isActive ? 'text-rijksblauw-700 dark:text-rijksblauw-200' : 'text-slate-500 dark:text-slate-400',
+                )
+              }
+              title="Goedkeuringen"
+              aria-label="Goedkeuringen"
+            >
+              <ClipboardCheck size={18} />
+            </NavLink>
+          )}
           <NavLink
             to="/admin"
             className={({ isActive }) =>

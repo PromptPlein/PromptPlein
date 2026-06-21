@@ -412,7 +412,7 @@ export default function PromptDetailPage() {
         </section>
       )}
 
-      <CollaborationPanel prompt={prompt} onUpdated={setPrompt} refreshKey={versionRefresh} />
+      <CollaborationPanel prompt={prompt} refreshKey={versionRefresh} />
 
       <ShareModal open={shareOpen} onClose={() => setShareOpen(false)} prompt={prompt} />
       <ExportModal

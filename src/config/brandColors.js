@@ -81,12 +81,15 @@ export const backgroundGradient = {
 
 /**
  * Kleur per organisatietype, gedeeld door OrgChart en het 3D-netwerk.
- * @type {Record<'ministry'|'department'|'agency', string>}
+ * @type {Record<'government'|'ministry'|'directorate_general'|'directorate'|'agency'|'department', string>}
  */
 export const orgTypeColor = {
+  government: rijksblauw[700],
   ministry: rijksblauw[500],
-  department: '#2f6db3',
+  directorate_general: '#5566c4',
+  directorate: '#2f6db3',
   agency: '#3f9d6b',
+  department: '#7a8aa8',
 };
 
 /**

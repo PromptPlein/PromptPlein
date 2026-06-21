@@ -2,6 +2,35 @@
 
 export type SharingLevel = 'private' | 'department' | 'ministry' | 'public';
 
+/**
+ * De deelniveaus die je expliciet kunt aanvinken bij het delen (privé is de
+ * afwezigheid van elk niveau). Elk niveau krijgt een eigen rij in
+ * prompt_visibility met een eigen goedkeuringsstatus.
+ */
+export type VisibilityLevel = 'department' | 'ministry' | 'public';
+
+/** Goedkeuringsstatus van één deelniveau van een prompt. */
+export type VisibilityStatus = 'approved' | 'pending' | 'rejected';
+
+/**
+ * Eén deelniveau van een prompt met een eigen status. Een afdelingsniveau wordt
+ * direct goedgekeurd; ministerie wacht op een moderator; Rijksoverheid op een
+ * admin. Zo kan een prompt op de afdeling al live zijn terwijl een hoger niveau
+ * nog wacht op goedkeuring.
+ */
+export interface PromptVisibility {
+  id: string;
+  prompt_id: string;
+  level: VisibilityLevel;
+  /** Organisatie waarop dit niveau scope heeft (null voor 'public'). */
+  org_id?: string | null;
+  status: VisibilityStatus;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  note?: string | null;
+  created_at?: string;
+}
+
 export interface Role {
   id: string;
   name: string;
@@ -78,6 +107,8 @@ export interface Prompt {
   like_count?: number;
   /** Of de huidige gebruiker deze prompt heeft geliket. Verrijkt door de likeService. */
   liked_by_me?: boolean;
+  /** De gekozen deelniveaus met hun status. Verrijkt door de visibilityService. */
+  visibility?: PromptVisibility[];
 }
 
 export interface Optimization {
@@ -97,7 +128,12 @@ export interface NewPromptInput {
   category_id?: string | null;
   role_id?: string | null;
   organization_id?: string | null;
-  sharing_level: SharingLevel;
+  /**
+   * De aangevinkte deelniveaus. Leeg = privé (alleen voor de maker zichtbaar).
+   * createPrompt() zet hier per niveau een prompt_visibility-rij voor klaar met
+   * de juiste begin-status (afdeling direct goedgekeurd, hoger ter goedkeuring).
+   */
+  sharing_levels: VisibilityLevel[];
   created_by: string;
 }
 
@@ -176,6 +212,13 @@ export interface OptimizeResult {
   success: boolean;
   provider: AiProviderResult;
   error?: string;
+  /**
+   * De AI heeft de input als onsamenhangend/onzin beoordeeld en bewust GEEN
+   * template gemaakt. `reason` legt uit wat onduidelijk is. De UI toont dit als
+   * blokkerende terugkoppeling i.p.v. een (verzonnen) resultaat.
+   */
+  unclear?: boolean;
+  reason?: string;
 }
 
 /** Eén techniekaanbeveling bij een door de gebruiker beschreven doel. */
@@ -198,6 +241,13 @@ export interface RecommendResult {
   success: boolean;
   provider: AiProviderResult;
   error?: string;
+  /**
+   * Het beschreven doel was onsamenhangend/onzin; er zijn bewust GEEN technieken
+   * aanbevolen. `reason` legt uit wat onduidelijk is, zodat de gebruiker het doel
+   * kan verduidelijken.
+   */
+  unclear?: boolean;
+  reason?: string;
 }
 
 /**
@@ -235,12 +285,61 @@ export interface AnalyzeResult {
   error?: string;
 }
 
+/** Herkomst van een voor-ingevuld veld: afgeleid uit de prompt of een AI-suggestie. */
+export type PrefillSource = 'prompt' | 'ai';
+
+/**
+ * Eén voor-ingevuld veld: een voorstel voor de inhoud van een techniek-/raamwerk-
+ * veld, met de herkomst (uit de prompt afgeleid of door de AI gesuggereerd) en een
+ * korte toelichting. De gebruiker kan de waarde controleren en aanpassen.
+ */
+export interface PrefilledField {
+  /** Verwijst naar een FollowUpQuestion.id van de gekozen techniek. */
+  id: string;
+  /** Voorgestelde inhoud voor dit veld. */
+  value: string;
+  /** 'prompt' = uit de tekst van de gebruiker afgeleid; 'ai' = AI-suggestie. */
+  source: PrefillSource;
+  /** Korte toelichting (bijv. "Afgeleid uit je prompt"). */
+  note: string;
+}
+
+/**
+ * Antwoord van de optimize-prompt service (prefill-modus). Vult de velden van de
+ * gekozen techniek alvast voor op basis van de tekst van de gebruiker, zodat die
+ * niet met lege velden begint maar met een controleerbare, aanpasbare basis.
+ */
+export interface PrefillResult {
+  /** Korte samenvatting: wat is afgeleid en wat is aangevuld. */
+  summary: string;
+  /** De voor-ingevulde velden (kan leeg zijn als de AI niets kon afleiden). */
+  fields: PrefilledField[];
+  success: boolean;
+  provider: AiProviderResult;
+  error?: string;
+  /** De prompt was onzin; er is bewust niets voor-ingevuld. */
+  unclear?: boolean;
+  reason?: string;
+}
+
 // --- Phase 3 entiteiten (authenticatie, organisaties & RBAC) ---
 
 /** Applicatierollen voor rolgebaseerde toegang (RBAC). */
 export type AppRole = 'user' | 'admin' | 'super_admin';
 
-export type OrganizationType = 'ministry' | 'department' | 'agency';
+/**
+ * Niveau van een organisatie in de Rijksoverheid-boom. 'government' is de
+ * overkoepelende root; daaronder ministeries, met directoraten-generaal,
+ * directies, agentschappen/dienstonderdelen en afdelingen. De getrapte
+ * zichtbaarheid leunt op de boom (parent_id), niet op dit type.
+ */
+export type OrganizationType =
+  | 'government'
+  | 'ministry'
+  | 'directorate_general'
+  | 'directorate'
+  | 'agency'
+  | 'department';
 
 /** Organisatie (ministerie / afdeling / agentschap) met hiërarchie. */
 export interface Organization {
@@ -255,6 +354,19 @@ export interface Organization {
   is_active: boolean;
   created_at?: string;
   updated_at?: string;
+}
+
+/**
+ * Koppeling: een gebruiker is moderator van een organisatie (in de praktijk een
+ * ministerie). Een moderator beoordeelt de Ministerie-deelniveaus van die hele
+ * tak. Admins beheren deze koppelingen.
+ */
+export interface OrganizationModerator {
+  id: string;
+  user_id: string;
+  organization_id: string;
+  added_by?: string | null;
+  created_at?: string;
 }
 
 /** Gebruikersprofiel, gekoppeld aan een Supabase Auth-gebruiker. */
@@ -346,6 +458,24 @@ export interface FunctionRequest {
   reviewed_at?: string | null;
   review_note?: string | null;
   created_role_id?: string | null;
+  created_at: string;
+  /** Verrijkt vanuit het profiel van de aanvrager (optioneel). */
+  requester?: Pick<Profile, 'email' | 'full_name'> | null;
+}
+
+export type CategoryRequestStatus = 'pending' | 'approved' | 'rejected';
+
+/** Een door een gebruiker aangevraagde (nog) niet-bestaande categorie. */
+export interface CategoryRequest {
+  id: string;
+  name: string;
+  motivation?: string | null;
+  status: CategoryRequestStatus;
+  requested_by?: string | null;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  review_note?: string | null;
+  created_category_id?: string | null;
   created_at: string;
   /** Verrijkt vanuit het profiel van de aanvrager (optioneel). */
   requester?: Pick<Profile, 'email' | 'full_name'> | null;

@@ -1,6 +1,12 @@
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { localStore } from '@/services/localStore';
-import type { AppRole, Organization, OrganizationType, Profile } from '@/types';
+import type {
+  AppRole,
+  Organization,
+  OrganizationModerator,
+  OrganizationType,
+  Profile,
+} from '@/types';
 
 /**
  * Beheer van organisaties (ministeries/afdelingen) en gebruikersprofielen.
@@ -129,6 +135,56 @@ export async function adminUpdateProfile(
   return data as Profile;
 }
 
+// --- Moderatoren (per organisatie/ministerie) ---
+
+/** Alle moderator-koppelingen (admin-overzicht). */
+export async function listOrganizationModerators(): Promise<OrganizationModerator[]> {
+  if (!isSupabaseConfigured || !supabase) return [];
+  const { data, error } = await supabase
+    .from('organization_moderators')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data as OrganizationModerator[]) ?? [];
+}
+
+/** Wijs een gebruiker aan als moderator van een organisatie (admin). */
+export async function addOrganizationModerator(
+  userId: string,
+  organizationId: string,
+): Promise<OrganizationModerator> {
+  const client = requireClient();
+  const { data, error } = await client
+    .from('organization_moderators')
+    .insert({ user_id: userId, organization_id: organizationId })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data as OrganizationModerator;
+}
+
+/** Verwijder een moderator-koppeling (admin). */
+export async function removeOrganizationModerator(id: string): Promise<void> {
+  const client = requireClient();
+  const { error } = await client.from('organization_moderators').delete().eq('id', id);
+  if (error) throw error;
+}
+
+/**
+ * De organisatie-id's waarvan de huidige gebruiker moderator is. Gebruikt om in
+ * de UI te bepalen of iemand de goedkeuringswachtrij mag zien. RLS staat lezen
+ * van organization_moderators toe voor elke ingelogde gebruiker.
+ */
+export async function fetchMyModeratorOrgIds(userId: string): Promise<string[]> {
+  if (!isSupabaseConfigured || !supabase) return [];
+  const { data, error } = await supabase
+    .from('organization_moderators')
+    .select('organization_id')
+    .eq('user_id', userId);
+  if (error) throw error;
+  return ((data as { organization_id: string }[]) ?? []).map((r) => r.organization_id);
+}
+
 export const APP_ROLE_LABELS: Record<AppRole, string> = {
   user: 'Gebruiker',
   admin: 'Beheerder',
@@ -136,7 +192,10 @@ export const APP_ROLE_LABELS: Record<AppRole, string> = {
 };
 
 export const ORG_TYPE_LABELS: Record<OrganizationType, string> = {
+  government: 'Rijksoverheid',
   ministry: 'Ministerie',
-  department: 'Afdeling',
+  directorate_general: 'Directoraat-generaal',
+  directorate: 'Directie',
   agency: 'Agentschap',
+  department: 'Afdeling',
 };

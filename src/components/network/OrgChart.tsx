@@ -42,12 +42,30 @@ const MIN_SCALE = 0.2;
 const MAX_SCALE = 2.5;
 
 const TYPE_LABEL: Record<OrganizationType, string> = {
+  government: 'Rijksoverheid',
   ministry: 'Ministerie',
-  department: 'Afdeling',
+  directorate_general: 'Directoraat-generaal',
+  directorate: 'Directie',
   agency: 'Dienstonderdeel',
+  department: 'Afdeling',
 };
 
 const TYPE_ACCENT: Record<OrganizationType, string> = orgTypeColor;
+
+/**
+ * Vaste rij (verticale laag) per organisatietype, zodat de boom strak top-down
+ * uitlijnt ongeacht de werkelijke boomdiepte:
+ *   0 Rijksoverheid → 1 Ministeries → 2 DG's → 3 Directies/Dienstonderdelen → 4 Afdelingen.
+ * Alle ouder→kind-relaties lopen hierdoor strikt naar beneden.
+ */
+const TYPE_ROW: Record<OrganizationType, number> = {
+  government: 0,
+  ministry: 1,
+  directorate_general: 2,
+  directorate: 3,
+  agency: 3,
+  department: 4,
+};
 
 interface LaidOutNode {
   org: Organization;
@@ -88,10 +106,23 @@ function nodeWidth(org: Organization): number {
   return Math.min(NODE_MAX_W, Math.max(NODE_MIN_W, Math.ceil(NODE_PAD_L + content + NODE_PAD_R)));
 }
 
+/** Verticale positie (boven-y) van een rij; rijhoogtes zijn vast en gelijk. */
+function rowY(row: number): number {
+  return row * (NODE_H + V_GAP);
+}
+
 /**
- * Bouw een bos (meerdere roots mogelijk) en leg het tidy uit. Subtree-breedtes
- * worden bottom-up bepaald op basis van de werkelijke (variabele) nodebreedtes,
- * daarna wordt elk kind onder het midden van zijn ouder gecentreerd.
+ * Bouw een bos (meerdere roots mogelijk) en leg het tidy top-down uit.
+ *
+ * - Verticaal: elke knoop staat op een vaste rij per organisatietype
+ *   (Rijksoverheid → Ministeries → DG's → Directies/Dienstonderdelen → Afdelingen).
+ *   Zo staat alles van hetzelfde type netjes op één hoogte.
+ * - Horizontaal: een klassieke "tidy tree" — bladeren komen links→rechts naast
+ *   elkaar, elke ouder komt exact gecentreerd boven de span van zijn kinderen.
+ *   Is een ouder breder dan zijn kinderen samen, dan schuift de hele subtree mee
+ *   zodat de ouder gecentreerd blijft én er geen overlap met de buurtak ontstaat.
+ * - De enige root (Rijksoverheid) eindigt zo vanzelf in het midden boven alles.
+ *
  * Cycli/zwevende parents worden veilig als root behandeld.
  */
 function buildLayout(orgs: Organization[]): {
@@ -127,54 +158,138 @@ function buildLayout(orgs: Organization[]): {
   orgs.forEach((o) => widthOf.set(o.id, nodeWidth(o)));
 
   const nodes: LaidOutNode[] = [];
-  const edges: Edge[] = [];
   const placed = new Map<string, LaidOutNode>();
   let cursorX = 0; // lopende linkerrand-offset bij het naast elkaar plaatsen
 
+  // Verschuif een reeds geplaatste subtree horizontaal (gebruikt om een ouder
+  // recht boven zijn kinderen te centreren wanneer de ouder breder is).
+  function shiftSubtree(node: TreeNode, dx: number) {
+    const laid = placed.get(node.org.id);
+    if (laid) laid.x += dx;
+    node.children.forEach((c) => shiftSubtree(c, dx));
+  }
+
   // Plaats een subtree; retourneer het midden-x van deze knoop.
-  function place(node: TreeNode, depth: number): number {
-    const y = depth * (NODE_H + V_GAP);
+  function place(node: TreeNode): number {
+    const row = TYPE_ROW[node.org.organization_type] ?? 0;
+    const y = rowY(row);
     const w = widthOf.get(node.org.id) ?? NODE_MIN_W;
+
     if (node.children.length === 0) {
       const x = cursorX + w / 2;
       cursorX += w + H_GAP;
-      const laid: LaidOutNode = { org: node.org, x, y, w, depth };
+      const laid: LaidOutNode = { org: node.org, x, y, w, depth: row };
       nodes.push(laid);
       placed.set(node.org.id, laid);
       return x;
     }
-    const childCenters = node.children.map((c) => place(c, depth + 1));
-    let x = (childCenters[0] + childCenters[childCenters.length - 1]) / 2;
-    // Als de ouder breder is dan zijn kinderen samen, schuif de cursor mee zodat
-    // er geen overlap ontstaat met de volgende tak.
+
+    const childCenters = node.children.map((c) => place(c));
     const half = w / 2;
+    // Gewenst midden = midden van de span van de kinderen.
+    let x = (childCenters[0] + childCenters[childCenters.length - 1]) / 2;
+
+    // Is de ouder breder dan de span van zijn kinderen, schuif dan de hele
+    // kinder-subtree naar rechts zodat de ouder gecentreerd blijft.
     if (x - half < cursorX) {
       const shift = cursorX - (x - half);
+      node.children.forEach((c) => shiftSubtree(c, shift));
       x += shift;
     }
+
     cursorX = Math.max(cursorX, x + half + H_GAP);
-    const laid: LaidOutNode = { org: node.org, x, y, w, depth };
+    const laid: LaidOutNode = { org: node.org, x, y, w, depth: row };
     nodes.push(laid);
     placed.set(node.org.id, laid);
     return x;
   }
 
   forest.forEach((tree) => {
-    place(tree, 0);
-    cursorX += H_GAP; // extra lucht tussen losse bomen
+    place(tree);
+    cursorX += H_GAP * 2; // extra lucht tussen losse bomen
   });
 
+  // --- Botsingen per rij wegwerken ---------------------------------------
+  // Omdat de rij wordt bepaald door het organisatietype (niet de boomdiepte),
+  // kunnen knopen uit verschillende takken op dezelfde rij naast elkaar komen.
+  // We lopen elke rij links→rechts na en duwen, zodra twee knopen elkaar raken,
+  // de tweede knoop én zijn hele subtree naar rechts. Daarna centreren we elke
+  // ouder opnieuw boven zijn kinderen (bottom-up), zodat de boom strak blijft.
+  const treeOf = new Map<string, TreeNode>();
+  forest.forEach(function walk(n) {
+    treeOf.set(n.org.id, n);
+    n.children.forEach(walk);
+  });
+
+  function shiftLaidSubtree(node: TreeNode, dx: number) {
+    const laid = placed.get(node.org.id);
+    if (laid) laid.x += dx;
+    node.children.forEach((c) => shiftLaidSubtree(c, dx));
+  }
+
+  const byRow = new Map<number, LaidOutNode[]>();
+  for (const n of nodes) {
+    const arr = byRow.get(n.depth) ?? [];
+    arr.push(n);
+    byRow.set(n.depth, arr);
+  }
+  for (const row of byRow.values()) {
+    row.sort((a, b) => a.x - b.x);
+    for (let i = 1; i < row.length; i++) {
+      const prev = row[i - 1];
+      const cur = row[i];
+      const minLeft = prev.x + prev.w / 2 + H_GAP; // gewenste linkerrand
+      const curLeft = cur.x - cur.w / 2;
+      if (curLeft < minLeft) {
+        const dx = minLeft - curLeft;
+        const tree = treeOf.get(cur.org.id);
+        if (tree) shiftLaidSubtree(tree, dx);
+        else cur.x += dx;
+      }
+    }
+  }
+
+  // Re-centreer ouders boven hun kinderen (bottom-up: diepste rij eerst).
+  // We klemmen het nieuwe midden tussen de buren op dezelfde rij, zodat het
+  // centreren nooit een nieuwe botsing op de ouder-rij introduceert.
+  const rowsDesc = [...byRow.keys()].sort((a, b) => b - a);
+  for (const rowKey of rowsDesc) {
+    const row = byRow.get(rowKey)!; // al gesorteerd op x
+    for (let i = 0; i < row.length; i++) {
+      const parent = row[i];
+      const kids = (treeOf.get(parent.org.id)?.children ?? [])
+        .map((c) => placed.get(c.org.id))
+        .filter((c): c is LaidOutNode => Boolean(c));
+      if (kids.length === 0) continue;
+      const xs = kids.map((k) => k.x).sort((a, b) => a - b);
+      let target = (xs[0] + xs[xs.length - 1]) / 2;
+      const half = parent.w / 2;
+      const leftBound = i > 0 ? row[i - 1].x + row[i - 1].w / 2 + H_GAP + half : -Infinity;
+      const rightBound = i < row.length - 1 ? row[i + 1].x - row[i + 1].w / 2 - H_GAP - half : Infinity;
+      target = Math.min(Math.max(target, leftBound), rightBound);
+      parent.x = target;
+    }
+  }
+
+  const edges: Edge[] = [];
   for (const o of orgs) {
     const to = o.parent_id ? placed.get(o.parent_id) : undefined;
     const from = placed.get(o.id);
     if (to && from) edges.push({ from, to });
   }
 
+  let minX = Infinity;
   let maxX = 0;
   let maxY = 0;
   for (const n of nodes) {
+    minX = Math.min(minX, n.x - n.w / 2);
     maxX = Math.max(maxX, n.x + n.w / 2);
     maxY = Math.max(maxY, n.y + NODE_H);
+  }
+  // Normaliseer zodat de linkerrand op x=0 begint.
+  if (Number.isFinite(minX) && minX !== 0) {
+    for (const n of nodes) n.x -= minX;
+    maxX -= minX;
   }
   return { nodes, edges, width: maxX, height: maxY };
 }

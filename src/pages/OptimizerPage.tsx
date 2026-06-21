@@ -7,6 +7,7 @@ import {
   Compass,
   Check,
   Wand2,
+  AlertTriangle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import TechniqueSelector from '@/components/optimizer/TechniqueSelector';
@@ -17,7 +18,8 @@ import FollowUpQuestions from '@/components/optimizer/FollowUpQuestions';
 import OptimizedOutput from '@/components/optimizer/OptimizedOutput';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { getPrompt, saveOptimization } from '@/services/repository';
-import { generatePrompt } from '@/services/optimizeService';
+import { generatePrompt, prefillFields } from '@/services/optimizeService';
+import type { FieldMeta } from '@/components/optimizer/FollowUpQuestions';
 import { trackEvent } from '@/services/analyticsService';
 import { getAiSettings, DEFAULT_AI_SETTINGS, type AiSettings } from '@/services/settingsService';
 import { detectPii, detectBlockedTopics, type GuardrailFinding } from '@/services/guardrails';
@@ -41,11 +43,17 @@ export default function OptimizerPage() {
   const [entryMode, setEntryMode] = useState<EntryMode>('techniques');
   const [techniqueId, setTechniqueId] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  // Herkomst per voor-ingevuld veld (origin-badges) + laadstaat tijdens prefill.
+  const [fieldMeta, setFieldMeta] = useState<FieldMeta>({});
+  const [prefilling, setPrefilling] = useState(false);
   const [loadingPrompt, setLoadingPrompt] = useState(Boolean(promptId));
   const [optimizing, setOptimizing] = useState(false);
   // Admin-bepaalde AI-instellingen; gebruikers kiezen niet meer zelf.
   const settingsRef = useRef<AiSettings>(DEFAULT_AI_SETTINGS);
   const [guardrailFindings, setGuardrailFindings] = useState<GuardrailFinding[] | null>(null);
+  // Terugkoppeling wanneer de AI de input als onzin beoordeelt: geen output,
+  // maar een blokkerende uitleg zodat de gebruiker zijn invoer kan verduidelijken.
+  const [unclearReason, setUnclearReason] = useState<string | null>(null);
   const [result, setResult] = useState<OptimizeResult | null>(null);
   // 'input' = invoerpaneel zichtbaar, 'transition' = uitfaden, 'output' = resultaat
   const [phase, setPhase] = useState<'input' | 'transition' | 'output'>('input');
@@ -86,9 +94,59 @@ export default function OptimizerPage() {
   function handleSelectTechnique(id: string) {
     setTechniqueId(id);
     setAnswers({}); // antwoorden resetten bij nieuwe techniek
+    setFieldMeta({});
     // Wacht tot het vervolgvragen-paneel is gerenderd en scroll het in beeld.
     requestAnimationFrame(() => {
       followUpRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    // Heeft de gebruiker al tekst meegegeven? Vul de velden dan alvast voor zodat
+    // hij niet met lege velden begint. Bron: het expliciete startpunt (promptContent)
+    // of anders het beschreven vraagstuk (goal, uit de "complex vraagstuk"-flow).
+    const chosen = techniques.find((t) => t.id === id);
+    const draft = promptContent.trim() || goal.trim();
+    if (chosen && chosen.follow_up_questions.length > 0 && draft) {
+      void runPrefill(chosen, draft);
+    }
+  }
+
+  /** Vul de velden van de gekozen techniek voor op basis van de eigen prompt. */
+  async function runPrefill(chosen: Technique, draft: string) {
+    setPrefilling(true);
+    setUnclearReason(null);
+    try {
+      const res = await prefillFields({
+        ownPrompt: draft,
+        technique: chosen,
+        preferredProvider: settingsRef.current.provider,
+      });
+      // De prompt was onzin → toon de terugkoppeling i.p.v. velden voor te vullen.
+      if (res.unclear) {
+        setUnclearReason(
+          res.reason?.trim() ||
+            'Je invoer is nog niet duidelijk genoeg om de velden voor te vullen. Beschrijf concreet wat je wilt bereiken.',
+        );
+        return;
+      }
+      if (res.error) toast(res.error, { icon: 'ℹ️' });
+      // Alleen overnemen als de gebruiker ondertussen niet van techniek wisselde.
+      setAnswers(Object.fromEntries(res.fields.map((f) => [f.id, f.value])));
+      setFieldMeta(
+        Object.fromEntries(res.fields.map((f) => [f.id, { source: f.source, note: f.note }])),
+      );
+    } catch {
+      // Voor-invullen is best-effort; bij een fout begint de gebruiker met lege velden.
+    } finally {
+      setPrefilling(false);
+    }
+  }
+
+  /** Laat de herkomst-badge vervallen zodra de gebruiker een veld zelf aanpast. */
+  function handleFieldEdit(id: string) {
+    setFieldMeta((prev) => {
+      if (!prev[id]) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
     });
   }
 
@@ -118,6 +176,7 @@ export default function OptimizerPage() {
   async function runGenerate() {
     if (!technique) return;
     setGuardrailFindings(null);
+    setUnclearReason(null); // nieuwe poging: oude onduidelijk-melding wissen
     setOptimizing(true);
     try {
       const s = settingsRef.current;
@@ -132,6 +191,17 @@ export default function OptimizerPage() {
         toneInstruction: s.toneInstruction.trim() || undefined,
         temperature: s.temperature,
       });
+
+      // Clarity-gate: de AI vond de input onzin en maakte bewust geen template.
+      // Toon de uitleg in plaats van door te gaan naar het resultaatscherm.
+      if (res.unclear) {
+        setUnclearReason(
+          res.reason?.trim() ||
+            'Je invoer is niet duidelijk genoeg om er een zinvolle prompt van te maken. ' +
+              'Beschrijf concreet wat je wilt bereiken en vul de velden inhoudelijk in.',
+        );
+        return;
+      }
 
       void trackEvent({
         event_type: 'optimization_run',
@@ -300,7 +370,14 @@ export default function OptimizerPage() {
                     </p>
                   </div>
                 </div>
-                <FollowUpQuestions technique={technique} answers={answers} onChange={setAnswers} />
+                <FollowUpQuestions
+                  technique={technique}
+                  answers={answers}
+                  onChange={setAnswers}
+                  fieldMeta={fieldMeta}
+                  onUserEdit={handleFieldEdit}
+                  prefilling={prefilling}
+                />
 
                 {/* Optioneel startpunt: eigen tekst die in de template verwerkt wordt */}
                 <div className="mt-5 border-t border-slate-100 pt-5 dark:border-slate-700">
@@ -331,6 +408,21 @@ export default function OptimizerPage() {
                 </div>
               </div>
             </section>
+          )}
+
+          {/* Onduidelijke-invoer-melding: de AI nam de input serieus en kon er
+              geen zinvolle prompt van maken. Geen verzonnen casus, wél uitleg. */}
+          {entryMode === 'techniques' && unclearReason && (
+            <div
+              role="alert"
+              className="animate-fade-in flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-200"
+            >
+              <AlertTriangle size={18} className="mt-0.5 shrink-0" />
+              <div>
+                <p className="font-medium">Je invoer is nog niet duidelijk genoeg</p>
+                <p className="mt-0.5 text-amber-700 dark:text-amber-300/90">{unclearReason}</p>
+              </div>
+            </div>
           )}
 
           {/* De eigen-prompt-flow heeft een eigen genereerknop; deze geldt voor de techniek-flow. */}

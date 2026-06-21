@@ -1,5 +1,6 @@
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { localStore } from '@/services/localStore';
+import { setInitialVisibility } from '@/services/visibilityService';
 import type {
   AdvancedPromptFilters,
   Category,
@@ -9,7 +10,9 @@ import type {
   PromptFilters,
   PromptVersion,
   Role,
+  SharingLevel,
   Technique,
+  VisibilityLevel,
 } from '@/types';
 
 const local = !isSupabaseConfigured || !supabase;
@@ -193,11 +196,30 @@ export async function getPrompt(id: string): Promise<Prompt | null> {
   return (data as Prompt) ?? null;
 }
 
+/**
+ * Leid het representatieve sharing_level van de prompt-rij af uit de gekozen
+ * deelniveaus (het hoogste niveau telt voor de badge/export/filters). Geen
+ * niveau gekozen = privé.
+ */
+function representativeSharingLevel(levels: VisibilityLevel[]): SharingLevel {
+  if (levels.includes('public')) return 'public';
+  if (levels.includes('ministry')) return 'ministry';
+  if (levels.includes('department')) return 'department';
+  return 'private';
+}
+
 export async function createPrompt(input: NewPromptInput): Promise<Prompt> {
   if (local) return localStore.createPrompt(input);
-  const { data, error } = await supabase!.from('prompts').insert(input).select('*').single();
+  const { sharing_levels, ...rest } = input;
+  // De prompt-rij houdt één representatief sharing_level (voor badge/filters);
+  // de echte zichtbaarheid leeft per niveau in prompt_visibility.
+  const row = { ...rest, sharing_level: representativeSharingLevel(sharing_levels) };
+  const { data, error } = await supabase!.from('prompts').insert(row).select('*').single();
   if (error) throw error;
-  return data as Prompt;
+  const prompt = data as Prompt;
+  // Zet de gekozen deelniveaus klaar (afdeling direct goedgekeurd, hoger pending).
+  await setInitialVisibility(prompt.id, sharing_levels, input.organization_id ?? null);
+  return prompt;
 }
 
 export async function toggleFavorite(prompt: Prompt): Promise<Prompt> {

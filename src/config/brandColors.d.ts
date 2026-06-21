@@ -26,7 +26,10 @@ export const categoryPalette: string[];
 
 export const backgroundGradient: { deep: string; mid: string; light: string };
 
-export const orgTypeColor: Record<'ministry' | 'department' | 'agency', string>;
+export const orgTypeColor: Record<
+  'government' | 'ministry' | 'directorate_general' | 'directorate' | 'agency' | 'department',
+  string
+>;
 
 export const ecosystemPalette: string[];
 

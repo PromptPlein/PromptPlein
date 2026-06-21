@@ -1,8 +1,5 @@
 import { useEffect, useState } from 'react';
 import {
-  Send,
-  Check,
-  X,
   MessageSquare,
   History,
   Trash2,
@@ -14,13 +11,11 @@ import { useAuth } from '@/context/AuthContext';
 import { formatDate } from '@/lib/utils';
 import {
   addComment,
-  decide,
   deleteComment,
   listComments,
   listVersions,
-  submitForApproval,
-  PROMPT_STATUS_META,
 } from '@/services/collaborationService';
+import VisibilityApprovalPanel from '@/components/collaboration/VisibilityApprovalPanel';
 import type { Prompt, PromptComment, PromptVersion } from '@/types';
 
 /**
@@ -37,27 +32,18 @@ function authorName(profile?: { full_name?: string | null; email?: string } | nu
 
 export default function CollaborationPanel({
   prompt,
-  onUpdated,
   refreshKey,
 }: {
   prompt: Prompt;
-  onUpdated: (p: Prompt) => void;
-  /** Verhoog deze waarde om versies/reacties opnieuw te laden (bijv. na opslaan). */
+  /** Verhoog deze waarde om deelniveaus/versies opnieuw te laden (bijv. na opslaan). */
   refreshKey?: number;
 }) {
   const { user, isAuthenticated, isAdmin } = useAuth();
   const [comments, setComments] = useState<PromptComment[]>([]);
   const [versions, setVersions] = useState<PromptVersion[]>([]);
   const [newComment, setNewComment] = useState('');
-  const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [openVersion, setOpenVersion] = useState<string | null>(null);
-
-  const status = prompt.status ?? 'approved';
-  const statusMeta = PROMPT_STATUS_META[status];
-
-  const isOwner = !!user && prompt.created_by_user === user.id;
-  const canEdit = isAdmin || isOwner;
 
   async function reload() {
     try {
@@ -77,32 +63,6 @@ export default function CollaborationPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prompt.id, refreshKey]);
 
-  async function handleSubmit() {
-    setBusy(true);
-    try {
-      onUpdated(await submitForApproval(prompt.id));
-      toast.success('Ingediend ter goedkeuring');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Indienen mislukt');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleDecision(decision: 'approved' | 'rejected') {
-    if (!user) return;
-    setBusy(true);
-    try {
-      onUpdated(await decide(prompt.id, decision, user.id, note));
-      setNote('');
-      toast.success(decision === 'approved' ? 'Goedgekeurd' : 'Afgewezen');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Beslissing mislukt');
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function handleAddComment() {
     if (!user || !newComment.trim()) return;
     setBusy(true);
@@ -119,51 +79,8 @@ export default function CollaborationPanel({
 
   return (
     <section className="mt-8 space-y-6">
-      {/* Status & workflow */}
-      <div className="opl-card p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Status</span>
-            <span className={clsx('opl-badge', statusMeta.classes)}>{statusMeta.label}</span>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            {canEdit && (status === 'draft' || status === 'rejected') && (
-              <button onClick={handleSubmit} disabled={busy} className="opl-btn-primary">
-                <Send size={16} /> Indienen ter goedkeuring
-              </button>
-            )}
-            {isAdmin && status === 'submitted' && (
-              <>
-                <button
-                  onClick={() => handleDecision('approved')}
-                  disabled={busy}
-                  className="opl-btn-primary bg-emerald-600 hover:bg-emerald-700"
-                >
-                  <Check size={16} /> Goedkeuren
-                </button>
-                <button
-                  onClick={() => handleDecision('rejected')}
-                  disabled={busy}
-                  className="opl-btn-secondary text-rijksrood"
-                >
-                  <X size={16} /> Afwijzen
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-
-        {isAdmin && status === 'submitted' && (
-          <textarea
-            className="opl-input mt-3"
-            rows={2}
-            placeholder="Optionele opmerking bij je beslissing…"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-          />
-        )}
-      </div>
+      {/* Deelniveaus & goedkeuring per niveau */}
+      <VisibilityApprovalPanel promptId={prompt.id} refreshKey={refreshKey} />
 
       {/* Reacties — uitgeschakeld via COMMENTS_ENABLED (alleen raadplegen + liken). */}
       {COMMENTS_ENABLED && (

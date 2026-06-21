@@ -6,6 +6,8 @@ import type {
   FrameworkRecommendResult,
   MissingField,
   OptimizeResult,
+  PrefilledField,
+  PrefillResult,
   RecommendResult,
   Technique,
   TechniqueRecommendation,
@@ -104,6 +106,18 @@ export async function optimizePrompt(args: {
       }
 
       const data = (await response.json()) as Partial<OptimizeResult>;
+      // Clarity-gate: de AI vond de input onzin en maakte bewust geen template.
+      // Geef dit ongewijzigd door — NIET terugvallen op een lokale template,
+      // want dan zou de gebruiker alsnog een (lege) template krijgen.
+      if (data.unclear) {
+        return {
+          optimized_content: '',
+          success: false,
+          unclear: true,
+          reason: data.reason,
+          provider: (data.provider as OptimizeResult['provider']) ?? 'claude',
+        };
+      }
       if (data.success && data.optimized_content) {
         return {
           optimized_content: data.optimized_content,
@@ -231,6 +245,17 @@ export async function recommendTechniques(args: {
       }
 
       const data = (await response.json()) as Partial<RecommendResult>;
+      // Clarity-gate: het doel was onzin → geef het verdict door i.p.v. terug te
+      // vallen op lokale matching (die zou alsnog willekeurige technieken tonen).
+      if (data.unclear) {
+        return {
+          recommendations: [],
+          success: false,
+          unclear: true,
+          reason: data.reason,
+          provider: (data.provider as RecommendResult['provider']) ?? 'claude',
+        };
+      }
       if (data.success && Array.isArray(data.recommendations)) {
         // Behoud alleen aanbevelingen die naar bestaande technieken verwijzen.
         const valid = new Set(techniques.map((t) => t.id));
@@ -440,6 +465,89 @@ export async function analyzePrompt(args: {
 }
 
 /**
+ * Ontleedt de eigen tekst/prompt van de gebruiker en vult de velden van de gekozen
+ * techniek alvast voor: per veld een voorstel met herkomst ('prompt' = afgeleid uit
+ * de tekst, 'ai' = suggestie) en een korte toelichting. Zo begint de gebruiker niet
+ * met lege velden, maar met een controleerbare, aanpasbare basis. Roept de edge
+ * function in 'prefill'-modus aan; lukt dat niet (of geen backend), dan een lege
+ * voor-invulling zodat de UI gewoon met lege velden verdergaat.
+ */
+export async function prefillFields(args: {
+  ownPrompt: string;
+  technique: Technique;
+  preferredProvider?: AiProvider;
+}): Promise<PrefillResult> {
+  const { ownPrompt, technique, preferredProvider } = args;
+  const content = ownPrompt.trim();
+  const empty: PrefillResult = {
+    summary: '',
+    fields: [],
+    success: true,
+    provider: 'local-template',
+  };
+  if (!content) return empty;
+
+  const functionUrl = getFunctionUrl('optimize-prompt');
+  if (!isSupabaseConfigured || !functionUrl) return empty;
+
+  try {
+    const anonKey = getAnonKey();
+    const response = await fetch(functionUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(anonKey ? { Authorization: `Bearer ${anonKey}`, apikey: anonKey } : {}),
+      },
+      body: JSON.stringify({
+        mode: 'prefill',
+        ownPrompt: content,
+        techniqueName: technique.name,
+        analyzeFields: technique.follow_up_questions.map((q) => ({
+          id: q.id,
+          label: q.label,
+          placeholder: q.placeholder,
+        })),
+        preferredProvider: preferredProvider ?? 'auto',
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Edge function gaf status ${response.status}`);
+    }
+
+    const data = (await response.json()) as Partial<PrefillResult>;
+    // Clarity-gate: de prompt was onzin → geef het verdict door.
+    if (data.unclear) {
+      return {
+        summary: '',
+        fields: [],
+        success: false,
+        unclear: true,
+        reason: data.reason,
+        provider: (data.provider as PrefillResult['provider']) ?? 'claude',
+      };
+    }
+    if (data.success && Array.isArray(data.fields)) {
+      // Behoud alleen voorstellen die naar bestaande velden van de techniek verwijzen.
+      const valid = new Set(technique.follow_up_questions.map((q) => q.id));
+      const fields: PrefilledField[] = data.fields.filter((f) => valid.has(f.id));
+      return {
+        summary: data.summary ?? '',
+        fields,
+        success: true,
+        provider: (data.provider as PrefillResult['provider']) ?? 'claude',
+      };
+    }
+    throw new Error(data.error ?? 'Prefill gaf geen bruikbaar resultaat');
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Onbekende fout';
+    // Voor-invullen is een hulp-laag: bij een fout gewoon lege velden, met een
+    // niet-blokkerende melding zodat de gebruiker alsnog zelf kan invullen.
+    return { ...empty, error: `Voor-invullen mislukt (${message}); begin met lege velden.` };
+  }
+}
+
+/**
  * Lokale fallback voor de titel: leid een korte titel af uit de gegenereerde
  * template zonder AI. Pak bij voorkeur de #Taak/vraag:-, #Rol:- of #Context:-kop,
  * anders de eerste zinvolle regel. Spiegelt de server-side `localTitle`.
@@ -512,4 +620,77 @@ export async function generateTitle(args: {
   }
 
   return localTitle(content);
+}
+
+/** Voorgestelde metadata voor een gegenereerde template (eigen-prompt-/techniek-flow). */
+export interface MetadataSuggestion {
+  /** Voorgestelde titel op basis van de inhoud. */
+  title: string;
+  /** Voorgestelde korte omschrijving op basis van de inhoud. */
+  description: string;
+  /** Id van de best passende bestaande categorie, of null bij geen duidelijke match. */
+  category_id: string | null;
+}
+
+/**
+ * Stelt in één AI-call een titel, omschrijving én best passende categorie voor,
+ * op basis van de gegenereerde template-inhoud. Roept de edge function in
+ * 'metadata'-modus aan; faalt dat (of geen backend), dan een lokale titel zonder
+ * omschrijving/categorie. Dit zijn hulp-suggesties die de gebruiker mag aanpassen.
+ */
+export async function generateMetadata(args: {
+  templateContent: string;
+  categories: { id: string; name: string; description?: string }[];
+  preferredProvider?: AiProvider;
+}): Promise<MetadataSuggestion> {
+  const { templateContent, categories, preferredProvider } = args;
+  const content = templateContent.trim();
+  if (!content) return { title: 'Nieuwe template', description: '', category_id: null };
+
+  const functionUrl = getFunctionUrl('optimize-prompt');
+
+  if (isSupabaseConfigured && functionUrl) {
+    try {
+      const anonKey = getAnonKey();
+      const response = await fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(anonKey ? { Authorization: `Bearer ${anonKey}`, apikey: anonKey } : {}),
+        },
+        body: JSON.stringify({
+          mode: 'metadata',
+          templateContent: content,
+          metaCategories: categories.map((c) => ({
+            id: c.id,
+            name: c.name,
+            description: c.description,
+          })),
+          preferredProvider: preferredProvider ?? 'auto',
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Edge function gaf status ${response.status}`);
+      }
+
+      const data = (await response.json()) as Partial<MetadataSuggestion> & { success?: boolean };
+      if (data.success && data.title?.trim()) {
+        const valid = new Set(categories.map((c) => c.id));
+        return {
+          title: data.title.trim(),
+          description: typeof data.description === 'string' ? data.description.trim() : '',
+          category_id:
+            typeof data.category_id === 'string' && valid.has(data.category_id)
+              ? data.category_id
+              : null,
+        };
+      }
+      throw new Error('Geen metadata ontvangen');
+    } catch {
+      return { title: localTitle(content), description: '', category_id: null };
+    }
+  }
+
+  return { title: localTitle(content), description: '', category_id: null };
 }

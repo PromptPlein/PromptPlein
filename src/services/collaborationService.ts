@@ -5,6 +5,7 @@ import type {
   PromptApproval,
   PromptComment,
   PromptVersion,
+  VisibilityStatus,
 } from '@/types';
 
 /**
@@ -157,4 +158,14 @@ export const PROMPT_STATUS_META: Record<
   approved: { label: 'Goedgekeurd', classes: 'bg-emerald-100 text-emerald-700' },
   rejected: { label: 'Afgewezen', classes: 'bg-red-100 text-rijksrood' },
   archived: { label: 'Gearchiveerd', classes: 'bg-slate-100 text-slate-400' },
+};
+
+/** Weergavemeta per goedkeuringsstatus van één deelniveau (prompt_visibility). */
+export const VISIBILITY_STATUS_META: Record<
+  VisibilityStatus,
+  { label: string; classes: string }
+> = {
+  approved: { label: 'Goedgekeurd', classes: 'bg-emerald-100 text-emerald-700' },
+  pending: { label: 'Wacht op goedkeuring', classes: 'bg-amber-100 text-amber-800' },
+  rejected: { label: 'Afgewezen', classes: 'bg-red-100 text-rijksrood' },
 };

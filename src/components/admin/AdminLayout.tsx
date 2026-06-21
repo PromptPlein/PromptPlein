@@ -10,10 +10,12 @@ import {
   BarChart3,
   Building2,
   UserCog,
+  UserCheck,
   ClipboardCheck,
   PieChart,
   Bot,
   Briefcase,
+  FolderPlus,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '@/context/AuthContext';
@@ -22,11 +24,13 @@ const adminNav = [
   { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/admin/goedkeuringen', label: 'Goedkeuringen', icon: ClipboardCheck, end: false },
   { to: '/admin/gebruikers', label: 'Gebruikers', icon: UserCog, end: false },
+  { to: '/admin/moderatoren', label: 'Moderatoren', icon: UserCheck, end: false },
   { to: '/admin/organisaties', label: 'Organisaties', icon: Building2, end: false },
   { to: '/admin/technieken', label: 'Technieken', icon: Sparkles, end: false },
   { to: '/admin/rollen', label: 'Functies', icon: Users, end: false },
   { to: '/admin/functie-aanvragen', label: 'Functie-aanvragen', icon: Briefcase, end: false },
   { to: '/admin/categorieen', label: 'Categorieën', icon: FolderTree, end: false },
+  { to: '/admin/categorie-aanvragen', label: 'Categorie-aanvragen', icon: FolderPlus, end: false },
   { to: '/admin/analytics', label: 'Analytics', icon: BarChart3, end: false },
   { to: '/admin/rapportage', label: 'Rapportage', icon: PieChart, end: false },
   { to: '/admin/audit', label: 'Audit log', icon: ScrollText, end: false },

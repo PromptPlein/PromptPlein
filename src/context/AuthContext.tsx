@@ -10,6 +10,7 @@ import {
 import type { Session, User } from '@supabase/supabase-js';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import * as authService from '@/services/authService';
+import { fetchMyModeratorOrgIds } from '@/services/orgService';
 import type { AppRole, Profile } from '@/types';
 
 interface AuthContextValue {
@@ -23,6 +24,10 @@ interface AuthContextValue {
   /** Rang-gebaseerde check: 'admin' matcht ook 'super_admin'. */
   hasRole: (role: AppRole) => boolean;
   isAdmin: boolean;
+  /** Is de gebruiker moderator van ten minste één organisatie? */
+  isModerator: boolean;
+  /** De organisatie-id's waarvan de gebruiker moderator is. */
+  moderatorOrgIds: string[];
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (params: { email: string; password: string; fullName?: string }) => Promise<void>;
   signOut: () => Promise<void>;
@@ -37,16 +42,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(isSupabaseConfigured);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [moderatorOrgIds, setModeratorOrgIds] = useState<string[]>([]);
 
   const loadProfile = useCallback(async (userId: string | undefined) => {
     if (!userId) {
       setProfile(null);
+      setModeratorOrgIds([]);
       return;
     }
     try {
-      setProfile(await authService.fetchProfile(userId));
+      // Profiel en moderator-koppelingen parallel laden.
+      const [prof, modOrgs] = await Promise.all([
+        authService.fetchProfile(userId),
+        fetchMyModeratorOrgIds(userId).catch(() => [] as string[]),
+      ]);
+      setProfile(prof);
+      setModeratorOrgIds(modOrgs);
     } catch {
       setProfile(null);
+      setModeratorOrgIds([]);
     }
   }, []);
 
@@ -91,6 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await authService.signOut();
     setSession(null);
     setProfile(null);
+    setModeratorOrgIds([]);
   }, []);
 
   const refreshProfile = useCallback(async () => {
@@ -108,12 +123,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAuthenticated: Boolean(session),
       hasRole: (required: AppRole) => Boolean(session) && ROLE_RANK[role] >= ROLE_RANK[required],
       isAdmin: Boolean(session) && ROLE_RANK[role] >= ROLE_RANK.admin,
+      isModerator: Boolean(session) && moderatorOrgIds.length > 0,
+      moderatorOrgIds,
       signIn,
       signUp,
       signOut,
       refreshProfile,
     };
-  }, [loading, session, profile, signIn, signUp, signOut, refreshProfile]);
+  }, [loading, session, profile, moderatorOrgIds, signIn, signUp, signOut, refreshProfile]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

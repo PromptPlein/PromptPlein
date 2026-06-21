@@ -12,6 +12,7 @@ import type {
   PromptLike,
   PublicProfile,
   Role,
+  SharingLevel,
   Technique,
 } from '@/types';
 
@@ -281,9 +282,20 @@ export const localStore = {
   createPrompt(input: NewPromptInput): Prompt {
     ensureSeeded();
     const prompts = read<Prompt[]>(PROMPTS_KEY, []);
+    const { sharing_levels, ...rest } = input;
+    // Mock-modus zonder backend: leid één representatief sharing_level af uit de
+    // gekozen niveaus (het hoogste telt). Geen niveau = privé.
+    const sharing_level: SharingLevel = sharing_levels.includes('public')
+      ? 'public'
+      : sharing_levels.includes('ministry')
+        ? 'ministry'
+        : sharing_levels.includes('department')
+          ? 'department'
+          : 'private';
     const prompt: Prompt = {
       id: uid('prompt'),
-      ...input,
+      ...rest,
+      sharing_level,
       is_favorite: false,
       created_at: nowIso(),
       updated_at: nowIso(),
