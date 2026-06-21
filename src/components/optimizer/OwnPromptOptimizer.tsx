@@ -16,6 +16,7 @@ import { useReferenceData } from '@/context/ReferenceDataContext';
 import { isContextPrompt } from '@/lib/techniques';
 import { generatePrompt, prefillFields, recommendFramework } from '@/services/optimizeService';
 import PrefillBadge from './PrefillBadge';
+import OptimizingLoader from './OptimizingLoader';
 import type { FieldMeta } from './FollowUpQuestions';
 import type { AiSettings } from '@/services/settingsService';
 import type {
@@ -469,16 +470,19 @@ export default function OwnPromptOptimizer({ settings, onResult }: OwnPromptOpti
           </div>
         )}
 
+        {/* Mooi laadscherm tijdens het genereren van de uiteindelijke prompt. */}
+        {generating && <OptimizingLoader techniqueName={technique?.name} />}
+
         {/* 5. Voor-ingevulde velden — controleer en pas aan */}
-        {prefill && !prefilling && technique && (
+        {prefill && !prefilling && !generating && technique && (
           <div className="animate-fade-in space-y-4 rounded-xl border border-rijksblauw-200 bg-rijksblauw-50/40 p-4 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10">
             <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
               {prefill.summary ||
                 'We hebben de velden alvast voor je ingevuld op basis van je prompt.'}
             </p>
             <p className="text-sm text-slate-600 dark:text-slate-300">
-              Controleer en pas aan waar nodig — vooral de oranje{' '}
-              <span className="font-medium">AI-suggesties</span>. Wat je leeg laat, blijft een
+              Controleer en pas aan waar nodig — vooral de AI-suggesties met het oranje label{' '}
+              <span className="font-medium">Controleren</span>. Wat je leeg laat, blijft een
               plaatshouder in de uiteindelijke prompt.
             </p>
             {technique.follow_up_questions.map((q) => {
@@ -526,8 +530,9 @@ export default function OwnPromptOptimizer({ settings, onResult }: OwnPromptOpti
         </div>
       )}
 
-      {/* 6. Genereren — pas zichtbaar nadat de velden zijn voor-ingevuld */}
-      {prefill && !prefilling && (
+      {/* 6. Genereren — pas zichtbaar nadat de velden zijn voor-ingevuld
+          (verborgen tijdens het genereren; dan toont OptimizingLoader de status) */}
+      {prefill && !prefilling && !generating && (
         <div className="flex justify-end">
           <button
             type="button"

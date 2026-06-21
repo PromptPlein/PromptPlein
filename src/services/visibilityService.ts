@@ -1,6 +1,6 @@
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import type { Prompt, PromptVisibility, VisibilityLevel } from '@/types';
-import { VISIBILITY_LEVELS } from '@/lib/utils';
+import { VISIBILITY_LEVELS, representativeSharingLevel } from '@/lib/utils';
 
 /**
  * Beheer van de deelniveaus (prompt_visibility) van een prompt: het klaarzetten
@@ -66,6 +66,63 @@ export async function setInitialVisibility(
 
   const { error } = await client.from('prompt_visibility').insert(rows);
   if (error) throw error;
+}
+
+/**
+ * Werk de deelniveaus van een bestaande prompt bij (eigenaar/admin). Vergelijkt
+ * de gewenste niveaus met wat er nu staat:
+ *   - nieuw gekozen niveaus → toegevoegd (afdeling direct 'approved', hoger 'pending');
+ *   - weggehaalde niveaus   → verwijderd;
+ *   - ongewijzigde niveaus  → met rust gelaten, zodat een al goedgekeurd niveau
+ *                             niet terugvalt naar 'pending'.
+ * Het representatieve `sharing_level` op de prompt-rij wordt meegewerkt zodat de
+ * badge/filters kloppen. RLS dwingt af dat alleen de eigenaar/admin dit mag.
+ */
+export async function updatePromptVisibility(
+  promptId: string,
+  nextLevels: VisibilityLevel[],
+  organizationId: string | null | undefined,
+): Promise<void> {
+  const client = requireClient();
+
+  const current = await listVisibility(promptId);
+  const currentLevels = new Set(current.map((r) => r.level));
+  const desired = new Set(nextLevels);
+
+  const toAdd = nextLevels.filter((l) => !currentLevels.has(l));
+  const toRemove = current.filter((r) => !desired.has(r.level));
+
+  // Verwijderde niveaus weghalen (op id, niet op level — preciezer onder RLS).
+  if (toRemove.length) {
+    const { error } = await client
+      .from('prompt_visibility')
+      .delete()
+      .in('id', toRemove.map((r) => r.id));
+    if (error) throw error;
+  }
+
+  // Nieuwe niveaus toevoegen met de juiste begin-status en org-koppeling.
+  if (toAdd.length) {
+    const ministryRoot = toAdd.includes('ministry') ? await ministryRootId(organizationId) : null;
+    const rows = toAdd.map((level) => ({
+      prompt_id: promptId,
+      level,
+      org_id:
+        level === 'department' ? organizationId ?? null : level === 'ministry' ? ministryRoot : null,
+      status: AUTO_APPROVED.has(level) ? 'approved' : 'pending',
+      reviewed_at: AUTO_APPROVED.has(level) ? new Date().toISOString() : null,
+    }));
+    const { error } = await client.from('prompt_visibility').insert(rows);
+    if (error) throw error;
+  }
+
+  // Houd het representatieve sharing_level op de prompt-rij in sync met de
+  // hoogste gekozen zichtbaarheid (privé als er niets gekozen is).
+  const { error: promptErr } = await client
+    .from('prompts')
+    .update({ sharing_level: representativeSharingLevel(nextLevels) })
+    .eq('id', promptId);
+  if (promptErr) throw promptErr;
 }
 
 /** Alle deelniveaus van een prompt (voor de detailweergave/het deelpaneel). */

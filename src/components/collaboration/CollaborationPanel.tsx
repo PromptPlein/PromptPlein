@@ -33,10 +33,16 @@ function authorName(profile?: { full_name?: string | null; email?: string } | nu
 export default function CollaborationPanel({
   prompt,
   refreshKey,
+  /** Mag de huidige gebruiker de deelniveaus aanpassen (eigenaar/admin)? */
+  canEditVisibility = false,
+  /** Aangeroepen nadat de zichtbaarheid is aangepast (om de pagina te verversen). */
+  onVisibilityChanged,
 }: {
   prompt: Prompt;
   /** Verhoog deze waarde om deelniveaus/versies opnieuw te laden (bijv. na opslaan). */
   refreshKey?: number;
+  canEditVisibility?: boolean;
+  onVisibilityChanged?: () => void;
 }) {
   const { user, isAuthenticated, isAdmin } = useAuth();
   const [comments, setComments] = useState<PromptComment[]>([]);
@@ -80,7 +86,13 @@ export default function CollaborationPanel({
   return (
     <section className="mt-8 space-y-6">
       {/* Deelniveaus & goedkeuring per niveau */}
-      <VisibilityApprovalPanel promptId={prompt.id} refreshKey={refreshKey} />
+      <VisibilityApprovalPanel
+        promptId={prompt.id}
+        refreshKey={refreshKey}
+        canEdit={canEditVisibility}
+        organizationId={prompt.organization_id ?? null}
+        onChanged={onVisibilityChanged}
+      />
 
       {/* Reacties — uitgeschakeld via COMMENTS_ENABLED (alleen raadplegen + liken). */}
       {COMMENTS_ENABLED && (

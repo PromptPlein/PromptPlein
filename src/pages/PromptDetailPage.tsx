@@ -412,7 +412,17 @@ export default function PromptDetailPage() {
         </section>
       )}
 
-      <CollaborationPanel prompt={prompt} refreshKey={versionRefresh} />
+      <CollaborationPanel
+        prompt={prompt}
+        refreshKey={versionRefresh}
+        canEditVisibility={canManage}
+        onVisibilityChanged={async () => {
+          // Zichtbaarheid is aangepast → prompt opnieuw ophalen zodat de
+          // sharing-badge bovenaan de pagina klopt.
+          const fresh = await getPrompt(prompt.id);
+          if (fresh) setPrompt(fresh);
+        }}
+      />
 
       <ShareModal open={shareOpen} onClose={() => setShareOpen(false)} prompt={prompt} />
       <ExportModal

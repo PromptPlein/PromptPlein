@@ -59,6 +59,19 @@ export function visibilityMeta(level: VisibilityLevel) {
   return VISIBILITY_LEVELS.find((v) => v.value === level);
 }
 
+/**
+ * Leid het representatieve sharing_level van een prompt-rij af uit de gekozen
+ * deelniveaus (het hoogste niveau telt voor de badge/export/filters). Geen
+ * niveau gekozen = privé. Eén bron, gebruikt bij aanmaken én bij het later
+ * aanpassen van de zichtbaarheid.
+ */
+export function representativeSharingLevel(levels: VisibilityLevel[]): SharingLevel {
+  if (levels.includes('public')) return 'public';
+  if (levels.includes('ministry')) return 'ministry';
+  if (levels.includes('department')) return 'department';
+  return 'private';
+}
+
 export function sharingLabel(level: SharingLevel): string {
   return SHARING_LEVELS.find((s) => s.value === level)?.label ?? level;
 }

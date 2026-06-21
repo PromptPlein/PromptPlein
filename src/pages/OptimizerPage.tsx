@@ -15,6 +15,7 @@ import GoalRecommender from '@/components/optimizer/GoalRecommender';
 import EntryOptionCard from '@/components/optimizer/EntryOptionCard';
 import OwnPromptOptimizer from '@/components/optimizer/OwnPromptOptimizer';
 import FollowUpQuestions from '@/components/optimizer/FollowUpQuestions';
+import OptimizingLoader from '@/components/optimizer/OptimizingLoader';
 import OptimizedOutput from '@/components/optimizer/OptimizedOutput';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { getPrompt, saveOptimization } from '@/services/repository';
@@ -425,8 +426,13 @@ export default function OptimizerPage() {
             </div>
           )}
 
+          {/* Mooi laadscherm tijdens het bouwen van de template. */}
+          {entryMode === 'techniques' && optimizing && (
+            <OptimizingLoader techniqueName={technique?.name} />
+          )}
+
           {/* De eigen-prompt-flow heeft een eigen genereerknop; deze geldt voor de techniek-flow. */}
-          {entryMode === 'techniques' && (
+          {entryMode === 'techniques' && !optimizing && (
             <div className="flex flex-wrap items-center justify-end gap-3">
               <button
                 className="opl-btn-primary px-6 py-2.5"

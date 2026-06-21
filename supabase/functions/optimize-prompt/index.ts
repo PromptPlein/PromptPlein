@@ -1242,11 +1242,13 @@ Deno.serve(async (req: Request) => {
           ? 'recommend-framework'
           : body.mode === 'analyze'
             ? 'analyze'
-            : body.mode === 'title'
-              ? 'title'
-              : body.mode === 'metadata'
-                ? 'metadata'
-                : 'generate';
+            : body.mode === 'prefill'
+              ? 'prefill'
+              : body.mode === 'title'
+                ? 'title'
+                : body.mode === 'metadata'
+                  ? 'metadata'
+                  : 'generate';
     const order = buildOrder(body.preferredProvider);
     const temperature = clampTemp(body.temperature);
 
@@ -1290,8 +1292,15 @@ Deno.serve(async (req: Request) => {
       const ownPrompt = body.ownPrompt?.trim();
       const fields = Array.isArray(body.analyzeFields) ? body.analyzeFields : [];
       if (!ownPrompt || fields.length === 0) {
+        // Diagnostisch: benoem precies wat ontbrak, zodat de client-side melding
+        // (en de logs) duidelijk maken waarom de prefill werd geweigerd.
+        const missing = [
+          !ownPrompt ? 'ownPrompt (lege of ontbrekende tekst)' : null,
+          fields.length === 0 ? 'analyzeFields (geen velden meegestuurd)' : null,
+        ].filter(Boolean);
+        console.error('prefill 400 — ontbrekende input:', missing.join(', '));
         return new Response(
-          JSON.stringify({ success: false, error: 'ownPrompt en analyzeFields zijn verplicht' }),
+          JSON.stringify({ success: false, error: `prefill: ontbrekend — ${missing.join(' en ')}` }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
         );
       }

@@ -490,6 +490,12 @@ export async function prefillFields(args: {
   const functionUrl = getFunctionUrl('optimize-prompt');
   if (!isSupabaseConfigured || !functionUrl) return empty;
 
+  const analyzeFields = technique.follow_up_questions.map((q) => ({
+    id: q.id,
+    label: q.label,
+    placeholder: q.placeholder,
+  }));
+
   try {
     const anonKey = getAnonKey();
     const response = await fetch(functionUrl, {
@@ -502,17 +508,16 @@ export async function prefillFields(args: {
         mode: 'prefill',
         ownPrompt: content,
         techniqueName: technique.name,
-        analyzeFields: technique.follow_up_questions.map((q) => ({
-          id: q.id,
-          label: q.label,
-          placeholder: q.placeholder,
-        })),
+        analyzeFields,
         preferredProvider: preferredProvider ?? 'auto',
       }),
     });
 
     if (!response.ok) {
-      throw new Error(`Edge function gaf status ${response.status}`);
+      // Diagnostisch: lees de servermelding mee zodat de echte reden zichtbaar wordt.
+      const detail = await response.text().catch(() => '');
+      console.error('[prefill] edge function', response.status, detail);
+      throw new Error(`Edge function gaf status ${response.status}${detail ? ` — ${detail}` : ''}`);
     }
 
     const data = (await response.json()) as Partial<PrefillResult>;

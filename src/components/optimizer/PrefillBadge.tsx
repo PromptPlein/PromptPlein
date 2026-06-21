@@ -26,7 +26,7 @@ export default function PrefillBadge({ source, note }: PrefillBadgeProps) {
       title={note || (fromPrompt ? 'Afgeleid uit je prompt' : 'AI-suggestie — controleer of dit klopt')}
     >
       {fromPrompt ? <Sparkles size={11} /> : <Wand2 size={11} />}
-      {fromPrompt ? 'Uit jouw prompt' : 'AI-suggestie'}
+      {fromPrompt ? 'Uit jouw prompt' : 'Controleren'}
     </span>
   );
 }

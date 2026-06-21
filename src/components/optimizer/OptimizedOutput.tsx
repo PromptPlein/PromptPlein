@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Copy, Check, RotateCcw, Save, Share2, Loader2, FolderCheck, Sparkles } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Link } from 'react-router-dom';
@@ -23,7 +23,7 @@ interface OptimizedOutputProps {
 }
 
 export default function OptimizedOutput({ result, technique, goal, onReset }: OptimizedOutputProps) {
-  const { profile, user } = useAuth();
+  const { profile, user, isAuthenticated } = useAuth();
   const { categories, organizations } = useReferenceData();
   const [copied, setCopied] = useState(false);
 
@@ -35,10 +35,20 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
   const [description, setDescription] = useState('');
   // Categorie en organisatie moeten net als bij het uploaden gekozen kunnen worden.
   const [categoryId, setCategoryId] = useState<string | null>(null);
-  const [organizationId, setOrganizationId] = useState<string>('');
-  // Vanuit de generator standaard Rijksbreed delen — daar zijn templates meestal
-  // breed bruikbaar. De maker kan dit aanpassen of meerdere niveaus aanvinken.
-  const [sharingLevels, setSharingLevels] = useState<VisibilityLevel[]>(['public']);
+  // Organisatie staat standaard op die van de gebruiker (uit het profiel), zodat
+  // de template meteen aan de eigen afdeling/ministerie gekoppeld is. De maker
+  // kan dit aanpassen. We onthouden of de gebruiker het veld zelf heeft gewijzigd.
+  const [organizationId, setOrganizationId] = useState<string>(profile?.organization_id ?? '');
+  const organizationTouched = useRef(false);
+  // Standaard delen met de eigen afdeling: dat niveau is direct beschikbaar
+  // (geen wachttijd) en is de meest voorkomende keuze. Alleen voorselecteren als
+  // we de organisatie van de gebruiker kennen — een afdelingsniveau zonder
+  // organisatie zou voor niemand gericht zichtbaar zijn. De maker kan dit
+  // aanpassen of meerdere niveaus aanvinken.
+  const [sharingLevels, setSharingLevels] = useState<VisibilityLevel[]>(
+    profile?.organization_id ? ['department'] : [],
+  );
+  const sharingTouched = useRef(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<Prompt | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
@@ -57,6 +67,21 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
   const [catRequestBusy, setCatRequestBusy] = useState(false);
   // Naam van de aangevraagde categorie zodra de aanvraag is verstuurd (pending).
   const [pendingCategory, setPendingCategory] = useState<string | null>(null);
+
+  // Het profiel laadt asynchroon: zodra de organisatie van de gebruiker bekend is
+  // en de gebruiker de velden nog niet zelf koos, vullen we ze standaard voor —
+  // organisatie op die van het profiel, en het afdelings-deelniveau aangevinkt.
+  useEffect(() => {
+    if (!profile?.organization_id) return;
+    if (!organizationTouched.current && !organizationId) {
+      setOrganizationId(profile.organization_id);
+    }
+    if (!sharingTouched.current && sharingLevels.length === 0) {
+      setSharingLevels(['department']);
+    }
+    // sharingLevels bewust niet als dependency: we vullen alleen één keer voor.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.organization_id, organizationId]);
 
   /** Open het opslaan-formulier en haal eenmalig titel + omschrijving + categorie op. */
   function openSave() {
@@ -121,6 +146,20 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
       toast.error('Geef je template een titel.');
       return;
     }
+    // Opslaan vereist een ingelogde gebruiker: de RLS-policy op `prompts` staat
+    // alleen inserts toe voor de rol `authenticated`. Zonder sessie geeft Supabase
+    // een 401 die voor de gebruiker nietszeggend is — vang dat hier af.
+    if (!isAuthenticated) {
+      toast.error('Log in om deze template op te slaan in de bibliotheek.');
+      return;
+    }
+    // Afdeling/ministerie delen vereist een organisatie om op te richten — anders
+    // weet niemand met welke afdeling de template gedeeld is.
+    const needsOrg = sharingLevels.includes('department') || sharingLevels.includes('ministry');
+    if (needsOrg && !organizationId) {
+      toast.error('Kies een organisatie om de template met je afdeling of ministerie te delen.');
+      return;
+    }
     setSaving(true);
     try {
       const prompt = await createPrompt({
@@ -136,7 +175,7 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
       setShowSave(false);
       toast.success('Template opgeslagen in de bibliotheek');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Opslaan mislukt');
+      toast.error(humanizeSaveError(err));
     } finally {
       setSaving(false);
     }
@@ -182,6 +221,20 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
       {/* Opslaan-formulier */}
       {showSave && !saved && (
         <div className="space-y-3 rounded-xl border border-rijksblauw-200 bg-rijksblauw-50/40 p-4 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10">
+          {/* Opslaan vereist een ingelogde gebruiker (RLS op `prompts`). Maak dat
+              meteen duidelijk in plaats van een 401 bij het opslaan. */}
+          {!isAuthenticated && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300">
+              Je bent niet ingelogd. Om een template in de bibliotheek op te slaan moet je eerst{' '}
+              <Link
+                to="/auth/login"
+                className="font-medium underline underline-offset-2 hover:no-underline"
+              >
+                inloggen
+              </Link>
+              . Je kunt de template ondertussen wel kopiëren.
+            </div>
+          )}
           <div>
             <label className="opl-label" htmlFor="tpl-title">
               Titel van de template
@@ -324,7 +377,10 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
                 id="tpl-organization"
                 className="opl-input"
                 value={organizationId}
-                onChange={(e) => setOrganizationId(e.target.value)}
+                onChange={(e) => {
+                  organizationTouched.current = true;
+                  setOrganizationId(e.target.value);
+                }}
               >
                 <option value="">Geen organisatie</option>
                 {organizations.map((o) => (
@@ -339,12 +395,24 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
               </p>
             </div>
           )}
-          <VisibilityPicker idPrefix="tpl" value={sharingLevels} onChange={setSharingLevels} />
+          <VisibilityPicker
+            idPrefix="tpl"
+            value={sharingLevels}
+            onChange={(next) => {
+              sharingTouched.current = true;
+              setSharingLevels(next);
+            }}
+          />
           <div className="flex justify-end gap-2">
             <button className="opl-btn-secondary" onClick={() => setShowSave(false)} disabled={saving}>
               Annuleren
             </button>
-            <button className="opl-btn-primary" onClick={handleSave} disabled={saving}>
+            <button
+              className="opl-btn-primary"
+              onClick={handleSave}
+              disabled={saving || !isAuthenticated}
+              title={!isAuthenticated ? 'Log in om op te slaan' : undefined}
+            >
               {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
               {saving ? 'Opslaan…' : 'Opslaan'}
             </button>
@@ -375,6 +443,29 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
       {saved && <ShareModal open={shareOpen} onClose={() => setShareOpen(false)} prompt={saved} />}
     </div>
   );
+}
+
+/**
+ * Vertaal een opslag-fout naar een begrijpelijke melding. De ruwe Supabase-fout
+ * (401, of een RLS-overtreding) zegt de gebruiker niets — een 401/JWT-fout
+ * betekent vrijwel altijd dat de sessie ontbreekt of is verlopen.
+ */
+function humanizeSaveError(err: unknown): string {
+  // Supabase/PostgREST-fouten dragen vaak een `code` en/of `status`.
+  const e = err as { code?: string; status?: number; message?: string } | null;
+  const msg = (e?.message ?? '').toLowerCase();
+  const isAuthIssue =
+    e?.status === 401 ||
+    e?.code === 'PGRST301' || // JWT ontbreekt/ongeldig
+    e?.code === '42501' || // onvoldoende rechten (RLS)
+    msg.includes('jwt') ||
+    msg.includes('unauthorized') ||
+    msg.includes('row-level security') ||
+    msg.includes('row level security');
+  if (isAuthIssue) {
+    return 'Je bent niet (meer) ingelogd. Log opnieuw in om de template op te slaan.';
+  }
+  return e?.message || 'Opslaan mislukt';
 }
 
 /** Stel een zinvolle standaardtitel voor op basis van techniek en doel. */

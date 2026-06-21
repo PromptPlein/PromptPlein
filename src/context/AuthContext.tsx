@@ -29,7 +29,12 @@ interface AuthContextValue {
   /** De organisatie-id's waarvan de gebruiker moderator is. */
   moderatorOrgIds: string[];
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (params: { email: string; password: string; fullName?: string }) => Promise<void>;
+  signUp: (params: {
+    email: string;
+    password: string;
+    fullName?: string;
+    organizationId?: string;
+  }) => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -95,7 +100,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signUp = useCallback(
-    async (params: { email: string; password: string; fullName?: string }) => {
+    async (params: {
+      email: string;
+      password: string;
+      fullName?: string;
+      organizationId?: string;
+    }) => {
       await authService.signUp(params);
     },
     [],

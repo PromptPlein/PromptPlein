@@ -1,30 +1,32 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { UserCircle2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/context/AuthContext';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { updateOwnProfile } from '@/services/authService';
-import { listOrganizations, APP_ROLE_LABELS } from '@/services/orgService';
+import { APP_ROLE_LABELS } from '@/services/orgService';
 import { requestFunction } from '@/services/functionRequestService';
+import { buildOrgOptions, orgOptionToSearchable } from '@/lib/orgTree';
 import SearchableSelect from '@/components/common/SearchableSelect';
-import type { Organization } from '@/types';
 
 export default function ProfilePage() {
   const { user, profile, refreshProfile } = useAuth();
-  const { roles } = useReferenceData();
-  const [orgs, setOrgs] = useState<Organization[]>([]);
+  const { roles, organizations } = useReferenceData();
   const [fullName, setFullName] = useState(profile?.full_name ?? '');
-  const [orgId, setOrgId] = useState<string>(profile?.organization_id ?? '');
+  const [orgId, setOrgId] = useState<string | null>(profile?.organization_id ?? null);
   const [functionId, setFunctionId] = useState<string | null>(profile?.function_id ?? null);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    listOrganizations().then(setOrgs).catch(() => setOrgs([]));
-  }, []);
+  // Zelfde pad-gebaseerde keuzelijst als bij registratie: kies je afdeling/dienst
+  // en je bent automatisch gekoppeld aan het ministerie erboven.
+  const orgOptions = useMemo(
+    () => buildOrgOptions(organizations).map(orgOptionToSearchable),
+    [organizations],
+  );
 
   useEffect(() => {
     setFullName(profile?.full_name ?? '');
-    setOrgId(profile?.organization_id ?? '');
+    setOrgId(profile?.organization_id ?? null);
     setFunctionId(profile?.function_id ?? null);
   }, [profile]);
 
@@ -87,15 +89,20 @@ export default function ProfilePage() {
         </div>
 
         <div>
-          <label className="opl-label">Organisatie</label>
-          <select className="opl-input" value={orgId} onChange={(e) => setOrgId(e.target.value)}>
-            <option value="">— Geen organisatie —</option>
-            {orgs.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.name}
-              </option>
-            ))}
-          </select>
+          <label className="opl-label" htmlFor="profile-org">Organisatie of afdeling</label>
+          <SearchableSelect
+            id="profile-org"
+            options={orgOptions}
+            value={orgId}
+            onChange={setOrgId}
+            placeholder="Zoek je afdeling, dienst of ministerie"
+            clearLabel="— Geen organisatie —"
+            searchPlaceholder="Zoek bijv. op je afdeling of dienst (zoals “DUO”)…"
+          />
+          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+            Kies de eenheid waar je werkt — je wordt automatisch gekoppeld aan het ministerie en de
+            tussenliggende lagen.
+          </p>
         </div>
 
         <div>

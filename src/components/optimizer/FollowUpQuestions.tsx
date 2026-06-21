@@ -106,7 +106,7 @@ export default function FollowUpQuestions({
         </div>
         <p className="text-sm text-slate-500 dark:text-slate-400">
           {hasPrefill
-            ? 'We hebben deze velden alvast voor je ingevuld op basis van je prompt. Controleer en pas aan waar nodig — vooral de oranje AI-suggesties.'
+            ? 'We hebben deze velden alvast voor je ingevuld op basis van je prompt. Controleer en pas aan waar nodig — vooral de AI-suggesties met het oranje label "Controleren".'
             : 'Dit zijn de bouwstenen van je template. Klopt alles? Bouw dan de herbruikbare template.'}
         </p>
         <ul className="divide-y divide-slate-100 dark:divide-slate-700">

@@ -23,13 +23,20 @@ export async function signUp(params: {
   email: string;
   password: string;
   fullName?: string;
+  /** De gekozen organisatie/afdeling — komt via metadata mee naar het profiel. */
+  organizationId?: string;
 }): Promise<void> {
   const client = requireClient();
+  // De DB-trigger handle_new_user leest full_name én organization_id uit de
+  // metadata en valideert de organisatie voordat hij hem op het profiel zet.
+  const data: Record<string, string> = {};
+  if (params.fullName) data.full_name = params.fullName;
+  if (params.organizationId) data.organization_id = params.organizationId;
   const { error } = await client.auth.signUp({
     email: params.email,
     password: params.password,
     options: {
-      data: params.fullName ? { full_name: params.fullName } : undefined,
+      data: Object.keys(data).length ? data : undefined,
       emailRedirectTo: `${window.location.origin}/auth/login`,
     },
   });

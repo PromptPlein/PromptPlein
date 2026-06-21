@@ -1,16 +1,28 @@
-import { useState, type FormEvent } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/context/AuthContext';
+import { useReferenceData } from '@/context/ReferenceDataContext';
+import { buildOrgOptions, orgOptionToSearchable } from '@/lib/orgTree';
+import SearchableSelect from '@/components/common/SearchableSelect';
 import AuthLayout from './AuthLayout';
 
 export default function SignupPage() {
   const { signUp, configured } = useAuth();
+  const { organizations, loading: orgsLoading } = useReferenceData();
   const navigate = useNavigate();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  // De gekozen organisatie/afdeling: kies de diepste eenheid, dan ben je
+  // automatisch verbonden met alle lagen daarboven (ministerie, dienst …).
+  const [organizationId, setOrganizationId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const orgOptions = useMemo(
+    () => buildOrgOptions(organizations).map(orgOptionToSearchable),
+    [organizations],
+  );
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -19,9 +31,18 @@ export default function SignupPage() {
       toast.error('Kies een wachtwoord van minimaal 8 tekens.');
       return;
     }
+    if (!organizationId) {
+      toast.error('Kies je organisatie of afdeling.');
+      return;
+    }
     setBusy(true);
     try {
-      await signUp({ email: email.trim(), password, fullName: fullName.trim() || undefined });
+      await signUp({
+        email: email.trim(),
+        password,
+        fullName: fullName.trim() || undefined,
+        organizationId,
+      });
       toast.success('Account aangemaakt. Controleer je e-mail om te bevestigen.');
       navigate('/auth/login', { replace: true });
     } catch (err) {
@@ -78,7 +99,33 @@ export default function SignupPage() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
-        <button type="submit" className="opl-btn-primary w-full" disabled={busy || !configured}>
+
+        {/* Organisatie/afdeling — verplicht. Eén zoekveld: kies je afdeling en je
+            bent automatisch verbonden met alle lagen erboven. */}
+        <div>
+          <label className="opl-label" htmlFor="signup-org">
+            Organisatie of afdeling
+          </label>
+          <SearchableSelect
+            id="signup-org"
+            options={orgOptions}
+            value={organizationId}
+            onChange={setOrganizationId}
+            disabled={orgsLoading || !configured}
+            placeholder={orgsLoading ? 'Organisaties laden…' : 'Zoek je afdeling, dienst of ministerie'}
+            searchPlaceholder="Zoek bijv. op je afdeling of dienst (zoals “DUO”)…"
+          />
+          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+            Kies de eenheid waar je werkt. Je wordt automatisch gekoppeld aan het ministerie en de
+            tussenliggende lagen.
+          </p>
+        </div>
+
+        <button
+          type="submit"
+          className="opl-btn-primary w-full"
+          disabled={busy || !configured || !organizationId}
+        >
           {busy ? 'Bezig…' : 'Account aanmaken'}
         </button>
       </form>
