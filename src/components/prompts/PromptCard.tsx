@@ -26,7 +26,7 @@ interface PromptCardProps {
 
 export default function PromptCard({ prompt, author, onChanged }: PromptCardProps) {
   const navigate = useNavigate();
-  const { categoryById, organizationById } = useReferenceData();
+  const { categoryById, roleById, organizationById } = useReferenceData();
   const { user, configured } = useAuth();
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -44,6 +44,7 @@ export default function PromptCard({ prompt, author, onChanged }: PromptCardProp
   }, [prompt.like_count, prompt.liked_by_me]);
 
   const category = categoryById(prompt.category_id);
+  const role = roleById(prompt.role_id);
   const org = organizationById(author?.organization_id ?? prompt.organization_id);
 
   const authorId = prompt.created_by_user ?? author?.id ?? null;
@@ -174,6 +175,9 @@ export default function PromptCard({ prompt, author, onChanged }: PromptCardProp
       <div className="mb-4 flex flex-wrap gap-1.5">
         {category && (
           <span className="opl-badge bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">{category.name}</span>
+        )}
+        {role && (
+          <span className="opl-badge bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300">{role.name}</span>
         )}
         <span className={`opl-badge ${sharingBadgeClasses(prompt.sharing_level)}`}>
           {sharingLabel(prompt.sharing_level)}

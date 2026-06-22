@@ -42,6 +42,8 @@ export async function optimizePrompt(args: {
   promptContent: string;
   followUpAnswers: Record<string, string>;
   preferredProvider?: AiProvider;
+  /** Concreet API-model binnen de provider; leeg = server-default voor die provider. */
+  preferredModel?: string;
   /** Admin-hoofdprompt (systeeminstructie); leeg = server-default. */
   systemPrompt?: string;
   /** Admin-toon/schrijfstijl die aan de prompt wordt meegegeven. */
@@ -54,6 +56,7 @@ export async function optimizePrompt(args: {
     promptContent,
     followUpAnswers,
     preferredProvider,
+    preferredModel,
     systemPrompt,
     toneInstruction,
     temperature,
@@ -95,6 +98,7 @@ export async function optimizePrompt(args: {
             }))
             .filter((f) => f.answer.trim()),
           preferredProvider: preferredProvider ?? 'auto',
+          preferredModel,
           systemPrompt,
           toneInstruction,
           temperature,
@@ -229,8 +233,9 @@ export async function recommendTechniques(args: {
   goal: string;
   techniques: Technique[];
   preferredProvider?: AiProvider;
+  preferredModel?: string;
 }): Promise<RecommendResult> {
-  const { goal, techniques, preferredProvider } = args;
+  const { goal, techniques, preferredProvider, preferredModel } = args;
   const functionUrl = getFunctionUrl('optimize-prompt');
 
   if (isSupabaseConfigured && functionUrl) {
@@ -253,6 +258,7 @@ export async function recommendTechniques(args: {
             use_cases: t.use_cases,
           })),
           preferredProvider: preferredProvider ?? 'auto',
+          preferredModel,
         }),
       });
 
@@ -312,8 +318,9 @@ export async function recommendFramework(args: {
   ownPrompt: string;
   frameworks: Technique[];
   preferredProvider?: AiProvider;
+  preferredModel?: string;
 }): Promise<FrameworkRecommendResult> {
-  const { ownPrompt, frameworks, preferredProvider } = args;
+  const { ownPrompt, frameworks, preferredProvider, preferredModel } = args;
   const functionUrl = getFunctionUrl('optimize-prompt');
 
   if (isSupabaseConfigured && functionUrl) {
@@ -336,6 +343,7 @@ export async function recommendFramework(args: {
             use_cases: t.use_cases,
           })),
           preferredProvider: preferredProvider ?? 'auto',
+          preferredModel,
         }),
       });
 
@@ -409,8 +417,9 @@ export async function analyzePrompt(args: {
   ownPrompt: string;
   technique: Technique;
   preferredProvider?: AiProvider;
+  preferredModel?: string;
 }): Promise<AnalyzeResult> {
-  const { ownPrompt, technique, preferredProvider } = args;
+  const { ownPrompt, technique, preferredProvider, preferredModel } = args;
   const functionUrl = getFunctionUrl('optimize-prompt');
 
   if (isSupabaseConfigured && functionUrl) {
@@ -432,6 +441,7 @@ export async function analyzePrompt(args: {
             placeholder: q.placeholder,
           })),
           preferredProvider: preferredProvider ?? 'auto',
+          preferredModel,
         }),
       });
 
@@ -492,8 +502,9 @@ export async function prefillFields(args: {
   ownPrompt: string;
   technique: Technique;
   preferredProvider?: AiProvider;
+  preferredModel?: string;
 }): Promise<PrefillResult> {
-  const { ownPrompt, technique, preferredProvider } = args;
+  const { ownPrompt, technique, preferredProvider, preferredModel } = args;
   const content = ownPrompt.trim();
   const empty: PrefillResult = {
     summary: '',
@@ -526,6 +537,7 @@ export async function prefillFields(args: {
         techniqueName: technique.name,
         analyzeFields,
         preferredProvider: preferredProvider ?? 'auto',
+        preferredModel,
       }),
     });
 
@@ -602,8 +614,9 @@ function localTitle(templateContent: string): string {
 export async function generateTitle(args: {
   templateContent: string;
   preferredProvider?: AiProvider;
+  preferredModel?: string;
 }): Promise<string> {
-  const { templateContent, preferredProvider } = args;
+  const { templateContent, preferredProvider, preferredModel } = args;
   const content = templateContent.trim();
   if (!content) return 'Nieuwe template';
 
@@ -622,6 +635,7 @@ export async function generateTitle(args: {
           mode: 'title',
           templateContent: content,
           preferredProvider: preferredProvider ?? 'auto',
+          preferredModel,
         }),
       });
 
@@ -663,8 +677,9 @@ export async function generateMetadata(args: {
   templateContent: string;
   categories: { id: string; name: string; description?: string }[];
   preferredProvider?: AiProvider;
+  preferredModel?: string;
 }): Promise<MetadataSuggestion> {
-  const { templateContent, categories, preferredProvider } = args;
+  const { templateContent, categories, preferredProvider, preferredModel } = args;
   const content = templateContent.trim();
   if (!content) return { title: 'Nieuwe template', description: '', category_id: null };
 
@@ -688,6 +703,7 @@ export async function generateMetadata(args: {
             description: c.description,
           })),
           preferredProvider: preferredProvider ?? 'auto',
+          preferredModel,
         }),
       });
 

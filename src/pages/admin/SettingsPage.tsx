@@ -10,10 +10,19 @@ import {
   X,
   Sliders,
   Bot,
+  Layers,
+  Coins,
 } from 'lucide-react';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
-import { AI_MODELS } from '@/config/aiModels';
+import {
+  AI_MODELS,
+  PROVIDER_MODELS,
+  defaultModelFor,
+  modelLabel,
+  pricingSummary,
+} from '@/config/aiModels';
+import type { AiProvider } from '@/config/aiModels';
 import {
   getAiSettings,
   saveAiSettings,
@@ -51,6 +60,11 @@ export default function SettingsPage() {
 
   function patch(p: Partial<AiSettings>) {
     setSettings((s) => ({ ...s, ...p }));
+  }
+
+  /** Kies een provider én zet meteen het standaardmodel van die provider klaar. */
+  function selectProvider(provider: AiProvider) {
+    patch({ provider, model: defaultModelFor(provider) });
   }
 
   function addTopic() {
@@ -128,7 +142,7 @@ export default function SettingsPage() {
               <button
                 key={m.id}
                 type="button"
-                onClick={() => patch({ provider: m.id })}
+                onClick={() => selectProvider(m.id)}
                 aria-pressed={active}
                 className={clsx(
                   'flex items-start justify-between gap-3 rounded-xl border p-4 text-left transition-all',
@@ -150,6 +164,74 @@ export default function SettingsPage() {
             );
           })}
         </div>
+
+        {/* Modelkeuze binnen de gekozen provider. Verschijnt zodra een concrete
+            provider (geen 'Automatisch') is geselecteerd. */}
+        {settings.provider !== 'auto' && (
+          <div className="mt-5 border-t border-slate-200 pt-5 dark:border-slate-700">
+            <div className="mb-3 flex items-center gap-2">
+              <Layers size={16} className="text-rijksblauw-500" />
+              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                Model voor {AI_MODELS.find((m) => m.id === settings.provider)?.label}
+              </h3>
+            </div>
+            <p className="mb-3 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
+              Kies welk specifiek API-model van deze provider voor alle optimalisaties wordt gebruikt.
+              Prijzen zijn richtbedragen in USD per 1 miljoen tokens (in = je prompt, uit = het
+              antwoord); duurdere modellen leveren doorgaans meer kwaliteit.
+            </p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {PROVIDER_MODELS[settings.provider].map((mdl) => {
+                const active = mdl.id === settings.model;
+                return (
+                  <button
+                    key={mdl.id}
+                    type="button"
+                    onClick={() => patch({ model: mdl.id })}
+                    aria-pressed={active}
+                    className={clsx(
+                      'flex items-start justify-between gap-3 rounded-xl border p-4 text-left transition-all',
+                      active
+                        ? 'border-rijksblauw-500 bg-rijksblauw-50 ring-2 ring-rijksblauw-500/20 dark:bg-rijksblauw-500/15'
+                        : 'border-slate-200 bg-white hover:border-rijksblauw-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-800',
+                    )}
+                  >
+                    <span className="flex flex-col">
+                      <span className="font-semibold text-rijksblauw-700 dark:text-rijksblauw-200">
+                        {mdl.label}
+                      </span>
+                      <span className="mt-0.5 text-sm text-slate-600 dark:text-slate-300">{mdl.hint}</span>
+                      <span className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-slate-500 dark:text-slate-400">
+                        <Coins size={12} className="text-slate-400" />
+                        {pricingSummary(mdl.pricing)}
+                      </span>
+                      <span className="mt-1 font-mono text-xs text-slate-400 dark:text-slate-500">
+                        {mdl.id}
+                      </span>
+                    </span>
+                    {active && (
+                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-rijksblauw-500 text-white">
+                        <Check size={14} />
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
+              Gekozen model:{' '}
+              <span className="font-semibold text-rijksblauw-700 dark:text-rijksblauw-200">
+                {modelLabel(settings.provider, settings.model) || 'standaardmodel'}
+              </span>
+              {(() => {
+                const chosen = PROVIDER_MODELS[settings.provider].find(
+                  (m) => m.id === settings.model,
+                );
+                return chosen ? <span> — {pricingSummary(chosen.pricing)}</span> : null;
+              })()}
+            </p>
+          </div>
+        )}
       </section>
 
       {/* 2. Hoofd-prompt + toon + creativiteit */}

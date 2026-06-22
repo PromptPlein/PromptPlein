@@ -6,6 +6,7 @@ import { useAuthGuard } from '@/hooks/useAuthGuard';
 import { createPrompt } from '@/services/repository';
 import { trackEvent } from '@/services/analyticsService';
 import { requestCategory } from '@/services/categoryRequestService';
+import { requestFunction } from '@/services/functionRequestService';
 import { getCurrentUser } from '@/lib/utils';
 import SearchableSelect from '@/components/common/SearchableSelect';
 import VisibilityPicker from '@/components/prompts/VisibilityPicker';
@@ -17,13 +18,14 @@ interface PromptUploadFormProps {
 }
 
 export default function PromptUploadForm({ onCreated, onCancel }: PromptUploadFormProps) {
-  const { categories, organizations } = useReferenceData();
+  const { categories, roles, organizations } = useReferenceData();
   const { user } = useAuth();
   const requireAuth = useAuthGuard();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [content, setContent] = useState('');
   const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [roleId, setRoleId] = useState<string | null>(null);
   const [organizationId, setOrganizationId] = useState<string>('');
   const [sharingLevels, setSharingLevels] = useState<VisibilityLevel[]>([]);
   const [createdBy, setCreatedBy] = useState(getCurrentUser());
@@ -49,6 +51,7 @@ export default function PromptUploadForm({ onCreated, onCancel }: PromptUploadFo
       description: description.trim() || undefined,
       content: content.trim(),
       category_id: categoryId,
+      role_id: roleId,
       organization_id: organizationId || null,
       sharing_levels: sharingLevels,
       created_by: createdBy.trim(),
@@ -143,6 +146,37 @@ export default function PromptUploadForm({ onCreated, onCancel }: PromptUploadFo
         />
         <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
           Waar is deze prompt voor bedoeld? Staat de juiste categorie er niet bij? Vraag hem aan.
+        </p>
+      </div>
+
+      <div>
+        <label className="opl-label" htmlFor="up-role">
+          Functie
+        </label>
+        <SearchableSelect
+          id="up-role"
+          options={roles.map((r) => ({ id: r.id, label: r.name, hint: r.description }))}
+          value={roleId}
+          onChange={(id) => setRoleId(id)}
+          placeholder="Voor welke functie is deze prompt geschreven?"
+          clearLabel="Geen functie"
+          searchPlaceholder="Zoek een functie…"
+          onRequestNew={
+            user
+              ? async (term) => {
+                  try {
+                    await requestFunction({ name: term, requestedBy: user.id });
+                    toast.success(`Aanvraag voor “${term}” verstuurd — een beheerder beoordeelt hem.`);
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : 'Aanvraag mislukt');
+                  }
+                }
+              : undefined
+          }
+          requestNewLabel={(term) => `“${term}” als nieuwe functie aanvragen`}
+        />
+        <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+          Voor welke functie is deze prompt geschreven? Staat de juiste functie er niet bij? Vraag hem aan.
         </p>
       </div>
 

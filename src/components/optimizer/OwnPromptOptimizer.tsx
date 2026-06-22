@@ -145,6 +145,7 @@ export default function OwnPromptOptimizer({ settings, onResult }: OwnPromptOpti
         ownPrompt: ownPrompt.trim(),
         frameworks,
         preferredProvider: settings.provider,
+        preferredModel: settings.model,
       });
       setRecommendations(res.recommendations);
       setRecommendSummary(res.summary);
@@ -183,6 +184,7 @@ export default function OwnPromptOptimizer({ settings, onResult }: OwnPromptOpti
         ownPrompt: ownPrompt.trim(),
         technique: chosen,
         preferredProvider: settings.provider,
+        preferredModel: settings.model,
       });
       // De prompt was onzin → toon de terugkoppeling i.p.v. velden voor te vullen.
       if (res.unclear) {
@@ -217,6 +219,7 @@ export default function OwnPromptOptimizer({ settings, onResult }: OwnPromptOpti
         promptContent: ownPrompt.trim() || '[BESCHRIJF HIER WAT JE WILT BEREIKEN]',
         followUpAnswers: answers,
         preferredProvider: settings.provider,
+        preferredModel: settings.model,
         systemPrompt: settings.systemPrompt.trim() || undefined,
         toneInstruction: settings.toneInstruction.trim() || undefined,
         temperature: settings.temperature,

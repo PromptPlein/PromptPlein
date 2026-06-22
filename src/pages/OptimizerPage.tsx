@@ -119,6 +119,7 @@ export default function OptimizerPage() {
         ownPrompt: draft,
         technique: chosen,
         preferredProvider: settingsRef.current.provider,
+        preferredModel: settingsRef.current.model,
       });
       // De prompt was onzin → toon de terugkoppeling i.p.v. velden voor te vullen.
       if (res.unclear) {
@@ -188,6 +189,7 @@ export default function OptimizerPage() {
         promptContent: draft,
         followUpAnswers: answers,
         preferredProvider: s.provider,
+        preferredModel: s.model,
         systemPrompt: s.systemPrompt.trim() || undefined,
         toneInstruction: s.toneInstruction.trim() || undefined,
         temperature: s.temperature,

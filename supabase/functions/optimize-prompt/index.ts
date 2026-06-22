@@ -111,15 +111,53 @@ interface RequestBody {
   // 'metadata'-velden: stel titel + omschrijving + best passende categorie voor.
   metaCategories?: { id: string; name: string; description?: string }[];
   preferredProvider?: PreferredProvider;
+  /**
+   * Het concrete API-model binnen de gekozen provider (bijv. 'claude-opus-4-8').
+   * Wordt alleen toegepast op de provider die met `preferredProvider` overeenkomt;
+   * valt een optimalisatie terug op een andere provider, dan gebruikt die zijn
+   * eigen standaardmodel. Leeg/ongeldig = standaardmodel van de provider.
+   */
+  preferredModel?: string;
   // Admin-bestuurde AI-instellingen (optioneel; anders defaults).
   systemPrompt?: string;
   toneInstruction?: string;
   temperature?: number;
 }
 
-const CLAUDE_MODEL = 'claude-opus-4-8';
-const OPENAI_MODEL = 'gpt-4o';
-const DEEPSEEK_MODEL = 'deepseek-chat';
+// Het EERSTE model per provider is de standaard; de overige zijn toegestane
+// alternatieven die de admin in de instellingen kan kiezen. Houd dit in sync met
+// `src/config/aiModels.ts` (PROVIDER_MODELS).
+const PROVIDER_MODELS: Record<Provider, string[]> = {
+  claude: ['claude-opus-4-8', 'claude-sonnet-4-6', 'claude-haiku-4-5'],
+  openai: ['gpt-5.5', 'gpt-5.5-pro', 'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.4-nano'],
+  // deepseek-chat/-reasoner zijn aliassen die op 2026-07-24 vervallen; gebruik de V4-ids.
+  deepseek: ['deepseek-v4-flash', 'deepseek-v4-pro'],
+};
+
+const CLAUDE_MODEL = PROVIDER_MODELS.claude[0];
+const OPENAI_MODEL = PROVIDER_MODELS.openai[0];
+const DEEPSEEK_MODEL = PROVIDER_MODELS.deepseek[0];
+
+/**
+ * Kies het model voor `candidate`. Alleen wanneer de admin-voorkeur dezelfde
+ * provider is én het gevraagde model bij die provider hoort, gebruiken we dat;
+ * anders het standaardmodel. Zo krijgt een fallback-provider nooit een model-id
+ * van een andere provider.
+ */
+function resolveModel(
+  candidate: Provider,
+  preferred: PreferredProvider | undefined,
+  preferredModel: string | undefined,
+): string {
+  if (
+    preferred === candidate &&
+    preferredModel &&
+    PROVIDER_MODELS[candidate].includes(preferredModel)
+  ) {
+    return preferredModel;
+  }
+  return PROVIDER_MODELS[candidate][0];
+}
 
 /**
  * Haalt de #-koppen uit een raamwerk-template, in volgorde van voorkomen.
@@ -905,13 +943,14 @@ async function runClaude(
   userMessage: string,
   system: string,
   temperature: number,
+  model: string = CLAUDE_MODEL,
 ): Promise<string> {
   const apiKey = Deno.env.get('CLAUDE_API_KEY');
   if (!apiKey) throw new Error('CLAUDE_API_KEY ontbreekt');
 
   const client = new Anthropic({ apiKey });
   const response = await client.messages.create({
-    model: CLAUDE_MODEL,
+    model,
     max_tokens: 4096,
     temperature,
     system,
@@ -932,6 +971,7 @@ async function runDeepSeek(
   userMessage: string,
   system: string,
   temperature: number,
+  model: string = DEEPSEEK_MODEL,
 ): Promise<string> {
   const apiKey = Deno.env.get('DEEPSEEK_API_KEY');
   if (!apiKey) throw new Error('DEEPSEEK_API_KEY ontbreekt');
@@ -944,7 +984,7 @@ async function runDeepSeek(
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: DEEPSEEK_MODEL,
+      model,
       max_tokens: 4096,
       temperature,
       messages: [
@@ -968,6 +1008,7 @@ async function runOpenAI(
   userMessage: string,
   system: string,
   temperature: number,
+  model: string = OPENAI_MODEL,
 ): Promise<string> {
   const apiKey = Deno.env.get('OPENAI_API_KEY');
   if (!apiKey) throw new Error('OPENAI_API_KEY ontbreekt');
@@ -979,7 +1020,7 @@ async function runOpenAI(
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: OPENAI_MODEL,
+      model,
       max_tokens: 4096,
       temperature,
       messages: [
@@ -999,7 +1040,12 @@ async function runOpenAI(
   return text;
 }
 
-type ProviderFn = (userMessage: string, system: string, temperature: number) => Promise<string>;
+type ProviderFn = (
+  userMessage: string,
+  system: string,
+  temperature: number,
+  model?: string,
+) => Promise<string>;
 
 const PROVIDERS: Record<Provider, ProviderFn> = {
   claude: runClaude,
@@ -1280,7 +1326,12 @@ Deno.serve(async (req: Request) => {
 
       for (const candidate of order) {
         try {
-          const raw = await PROVIDERS[candidate](userMessage, ANALYZE_SYSTEM_PROMPT, 0.2);
+          const raw = await PROVIDERS[candidate](
+            userMessage,
+            ANALYZE_SYSTEM_PROMPT,
+            0.2,
+            resolveModel(candidate, body.preferredProvider, body.preferredModel),
+          );
           analysis = parseAnalysis(raw, fields);
           provider = candidate;
           break;
@@ -1322,7 +1373,12 @@ Deno.serve(async (req: Request) => {
 
       for (const candidate of order) {
         try {
-          const raw = await PROVIDERS[candidate](userMessage, PREFILL_SYSTEM_PROMPT, 0.3);
+          const raw = await PROVIDERS[candidate](
+            userMessage,
+            PREFILL_SYSTEM_PROMPT,
+            0.3,
+            resolveModel(candidate, body.preferredProvider, body.preferredModel),
+          );
           // Clarity-gate: is de prompt zelf onzin? Dan eerlijk terugkoppelen.
           const unclear = detectUnclearJson(raw);
           if (unclear) {
@@ -1367,7 +1423,12 @@ Deno.serve(async (req: Request) => {
 
       for (const candidate of order) {
         try {
-          const raw = await PROVIDERS[candidate](userMessage, TITLE_SYSTEM_PROMPT, 0.3);
+          const raw = await PROVIDERS[candidate](
+            userMessage,
+            TITLE_SYSTEM_PROMPT,
+            0.3,
+            resolveModel(candidate, body.preferredProvider, body.preferredModel),
+          );
           const cleaned = cleanTitle(raw);
           if (cleaned) {
             title = cleaned;
@@ -1405,7 +1466,12 @@ Deno.serve(async (req: Request) => {
 
       for (const candidate of order) {
         try {
-          const raw = await PROVIDERS[candidate](userMessage, METADATA_SYSTEM_PROMPT, 0.3);
+          const raw = await PROVIDERS[candidate](
+            userMessage,
+            METADATA_SYSTEM_PROMPT,
+            0.3,
+            resolveModel(candidate, body.preferredProvider, body.preferredModel),
+          );
           const parsed = parseMetadata(raw, validCatIds);
           if (parsed.title) {
             meta = parsed;
@@ -1451,6 +1517,7 @@ Deno.serve(async (req: Request) => {
             userMessage,
             RECOMMEND_FRAMEWORK_SYSTEM_PROMPT,
             0.2,
+            resolveModel(candidate, body.preferredProvider, body.preferredModel),
           );
           const parsed = parseFrameworkRecommendations(raw, validIds);
           if (parsed.recommendations.length > 0) {
@@ -1492,7 +1559,12 @@ Deno.serve(async (req: Request) => {
 
       for (const candidate of order) {
         try {
-          const raw = await PROVIDERS[candidate](userMessage, RECOMMEND_SYSTEM_PROMPT, 0.2);
+          const raw = await PROVIDERS[candidate](
+            userMessage,
+            RECOMMEND_SYSTEM_PROMPT,
+            0.2,
+            resolveModel(candidate, body.preferredProvider, body.preferredModel),
+          );
           // Clarity-gate: heeft het model het doel als onzin beoordeeld?
           const unclear = detectUnclearJson(raw);
           if (unclear) {
@@ -1556,7 +1628,12 @@ Deno.serve(async (req: Request) => {
 
     for (const candidate of order) {
       try {
-        const raw = await PROVIDERS[candidate](userMessage, system, temperature);
+        const raw = await PROVIDERS[candidate](
+          userMessage,
+          system,
+          temperature,
+          resolveModel(candidate, body.preferredProvider, body.preferredModel),
+        );
         // Clarity-gate: heeft het model de input als onbruikbaar beoordeeld?
         // Dan geen verzonnen casus teruggeven, maar eerlijk terugkoppelen.
         const unclear = detectUnclear(raw);

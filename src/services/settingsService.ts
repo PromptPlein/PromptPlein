@@ -1,5 +1,5 @@
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
-import type { AiProvider } from '@/config/aiModels';
+import { defaultModelFor, isValidModelFor, type AiProvider } from '@/config/aiModels';
 
 /**
  * App-brede AI-instellingen die de admin beheert. Gelden voor ALLE
@@ -16,6 +16,11 @@ import type { AiProvider } from '@/config/aiModels';
 export interface AiSettings {
   /** Welke AI-provider er draait voor alle optimalisaties. */
   provider: AiProvider;
+  /**
+   * Het concrete API-model binnen de gekozen provider (bijv. 'claude-opus-4-8').
+   * Leeg bij provider 'auto' (de fallback-keten kiest dan zelf per provider).
+   */
+  model: string;
   /** Hoofd-/systeemprompt: hoe de AI zich moet gedragen. Leeg = ingebouwde default. */
   systemPrompt: string;
   /** Toon/schrijfstijl die aan elke optimalisatie wordt meegegeven. */
@@ -58,6 +63,7 @@ Werkwijze:
 
 export const DEFAULT_AI_SETTINGS: AiSettings = {
   provider: 'auto',
+  model: '',
   systemPrompt: DEFAULT_SYSTEM_PROMPT,
   toneInstruction: 'Schrijf in duidelijke, professionele taal op B1-taalniveau.',
   temperature: 0.4,
@@ -103,8 +109,13 @@ function normalize(raw: Partial<AiSettings> | null | undefined): AiSettings {
   const d = DEFAULT_AI_SETTINGS;
   if (!raw || typeof raw !== 'object') return { ...d, pii: { ...d.pii }, blockedTopics: [] };
   const temp = typeof raw.temperature === 'number' ? raw.temperature : d.temperature;
+  const provider = isProvider(raw.provider) ? raw.provider : d.provider;
+  // Model moet bij de provider horen; anders het standaardmodel van die provider
+  // (en leeg bij 'auto', waar de fallback-keten zelf kiest).
+  const model = isValidModelFor(provider, raw.model) ? (raw.model ?? '') : defaultModelFor(provider);
   return {
-    provider: isProvider(raw.provider) ? raw.provider : d.provider,
+    provider,
+    model,
     systemPrompt: typeof raw.systemPrompt === 'string' ? raw.systemPrompt : d.systemPrompt,
     toneInstruction:
       typeof raw.toneInstruction === 'string' ? raw.toneInstruction : d.toneInstruction,
