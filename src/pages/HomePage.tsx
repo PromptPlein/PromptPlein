@@ -94,7 +94,7 @@ export default function HomePage() {
                 to="/genereren"
                 className="opl-btn w-full justify-center border border-white/70 text-white hover:bg-white/10"
               >
-                <Sparkles size={18} /> Genereer je prompt
+                <Sparkles size={18} className="text-rijksoranje" /> Genereer je prompt
               </Link>
             </div>
           </div>

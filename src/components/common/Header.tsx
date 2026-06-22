@@ -19,7 +19,7 @@ import ThemeToggle from './ThemeToggle';
 const navItems = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/zoeken', label: 'Zoeken', icon: Search, end: false },
-  { to: '/genereren', label: 'Genereren', icon: Sparkles, end: false },
+  { to: '/genereren', label: 'Genereren', icon: Sparkles, end: false, iconClassName: 'text-rijksoranje' },
   { to: '/bibliotheek', label: 'Mijn prompts', icon: Library, end: false },
   { to: '/community', label: 'Community', icon: Users, end: false },
   { to: '/netwerk', label: 'Netwerk', icon: Network, end: false },
@@ -45,7 +45,7 @@ export default function Header() {
         </Link>
 
         <nav className="hidden items-center gap-1 lg:flex" aria-label="Hoofdnavigatie">
-          {navItems.map(({ to, label, icon: Icon, end }) => (
+          {navItems.map(({ to, label, icon: Icon, end, iconClassName }) => (
             <NavLink
               key={to}
               to={to}
@@ -59,7 +59,7 @@ export default function Header() {
                 )
               }
             >
-              <Icon size={16} />
+              <Icon size={16} className={iconClassName} />
               {label}
             </NavLink>
           ))}
@@ -118,7 +118,7 @@ export default function Header() {
         className="flex items-center justify-around border-t border-slate-200 dark:border-slate-700 lg:hidden"
         aria-label="Mobiele navigatie"
       >
-        {navItems.map(({ to, label, icon: Icon, end }) => (
+        {navItems.map(({ to, label, icon: Icon, end, iconClassName }) => (
           <NavLink
             key={to}
             to={to}
@@ -130,7 +130,7 @@ export default function Header() {
               )
             }
           >
-            <Icon size={18} />
+            <Icon size={18} className={iconClassName} />
             {label}
           </NavLink>
         ))}

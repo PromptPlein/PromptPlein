@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Copy, Sparkles, Star, Check, Share2, ThumbsUp } from 'lucide-react';
+import { Copy, Star, Check, Share2, ThumbsUp } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { useAuth } from '@/context/AuthContext';
@@ -26,7 +26,7 @@ interface PromptCardProps {
 
 export default function PromptCard({ prompt, author, onChanged }: PromptCardProps) {
   const navigate = useNavigate();
-  const { categoryById, roleById, organizationById } = useReferenceData();
+  const { categoryById, organizationById } = useReferenceData();
   const { user, configured } = useAuth();
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -44,7 +44,6 @@ export default function PromptCard({ prompt, author, onChanged }: PromptCardProp
   }, [prompt.like_count, prompt.liked_by_me]);
 
   const category = categoryById(prompt.category_id);
-  const role = roleById(prompt.role_id);
   const org = organizationById(author?.organization_id ?? prompt.organization_id);
 
   const authorId = prompt.created_by_user ?? author?.id ?? null;
@@ -127,7 +126,7 @@ export default function PromptCard({ prompt, author, onChanged }: PromptCardProp
           onClick={handleFavorite}
           disabled={busy}
           aria-label={prompt.is_favorite ? 'Verwijder uit favorieten' : 'Voeg toe aan favorieten'}
-          className="shrink-0 rounded-md p-1 text-slate-400 hover:bg-amber-50 hover:text-amber-500 dark:text-slate-500 dark:hover:bg-amber-500/10"
+          className="shrink-0 rounded-md p-1 text-amber-400 hover:bg-amber-50 hover:text-amber-500 dark:hover:bg-amber-500/10"
         >
           <Star
             size={18}
@@ -176,7 +175,6 @@ export default function PromptCard({ prompt, author, onChanged }: PromptCardProp
         {category && (
           <span className="opl-badge bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">{category.name}</span>
         )}
-        {role && <span className="opl-badge bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300">{role.name}</span>}
         <span className={`opl-badge ${sharingBadgeClasses(prompt.sharing_level)}`}>
           {sharingLabel(prompt.sharing_level)}
         </span>
@@ -192,19 +190,19 @@ export default function PromptCard({ prompt, author, onChanged }: PromptCardProp
             disabled={likeBusy}
             className={
               liked
-                ? 'inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-sm font-medium text-rijksblauw-600 dark:text-rijksblauw-300'
-                : 'inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-sm text-slate-400 hover:bg-rijksblauw-50 hover:text-rijksblauw-600 dark:text-slate-500 dark:hover:bg-rijksblauw-500/10 dark:hover:text-rijksblauw-300'
+                ? 'inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-sm font-medium text-[#1877F2]'
+                : 'inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-sm text-[#1877F2]/70 hover:bg-[#1877F2]/10 hover:text-[#1877F2]'
             }
             aria-label={liked ? 'Like intrekken' : 'Prompt liken'}
             aria-pressed={liked}
             title={liked ? 'Like intrekken' : 'Vind ik goed'}
           >
-            <ThumbsUp size={16} className={liked ? 'fill-rijksblauw-500/20' : ''} />
+            <ThumbsUp size={16} className={liked ? 'fill-[#1877F2]/20' : ''} />
             <span className="tabular-nums">{likeCount}</span>
           </button>
           <button
             onClick={handleShare}
-            className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+            className="rounded-md p-1.5 text-rijksoranje/70 hover:bg-orange-50 hover:text-rijksoranje dark:hover:bg-rijksoranje/10"
             aria-label="Deel prompt"
             title="Deelbare link kopiëren"
           >
@@ -212,23 +210,11 @@ export default function PromptCard({ prompt, author, onChanged }: PromptCardProp
           </button>
           <button
             onClick={handleCopy}
-            className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+            className="rounded-md p-1.5 text-rijksblauw-500/70 hover:bg-rijksblauw-50 hover:text-rijksblauw-600 dark:text-rijksblauw-300/70 dark:hover:bg-rijksblauw-500/10 dark:hover:text-rijksblauw-200"
             aria-label="Kopieer prompt"
             title="Prompt kopiëren"
           >
             {copied ? <Check size={16} className="text-rijksgroen" /> : <Copy size={16} />}
-          </button>
-          <button
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              navigate(`/genereren/${prompt.id}`);
-            }}
-            className="rounded-md p-1.5 text-rijksoranje hover:bg-orange-50"
-            aria-label="Prompt-template genereren"
-            title="Template genereren"
-          >
-            <Sparkles size={16} />
           </button>
         </div>
       </div>

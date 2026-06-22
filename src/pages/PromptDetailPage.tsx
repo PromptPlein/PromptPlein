@@ -19,7 +19,6 @@ import toast from 'react-hot-toast';
 import ShareModal from '@/components/share/ShareModal';
 import ExportModal from '@/components/export/ExportModal';
 import CollaborationPanel from '@/components/collaboration/CollaborationPanel';
-import { PROMPT_STATUS_META } from '@/services/collaborationService';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { useAuth } from '@/context/AuthContext';
 import {
@@ -280,15 +279,9 @@ export default function PromptDetailPage() {
           {category && (
             <span className="opl-badge bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">{category.name}</span>
           )}
-          {role && <span className="opl-badge bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300">{role.name}</span>}
           <span className={`opl-badge ${sharingBadgeClasses(prompt.sharing_level)}`}>
             {sharingLabel(prompt.sharing_level)}
           </span>
-          {prompt.status && (
-            <span className={`opl-badge ${PROMPT_STATUS_META[prompt.status].classes}`}>
-              {PROMPT_STATUS_META[prompt.status].label}
-            </span>
-          )}
         </div>
 
         <div className="mb-2 flex items-center justify-between">

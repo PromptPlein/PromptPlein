@@ -88,7 +88,7 @@ export function BarChartCard({ title, data, emptyHint, onBarClick, activeLabel }
               {data.map((d, i) => {
                 const dimmed = clickable && activeLabel != null && activeLabel !== d.label;
                 return (
-                  <Cell key={i} fill={PALETTE[i % PALETTE.length]} fillOpacity={dimmed ? 0.35 : 1} />
+                  <Cell key={i} fill={PALETTE[i % PALETTE.length]} fillOpacity={dimmed ? 0.2 : 1} />
                 );
               })}
             </Bar>

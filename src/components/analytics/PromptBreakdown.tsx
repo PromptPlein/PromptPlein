@@ -2,42 +2,45 @@ import { useEffect, useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import { BarChartCard } from '@/components/analytics/Charts';
 import PromptCard from '@/components/prompts/PromptCard';
-import { listPrompts } from '@/services/repository';
-import { listEvents, topTechniques } from '@/services/analyticsService';
+import { listPrompts, listTechniquePromptLinks } from '@/services/repository';
 import { usePromptCommunity } from '@/hooks/usePromptCommunity';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import type { CountByLabel } from '@/services/analyticsService';
-import type { AnalyticsEvent, Prompt } from '@/types';
+import type { Prompt } from '@/types';
+
+type Dimension = 'category' | 'technique';
 
 interface Selection {
+  dimension: Dimension;
   label: string;
 }
 
 /**
- * Overzichtsgrafieken op het dashboard: prompts per categorie (klikbaar — klik
- * op een staaf en de prompts van die categorie verschijnen eronder) en de meest
- * gebruikte technieken (zelfde bron als de Trending-tab: het aantal
- * optimalisatie-runs per techniek uit de analytics-events).
+ * Klikbare overzichtsgrafieken op het dashboard: prompts per categorie en per
+ * gebruikte techniek. Klik je op een staaf, dan licht die op en verschijnen de
+ * prompts van die groep er direct onder. De techniek-grafiek gebruikt de
+ * optimizations-tabel (welke prompts welke techniek gebruiken), zodat de
+ * balkhoogte exact overeenkomt met wat je bij klikken te zien krijgt.
  */
 export default function PromptBreakdown() {
   const { categories, techniqueById } = useReferenceData();
   const [prompts, setPrompts] = useState<Prompt[]>([]);
-  const [events, setEvents] = useState<AnalyticsEvent[]>([]);
+  const [links, setLinks] = useState<{ technique_id: string; prompt_id: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [selection, setSelection] = useState<Selection | null>(null);
 
   useEffect(() => {
     let active = true;
-    Promise.all([listPrompts(), listEvents()])
-      .then(([p, e]) => {
+    Promise.all([listPrompts(), listTechniquePromptLinks()])
+      .then(([p, l]) => {
         if (!active) return;
         setPrompts(p);
-        setEvents(e);
+        setLinks(l);
       })
       .catch(() => {
         if (!active) return;
         setPrompts([]);
-        setEvents([]);
+        setLinks([]);
       })
       .finally(() => active && setLoading(false));
     return () => {
@@ -62,21 +65,44 @@ export default function PromptBreakdown() {
       .sort((a, b) => b.value - a.value);
   }, [prompts, categoryName]);
 
-  // Zelfde bron en berekening als de Trending-tab: optimalisatie-runs per
-  // techniek uit de analytics-events.
+  // Prompt-ids per techniek-naam (één prompt telt per techniek maar één keer),
+  // beperkt tot prompts die de gebruiker daadwerkelijk mag zien.
+  const promptIdsByTechnique = useMemo(() => {
+    const visible = new Set(prompts.map((p) => p.id));
+    const map = new Map<string, Set<string>>();
+    for (const l of links) {
+      if (!visible.has(l.prompt_id)) continue;
+      const name = techniqueById(l.technique_id)?.name ?? 'Onbekend';
+      const set = map.get(name) ?? new Set<string>();
+      set.add(l.prompt_id);
+      map.set(name, set);
+    }
+    return map;
+  }, [links, prompts, techniqueById]);
+
   const byTechnique: CountByLabel[] = useMemo(
-    () => topTechniques(events, (id) => techniqueById(id)?.name ?? 'Onbekend'),
-    [events, techniqueById],
+    () =>
+      [...promptIdsByTechnique.entries()]
+        .map(([label, ids]) => ({ label, value: ids.size }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 8),
+    [promptIdsByTechnique],
   );
 
-  // De prompts die bij de huidige (categorie-)selectie horen.
+  // De prompts die bij de huidige selectie horen.
   const selected = useMemo(() => {
     if (!selection) return [];
-    return prompts.filter((p) => categoryName(p.category_id) === selection.label);
-  }, [selection, prompts, categoryName]);
+    if (selection.dimension === 'category') {
+      return prompts.filter((p) => categoryName(p.category_id) === selection.label);
+    }
+    const ids = promptIdsByTechnique.get(selection.label);
+    return ids ? prompts.filter((p) => ids.has(p.id)) : [];
+  }, [selection, prompts, categoryName, promptIdsByTechnique]);
 
-  function pick(label: string) {
-    setSelection((prev) => (prev && prev.label === label ? null : { label }));
+  function pick(dimension: Dimension, label: string) {
+    setSelection((prev) =>
+      prev && prev.dimension === dimension && prev.label === label ? null : { dimension, label },
+    );
   }
 
   if (loading) {
@@ -95,13 +121,15 @@ export default function PromptBreakdown() {
           title="Prompts per categorie"
           data={byCategory}
           emptyHint="Nog geen prompts om te tonen."
-          onBarClick={pick}
-          activeLabel={selection?.label ?? null}
+          onBarClick={(label) => pick('category', label)}
+          activeLabel={selection?.dimension === 'category' ? selection.label : null}
         />
         <BarChartCard
           title="Meest gebruikte technieken"
           data={byTechnique}
-          emptyHint="Nog geen technieken gebruikt."
+          emptyHint="Nog geen technieken toegepast op een prompt."
+          onBarClick={(label) => pick('technique', label)}
+          activeLabel={selection?.dimension === 'technique' ? selection.label : null}
         />
       </div>
 

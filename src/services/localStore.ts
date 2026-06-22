@@ -106,12 +106,11 @@ function backfillTechniqueMetadata(): void {
 // de community zichtbaar zijn zonder echte backend.
 const LOCAL_ORG_RIJK = 'org-rijk';
 const LOCAL_ORG_BZK = 'org-bzk';
-const LOCAL_ORG_BZK_DIGI = 'org-bzk-digitalisering';
 const LOCAL_ORG_JENV = 'org-jenv';
 
 // Vaste demo-auteurs (mock-modus). De eerste is "ikzelf", zodat liken werkt.
 const LOCAL_PROFILES: PublicProfile[] = [
-  { id: LOCAL_USER_ID, full_name: 'Jij (demo)', organization_id: LOCAL_ORG_BZK_DIGI },
+  { id: LOCAL_USER_ID, full_name: 'Jij (demo)', organization_id: LOCAL_ORG_BZK },
   { id: 'demo-sanne', full_name: 'Sanne de Vries', organization_id: LOCAL_ORG_BZK },
   { id: 'demo-mehmet', full_name: 'Mehmet Yıldız', organization_id: LOCAL_ORG_JENV },
 ];
@@ -134,7 +133,7 @@ function ensureSeeded(): void {
         'Schrijf een afwijzingsbrief voor een aanvraag van een vergunning. Leg duidelijk uit waarom de aanvraag is afgewezen en welke mogelijkheden de aanvrager nog heeft.',
       category_id: 'cat-burgerbrieven',
       role_id: 'role-klantcontact',
-      organization_id: LOCAL_ORG_BZK_DIGI,
+      organization_id: LOCAL_ORG_BZK,
       sharing_level: 'public',
       created_by: 'Jij (demo)',
       created_by_user: LOCAL_USER_ID,
@@ -513,13 +512,12 @@ export const localStore = {
     ensureProfilesSeeded();
     return read<PublicProfile[]>(PROFILES_KEY, []).find((p) => p.id === id) ?? null;
   },
-  /** Demo-organisaties (mock-modus) — boomstructuur Rijk → ministerie → afdeling. */
+  /** Demo-organisaties (mock-modus) — boomstructuur Rijk → ministerie. */
   listOrganizations(): import('@/types').Organization[] {
     const now = nowIso();
     return [
-      { id: LOCAL_ORG_RIJK, name: 'Rijksoverheid', code: 'RIJK', parent_id: null, organization_type: 'ministry', is_active: true, created_at: now },
+      { id: LOCAL_ORG_RIJK, name: 'Rijksoverheid', code: 'RIJK', parent_id: null, organization_type: 'government', is_active: true, created_at: now },
       { id: LOCAL_ORG_BZK, name: 'Ministerie van Binnenlandse Zaken', code: 'BZK', parent_id: LOCAL_ORG_RIJK, organization_type: 'ministry', is_active: true, created_at: now },
-      { id: LOCAL_ORG_BZK_DIGI, name: 'Afdeling Digitalisering', code: 'BZK-DIGI', parent_id: LOCAL_ORG_BZK, organization_type: 'department', is_active: true, created_at: now },
       { id: LOCAL_ORG_JENV, name: 'Ministerie van Justitie en Veiligheid', code: 'JenV', parent_id: LOCAL_ORG_RIJK, organization_type: 'ministry', is_active: true, created_at: now },
     ];
   },

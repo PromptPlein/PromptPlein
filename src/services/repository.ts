@@ -334,3 +334,26 @@ export async function saveOptimization(
   if (error) throw error;
   return data as Optimization;
 }
+
+/** Eén (techniek → prompt)-koppeling, voor overzichten per techniek. */
+export interface TechniquePromptLink {
+  technique_id: string;
+  prompt_id: string;
+}
+
+/**
+ * Alle techniek↔prompt-koppelingen in één keer (via de optimizations-tabel).
+ * Bron voor het dashboard-overzicht "prompts per techniek": welke prompts elke
+ * techniek gebruiken (en hoeveel). RLS beperkt dit automatisch tot wat de
+ * gebruiker mag zien.
+ */
+export async function listTechniquePromptLinks(): Promise<TechniquePromptLink[]> {
+  if (local) {
+    return localStore
+      .allOptimizations()
+      .map((o) => ({ technique_id: o.technique_id, prompt_id: o.prompt_id }));
+  }
+  const { data, error } = await supabase!.from('optimizations').select('technique_id, prompt_id');
+  if (error) throw error;
+  return (data ?? []) as TechniquePromptLink[];
+}
