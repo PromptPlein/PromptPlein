@@ -24,6 +24,13 @@ interface ChartCardProps {
   emptyHint?: string;
 }
 
+interface BarChartCardProps extends ChartCardProps {
+  /** Maakt de staven klikbaar; krijgt het label van de aangeklikte staaf. */
+  onBarClick?: (label: string) => void;
+  /** Het label van de momenteel geselecteerde staaf (krijgt nadruk). */
+  activeLabel?: string | null;
+}
+
 /** Themabewuste kleuren voor de recharts-elementen (assen, raster, tooltip). */
 function useChartColors() {
   const { resolvedTheme } = useTheme();
@@ -55,8 +62,9 @@ function EmptyState({ hint }: { hint?: string }) {
   );
 }
 
-export function BarChartCard({ title, data, emptyHint }: ChartCardProps) {
+export function BarChartCard({ title, data, emptyHint, onBarClick, activeLabel }: BarChartCardProps) {
   const c = useChartColors();
+  const clickable = Boolean(onBarClick);
   return (
     <CardShell title={title}>
       {data.length === 0 ? (
@@ -68,10 +76,21 @@ export function BarChartCard({ title, data, emptyHint }: ChartCardProps) {
             <XAxis dataKey="label" tick={{ fontSize: 11, fill: c.tick }} interval={0} angle={-15} textAnchor="end" height={60} />
             <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: c.tick }} />
             <Tooltip cursor={{ fill: c.cursor }} contentStyle={c.tooltip} />
-            <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-              {data.map((_, i) => (
-                <Cell key={i} fill={PALETTE[i % PALETTE.length]} />
-              ))}
+            <Bar
+              dataKey="value"
+              radius={[4, 4, 0, 0]}
+              cursor={clickable ? 'pointer' : undefined}
+              onClick={(d) => {
+                const label = (d as { payload?: CountByLabel }).payload?.label;
+                if (label) onBarClick?.(label);
+              }}
+            >
+              {data.map((d, i) => {
+                const dimmed = clickable && activeLabel != null && activeLabel !== d.label;
+                return (
+                  <Cell key={i} fill={PALETTE[i % PALETTE.length]} fillOpacity={dimmed ? 0.35 : 1} />
+                );
+              })}
             </Bar>
           </BarChart>
         </ResponsiveContainer>

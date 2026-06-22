@@ -29,6 +29,8 @@ const CATEGORY_ICONS: Record<string, LucideIcon> = {
 
 // Three.js is zwaar; lazy-load zodat de hero direct rendert.
 const DashboardBackground = lazy(() => import('@/components/three/DashboardBackground'));
+// Recharts is zwaar; lazy-load de overzichtsgrafieken.
+const PromptBreakdown = lazy(() => import('@/components/analytics/PromptBreakdown'));
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { listPrompts } from '@/services/repository';
 import { usePromptCommunity } from '@/hooks/usePromptCommunity';
@@ -107,7 +109,7 @@ export default function HomePage() {
         </section>
 
         {/* Recente prompts */}
-        <section>
+        <section className="mb-12">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Recente prompts</h2>
             <Link
@@ -139,6 +141,14 @@ export default function HomePage() {
               ))}
             </div>
           )}
+        </section>
+
+        {/* Overzicht: prompts per categorie en per techniek (klikbaar) */}
+        <section>
+          <h2 className="mb-4 text-xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Overzicht</h2>
+          <Suspense fallback={<div className="skeleton h-72 w-full rounded-xl" />}>
+            <PromptBreakdown />
+          </Suspense>
         </section>
       </div>
 
