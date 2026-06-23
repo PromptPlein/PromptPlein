@@ -10,3 +10,4 @@ dist-ssr
 npm-debug.log*
 yarn-error.log*
 supabase/.temp
+.vercel

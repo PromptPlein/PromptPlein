@@ -6,6 +6,7 @@ import { copyToClipboard, getCurrentUser } from '@/lib/utils';
 import { createPrompt } from '@/services/repository';
 import { generateMetadata } from '@/services/optimizeService';
 import { requestCategory } from '@/services/categoryRequestService';
+import { requestFunction } from '@/services/functionRequestService';
 import { useAuth } from '@/context/AuthContext';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import ShareModal from '@/components/share/ShareModal';
@@ -24,7 +25,7 @@ interface OptimizedOutputProps {
 
 export default function OptimizedOutput({ result, technique, goal, onReset }: OptimizedOutputProps) {
   const { profile, user, isAuthenticated } = useAuth();
-  const { categories, organizations } = useReferenceData();
+  const { categories, roles, organizations } = useReferenceData();
   const [copied, setCopied] = useState(false);
 
   // Opslaan-formulier
@@ -35,6 +36,8 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
   const [description, setDescription] = useState('');
   // Categorie en organisatie moeten net als bij het uploaden gekozen kunnen worden.
   const [categoryId, setCategoryId] = useState<string | null>(null);
+  // Functie: voor welke functie is deze prompt geschreven (zelfde keuze als bij het uploaden).
+  const [roleId, setRoleId] = useState<string | null>(null);
   // Organisatie staat standaard op die van de gebruiker (uit het profiel), zodat
   // de template meteen aan de eigen afdeling/ministerie gekoppeld is. De maker
   // kan dit aanpassen. We onthouden of de gebruiker het veld zelf heeft gewijzigd.
@@ -167,6 +170,7 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
         description: description.trim() || undefined,
         content: result.optimized_content,
         category_id: categoryId,
+        role_id: roleId,
         organization_id: organizationId || null,
         sharing_levels: sharingLevels,
         created_by: profile?.full_name || getCurrentUser() || 'Onbekend',
@@ -366,6 +370,36 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
             )}
             <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
               Zo vinden collega&apos;s waar deze prompt voor bedoeld is.
+            </p>
+          </div>
+          <div>
+            <label className="opl-label" htmlFor="tpl-role">
+              Functie
+            </label>
+            <SearchableSelect
+              id="tpl-role"
+              options={roles.map((r) => ({ id: r.id, label: r.name, hint: r.description }))}
+              value={roleId}
+              onChange={(id) => setRoleId(id)}
+              placeholder="Voor welke functie is deze prompt geschreven?"
+              clearLabel="Geen functie"
+              searchPlaceholder="Zoek een functie…"
+              onRequestNew={
+                user
+                  ? async (term) => {
+                      try {
+                        await requestFunction({ name: term, requestedBy: user.id });
+                        toast.success(`Aanvraag voor “${term}” verstuurd — een beheerder beoordeelt hem.`);
+                      } catch (err) {
+                        toast.error(err instanceof Error ? err.message : 'Aanvraag mislukt');
+                      }
+                    }
+                  : undefined
+              }
+              requestNewLabel={(term) => `“${term}” als nieuwe functie aanvragen`}
+            />
+            <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+              Voor welke functie is deze prompt geschreven?
             </p>
           </div>
           {organizations.length > 0 && (

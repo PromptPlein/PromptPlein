@@ -32,7 +32,7 @@ export default function SignupPage() {
       return;
     }
     if (!organizationId) {
-      toast.error('Kies je organisatie of afdeling.');
+      toast.error('Kies je ministerie.');
       return;
     }
     setBusy(true);
@@ -100,11 +100,11 @@ export default function SignupPage() {
           onChange={(e) => setPassword(e.target.value)}
         />
 
-        {/* Organisatie/afdeling — verplicht. Eén zoekveld: kies je afdeling en je
-            bent automatisch verbonden met alle lagen erboven. */}
+        {/* Ministerie — verplicht. Eén zoekveld waarmee de gebruiker het
+            ministerie kiest waar hij/zij voor werkt. */}
         <div>
           <label className="opl-label" htmlFor="signup-org">
-            Organisatie of afdeling
+            Ministerie
           </label>
           <SearchableSelect
             id="signup-org"
@@ -112,12 +112,11 @@ export default function SignupPage() {
             value={organizationId}
             onChange={setOrganizationId}
             disabled={orgsLoading || !configured}
-            placeholder={orgsLoading ? 'Organisaties laden…' : 'Zoek je afdeling, dienst of ministerie'}
-            searchPlaceholder="Zoek bijv. op je afdeling of dienst (zoals “DUO”)…"
+            placeholder={orgsLoading ? 'Ministeries laden…' : 'Kies het ministerie waar je nu voor werkt'}
+            searchPlaceholder="Zoek jouw ministerie…"
           />
           <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-            Kies de eenheid waar je werkt. Je wordt automatisch gekoppeld aan het ministerie en de
-            tussenliggende lagen.
+            Kies het ministerie waar je nu voor werkt.
           </p>
         </div>
 
