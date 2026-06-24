@@ -328,7 +328,7 @@ export default function OwnPromptOptimizer({ settings, onResult, header }: OwnPr
               type="button"
               onClick={handleClearAll}
               title="Wis je prompt en begin opnieuw"
-              className="ml-auto inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-medium text-slate-400 transition-colors hover:text-rijksoranje dark:text-slate-500 dark:hover:text-rijksoranje"
+              className="ml-auto inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-semibold text-slate-700 transition-colors hover:text-rijksoranje dark:text-slate-200 dark:hover:text-rijksoranje"
             >
               <Eraser size={15} />
               <span>Opschonen</span>

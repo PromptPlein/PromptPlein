@@ -328,7 +328,7 @@ export default function OptimizerPage() {
             type="button"
             onClick={handleClearAll}
             title="Wis je tekst en begin opnieuw"
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-500 transition-colors hover:border-rijksoranje/40 hover:bg-rijksoranje/5 hover:text-rijksoranje dark:border-slate-700 dark:text-slate-400 dark:hover:border-rijksoranje/40 dark:hover:bg-rijksoranje/10"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:border-rijksoranje/40 hover:bg-rijksoranje/5 hover:text-rijksoranje dark:border-slate-700 dark:text-slate-200 dark:hover:border-rijksoranje/40 dark:hover:bg-rijksoranje/10"
           >
             <Eraser size={15} /> Opschonen
           </button>

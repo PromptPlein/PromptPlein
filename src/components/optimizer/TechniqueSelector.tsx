@@ -43,7 +43,10 @@ export default function TechniqueSelector({
   return (
     <div
       className={clsx(
-        sideBySide ? 'grid grid-cols-1 gap-8 md:grid-cols-2' : 'space-y-8',
+        // Naast elkaar: een smalle middenkolom voor de verticale scheidingslijn.
+        sideBySide
+          ? 'grid grid-cols-1 gap-8 md:grid-cols-[1fr_auto_1fr] md:gap-6'
+          : 'space-y-8',
       )}
     >
       {showFrameworks && (
@@ -57,6 +60,25 @@ export default function TechniqueSelector({
           onSelect={onSelect}
           // Naast elkaar: één kaart per rij. Alleen: brede 2-koloms grid.
           columns={sideBySide ? 1 : 2}
+        />
+      )}
+
+      {/* Verticale scheidingslijn tussen de twee groepen. Het grootste deel is
+          vol/donker; alleen een kort stukje aan de boven- én onderkant gaat van
+          donker naar transparant (fade binnen ~10% aan elk uiteinde). Loopt iets
+          hoger dan de kaarten via een negatieve top-marge. Alleen zichtbaar
+          wanneer beide groepen naast elkaar staan (md+). */}
+      {sideBySide && (
+        <div
+          aria-hidden="true"
+          // Kleur via currentColor (text-*), zodat dark mode automatisch meegaat.
+          // De gradient gebruikt currentColor in het midden en transparant aan de
+          // uiteinden, met een korte fade van ~10% aan boven- en onderkant.
+          className="-mt-2 hidden w-0.5 self-stretch text-slate-300 md:block dark:text-slate-600"
+          style={{
+            backgroundImage:
+              'linear-gradient(to bottom, transparent 0%, currentColor 10%, currentColor 90%, transparent 100%)',
+          }}
         />
       )}
 
@@ -81,7 +103,19 @@ type Accent = 'oranje' | 'blauw';
 
 const ACCENT_STYLES: Record<
   Accent,
-  { badge: string; icon: string; rule: string }
+  {
+    badge: string;
+    icon: string;
+    rule: string;
+    /** Kaartstijl wanneer geselecteerd: rand + ring + achtergrond in de accentkleur. */
+    cardActive: string;
+    /** Naam-tekstkleur op een kaart (zowel actief als rust). */
+    cardName: string;
+    /** Het ronde vinkje rechtsboven op een geselecteerde kaart. */
+    cardCheck: string;
+    /** Hover-rand op een niet-geselecteerde kaart. */
+    cardHover: string;
+  }
 > = {
   oranje: {
     // Titel-badge: getinte achtergrond + accentrand links, zodat de kop opvalt.
@@ -90,12 +124,20 @@ const ACCENT_STYLES: Record<
     icon: 'text-rijksoranje',
     // Volledige scheidingslijn onder de kop, in de accentkleur, vervagend.
     rule: 'from-rijksoranje/50 via-rijksoranje/20',
+    cardActive: 'border-rijksoranje bg-rijksoranje/10 ring-2 ring-rijksoranje/20 dark:bg-rijksoranje/15',
+    cardName: 'text-rijksoranje dark:text-rijksoranje',
+    cardCheck: 'bg-rijksoranje text-white',
+    cardHover: 'hover:border-rijksoranje/50',
   },
   blauw: {
     badge:
       'border-rijksblauw-500/30 bg-rijksblauw-50 text-rijksblauw-700 dark:border-rijksblauw-500/40 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200',
     icon: 'text-rijksblauw-500',
     rule: 'from-rijksblauw-500/50 via-rijksblauw-500/20',
+    cardActive: 'border-rijksblauw-500 bg-rijksblauw-50 ring-2 ring-rijksblauw-500/20 dark:bg-rijksblauw-500/15',
+    cardName: 'text-rijksblauw-700 dark:text-rijksblauw-200',
+    cardCheck: 'bg-rijksblauw-500 text-white',
+    cardHover: 'hover:border-rijksblauw-300',
   },
 };
 
@@ -124,7 +166,7 @@ function Group({
   return (
     <div>
       {/* Sectiekop: een opvallende, omkaderde titel-badge met icoon + subtitel. */}
-      <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+      <div className="mb-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
         <span
           className={clsx(
             'inline-flex items-center gap-2 rounded-lg border-l-4 border px-3 py-1.5 text-sm font-bold uppercase tracking-wide shadow-sm',
@@ -134,12 +176,12 @@ function Group({
           <span className={styles.icon}>{icon}</span>
           {title}
         </span>
-        <p className="text-xs text-slate-500 dark:text-slate-400">{subtitle}</p>
+        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{subtitle}</p>
       </div>
 
       {/* Volledige scheidingslijn onder de kop: markeert de grens van deze sectie. */}
       <div
-        className={clsx('mb-4 h-px w-full bg-gradient-to-r to-transparent', styles.rule)}
+        className={clsx('mb-4 h-0.5 w-full bg-gradient-to-r to-transparent', styles.rule)}
         aria-hidden="true"
       />
 
@@ -149,6 +191,7 @@ function Group({
             key={t.id}
             technique={t}
             active={t.id === selectedId}
+            accent={accent}
             onSelect={() => onSelect(t.id)}
           />
         ))}
@@ -160,12 +203,16 @@ function Group({
 function TechniqueCard({
   technique: t,
   active,
+  accent,
   onSelect,
 }: {
   technique: Technique;
   active: boolean;
+  /** Accentkleur van de groep: bepaalt de selectie-/naam-kleur van de kaart. */
+  accent: Accent;
   onSelect: () => void;
 }) {
+  const styles = ACCENT_STYLES[accent];
   return (
     <button
       type="button"
@@ -174,18 +221,32 @@ function TechniqueCard({
       className={clsx(
         'flex flex-col rounded-xl border p-4 text-left transition-all',
         active
-          ? 'border-rijksblauw-500 bg-rijksblauw-50 ring-2 ring-rijksblauw-500/20 dark:bg-rijksblauw-500/15'
-          : 'border-slate-200 bg-white hover:border-rijksblauw-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-800',
+          ? styles.cardActive
+          : clsx(
+              'border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-800',
+              styles.cardHover,
+            ),
       )}
     >
-      <div className="mb-1 flex items-center justify-between">
-        <span className="font-semibold text-rijksblauw-700 dark:text-rijksblauw-200">{t.name}</span>
+      <div className="mb-1.5 flex items-center justify-between">
+        <span className={clsx('font-semibold', styles.cardName)}>{t.name}</span>
         {active && (
-          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-rijksblauw-500 text-white">
+          <span
+            className={clsx(
+              'flex h-5 w-5 items-center justify-center rounded-full',
+              styles.cardCheck,
+            )}
+          >
             <Check size={14} />
           </span>
         )}
       </div>
+      {/* Vervagende onderlijn in de accentkleur van de groep (oranje bij
+          frameworks, blauw bij technieken), net als onder de sectiekop. */}
+      <div
+        className={clsx('mb-2.5 h-0.5 w-full bg-gradient-to-r to-transparent', styles.rule)}
+        aria-hidden="true"
+      />
       <span className="text-sm text-slate-600 dark:text-slate-300">{t.description}</span>
       {t.strength && (
         <span className="mt-2 text-xs text-slate-500 dark:text-slate-400">
