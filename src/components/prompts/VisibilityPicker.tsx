@@ -6,7 +6,8 @@ import type { VisibilityLevel } from '@/types';
 /**
  * Gedeelde multi-select voor de deelniveaus van een prompt. Wordt op ELKE plek
  * gebruikt waar je een prompt deelt (dashboard, zoeken, generator), zodat de
- * labels én de uitleg overal identiek zijn. Privé = niets aangevinkt.
+ * labels én de uitleg overal identiek zijn. Privé staat bovenaan als expliciete,
+ * standaard-actieve keuze en komt overeen met "geen enkel deelniveau aangevinkt".
  *
  * Je kunt meerdere niveaus tegelijk kiezen; per niveau is duidelijk wat er na
  * opslaan gebeurt (de afdeling is direct beschikbaar, hogere niveaus wachten op
@@ -33,10 +34,57 @@ export default function VisibilityPicker({
     <fieldset className="space-y-2">
       <legend className="opl-label">Wie mag deze prompt zien?</legend>
       <p className="-mt-1 mb-2 text-xs text-slate-400 dark:text-slate-500">
-        Kies één of meerdere niveaus. Vink niets aan om de prompt alleen voor jezelf te houden.
+        Kies één of meerdere niveaus. Standaard blijft de prompt privé — alleen voor jezelf.
       </p>
 
       <div className="space-y-2">
+        {/* Privé staat bovenaan en is standaard de actieve keuze (geen enkel
+            deelniveau aangevinkt). Erop klikken zet alles uit: privé en delen
+            sluiten elkaar uit. */}
+        <label
+          htmlFor={`${idPrefix}-private`}
+          className={clsx(
+            'flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition-colors',
+            isPrivate
+              ? 'border-rijksblauw-400 bg-rijksblauw-50/60 dark:border-rijksblauw-500/50 dark:bg-rijksblauw-500/10'
+              : 'border-slate-200 hover:border-slate-300 dark:border-slate-700 dark:hover:border-slate-600',
+          )}
+        >
+          <span
+            className={clsx(
+              'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border',
+              isPrivate
+                ? 'border-rijksblauw-500 bg-rijksblauw-600 text-white'
+                : 'border-slate-300 bg-white dark:border-slate-600 dark:bg-slate-800',
+            )}
+            aria-hidden
+          >
+            {isPrivate && <Check size={14} />}
+          </span>
+          <input
+            id={`${idPrefix}-private`}
+            type="checkbox"
+            className="sr-only"
+            checked={isPrivate}
+            onChange={() => onChange([])}
+          />
+          <span className="min-w-0">
+            <span className="flex flex-wrap items-center gap-2">
+              <span className="font-medium text-slate-800 dark:text-slate-100">Privé</span>
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                Alleen jij
+              </span>
+            </span>
+            <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
+              Alleen zichtbaar voor jezelf — je deelt deze prompt met niemand.
+            </span>
+            <span className="mt-1 flex items-start gap-1 text-xs text-slate-400 dark:text-slate-500">
+              <Lock size={12} className="mt-0.5 shrink-0" aria-hidden />
+              Niemand anders kan deze prompt zien zolang je niets deelt.
+            </span>
+          </span>
+        </label>
+
         {VISIBILITY_LEVELS.map((lvl) => {
           const active = value.includes(lvl.value);
           return (
@@ -94,13 +142,6 @@ export default function VisibilityPicker({
           );
         })}
       </div>
-
-      {isPrivate && (
-        <p className="flex items-center gap-1.5 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-          <Lock size={13} aria-hidden /> Niets aangevinkt — deze prompt blijft privé en is alleen voor
-          jou zichtbaar.
-        </p>
-      )}
     </fieldset>
   );
 }

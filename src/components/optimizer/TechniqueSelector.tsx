@@ -85,7 +85,7 @@ export default function TechniqueSelector({
       {showTechs && (
         <Group
           icon={<Wrench size={16} />}
-          title="Prompttechnieken"
+          title="Prompt technieken"
           subtitle="Gerichte technieken voor een specifiek effect."
           accent="blauw"
           techniques={promptTechniques}

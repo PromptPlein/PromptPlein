@@ -24,7 +24,7 @@ interface OptimizedOutputProps {
 }
 
 export default function OptimizedOutput({ result, technique, goal, onReset }: OptimizedOutputProps) {
-  const { profile, user, isAuthenticated } = useAuth();
+  const { profile, user, isAuthenticated, isAdmin } = useAuth();
   const { categories, roles, organizations } = useReferenceData();
   const [copied, setCopied] = useState(false);
 
@@ -43,14 +43,10 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
   // kan dit aanpassen. We onthouden of de gebruiker het veld zelf heeft gewijzigd.
   const [organizationId, setOrganizationId] = useState<string>(profile?.organization_id ?? '');
   const organizationTouched = useRef(false);
-  // Standaard delen met de eigen afdeling: dat niveau is direct beschikbaar
-  // (geen wachttijd) en is de meest voorkomende keuze. Alleen voorselecteren als
-  // we de organisatie van de gebruiker kennen — een afdelingsniveau zonder
-  // organisatie zou voor niemand gericht zichtbaar zijn. De maker kan dit
-  // aanpassen of meerdere niveaus aanvinken.
-  const [sharingLevels, setSharingLevels] = useState<VisibilityLevel[]>(
-    profile?.organization_id ? ['department'] : [],
-  );
+  // Standaard privé (geen enkel niveau aangevinkt): de maker deelt pas bewust.
+  // Dit is de veiligste default — niemand deelt per ongeluk met de afdeling,
+  // het ministerie of de hele Rijksoverheid.
+  const [sharingLevels, setSharingLevels] = useState<VisibilityLevel[]>([]);
   const sharingTouched = useRef(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<Prompt | null>(null);
@@ -72,18 +68,13 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
   const [pendingCategory, setPendingCategory] = useState<string | null>(null);
 
   // Het profiel laadt asynchroon: zodra de organisatie van de gebruiker bekend is
-  // en de gebruiker de velden nog niet zelf koos, vullen we ze standaard voor —
-  // organisatie op die van het profiel, en het afdelings-deelniveau aangevinkt.
+  // en de gebruiker het veld nog niet zelf koos, vullen we de organisatie voor op
+  // die van het profiel. De zichtbaarheid blijft bewust op privé (standaard) staan.
   useEffect(() => {
     if (!profile?.organization_id) return;
     if (!organizationTouched.current && !organizationId) {
       setOrganizationId(profile.organization_id);
     }
-    if (!sharingTouched.current && sharingLevels.length === 0) {
-      setSharingLevels(['department']);
-    }
-    // sharingLevels bewust niet als dependency: we vullen alleen één keer voor.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.organization_id, organizationId]);
 
   /** Open het opslaan-formulier en haal eenmalig titel + omschrijving + categorie op. */
@@ -259,12 +250,13 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
                     : 'Bijv. Vriendelijke afwijzingsbrief aan burger'
                 }
               />
+              {/* Positionering (translate) op de wrapper, de rotatie (animate-spin)
+                  op het icoon zelf. Anders botsen beide om dezelfde CSS-transform
+                  en lijkt de spinner op-en-neer te stuiteren i.p.v. rond te draaien. */}
               {metaLoading && (
-                <Loader2
-                  size={16}
-                  className="animate-spin absolute right-3 top-1/2 -translate-y-1/2 text-rijksblauw-400"
-                  aria-hidden
-                />
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">
+                  <Loader2 size={16} className="animate-spin text-rijksblauw-400" aria-hidden />
+                </span>
               )}
             </div>
             <p className="mt-1 flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
@@ -407,16 +399,23 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
               <label className="opl-label" htmlFor="tpl-organization">
                 Organisatie
               </label>
+              {/* Beheerders/superadmins mogen elke organisatie (of geen) kiezen.
+                  Een normale gebruiker kan alleen de eigen organisatie koppelen:
+                  het veld is dan vergrendeld op de organisatie uit het profiel. */}
               <select
                 id="tpl-organization"
-                className="opl-input"
+                className="opl-input disabled:cursor-not-allowed disabled:opacity-70"
                 value={organizationId}
+                disabled={!isAdmin}
                 onChange={(e) => {
                   organizationTouched.current = true;
                   setOrganizationId(e.target.value);
                 }}
               >
-                <option value="">Geen organisatie</option>
+                {/* "Geen organisatie" voor beheerders, of als terugval voor een
+                    normale gebruiker zonder eigen organisatie (anders heeft het
+                    vergrendelde veld geen geldige optie om te tonen). */}
+                {(isAdmin || !organizationId) && <option value="">Geen organisatie</option>}
                 {organizations.map((o) => (
                   <option key={o.id} value={o.id}>
                     {o.code ? `${o.name} (${o.code})` : o.name}
@@ -424,8 +423,9 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
                 ))}
               </select>
               <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-                Koppel deze template aan een ministerie of afdeling, zodat hij vindbaar is via de
-                netwerkverkenner.
+                {isAdmin
+                  ? 'Koppel deze template aan een ministerie of afdeling, zodat hij vindbaar is via de netwerkverkenner.'
+                  : 'Deze template wordt gekoppeld aan jouw eigen organisatie, zodat hij vindbaar is via de netwerkverkenner.'}
               </p>
             </div>
           )}

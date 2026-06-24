@@ -115,6 +115,34 @@ export function formatDate(iso: string): string {
   }
 }
 
+/**
+ * Verwijdert inline-Markdown uit AI-tekst en houdt de leesbare inhoud over.
+ * Sommige providers (m.n. Mistral) leveren `**vet**`, `*cursief*`, koppen en
+ * lijst-markeringen terug; in de uitleg-tekstjes willen we die opmaak niet —
+ * gewoon platte tekst. We strippen de markeringen maar laten de woorden staan.
+ */
+export function stripMarkdown(input: string): string {
+  if (!input) return '';
+  return (
+    input
+      // **vet** / __vet__  → vet   (en *cursief* / _cursief_ → cursief)
+      .replace(/(\*\*|__)(.*?)\1/g, '$2')
+      .replace(/(\*|_)(.*?)\1/g, '$2')
+      // `code` → code
+      .replace(/`([^`]+)`/g, '$1')
+      // [tekst](url) → tekst
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+      // Kop-hekjes en blockquote-tekens aan het begin van een regel weghalen.
+      .replace(/^[ \t]*#{1,6}[ \t]+/gm, '')
+      .replace(/^[ \t]*>[ \t]?/gm, '')
+      // Lijst-bullets (*, -, +) aan het begin van een regel → een nette •.
+      .replace(/^[ \t]*[*+-][ \t]+/gm, '• ')
+      // Overgebleven losse sterretjes (bijv. een onafgesloten **) opruimen.
+      .replace(/\*/g, '')
+      .trim()
+  );
+}
+
 export async function copyToClipboard(text: string): Promise<void> {
   if (navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(text);

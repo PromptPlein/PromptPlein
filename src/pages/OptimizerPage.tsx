@@ -26,7 +26,7 @@ import { trackEvent } from '@/services/analyticsService';
 import { getAiSettings, DEFAULT_AI_SETTINGS, type AiSettings } from '@/services/settingsService';
 import { detectPii, detectBlockedTopics, type GuardrailFinding } from '@/services/guardrails';
 import GuardrailDialog from '@/components/optimizer/GuardrailDialog';
-import { getCurrentUser } from '@/lib/utils';
+import { getCurrentUser, stripMarkdown } from '@/lib/utils';
 import { usePersistentDraft, clearAllDrafts } from '@/lib/usePersistentDraft';
 import type { OptimizeResult, Technique } from '@/types';
 
@@ -447,7 +447,7 @@ export default function OptimizerPage() {
                     <AlertTriangle size={18} className="mt-0.5 shrink-0" />
                     <div>
                       <p className="font-medium">Je invoer is nog niet duidelijk genoeg</p>
-                      <p className="mt-0.5 text-amber-700 dark:text-amber-300/90">{unclearReason}</p>
+                      <p className="mt-0.5 text-amber-700 dark:text-amber-300/90">{stripMarkdown(unclearReason)}</p>
                     </div>
                   </div>
                 )}
@@ -509,6 +509,7 @@ export default function OptimizerPage() {
                 />
                 <EntryTab
                   active={smartActive}
+                  accent="blauw"
                   onClick={() => {
                     setEntryMode('techniques');
                     setTechniqueMode('smart');

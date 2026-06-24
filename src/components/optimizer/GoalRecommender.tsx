@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { recommendTechniques } from '@/services/optimizeService';
 import { isContextPrompt } from '@/lib/techniques';
+import { stripMarkdown } from '@/lib/utils';
 import type { TechniqueRecommendation } from '@/types';
 
 /**
@@ -297,7 +298,7 @@ export default function GoalRecommender({
           <AlertTriangle size={18} className="mt-0.5 shrink-0" />
           <div>
             <p className="font-medium">Je omschrijving is nog niet duidelijk genoeg</p>
-            <p className="mt-0.5 text-amber-700 dark:text-amber-300/90">{unclearReason}</p>
+            <p className="mt-0.5 text-amber-700 dark:text-amber-300/90">{stripMarkdown(unclearReason)}</p>
           </div>
         </div>
       )}
@@ -341,12 +342,14 @@ export default function GoalRecommender({
                   )}
                 </div>
                 {rec.reason && (
-                  <span className="text-sm text-slate-600 dark:text-slate-300">{rec.reason}</span>
+                  <span className="text-sm text-slate-600 dark:text-slate-300">
+                    {stripMarkdown(rec.reason)}
+                  </span>
                 )}
                 {rec.value && (
                   <span className="mt-2 rounded-lg border border-rijksoranje/30 bg-rijksoranje/5 p-2.5 text-xs leading-relaxed text-slate-600 dark:border-rijksoranje/20 dark:bg-rijksoranje/10 dark:text-slate-300">
                     <span className="font-semibold text-rijksoranje">Waarom voor jouw vraagstuk: </span>
-                    {rec.value}
+                    {stripMarkdown(rec.value)}
                   </span>
                 )}
                 {technique.strength && (

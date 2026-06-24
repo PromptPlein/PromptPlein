@@ -18,6 +18,7 @@ import toast from 'react-hot-toast';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { isContextPrompt } from '@/lib/techniques';
 import { usePersistentDraft } from '@/lib/usePersistentDraft';
+import { stripMarkdown } from '@/lib/utils';
 import { generatePrompt, prefillFields, recommendFramework } from '@/services/optimizeService';
 import OptimizingLoader from './OptimizingLoader';
 import FollowUpQuestions, { type FieldMeta } from './FollowUpQuestions';
@@ -427,7 +428,7 @@ export default function OwnPromptOptimizer({ settings, onResult, header }: OwnPr
         <div className="space-y-3">
           {recommendSummary && (
             <div className="rounded-xl border border-l-4 border-rijksoranje/30 border-l-rijksoranje bg-rijksoranje/5 p-3.5 text-sm font-medium leading-relaxed text-slate-700 dark:border-rijksoranje/25 dark:border-l-rijksoranje dark:bg-rijksoranje/10 dark:text-slate-200">
-              {recommendSummary}
+              {stripMarkdown(recommendSummary)}
             </div>
           )}
           <p className="text-sm text-slate-600 dark:text-slate-300">
@@ -469,12 +470,14 @@ export default function OwnPromptOptimizer({ settings, onResult, header }: OwnPr
                   )}
                 </div>
                 {rec.reason && (
-                  <span className="text-sm text-slate-600 dark:text-slate-300">{rec.reason}</span>
+                  <span className="text-sm text-slate-600 dark:text-slate-300">
+                    {stripMarkdown(rec.reason)}
+                  </span>
                 )}
                 {rec.value && (
                   <span className="mt-2 rounded-lg border border-rijksoranje/30 bg-rijksoranje/5 p-2.5 text-xs leading-relaxed text-slate-600 dark:border-rijksoranje/20 dark:bg-rijksoranje/10 dark:text-slate-300">
                     <span className="font-semibold text-rijksoranje">Waarom voor jouw vraagstuk: </span>
-                    {rec.value}
+                    {stripMarkdown(rec.value)}
                   </span>
                 )}
                 {fw.strength && (
@@ -619,7 +622,7 @@ export default function OwnPromptOptimizer({ settings, onResult, header }: OwnPr
         {prefill && !prefilling && !generating && technique && (
           <div className="animate-fade-in space-y-4 rounded-xl border border-rijksblauw-200 bg-rijksblauw-50/40 p-4 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10">
             <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
-              {prefill.summary ||
+              {stripMarkdown(prefill.summary) ||
                 'We hebben de velden alvast voor je ingevuld op basis van je prompt.'}
             </p>
             <p className="text-sm text-slate-600 dark:text-slate-300">
@@ -655,7 +658,7 @@ export default function OwnPromptOptimizer({ settings, onResult, header }: OwnPr
           <AlertTriangle size={18} className="mt-0.5 shrink-0" />
           <div>
             <p className="font-medium">Je invoer is nog niet duidelijk genoeg</p>
-            <p className="mt-0.5 text-amber-700 dark:text-amber-300/90">{unclearReason}</p>
+            <p className="mt-0.5 text-amber-700 dark:text-amber-300/90">{stripMarkdown(unclearReason)}</p>
           </div>
         </div>
       )}
