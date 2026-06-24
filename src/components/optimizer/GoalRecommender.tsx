@@ -258,7 +258,7 @@ export default function GoalRecommender({
 
         <textarea
           id="goal-input"
-          className="opl-input min-h-[88px] resize-y"
+          className="opl-input min-h-[120px] resize-y"
           value={goal}
           placeholder="Bijv. ik wil een formele e-mail aan een burger vriendelijker en duidelijker laten schrijven"
           onChange={(e) => onGoalChange(e.target.value)}
