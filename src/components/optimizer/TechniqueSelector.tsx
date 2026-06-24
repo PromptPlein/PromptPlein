@@ -1,4 +1,4 @@
-import { Check, Layers, Wrench } from 'lucide-react';
+import { Check, ChevronRight, Layers, Wrench } from 'lucide-react';
 import clsx from 'clsx';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { isContextPrompt } from '@/lib/techniques';
@@ -222,7 +222,7 @@ function TechniqueCard({
         // Diepte zodat de kaart als klikbare knop leest: een grondschaduw, en bij
         // hover komt de kaart iets omhoog met een sterkere schaduw. Bij indrukken
         // zakt hij weer terug (active:). De ring/rand markeert de gekozen kaart.
-        'flex flex-col rounded-xl border p-4 text-left shadow-sm transition-all duration-150',
+        'group flex flex-col rounded-xl border p-4 text-left shadow-sm transition-all duration-150',
         'hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:shadow-sm',
         'focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500/40',
         active
@@ -233,17 +233,28 @@ function TechniqueCard({
             ),
       )}
     >
-      <div className="mb-1.5 flex items-center justify-between">
+      <div className="mb-1.5 flex items-center justify-between gap-2">
         <span className={clsx('font-semibold', styles.cardName)}>{t.name}</span>
-        {active && (
+        {/* Gekozen kaart toont een vinkje; anders een pijltje rechts op
+            titelhoogte dat bij hover meeschuift — een duidelijke klik-hint. */}
+        {active ? (
           <span
             className={clsx(
-              'flex h-5 w-5 items-center justify-center rounded-full',
+              'flex h-5 w-5 shrink-0 items-center justify-center rounded-full',
               styles.cardCheck,
             )}
           >
             <Check size={14} />
           </span>
+        ) : (
+          <ChevronRight
+            size={18}
+            className={clsx(
+              'shrink-0 transition-transform duration-150 group-hover:translate-x-0.5',
+              styles.icon,
+            )}
+            aria-hidden
+          />
         )}
       </div>
       {/* Vervagende onderlijn in de accentkleur van de groep (oranje bij
