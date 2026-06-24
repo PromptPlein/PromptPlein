@@ -4,6 +4,7 @@ import {
   Check,
   ClipboardCopy,
   Compass,
+  Eraser,
   Info,
   Loader2,
   Search,
@@ -14,6 +15,7 @@ import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { isContextPrompt } from '@/lib/techniques';
+import { usePersistentDraft } from '@/lib/usePersistentDraft';
 import { generatePrompt, prefillFields, recommendFramework } from '@/services/optimizeService';
 import OptimizingLoader from './OptimizingLoader';
 import FollowUpQuestions, { type FieldMeta } from './FollowUpQuestions';
@@ -85,7 +87,9 @@ export default function OwnPromptOptimizer({ settings, onResult, header }: OwnPr
   const { techniques, techniqueById } = useReferenceData();
   const frameworks = techniques.filter(isContextPrompt);
 
-  const [ownPrompt, setOwnPrompt] = useState('');
+  // De geplakte prompt wordt in localStorage bewaard, zodat hij niet verloren
+  // gaat bij een fout of herlaadactie. "Opschonen" maakt hem (en de rest) leeg.
+  const [ownPrompt, setOwnPrompt, clearOwnPromptDraft] = usePersistentDraft('ownPromptFlow');
   const [showExamples, setShowExamples] = useState(false);
   const [recommending, setRecommending] = useState(false);
   const [recommendations, setRecommendations] = useState<TechniqueRecommendation[] | null>(null);
@@ -114,6 +118,14 @@ export default function OwnPromptOptimizer({ settings, onResult, header }: OwnPr
     setAnswers({});
     setFieldMeta({});
     setUnclearReason(null);
+  }
+
+  /** "Opschonen": wis de geplakte prompt (ook uit localStorage) én alle voortgang. */
+  function handleClearAll() {
+    clearOwnPromptDraft();
+    resetDownstream();
+    setShowExamples(false);
+    toast.success('Alles opgeschoond. Je begint met een schone lei.');
   }
 
   /** Kopieer een voorbeeldprompt naar het klembord. */
@@ -299,6 +311,18 @@ export default function OwnPromptOptimizer({ settings, onResult, header }: OwnPr
             <Info size={15} />
             <span>Voorbeelden</span>
           </button>
+          {/* Opschonen — alleen tonen als er iets te wissen valt. */}
+          {ownPrompt.trim() && (
+            <button
+              type="button"
+              onClick={handleClearAll}
+              title="Wis je prompt en begin opnieuw"
+              className="ml-auto inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-medium text-slate-400 transition-colors hover:text-rijksoranje dark:text-slate-500 dark:hover:text-rijksoranje"
+            >
+              <Eraser size={15} />
+              <span>Opschonen</span>
+            </button>
+          )}
         </div>
 
         {/* Uitklapbaar paneel met voorbeeldprompts per raamwerk. */}

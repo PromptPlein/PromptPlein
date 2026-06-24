@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { AlertTriangle, Check, ClipboardCopy, Info, Loader2, Sparkles, Wand2 } from 'lucide-react';
+import { AlertTriangle, Check, ClipboardCopy, Eraser, Info, Loader2, Sparkles, Wand2 } from 'lucide-react';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import { useReferenceData } from '@/context/ReferenceDataContext';
@@ -52,6 +52,12 @@ interface GoalRecommenderProps {
   goal: string;
   /** Aangeroepen wanneer de doelomschrijving wijzigt. */
   onGoalChange: (goal: string) => void;
+  /**
+   * Opschonen: wist het doel én alle voortgang. Aangeleverd door de pagina, die
+   * de bewaarde tekst en de afgeleide state (techniek, antwoorden) beheert. Is
+   * dit niet meegegeven, dan wordt de knop niet getoond.
+   */
+  onClear?: () => void;
   /** De instap-tabs; vallen bovenin het oranje generator-blok. */
   header?: ReactNode;
   /**
@@ -77,6 +83,7 @@ export default function GoalRecommender({
   onSelectTechnique,
   goal,
   onGoalChange,
+  onClear,
   header,
   templateBuilder,
   manualList,
@@ -103,6 +110,14 @@ export default function GoalRecommender({
     onGoalChange(text);
     setShowExamples(false);
     toast.success('Voorbeeld ingevuld.');
+  }
+
+  /** Opschonen: wis de lokale aanbevelingen/meldingen én laat de pagina de rest leegmaken. */
+  function handleClear() {
+    setRecommendations(null);
+    setUnclearReason(null);
+    setShowExamples(false);
+    onClear?.();
   }
 
   async function handleRecommend() {
@@ -180,6 +195,18 @@ export default function GoalRecommender({
             <Info size={15} />
             <span>Voorbeelden</span>
           </button>
+          {/* Opschonen — alleen tonen als er iets te wissen valt. */}
+          {onClear && goal.trim() && (
+            <button
+              type="button"
+              onClick={handleClear}
+              title="Wis je doel en begin opnieuw"
+              className="ml-auto inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-medium text-slate-400 transition-colors hover:text-rijksoranje dark:text-slate-500 dark:hover:text-rijksoranje"
+            >
+              <Eraser size={15} />
+              <span>Opschonen</span>
+            </button>
+          )}
         </div>
 
         {/* Uitklapbaar paneel met voorbeelddoelen per prompttechniek. */}

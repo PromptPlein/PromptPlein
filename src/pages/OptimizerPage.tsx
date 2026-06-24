@@ -8,6 +8,7 @@ import {
   Check,
   Wand2,
   AlertTriangle,
+  Eraser,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import TechniqueSelector from '@/components/optimizer/TechniqueSelector';
@@ -26,6 +27,7 @@ import { getAiSettings, DEFAULT_AI_SETTINGS, type AiSettings } from '@/services/
 import { detectPii, detectBlockedTopics, type GuardrailFinding } from '@/services/guardrails';
 import GuardrailDialog from '@/components/optimizer/GuardrailDialog';
 import { getCurrentUser } from '@/lib/utils';
+import { usePersistentDraft, clearAllDrafts } from '@/lib/usePersistentDraft';
 import type { OptimizeResult, Technique } from '@/types';
 
 /** Instapwijze: zelf kiezen/aanbevelen, óf de eigen prompt optimaliseren. */
@@ -37,9 +39,11 @@ export default function OptimizerPage() {
   const { promptId } = useParams<{ promptId?: string }>();
   const { techniques } = useReferenceData();
 
-  const [promptContent, setPromptContent] = useState('');
+  // Eigen prompt/startpunt en doel worden in localStorage bewaard, zodat de tekst
+  // niet verloren gaat bij een fout of herlaadactie. "Opschonen" maakt ze leeg.
+  const [promptContent, setPromptContent, clearPromptDraft] = usePersistentDraft('ownPrompt');
   const [sourcePromptId, setSourcePromptId] = useState<string | null>(null);
-  const [goal, setGoal] = useState('');
+  const [goal, setGoal, clearGoalDraft] = usePersistentDraft('goal');
   // Standaard staat de eigen-prompt-flow uitgeklapt: dat is het meest gebruikte
   // startpunt. 'smart' (complex vraagstuk) wordt pas actief als de gebruiker daar
   // bewust op klikt; daarom is techniqueMode standaard 'smart' zodat de tweede
@@ -266,16 +270,60 @@ export default function OptimizerPage() {
     setPhase('input');
   }
 
+  /**
+   * "Opschonen": maak alles leeg voor een frisse start. Wist zowel de bewaarde
+   * tekst (drafts in localStorage) als alle afgeleide state in deze sessie —
+   * gekozen techniek, voor-ingevulde antwoorden, meldingen en het resultaat.
+   * Belangrijk: clearAllDrafts() haalt óók drafts weg van velden die nu niet
+   * gemonteerd zijn (bijv. de eigen prompt in de andere flow), zodat er
+   * gegarandeerd niets blijft staan.
+   */
+  function handleClearAll() {
+    clearPromptDraft();
+    clearGoalDraft();
+    clearAllDrafts();
+    setSourcePromptId(null);
+    setTechniqueId(null);
+    setAnswers({});
+    setFieldMeta({});
+    setUnclearReason(null);
+    setGuardrailFindings(null);
+    setResult(null);
+    setPhase('input');
+    toast.success('Alles opgeschoond. Je begint met een schone lei.');
+  }
+
+  // Is er iets om op te schonen? Toon de knop alleen als dat zo is.
+  const hasDraftContent =
+    Boolean(promptContent.trim()) ||
+    Boolean(goal.trim()) ||
+    Boolean(techniqueId) ||
+    Object.keys(answers).length > 0;
+
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mb-6">
-        <h1 className="flex items-center gap-2 text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
-          <Sparkles className="text-rijksoranje" /> Prompt genereren
-        </h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          Genereer een herbruikbare prompt-template. De inhoud vul je zelf aan in je eigen chat.
-          Kopieer en plak de template telkens wanneer je hem nodig hebt.
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="flex items-center gap-2 text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
+            <Sparkles className="text-rijksoranje" /> Prompt genereren
+          </h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Genereer een herbruikbare prompt-template. De inhoud vul je zelf aan in je eigen chat.
+            Kopieer en plak de template telkens wanneer je hem nodig hebt.
+          </p>
+        </div>
+        {/* Opschonen: maakt de bewaarde tekst en alle voortgang leeg voor een
+            frisse start. Alleen zichtbaar in de invoerfase als er iets te wissen is. */}
+        {phase === 'input' && hasDraftContent && (
+          <button
+            type="button"
+            onClick={handleClearAll}
+            title="Wis je tekst en begin opnieuw"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-500 transition-colors hover:border-rijksoranje/40 hover:bg-rijksoranje/5 hover:text-rijksoranje dark:border-slate-700 dark:text-slate-400 dark:hover:border-rijksoranje/40 dark:hover:bg-rijksoranje/10"
+          >
+            <Eraser size={15} /> Opschonen
+          </button>
+        )}
       </div>
 
       {phase === 'output' && result ? (
@@ -475,6 +523,7 @@ export default function OptimizerPage() {
                 onSelectTechnique={handleSelectTechnique}
                 goal={goal}
                 onGoalChange={setGoal}
+                onClear={handleClearAll}
                 header={tabs}
                 templateBuilder={templateBuilderNode}
                 manualList={manualListNode}

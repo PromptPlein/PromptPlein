@@ -512,7 +512,12 @@ gebruiker niet met lege velden begint maar met een ingevulde, controleerbare bas
 WERKWIJZE PER VELD:
 1. Zoek eerst in de tekst van de gebruiker naar inhoud die bij dit veld hoort (bijv. een beschreven
    rol → het rol-veld, achtergrond/situatie → het context-veld, de opdracht → het taak-veld).
-   Vind je die? Vat die inhoud kort en bruikbaar samen in je eigen woorden en zet "source":"prompt".
+   Vind je die? Neem dan ALLE relevante details voor dit veld over en zet "source":"prompt".
+   BEHOUD concrete specifieke inhoud die de gebruiker noemt — denk aan aantallen, namen, categorieën,
+   opsommingen, voorbeelden, schermen/views, filters en stappen. Vat NIET samen tot één regel als de
+   gebruiker meer detail heeft gegeven: je mag herformuleren en ordenen (bijv. in korte bullets), maar
+   laat geen door de gebruiker genoemde details weg. Een rijke beschrijving hoort te leiden tot een rijk
+   ingevuld veld. Verdeel details over het veld waar ze inhoudelijk thuishoren; stop niet alles in één veld.
 2. Staat er in de tekst niets voor dit veld? Bedenk dan zelf een passend, plausibel voorstel dat
    logisch aansluit op de rest van de tekst, en zet "source":"ai". Verzin GEEN feiten die de
    bedoeling van de gebruiker veranderen; blijf dicht bij wat de tekst impliceert en houd het
@@ -520,14 +525,22 @@ WERKWIJZE PER VELD:
 
 REGELS:
 - Vul ELK veld in (laat "value" nooit leeg): of afgeleid uit de tekst ("prompt"), of als suggestie ("ai").
+- Volledigheid gaat vóór beknoptheid bij "source":"prompt"-velden: liever een compleet, detailrijk veld
+  dan een korte samenvatting waarin informatie van de gebruiker verloren gaat. Knip lange opsommingen op
+  in leesbare bullets in plaats van ze in te korten.
 - Schrijf in helder Nederlands (B1-taalniveau waar passend). Houd het intern gericht: de doelgroep
   is een overheidsmedewerker, niet de burger.
 - "note": één heel korte toelichting (max ~12 woorden) per veld, bijv. "Afgeleid uit je prompt" of
   "Suggestie — controleer of dit klopt".
 ${CLARITY_GATE_JSON_INSTRUCTION}
 
+CONTROLE VOORDAT JE ANTWOORDT: als de gebruiker een lange of gedetailleerde tekst heeft aangeleverd,
+mag vrijwel geen enkel concreet detail (aantal, naam, categorie, view, filter, stap) ontbreken in de
+gevulde velden. Loop de tekst van de gebruiker na en zorg dat elk genoemd detail ergens terechtkomt in
+het veld waar het thuishoort. Een detail mag je herformuleren of verplaatsen, maar niet stilzwijgend laten vallen.
+
 Geef UITSLUITEND geldige JSON terug, zonder codeblok of extra tekst, in dit formaat:
-{"summary":"<1 zin: wat je uit de prompt hebt gehaald en wat je hebt aangevuld, in het Nederlands>","fields":[{"id":"<veld-id>","value":"<voorgestelde inhoud voor dit veld>","source":"prompt|ai","note":"<korte toelichting>"}]}
+{"summary":"<1 zin: wat je uit de prompt hebt gehaald en wat je hebt aangevuld, in het Nederlands>","fields":[{"id":"<veld-id>","value":"<voorgestelde inhoud voor dit veld — detailrijk waar de gebruiker detail gaf>","source":"prompt|ai","note":"<korte toelichting>"}]}
 
 Gebruik alleen veld-id's die exact in de lijst voorkomen.`;
 
@@ -951,7 +964,9 @@ async function runClaude(
   const client = new Anthropic({ apiKey });
   const response = await client.messages.create({
     model,
-    max_tokens: 4096,
+    // Claude (primaire provider) mag royaal: genoeg ruimte voor detailrijke
+    // prefill van veel velden zonder dat de JSON wordt afgekapt.
+    max_tokens: 16384,
     temperature,
     system,
     messages: [{ role: 'user', content: userMessage }],
@@ -985,7 +1000,11 @@ async function runDeepSeek(
     },
     body: JSON.stringify({
       model,
-      max_tokens: 4096,
+      // DeepSeek V4 (Flash/Pro) ondersteunt zeer hoge output-limieten (V4 Pro tot
+      // 384k). 16384 is ruim genoeg voor detailrijke prefill en veilig voor beide
+      // modellen; hoger heeft hier geen meerwaarde (je betaalt alleen voor wat
+      // daadwerkelijk gegenereerd wordt, niet voor het plafond).
+      max_tokens: 16384,
       temperature,
       messages: [
         { role: 'system', content: system },
@@ -1021,7 +1040,7 @@ async function runOpenAI(
     },
     body: JSON.stringify({
       model,
-      max_tokens: 4096,
+      max_tokens: 16384,
       temperature,
       messages: [
         { role: 'system', content: system },
