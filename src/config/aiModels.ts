@@ -1,6 +1,6 @@
 /** Selecteerbare AI-modellen voor het optimaliseren van prompts. */
 
-export type AiProvider = 'auto' | 'claude' | 'openai' | 'deepseek';
+export type AiProvider = 'auto' | 'claude' | 'openai' | 'deepseek' | 'mistral';
 
 export interface AiModelOption {
   id: AiProvider;
@@ -9,10 +9,11 @@ export interface AiModelOption {
 }
 
 export const AI_MODELS: AiModelOption[] = [
-  { id: 'auto', label: 'Automatisch', hint: 'Claude → GPT-5 → DeepSeek, met fallback' },
+  { id: 'auto', label: 'Automatisch', hint: 'Claude → GPT-5 → DeepSeek → Mistral, met fallback' },
   { id: 'claude', label: 'Claude (Anthropic)', hint: 'Hoogste kwaliteit' },
   { id: 'openai', label: 'GPT-5 (OpenAI)', hint: 'Alternatief model' },
   { id: 'deepseek', label: 'DeepSeek', hint: 'Kostenefficiënt' },
+  { id: 'mistral', label: 'Mistral', hint: 'Snel en goedkoop' },
 ];
 
 /** Prijs per 1 miljoen tokens (USD). Bron: officiële provider-prijslijsten. */
@@ -111,6 +112,26 @@ export const PROVIDER_MODELS: Record<Exclude<AiProvider, 'auto'>, ProviderModelO
       pricing: { input: 0.435, output: 0.87 },
     },
   ],
+  mistral: [
+    {
+      id: 'mistral-small-latest',
+      label: 'Mistral Small 3',
+      hint: 'Beste balans: sterk en zeer goedkoop',
+      pricing: { input: 0.1, output: 0.3 },
+    },
+    {
+      id: 'ministral-8b-latest',
+      label: 'Ministral 8B',
+      hint: 'Snel en ultra-goedkoop, vlakke prijs',
+      pricing: { input: 0.1, output: 0.1 },
+    },
+    {
+      id: 'ministral-3b-latest',
+      label: 'Ministral 3B',
+      hint: 'Goedkoopst en laagste latency',
+      pricing: { input: 0.04, output: 0.04 },
+    },
+  ],
 };
 
 /** Alle geldige model-ids per provider (voor validatie). */
@@ -157,5 +178,6 @@ export const PROVIDER_LABELS: Record<string, string> = {
   claude: 'Claude (Anthropic)',
   openai: 'GPT-5 (OpenAI)',
   deepseek: 'DeepSeek',
+  mistral: 'Mistral',
   'local-template': 'Lokale template (geen AI)',
 };

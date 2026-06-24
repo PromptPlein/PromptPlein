@@ -2,10 +2,12 @@ import { useRef, useState, type ReactNode } from 'react';
 import {
   AlertTriangle,
   Check,
+  ChevronDown,
   ClipboardCopy,
   Compass,
   Eraser,
   Info,
+  LayoutGrid,
   Loader2,
   Search,
   Sparkles,
@@ -91,6 +93,9 @@ export default function OwnPromptOptimizer({ settings, onResult, header }: OwnPr
   // gaat bij een fout of herlaadactie. "Opschonen" maakt hem (en de rest) leeg.
   const [ownPrompt, setOwnPrompt, clearOwnPromptDraft] = usePersistentDraft('ownPromptFlow');
   const [showExamples, setShowExamples] = useState(false);
+  // Toont de volledige frameworklijst zodat de gebruiker — los van het AI-advies —
+  // alsnog elk ander framework kan kiezen (met dezelfde auto-voorinvulling).
+  const [showAllFrameworks, setShowAllFrameworks] = useState(false);
   const [recommending, setRecommending] = useState(false);
   const [recommendations, setRecommendations] = useState<TechniqueRecommendation[] | null>(null);
   const [recommendSummary, setRecommendSummary] = useState('');
@@ -118,6 +123,7 @@ export default function OwnPromptOptimizer({ settings, onResult, header }: OwnPr
     setAnswers({});
     setFieldMeta({});
     setUnclearReason(null);
+    setShowAllFrameworks(false);
   }
 
   /** "Opschonen": wis de geplakte prompt (ook uit localStorage) én alle voortgang. */
@@ -232,6 +238,11 @@ export default function OwnPromptOptimizer({ settings, onResult, header }: OwnPr
     if (!technique) return;
     setGenerating(true);
     setUnclearReason(null); // nieuwe poging: oude onduidelijk-melding wissen
+    // Het laadscherm verschijnt boven de genereerknop; scroll het in beeld zodat
+    // de gebruiker de analyse ziet i.p.v. naar de (nu verdwenen) knop te staren.
+    requestAnimationFrame(() => {
+      analysisRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
     try {
       const res = await generatePrompt({
         technique,
@@ -475,6 +486,85 @@ export default function OwnPromptOptimizer({ settings, onResult, header }: OwnPr
               </button>
             );
           })}
+        </div>
+      )}
+
+      {/* "Of kies zelf een ander framework": het AI-advies toont maar 1–3 opties,
+          maar soms wil de gebruiker bewust een ander framework (bijv. de echte
+          BLUEPRINT i.p.v. BLUEPRINT Preview). Deze inklapbare lijst toont ALLE
+          frameworks; een keuze loopt via dezelfde handleSelectFramework, dus de
+          velden worden óók automatisch voor-ingevuld — geen handwerk nodig. */}
+      {recommendations && frameworks.length > 0 && (
+        <div className="rounded-xl border border-slate-200 dark:border-slate-700">
+          <button
+            type="button"
+            onClick={() => setShowAllFrameworks((v) => !v)}
+            aria-expanded={showAllFrameworks}
+            className="flex w-full items-center justify-between gap-2 rounded-xl px-4 py-3 text-left text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800"
+          >
+            <span className="flex items-center gap-2">
+              <LayoutGrid size={16} className="text-rijksblauw-500" />
+              Of kies zelf een ander framework
+            </span>
+            <ChevronDown
+              size={18}
+              className={clsx(
+                'shrink-0 text-slate-400 transition-transform',
+                showAllFrameworks && 'rotate-180',
+              )}
+            />
+          </button>
+          {showAllFrameworks && (
+            <div className="border-t border-slate-200 p-4 dark:border-slate-700">
+              <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
+                Klik op een framework om het toe te passen. We vullen de velden ook dan
+                automatisch voor op basis van je prompt.
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {frameworks.map((fw) => {
+                  const active = fw.id === techniqueId;
+                  const isRecommended = recommendations.some((r) => r.id === fw.id);
+                  return (
+                    <button
+                      key={fw.id}
+                      type="button"
+                      onClick={() => void handleSelectFramework(fw.id)}
+                      aria-pressed={active}
+                      disabled={prefilling || generating}
+                      className={clsx(
+                        'flex flex-col rounded-lg border p-3 text-left transition-all disabled:cursor-not-allowed disabled:opacity-60',
+                        active
+                          ? 'border-rijksblauw-500 bg-rijksblauw-50 ring-2 ring-rijksblauw-500/20 dark:bg-rijksblauw-500/15'
+                          : 'border-slate-200 bg-white hover:border-rijksblauw-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700/50',
+                      )}
+                    >
+                      <span className="flex items-center justify-between gap-2">
+                        <span className="font-semibold text-rijksblauw-700 dark:text-rijksblauw-200">
+                          {fw.name}
+                        </span>
+                        {active ? (
+                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-rijksblauw-500 text-white">
+                            <Check size={13} />
+                          </span>
+                        ) : (
+                          isRecommended && (
+                            <span className="opl-badge shrink-0 bg-rijksoranje/15 text-rijksoranje">
+                              Aanbevolen
+                            </span>
+                          )
+                        )}
+                      </span>
+                      {fw.strength && (
+                        <span className="mt-1 line-clamp-2 text-xs text-slate-500 dark:text-slate-400">
+                          {fw.strength}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

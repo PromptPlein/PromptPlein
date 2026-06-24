@@ -204,7 +204,7 @@ export interface AuditLogEntry {
 }
 
 /** Herkomst van een gegenereerd/aanbevolen resultaat. */
-export type AiProviderResult = 'claude' | 'openai' | 'deepseek' | 'local-template';
+export type AiProviderResult = 'claude' | 'openai' | 'deepseek' | 'mistral' | 'local-template';
 
 /** Antwoord van de optimize-prompt service (generatiemodus). */
 export interface OptimizeResult {

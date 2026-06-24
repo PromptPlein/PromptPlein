@@ -10,21 +10,22 @@
 //     gerangschikt met een korte motivatie.
 //
 // Multi-model met fallback-keten. De client kan een voorkeursprovider sturen
-// (`preferredProvider`: 'auto' | 'claude' | 'openai' | 'deepseek'); 'auto'
-// gebruikt de standaardvolgorde Claude → GPT-4 → DeepSeek. Faalt alles
-// (of ontbreken de keys), dan valt de functie terug op de ruwe template
-// (generate) of lokale trefwoord-matching (recommend).
+// (`preferredProvider`: 'auto' | 'claude' | 'openai' | 'deepseek' | 'mistral');
+// 'auto' gebruikt de standaardvolgorde Claude → GPT-4 → DeepSeek → Mistral.
+// Faalt alles (of ontbreken de keys), dan valt de functie terug op de ruwe
+// template (generate) of lokale trefwoord-matching (recommend).
 //
 // Deploy:  supabase functions deploy optimize-prompt
 // Secrets: supabase secrets set CLAUDE_API_KEY=sk-ant-...     (Anthropic)
 //          supabase secrets set OPENAI_API_KEY=sk-...         (OpenAI, optioneel)
 //          supabase secrets set DEEPSEEK_API_KEY=sk-...       (DeepSeek, optioneel)
+//          supabase secrets set MISTRAL_API_KEY=...           (Mistral, optioneel)
 //
 // Runtime: Deno (Supabase Edge Functions)
 
 import Anthropic from 'npm:@anthropic-ai/sdk@^0.65.0';
 
-type Provider = 'claude' | 'openai' | 'deepseek';
+type Provider = 'claude' | 'openai' | 'deepseek' | 'mistral';
 type PreferredProvider = 'auto' | Provider;
 type Mode =
   | 'generate'
@@ -132,11 +133,13 @@ const PROVIDER_MODELS: Record<Provider, string[]> = {
   openai: ['gpt-5.5', 'gpt-5.5-pro', 'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.4-nano'],
   // deepseek-chat/-reasoner zijn aliassen die op 2026-07-24 vervallen; gebruik de V4-ids.
   deepseek: ['deepseek-v4-flash', 'deepseek-v4-pro'],
+  mistral: ['mistral-small-latest', 'ministral-8b-latest', 'ministral-3b-latest'],
 };
 
 const CLAUDE_MODEL = PROVIDER_MODELS.claude[0];
 const OPENAI_MODEL = PROVIDER_MODELS.openai[0];
 const DEEPSEEK_MODEL = PROVIDER_MODELS.deepseek[0];
+const MISTRAL_MODEL = PROVIDER_MODELS.mistral[0];
 
 /**
  * Kies het model voor `candidate`. Alleen wanneer de admin-voorkeur dezelfde
@@ -1059,6 +1062,43 @@ async function runOpenAI(
   return text;
 }
 
+async function runMistral(
+  userMessage: string,
+  system: string,
+  temperature: number,
+  model: string = MISTRAL_MODEL,
+): Promise<string> {
+  const apiKey = Deno.env.get('MISTRAL_API_KEY');
+  if (!apiKey) throw new Error('MISTRAL_API_KEY ontbreekt');
+
+  // Mistral gebruikt een OpenAI-compatibele API.
+  const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 4096,
+      temperature,
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: userMessage },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Mistral gaf status ${response.status}`);
+  }
+
+  const data = await response.json();
+  const text: string = data?.choices?.[0]?.message?.content?.trim() ?? '';
+  if (!text) throw new Error('Mistral gaf een lege respons');
+  return text;
+}
+
 type ProviderFn = (
   userMessage: string,
   system: string,
@@ -1070,9 +1110,10 @@ const PROVIDERS: Record<Provider, ProviderFn> = {
   claude: runClaude,
   openai: runOpenAI,
   deepseek: runDeepSeek,
+  mistral: runMistral,
 };
 
-const DEFAULT_ORDER: Provider[] = ['claude', 'openai', 'deepseek'];
+const DEFAULT_ORDER: Provider[] = ['claude', 'openai', 'deepseek', 'mistral'];
 
 /** Bouw de fallback-volgorde op basis van de voorkeur van de client. */
 function buildOrder(preferred?: PreferredProvider): Provider[] {

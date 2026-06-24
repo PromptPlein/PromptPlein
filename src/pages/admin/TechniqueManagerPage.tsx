@@ -1,6 +1,23 @@
 import { useEffect, useState } from 'react';
 import { Plus, Pencil, Trash2, Eye, EyeOff, ArrowUp, ArrowDown, GripVertical, X } from 'lucide-react';
 import toast from 'react-hot-toast';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import Modal from '@/components/common/Modal';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { useReferenceData } from '@/context/ReferenceDataContext';
@@ -75,6 +92,130 @@ function parseUseCases(text: string): string[] {
     .split('\n')
     .map((s) => s.trim())
     .filter(Boolean);
+}
+
+/** Eén sleepbare tabelrij. De grijp-greep links activeert het slepen; de rest
+ *  van de rij blijft normaal klikbaar (bewerken, status, verwijderen). */
+function SortableRow({
+  t,
+  index,
+  total,
+  onMove,
+  onToggleActive,
+  onEdit,
+  onDelete,
+}: {
+  t: Technique;
+  index: number;
+  total: number;
+  onMove: (t: Technique, dir: -1 | 1) => void;
+  onToggleActive: (t: Technique) => void;
+  onEdit: (t: Technique) => void;
+  onDelete: (t: Technique) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: t.id,
+  });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    // De gesleepte rij komt visueel bovenop te liggen en wordt licht gemarkeerd.
+    ...(isDragging ? { position: 'relative' as const, zIndex: 10 } : {}),
+  };
+
+  return (
+    <tr
+      ref={setNodeRef}
+      style={style}
+      className={`hover:bg-slate-50 dark:hover:bg-slate-800 ${
+        isDragging ? 'bg-rijksblauw-50 shadow-lg dark:bg-rijksblauw-500/15' : ''
+      }`}
+    >
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="cursor-grab touch-none rounded p-1 text-slate-300 hover:bg-slate-100 hover:text-slate-500 active:cursor-grabbing dark:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300"
+            aria-label="Sleep om te sorteren"
+            {...attributes}
+            {...listeners}
+          >
+            <GripVertical size={16} />
+          </button>
+          <div>
+            <p className="font-medium text-slate-800 dark:text-slate-100">{t.name}</p>
+            <p className="line-clamp-1 text-xs text-slate-400 dark:text-slate-500">{t.description}</p>
+          </div>
+        </div>
+      </td>
+      <td className="hidden px-4 py-3 md:table-cell">
+        <span
+          className={`opl-badge ${
+            (t.family ?? 'technique') === 'context'
+              ? 'bg-rijksblauw-100 text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200'
+              : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
+          }`}
+        >
+          {(t.family ?? 'technique') === 'context' ? 'Framework' : 'Techniek'}
+        </span>
+      </td>
+      <td className="hidden px-4 py-3 text-slate-600 sm:table-cell dark:text-slate-300">
+        {t.follow_up_questions.length}
+      </td>
+      <td className="px-4 py-3">
+        <span
+          className={`opl-badge ${
+            t.is_active === false
+              ? 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400'
+              : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
+          }`}
+        >
+          {t.is_active === false ? 'Inactief' : 'Actief'}
+        </span>
+      </td>
+      <td className="px-4 py-3">
+        <div className="flex items-center justify-end gap-1">
+          <button
+            onClick={() => onMove(t, -1)}
+            disabled={index === 0}
+            className="rounded p-1.5 text-slate-400 hover:bg-slate-100 disabled:opacity-30 dark:text-slate-500 dark:hover:bg-slate-800"
+            aria-label="Omhoog"
+          >
+            <ArrowUp size={15} />
+          </button>
+          <button
+            onClick={() => onMove(t, 1)}
+            disabled={index === total - 1}
+            className="rounded p-1.5 text-slate-400 hover:bg-slate-100 disabled:opacity-30 dark:text-slate-500 dark:hover:bg-slate-800"
+            aria-label="Omlaag"
+          >
+            <ArrowDown size={15} />
+          </button>
+          <button
+            onClick={() => onToggleActive(t)}
+            className="rounded p-1.5 text-slate-400 hover:bg-slate-100 dark:text-slate-500 dark:hover:bg-slate-800"
+            aria-label="Actief/inactief"
+          >
+            {t.is_active === false ? <EyeOff size={15} /> : <Eye size={15} />}
+          </button>
+          <button
+            onClick={() => onEdit(t)}
+            className="rounded p-1.5 text-rijksblauw-500 hover:bg-rijksblauw-50 dark:hover:bg-rijksblauw-500/15"
+            aria-label="Bewerken"
+          >
+            <Pencil size={15} />
+          </button>
+          <button
+            onClick={() => onDelete(t)}
+            className="rounded p-1.5 text-rijksrood hover:bg-red-50 dark:hover:bg-red-500/10"
+            aria-label="Verwijderen"
+          >
+            <Trash2 size={15} />
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
 }
 
 export default function TechniqueManagerPage() {
@@ -204,20 +345,53 @@ export default function TechniqueManagerPage() {
     await refresh();
   }
 
-  async function move(t: Technique, dir: -1 | 1) {
-    const sorted = [...techniques];
-    const idx = sorted.findIndex((x) => x.id === t.id);
-    const swap = idx + dir;
-    if (swap < 0 || swap >= sorted.length) return;
-    const a = sorted[idx];
-    const b = sorted[swap];
-    await Promise.all([
-      updateTechnique(a.id, { sort_order: b.sort_order ?? swap }),
-      updateTechnique(b.id, { sort_order: a.sort_order ?? idx }),
-    ]);
-    await load();
-    await refresh();
+  /**
+   * Schrijft de nieuwe volgorde weg als opeenvolgende sort_order-waarden (0,1,2,…).
+   * Dat is robuuster dan twee waarden omwisselen: gelijke of lege sort_orders —
+   * de oorzaak van het haperende sorteren — worden hiermee definitief rechtgetrokken.
+   * Alleen de rijen waarvan de positie écht verandert worden bijgewerkt.
+   */
+  async function persistOrder(ordered: Technique[]) {
+    const changed = ordered.filter((t, i) => t.sort_order !== i);
+    if (changed.length === 0) return;
+    try {
+      await Promise.all(
+        changed.map((t) => updateTechnique(t.id, { sort_order: ordered.indexOf(t) })),
+      );
+      await refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Volgorde opslaan mislukt');
+      await load(); // herstel naar de server-waarheid bij een fout
+    }
   }
+
+  /** Drag-and-drop: verplaats de gesleepte rij naar zijn nieuwe plek en bewaar. */
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = techniques.findIndex((t) => t.id === active.id);
+    const newIndex = techniques.findIndex((t) => t.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+    const reordered = arrayMove(techniques, oldIndex, newIndex);
+    setTechniques(reordered); // optimistisch: meteen de nieuwe volgorde tonen
+    await persistOrder(reordered);
+  }
+
+  /** Pijltjes-knoppen (toetsenbord/fallback): verplaats één positie omhoog/omlaag. */
+  async function move(t: Technique, dir: -1 | 1) {
+    const idx = techniques.findIndex((x) => x.id === t.id);
+    const swap = idx + dir;
+    if (swap < 0 || swap >= techniques.length) return;
+    const reordered = arrayMove(techniques, idx, swap);
+    setTechniques(reordered);
+    await persistOrder(reordered);
+  }
+
+  const sensors = useSensors(
+    // Een kleine drempel voorkomt dat een gewone klik al als sleep wordt gezien.
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
   const preview =
     editor &&
@@ -234,7 +408,10 @@ export default function TechniqueManagerPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Technieken beheren</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">{techniques.length} technieken</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            {techniques.length} technieken · sleep aan de greep{' '}
+            <GripVertical size={13} className="inline align-text-bottom" /> om de volgorde te wijzigen
+          </p>
         </div>
         <button className="opl-btn-primary" onClick={() => setEditor({ ...EMPTY })}>
           <Plus size={18} /> Nieuwe techniek
@@ -245,93 +422,42 @@ export default function TechniqueManagerPage() {
         {loading ? (
           <div className="skeleton h-64 w-full" />
         ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-              <tr>
-                <th className="px-4 py-3 font-medium">Naam</th>
-                <th className="hidden px-4 py-3 font-medium md:table-cell">Soort</th>
-                <th className="hidden px-4 py-3 font-medium sm:table-cell">Vervolgvragen</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 text-right font-medium">Acties</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-              {techniques.map((t, i) => (
-                <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-slate-800">
-                  <td className="px-4 py-3">
-                    <p className="font-medium text-slate-800 dark:text-slate-100">{t.name}</p>
-                    <p className="line-clamp-1 text-xs text-slate-400 dark:text-slate-500">{t.description}</p>
-                  </td>
-                  <td className="hidden px-4 py-3 md:table-cell">
-                    <span
-                      className={`opl-badge ${
-                        (t.family ?? 'technique') === 'context'
-                          ? 'bg-rijksblauw-100 text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200'
-                          : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
-                      }`}
-                    >
-                      {(t.family ?? 'technique') === 'context' ? 'Framework' : 'Techniek'}
-                    </span>
-                  </td>
-                  <td className="hidden px-4 py-3 text-slate-600 sm:table-cell dark:text-slate-300">
-                    {t.follow_up_questions.length}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`opl-badge ${
-                        t.is_active === false
-                          ? 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400'
-                          : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
-                      }`}
-                    >
-                      {t.is_active === false ? 'Inactief' : 'Actief'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-1">
-                      <button
-                        onClick={() => move(t, -1)}
-                        disabled={i === 0}
-                        className="rounded p-1.5 text-slate-400 hover:bg-slate-100 disabled:opacity-30 dark:text-slate-500 dark:hover:bg-slate-800"
-                        aria-label="Omhoog"
-                      >
-                        <ArrowUp size={15} />
-                      </button>
-                      <button
-                        onClick={() => move(t, 1)}
-                        disabled={i === techniques.length - 1}
-                        className="rounded p-1.5 text-slate-400 hover:bg-slate-100 disabled:opacity-30 dark:text-slate-500 dark:hover:bg-slate-800"
-                        aria-label="Omlaag"
-                      >
-                        <ArrowDown size={15} />
-                      </button>
-                      <button
-                        onClick={() => toggleActive(t)}
-                        className="rounded p-1.5 text-slate-400 hover:bg-slate-100 dark:text-slate-500 dark:hover:bg-slate-800"
-                        aria-label="Actief/inactief"
-                      >
-                        {t.is_active === false ? <EyeOff size={15} /> : <Eye size={15} />}
-                      </button>
-                      <button
-                        onClick={() => setEditor(toEditor(t))}
-                        className="rounded p-1.5 text-rijksblauw-500 hover:bg-rijksblauw-50 dark:hover:bg-rijksblauw-500/15"
-                        aria-label="Bewerken"
-                      >
-                        <Pencil size={15} />
-                      </button>
-                      <button
-                        onClick={() => setToDelete(t)}
-                        className="rounded p-1.5 text-rijksrood hover:bg-red-50 dark:hover:bg-red-500/10"
-                        aria-label="Verwijderen"
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  </td>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                <tr>
+                  <th className="px-4 py-3 font-medium">Naam</th>
+                  <th className="hidden px-4 py-3 font-medium md:table-cell">Soort</th>
+                  <th className="hidden px-4 py-3 font-medium sm:table-cell">Vervolgvragen</th>
+                  <th className="px-4 py-3 font-medium">Status</th>
+                  <th className="px-4 py-3 text-right font-medium">Acties</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                <SortableContext
+                  items={techniques.map((t) => t.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {techniques.map((t, i) => (
+                    <SortableRow
+                      key={t.id}
+                      t={t}
+                      index={i}
+                      total={techniques.length}
+                      onMove={move}
+                      onToggleActive={toggleActive}
+                      onEdit={(tech) => setEditor(toEditor(tech))}
+                      onDelete={setToDelete}
+                    />
+                  ))}
+                </SortableContext>
+              </tbody>
+            </table>
+          </DndContext>
         )}
       </div>
 

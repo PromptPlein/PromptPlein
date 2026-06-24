@@ -67,6 +67,10 @@ export default function OptimizerPage() {
   // 'input' = invoerpaneel zichtbaar, 'transition' = uitfaden, 'output' = resultaat
   const [phase, setPhase] = useState<'input' | 'transition' | 'output'>('input');
   const followUpRef = useRef<HTMLElement>(null);
+  // Anker voor het laadscherm zodat we er bij het genereren naartoe scrollen
+  // (de genereerknop staat onderaan een lang formulier; zonder scroll mist de
+  // gebruiker de analyse die boven de vouw plaatsvindt).
+  const optimizingRef = useRef<HTMLDivElement>(null);
 
   // Laad de bronprompt als er via de URL een prompt is meegegeven.
   useEffect(() => {
@@ -188,6 +192,11 @@ export default function OptimizerPage() {
     setGuardrailFindings(null);
     setUnclearReason(null); // nieuwe poging: oude onduidelijk-melding wissen
     setOptimizing(true);
+    // Wacht tot het laadscherm is gerenderd en scroll het rustig in beeld, zodat
+    // de gebruiker de analyse ziet i.p.v. naar de onderkant van het formulier te staren.
+    requestAnimationFrame(() => {
+      optimizingRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
     try {
       const s = settingsRef.current;
       // Leeg = de generator gebruikt een neutrale plaatshouder voor de eigen inhoud.
@@ -443,8 +452,13 @@ export default function OptimizerPage() {
                   </div>
                 )}
 
-                {/* Laadscherm tijdens het bouwen van de template */}
-                {optimizing && <OptimizingLoader techniqueName={technique?.name} />}
+                {/* Laadscherm tijdens het bouwen van de template; anker voor de
+                    auto-scroll bij genereren. */}
+                {optimizing && (
+                  <div ref={optimizingRef} className="scroll-mt-24">
+                    <OptimizingLoader techniqueName={technique?.name} />
+                  </div>
+                )}
 
                 {/* Genereerknop */}
                 {!optimizing && technique && (

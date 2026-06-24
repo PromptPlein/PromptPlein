@@ -98,7 +98,7 @@ const PROVIDER_KEY = 'optimize_provider';
 const SETTINGS_KEY = 'ai_settings';
 const LOCAL_PROVIDER_KEY = 'opl.settings.optimize_provider';
 const LOCAL_SETTINGS_KEY = 'opl.settings.ai_settings';
-const VALID_PROVIDERS: AiProvider[] = ['auto', 'claude', 'openai', 'deepseek'];
+const VALID_PROVIDERS: AiProvider[] = ['auto', 'claude', 'openai', 'deepseek', 'mistral'];
 
 function isProvider(value: unknown): value is AiProvider {
   return typeof value === 'string' && VALID_PROVIDERS.includes(value as AiProvider);
