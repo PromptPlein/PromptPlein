@@ -75,6 +75,30 @@ export async function updatePassword(newPassword: string): Promise<void> {
   if (error) throw error;
 }
 
+/**
+ * Controleer of er een geldige, actieve sessie is — en ververs het access-token
+ * als dat (bijna) verlopen is. supabase-js ververst normaal automatisch, maar
+ * vlak vóór een schrijfactie willen we zeker weten dat het token nog geldig is,
+ * zodat we geen 403 krijgen terwijl de UI de gebruiker nog als ingelogd toont.
+ *
+ * Geeft `true` terug als er na (eventueel) verversen een geldige sessie is.
+ */
+export async function ensureValidSession(): Promise<boolean> {
+  if (!isSupabaseConfigured || !supabase) return false;
+  const { data } = await supabase.auth.getSession();
+  const session = data.session;
+  if (!session) return false;
+
+  // Token (bijna) verlopen? Probeer te verversen. expires_at is in seconden.
+  const expiresAt = session.expires_at ? session.expires_at * 1000 : 0;
+  const bijnaVerlopen = expiresAt > 0 && expiresAt - Date.now() < 60_000;
+  if (bijnaVerlopen) {
+    const { data: refreshed, error } = await supabase.auth.refreshSession();
+    if (error || !refreshed.session) return false;
+  }
+  return true;
+}
+
 /** Haal het profiel (incl. rol & organisatie) op voor een Auth-gebruiker. */
 export async function fetchProfile(userId: string): Promise<Profile | null> {
   if (!isSupabaseConfigured || !supabase) return null;

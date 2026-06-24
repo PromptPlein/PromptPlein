@@ -2,6 +2,7 @@ import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { representativeSharingLevel } from '@/lib/utils';
 import { localStore } from '@/services/localStore';
 import { setInitialVisibility } from '@/services/visibilityService';
+import { ensureValidSession } from '@/services/authService';
 import type {
   AdvancedPromptFilters,
   Category,
@@ -197,6 +198,13 @@ export async function getPrompt(id: string): Promise<Prompt | null> {
 
 export async function createPrompt(input: NewPromptInput): Promise<Prompt> {
   if (local) return localStore.createPrompt(input);
+  // Zorg dat het access-token nog geldig is (ververs het zo nodig) vóór de insert.
+  // Anders weigert RLS de insert met een 403 terwijl de UI de gebruiker nog als
+  // ingelogd toont. Een verlopen sessie → duidelijke foutmelding i.p.v. een 403.
+  const valid = await ensureValidSession();
+  if (!valid) {
+    throw new Error('Je sessie is verlopen. Log opnieuw in om de template op te slaan.');
+  }
   const { sharing_levels, ...rest } = input;
   // De prompt-rij houdt één representatief sharing_level (voor badge/filters);
   // de echte zichtbaarheid leeft per niveau in prompt_visibility.

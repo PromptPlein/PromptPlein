@@ -12,7 +12,7 @@ import {
 import toast from 'react-hot-toast';
 import TechniqueSelector from '@/components/optimizer/TechniqueSelector';
 import GoalRecommender from '@/components/optimizer/GoalRecommender';
-import EntryOptionCard from '@/components/optimizer/EntryOptionCard';
+import EntryTab from '@/components/optimizer/EntryTab';
 import OwnPromptOptimizer from '@/components/optimizer/OwnPromptOptimizer';
 import FollowUpQuestions from '@/components/optimizer/FollowUpQuestions';
 import OptimizingLoader from '@/components/optimizer/OptimizingLoader';
@@ -40,8 +40,12 @@ export default function OptimizerPage() {
   const [promptContent, setPromptContent] = useState('');
   const [sourcePromptId, setSourcePromptId] = useState<string | null>(null);
   const [goal, setGoal] = useState('');
-  const [techniqueMode, setTechniqueMode] = useState<TechniqueMode>('manual');
-  const [entryMode, setEntryMode] = useState<EntryMode>('techniques');
+  // Standaard staat de eigen-prompt-flow uitgeklapt: dat is het meest gebruikte
+  // startpunt. 'smart' (complex vraagstuk) wordt pas actief als de gebruiker daar
+  // bewust op klikt; daarom is techniqueMode standaard 'smart' zodat de tweede
+  // tab meteen de juiste flow toont.
+  const [techniqueMode, setTechniqueMode] = useState<TechniqueMode>('smart');
+  const [entryMode, setEntryMode] = useState<EntryMode>('own-prompt');
   const [techniqueId, setTechniqueId] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   // Herkomst per voor-ingevuld veld (origin-badges) + laadstaat tijdens prefill.
@@ -289,170 +293,205 @@ export default function OptimizerPage() {
             phase === 'transition' ? 'pointer-events-none opacity-0' : 'opacity-100'
           }`}
         >
-          {/* 1. Twee gelijkwaardige instapopties, naast elkaar (met 3D-effect). */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {/* Optie A (links): optimaliseer je eigen prompt (altijd een prompt framework) */}
-            <EntryOptionCard
-              active={entryMode === 'own-prompt'}
-              onClick={() => setEntryMode('own-prompt')}
-              icon={<Wand2 size={24} />}
-              title="Optimaliseer jouw eigen prompt"
-              description="Heb je al een prompt? Wij zoeken het best passende prompt framework, analyseren je prompt en vullen aan wat nog ontbreekt."
-            />
+          {/* De volledige techniekenlijst (handmatige keuze). In de doel-flow valt
+              dit als losse kaart buiten de oranje rand; in de handmatige flow staat
+              het gewoon op de pagina. */}
+          {(() => {
+            const manualListNode = (
+              <section className="opl-card p-6">
+                <p className="mb-4 text-sm text-slate-600 dark:text-slate-300">
+                  Of kies zelf direct een prompt framework of techniek en vul de velden handmatig in:
+                </p>
+                <TechniqueSelector
+                  selectedId={techniqueId}
+                  onSelect={handleSelectTechnique}
+                />
+              </section>
+            );
 
-            {/* Optie B (rechts): complex vraagstuk → laat een techniek aanbevelen */}
-            <EntryOptionCard
-              active={entryMode === 'techniques' && techniqueMode === 'smart'}
-              onClick={() => {
-                setEntryMode('techniques');
-                setTechniqueMode('smart');
-              }}
-              icon={<Compass size={24} />}
-              title="Heb je een complex vraagstuk?"
-              description="Beschrijf in je eigen woorden wat je wilt bereiken. Wij bevelen automatisch de best passende prompttechniek aan."
-            />
-          </div>
+            // De "Bouw je template"-velden + meldingen + genereerknop. Verschijnen
+            // pas zodra er een techniek gekozen is. In de doel-flow vallen ze binnen
+            // de oranje rand (via GoalRecommender); in de handmatige flow op de pagina.
+            const templateBuilderNode = (
+              <>
+                {technique && (
+                  <section
+                    key={technique.id}
+                    ref={followUpRef}
+                    className="animate-fade-in scroll-mt-24 overflow-hidden rounded-2xl border border-rijksblauw-200 bg-white shadow-sm dark:border-rijksblauw-500/30 dark:bg-slate-800"
+                  >
+                    {/* Accentbalk bovenaan */}
+                    <div className="h-1 w-full bg-gradient-to-r from-rijksblauw-400 to-rijksblauw-700" />
+                    <div className="p-6">
+                      <div className="mb-4 flex items-start gap-3">
+                        <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-rijksblauw-500 text-white">
+                          <Check size={14} />
+                        </span>
+                        <div>
+                          <h2 className="font-semibold text-slate-800 dark:text-slate-100">
+                            Bouw je template
+                          </h2>
+                          <p className="text-sm text-slate-500 dark:text-slate-400">
+                            Beantwoord de vragen voor{' '}
+                            <span className="font-medium text-rijksblauw-700 dark:text-rijksblauw-200">
+                              {technique.name}
+                            </span>
+                            . Zo ontstaat een herbruikbare template die collega&apos;s opnieuw
+                            kunnen invullen.
+                          </p>
+                        </div>
+                      </div>
+                      <FollowUpQuestions
+                        technique={technique}
+                        answers={answers}
+                        onChange={setAnswers}
+                        fieldMeta={fieldMeta}
+                        onUserEdit={handleFieldEdit}
+                        prefilling={prefilling}
+                      />
 
-          {/* Uitklap-paneel van de gekozen instapoptie. */}
-          {entryMode === 'techniques' && techniqueMode === 'smart' && (
-            <div className="opl-card p-5 sm:p-6">
+                      {/* Optioneel startpunt: eigen tekst die in de template verwerkt wordt */}
+                      <div className="mt-5 border-t border-slate-100 pt-5 dark:border-slate-700">
+                        <label className="opl-label" htmlFor="draft-input">
+                          Startpunt of voorbeeldtekst{' '}
+                          <span className="font-normal text-slate-400">(optioneel)</span>
+                        </label>
+                        {loadingPrompt ? (
+                          <div className="skeleton h-24 w-full rounded-lg" />
+                        ) : (
+                          <textarea
+                            id="draft-input"
+                            className="opl-input min-h-[96px] resize-y font-mono text-[13px]"
+                            value={promptContent}
+                            onChange={(e) => {
+                              setPromptContent(e.target.value);
+                              setSourcePromptId(null); // handmatig bewerkt = niet langer gekoppeld
+                            }}
+                            placeholder="Laat leeg voor een lege template, of plak hier een bestaande prompt/tekst als startpunt…"
+                          />
+                        )}
+                        {sourcePromptId && (
+                          <p className="mt-2 inline-flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
+                            <FileText size={12} /> Gekoppeld aan een opgeslagen prompt. De generatie
+                            wordt bewaard.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </section>
+                )}
+
+                {/* Onduidelijke-invoer-melding */}
+                {unclearReason && (
+                  <div
+                    role="alert"
+                    className="animate-fade-in flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-200"
+                  >
+                    <AlertTriangle size={18} className="mt-0.5 shrink-0" />
+                    <div>
+                      <p className="font-medium">Je invoer is nog niet duidelijk genoeg</p>
+                      <p className="mt-0.5 text-amber-700 dark:text-amber-300/90">{unclearReason}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Laadscherm tijdens het bouwen van de template */}
+                {optimizing && <OptimizingLoader techniqueName={technique?.name} />}
+
+                {/* Genereerknop */}
+                {!optimizing && technique && (
+                  <div className="flex flex-wrap items-center justify-end gap-3">
+                    <button
+                      className="opl-btn-primary px-6 py-2.5"
+                      onClick={handleGenerate}
+                      disabled={optimizing || !technique}
+                    >
+                      {optimizing ? (
+                        <>
+                          <Loader2 size={18} className="animate-spin" /> Template bouwen…
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles size={18} /> Bouw template
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+              </>
+            );
+
+            const smart = entryMode === 'techniques' && techniqueMode === 'smart';
+            const ownActive = entryMode === 'own-prompt';
+
+            return (
+              <div className="space-y-6">
+          {/* 1. Segmented control: kies eerst je instap (twee gescheiden knoppen),
+              daarna verschijnt de bijbehorende chat naadloos binnen hetzelfde
+              oranje-omrande element — zo valt de oranje rand alléén om de chat.
+              De tabs (header) gaan in beide flows mee in datzelfde element. */}
+          {(() => {
+            const smartActive = entryMode === 'techniques' && techniqueMode === 'smart';
+            const tabs = (
+              <div
+                role="tablist"
+                aria-label="Kies hoe je wilt starten"
+                className="grid grid-cols-1 divide-y divide-slate-200 border-b border-slate-200 sm:grid-cols-2 sm:divide-x sm:divide-y-0 dark:divide-slate-700 dark:border-slate-700"
+              >
+                <EntryTab
+                  active={ownActive}
+                  onClick={() => setEntryMode('own-prompt')}
+                  icon={<Wand2 size={20} />}
+                  title="Optimaliseer jouw eigen prompt"
+                  description="Heb je al een prompt? Wij zoeken het best passende prompt framework, analyseren je prompt en vullen aan wat nog ontbreekt."
+                />
+                <EntryTab
+                  active={smartActive}
+                  onClick={() => {
+                    setEntryMode('techniques');
+                    setTechniqueMode('smart');
+                  }}
+                  icon={<Compass size={20} />}
+                  title="Help mij met een prompt om mijn doel te bereiken"
+                  description="Beschrijf wat je wilt bereiken, dan vinden we de techniek waarmee je je prompt opbouwt."
+                />
+              </div>
+            );
+
+            // De eigen-prompt-flow rendert de tabs zelf als header (oranje rand om
+            // chat + advies; frameworklijst eronder). De doel-flow doet hetzelfde:
+            // GoalRecommender krijgt de tabs als header, de template-velden als
+            // 'templateBuilder' (binnen de rand) en de techniekenlijst als
+            // 'manualList' (buiten de rand).
+            return ownActive ? (
+              <OwnPromptOptimizer
+                settings={settingsRef.current}
+                onResult={handleOwnPromptResult}
+                header={tabs}
+              />
+            ) : (
               <GoalRecommender
                 selectedTechniqueId={techniqueId}
                 onSelectTechnique={handleSelectTechnique}
                 goal={goal}
                 onGoalChange={setGoal}
+                header={tabs}
+                templateBuilder={templateBuilderNode}
+                manualList={manualListNode}
               />
-            </div>
-          )}
+            );
+          })()}
 
-          {/* Eigen-prompt-flow: plak prompt, kies prompt framework, analyseer, vul aan, optimaliseer */}
-          {entryMode === 'own-prompt' && (
-            <div className="opl-card p-5 sm:p-6">
-              <OwnPromptOptimizer settings={settingsRef.current} onResult={handleOwnPromptResult} />
-            </div>
-          )}
-
-          {/* 2. Of kies zelf — prompt frameworks + prompttechnieken. In de
-              "complex vraagstuk"-flow (smart) vervallen de prompt frameworks;
-              die horen bij "Optimaliseer jouw eigen prompt". */}
-          {entryMode === 'techniques' && (
-            <section className="opl-card p-6">
-              <TechniqueSelector
-                selectedId={techniqueId}
-                onSelect={handleSelectTechnique}
-                showContextPrompts={techniqueMode !== 'smart'}
-              />
-            </section>
-          )}
-
-          {/* 2. Velden invullen: stap voor stap de template bouwen */}
-          {entryMode === 'techniques' && technique && (
-            <section
-              key={technique.id}
-              ref={followUpRef}
-              className="animate-fade-in scroll-mt-24 overflow-hidden rounded-2xl border border-rijksblauw-200 bg-white shadow-sm dark:border-rijksblauw-500/30 dark:bg-slate-800"
-            >
-              {/* Accentbalk bovenaan */}
-              <div className="h-1 w-full bg-gradient-to-r from-rijksblauw-400 to-rijksblauw-700" />
-              <div className="p-6">
-                <div className="mb-4 flex items-start gap-3">
-                  <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-rijksblauw-500 text-white">
-                    <Check size={14} />
-                  </span>
-                  <div>
-                    <h2 className="font-semibold text-slate-800 dark:text-slate-100">
-                      Bouw je template
-                    </h2>
-                    <p className="text-sm text-slate-500 dark:text-slate-400">
-                      Beantwoord de vragen voor{' '}
-                      <span className="font-medium text-rijksblauw-700 dark:text-rijksblauw-200">
-                        {technique.name}
-                      </span>
-                      . Zo ontstaat een herbruikbare template die collega&apos;s opnieuw kunnen
-                      invullen.
-                    </p>
-                  </div>
-                </div>
-                <FollowUpQuestions
-                  technique={technique}
-                  answers={answers}
-                  onChange={setAnswers}
-                  fieldMeta={fieldMeta}
-                  onUserEdit={handleFieldEdit}
-                  prefilling={prefilling}
-                />
-
-                {/* Optioneel startpunt: eigen tekst die in de template verwerkt wordt */}
-                <div className="mt-5 border-t border-slate-100 pt-5 dark:border-slate-700">
-                  <label className="opl-label" htmlFor="draft-input">
-                    Startpunt of voorbeeldtekst{' '}
-                    <span className="font-normal text-slate-400">(optioneel)</span>
-                  </label>
-                  {loadingPrompt ? (
-                    <div className="skeleton h-24 w-full rounded-lg" />
-                  ) : (
-                    <textarea
-                      id="draft-input"
-                      className="opl-input min-h-[96px] resize-y font-mono text-[13px]"
-                      value={promptContent}
-                      onChange={(e) => {
-                        setPromptContent(e.target.value);
-                        setSourcePromptId(null); // handmatig bewerkt = niet langer gekoppeld
-                      }}
-                      placeholder="Laat leeg voor een lege template, of plak hier een bestaande prompt/tekst als startpunt…"
-                    />
-                  )}
-                  {sourcePromptId && (
-                    <p className="mt-2 inline-flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
-                      <FileText size={12} /> Gekoppeld aan een opgeslagen prompt. De generatie wordt
-                      bewaard.
-                    </p>
-                  )}
-                </div>
+          {/* Handmatige keuzelijst — onder zowel de eigen-prompt-flow als de
+              handmatige techniek-flow. Frameworks links, technieken rechts; klik
+              op één opent de invulbare velden eronder (met auto-scroll). In de
+              doel-flow zit deze lijst al binnen GoalRecommender. */}
+          {(ownActive || (entryMode === 'techniques' && !smart)) && manualListNode}
+          {(ownActive || (entryMode === 'techniques' && !smart)) && templateBuilderNode}
               </div>
-            </section>
-          )}
+            );
+          })()}
 
-          {/* Onduidelijke-invoer-melding: de AI nam de input serieus en kon er
-              geen zinvolle prompt van maken. Geen verzonnen casus, wél uitleg. */}
-          {entryMode === 'techniques' && unclearReason && (
-            <div
-              role="alert"
-              className="animate-fade-in flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-200"
-            >
-              <AlertTriangle size={18} className="mt-0.5 shrink-0" />
-              <div>
-                <p className="font-medium">Je invoer is nog niet duidelijk genoeg</p>
-                <p className="mt-0.5 text-amber-700 dark:text-amber-300/90">{unclearReason}</p>
-              </div>
-            </div>
-          )}
-
-          {/* Mooi laadscherm tijdens het bouwen van de template. */}
-          {entryMode === 'techniques' && optimizing && (
-            <OptimizingLoader techniqueName={technique?.name} />
-          )}
-
-          {/* De eigen-prompt-flow heeft een eigen genereerknop; deze geldt voor de techniek-flow. */}
-          {entryMode === 'techniques' && !optimizing && (
-            <div className="flex flex-wrap items-center justify-end gap-3">
-              <button
-                className="opl-btn-primary px-6 py-2.5"
-                onClick={handleGenerate}
-                disabled={optimizing || !technique}
-              >
-                {optimizing ? (
-                  <>
-                    <Loader2 size={18} className="animate-spin" /> Template bouwen…
-                  </>
-                ) : (
-                  <>
-                    <Sparkles size={18} /> Bouw template
-                  </>
-                )}
-              </button>
-            </div>
-          )}
         </div>
       )}
 

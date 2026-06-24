@@ -1,30 +1,45 @@
-import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { Copy, Check, Library, Eye, ExternalLink } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useLocation, useParams } from 'react-router-dom';
+import { Copy, Check, Library, Eye, ExternalLink, Lock, LogIn } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getShareByToken, trackShareView } from '@/services/shareService';
 import { getPrompt } from '@/services/repository';
 import { useReferenceData } from '@/context/ReferenceDataContext';
+import { useAuth } from '@/context/AuthContext';
 import { copyToClipboard, formatDate, sharingBadgeClasses, sharingLabel } from '@/lib/utils';
 import type { EmailShare, Prompt } from '@/types';
 
 export default function SharePreviewPage() {
   const { token } = useParams<{ token: string }>();
+  const location = useLocation();
   const { categoryById, roleById } = useReferenceData();
+  // De zichtbaarheid van de prompt hangt af van de sessie (RLS). Daarom laden we
+  // opnieuw zodra de auth-status verandert (bijv. terugkeren na inloggen).
+  const { isAuthenticated, loading: authLoading } = useAuth();
   const [prompt, setPrompt] = useState<Prompt | null>(null);
   const [share, setShare] = useState<EmailShare | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  // De weergave maar één keer per bezoek tellen, ook al herladen we na inloggen.
+  const viewTracked = useRef(false);
 
   useEffect(() => {
     if (!token) return;
+    // Wacht tot de auth-status bekend is, anders laden we de prompt mogelijk als
+    // 'anon' terwijl er net een sessie wordt hersteld.
+    if (authLoading) return;
     let active = true;
+    setLoading(true);
     (async () => {
       const s = await getShareByToken(token);
       if (!active) return;
       setShare(s);
       if (s) {
-        await trackShareView(token);
+        // Tel de weergave eenmalig — niet opnieuw bij de herlaad-na-inloggen.
+        if (!viewTracked.current) {
+          viewTracked.current = true;
+          await trackShareView(token);
+        }
         const p = await getPrompt(s.prompt_id);
         if (active) setPrompt(p);
       }
@@ -32,7 +47,9 @@ export default function SharePreviewPage() {
     return () => {
       active = false;
     };
-  }, [token]);
+    // isAuthenticated als dependency: na inloggen laden we de prompt opnieuw,
+    // zodat de gebruiker hem meteen ziet zonder de pagina te herladen.
+  }, [token, isAuthenticated, authLoading]);
 
   async function copy() {
     if (!prompt) return;
@@ -42,7 +59,7 @@ export default function SharePreviewPage() {
     setTimeout(() => setCopied(false), 1500);
   }
 
-  if (loading) {
+  if (loading || authLoading) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-16">
         <div className="skeleton h-64 w-full rounded-xl" />
@@ -50,12 +67,72 @@ export default function SharePreviewPage() {
     );
   }
 
-  if (!share || !prompt) {
+  // De deel-link bestaat echt niet (token onbekend) → genuine 'niet gevonden'.
+  if (!share) {
     return (
       <div className="mx-auto max-w-lg px-4 py-20 text-center">
-        <h1 className="text-xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Link niet gevonden</h1>
+        <h1 className="text-xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
+          Link niet gevonden
+        </h1>
         <p className="mt-2 text-slate-600 dark:text-slate-300">
           Deze deel-link bestaat niet (meer) of is verlopen.
+        </p>
+        <Link to="/" className="opl-btn-primary mt-6 inline-flex">
+          Naar de bibliotheek
+        </Link>
+      </div>
+    );
+  }
+
+  // De deel-link bestaat wél, maar de prompt is niet zichtbaar. Dat komt door de
+  // zichtbaarheidsregels (RLS): de prompt is gedeeld op afdelings-/ministerieniveau.
+  // - Niet ingelogd → vraag om in te loggen en kom daarna direct hier terug.
+  // - Wel ingelogd → de prompt hoort bij een ander ministerie/afdeling: geen toegang.
+  if (!prompt) {
+    if (!isAuthenticated) {
+      return (
+        <div className="mx-auto max-w-lg px-4 py-20 text-center">
+          <span className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-rijksblauw-50 text-rijksblauw-600 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">
+            <Lock size={26} />
+          </span>
+          <h1 className="text-xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
+            Log in om deze prompt te bekijken
+          </h1>
+          <p className="mt-2 text-slate-600 dark:text-slate-300">
+            Deze prompt is gedeeld binnen de overheid. Log in met je account; daarna open je de
+            prompt meteen — je hoeft de link niet opnieuw te openen.
+          </p>
+          <Link
+            to="/auth/login"
+            state={{ from: location.pathname }}
+            className="opl-btn-primary mt-6 inline-flex items-center gap-2"
+          >
+            <LogIn size={18} /> Inloggen
+          </Link>
+          <p className="mt-4 text-sm text-slate-500 dark:text-slate-400">
+            Nog geen account?{' '}
+            <Link
+              to="/auth/signup"
+              className="font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
+            >
+              Registreren
+            </Link>
+          </p>
+        </div>
+      );
+    }
+    // Ingelogd, maar geen toegang: de prompt hoort bij een andere afdeling/ministerie.
+    return (
+      <div className="mx-auto max-w-lg px-4 py-20 text-center">
+        <span className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-300">
+          <Lock size={26} />
+        </span>
+        <h1 className="text-xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
+          Geen toegang tot deze prompt
+        </h1>
+        <p className="mt-2 text-slate-600 dark:text-slate-300">
+          Deze prompt is gedeeld binnen een ander ministerie of een andere afdeling, of is nog niet
+          goedgekeurd. Daardoor kun je hem niet bekijken.
         </p>
         <Link to="/" className="opl-btn-primary mt-6 inline-flex">
           Naar de bibliotheek

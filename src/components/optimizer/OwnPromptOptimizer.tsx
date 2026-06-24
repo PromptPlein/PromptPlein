@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import {
   AlertTriangle,
   Check,
@@ -17,7 +17,6 @@ import { isContextPrompt } from '@/lib/techniques';
 import { generatePrompt, prefillFields, recommendFramework } from '@/services/optimizeService';
 import OptimizingLoader from './OptimizingLoader';
 import FollowUpQuestions, { type FieldMeta } from './FollowUpQuestions';
-import TechniqueSelector from './TechniqueSelector';
 import type { AiSettings } from '@/services/settingsService';
 import type {
   OptimizeResult,
@@ -31,6 +30,14 @@ interface OwnPromptOptimizerProps {
   settings: AiSettings;
   /** Aangeroepen met het geoptimaliseerde resultaat + de gekozen techniek. */
   onResult: (result: OptimizeResult, technique: Technique) => void;
+  /**
+   * Optionele header (de instap-tabs) die boven de chat valt. De chat (prompt
+   * plakken + zoekknop) wordt samen met deze header in één oranje-omrand element
+   * getoond, zodat de oranje rand alléén om de chat valt. Alles daarna
+   * (aanbevelingen, frameworklijst, voor-invullen, genereren) staat als losse
+   * kaarten eronder, buiten het oranje element.
+   */
+  header?: ReactNode;
 }
 
 /** Voorbeeldprompts per raamwerk; uitklapbaar als hulp/inspiratie en om te testen. */
@@ -74,7 +81,7 @@ const PROMPT_EXAMPLES: { framework: string; prompt: string }[] = [
  * prompt tegen de eisen van dat raamwerk, tonen we wat nog ontbreekt als extra
  * invulvelden, en genereren we de volledig geoptimaliseerde prompt.
  */
-export default function OwnPromptOptimizer({ settings, onResult }: OwnPromptOptimizerProps) {
+export default function OwnPromptOptimizer({ settings, onResult, header }: OwnPromptOptimizerProps) {
   const { techniques, techniqueById } = useReferenceData();
   const frameworks = techniques.filter(isContextPrompt);
 
@@ -248,14 +255,34 @@ export default function OwnPromptOptimizer({ settings, onResult }: OwnPromptOpti
     );
   }
 
+  // Zodra er een framework is gezocht (aanbevelingen aanwezig), groeit de oranje
+  // omranding mee om de héle flow — chat + aanbevelingen + frameworklijst — zodat
+  // het als één geheel oogt. Daarvóór valt de rand alléén om de chat.
+  const expanded = Boolean(recommendations);
+
   return (
     <div className="space-y-5">
-      {/* 1. Eigen prompt plakken */}
-      <div>
-        <div className="mb-1 flex items-center gap-1.5">
-          <label className="opl-label mb-0" htmlFor="own-prompt-input">
-            Jouw eigen prompt
-          </label>
+      {/* Generator-blok = het advies vanuit de prompt generator: de chat + de
+          aanbevelingen + (na een keuze) de voor-ingevulde velden en genereer-knop.
+          De oranje rand omsluit dit hele blok zodra er een advies is (expanded);
+          de handmatige frameworklijst valt er bewust buiten (zie onder). */}
+      <div className="overflow-hidden rounded-2xl border-2 border-rijksoranje/60 shadow-sm dark:border-rijksoranje/50">
+        {/* Chatdeel: de tabs (header) + het promptveld + de zoekknop. Bij een
+            advies krijgt dit een scheidingslijn onder zich binnen hetzelfde blok. */}
+        <div
+          className={clsx(
+            'overflow-hidden',
+            expanded && 'border-b border-slate-200 dark:border-slate-700',
+          )}
+        >
+          {header}
+          <div className="space-y-5 bg-white p-5 dark:bg-slate-800 sm:p-6">
+          {/* 1. Eigen prompt plakken */}
+          <div>
+            <div className="mb-1 flex items-center gap-1.5">
+              <label className="opl-label mb-0" htmlFor="own-prompt-input">
+                Jouw eigen prompt
+              </label>
           <button
             type="button"
             onClick={() => setShowExamples((v) => !v)}
@@ -334,31 +361,39 @@ export default function OwnPromptOptimizer({ settings, onResult }: OwnPromptOpti
         </p>
       </div>
 
-      {/* 2. Beste framework laten zoeken op basis van de prompt */}
-      <button
-        type="button"
-        className="opl-btn-primary"
-        onClick={handleRecommend}
-        disabled={recommending || prefilling || !ownPrompt.trim()}
-      >
-        {recommending ? (
-          <>
-            <Loader2 size={18} className="animate-spin" /> Beste framework zoeken…
-          </>
-        ) : (
-          <>
-            <Compass size={18} /> Zoek het beste prompt framework
-          </>
-        )}
-      </button>
+          {/* 2. Beste framework laten zoeken op basis van de prompt */}
+          <button
+            type="button"
+            className="opl-btn-primary"
+            onClick={handleRecommend}
+            disabled={recommending || prefilling || !ownPrompt.trim()}
+          >
+            {recommending ? (
+              <>
+                <Loader2 size={18} className="animate-spin" /> Beste framework zoeken…
+              </>
+            ) : (
+              <>
+                <Compass size={18} /> Zoek het beste prompt framework
+              </>
+            )}
+          </button>
+        </div>
+      </div>
 
-      {/* 3. Aanbevolen frameworks — kies er één om toe te passen */}
+      {/* Adviesdeel binnen het generator-blok: de aanbevelingen en — na een keuze —
+          de voor-ingevulde velden en genereer-knop. Zodra er een advies is, krijgt
+          dit een witte achtergrond met padding, zodat het naadloos onder de chat
+          binnen dezelfde oranje rand valt. De handmatige frameworklijst staat
+          bewust apart, ná dit hele blok. */}
+      <div className={clsx(expanded ? 'space-y-5 bg-white p-5 dark:bg-slate-800 sm:p-6' : 'space-y-5')}>
+        {/* 3. Aanbevolen frameworks — kies er één om toe te passen */}
       {recommendations && recommendations.length > 0 && (
         <div className="space-y-3">
           {recommendSummary && (
-            <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
+            <div className="rounded-xl border border-l-4 border-rijksoranje/30 border-l-rijksoranje bg-rijksoranje/5 p-3.5 text-sm font-medium leading-relaxed text-slate-700 dark:border-rijksoranje/25 dark:border-l-rijksoranje dark:bg-rijksoranje/10 dark:text-slate-200">
               {recommendSummary}
-            </p>
+            </div>
           )}
           <p className="text-sm text-slate-600 dark:text-slate-300">
             {recommendations.length === 1
@@ -418,22 +453,6 @@ export default function OwnPromptOptimizer({ settings, onResult }: OwnPromptOpti
           })}
         </div>
       )}
-
-      {/* Volledige lijst met prompt frameworks — altijd zichtbaar, ook na een keuze,
-          zodat de gebruiker alle raamwerken ziet en op elk moment kan wisselen. Een
-          andere keuze hier vult de velden opnieuw voor (handleSelectFramework). */}
-      <div className="rounded-2xl border border-slate-200 p-5 dark:border-slate-700 sm:p-6">
-        <p className="mb-4 text-sm text-slate-600 dark:text-slate-300">
-          {recommendations
-            ? 'Of kies zelf een ander prompt framework uit de volledige lijst:'
-            : 'Of kies direct zelf een prompt framework uit de volledige lijst:'}
-        </p>
-        <TechniqueSelector
-          selectedId={techniqueId}
-          onSelect={(id) => void handleSelectFramework(id)}
-          showTechniques={false}
-        />
-      </div>
 
       {/* Anker voor het laad-/voor-invulblok; hier scrollen we na een keuze naartoe. */}
       <div ref={analysisRef} className="scroll-mt-24">
@@ -549,6 +568,8 @@ export default function OwnPromptOptimizer({ settings, onResult }: OwnPromptOpti
           </button>
         </div>
       )}
+        </div>
+      </div>
 
       {!recommendations && !recommending && (
         <p className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500">

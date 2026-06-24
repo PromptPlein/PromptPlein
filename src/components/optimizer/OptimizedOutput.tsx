@@ -151,7 +151,7 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
     }
     // Opslaan vereist een ingelogde gebruiker: de RLS-policy op `prompts` staat
     // alleen inserts toe voor de rol `authenticated`. Zonder sessie geeft Supabase
-    // een 401 die voor de gebruiker nietszeggend is — vang dat hier af.
+    // een 403 die voor de gebruiker nietszeggend is — vang dat hier af.
     if (!isAuthenticated) {
       toast.error('Log in om deze template op te slaan in de bibliotheek.');
       return;

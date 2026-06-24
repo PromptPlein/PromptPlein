@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { AlertTriangle, Check, ClipboardCopy, Info, Loader2, Sparkles, Wand2 } from 'lucide-react';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
@@ -52,6 +52,19 @@ interface GoalRecommenderProps {
   goal: string;
   /** Aangeroepen wanneer de doelomschrijving wijzigt. */
   onGoalChange: (goal: string) => void;
+  /** De instap-tabs; vallen bovenin het oranje generator-blok. */
+  header?: ReactNode;
+  /**
+   * De "Bouw je template"-velden die ná een keuze verschijnen. Vallen binnen de
+   * oranje rand, onder de aanbevelingen — zodat het veld zich daar uitbreidt.
+   */
+  templateBuilder?: ReactNode;
+  /**
+   * De volledige, handmatige techniekenlijst. Valt bewust BUITEN de oranje rand,
+   * als losse kaart eronder — dit is geen advies van de generator maar een eigen
+   * keuze.
+   */
+  manualList?: ReactNode;
 }
 
 /**
@@ -64,6 +77,9 @@ export default function GoalRecommender({
   onSelectTechnique,
   goal,
   onGoalChange,
+  header,
+  templateBuilder,
+  manualList,
 }: GoalRecommenderProps) {
   const { techniques, techniqueById } = useReferenceData();
   const [loading, setLoading] = useState(false);
@@ -122,8 +138,27 @@ export default function GoalRecommender({
     }
   }
 
+  // Zodra er technieken zijn aanbevolen, groeit de oranje omranding mee om het
+  // hele advies — chat + aanbevelingen + (na een keuze) de template-velden.
+  const expanded = Boolean(recommendations);
+
   return (
     <div className="space-y-5">
+      {/* Generator-blok = het advies vanuit de prompt generator: de chat + de
+          aanbevolen technieken + (na een keuze) de template-velden. De oranje rand
+          omsluit dit hele blok; de handmatige techniekenlijst valt er bewust
+          buiten (zie onder). */}
+      <div className="overflow-hidden rounded-2xl border-2 border-rijksoranje/60 shadow-sm dark:border-rijksoranje/50">
+        {/* Chatdeel: de tabs (header) + het doelveld + de zoekknop. Bij een advies
+            krijgt dit een scheidingslijn onder zich binnen hetzelfde blok. */}
+        <div
+          className={clsx(
+            'overflow-hidden',
+            expanded && 'border-b border-slate-200 dark:border-slate-700',
+          )}
+        >
+          {header}
+          <div className="space-y-5 bg-white p-5 dark:bg-slate-800 sm:p-6">
       <div>
         <div className="mb-1 flex items-center gap-1.5">
           <label className="opl-label mb-0" htmlFor="goal-input">
@@ -219,7 +254,14 @@ export default function GoalRecommender({
           </>
         )}
       </button>
+          </div>
+        </div>
 
+        {/* Adviesdeel binnen het generator-blok: de aanbevolen technieken en — na
+            een keuze — de template-velden. Bij een advies witte achtergrond met
+            padding, zodat het naadloos onder de chat binnen dezelfde oranje rand
+            valt. */}
+        <div className={clsx(expanded ? 'space-y-5 bg-white p-5 dark:bg-slate-800 sm:p-6' : 'space-y-5')}>
       {unclearReason && (
         <div
           role="alert"
@@ -302,6 +344,15 @@ export default function GoalRecommender({
           })}
         </div>
       )}
+
+          {/* Na een keuze: de template-velden breiden zich hier uit, binnen de rand. */}
+          {templateBuilder}
+        </div>
+      </div>
+
+      {/* Handmatige keuze — bewust BUITEN de oranje rand: niet het advies van de
+          generator, maar de volledige lijst voor wie zelf een techniek wil kiezen. */}
+      {manualList}
     </div>
   );
 }

@@ -33,9 +33,20 @@ export default function TechniqueSelector({
   const contextPrompts = techniques.filter(isContextPrompt);
   const promptTechniques = techniques.filter((t) => !isContextPrompt(t));
 
+  const showFrameworks = showContextPrompts && contextPrompts.length > 0;
+  const showTechs = showTechniques && promptTechniques.length > 0;
+  // Beide groepen zichtbaar (de handmatige keuzelijst): zet ze naast elkaar —
+  // links frameworks, rechts technieken — elk als verticale lijst (één per rij).
+  // Maar één groep zichtbaar: dan gewoon de volle breedte met een 2-koloms grid.
+  const sideBySide = showFrameworks && showTechs;
+
   return (
-    <div className="space-y-8">
-      {showContextPrompts && contextPrompts.length > 0 && (
+    <div
+      className={clsx(
+        sideBySide ? 'grid grid-cols-1 gap-8 md:grid-cols-2' : 'space-y-8',
+      )}
+    >
+      {showFrameworks && (
         <Group
           icon={<Layers size={16} />}
           title="Prompt frameworks"
@@ -44,10 +55,12 @@ export default function TechniqueSelector({
           techniques={contextPrompts}
           selectedId={selectedId}
           onSelect={onSelect}
+          // Naast elkaar: één kaart per rij. Alleen: brede 2-koloms grid.
+          columns={sideBySide ? 1 : 2}
         />
       )}
 
-      {showTechniques && (
+      {showTechs && (
         <Group
           icon={<Wrench size={16} />}
           title="Prompttechnieken"
@@ -56,6 +69,7 @@ export default function TechniqueSelector({
           techniques={promptTechniques}
           selectedId={selectedId}
           onSelect={onSelect}
+          columns={sideBySide ? 1 : 2}
         />
       )}
     </div>
@@ -93,6 +107,7 @@ function Group({
   techniques,
   selectedId,
   onSelect,
+  columns = 2,
 }: {
   icon: React.ReactNode;
   title: string;
@@ -101,6 +116,8 @@ function Group({
   techniques: Technique[];
   selectedId: string | null;
   onSelect: (id: string) => void;
+  /** Aantal kolommen voor de kaarten: 1 = lijst onder elkaar, 2 = breed grid. */
+  columns?: 1 | 2;
 }) {
   if (techniques.length === 0) return null;
   const styles = ACCENT_STYLES[accent];
@@ -126,7 +143,7 @@ function Group({
         aria-hidden="true"
       />
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className={clsx('grid grid-cols-1 gap-3', columns === 2 && 'sm:grid-cols-2')}>
         {techniques.map((t) => (
           <TechniqueCard
             key={t.id}
