@@ -447,7 +447,9 @@ export default function OwnPromptOptimizer({ settings, onResult, header }: OwnPr
                 onClick={() => void handleSelectFramework(fw.id)}
                 aria-pressed={active}
                 className={clsx(
-                  'flex w-full flex-col rounded-xl border p-4 text-left transition-all',
+                  'flex w-full flex-col rounded-xl border p-4 text-left shadow-sm transition-all duration-150',
+                  'hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:shadow-sm',
+                  'focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500/40',
                   active
                     ? 'border-rijksblauw-500 bg-rijksblauw-50 ring-2 ring-rijksblauw-500/20 dark:bg-rijksblauw-500/15'
                     : 'border-slate-200 bg-white hover:border-rijksblauw-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-800',

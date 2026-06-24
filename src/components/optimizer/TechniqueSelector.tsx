@@ -219,11 +219,16 @@ function TechniqueCard({
       onClick={onSelect}
       aria-pressed={active}
       className={clsx(
-        'flex flex-col rounded-xl border p-4 text-left transition-all',
+        // Diepte zodat de kaart als klikbare knop leest: een grondschaduw, en bij
+        // hover komt de kaart iets omhoog met een sterkere schaduw. Bij indrukken
+        // zakt hij weer terug (active:). De ring/rand markeert de gekozen kaart.
+        'flex flex-col rounded-xl border p-4 text-left shadow-sm transition-all duration-150',
+        'hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:shadow-sm',
+        'focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500/40',
         active
-          ? styles.cardActive
+          ? clsx(styles.cardActive, 'shadow-md')
           : clsx(
-              'border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-800',
+              'border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700/60',
               styles.cardHover,
             ),
       )}
