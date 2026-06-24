@@ -164,7 +164,9 @@ export default function GoalRecommender({
           aanbevolen technieken + (na een keuze) de template-velden. De oranje rand
           omsluit dit hele blok; de handmatige techniekenlijst valt er bewust
           buiten (zie onder). */}
-      <div className="overflow-hidden rounded-2xl border-2 border-rijksoranje/60 shadow-sm dark:border-rijksoranje/50">
+      {/* Blauwe rand: deze doel-flow hoort bij de blauwe instap-tab ("Help mij
+          met een prompt…"), zodat de gekozen optie duidelijk herkenbaar is. */}
+      <div className="overflow-hidden rounded-2xl border-2 border-rijksblauw-500/60 shadow-sm dark:border-rijksblauw-500/50">
         {/* Chatdeel: de tabs (header) + het doelveld + de zoekknop. Bij een advies
             krijgt dit een scheidingslijn onder zich binnen hetzelfde blok. */}
         <div
