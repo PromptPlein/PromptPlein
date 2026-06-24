@@ -104,7 +104,17 @@ export default function OptimizerPage() {
 
   const technique = techniques.find((t) => t.id === techniqueId) ?? null;
 
-  function handleSelectTechnique(id: string) {
+  /**
+   * Kies een techniek. `source` bepaalt UIT WELK zichtbaar veld we eventueel
+   * voor-invullen, zodat we nooit analyseren op basis van een verborgen draft:
+   *  - 'goal'   → de doel-flow (het "Wat wil je bereiken?"-veld)
+   *  - 'manual' → de handmatige keuzelijst; vul alleen voor als het zichtbare
+   *               startpunt-veld (promptContent) ingevuld is.
+   * Belangrijk: we vallen NIET terug op een ander veld. Eerder leidde dat tot
+   * de bug dat een leeg zichtbaar veld toch analyseerde, omdat een oude draft
+   * (goal of promptContent) nog in localStorage stond.
+   */
+  function handleSelectTechnique(id: string, source: 'goal' | 'manual' = 'manual') {
     setTechniqueId(id);
     setAnswers({}); // antwoorden resetten bij nieuwe techniek
     setFieldMeta({});
@@ -112,11 +122,8 @@ export default function OptimizerPage() {
     requestAnimationFrame(() => {
       followUpRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
-    // Heeft de gebruiker al tekst meegegeven? Vul de velden dan alvast voor zodat
-    // hij niet met lege velden begint. Bron: het expliciete startpunt (promptContent)
-    // of anders het beschreven vraagstuk (goal, uit de "complex vraagstuk"-flow).
     const chosen = techniques.find((t) => t.id === id);
-    const draft = promptContent.trim() || goal.trim();
+    const draft = (source === 'goal' ? goal : promptContent).trim();
     if (chosen && chosen.follow_up_questions.length > 0 && draft) {
       void runPrefill(chosen, draft);
     }
@@ -361,7 +368,7 @@ export default function OptimizerPage() {
                 </p>
                 <TechniqueSelector
                   selectedId={techniqueId}
-                  onSelect={handleSelectTechnique}
+                  onSelect={(id) => handleSelectTechnique(id, 'manual')}
                 />
               </section>
             );
@@ -535,7 +542,7 @@ export default function OptimizerPage() {
             ) : (
               <GoalRecommender
                 selectedTechniqueId={techniqueId}
-                onSelectTechnique={handleSelectTechnique}
+                onSelectTechnique={(id) => handleSelectTechnique(id, 'goal')}
                 goal={goal}
                 onGoalChange={setGoal}
                 onClear={handleClearAll}
