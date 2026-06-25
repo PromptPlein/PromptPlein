@@ -110,6 +110,8 @@ Deno.serve(async (req: Request) => {
   }
 
   const toEmail = Deno.env.get('CONTACT_TO_EMAIL') ?? DEFAULT_TO;
+  // Optioneel kopie-adres (bijv. een werk-mailbox die mee wil lezen).
+  const ccEmail = Deno.env.get('CONTACT_CC_EMAIL')?.trim();
   // Brevo eist een geverifieerd afzenderadres/-domein. Valt CONTACT_FROM_EMAIL
   // weg, dan gebruiken we het ontvangstadres als afzender (werkt zodra dat
   // adres/domein in Brevo geverifieerd is).
@@ -149,6 +151,11 @@ Deno.serve(async (req: Request) => {
     htmlContent: htmlBody,
     textContent: textBody,
   };
+  // Stuur een kopie naar het CC-adres als dat is ingesteld (en niet gelijk is
+  // aan de hoofdontvanger).
+  if (ccEmail && ccEmail.toLowerCase() !== toEmail.toLowerCase()) {
+    payload.cc = [{ email: ccEmail }];
+  }
   if (replyTo) {
     payload.replyTo = { email: replyTo, name: name || replyTo };
   }
