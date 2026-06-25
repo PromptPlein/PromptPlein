@@ -25,6 +25,14 @@ export default function ContactPage() {
   }, [user?.email]);
 
   async function submit() {
+    if (!replyTo.trim()) {
+      toast.error('Vul je e-mailadres in zodat we kunnen reageren.');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(replyTo.trim())) {
+      toast.error('Vul een geldig e-mailadres in.');
+      return;
+    }
     if (!message.trim()) {
       toast.error('Schrijf eerst een bericht.');
       return;
@@ -123,12 +131,13 @@ export default function ContactPage() {
         </div>
 
         <div>
-          <label className="opl-label" htmlFor="contact-reply">Jouw e-mailadres (optioneel)</label>
+          <label className="opl-label" htmlFor="contact-reply">Jouw e-mailadres</label>
           <input
             id="contact-reply"
             type="email"
+            required
             className="opl-input"
-            placeholder="zodat we kunnen reageren"
+            placeholder="naam@voorbeeld.nl"
             value={replyTo}
             onChange={(e) => setReplyTo(e.target.value)}
           />
