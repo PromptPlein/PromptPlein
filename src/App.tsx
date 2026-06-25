@@ -16,6 +16,7 @@ import SignupPage from '@/pages/auth/SignupPage';
 import PasswordResetPage from '@/pages/auth/PasswordResetPage';
 import UpdatePasswordPage from '@/pages/auth/UpdatePasswordPage';
 import ProfilePage from '@/pages/ProfilePage';
+import ContactPage from '@/pages/ContactPage';
 const NetworkPage = lazy(() => import('@/pages/NetworkPage'));
 const CommunityPage = lazy(() => import('@/pages/CommunityPage'));
 const PublicProfilePage = lazy(() => import('@/pages/PublicProfilePage'));
@@ -78,6 +79,7 @@ export default function App() {
               <Route path="/activiteit" element={<ActivityPage />} />
               <Route path="/prompt/:promptId" element={<PromptDetailPage />} />
               <Route path="/share/:token" element={<SharePreviewPage />} />
+              <Route path="/contact" element={<ContactPage />} />
 
               {/* Community — openbaar: wie maakt de prompts en bij welk ministerie. */}
               <Route path="/community" element={<CommunityPage />} />

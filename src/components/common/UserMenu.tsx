@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { UserCircle2, LogOut, ShieldCheck, ChevronDown, User, Sun, Moon, Monitor } from 'lucide-react';
+import { UserCircle2, LogOut, ShieldCheck, ChevronDown, User, Sun, Moon, Monitor, Mail } from 'lucide-react';
 import clsx from 'clsx';
 import { useTheme, type ThemeChoice } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
@@ -130,6 +130,13 @@ export default function UserMenu() {
               <ShieldCheck size={16} className="text-rijksblauw-500" /> Beheerpaneel
             </Link>
           )}
+          <Link
+            to="/contact"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700"
+          >
+            <Mail size={16} className="text-rijksblauw-500" /> Contact
+          </Link>
 
           <div className="my-1 border-t border-slate-100 dark:border-slate-700" />
           <div className="px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">

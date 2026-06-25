@@ -5,3 +5,8 @@ project_id = "overheid-prompt-library"
 [functions.optimize-prompt]
 # JWT-verificatie staat aan; de frontend stuurt de anon key mee.
 verify_jwt = true
+
+[functions.send-contact]
+# JWT-verificatie staat uit: het contactformulier is ook bruikbaar door
+# niet-ingelogde bezoekers. De anon key blijft verplicht via de gateway.
+verify_jwt = false
