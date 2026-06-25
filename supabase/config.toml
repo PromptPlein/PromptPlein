@@ -10,3 +10,9 @@ verify_jwt = true
 # JWT-verificatie staat uit: het contactformulier is ook bruikbaar door
 # niet-ingelogde bezoekers. De anon key blijft verplicht via de gateway.
 verify_jwt = false
+
+[functions.register-brevo-contact]
+# JWT-verificatie staat uit: deze functie wordt door een database-trigger
+# (pg_net) aangeroepen, niet door een ingelogde gebruiker. Authenticatie
+# gebeurt via het gedeelde geheim in de header x-webhook-secret.
+verify_jwt = false
