@@ -3,7 +3,7 @@ import { Bug, Lightbulb, Mail, MessageSquare, Send } from 'lucide-react';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
 import { useAuth } from '@/context/AuthContext';
-import { CONTACT_EMAIL, sendContactMessage, type ContactKind } from '@/services/contactService';
+import { sendContactMessage, type ContactKind } from '@/services/contactService';
 
 const KINDS: { value: ContactKind; label: string; icon: typeof Bug; hint: string }[] = [
   { value: 'bug', label: 'Bug melden', icon: Bug, hint: 'Er gaat iets niet goed of een functie werkt niet.' },
@@ -133,7 +133,7 @@ export default function ContactPage() {
             onChange={(e) => setReplyTo(e.target.value)}
           />
           <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-            Berichten komen binnen bij {CONTACT_EMAIL}.
+            We gebruiken je e-mailadres alleen om op je bericht te reageren.
           </p>
         </div>
 
