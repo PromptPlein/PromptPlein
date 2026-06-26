@@ -7,7 +7,7 @@ import { sendContactMessage, type ContactKind } from '@/services/contactService'
 
 const KINDS: { value: ContactKind; label: string; icon: typeof Bug; hint: string }[] = [
   { value: 'bug', label: 'Bug melden', icon: Bug, hint: 'Er gaat iets niet goed of een functie werkt niet.' },
-  { value: 'feature', label: 'Feature voorstellen', icon: Lightbulb, hint: 'Een idee of wens om PromptGo beter te maken.' },
+  { value: 'feature', label: 'Feature voorstellen', icon: Lightbulb, hint: 'Een idee of wens om PromptPlein beter te maken.' },
   { value: 'other', label: 'Iets anders', icon: MessageSquare, hint: 'Een vraag of opmerking.' },
 ];
 

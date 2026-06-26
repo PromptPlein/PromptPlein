@@ -1,4 +1,4 @@
-# Supabase — PromptGo
+# Supabase — PromptPlein
 
 **Project ref:** `qpttoyahhjybejgqohfz`
 **URL:** https://qpttoyahhjybejgqohfz.supabase.co (komt overeen met `VITE_SUPABASE_URL` in `.env`)
@@ -11,7 +11,7 @@ en heeft geen `project_id`-parameter — hij kan dus niet de verkeerde database 
 
 Gebruik NOOIT de `mcp__plugin_supabase_supabase__*`-tools hier. Dat is een aparte,
 globaal geïnstalleerde plugin die op de **Awaren**-organisatie is ingelogd
-(projecten AwarenApp, MoonMix). Doe vanuit PromptGo geen enkele wijziging in Awaren.
+(projecten AwarenApp, MoonMix). Doe vanuit PromptPlein geen enkele wijziging in Awaren.
 
 Verifieer vóór elke DDL met `mcp__supabase__get_project_url` dat de URL
 `https://qpttoyahhjybejgqohfz.supabase.co` teruggeeft.

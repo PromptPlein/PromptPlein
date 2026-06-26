@@ -119,8 +119,8 @@ Deno.serve(async (req: Request) => {
 
   const kindLabel = KIND_LABELS[kind];
   const mailSubject = subject
-    ? `[PromptGo] ${kindLabel}: ${subject}`
-    : `[PromptGo] ${kindLabel}`;
+    ? `[PromptPlein] ${kindLabel}: ${subject}`
+    : `[PromptPlein] ${kindLabel}`;
 
   const safeName = name ? escapeHtml(name) : 'Onbekend';
   const safeReply = replyTo ? escapeHtml(replyTo) : '—';
@@ -145,7 +145,7 @@ Deno.serve(async (req: Request) => {
   // Brevo transactionele e-mail-API.
   // Docs: https://developers.brevo.com/reference/sendtransacemail
   const payload: Record<string, unknown> = {
-    sender: { email: fromEmail, name: 'PromptGo Contact' },
+    sender: { email: fromEmail, name: 'PromptPlein Contact' },
     to: [{ email: toEmail }],
     subject: mailSubject,
     htmlContent: htmlBody,

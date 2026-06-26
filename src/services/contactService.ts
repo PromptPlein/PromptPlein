@@ -28,7 +28,7 @@ const KIND_LABELS: Record<ContactKind, string> = {
  */
 export function buildContactMailto(msg: ContactMessage): string {
   const label = KIND_LABELS[msg.kind];
-  const subject = msg.subject ? `[PromptGo] ${label}: ${msg.subject}` : `[PromptGo] ${label}`;
+  const subject = msg.subject ? `[PromptPlein] ${label}: ${msg.subject}` : `[PromptPlein] ${label}`;
   const body = [
     label,
     msg.name ? `Van: ${msg.name}` : '',
