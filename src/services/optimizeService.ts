@@ -8,9 +8,13 @@ import type {
   FrameworkRecommendResult,
   MissingField,
   OptimizeResult,
+  PlanResult,
+  PlanStep,
+  PromptPlan,
   PrefilledField,
   PrefillResult,
   RecommendResult,
+  StepProduces,
   Technique,
   TechniqueRecommendation,
 } from '@/types';
@@ -321,8 +325,14 @@ export async function recommendFramework(args: {
   frameworks: Technique[];
   preferredProvider?: AiProvider;
   preferredModel?: string;
+  /**
+   * Optionele toelichting van de gebruiker uit de heranalyse-lus: extra context
+   * die de gebruiker zelf heeft aangevuld nadat de AI aangaf wat er nog ontbrak.
+   * Wordt bij de heranalyse meegewogen zodat de aanbeveling beter aansluit.
+   */
+  clarification?: string;
 }): Promise<FrameworkRecommendResult> {
-  const { ownPrompt, frameworks, preferredProvider, preferredModel } = args;
+  const { ownPrompt, frameworks, preferredProvider, preferredModel, clarification } = args;
   const functionUrl = getFunctionUrl('optimize-prompt');
 
   if (isSupabaseConfigured && functionUrl) {
@@ -337,6 +347,7 @@ export async function recommendFramework(args: {
         body: JSON.stringify({
           mode: 'recommend-framework',
           ownPrompt,
+          clarification,
           techniques: frameworks.map((t) => ({
             id: t.id,
             name: t.name,
@@ -361,6 +372,7 @@ export async function recommendFramework(args: {
           return {
             summary: data.summary ?? '',
             recommendations,
+            missingContext: Array.isArray(data.missingContext) ? data.missingContext : [],
             success: true,
             provider: (data.provider as FrameworkRecommendResult['provider']) ?? 'claude',
           };
@@ -372,6 +384,7 @@ export async function recommendFramework(args: {
       return {
         summary: '',
         recommendations: localRecommend(ownPrompt, frameworks),
+        missingContext: [],
         success: true,
         provider: 'local-template',
         error: `Slimme aanbeveling mislukt (${message}); lokale suggestie gebruikt.`,
@@ -382,6 +395,7 @@ export async function recommendFramework(args: {
   return {
     summary: '',
     recommendations: localRecommend(ownPrompt, frameworks),
+    missingContext: [],
     success: true,
     provider: 'local-template',
   };

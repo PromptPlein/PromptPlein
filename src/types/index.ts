@@ -274,6 +274,85 @@ export interface RecommendResult {
   reason?: string;
 }
 
+// --- Slimme meerstaps-bouwer ("Plan-wizard", doel-flow) ---
+//
+// De doel-flow ("Help mij met een prompt om mijn doel te bereiken") bouwt niet
+// langer één losse techniek in, maar stelt eerst een PLAN op: een geordend recept
+// van techniek-stappen (bijv. persona → template-based → chain-of-thought). Het
+// eindresultaat blijft één herbruikbare prompt-template. De AI bepaalt welke
+// technieken in welke volgorde nodig zijn; de gebruiker kan het plan inzien en
+// aanpassen voordat het wordt uitgevoerd.
+
+/**
+ * Wat een stap oplevert; bepaalt hoe het verzamelde materiaal in de uiteindelijke
+ * template landt.
+ *  - 'persona' → een uitgeschreven doelgroep/rol.
+ *  - 'format'  → een gekozen uitvoerstructuur (rubrieken).
+ *  - 'brief'   → een geconsolideerde inhoudelijke brief (bijv. uit vraag-na-vraag).
+ *  - 'text'    → vrije tekst; ook de compose-basis (laatste stap).
+ */
+export type StepProduces = 'persona' | 'format' | 'brief' | 'text';
+
+/**
+ * Eén stap in het plan. `structure_format` en `interactive` worden client-side
+ * afgeleid uit de techniek (via `structureFormat()`), niet door de AI bepaald.
+ */
+export interface PlanStep {
+  /** Stabiele key binnen het plan, bijv. 'step-1'. */
+  id: string;
+  /** Verwijst naar een bestaande Technique.id (gevalideerd tegen echte id's). */
+  technique_id: string;
+  /** Korte Nederlandse staptitel, bijv. "Bepaal voor wie het plan is". */
+  title: string;
+  /** Waarom deze techniek, en waarom op deze plek — getoond in de plan-review. */
+  rationale: string;
+  /** Vormhint voor de uiteindelijke samenstelling. */
+  produces: StepProduces;
+  /**
+   * Afgeleid: de vaste uitvoerstructuur van de techniek (client-side gedecoreerd
+   * via `structureFormat()` uit `@/lib/techniques`). Het literale type wordt hier
+   * bewust inline gehouden zodat `@/types` niet van `@/lib` afhankelijk wordt
+   * (dat zou een import-cyclus geven — `lib/techniques` importeert al uit `@/types`).
+   * Houd in sync met `StructureFormat` in `src/lib/techniques.ts`.
+   */
+  structure_format?:
+    | 'care'
+    | 'few-shot'
+    | 'chain-of-thought'
+    | 'persona'
+    | 'multi-persona'
+    | 'template-based'
+    | 'meta'
+    | 'socratic';
+  /** Afgeleid: true bij chain-of-thought/socratic (vraag-na-vraag stappen). */
+  interactive?: boolean;
+}
+
+/** Een geordend recept van techniek-stappen om het doel tot een template te bouwen. */
+export interface PromptPlan {
+  goal: string;
+  /** 1–2 zinnen die het recept samenvatten (getoond boven de stappen). */
+  summary: string;
+  /** Geordende stappen; gecapt op een handvol, met minstens één compose-basis. */
+  steps: PlanStep[];
+}
+
+/** Antwoord van de optimize-prompt service (plan-modus, doel-flow). */
+export interface PlanResult {
+  plan?: PromptPlan;
+  success: boolean;
+  provider: AiProviderResult;
+  /** Niet-blokkerende fout: er is teruggevallen op een lokaal plan. */
+  error?: string;
+  /**
+   * Het beschreven doel was onsamenhangend/onzin; er is bewust GEEN plan gemaakt.
+   * `reason` legt uit wat onduidelijk is, zodat de gebruiker het doel kan
+   * verduidelijken. Spiegelt de clarity-gate van {@link RecommendResult}.
+   */
+  unclear?: boolean;
+  reason?: string;
+}
+
 /**
  * Antwoord van de optimize-prompt service (framework-aanbevelingsmodus,
  * eigen-prompt-flow). Beveelt het best passende prompt framework aan op basis
@@ -283,6 +362,12 @@ export interface FrameworkRecommendResult {
   /** Korte samenvatting: wat voor prompt dit is en wat het raamwerk toevoegt. */
   summary: string;
   recommendations: TechniqueRecommendation[];
+  /**
+   * Korte punten met context die nog ONTBREEKT in de prompt. Als de gebruiker
+   * die aanvult en opnieuw laat zoeken, sluit de aanbeveling (en straks de
+   * template) beter aan. Leeg = de prompt is al volledig genoeg.
+   */
+  missingContext: string[];
   success: boolean;
   provider: AiProviderResult;
   error?: string;

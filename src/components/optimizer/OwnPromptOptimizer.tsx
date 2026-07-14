@@ -7,9 +7,12 @@ import {
   ClipboardCopy,
   Compass,
   Eraser,
+  HelpCircle,
   Info,
   Layers,
+  Lightbulb,
   Loader2,
+  RefreshCw,
   Search,
   Sparkles,
   Wand2,
@@ -111,6 +114,12 @@ export default function OwnPromptOptimizer({ settings, onResult, header }: OwnPr
   const [recommending, setRecommending] = useState(false);
   const [recommendations, setRecommendations] = useState<TechniqueRecommendation[] | null>(null);
   const [recommendSummary, setRecommendSummary] = useState('');
+  // Punten met context die nog ontbreekt in de prompt (uit de zoek-analyse). De
+  // gebruiker kan die aanvullen en opnieuw laten zoeken — een chain-of-thought-lus
+  // waarbij menselijke input de aanbeveling (en straks de template) scherper maakt.
+  const [missingContext, setMissingContext] = useState<string[]>([]);
+  // Toelichting die de gebruiker typt om de ontbrekende context aan te vullen.
+  const [clarification, setClarification] = useState('');
   const [techniqueId, setTechniqueId] = useState<string | null>(null);
   // Voor-invulling van de velden op basis van de eigen prompt (null = nog niet gedaan).
   const [prefill, setPrefill] = useState<PrefillResult | null>(null);
@@ -130,6 +139,8 @@ export default function OwnPromptOptimizer({ settings, onResult, header }: OwnPr
   function resetDownstream() {
     setRecommendations(null);
     setRecommendSummary('');
+    setMissingContext([]);
+    setClarification('');
     setTechniqueId(null);
     setPrefill(null);
     setAnswers({});
@@ -166,12 +177,18 @@ export default function OwnPromptOptimizer({ settings, onResult, header }: OwnPr
     toast.success('Voorbeeld ingevuld.');
   }
 
-  /** Stap 1: laat de AI op basis van de geplakte prompt het beste framework kiezen. */
-  async function handleRecommend() {
+  /**
+   * Stap 1: laat de AI op basis van de geplakte prompt het beste framework kiezen.
+   * `clarify` (optioneel) bevat de toelichting uit de heranalyse-lus: als de AI
+   * eerder aangaf wat aan context ontbrak, vult de gebruiker dat aan en zoeken we
+   * opnieuw mét die extra context — zo sluit de aanbeveling steeds beter aan.
+   */
+  async function handleRecommend(clarify?: string) {
     if (!ownPrompt.trim()) {
       toast.error('Plak eerst je eigen prompt.');
       return;
     }
+    const isRefine = Boolean(clarify?.trim());
     setRecommending(true);
     // Een nieuwe zoekopdracht maakt de vorige keuze en voor-invulling ongeldig.
     setTechniqueId(null);
@@ -186,14 +203,18 @@ export default function OwnPromptOptimizer({ settings, onResult, header }: OwnPr
       const res = await recommendFramework({
         ownPrompt: ownPrompt.trim(),
         frameworks,
+        clarification: clarify?.trim() || undefined,
         preferredProvider: settings.provider,
         preferredModel: settings.model,
       });
       setRecommendations(res.recommendations);
       setRecommendSummary(res.summary);
+      setMissingContext(res.missingContext);
       if (res.error) toast(res.error, { icon: '⚠️' });
       if (res.recommendations.length === 0) {
         toast('Geen duidelijke match. Kies hieronder zelf een framework.', { icon: 'ℹ️' });
+      } else if (isRefine) {
+        toast.success('Opnieuw gezocht met jouw toelichting.');
       }
     } catch {
       toast.error('Aanbeveling mislukt. Probeer het opnieuw.');
@@ -447,7 +468,7 @@ export default function OwnPromptOptimizer({ settings, onResult, header }: OwnPr
           <button
             type="button"
             className="opl-btn-primary"
-            onClick={handleRecommend}
+            onClick={() => void handleRecommend()}
             disabled={recommending || prefilling || !ownPrompt.trim()}
           >
             {recommending ? (
@@ -537,6 +558,79 @@ export default function OwnPromptOptimizer({ settings, onResult, header }: OwnPr
               </button>
             );
           })}
+        </div>
+      )}
+
+      {/* Chain-of-thought-lus: de AI geeft aan welke context nog ontbreekt in de
+          prompt. De gebruiker licht dat toe en laat opnieuw zoeken — mét die extra
+          context — zodat de aanbeveling (en straks de template) beter aansluit.
+          Herhaalbaar: dit kan meerdere rondes. Verschijnt zodra er aanbevelingen
+          zijn; doorgaan met een framework kiezen kan altijd (het blok is optioneel). */}
+      {recommendations && recommendations.length > 0 && (
+        <div className="rounded-xl border border-rijksblauw-200 bg-rijksblauw-50/50 p-4 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10">
+          <div className="flex items-start gap-2">
+            <Lightbulb size={18} className="mt-0.5 shrink-0 text-rijksblauw-500" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                Maak je prompt scherper met wat extra context
+              </p>
+              <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-300">
+                {missingContext.length > 0
+                  ? 'Op basis van je prompt zou dit nog helpen om beter aan te sluiten:'
+                  : 'Wil je nog iets verduidelijken? Vul het aan en we zoeken opnieuw mee.'}
+              </p>
+            </div>
+          </div>
+
+          {/* De concrete punten die de AI miste in de prompt. */}
+          {missingContext.length > 0 && (
+            <ul className="mt-2.5 space-y-1.5 pl-1">
+              {missingContext.map((point, i) => (
+                <li
+                  key={i}
+                  className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200"
+                >
+                  <HelpCircle size={15} className="mt-0.5 shrink-0 text-rijksblauw-500" />
+                  <span>{stripMarkdown(point)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {/* Toelichtingsveld: de gebruiker vult de ontbrekende context aan. */}
+          <label className="opl-label mb-1 mt-3 block" htmlFor="clarify-input">
+            Jouw toelichting
+          </label>
+          <textarea
+            id="clarify-input"
+            className="opl-input min-h-[80px] resize-y text-sm"
+            value={clarification}
+            placeholder="Bijv. de doelgroep is nieuwe medewerkers, de tekst mag max. 200 woorden zijn, toon informeel…"
+            onChange={(e) => setClarification(e.target.value)}
+            disabled={recommending}
+          />
+
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className="opl-btn-primary"
+              onClick={() => void handleRecommend(clarification)}
+              disabled={recommending || prefilling || !clarification.trim()}
+            >
+              {recommending ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" /> Opnieuw zoeken…
+                </>
+              ) : (
+                <>
+                  <RefreshCw size={16} /> Opnieuw zoeken met mijn toelichting
+                </>
+              )}
+            </button>
+            <span className="text-xs text-slate-500 dark:text-slate-400">
+              Of ga hieronder direct verder met een framework.
+            </span>
+          </div>
         </div>
       )}
 

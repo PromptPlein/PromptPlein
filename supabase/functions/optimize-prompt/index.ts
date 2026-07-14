@@ -35,7 +35,8 @@ type Mode =
   | 'analyze'
   | 'prefill'
   | 'title'
-  | 'metadata';
+  | 'metadata'
+  | 'plan';
 
 /** Eén veld van het gekozen prompt framework waar de analyse op toetst. */
 interface AnalyzeField {
@@ -53,6 +54,18 @@ interface TechniqueSummary {
   strength?: string;
   /** Concrete gebruikssituaties. */
   use_cases?: string[];
+  /**
+   * Alleen voor de plan-modus: is dit een compleet raamwerk (CARE, CRISP, …)?
+   * De planner mag hoogstens één raamwerk kiezen en zet dat vooraan.
+   */
+  is_framework?: boolean;
+  /**
+   * Alleen voor de plan-modus: de vaste uitvoerstructuur van de techniek
+   * (persona/template-based/chain-of-thought/…). Helpt de planner de juiste
+   * volgorde te kiezen (context eerst, vormgevers daarna, bevraging om materiaal
+   * op te halen).
+   */
+  structure_format?: string;
 }
 
 /** Eén ingevuld veld met het label en het antwoord van de gebruiker. */
@@ -108,6 +121,12 @@ interface RequestBody {
   // 'analyze'-velden: toets de eigen prompt aan de eisen van het prompt framework.
   ownPrompt?: string;
   analyzeFields?: AnalyzeField[];
+  /**
+   * 'recommend-framework': optionele toelichting van de gebruiker uit de
+   * heranalyse-lus. Nadat de AI aangaf welke context nog ontbrak, vult de
+   * gebruiker dit aan; de heranalyse weegt het mee als extra context.
+   */
+  clarification?: string;
   // 'title'-velden: vat een gegenereerde template samen tot een korte titel.
   templateContent?: string;
   // 'metadata'-velden: stel titel + omschrijving + best passende categorie voor.
@@ -440,6 +459,51 @@ const RECOMMEND_USER_PROMPT = (goal: string, techniques: TechniqueSummary[]) =>
     })
     .join('\n')}`;
 
+// --- Plan-modus: stel een geordend meerstaps-recept van technieken samen ---
+// De doel-flow bouwt niet één losse techniek in, maar combineert er meerdere tot
+// één herbruikbare template. De planner bepaalt WELKE technieken in WELKE volgorde
+// nodig zijn. Het maakt hier nog GEEN template of inhoud — alleen het plan.
+const PLAN_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse rijksoverheid.
+Een interne overheidsmedewerker beschrijft wat die wil bereiken. Jouw taak: stel een SLIM,
+GEORDEND PLAN op van prompttechnieken die SAMEN één sterke, herbruikbare prompt-template opbouwen.
+
+Denk na over welke technieken elkaar aanvullen en in welke VOLGORDE ze horen:
+- Bepaal EERST de context/doelgroep (persona of multi-persona) als dat relevant is.
+- Kies DAARNA een uitvoerstructuur/format (template-based output) als er een vaste vorm nodig is.
+- Gebruik verdiepende bevraging (chain-of-thought, socratic) om de inhoud scherp te krijgen.
+- De LAATSTE stap stelt alles samen tot de uiteindelijke template (produces: "text").
+- Gebruik HOOGSTENS één compleet raamwerk (is_framework=true) en zet dat vooraan.
+- Kies alleen technieken die het doel echt nodig heeft: liever 2–3 goede stappen dan alles.
+- Maximaal 5 stappen.
+
+Geef per stap:
+- "technique_id": exact een id uit de lijst.
+- "title": korte Nederlandse staptitel (bijv. "Bepaal voor wie het plan is").
+- "rationale": één zin die uitlegt waarom deze techniek hier hoort.
+- "produces": één van "persona" | "format" | "brief" | "text".
+
+${CLARITY_GATE_JSON_INSTRUCTION}
+
+Anders geef je UITSLUITEND geldige JSON terug, zonder codeblok of extra tekst, in dit formaat:
+{"summary":"<1–2 zinnen die het recept samenvatten, in het Nederlands>","steps":[{"technique_id":"<id>","title":"<staptitel>","rationale":"<waarom deze techniek hier, 1 zin>","produces":"persona|format|brief|text"}]}
+
+Gebruik alleen id's die exact in de lijst voorkomen. Geef minstens 1 en maximaal 5 stappen; de laatste stap produces "text".`;
+
+/** Bouw de gebruikersprompt voor de plan-modus. */
+const PLAN_USER_PROMPT = (goal: string, techniques: TechniqueSummary[]) =>
+  `Doel van de gebruiker:\n${goal}\n\nBeschikbare technieken:\n${techniques
+    .map((t) => {
+      const parts = [`- id: ${t.id}`, `naam: ${t.name}`];
+      if (t.description) parts.push(`uitleg: ${t.description}`);
+      if (t.strength) parts.push(`kracht: ${t.strength}`);
+      if (t.use_cases && t.use_cases.length > 0)
+        parts.push(`gebruik voor: ${t.use_cases.join('; ')}`);
+      if (t.is_framework) parts.push('type: compleet raamwerk');
+      if (t.structure_format) parts.push(`structuur: ${t.structure_format}`);
+      return parts.join(' | ');
+    })
+    .join('\n')}`;
+
 const RECOMMEND_FRAMEWORK_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse rijksoverheid.
 Een interne overheidsmedewerker heeft een EIGEN prompt geschreven en wil die optimaliseren met een
 prompt framework (een compleet raamwerk dat de hele prompt structureert, bijv. CARE, CRISP, CO-STAR).
@@ -455,14 +519,33 @@ Geef per aanbeveling TWEE dingen:
   is voor precies DIT vraagstuk. Verwijs kort naar de case (het onderwerp/de doelgroep/het soort tekst),
   geen opsomming, geen algemeenheden, niet uitweiden.
 
+Geef daarnaast "missingContext": een korte lijst (0–4 punten) van concrete context die NOG ONTBREEKT
+in de prompt en die — als de gebruiker die aanvult — een scherpere prompt-template zou opleveren.
+Denk aan: doelgroep/ontvanger, gewenste lengte/vorm, toon, doel of beoogd effect, concrete
+onderwerpsafbakening, voorbeelden, randvoorwaarden. Elk punt is één korte, vriendelijke zin die de
+gebruiker uitnodigt iets te verduidelijken (bijv. "Voor wie is deze tekst bedoeld?"). Is de prompt al
+volledig genoeg, geef dan een lege lijst.
+
 Geef UITSLUITEND geldige JSON terug, zonder codeblok of extra tekst, in dit formaat:
-{"summary":"<1 zin: wat voor prompt dit is en wat het beste raamwerk eraan toevoegt, in het Nederlands>","recommendations":[{"id":"<framework-id>","reason":"<korte motivatie in 1 zin die de kracht van het raamwerk koppelt aan deze prompt, in het Nederlands>","value":"<1 korte zin (max ~20 woorden) waarom dit raamwerk nuttig is voor precies dit vraagstuk, in het Nederlands>"}]}
+{"summary":"<1 zin: wat voor prompt dit is en wat het beste raamwerk eraan toevoegt, in het Nederlands>","missingContext":["<kort punt dat nog mist, in het Nederlands>"],"recommendations":[{"id":"<framework-id>","reason":"<korte motivatie in 1 zin die de kracht van het raamwerk koppelt aan deze prompt, in het Nederlands>","value":"<1 korte zin (max ~20 woorden) waarom dit raamwerk nuttig is voor precies dit vraagstuk, in het Nederlands>"}]}
 
 Gebruik alleen id's die exact in de lijst voorkomen. Geef minstens 1 en maximaal 3 aanbevelingen.`;
 
-/** Bouw de gebruikersprompt voor de framework-aanbevelingsmodus (eigen-prompt-flow). */
-const RECOMMEND_FRAMEWORK_USER_PROMPT = (ownPrompt: string, frameworks: TechniqueSummary[]) =>
+/**
+ * Bouw de gebruikersprompt voor de framework-aanbevelingsmodus (eigen-prompt-flow).
+ * `clarification` (optioneel) bevat eerdere toelichtingen van de gebruiker uit de
+ * heranalyse-lus: extra context die de gebruiker zelf heeft aangevuld nadat de AI
+ * aangaf wat er nog ontbrak. Die weegt de AI expliciet mee.
+ */
+const RECOMMEND_FRAMEWORK_USER_PROMPT = (
+  ownPrompt: string,
+  frameworks: TechniqueSummary[],
+  clarification?: string,
+) =>
   `PROMPT VAN DE GEBRUIKER (analyseer deze):\n"""\n${ownPrompt}\n"""\n\n` +
+  (clarification && clarification.trim()
+    ? `AANVULLENDE TOELICHTING VAN DE GEBRUIKER (weeg dit mee als extra context bij de prompt):\n"""\n${clarification.trim()}\n"""\n\n`
+    : '') +
   `Beschikbare prompt frameworks:\n${frameworks
     .map((t) => {
       const parts = [`- id: ${t.id}`, `naam: ${t.name}`];
@@ -1256,12 +1339,13 @@ function parseFrameworkFits(raw: string, valid: Set<string>): FrameworkFit[] {
 function parseFrameworkRecommendations(
   raw: string,
   valid: Set<string>,
-): { summary: string; recommendations: Recommendation[] } {
+): { summary: string; recommendations: Recommendation[]; missingContext: string[] } {
   const match = raw.match(/\{[\s\S]*\}/);
-  if (!match) return { summary: '', recommendations: [] };
+  if (!match) return { summary: '', recommendations: [], missingContext: [] };
   try {
     const parsed = JSON.parse(match[0]) as {
       summary?: string;
+      missingContext?: unknown;
       recommendations?: Recommendation[];
     };
     const recommendations = (Array.isArray(parsed.recommendations) ? parsed.recommendations : [])
@@ -1272,12 +1356,18 @@ function parseFrameworkRecommendations(
         reason: typeof r.reason === 'string' ? r.reason : '',
         value: typeof r.value === 'string' ? r.value : '',
       }));
+    // Ontbrekende-context-punten: alleen niet-lege strings, maximaal 4.
+    const missingContext = (Array.isArray(parsed.missingContext) ? parsed.missingContext : [])
+      .filter((p): p is string => typeof p === 'string' && p.trim().length > 0)
+      .map((p) => p.trim())
+      .slice(0, 4);
     return {
       summary: typeof parsed.summary === 'string' ? parsed.summary : '',
       recommendations,
+      missingContext,
     };
   } catch {
-    return { summary: '', recommendations: [] };
+    return { summary: '', recommendations: [], missingContext: [] };
   }
 }
 
@@ -1415,6 +1505,97 @@ function localRecommend(goal: string, techniques: TechniqueSummary[]): Recommend
   }));
 }
 
+/** Eén stap uit het door de AI voorgestelde plan (plan-modus). */
+interface PlanStepOut {
+  technique_id: string;
+  title: string;
+  rationale: string;
+  produces: 'persona' | 'format' | 'brief' | 'text';
+}
+
+/** Het volledige plan-antwoord (plan-modus). */
+interface PlanOut {
+  summary: string;
+  steps: PlanStepOut[];
+}
+
+/**
+ * Parseert het JSON-antwoord van de plan-modus robuust. Filtert stappen op
+ * bestaande techniek-id's (net als {@link parseRecommendations}) en capt op 5.
+ * Garandeert dat de laatste stap "text" produceert (de compose-basis).
+ */
+function parsePlan(raw: string, valid: Set<string>): PlanOut | null {
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  try {
+    const parsed = JSON.parse(match[0]) as { summary?: unknown; steps?: unknown };
+    const rawSteps = Array.isArray(parsed.steps) ? parsed.steps : [];
+    const steps: PlanStepOut[] = rawSteps
+      .filter(
+        (s): s is Record<string, unknown> =>
+          !!s && typeof (s as Record<string, unknown>).technique_id === 'string',
+      )
+      .filter((s) => valid.has(s.technique_id as string))
+      .slice(0, 5)
+      .map((s) => {
+        const produces = s.produces;
+        const p =
+          produces === 'persona' || produces === 'format' || produces === 'brief'
+            ? produces
+            : 'text';
+        return {
+          technique_id: s.technique_id as string,
+          title: typeof s.title === 'string' ? s.title : '',
+          rationale: typeof s.rationale === 'string' ? s.rationale : '',
+          produces: p,
+        };
+      });
+    if (steps.length === 0) return null;
+    // De laatste stap is de compose-basis en levert altijd "text".
+    steps[steps.length - 1].produces = 'text';
+    return {
+      summary: typeof parsed.summary === 'string' ? parsed.summary : '',
+      steps,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Lokale fallback voor de plan-modus (geen AI beschikbaar / parse mislukt).
+ * Bouwt een eenvoudig 2-staps plan uit de lokaal best passende techniek plus een
+ * compose-stap, zodat de wizard ook zonder backend een bruikbaar plan toont.
+ */
+function localPlan(goal: string, techniques: TechniqueSummary[]): PlanOut {
+  const recs = localRecommend(goal, techniques);
+  const top = recs[0] ? techniques.find((t) => t.id === recs[0].id) : undefined;
+  const base = top ?? techniques[0];
+  if (!base) {
+    return { summary: 'Geen technieken beschikbaar.', steps: [] };
+  }
+  const steps: PlanStepOut[] = [
+    {
+      technique_id: base.id,
+      title: `Werk je doel uit met ${base.name}`,
+      rationale: base.strength
+        ? base.strength.split(/(?<=[.!?])\s/)[0]
+        : 'Passend bij je doel.',
+      produces: 'brief',
+    },
+    {
+      technique_id: base.id,
+      title: 'Stel de complete template samen',
+      rationale: 'Giet het verzamelde materiaal in één herbruikbare template.',
+      produces: 'text',
+    },
+  ];
+  return {
+    summary: 'Een eenvoudig plan op basis van je doel (lokale suggestie).',
+    steps,
+  };
+}
+
 /**
  * Lokale fallback voor de framework-fit-modus (geen AI beschikbaar). Grove
  * trefwoord-overlap tussen het vraagstuk en de kracht/gebruikssituaties van elk
@@ -1477,7 +1658,9 @@ Deno.serve(async (req: Request) => {
                   ? 'title'
                   : body.mode === 'metadata'
                     ? 'metadata'
-                    : 'generate';
+                    : body.mode === 'plan'
+                      ? 'plan'
+                      : 'generate';
     const order = buildOrder(body.preferredProvider);
     const temperature = clampTemp(body.temperature);
 
@@ -1679,8 +1862,11 @@ Deno.serve(async (req: Request) => {
       }
 
       const validIds = new Set(frameworks.map((t) => t.id));
-      const userMessage = RECOMMEND_FRAMEWORK_USER_PROMPT(ownPrompt, frameworks);
-      let result: { summary: string; recommendations: Recommendation[] } | null = null;
+      // Eventuele eerdere toelichting uit de heranalyse-lus meewegen als extra context.
+      const userMessage = RECOMMEND_FRAMEWORK_USER_PROMPT(ownPrompt, frameworks, body.clarification);
+      let result:
+        | { summary: string; recommendations: Recommendation[]; missingContext: string[] }
+        | null = null;
       let provider: Provider | 'local-template' = 'local-template';
 
       for (const candidate of order) {
@@ -1704,7 +1890,11 @@ Deno.serve(async (req: Request) => {
 
       // Geen AI-resultaat: val terug op trefwoord-matching over de eigen prompt.
       if (!result) {
-        result = { summary: '', recommendations: localRecommend(ownPrompt, frameworks) };
+        result = {
+          summary: '',
+          recommendations: localRecommend(ownPrompt, frameworks),
+          missingContext: [],
+        };
       }
 
       return new Response(
@@ -1714,6 +1904,59 @@ Deno.serve(async (req: Request) => {
     }
 
     // --- Aanbevelingsmodus: kies passende technieken bij een doel ---
+    // --- Plan-modus: stel een geordend meerstaps-recept van technieken samen ---
+    if (mode === 'plan') {
+      const goal = body.goal?.trim();
+      const techniques = Array.isArray(body.techniques) ? body.techniques : [];
+      if (!goal || techniques.length === 0) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'goal en techniques zijn verplicht' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      const validIds = new Set(techniques.map((t) => t.id));
+      const userMessage = PLAN_USER_PROMPT(goal, techniques);
+      let plan: PlanOut | null = null;
+      let provider: Provider | 'local-template' = 'local-template';
+
+      for (const candidate of order) {
+        try {
+          const raw = await PROVIDERS[candidate](
+            userMessage,
+            PLAN_SYSTEM_PROMPT,
+            0.2,
+            resolveModel(candidate, body.preferredProvider, body.preferredModel),
+          );
+          // Clarity-gate: heeft het model het doel als onzin beoordeeld?
+          const unclear = detectUnclearJson(raw);
+          if (unclear) {
+            return new Response(
+              JSON.stringify({ success: false, unclear: true, reason: unclear, provider: candidate }),
+              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            );
+          }
+          const parsed = parsePlan(raw, validIds);
+          if (parsed && parsed.steps.length > 0) {
+            plan = parsed;
+            provider = candidate;
+            break;
+          }
+        } catch (providerErr) {
+          console.error(`${candidate} (plan) mislukt, probeer volgende:`, providerErr);
+        }
+      }
+
+      if (!plan) {
+        plan = localPlan(goal, techniques);
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, plan, provider }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
     if (mode === 'recommend') {
       const goal = body.goal?.trim();
       const techniques = Array.isArray(body.techniques) ? body.techniques : [];
