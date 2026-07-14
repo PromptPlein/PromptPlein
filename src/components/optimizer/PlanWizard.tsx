@@ -7,12 +7,10 @@ import {
   ChevronRight,
   ChevronUp,
   Eraser,
-  FileUp,
   HelpCircle,
   Info,
   Lightbulb,
   Loader2,
-  MessageCircleQuestion,
   Pencil,
   RotateCw,
   Sparkles,
@@ -44,6 +42,8 @@ import GuardrailDialog from './GuardrailDialog';
 import PersonaBuilder from './PersonaBuilder';
 import FewShotBuilder from './FewShotBuilder';
 import MetaBuilder from './MetaBuilder';
+import DocumentUpload from './DocumentUpload';
+import { InterviewPanel } from './InterviewPanel';
 import RichText from './RichText';
 import type {
   OptimizeResult,
@@ -1389,89 +1389,6 @@ function PlanExecutor({
 }
 
 /**
- * Upload-zone voor een voorbeelddocument (Template-based Output). Extraheert de
- * tekst client-side (txt/md/pdf/docx), waarna de AI het document volledig
- * doorleest en de layout (format, rubrieken, regels) in de velden voor-invult.
- */
-function DocumentUpload({
-  onPrefill,
-  disabled,
-}: {
-  onPrefill: (text: string) => Promise<boolean>;
-  disabled?: boolean;
-}) {
-  const [busy, setBusy] = useState(false);
-  const [doneName, setDoneName] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  async function handleFile(file: File | undefined) {
-    if (!file) return;
-    setBusy(true);
-    setDoneName(null);
-    try {
-      const { extractDocument } = await import('@/lib/extractDocument');
-      const doc = await extractDocument(file);
-      toast.success(`"${doc.name}" ingelezen (${doc.chars.toLocaleString('nl-NL')} tekens).`);
-      const ok = await onPrefill(doc.text);
-      if (ok) setDoneName(doc.name);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Document inlezen mislukt.');
-    } finally {
-      setBusy(false);
-      if (inputRef.current) inputRef.current.value = '';
-    }
-  }
-
-  return (
-    <div className="rounded-xl border border-dashed border-rijksblauw-300 bg-rijksblauw-50/40 p-4 dark:border-rijksblauw-500/40 dark:bg-rijksblauw-500/10">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-start gap-2">
-          <FileUp size={18} className="mt-0.5 shrink-0 text-rijksblauw-500" />
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-              Voorbeelddocument uploaden (optioneel)
-            </p>
-            <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-300">
-              De AI leest het document volledig door, analyseert de opbouw (format, rubrieken, regels)
-              en vult de velden hieronder automatisch voor. Ondersteunt .txt, .md, .pdf en .docx.
-            </p>
-          </div>
-        </div>
-        <button
-          type="button"
-          className="opl-btn-secondary shrink-0"
-          onClick={() => inputRef.current?.click()}
-          disabled={busy || disabled}
-        >
-          {busy ? (
-            <>
-              <Loader2 size={16} className="animate-spin" /> Inlezen…
-            </>
-          ) : (
-            <>
-              <FileUp size={16} /> Kies bestand
-            </>
-          )}
-        </button>
-      </div>
-      {doneName && (
-        <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400">
-          <Check size={13} /> Velden voor-ingevuld op basis van &quot;{doneName}&quot;. Controleer en
-          pas aan waar nodig.
-        </p>
-      )}
-      <input
-        ref={inputRef}
-        type="file"
-        accept=".txt,.md,.markdown,.pdf,.docx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        className="hidden"
-        onChange={(e) => void handleFile(e.target.files?.[0])}
-      />
-    </div>
-  );
-}
-
-/**
  * Het invoer- en analysepaneel voor één actieve tussenstap. Eerst de
  * vervolgvragen van de techniek (input van de gebruiker) + "Genereren". Daarna
  * het door de AI uitgeschreven materiaal met de openstaande hiaten ("wat mist
@@ -1551,6 +1468,7 @@ function StepCollector({
     return (
       <div className="mt-3">
         <InterviewPanel
+          socratic={format === 'socratic'}
           question={interviewQuestion}
           transcript={interviewTranscript}
           answer={interviewAnswer}
@@ -1706,109 +1624,6 @@ function StepCollector({
   );
 }
 
-/**
- * Het adaptieve vraag-na-vraag-paneel voor Chain-of-Thought / Socratic-stappen.
- * Toont het gesprek tot nu toe, de huidige vraag met een antwoordveld, en twee
- * acties: het antwoord versturen (volgende vraag), of het interview afronden
- * ("ik heb genoeg gedeeld") zodat de AI meteen een conclusie trekt.
- */
-function InterviewPanel({
-  question,
-  transcript,
-  answer,
-  busy,
-  onAnswerChange,
-  onSubmit,
-  onFinish,
-}: {
-  question: string | null;
-  transcript: TranscriptTurn[];
-  answer: string;
-  busy: boolean;
-  onAnswerChange: (v: string) => void;
-  onSubmit: () => void;
-  onFinish: () => void;
-}) {
-  return (
-    <div className="space-y-3">
-      <div className="flex items-start gap-2">
-        <MessageCircleQuestion size={18} className="mt-0.5 shrink-0 text-rijksblauw-500" />
-        <p className="text-sm text-slate-600 dark:text-slate-300">
-          De AI stelt op basis van je antwoorden telkens de volgende vraag (max. 7), tot het beeld
-          compleet is. Klaar met input geven? Rond dan af — de AI trekt dan meteen een conclusie.
-        </p>
-      </div>
-
-      {/* Het gesprek tot nu toe. */}
-      {transcript.length > 0 && (
-        <ul className="space-y-2">
-          {transcript.map((t, i) => (
-            <li
-              key={i}
-              className="rounded-lg border border-slate-200 bg-white p-2.5 text-xs dark:border-slate-700 dark:bg-slate-800"
-            >
-              <p className="font-medium text-slate-600 dark:text-slate-300">
-                {i + 1}. {stripMarkdown(t.question)}
-              </p>
-              <p className="mt-0.5 text-slate-500 dark:text-slate-400">{t.answer}</p>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {/* De huidige vraag + antwoordveld, of een laadstaat terwijl de AI nadenkt. */}
-      {busy && !question ? (
-        <div className="flex items-center gap-2 rounded-xl border border-rijksblauw-200 bg-white p-3 text-sm text-rijksblauw-600 dark:border-rijksblauw-500/30 dark:bg-slate-800 dark:text-rijksblauw-300">
-          <Loader2 size={16} className="animate-spin" />
-          {transcript.length === 0 ? 'De eerste vraag wordt opgesteld…' : 'De AI denkt na over de volgende vraag…'}
-        </div>
-      ) : question ? (
-        <div className="rounded-xl border border-rijksblauw-200 bg-white p-3 dark:border-rijksblauw-500/30 dark:bg-slate-800">
-          <p className="flex items-start gap-2 text-sm font-medium text-rijksblauw-700 dark:text-rijksblauw-200">
-            <MessageCircleQuestion size={16} className="mt-0.5 shrink-0" />
-            <span>
-              Vraag {transcript.length + 1}: {stripMarkdown(question)}
-            </span>
-          </p>
-          <textarea
-            className="opl-input mt-2 min-h-[72px] resize-y"
-            value={answer}
-            placeholder="Typ je antwoord…"
-            autoFocus
-            disabled={busy}
-            onChange={(e) => onAnswerChange(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                onSubmit();
-              }
-            }}
-          />
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-            <button
-              type="button"
-              className="opl-btn-secondary"
-              onClick={onFinish}
-              disabled={busy}
-              title="Rond het interview af; de AI trekt een conclusie op basis van je antwoorden"
-            >
-              <Check size={16} /> Ik heb genoeg gedeeld
-            </button>
-            <button
-              type="button"
-              className="opl-btn-primary"
-              onClick={onSubmit}
-              disabled={busy || !answer.trim()}
-            >
-              {busy ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
-              Volgende vraag
-            </button>
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
-}
 
 type StepStatus = 'pending' | 'active' | 'done' | 'error';
 

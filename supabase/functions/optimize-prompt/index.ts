@@ -144,10 +144,18 @@ interface RequestBody {
    * uit te schrijven.
    */
   stepInteractive?: boolean;
+  /**
+   * De structuur van de interactieve stap: 'socratic' of 'chain-of-thought'.
+   * Bepaalt welke interview-systeemprompt wordt gebruikt (socratisch = alleen
+   * vragen, geen conclusie/advies; chain-of-thought = aanscherpen + concluderen).
+   */
+  stepFormat?: string;
   /** Het vraag-na-vraag-transcript tot nu toe (interactieve stap). */
   transcript?: { question: string; answer: string }[];
   /** De gebruiker wil geen input meer geven: rond het interview af met een conclusie. */
   forceFinish?: boolean;
+  /** Er is nog geen doel/context: de AI vraagt eerst wat de gebruiker wil bereiken. */
+  noContext?: boolean;
   // 'persona-fill'-velden: vul de persona-definitie in op basis van een korte hint.
   /** Korte aanduiding van de persona, bijv. "mijn teammanager". */
   personaHint?: string;
@@ -655,6 +663,44 @@ Werkwijze — houd je STRIKT aan dit protocol:
 
 ${CLARITY_GATE_JSON_INSTRUCTION}`;
 
+// --- Socratische interview-prompt: alleen vragen, GEEN antwoord/advies/oordeel ---
+// Fundamenteel anders dan chain-of-thought: het inzicht ontstaat bij de GEBRUIKER.
+// Zelfde VRAAG:/KLAAR:-protocol als de wizard verwacht, maar "KLAAR:" is hier een
+// samenvatting van wat de GEBRUIKER zelf heeft aangescherpt — geen AI-conclusie.
+const PLAN_STEP_SOCRATIC_SYSTEM_PROMPT = `# ROL
+Je bent een socratisch gesprekspartner. Je geeft GEEN antwoorden, GEEN adviezen en GEEN oordelen. Je
+stelt vragen waarmee de gebruiker zijn eigen denken aanscherpt.
+
+# AFBAKENING — LEES DIT EERST
+Jouw output is een VRAAG, geen antwoord. Het resultaat ontstaat bij de GEBRUIKER, niet bij jou.
+Je bent hier expliciet NIET behulpzaam op de gebruikelijke manier. Vraagt de gebruiker "wat vind jij
+ervan?" of "geef gewoon het antwoord"? Dan kaats je terug met een vraag. Eén keer toegeven en de
+techniek is stuk.
+
+# FASE 1 — DENKOBJECT VASTLEGGEN
+Is er nog geen scherpe STELLING (een uitspraak, voorgenomen besluit of aanname) om over na te denken?
+- Accepteer geen ONDERWERP, alleen een uitspraak. Onbruikbaar: "AI in ons ministerie". Bruikbaar:
+  "Wij moeten AI-gebruik centraal reguleren".
+- Gaf de gebruiker een onderwerp? Stel dan als eerste vraag: "Formuleer in één zin de stelling, het
+  voorgenomen besluit of de aanname waarover je wilt nadenken." Help hem desnoods herformuleren en
+  vraag om bevestiging vóór je verder gaat.
+
+# FASE 2 — HET GESPREK
+- Stel telkens ÉÉN vraag per beurt en wacht op antwoord. Nooit meerdere vragen tegelijk.
+- Bouw elke vraag op het LAATSTE antwoord: citeer of parafraseer kort wat de gebruiker zei, en vraag
+  dan door. Wissel af tussen verhelderende vragen, aannames toetsen, om bewijs/voorbeelden vragen,
+  andere perspectieven, en gevolgen doordenken.
+- Verzin GEEN antwoorden namens de gebruiker en geef zelf geen standpunt.
+
+# PROTOCOL (strikt)
+- Zolang je een vraag stelt: antwoord met exact één regel die begint met "VRAAG:" gevolgd door je vraag.
+  Geen inleiding, geen extra tekst.
+- MAXIMUM 7 vragen. Vraagt de gebruiker af te ronden, of bij de 7e beurt: antwoord met "KLAAR:" gevolgd
+  door een korte, neutrale SAMENVATTING van wat de GEBRUIKER zelf heeft aangescherpt (de stelling zoals
+  die nu luidt, de eigen inzichten en de nog openstaande vragen). Voeg GEEN eigen oordeel of advies toe.
+
+${CLARITY_GATE_JSON_INSTRUCTION}`;
+
 /** Bouw de gebruikersprompt voor één interview-beurt (interactieve plan-step). */
 const PLAN_STEP_INTERVIEW_USER_PROMPT = (args: {
   goal: string;
@@ -663,8 +709,14 @@ const PLAN_STEP_INTERVIEW_USER_PROMPT = (args: {
   outcomesSummary?: string;
   transcript?: { question: string; answer: string }[];
   forceFinish?: boolean;
+  noContext?: boolean;
+  socratic?: boolean;
 }) => {
-  const parts: string[] = [`DOEL VAN DE GEBRUIKER:\n${args.goal}`];
+  const parts: string[] = [
+    args.goal.trim()
+      ? `DOEL VAN DE GEBRUIKER:\n${args.goal}`
+      : 'DOEL VAN DE GEBRUIKER:\n(nog niet opgegeven — er is geen enkele context)',
+  ];
   if (args.outcomesSummary && args.outcomesSummary.trim()) {
     parts.push(`MATERIAAL UIT EERDERE STAPPEN:\n${args.outcomesSummary.trim()}`);
   }
@@ -673,7 +725,13 @@ const PLAN_STEP_INTERVIEW_USER_PROMPT = (args: {
   if (args.stepTechniqueName) wat.push(`Techniek: ${args.stepTechniqueName}`);
   parts.push(`DEZE STAP:\n${wat.join('\n')}`);
   const turns = args.transcript ?? [];
-  if (turns.length === 0) {
+  if (turns.length === 0 && args.noContext) {
+    parts.push(
+      args.socratic
+        ? 'GESPREK TOT NU TOE:\n(nog geen context bekend). Er is nog geen stelling om over door te vragen. Je ALLEREERSTE vraag MOET de gebruiker vragen wat het voorgenomen besluit, de stelling of de aanname is waarover hij wil nadenken. Nodig hem uit om dat zo UITGEBREID te beschrijven als hij wil — hij hoeft het niet in één zin te vatten. Uit dat antwoord destilleer JIJ de kernstelling in één heldere zin, bevestig die kort ("Ik lees dat je stelling is: … — klopt dat?"), en ga dan pas socratisch doorvragen op de aannames erin. Verzin zelf geen onderwerp.'
+        : 'GESPREK TOT NU TOE:\n(nog geen context bekend). Je ALLEREERSTE vraag MOET zijn wat de gebruiker precies wil bereiken (het doel/vraagstuk). Nodig hem uit dit zo uitgebreid te beschrijven als hij wil. Verzin zelf geen onderwerp. Pas daarna ga je op basis van dat antwoord verder doorvragen.',
+    );
+  } else if (turns.length === 0) {
     parts.push('GESPREK TOT NU TOE:\n(nog geen vragen gesteld — stel je eerste vraag)');
   } else {
     parts.push(
@@ -2594,8 +2652,10 @@ Deno.serve(async (req: Request) => {
 
     // --- Plan-step-modus: verzamel het uitgeschreven materiaal voor één stap ---
     if (mode === 'plan-step') {
-      const goal = body.goal?.trim();
-      if (!goal) {
+      const goal = body.goal?.trim() ?? '';
+      // Een leeg doel mag alleen bij een interactief interview zonder context: dan
+      // vraagt de AI er zelf eerst naar. In alle andere gevallen is goal verplicht.
+      if (!goal && !(body.stepInteractive && body.noContext)) {
         return new Response(
           JSON.stringify({ success: false, error: 'goal is verplicht' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
@@ -2612,13 +2672,20 @@ Deno.serve(async (req: Request) => {
           outcomesSummary: body.outcomesSummary,
           transcript,
           forceFinish: body.forceFinish,
+          noContext: body.noContext,
+          socratic: body.stepFormat === 'socratic',
         });
+        // Socratisch: alleen vragen, geen conclusie/advies. Anders: chain-of-thought.
+        const interviewSystem =
+          body.stepFormat === 'socratic'
+            ? PLAN_STEP_SOCRATIC_SYSTEM_PROMPT
+            : PLAN_STEP_INTERVIEW_SYSTEM_PROMPT;
 
         for (const candidate of order) {
           try {
             const raw = await PROVIDERS[candidate](
               interviewMessage,
-              PLAN_STEP_INTERVIEW_SYSTEM_PROMPT,
+              interviewSystem,
               0.3,
               resolveModel(candidate, body.preferredProvider, body.preferredModel),
             );

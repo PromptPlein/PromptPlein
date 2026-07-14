@@ -827,6 +827,8 @@ export async function runPlanStep(args: {
   transcript?: TranscriptTurn[];
   /** De gebruiker wil geen input meer geven → rond het interview af met een conclusie. */
   forceFinish?: boolean;
+  /** Er is nog geen doel/context: laat de AI eerst vragen wat de gebruiker wil bereiken. */
+  noContext?: boolean;
   preferredProvider?: AiProvider;
   preferredModel?: string;
 }): Promise<PlanStepResult> {
@@ -838,6 +840,7 @@ export async function runPlanStep(args: {
     interactive,
     transcript,
     forceFinish,
+    noContext,
     preferredProvider,
     preferredModel,
   } = args;
@@ -869,8 +872,11 @@ export async function runPlanStep(args: {
         stepTechniqueName: techniqueName,
         outcomesSummary,
         stepInteractive: Boolean(interactive),
+        // Bepaalt de interview-toon: socratic (alleen vragen) vs chain-of-thought.
+        stepFormat: interactive ? step.structure_format : undefined,
         transcript: interactive ? (transcript ?? []) : undefined,
         forceFinish: interactive ? Boolean(forceFinish) : undefined,
+        noContext: interactive ? Boolean(noContext) : undefined,
         preferredProvider: preferredProvider ?? 'auto',
         preferredModel,
       }),

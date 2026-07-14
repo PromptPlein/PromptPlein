@@ -16,7 +16,13 @@ import PlanWizard from '@/components/optimizer/PlanWizard';
 import EntryTab from '@/components/optimizer/EntryTab';
 import OwnPromptOptimizer from '@/components/optimizer/OwnPromptOptimizer';
 import FollowUpQuestions from '@/components/optimizer/FollowUpQuestions';
+import PersonaBuilder from '@/components/optimizer/PersonaBuilder';
+import FewShotBuilder from '@/components/optimizer/FewShotBuilder';
+import MetaBuilder from '@/components/optimizer/MetaBuilder';
+import DocumentUpload from '@/components/optimizer/DocumentUpload';
+import InterviewFlow from '@/components/optimizer/InterviewPanel';
 import OptimizingLoader from '@/components/optimizer/OptimizingLoader';
+import { structureFormat } from '@/lib/techniques';
 import OptimizedOutput from '@/components/optimizer/OptimizedOutput';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { useAuth } from '@/context/AuthContext';
@@ -58,6 +64,10 @@ export default function OptimizerPage() {
   const [entryMode, setEntryMode] = useState<EntryMode>('own-prompt');
   const [techniqueId, setTechniqueId] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  // Geserialiseerde output van een gespecialiseerde bouwer (Persona/Few-Shot/Meta)
+  // wanneer de gebruiker zo'n techniek handmatig kiest. Gaat als context mee bij het
+  // genereren; leeg voor gewone technieken (die de vragenlijst gebruiken).
+  const [builderText, setBuilderText] = useState('');
   // Herkomst per voor-ingevuld veld (origin-badges) + laadstaat tijdens prefill.
   const [fieldMeta, setFieldMeta] = useState<FieldMeta>({});
   const [prefilling, setPrefilling] = useState(false);
@@ -124,6 +134,7 @@ export default function OptimizerPage() {
     setTechniqueId(id);
     setAnswers({}); // antwoorden resetten bij nieuwe techniek
     setFieldMeta({});
+    setBuilderText(''); // output van de vorige bouwer wissen
     // Wacht tot het vervolgvragen-paneel is gerenderd en scroll het in beeld.
     requestAnimationFrame(() => {
       followUpRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -167,6 +178,56 @@ export default function OptimizerPage() {
     }
   }
 
+  /**
+   * Vul de velden van de gekozen techniek voor op basis van een geüpload document
+   * (Template-based Output): de AI leest het document volledig door en leidt de
+   * layout (format, rubrieken, regels) af. Hergebruikt hetzelfde prefill-mechanisme
+   * als de plan-bouwer. Bestaande, door de gebruiker ingevulde velden blijven staan.
+   */
+  async function prefillFromDocument(text: string): Promise<boolean> {
+    if (!technique) return false;
+    setPrefilling(true);
+    setUnclearReason(null);
+    try {
+      const res = await prefillFields({
+        ownPrompt: text,
+        technique,
+        fromDocument: true,
+        preferredProvider: settingsRef.current.provider,
+        preferredModel: settingsRef.current.model,
+      });
+      if (res.unclear) {
+        setUnclearReason(
+          res.reason?.trim() ||
+            'Uit het document kon geen bruikbare structuur worden gehaald.',
+        );
+        return false;
+      }
+      if (res.fields.length === 0) {
+        toast('Geen velden ingevuld uit het document. Vul ze zelf aan.', { icon: 'ℹ️' });
+        return false;
+      }
+      if (res.error) toast(res.error, { icon: '⚠️' });
+      // Afgeleide waarden toevoegen; door de gebruiker ingevulde velden niet overschrijven.
+      setAnswers((prev) => {
+        const next = { ...prev };
+        for (const f of res.fields) if (!next[f.id]?.trim()) next[f.id] = f.value;
+        return next;
+      });
+      setFieldMeta((prev) => {
+        const next = { ...prev };
+        for (const f of res.fields) if (!next[f.id]) next[f.id] = { source: f.source, note: f.note };
+        return next;
+      });
+      return true;
+    } catch {
+      toast.error('Document verwerken mislukt.');
+      return false;
+    } finally {
+      setPrefilling(false);
+    }
+  }
+
   /** Laat de herkomst-badge vervallen zodra de gebruiker een veld zelf aanpast. */
   function handleFieldEdit(id: string) {
     setFieldMeta((prev) => {
@@ -184,13 +245,14 @@ export default function OptimizerPage() {
       return;
     }
 
-    // Alleen de meegegeven inhoud op guardrails toetsen (mag leeg zijn:
-    // de generator levert een herbruikbare template met plaatshouders).
-    if (promptContent.trim()) {
+    // De meegegeven inhoud (eigen tekst + bouwer-output) op guardrails toetsen (mag
+    // leeg zijn: de generator levert een herbruikbare template met plaatshouders).
+    const toCheck = [promptContent, builderText].map((v) => v.trim()).filter(Boolean).join('\n');
+    if (toCheck) {
       const s = settingsRef.current;
       const findings: GuardrailFinding[] = [
-        ...(s.pii.enabled ? detectPii(promptContent) : []),
-        ...detectBlockedTopics(promptContent, s.blockedTopics),
+        ...(s.pii.enabled ? detectPii(toCheck) : []),
+        ...detectBlockedTopics(toCheck, s.blockedTopics),
       ];
       if (findings.length > 0) {
         setGuardrailFindings(findings); // toon bevestigingsdialoog; blokkeer tot bevestiging
@@ -218,6 +280,11 @@ export default function OptimizerPage() {
         technique,
         promptContent: draft,
         followUpAnswers: answers,
+        // Output van een gespecialiseerde bouwer (Persona/Few-Shot/Meta) als
+        // gelabelde context meesturen, zodat die de template mede bepaalt.
+        extraAnsweredFields: builderText.trim()
+          ? [{ id: 'builder_input', label: 'Ingevulde bouwer', answer: builderText.trim() }]
+          : undefined,
         preferredProvider: s.provider,
         preferredModel: s.model,
         systemPrompt: s.systemPrompt.trim() || undefined,
@@ -330,6 +397,7 @@ export default function OptimizerPage() {
     setTechniqueId(null);
     setAnswers({});
     setFieldMeta({});
+    setBuilderText('');
     setUnclearReason(null);
     setGuardrailFindings(null);
     setResult(null);
@@ -423,24 +491,90 @@ export default function OptimizerPage() {
                           <h2 className="font-semibold text-slate-800 dark:text-slate-100">
                             Bouw je template
                           </h2>
-                          <p className="text-sm text-slate-500 dark:text-slate-400">
-                            Beantwoord de vragen voor{' '}
-                            <span className="font-medium text-rijksblauw-700 dark:text-rijksblauw-200">
-                              {technique.name}
-                            </span>
-                            . Zo ontstaat een herbruikbare template die collega&apos;s opnieuw
-                            kunnen invullen.
-                          </p>
+                          {(() => {
+                            const fmt = structureFormat(technique);
+                            // Chain-of-Thought/Socratic leveren een direct bruikbare
+                            // prompt op (die een andere AI het gesprek laat voeren),
+                            // geen invulformulier — maak dat expliciet.
+                            const intro =
+                              fmt === 'chain-of-thought'
+                                ? 'Beantwoord de vragen; je krijgt een kant-en-klare prompt die de AI stap voor stap laat doorvragen. Kopieer hem naar je eigen chat of voer hem direct uit.'
+                                : fmt === 'socratic'
+                                  ? 'Beantwoord de vragen; je krijgt een kant-en-klare prompt die de AI socratisch laat doorvragen. Kopieer hem naar je eigen chat of voer hem direct uit.'
+                                  : 'Beantwoord de vragen; zo ontstaat een herbruikbare template — kopieer hem, of laat hem direct uitvoeren voor een kant-en-klaar resultaat.';
+                            return (
+                              <p className="text-sm text-slate-500 dark:text-slate-400">
+                                Voor{' '}
+                                <span className="font-medium text-rijksblauw-700 dark:text-rijksblauw-200">
+                                  {technique.name}
+                                </span>
+                                : {intro}
+                              </p>
+                            );
+                          })()}
                         </div>
                       </div>
-                      <FollowUpQuestions
-                        technique={technique}
-                        answers={answers}
-                        onChange={setAnswers}
-                        fieldMeta={fieldMeta}
-                        onUserEdit={handleFieldEdit}
-                        prefilling={prefilling}
-                      />
+                      {/* Gespecialiseerde bouwers per techniek; anders de gewone
+                          vragenlijst. De bouwer levert geserialiseerde input aan die
+                          bij het genereren wordt meegewogen. */}
+                      {(() => {
+                        const fmt = structureFormat(technique);
+                        const s = settingsRef.current;
+                        if (fmt === 'persona' || fmt === 'multi-persona') {
+                          return (
+                            <PersonaBuilder
+                              multi={fmt === 'multi-persona'}
+                              settings={s}
+                              context={promptContent || goal}
+                              onSerialized={setBuilderText}
+                            />
+                          );
+                        }
+                        if (fmt === 'few-shot') {
+                          return <FewShotBuilder settings={s} onSerialized={setBuilderText} />;
+                        }
+                        if (fmt === 'meta') {
+                          return (
+                            <MetaBuilder
+                              settings={s}
+                              goal={promptContent || goal}
+                              onSerialized={setBuilderText}
+                            />
+                          );
+                        }
+                        // Chain-of-Thought / Socratic: het interactieve vraag-na-vraag-
+                        // interview (zoals in de plan-bouwer). De conclusie voedt het
+                        // genereren.
+                        if (fmt === 'chain-of-thought' || fmt === 'socratic') {
+                          // Bewust GEEN goal meegeven: in de losse keuze is er nog geen
+                          // context. Het interview vraagt zelf eerst wat de gebruiker wil
+                          // bereiken (niet lenen uit het doel-veld van de andere flow).
+                          return (
+                            <InterviewFlow
+                              technique={technique}
+                              settings={s}
+                              onComplete={setBuilderText}
+                            />
+                          );
+                        }
+                        // Template-based: upload-zone (document → velden voor-invullen)
+                        // bovenop de vragenlijst; anders alleen de vragenlijst.
+                        return (
+                          <div className="space-y-4">
+                            {fmt === 'template-based' && (
+                              <DocumentUpload onPrefill={prefillFromDocument} disabled={prefilling} />
+                            )}
+                            <FollowUpQuestions
+                              technique={technique}
+                              answers={answers}
+                              onChange={setAnswers}
+                              fieldMeta={fieldMeta}
+                              onUserEdit={handleFieldEdit}
+                              prefilling={prefilling}
+                            />
+                          </div>
+                        );
+                      })()}
 
                       {/* Optioneel startpunt: eigen tekst die in de template verwerkt wordt */}
                       <div className="mt-5 border-t border-slate-100 pt-5 dark:border-slate-700">
@@ -549,7 +683,7 @@ export default function OptimizerPage() {
                     setTechniqueMode('smart');
                   }}
                   icon={<Compass size={20} />}
-                  title="Help mij met een prompt om mijn doel te bereiken"
+                  title="Help mij met het bereiken van mijn doel"
                   description="Beschrijf wat je wilt bereiken, dan vinden we de techniek waarmee je je prompt opbouwt."
                 />
               </div>
