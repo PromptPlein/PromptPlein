@@ -460,6 +460,17 @@ export interface PromptRecipe {
 }
 
 /**
+ * Resultaat van het DIRECT uitvoeren van een samengestelde prompt: het door de
+ * AI afgeleverde eindproduct (bijv. het projectplan zelf), i.p.v. een template.
+ */
+export interface ExecuteResult {
+  output: string;
+  success: boolean;
+  provider: AiProviderResult;
+  error?: string;
+}
+
+/**
  * Antwoord van de optimize-prompt service (framework-aanbevelingsmodus,
  * eigen-prompt-flow). Beveelt het best passende prompt framework aan op basis
  * van de geplakte prompt, met een korte samenvatting van de analyse.

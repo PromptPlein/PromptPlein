@@ -3,6 +3,7 @@ import { isContextPrompt, structureFormat } from '@/lib/techniques';
 import type { AiProvider } from '@/config/aiModels';
 import type {
   AnalyzeResult,
+  ExecuteResult,
   FrameworkFit,
   FrameworkFitResult,
   FrameworkRecommendResult,
@@ -175,6 +176,72 @@ export async function optimizePrompt(args: {
  * Functioneel identiek aan `optimizePrompt` — de generator denkt in "genereren".
  */
 export const generatePrompt = optimizePrompt;
+
+/**
+ * Voert een samengestelde prompt DIRECT uit en levert het eindproduct (bijv. het
+ * projectplan) i.p.v. een template. Roept de edge function in 'execute'-modus
+ * aan. Zonder backend of bij een fout: honest-degrade (`{success:false, error}`).
+ */
+export async function executePrompt(args: {
+  prompt: string;
+  preferredProvider?: AiProvider;
+  preferredModel?: string;
+  temperature?: number;
+}): Promise<ExecuteResult> {
+  const { prompt, preferredProvider, preferredModel, temperature } = args;
+  const functionUrl = getFunctionUrl('optimize-prompt');
+
+  if (!isSupabaseConfigured || !functionUrl) {
+    return {
+      output: '',
+      success: false,
+      provider: 'local-template',
+      error: 'Geen AI-service beschikbaar om de prompt uit te voeren.',
+    };
+  }
+
+  try {
+    const anonKey = getAnonKey();
+    const response = await fetch(functionUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(anonKey ? { Authorization: `Bearer ${anonKey}`, apikey: anonKey } : {}),
+      },
+      body: JSON.stringify({
+        mode: 'execute',
+        promptContent: prompt,
+        preferredProvider: preferredProvider ?? 'auto',
+        preferredModel,
+        temperature,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Edge function gaf status ${response.status}`);
+    }
+
+    const data = (await response.json()) as {
+      success?: boolean;
+      output?: string;
+      provider?: ExecuteResult['provider'];
+      error?: string;
+    };
+
+    if (data.success && data.output?.trim()) {
+      return { output: data.output.trim(), success: true, provider: data.provider ?? 'claude' };
+    }
+    return {
+      output: '',
+      success: false,
+      provider: data.provider ?? 'claude',
+      error: data.error ?? 'De prompt kon niet worden uitgevoerd.',
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Onbekende fout';
+    return { output: '', success: false, provider: 'local-template', error: `Uitvoeren mislukt (${message}).` };
+  }
+}
 
 /** Lokale trefwoord-matching als de backend niet beschikbaar is of faalt. */
 function localRecommend(goal: string, techniques: Technique[]): TechniqueRecommendation[] {

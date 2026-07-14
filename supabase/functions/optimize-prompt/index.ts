@@ -38,7 +38,8 @@ type Mode =
   | 'metadata'
   | 'plan'
   | 'plan-step'
-  | 'plan-step-analyze';
+  | 'plan-step-analyze'
+  | 'execute';
 
 /** Eén veld van het gekozen prompt framework waar de analyse op toetst. */
 interface AnalyzeField {
@@ -771,6 +772,24 @@ function parsePlanStepAnalyze(
     return null;
   }
 }
+
+// --- Execute-modus: voer de samengestelde prompt DIRECT uit ---
+// De plan-bouwer levert een rijke prompt-template. Wil de gebruiker niet zelf
+// kopiëren-en-plakken, dan voert deze modus de prompt meteen uit en levert het
+// eindproduct (bijv. het projectplan) zelf. Plaatshouders die nog niet ingevuld
+// zijn, vult het model met redelijke, duidelijk herkenbare aannames.
+const EXECUTE_SYSTEM_PROMPT = `Je bent een deskundige assistent voor de Nederlandse rijksoverheid.
+Je krijgt een volledig uitgewerkte prompt-instructie. VOER die instructie nu UIT en lever het
+gevraagde eindproduct (bijv. het projectplan, de nota of de brief) direct en volledig af.
+
+Werkwijze:
+- Volg de instructie nauwkeurig; produceer het gevraagde document, niet een nieuwe prompt of uitleg.
+- Zijn er nog [plaatshouders] die niet zijn ingevuld, vul die dan in met redelijke, passende aannames
+  en markeer zulke aannames kort en herkenbaar (bijv. cursief of tussen haakjes), zodat de gebruiker
+  ze makkelijk kan aanpassen.
+- Dit is uitsluitend voor INTERN overheidsgebruik.
+- Schrijf in duidelijke, professionele taal (waar passend B1-niveau).
+- Geef ALLEEN het eindproduct terug, zonder inleiding vooraf of meta-uitleg achteraf.`;
 
 const RECOMMEND_FRAMEWORK_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse rijksoverheid.
 Een interne overheidsmedewerker heeft een EIGEN prompt geschreven en wil die optimaliseren met een
@@ -1936,7 +1955,9 @@ Deno.serve(async (req: Request) => {
                         ? 'plan-step'
                         : body.mode === 'plan-step-analyze'
                           ? 'plan-step-analyze'
-                          : 'generate';
+                          : body.mode === 'execute'
+                            ? 'execute'
+                            : 'generate';
     const order = buildOrder(body.preferredProvider);
     const temperature = clampTemp(body.temperature);
 
@@ -2416,6 +2437,54 @@ Deno.serve(async (req: Request) => {
           gaps: analysis.gaps,
           provider,
         }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    // --- Execute-modus: voer de samengestelde prompt direct uit ---
+    if (mode === 'execute') {
+      const prompt = body.promptContent?.trim();
+      if (!prompt) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'promptContent is verplicht' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      let output = '';
+      let provider: Provider | 'local-template' = 'local-template';
+      // Iets hogere temperatuur: dit is creatief eindwerk, geen JSON.
+      const execTemp = clampTemp(body.temperature ?? 0.5);
+
+      for (const candidate of order) {
+        try {
+          const raw = await PROVIDERS[candidate](
+            prompt,
+            EXECUTE_SYSTEM_PROMPT,
+            execTemp,
+            resolveModel(candidate, body.preferredProvider, body.preferredModel),
+          );
+          const trimmed = raw.trim();
+          if (trimmed) {
+            output = trimmed;
+            provider = candidate;
+            break;
+          }
+        } catch (providerErr) {
+          console.error(`${candidate} (execute) mislukt, probeer volgende:`, providerErr);
+        }
+      }
+
+      // Honest-degrade: geen backend-resultaat → duidelijke fout, geen nep-output.
+      if (!output) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'De prompt kon niet worden uitgevoerd' }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, output, provider }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
