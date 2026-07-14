@@ -10,13 +10,16 @@ import type {
   OptimizeResult,
   PlanResult,
   PlanStep,
+  PlanStepResult,
   PromptPlan,
   PrefilledField,
   PrefillResult,
   RecommendResult,
+  StepOutcome,
   StepProduces,
   Technique,
   TechniqueRecommendation,
+  TranscriptTurn,
 } from '@/types';
 
 /**
@@ -56,6 +59,14 @@ export async function optimizePrompt(args: {
   toneInstruction?: string;
   /** Admin-creativiteit (0–1). */
   temperature?: number;
+  /**
+   * Extra gelabelde antwoordvelden bovenop de vervolgvragen van de techniek.
+   * Gebruikt door de plan-bouwer om het verzamelde materiaal van eerdere stappen
+   * (persona, format, brief) als context aan de eind-compose mee te geven, in
+   * exact het formaat dat de generate-modus als "ANTWOORDEN VAN DE GEBRUIKER"
+   * verwerkt. Leeg = gewone enkele-techniek-generatie.
+   */
+  extraAnsweredFields?: { id: string; label: string; answer: string }[];
 }): Promise<OptimizeResult> {
   const {
     technique,
@@ -66,6 +77,7 @@ export async function optimizePrompt(args: {
     systemPrompt,
     toneInstruction,
     temperature,
+    extraAnsweredFields,
   } = args;
 
   const functionUrl = getFunctionUrl('optimize-prompt');
@@ -96,13 +108,15 @@ export async function optimizePrompt(args: {
           // Welke vaste uitvoerstructuur de generator moet afdwingen (CARE-koppen,
           // Few-Shot-blokken, …). Undefined = de AI bepaalt zelf de vorm.
           structureFormat: structureFormat(technique),
-          answeredFields: technique.follow_up_questions
-            .map((q) => ({
+          answeredFields: [
+            ...technique.follow_up_questions.map((q) => ({
               id: q.id,
               label: q.label,
               answer: followUpAnswers[q.id] ?? '',
-            }))
-            .filter((f) => f.answer.trim()),
+            })),
+            // Materiaal uit eerdere plan-stappen als gelabelde context (plan-bouwer).
+            ...(extraAnsweredFields ?? []),
+          ].filter((f) => f.answer.trim()),
           preferredProvider: preferredProvider ?? 'auto',
           preferredModel,
           systemPrompt,
@@ -313,6 +327,327 @@ export async function recommendTechniques(args: {
     success: true,
     provider: 'local-template',
   };
+}
+
+/** Ruwe stap zoals de edge function die teruggeeft (nog niet gedecoreerd). */
+interface RawPlanStep {
+  technique_id: string;
+  title: string;
+  rationale: string;
+  produces: StepProduces;
+}
+
+/**
+ * Decoreer een ruwe plan-stap tot een volledige {@link PlanStep}: geef hem een
+ * stabiele id en leid `structure_format`/`interactive` client-side af uit de
+ * echte techniek (via {@link structureFormat}). De AI bepaalt de structuur dus
+ * niet zelf — dat blijft consistent met de rest van de generator.
+ */
+function decoratePlanStep(
+  raw: RawPlanStep,
+  index: number,
+  techniqueById: Map<string, Technique>,
+): PlanStep {
+  const technique = techniqueById.get(raw.technique_id);
+  const format = technique ? structureFormat(technique) : undefined;
+  return {
+    id: `step-${index + 1}`,
+    technique_id: raw.technique_id,
+    title: raw.title,
+    rationale: raw.rationale,
+    produces: raw.produces,
+    structure_format: format,
+    interactive: format === 'chain-of-thought' || format === 'socratic',
+  };
+}
+
+/** Bouw een eenvoudig lokaal plan (geen backend): top-techniek + compose-stap. */
+function localPlan(goal: string, techniques: Technique[]): PromptPlan {
+  const recs = localRecommend(goal, techniques);
+  const byId = new Map(techniques.map((t) => [t.id, t]));
+  const base = (recs[0] && byId.get(recs[0].id)) ?? techniques[0];
+  const steps: PlanStep[] = [];
+  if (base) {
+    steps.push(
+      decoratePlanStep(
+        {
+          technique_id: base.id,
+          title: `Werk je doel uit met ${base.name}`,
+          rationale: base.strength?.split(/(?<=[.!?])\s/)[0] ?? 'Passend bij je doel.',
+          produces: 'brief',
+        },
+        0,
+        byId,
+      ),
+      decoratePlanStep(
+        {
+          technique_id: base.id,
+          title: 'Stel de complete template samen',
+          rationale: 'Giet het verzamelde materiaal in één herbruikbare template.',
+          produces: 'text',
+        },
+        1,
+        byId,
+      ),
+    );
+  }
+  return {
+    goal,
+    summary: 'Een eenvoudig plan op basis van je doel (lokale suggestie).',
+    steps,
+  };
+}
+
+/**
+ * Stelt een slim, geordend PLAN op van prompttechnieken die samen één sterke,
+ * herbruikbare template opbouwen (doel-flow). Roept de edge function in
+ * 'plan'-modus aan; faalt dat, dan een eenvoudig lokaal plan. Elke stap wordt
+ * client-side gedecoreerd met de afgeleide `structure_format`/`interactive`.
+ */
+export async function generatePlan(args: {
+  goal: string;
+  techniques: Technique[];
+  preferredProvider?: AiProvider;
+  preferredModel?: string;
+}): Promise<PlanResult> {
+  const { goal, techniques, preferredProvider, preferredModel } = args;
+  const functionUrl = getFunctionUrl('optimize-prompt');
+  const byId = new Map(techniques.map((t) => [t.id, t]));
+
+  if (isSupabaseConfigured && functionUrl) {
+    try {
+      const anonKey = getAnonKey();
+      const response = await fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(anonKey ? { Authorization: `Bearer ${anonKey}`, apikey: anonKey } : {}),
+        },
+        body: JSON.stringify({
+          mode: 'plan',
+          goal,
+          techniques: techniques.map((t) => ({
+            id: t.id,
+            name: t.name,
+            description: t.description,
+            strength: t.strength,
+            use_cases: t.use_cases,
+            // Extra plan-signalen: de planner weegt raamwerk-vs-techniek en de
+            // vaste structuur mee om een zinvolle volgorde te kiezen.
+            is_framework: isContextPrompt(t),
+            structure_format: structureFormat(t),
+          })),
+          preferredProvider: preferredProvider ?? 'auto',
+          preferredModel,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Edge function gaf status ${response.status}`);
+      }
+
+      const data = (await response.json()) as {
+        success?: boolean;
+        plan?: { summary?: string; steps?: RawPlanStep[] };
+        provider?: PlanResult['provider'];
+        unclear?: boolean;
+        reason?: string;
+        error?: string;
+      };
+
+      // Clarity-gate: het doel was onzin → geef het verdict door i.p.v. terug te
+      // vallen op een lokaal plan (dat zou alsnog willekeurige stappen tonen).
+      if (data.unclear) {
+        return {
+          success: false,
+          unclear: true,
+          reason: data.reason,
+          provider: data.provider ?? 'claude',
+        };
+      }
+
+      if (data.success && data.plan && Array.isArray(data.plan.steps)) {
+        // Behoud alleen stappen die naar bestaande technieken verwijzen, en
+        // decoreer ze met de client-side afgeleide structuur.
+        const steps = data.plan.steps
+          .filter((s) => byId.has(s.technique_id))
+          .map((s, i) => decoratePlanStep(s, i, byId));
+        if (steps.length > 0) {
+          return {
+            plan: { goal, summary: data.plan.summary ?? '', steps },
+            success: true,
+            provider: data.provider ?? 'claude',
+          };
+        }
+      }
+      throw new Error(data.error ?? 'Geen bruikbaar plan ontvangen');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Onbekende fout';
+      return {
+        plan: localPlan(goal, techniques),
+        success: true,
+        provider: 'local-template',
+        error: `Slim plan mislukt (${message}); lokaal plan gebruikt.`,
+      };
+    }
+  }
+
+  return {
+    plan: localPlan(goal, techniques),
+    success: true,
+    provider: 'local-template',
+  };
+}
+
+/** Menselijk leesbaar label per stap-uitkomst, voor de doorgegeven context. */
+function produceLabel(produces: StepProduces): string {
+  switch (produces) {
+    case 'persona':
+      return 'PERSONA';
+    case 'format':
+      return 'FORMAT';
+    case 'brief':
+      return 'BRIEF';
+    default:
+      return 'MATERIAAL';
+  }
+}
+
+/**
+ * Serialiseert de verzamelde stap-uitkomsten tot een compact tekstblok dat als
+ * "materiaal uit eerdere stappen" naar de volgende stap gaat. Dit IS de
+ * thread-seam: "dat wat gemaakt is gebruikt voor de volgende stap".
+ */
+export function serializeOutcomes(outcomes: StepOutcome[]): string {
+  return outcomes
+    .filter((o) => o.material.trim())
+    .map((o, i) => `${produceLabel(o.produces)} (uit stap ${i + 1}):\n${o.material.trim()}`)
+    .join('\n\n');
+}
+
+/**
+ * Voert één plan-stap uit. Twee smaken:
+ *  - Niet-interactief: verzamelt in één keer het uitgeschreven MATERIAAL (persona,
+ *    format-rubrieken, brief), voortbouwend op eerdere stappen.
+ *  - Interactief (chain-of-thought / socratic): één beurt in een vraag-na-vraag-
+ *    interview. Levert óf `needs_input`+`question` (nog een vraag), óf `done`+
+ *    `material` (genoeg info, brief geconsolideerd) op basis van het `transcript`.
+ * Produceert bewust GEEN template (dat doet alleen de eind-compose via
+ * {@link generatePrompt}). Faalt de AI, dan honest-degrade: `{success:false,
+ * error}` zodat de wizard een retry toont — nooit nep-materiaal.
+ */
+export async function runPlanStep(args: {
+  goal: string;
+  step: PlanStep;
+  techniqueName?: string;
+  /** Compact tekstblok van eerdere uitkomsten (zie {@link serializeOutcomes}). */
+  outcomesSummary?: string;
+  /** Interactieve stap? Dan stelt de AI één vraag tegelijk i.p.v. materiaal. */
+  interactive?: boolean;
+  /** Het vraag-na-vraag-transcript tot nu toe (alleen interactieve stap). */
+  transcript?: TranscriptTurn[];
+  preferredProvider?: AiProvider;
+  preferredModel?: string;
+}): Promise<PlanStepResult> {
+  const {
+    goal,
+    step,
+    techniqueName,
+    outcomesSummary,
+    interactive,
+    transcript,
+    preferredProvider,
+    preferredModel,
+  } = args;
+  const functionUrl = getFunctionUrl('optimize-prompt');
+
+  if (!isSupabaseConfigured || !functionUrl) {
+    // Geen backend: er is geen zinvolle lokale manier om materiaal te schrijven.
+    // Honest-degrade — de wizard slaat de stap over of toont een retry.
+    return {
+      success: false,
+      provider: 'local-template',
+      error: 'Geen AI-service beschikbaar om materiaal te genereren.',
+    };
+  }
+
+  try {
+    const anonKey = getAnonKey();
+    const response = await fetch(functionUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(anonKey ? { Authorization: `Bearer ${anonKey}`, apikey: anonKey } : {}),
+      },
+      body: JSON.stringify({
+        mode: 'plan-step',
+        goal,
+        stepTitle: step.title,
+        stepProduces: step.produces,
+        stepTechniqueName: techniqueName,
+        outcomesSummary,
+        stepInteractive: Boolean(interactive),
+        transcript: interactive ? (transcript ?? []) : undefined,
+        preferredProvider: preferredProvider ?? 'auto',
+        preferredModel,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Edge function gaf status ${response.status}`);
+    }
+
+    const data = (await response.json()) as {
+      success?: boolean;
+      material?: string;
+      needs_input?: boolean;
+      question?: string;
+      done?: boolean;
+      provider?: PlanStepResult['provider'];
+      unclear?: boolean;
+      reason?: string;
+      error?: string;
+    };
+
+    if (data.unclear) {
+      return {
+        success: false,
+        unclear: true,
+        reason: data.reason,
+        provider: data.provider ?? 'claude',
+      };
+    }
+    // Interactief: de AI heeft nog een vraag nodig.
+    if (data.success && data.needs_input && data.question?.trim()) {
+      return {
+        success: true,
+        needs_input: true,
+        question: data.question.trim(),
+        provider: data.provider ?? 'claude',
+      };
+    }
+    // Materiaal of afgeronde interview-brief.
+    if (data.success && data.material?.trim()) {
+      return {
+        success: true,
+        done: true,
+        material: data.material.trim(),
+        provider: data.provider ?? 'claude',
+      };
+    }
+    return {
+      success: false,
+      provider: data.provider ?? 'claude',
+      error: data.error ?? 'Geen materiaal ontvangen voor deze stap.',
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Onbekende fout';
+    return {
+      success: false,
+      provider: 'local-template',
+      error: `Stap mislukt (${message}).`,
+    };
+  }
 }
 
 /**
@@ -626,8 +961,14 @@ export async function prefillFields(args: {
   technique: Technique;
   preferredProvider?: AiProvider;
   preferredModel?: string;
+  /**
+   * Optionele toelichting uit de "wat mist nog voor dit framework"-lus: extra
+   * context die de gebruiker aanleverde nadat bleek welke velden nog ontbraken.
+   * Wordt meegewogen zodat die velden nu concreet ingevuld worden.
+   */
+  clarification?: string;
 }): Promise<PrefillResult> {
-  const { ownPrompt, technique, preferredProvider, preferredModel } = args;
+  const { ownPrompt, technique, preferredProvider, preferredModel, clarification } = args;
   const content = ownPrompt.trim();
   const empty: PrefillResult = {
     summary: '',
@@ -657,6 +998,7 @@ export async function prefillFields(args: {
       body: JSON.stringify({
         mode: 'prefill',
         ownPrompt: content,
+        clarification,
         techniqueName: technique.name,
         analyzeFields,
         preferredProvider: preferredProvider ?? 'auto',

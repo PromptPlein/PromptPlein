@@ -354,6 +354,63 @@ export interface PlanResult {
 }
 
 /**
+ * Eén beurt in het vraag-na-vraag-gesprek van een interactieve stap
+ * (chain-of-thought / socratic): de vraag die de AI stelde en het antwoord van
+ * de gebruiker. Het volledige transcript vormt de basis voor de brief die de
+ * stap uiteindelijk oplevert.
+ */
+export interface TranscriptTurn {
+  question: string;
+  answer: string;
+}
+
+/**
+ * Het resultaat van één afgeronde plan-stap: het door de AI uitgeschreven
+ * MATERIAAL (een persona-beschrijving, gekozen format-rubrieken, een brief),
+ * niet een template. Dit materiaal wordt als context doorgegeven aan de volgende
+ * stap en uiteindelijk als gelabeld antwoordveld in de eind-compose verwerkt.
+ * Dit is de kern van "dat wat gemaakt is gebruikt voor de volgende stap".
+ */
+export interface StepOutcome {
+  step_id: string;
+  technique_id: string;
+  produces: StepProduces;
+  /** Het uitgeschreven materiaal van deze stap (echte inhoud, geen plaatshouders). */
+  material: string;
+  /**
+   * Alleen bij interactieve stappen: het vraag-na-vraag-transcript waaruit het
+   * materiaal is geconsolideerd. Bewaard voor de UI en eventuele terugblik.
+   */
+  transcript?: TranscriptTurn[];
+}
+
+/**
+ * Antwoord van de optimize-prompt service voor één plan-stap (plan-step-modus).
+ * Twee smaken:
+ *  - Niet-interactieve materiaal-stap → `material` (het uitgeschreven materiaal).
+ *  - Interactieve stap (vraag-na-vraag) → óf `needs_input`+`question` (nog een
+ *    vraag nodig), óf `done`+`material` (genoeg info, brief geconsolideerd).
+ * Plus de gedeelde clarity-gate (`unclear`) en foutafhandeling (`error`).
+ */
+export interface PlanStepResult {
+  success: boolean;
+  provider: AiProviderResult;
+  /** Het uitgeschreven materiaal bij een geslaagde (of afgeronde) stap. */
+  material?: string;
+  /** Interactieve stap: de AI heeft nog een vraag nodig voordat hij afrondt. */
+  needs_input?: boolean;
+  /** Interactieve stap: de ene volgende vraag aan de gebruiker. */
+  question?: string;
+  /** Interactieve stap: de AI is klaar (dan is `material` de brief). */
+  done?: boolean;
+  /** Blokkerende fout (bijv. AI onbereikbaar); de wizard toont dan een retry. */
+  error?: string;
+  /** De input voor deze stap was onduidelijk; `reason` legt uit wat. */
+  unclear?: boolean;
+  reason?: string;
+}
+
+/**
  * Antwoord van de optimize-prompt service (framework-aanbevelingsmodus,
  * eigen-prompt-flow). Beveelt het best passende prompt framework aan op basis
  * van de geplakte prompt, met een korte samenvatting van de analyse.

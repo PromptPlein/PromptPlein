@@ -36,7 +36,8 @@ type Mode =
   | 'prefill'
   | 'title'
   | 'metadata'
-  | 'plan';
+  | 'plan'
+  | 'plan-step';
 
 /** Eén veld van het gekozen prompt framework waar de analyse op toetst. */
 interface AnalyzeField {
@@ -118,6 +119,27 @@ interface RequestBody {
   // 'recommend'-velden
   goal?: string;
   techniques?: TechniqueSummary[];
+  // 'plan-step'-velden: verzamel het materiaal voor één stap uit het plan.
+  /** De titel van de huidige stap (bijv. "Bepaal voor wie het plan is"). */
+  stepTitle?: string;
+  /** Wat deze stap moet opleveren: persona/format/brief/text. */
+  stepProduces?: 'persona' | 'format' | 'brief' | 'text';
+  /** Naam van de techniek van deze stap, voor context in de prompt. */
+  stepTechniqueName?: string;
+  /**
+   * Compacte tekst van het materiaal dat eerdere stappen al opleverden. Dit is
+   * de letterlijke "dat wat gemaakt is gebruikt voor de volgende stap": de AI
+   * bouwt het materiaal van deze stap voort op wat er al ligt.
+   */
+  outcomesSummary?: string;
+  /**
+   * Is dit een INTERACTIEVE stap (chain-of-thought / socratic)? Dan stelt de AI
+   * één vraag tegelijk (VRAAG:/KLAAR:-protocol) i.p.v. het materiaal in één keer
+   * uit te schrijven.
+   */
+  stepInteractive?: boolean;
+  /** Het vraag-na-vraag-transcript tot nu toe (interactieve stap). */
+  transcript?: { question: string; answer: string }[];
   // 'analyze'-velden: toets de eigen prompt aan de eisen van het prompt framework.
   ownPrompt?: string;
   analyzeFields?: AnalyzeField[];
@@ -504,6 +526,142 @@ const PLAN_USER_PROMPT = (goal: string, techniques: TechniqueSummary[]) =>
     })
     .join('\n')}`;
 
+// --- Plan-step-modus (materiaal): verzamel de inhoud van ÉÉN stap ---
+// KRITIEK: deze modus produceert GEEN template met plaatshouders (dat doet alleen
+// mode:'generate' in de laatste stap). Hij schrijft ECHT MATERIAAL uit — een
+// uitgewerkte persona, concrete format-rubrieken, een korte brief — dat als
+// context aan de volgende stap wordt doorgegeven. Zo stapelen plaatshouders niet
+// en ontstaat er geen prompt-die-een-prompt-maakt.
+const PLAN_STEP_MATERIAL_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse rijksoverheid.
+Je bouwt STAP VOOR STAP materiaal op waarmee straks één sterke, herbruikbare prompt-template wordt
+samengesteld. Dit is één tussenstap — nog NIET de eindtemplate.
+
+Schrijf UITSLUITEND het concrete materiaal voor deze stap uit, gebaseerd op het doel en het materiaal
+van eerdere stappen:
+- Levert de stap een PERSONA op → beschrijf de doelgroep/rol(len): wie zijn het, wat hebben ze nodig,
+  welke toon en welk detailniveau passen daarbij.
+- Levert de stap een FORMAT op → geef de concrete structuur/rubrieken die bij dit doel en deze
+  doelgroep passen (genummerd of als kopjes), afgestemd op wat eerdere stappen opleverden.
+- Levert de stap een BRIEF op → vat de inhoudelijke kern bondig samen: aanleiding, doel, scope,
+  aandachtspunten.
+
+BELANGRIJK:
+- Schrijf ECHTE inhoud, GEEN plaatshouders zoals [zo], GEEN meta-instructies aan een AI, GEEN
+  volledige prompt-template. Alleen het materiaal zelf.
+- Bouw voort op het materiaal van eerdere stappen; herhaal het niet, maar sluit erop aan.
+- Dit is voor INTERN overheidsgebruik; gebruik interne persona's, geen burger-persona's.
+- Schrijf in duidelijke, professionele taal (waar passend B1-niveau).
+- Houd het bondig en bruikbaar (enkele zinnen tot een korte opsomming).
+
+${CLARITY_GATE_JSON_INSTRUCTION}
+
+Anders geef je ALLEEN het uitgeschreven materiaal terug als platte tekst, zonder inleiding, kop of
+opmaak-markeringen.`;
+
+/** Bouw de gebruikersprompt voor één materiaal-stap (plan-step-modus). */
+const PLAN_STEP_MATERIAL_USER_PROMPT = (args: {
+  goal: string;
+  stepTitle?: string;
+  stepProduces?: string;
+  stepTechniqueName?: string;
+  outcomesSummary?: string;
+}) => {
+  const parts: string[] = [`DOEL VAN DE GEBRUIKER:\n${args.goal}`];
+  if (args.outcomesSummary && args.outcomesSummary.trim()) {
+    parts.push(`MATERIAAL UIT EERDERE STAPPEN:\n${args.outcomesSummary.trim()}`);
+  }
+  const wat: string[] = [];
+  if (args.stepTitle) wat.push(`Stap: ${args.stepTitle}`);
+  if (args.stepTechniqueName) wat.push(`Techniek: ${args.stepTechniqueName}`);
+  const producesLabel =
+    args.stepProduces === 'persona'
+      ? 'een uitgewerkte persona/doelgroep'
+      : args.stepProduces === 'format'
+        ? 'een concrete format-structuur met rubrieken'
+        : args.stepProduces === 'brief'
+          ? 'een bondige inhoudelijke brief'
+          : 'het gevraagde materiaal';
+  wat.push(`Wat je nu levert: ${producesLabel}.`);
+  parts.push(`WAT JE NU LEVERT:\n${wat.join('\n')}`);
+  return parts.join('\n\n');
+};
+
+// --- Plan-step-modus (interactief): vraag-na-vraag chain-of-thought/socratic ---
+// Anders dan de materiaal-tak schrijft deze NIET meteen materiaal uit, maar voert
+// een kort interview: ÉÉN vraag tegelijk tot er genoeg bekend is, dan een bondige
+// brief. Sentinel-protocol zodat de client weet wat te doen:
+//   VRAAG: <één vraag>        → er is nog input nodig
+//   KLAAR: <geconsolideerde brief> → genoeg info, dit is het materiaal
+const PLAN_STEP_INTERVIEW_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse rijksoverheid.
+Je helpt een interne medewerker STAP VOOR STAP de inhoud van één tussenstap scherp te krijgen via een
+kort interview. Dit is nog NIET de eindtemplate — je verzamelt materiaal.
+
+Werkwijze — houd je STRIKT aan dit protocol:
+- Stel telkens ÉÉN concrete, korte vraag die de inhoud verder aanscherpt. Bouw voort op het doel, het
+  materiaal van eerdere stappen en de al gegeven antwoorden. Herhaal geen eerder gestelde vraag.
+- Zolang je nog een vraag nodig hebt, antwoord je met exact één regel die begint met "VRAAG:" gevolgd
+  door je vraag. Geen inleiding, geen extra tekst.
+- Zodra je genoeg weet (meestal na 2 tot 5 vragen), stop je met vragen en geef je een bondige,
+  goed gestructureerde brief die alle input samenvat. Antwoord dan met "KLAAR:" gevolgd door die brief.
+- Stel NOOIT meerdere vragen tegelijk. Verzin GEEN antwoorden namens de gebruiker.
+- Schrijf ECHTE inhoud in de brief, GEEN plaatshouders, GEEN prompt-template, GEEN meta-instructies.
+- Dit is voor INTERN overheidsgebruik; gebruik interne persona's, geen burger-persona's.
+- Schrijf in duidelijke, professionele taal (waar passend B1-niveau).
+
+${CLARITY_GATE_JSON_INSTRUCTION}`;
+
+/** Bouw de gebruikersprompt voor één interview-beurt (interactieve plan-step). */
+const PLAN_STEP_INTERVIEW_USER_PROMPT = (args: {
+  goal: string;
+  stepTitle?: string;
+  stepTechniqueName?: string;
+  outcomesSummary?: string;
+  transcript?: { question: string; answer: string }[];
+}) => {
+  const parts: string[] = [`DOEL VAN DE GEBRUIKER:\n${args.goal}`];
+  if (args.outcomesSummary && args.outcomesSummary.trim()) {
+    parts.push(`MATERIAAL UIT EERDERE STAPPEN:\n${args.outcomesSummary.trim()}`);
+  }
+  const wat: string[] = [];
+  if (args.stepTitle) wat.push(`Stap: ${args.stepTitle}`);
+  if (args.stepTechniqueName) wat.push(`Techniek: ${args.stepTechniqueName}`);
+  parts.push(`DEZE STAP:\n${wat.join('\n')}`);
+  const turns = args.transcript ?? [];
+  if (turns.length === 0) {
+    parts.push('GESPREK TOT NU TOE:\n(nog geen vragen gesteld — stel je eerste vraag)');
+  } else {
+    parts.push(
+      `GESPREK TOT NU TOE:\n${turns
+        .map((t, i) => `V${i + 1}: ${t.question}\nA${i + 1}: ${t.answer}`)
+        .join('\n')}`,
+    );
+  }
+  parts.push(
+    'Stel je volgende vraag ("VRAAG: …"), of rond af met de brief ("KLAAR: …") als je genoeg weet.',
+  );
+  return parts.join('\n\n');
+};
+
+/**
+ * Parseert het VRAAG:/KLAAR:-sentinel-antwoord van een interview-beurt.
+ * Onparseerbaar (geen sentinel) → behandel als afgerond materiaal i.p.v.
+ * vastlopen: degradeert veilig naar een brief.
+ */
+function parseInterviewTurn(raw: string): { question?: string; material?: string } {
+  const text = raw.trim();
+  const vraag = text.match(/(?:^|\n)\s*VRAAG:\s*([\s\S]+?)\s*$/i);
+  const klaar = text.match(/(?:^|\n)\s*KLAAR:\s*([\s\S]+)$/i);
+  // "KLAAR:" wint: als het model afrondt is dat het eindmateriaal.
+  if (klaar && klaar[1].trim()) return { material: klaar[1].trim() };
+  if (vraag && vraag[1].trim()) {
+    // Pak alleen de eerste regel als vraag; negeer eventuele nakomende tekst.
+    const q = vraag[1].trim().split('\n')[0].trim();
+    if (q) return { question: q };
+  }
+  // Geen herkenbare sentinel → veilige degradatie: gebruik de ruwe tekst als brief.
+  return { material: text };
+}
+
 const RECOMMEND_FRAMEWORK_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse rijksoverheid.
 Een interne overheidsmedewerker heeft een EIGEN prompt geschreven en wil die optimaliseren met een
 prompt framework (een compleet raamwerk dat de hele prompt structureert, bijv. CARE, CRISP, CO-STAR).
@@ -682,13 +840,17 @@ const PREFILL_USER_PROMPT = (
   ownPrompt: string,
   techniqueName: string | undefined,
   fields: AnalyzeField[],
+  clarification?: string,
 ) =>
   `Gekozen techniek/raamwerk: ${techniqueName ?? 'onbekend'}\n\n` +
   `IN TE VULLEN VELDEN van dit raamwerk:\n` +
   fields
     .map((f) => `- id: ${f.id} | label: ${f.label}${f.placeholder ? ` | bedoeld voor: ${f.placeholder}` : ''}`)
     .join('\n') +
-  `\n\nTEKST/PROMPT VAN DE GEBRUIKER (ontleed deze en vul de velden voor):\n"""\n${ownPrompt}\n"""`;
+  `\n\nTEKST/PROMPT VAN DE GEBRUIKER (ontleed deze en vul de velden voor):\n"""\n${ownPrompt}\n"""` +
+  (clarification && clarification.trim()
+    ? `\n\nAANVULLENDE TOELICHTING VAN DE GEBRUIKER (verwerk dit als extra, leidende context bij het invullen van de velden — het is bedoeld om de velden die nog ontbraken of vaag waren nu concreet te maken):\n"""\n${clarification.trim()}\n"""`
+    : '');
 
 const TITLE_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse rijksoverheid.
 Een interne overheidsmedewerker heeft een herbruikbare prompt-template gemaakt en wil die opslaan
@@ -1660,7 +1822,9 @@ Deno.serve(async (req: Request) => {
                     ? 'metadata'
                     : body.mode === 'plan'
                       ? 'plan'
-                      : 'generate';
+                      : body.mode === 'plan-step'
+                        ? 'plan-step'
+                        : 'generate';
     const order = buildOrder(body.preferredProvider);
     const temperature = clampTemp(body.temperature);
 
@@ -1722,7 +1886,13 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      const userMessage = PREFILL_USER_PROMPT(ownPrompt, body.techniqueName, fields);
+      // Eventuele toelichting uit de "wat mist nog"-lus meewegen bij het invullen.
+      const userMessage = PREFILL_USER_PROMPT(
+        ownPrompt,
+        body.techniqueName,
+        fields,
+        body.clarification,
+      );
       let result: { summary: string; fields: PrefilledField[] } | null = null;
       let provider: Provider | 'local-template' = 'local-template';
 
@@ -1953,6 +2123,119 @@ Deno.serve(async (req: Request) => {
 
       return new Response(
         JSON.stringify({ success: true, plan, provider }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    // --- Plan-step-modus: verzamel het uitgeschreven materiaal voor één stap ---
+    if (mode === 'plan-step') {
+      const goal = body.goal?.trim();
+      if (!goal) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'goal is verplicht' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      // --- Interactieve tak: vraag-na-vraag (chain-of-thought / socratic) ---
+      if (body.stepInteractive) {
+        const transcript = Array.isArray(body.transcript) ? body.transcript : [];
+        const interviewMessage = PLAN_STEP_INTERVIEW_USER_PROMPT({
+          goal,
+          stepTitle: body.stepTitle,
+          stepTechniqueName: body.stepTechniqueName,
+          outcomesSummary: body.outcomesSummary,
+          transcript,
+        });
+
+        for (const candidate of order) {
+          try {
+            const raw = await PROVIDERS[candidate](
+              interviewMessage,
+              PLAN_STEP_INTERVIEW_SYSTEM_PROMPT,
+              0.3,
+              resolveModel(candidate, body.preferredProvider, body.preferredModel),
+            );
+            const unclear = detectUnclearJson(raw);
+            if (unclear) {
+              return new Response(
+                JSON.stringify({ success: false, unclear: true, reason: unclear, provider: candidate }),
+                { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+              );
+            }
+            const turn = parseInterviewTurn(raw);
+            if (turn.question) {
+              return new Response(
+                JSON.stringify({ success: true, needs_input: true, question: turn.question, provider: candidate }),
+                { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+              );
+            }
+            if (turn.material) {
+              return new Response(
+                JSON.stringify({ success: true, done: true, material: turn.material, provider: candidate }),
+                { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+              );
+            }
+          } catch (providerErr) {
+            console.error(`${candidate} (plan-step interview) mislukt, probeer volgende:`, providerErr);
+          }
+        }
+
+        // Honest-degrade: geen enkele provider leverde iets bruikbaars.
+        return new Response(
+          JSON.stringify({ success: false, error: 'De volgende vraag kon niet worden opgehaald' }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      const userMessage = PLAN_STEP_MATERIAL_USER_PROMPT({
+        goal,
+        stepTitle: body.stepTitle,
+        stepProduces: body.stepProduces,
+        stepTechniqueName: body.stepTechniqueName,
+        outcomesSummary: body.outcomesSummary,
+      });
+      let material = '';
+      let provider: Provider | 'local-template' = 'local-template';
+
+      for (const candidate of order) {
+        try {
+          const raw = await PROVIDERS[candidate](
+            userMessage,
+            PLAN_STEP_MATERIAL_SYSTEM_PROMPT,
+            0.3,
+            resolveModel(candidate, body.preferredProvider, body.preferredModel),
+          );
+          // Clarity-gate: alleen deze STAP wordt afgekort, niet het hele plan.
+          const unclear = detectUnclearJson(raw);
+          if (unclear) {
+            return new Response(
+              JSON.stringify({ success: false, unclear: true, reason: unclear, provider: candidate }),
+              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            );
+          }
+          const trimmed = raw.trim();
+          if (trimmed) {
+            material = trimmed;
+            provider = candidate;
+            break;
+          }
+        } catch (providerErr) {
+          console.error(`${candidate} (plan-step) mislukt, probeer volgende:`, providerErr);
+        }
+      }
+
+      // Honest-degrade: geen nep-materiaal. Kon geen enkele provider iets leveren,
+      // dan geeft de wizard een retry — nooit een verzonnen tekst.
+      if (!material) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Materiaal voor deze stap kon niet worden gegenereerd' }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, material, provider }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }

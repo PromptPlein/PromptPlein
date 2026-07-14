@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import TechniqueSelector from '@/components/optimizer/TechniqueSelector';
-import GoalRecommender from '@/components/optimizer/GoalRecommender';
+import PlanWizard from '@/components/optimizer/PlanWizard';
 import EntryTab from '@/components/optimizer/EntryTab';
 import OwnPromptOptimizer from '@/components/optimizer/OwnPromptOptimizer';
 import FollowUpQuestions from '@/components/optimizer/FollowUpQuestions';
@@ -43,7 +43,9 @@ export default function OptimizerPage() {
   // niet verloren gaat bij een fout of herlaadactie. "Opschonen" maakt ze leeg.
   const [promptContent, setPromptContent, clearPromptDraft] = usePersistentDraft('ownPrompt');
   const [sourcePromptId, setSourcePromptId] = useState<string | null>(null);
-  const [goal, setGoal, clearGoalDraft] = usePersistentDraft('goal');
+  // De doel-flow (PlanWizard) beheert dit veld zelf via dezelfde 'goal'-sleutel;
+  // de pagina leest het alleen nog (titel-fallback, hasDraftContent, opschonen).
+  const [goal, , clearGoalDraft] = usePersistentDraft('goal');
   // Standaard staat de eigen-prompt-flow uitgeklapt: dat is het meest gebruikte
   // startpunt. 'smart' (complex vraagstuk) wordt pas actief als de gebruiker daar
   // bewust op klikt; daarom is techniqueMode standaard 'smart' zodat de tweede
@@ -490,7 +492,6 @@ export default function OptimizerPage() {
               </>
             );
 
-            const smart = entryMode === 'techniques' && techniqueMode === 'smart';
             const ownActive = entryMode === 'own-prompt';
 
             return (
@@ -529,10 +530,10 @@ export default function OptimizerPage() {
             );
 
             // De eigen-prompt-flow rendert de tabs zelf als header (oranje rand om
-            // chat + advies; frameworklijst eronder). De doel-flow doet hetzelfde:
-            // GoalRecommender krijgt de tabs als header, de template-velden als
-            // 'templateBuilder' (binnen de rand) en de techniekenlijst als
-            // 'manualList' (buiten de rand).
+            // chat + advies; frameworklijst eronder). De doel-flow toont de slimme
+            // meerstaps-bouwer (PlanWizard) met de tabs als header. De handmatige
+            // techniekenlijst + template-velden vallen daaronder (buiten de rand),
+            // net als bij de eigen-prompt-flow — zie de render onder deze functie.
             return ownActive ? (
               <OwnPromptOptimizer
                 settings={settingsRef.current}
@@ -540,25 +541,21 @@ export default function OptimizerPage() {
                 header={tabs}
               />
             ) : (
-              <GoalRecommender
-                selectedTechniqueId={techniqueId}
-                onSelectTechnique={(id) => handleSelectTechnique(id, 'goal')}
-                goal={goal}
-                onGoalChange={setGoal}
-                onClear={handleClearAll}
+              <PlanWizard
+                settings={settingsRef.current}
+                onResult={handleOwnPromptResult}
                 header={tabs}
-                templateBuilder={templateBuilderNode}
-                manualList={manualListNode}
               />
             );
           })()}
 
-          {/* Handmatige keuzelijst — onder zowel de eigen-prompt-flow als de
-              handmatige techniek-flow. Frameworks links, technieken rechts; klik
-              op één opent de invulbare velden eronder (met auto-scroll). In de
-              doel-flow zit deze lijst al binnen GoalRecommender. */}
-          {(ownActive || (entryMode === 'techniques' && !smart)) && manualListNode}
-          {(ownActive || (entryMode === 'techniques' && !smart)) && templateBuilderNode}
+          {/* Handmatige keuzelijst — onder de eigen-prompt-flow, de doel-flow
+              (PlanWizard) én de handmatige techniek-flow. Frameworks links,
+              technieken rechts; klik op één opent de invulbare velden eronder
+              (met auto-scroll). Biedt in de doel-flow een handmatige uitweg naast
+              het slimme plan. */}
+          {manualListNode}
+          {templateBuilderNode}
               </div>
             );
           })()}
