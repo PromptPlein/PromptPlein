@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   AlertTriangle,
   ArrowRight,
@@ -7,10 +7,12 @@ import {
   ChevronRight,
   ChevronUp,
   Eraser,
+  FileUp,
   HelpCircle,
   Info,
   Lightbulb,
   Loader2,
+  MessageCircleQuestion,
   Pencil,
   RotateCw,
   Sparkles,
@@ -24,9 +26,11 @@ import {
   analyzePlanStep,
   generatePlan,
   generatePrompt,
+  prefillFields,
+  runPlanStep,
   serializeOutcomes,
 } from '@/services/optimizeService';
-import { isContextPrompt } from '@/lib/techniques';
+import { isContextPrompt, structureFormat } from '@/lib/techniques';
 import { stripMarkdown } from '@/lib/utils';
 import { usePersistentDraft } from '@/lib/usePersistentDraft';
 import { detectPii, detectBlockedTopics, type GuardrailFinding } from '@/services/guardrails';
@@ -34,6 +38,8 @@ import type { AiSettings } from '@/services/settingsService';
 import OptimizingLoader from './OptimizingLoader';
 import FollowUpQuestions from './FollowUpQuestions';
 import GuardrailDialog from './GuardrailDialog';
+import PersonaBuilder from './PersonaBuilder';
+import RichText from './RichText';
 import type {
   OptimizeResult,
   PlanStep,
@@ -42,6 +48,7 @@ import type {
   PromptRecipe,
   StepOutcome,
   Technique,
+  TranscriptTurn,
 } from '@/types';
 
 /** localStorage-sleutel waaronder een lopende plan-run wordt bewaard (hervatten na herladen). */
@@ -171,6 +178,15 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
   const [stepSummary, setStepSummary] = useState<string>('');
   const [stepGaps, setStepGaps] = useState<PlanStepGap[]>([]);
   const [clarification, setClarification] = useState('');
+  // Geserialiseerde persona-definitie (Persona/Multi-Persona-stap); leeg voor
+  // andere technieken. Gaat als gelabeld veld mee in de analyse.
+  const [personaText, setPersonaText] = useState('');
+  // Chain-of-Thought / Socratic: het adaptieve vraag-na-vraag-interview.
+  const [interviewActive, setInterviewActive] = useState(false);
+  const [interviewQuestion, setInterviewQuestion] = useState<string | null>(null);
+  const [interviewTranscript, setInterviewTranscript] = useState<TranscriptTurn[]>([]);
+  const [interviewAnswer, setInterviewAnswer] = useState('');
+  const [interviewBusy, setInterviewBusy] = useState(false);
   // Een bij het laden gevonden, niet-afgemaakte run — aangeboden om te hervatten.
   const [resumable, setResumable] = useState<PersistedRun | null>(null);
 
@@ -200,6 +216,11 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
     setStepSummary('');
     setStepGaps([]);
     setClarification('');
+    setPersonaText('');
+    setInterviewActive(false);
+    setInterviewQuestion(null);
+    setInterviewTranscript([]);
+    setInterviewAnswer('');
   }
 
   /** Herstel een eerder bewaarde run en ga verder waar de gebruiker gebleven was. */
@@ -335,21 +356,23 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
 
   /**
    * Begin een stap: reset de per-stap-state en toon óf het invoerscherm
-   * (tussenstap) óf stel meteen de template samen (laatste stap).
+   * (tussenstap) óf stel meteen de template samen (laatste stap). Bij een
+   * interactieve stap (chain-of-thought/socratic) start meteen het interview.
    */
   function beginStep(p: PromptPlan, index: number, accumulated: StepOutcome[]) {
     setCurrentStepIndex(index);
     setStepError(null);
     setUnclearReason(null);
-    setStepAnswers({});
-    setStepMaterial(null);
-    setStepSummary('');
-    setStepGaps([]);
-    setClarification('');
+    resetStepState();
     if (isLastStep(p, index)) {
       void composeFinal(p, accumulated);
-    } else {
-      setPhase('collecting');
+      return;
+    }
+    setPhase('collecting');
+    const step = p.steps[index];
+    if (step?.interactive) {
+      setInterviewActive(true);
+      void interviewTurn(p, index, accumulated, [], false);
     }
   }
 
@@ -360,8 +383,12 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
     setUnclearReason(null);
     if (isLastStep(plan, currentStepIndex)) {
       void composeFinal(plan, outcomes);
-    } else {
-      setPhase('collecting');
+      return;
+    }
+    setPhase('collecting');
+    // Mislukte de stap midden in een interview, herpak dan die beurt.
+    if (interviewActive) {
+      void interviewTurn(plan, currentStepIndex, outcomes, interviewTranscript, false);
     }
   }
 
@@ -392,8 +419,8 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
       return;
     }
 
-    // Guardrail-check op de door de gebruiker ingevulde velden + toelichting.
-    const toCheck = [...Object.values(stepAnswers), extraClarification ?? '']
+    // Guardrail-check op de door de gebruiker ingevulde velden + persona + toelichting.
+    const toCheck = [...Object.values(stepAnswers), personaText, extraClarification ?? '']
       .map((v) => v.trim())
       .filter(Boolean)
       .join('\n');
@@ -417,6 +444,10 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
         step,
         technique,
         answers: stepAnswers,
+        // De gestructureerde persona-definitie gaat als gelabeld veld mee.
+        extraAnsweredFields: personaText.trim()
+          ? [{ id: 'persona_definitie', label: 'Persona-definitie', answer: personaText.trim() }]
+          : undefined,
         outcomesSummary: serializeOutcomes(outcomes),
         clarification: extraClarification,
         preferredProvider: settings.provider,
@@ -452,6 +483,149 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
     void analyzeCurrentStep(clarification.trim() || undefined);
   }
 
+  /**
+   * Eén beurt van het adaptieve interview (chain-of-thought/socratic). De AI stelt
+   * op basis van het transcript de volgende vraag, of — na max. 7 vragen of als de
+   * gebruiker afrondt (`forceFinish`) — een conclusie die het stap-materiaal wordt.
+   * `turns` en `accumulated` worden expliciet doorgegeven (stale-closure-vrij).
+   */
+  async function interviewTurn(
+    p: PromptPlan,
+    index: number,
+    accumulated: StepOutcome[],
+    turns: TranscriptTurn[],
+    forceFinish: boolean,
+  ) {
+    const step = p.steps[index];
+    const technique = techniqueById(step.technique_id);
+    if (!technique) {
+      setStepError('Kon de techniek voor deze stap niet vinden.');
+      setPhase('error');
+      return;
+    }
+    setInterviewBusy(true);
+    setStepError(null);
+    setUnclearReason(null);
+    try {
+      const res = await runPlanStep({
+        goal: goal.trim(),
+        step,
+        techniqueName: technique.name,
+        outcomesSummary: serializeOutcomes(accumulated),
+        interactive: true,
+        transcript: turns,
+        forceFinish,
+        preferredProvider: settings.provider,
+        preferredModel: settings.model,
+      });
+      if (res.unclear) {
+        setUnclearReason(res.reason?.trim() || 'Je invoer is nog niet duidelijk genoeg.');
+        return;
+      }
+      // De AI heeft nog een vraag nodig (en we zitten onder het maximum).
+      if (res.needs_input && res.question) {
+        setInterviewQuestion(res.question);
+        setInterviewAnswer('');
+        return;
+      }
+      // De AI is klaar: de conclusie wordt het materiaal van deze stap. Vanaf hier
+      // loopt de gewone flow (tonen + "Volgende stap"/compose) door.
+      if (res.material) {
+        setInterviewActive(false);
+        setInterviewQuestion(null);
+        setStepMaterial(res.material);
+        setStepSummary('');
+        setStepGaps([]);
+        return;
+      }
+      setStepError(res.error ?? 'De volgende vraag kon niet worden opgehaald.');
+      setPhase('error');
+    } catch (err) {
+      setStepError(err instanceof Error ? err.message : 'Interview mislukt.');
+      setPhase('error');
+    } finally {
+      setInterviewBusy(false);
+    }
+  }
+
+  /** De gebruiker beantwoordt de huidige interview-vraag; guardrail-check eerst. */
+  function submitInterviewAnswer() {
+    if (!plan || !interviewQuestion) return;
+    const answer = interviewAnswer.trim();
+    if (!answer) {
+      toast.error('Vul eerst een antwoord in, of rond het interview af.');
+      return;
+    }
+    const findings: GuardrailFinding[] = [
+      ...(settings.pii.enabled ? detectPii(answer) : []),
+      ...detectBlockedTopics(answer, settings.blockedTopics),
+    ];
+    if (findings.length > 0) {
+      setGuardrailFindings(findings);
+      return;
+    }
+    const turns = [...interviewTranscript, { question: interviewQuestion, answer }];
+    setInterviewTranscript(turns);
+    setInterviewQuestion(null);
+    void interviewTurn(plan, currentStepIndex, outcomes, turns, false);
+  }
+
+  /** Guardrail bevestigd → verwerk het interview-antwoord alsnog. */
+  function confirmInterviewAnswer() {
+    if (!plan || !interviewQuestion) return;
+    const answer = interviewAnswer.trim();
+    if (!answer) return;
+    const turns = [...interviewTranscript, { question: interviewQuestion, answer }];
+    setInterviewTranscript(turns);
+    setInterviewQuestion(null);
+    void interviewTurn(plan, currentStepIndex, outcomes, turns, false);
+  }
+
+  /** "Ik heb genoeg gedeeld": rond het interview af met een conclusie. */
+  function finishInterview() {
+    if (!plan) return;
+    setInterviewQuestion(null);
+    void interviewTurn(plan, currentStepIndex, outcomes, interviewTranscript, true);
+  }
+
+  /**
+   * Vul de velden van de huidige stap voor op basis van een geüpload document:
+   * de AI leest het document volledig door, analyseert de layout (format,
+   * rubrieken, regels) en vult de vragen voor. Alleen zinvol bij template-based.
+   */
+  async function prefillFromDocument(text: string): Promise<boolean> {
+    if (!plan) return false;
+    const step = plan.steps[currentStepIndex];
+    const technique = techniqueById(step.technique_id);
+    if (!technique) return false;
+    const res = await prefillFields({
+      ownPrompt: text,
+      technique,
+      fromDocument: true,
+      preferredProvider: settings.provider,
+      preferredModel: settings.model,
+    });
+    if (res.unclear) {
+      toast.error(res.reason?.trim() || 'Uit het document kon geen bruikbare structuur worden gehaald.');
+      return false;
+    }
+    if (res.fields.length === 0) {
+      toast('Geen velden ingevuld uit het document. Vul ze zelf aan.', { icon: 'ℹ️' });
+      return false;
+    }
+    if (res.error) toast(res.error, { icon: '⚠️' });
+    // Voeg de afgeleide waarden toe (bestaande, door de gebruiker ingevulde velden
+    // niet overschrijven — die zijn leidend).
+    setStepAnswers((prev) => {
+      const next = { ...prev };
+      for (const f of res.fields) {
+        if (!next[f.id]?.trim()) next[f.id] = f.value;
+      }
+      return next;
+    });
+    return true;
+  }
+
   /** Leg het materiaal van deze stap vast en ga naar de volgende stap. */
   function commitStep() {
     if (!plan || stepMaterial == null) return;
@@ -461,7 +635,9 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
       technique_id: step.technique_id,
       produces: step.produces,
       material: stepMaterial,
-      answers: { ...stepAnswers },
+      answers: personaText.trim()
+        ? { ...stepAnswers, persona_definitie: personaText.trim() }
+        : { ...stepAnswers },
     };
     const next = [...outcomes, outcome];
     setOutcomes(next);
@@ -677,6 +853,18 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
                 onClarificationChange={setClarification}
                 onAnalyze={() => void analyzeCurrentStep(clarification.trim() || undefined)}
                 onCommit={commitStep}
+                onPrefillFromDocument={prefillFromDocument}
+                settings={settings}
+                goal={goal}
+                onPersonaChange={setPersonaText}
+                interviewActive={interviewActive}
+                interviewQuestion={interviewQuestion}
+                interviewTranscript={interviewTranscript}
+                interviewAnswer={interviewAnswer}
+                interviewBusy={interviewBusy}
+                onInterviewAnswerChange={setInterviewAnswer}
+                onSubmitInterviewAnswer={submitInterviewAnswer}
+                onFinishInterview={finishInterview}
               />
             )}
           </div>
@@ -702,9 +890,14 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
         <GuardrailDialog
           findings={guardrailFindings}
           piiWarning={settings.pii.warning}
-          // In de doel-fase bevestigt dit het opstellen van het plan; tijdens een
-          // stap bevestigt het de analyse van de ingevulde input.
-          onConfirm={() => (phase === 'collecting' ? confirmAnalyze() : void runPlan())}
+          // Route naar de juiste actie: een interview-antwoord, de stap-analyse,
+          // óf het opstellen van het plan (doel-fase).
+          onConfirm={() => {
+            setGuardrailFindings(null);
+            if (interviewActive) confirmInterviewAnswer();
+            else if (phase === 'collecting') confirmAnalyze();
+            else void runPlan();
+          }}
           onCancel={() => setGuardrailFindings(null)}
         />
       )}
@@ -921,6 +1114,18 @@ function PlanExecutor({
   onClarificationChange,
   onAnalyze,
   onCommit,
+  onPrefillFromDocument,
+  settings,
+  goal,
+  onPersonaChange,
+  interviewActive,
+  interviewQuestion,
+  interviewTranscript,
+  interviewAnswer,
+  interviewBusy,
+  onInterviewAnswerChange,
+  onSubmitInterviewAnswer,
+  onFinishInterview,
 }: {
   plan: PromptPlan;
   techniqueById: (id?: string | null) => Technique | undefined;
@@ -940,6 +1145,18 @@ function PlanExecutor({
   onClarificationChange: (v: string) => void;
   onAnalyze: () => void;
   onCommit: () => void;
+  onPrefillFromDocument: (text: string) => Promise<boolean>;
+  settings: AiSettings;
+  goal: string;
+  onPersonaChange: (text: string) => void;
+  interviewActive: boolean;
+  interviewQuestion: string | null;
+  interviewTranscript: TranscriptTurn[];
+  interviewAnswer: string;
+  interviewBusy: boolean;
+  onInterviewAnswerChange: (v: string) => void;
+  onSubmitInterviewAnswer: () => void;
+  onFinishInterview: () => void;
 }) {
   const total = plan.steps.length;
   const outcomeByStepId = new Map(outcomes.map((o) => [o.step_id, o]));
@@ -1002,6 +1219,18 @@ function PlanExecutor({
                   onClarificationChange={onClarificationChange}
                   onAnalyze={onAnalyze}
                   onCommit={onCommit}
+                  onPrefillFromDocument={onPrefillFromDocument}
+                  settings={settings}
+                  goal={goal}
+                  onPersonaChange={onPersonaChange}
+                  interviewActive={interviewActive}
+                  interviewQuestion={interviewQuestion}
+                  interviewTranscript={interviewTranscript}
+                  interviewAnswer={interviewAnswer}
+                  interviewBusy={interviewBusy}
+                  onInterviewAnswerChange={onInterviewAnswerChange}
+                  onSubmitInterviewAnswer={onSubmitInterviewAnswer}
+                  onFinishInterview={onFinishInterview}
                   isLastBeforeCompose={idx === total - 2}
                 />
               )}
@@ -1032,6 +1261,89 @@ function PlanExecutor({
 }
 
 /**
+ * Upload-zone voor een voorbeelddocument (Template-based Output). Extraheert de
+ * tekst client-side (txt/md/pdf/docx), waarna de AI het document volledig
+ * doorleest en de layout (format, rubrieken, regels) in de velden voor-invult.
+ */
+function DocumentUpload({
+  onPrefill,
+  disabled,
+}: {
+  onPrefill: (text: string) => Promise<boolean>;
+  disabled?: boolean;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [doneName, setDoneName] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  async function handleFile(file: File | undefined) {
+    if (!file) return;
+    setBusy(true);
+    setDoneName(null);
+    try {
+      const { extractDocument } = await import('@/lib/extractDocument');
+      const doc = await extractDocument(file);
+      toast.success(`"${doc.name}" ingelezen (${doc.chars.toLocaleString('nl-NL')} tekens).`);
+      const ok = await onPrefill(doc.text);
+      if (ok) setDoneName(doc.name);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Document inlezen mislukt.');
+    } finally {
+      setBusy(false);
+      if (inputRef.current) inputRef.current.value = '';
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-dashed border-rijksblauw-300 bg-rijksblauw-50/40 p-4 dark:border-rijksblauw-500/40 dark:bg-rijksblauw-500/10">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-start gap-2">
+          <FileUp size={18} className="mt-0.5 shrink-0 text-rijksblauw-500" />
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+              Voorbeelddocument uploaden (optioneel)
+            </p>
+            <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-300">
+              De AI leest het document volledig door, analyseert de opbouw (format, rubrieken, regels)
+              en vult de velden hieronder automatisch voor. Ondersteunt .txt, .md, .pdf en .docx.
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          className="opl-btn-secondary shrink-0"
+          onClick={() => inputRef.current?.click()}
+          disabled={busy || disabled}
+        >
+          {busy ? (
+            <>
+              <Loader2 size={16} className="animate-spin" /> Inlezen…
+            </>
+          ) : (
+            <>
+              <FileUp size={16} /> Kies bestand
+            </>
+          )}
+        </button>
+      </div>
+      {doneName && (
+        <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+          <Check size={13} /> Velden voor-ingevuld op basis van &quot;{doneName}&quot;. Controleer en
+          pas aan waar nodig.
+        </p>
+      )}
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".txt,.md,.markdown,.pdf,.docx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        className="hidden"
+        onChange={(e) => void handleFile(e.target.files?.[0])}
+      />
+    </div>
+  );
+}
+
+/**
  * Het invoer- en analysepaneel voor één actieve tussenstap. Eerst de
  * vervolgvragen van de techniek (input van de gebruiker) + "Genereren". Daarna
  * het door de AI uitgeschreven materiaal met de openstaande hiaten ("wat mist
@@ -1049,6 +1361,18 @@ function StepCollector({
   onClarificationChange,
   onAnalyze,
   onCommit,
+  onPrefillFromDocument,
+  settings,
+  goal,
+  onPersonaChange,
+  interviewActive,
+  interviewQuestion,
+  interviewTranscript,
+  interviewAnswer,
+  interviewBusy,
+  onInterviewAnswerChange,
+  onSubmitInterviewAnswer,
+  onFinishInterview,
   isLastBeforeCompose,
 }: {
   technique: Technique;
@@ -1062,13 +1386,67 @@ function StepCollector({
   onClarificationChange: (v: string) => void;
   onAnalyze: () => void;
   onCommit: () => void;
+  onPrefillFromDocument: (text: string) => Promise<boolean>;
+  settings: AiSettings;
+  goal: string;
+  onPersonaChange: (text: string) => void;
+  interviewActive: boolean;
+  interviewQuestion: string | null;
+  interviewTranscript: TranscriptTurn[];
+  interviewAnswer: string;
+  interviewBusy: boolean;
+  onInterviewAnswerChange: (v: string) => void;
+  onSubmitInterviewAnswer: () => void;
+  onFinishInterview: () => void;
   isLastBeforeCompose: boolean;
 }) {
   const hasFields = technique.follow_up_questions.length > 0;
+  const format = structureFormat(technique);
+  // Documenten uploaden is alleen zinvol bij Template-based Output: daar leidt de
+  // AI de layout (format, rubrieken, regels) uit een voorbeelddocument af.
+  const supportsDocument = format === 'template-based';
+  // Persona/Multi-Persona krijgen de uitgebreide persona-builder i.p.v. de
+  // generieke vragenlijst.
+  const isPersona = format === 'persona' || format === 'multi-persona';
+
+  // Chain-of-Thought / Socratic: het adaptieve vraag-na-vraag-interview vervangt
+  // de gewone input+Genereren, tot de AI een conclusie levert (dan is material gezet).
+  if (interviewActive && material == null) {
+    return (
+      <div className="mt-3">
+        <InterviewPanel
+          question={interviewQuestion}
+          transcript={interviewTranscript}
+          answer={interviewAnswer}
+          busy={interviewBusy}
+          onAnswerChange={onInterviewAnswerChange}
+          onSubmit={onSubmitInterviewAnswer}
+          onFinish={onFinishInterview}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="mt-3 space-y-4">
-      {/* 1. Input van de gebruiker via de vervolgvragen van de techniek. */}
-      {hasFields ? (
+      {/* 0. Alleen bij Template-based: upload een voorbeelddocument om de velden
+             op basis van de layout automatisch voor te laten invullen. */}
+      {supportsDocument && material == null && (
+        <DocumentUpload onPrefill={onPrefillFromDocument} disabled={analyzing} />
+      )}
+
+      {/* 1. Input van de gebruiker. Persona/Multi-Persona → de uitgebreide
+             persona-builder; anders de vervolgvragen van de techniek. */}
+      {isPersona ? (
+        material == null && (
+          <PersonaBuilder
+            multi={format === 'multi-persona'}
+            settings={settings}
+            context={goal}
+            onSerialized={onPersonaChange}
+          />
+        )
+      ) : hasFields ? (
         <FollowUpQuestions technique={technique} answers={answers} onChange={onAnswersChange} />
       ) : (
         <p className="text-sm text-slate-500 dark:text-slate-400">
@@ -1105,9 +1483,9 @@ function StepCollector({
             <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               Tussenresultaat
             </p>
-            <pre className="max-h-56 overflow-auto whitespace-pre-wrap rounded-lg border border-slate-200 bg-white p-3 text-xs leading-relaxed text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-              {material}
-            </pre>
+            <div className="max-h-56 overflow-auto rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
+              <RichText text={material} className="text-xs text-slate-600 dark:text-slate-300" />
+            </div>
           </div>
 
           {/* "Wat mist nog voor het totale plaatje" — de doorvraag-lus. */}
@@ -1184,6 +1562,110 @@ function StepCollector({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Het adaptieve vraag-na-vraag-paneel voor Chain-of-Thought / Socratic-stappen.
+ * Toont het gesprek tot nu toe, de huidige vraag met een antwoordveld, en twee
+ * acties: het antwoord versturen (volgende vraag), of het interview afronden
+ * ("ik heb genoeg gedeeld") zodat de AI meteen een conclusie trekt.
+ */
+function InterviewPanel({
+  question,
+  transcript,
+  answer,
+  busy,
+  onAnswerChange,
+  onSubmit,
+  onFinish,
+}: {
+  question: string | null;
+  transcript: TranscriptTurn[];
+  answer: string;
+  busy: boolean;
+  onAnswerChange: (v: string) => void;
+  onSubmit: () => void;
+  onFinish: () => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-start gap-2">
+        <MessageCircleQuestion size={18} className="mt-0.5 shrink-0 text-rijksblauw-500" />
+        <p className="text-sm text-slate-600 dark:text-slate-300">
+          De AI stelt op basis van je antwoorden telkens de volgende vraag (max. 7), tot het beeld
+          compleet is. Klaar met input geven? Rond dan af — de AI trekt dan meteen een conclusie.
+        </p>
+      </div>
+
+      {/* Het gesprek tot nu toe. */}
+      {transcript.length > 0 && (
+        <ul className="space-y-2">
+          {transcript.map((t, i) => (
+            <li
+              key={i}
+              className="rounded-lg border border-slate-200 bg-white p-2.5 text-xs dark:border-slate-700 dark:bg-slate-800"
+            >
+              <p className="font-medium text-slate-600 dark:text-slate-300">
+                {i + 1}. {stripMarkdown(t.question)}
+              </p>
+              <p className="mt-0.5 text-slate-500 dark:text-slate-400">{t.answer}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {/* De huidige vraag + antwoordveld, of een laadstaat terwijl de AI nadenkt. */}
+      {busy && !question ? (
+        <div className="flex items-center gap-2 rounded-xl border border-rijksblauw-200 bg-white p-3 text-sm text-rijksblauw-600 dark:border-rijksblauw-500/30 dark:bg-slate-800 dark:text-rijksblauw-300">
+          <Loader2 size={16} className="animate-spin" />
+          {transcript.length === 0 ? 'De eerste vraag wordt opgesteld…' : 'De AI denkt na over de volgende vraag…'}
+        </div>
+      ) : question ? (
+        <div className="rounded-xl border border-rijksblauw-200 bg-white p-3 dark:border-rijksblauw-500/30 dark:bg-slate-800">
+          <p className="flex items-start gap-2 text-sm font-medium text-rijksblauw-700 dark:text-rijksblauw-200">
+            <MessageCircleQuestion size={16} className="mt-0.5 shrink-0" />
+            <span>
+              Vraag {transcript.length + 1}: {stripMarkdown(question)}
+            </span>
+          </p>
+          <textarea
+            className="opl-input mt-2 min-h-[72px] resize-y"
+            value={answer}
+            placeholder="Typ je antwoord…"
+            autoFocus
+            disabled={busy}
+            onChange={(e) => onAnswerChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                onSubmit();
+              }
+            }}
+          />
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+            <button
+              type="button"
+              className="opl-btn-secondary"
+              onClick={onFinish}
+              disabled={busy}
+              title="Rond het interview af; de AI trekt een conclusie op basis van je antwoorden"
+            >
+              <Check size={16} /> Ik heb genoeg gedeeld
+            </button>
+            <button
+              type="button"
+              className="opl-btn-primary"
+              onClick={onSubmit}
+              disabled={busy || !answer.trim()}
+            >
+              {busy ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
+              Volgende vraag
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1271,9 +1753,9 @@ function StepRow({
                 )}
               </div>
               {open && (
-                <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-relaxed text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-                  {outcome.material}
-                </pre>
+                <div className="mt-2 max-h-56 overflow-auto rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900">
+                  <RichText text={outcome.material} className="text-xs text-slate-600 dark:text-slate-300" />
+                </div>
               )}
             </div>
           )}

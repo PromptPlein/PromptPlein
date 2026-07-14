@@ -39,7 +39,8 @@ type Mode =
   | 'plan'
   | 'plan-step'
   | 'plan-step-analyze'
-  | 'execute';
+  | 'execute'
+  | 'persona-fill';
 
 /** Eén veld van het gekozen prompt framework waar de analyse op toetst. */
 interface AnalyzeField {
@@ -142,6 +143,15 @@ interface RequestBody {
   stepInteractive?: boolean;
   /** Het vraag-na-vraag-transcript tot nu toe (interactieve stap). */
   transcript?: { question: string; answer: string }[];
+  /** De gebruiker wil geen input meer geven: rond het interview af met een conclusie. */
+  forceFinish?: boolean;
+  // 'persona-fill'-velden: vul de persona-definitie in op basis van een korte hint.
+  /** Korte aanduiding van de persona, bijv. "mijn teammanager". */
+  personaHint?: string;
+  /** Het vraagstuk/de context waarvoor de persona geldt (optioneel, voor betere invulling). */
+  personaContext?: string;
+  /** De in te vullen persona-vragen (id + label + waarom die vraag ertoe doet). */
+  personaQuestions?: { id: string; label: string; why?: string }[];
   // 'analyze'-velden: toets de eigen prompt aan de eisen van het prompt framework.
   ownPrompt?: string;
   analyzeFields?: AnalyzeField[];
@@ -151,6 +161,12 @@ interface RequestBody {
    * gebruiker dit aan; de heranalyse weegt het mee als extra context.
    */
   clarification?: string;
+  /**
+   * 'prefill': de aangeleverde tekst is een GEÜPLOAD DOCUMENT (geen losse prompt).
+   * Dan leest de AI het document volledig van kop tot staart door en analyseert
+   * hij de layout/structuur (format, rubrieken, regels) om de velden voor te vullen.
+   */
+  fromDocument?: boolean;
   // 'title'-velden: vat een gegenereerde template samen tot een korte titel.
   templateContent?: string;
   // 'metadata'-velden: stel titel + omschrijving + best passende categorie voor.
@@ -595,18 +611,26 @@ const PLAN_STEP_MATERIAL_USER_PROMPT = (args: {
 //   VRAAG: <één vraag>        → er is nog input nodig
 //   KLAAR: <geconsolideerde brief> → genoeg info, dit is het materiaal
 const PLAN_STEP_INTERVIEW_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse rijksoverheid.
-Je helpt een interne medewerker STAP VOOR STAP de inhoud van één tussenstap scherp te krijgen via een
-kort interview. Dit is nog NIET de eindtemplate — je verzamelt materiaal.
+Je helpt een interne medewerker STAP VOOR STAP een vraagstuk helder te krijgen via een adaptief
+interview (chain-of-thought). Op basis van wat de gebruiker aanlevert bedenk je telkens de MEEST
+ZINVOLLE vervolgvraag, tot je een compleet en duidelijk beeld hebt en tot een conclusie komt. Dit is
+nog NIET de eindtemplate — je verzamelt en scherpt de inhoud aan.
 
 Werkwijze — houd je STRIKT aan dit protocol:
-- Stel telkens ÉÉN concrete, korte vraag die de inhoud verder aanscherpt. Bouw voort op het doel, het
-  materiaal van eerdere stappen en de al gegeven antwoorden. Herhaal geen eerder gestelde vraag.
+- CONTEXT EERST: is nog niet duidelijk wat de gebruiker precies wil bereiken of waar het vraagstuk over
+  gaat? Stel dan eerst een verhelderende vraag om dat scherp te krijgen, vóór je de diepte in gaat.
+- DENK NA NA ELK ANTWOORD: bepaal, gegeven het doel en alle antwoorden tot nu toe, welke ENE vraag nu
+  het meeste toevoegt om het beeld compleet te maken. Vraag door op wat nog vaag, aannemelijk of
+  onbenoemd is. Herhaal geen eerder gestelde vraag en stel nooit meerdere vragen tegelijk.
 - Zolang je nog een vraag nodig hebt, antwoord je met exact één regel die begint met "VRAAG:" gevolgd
   door je vraag. Geen inleiding, geen extra tekst.
-- Zodra je genoeg weet (meestal na 2 tot 5 vragen), stop je met vragen en geef je een bondige,
-  goed gestructureerde brief die alle input samenvat. Antwoord dan met "KLAAR:" gevolgd door die brief.
-- Stel NOOIT meerdere vragen tegelijk. Verzin GEEN antwoorden namens de gebruiker.
-- Schrijf ECHTE inhoud in de brief, GEEN plaatshouders, GEEN prompt-template, GEEN meta-instructies.
+- MAXIMUM 7 VRAGEN in totaal. Zodra je genoeg weet (vaak eerder), of bij de 7e beurt, stop je met vragen
+  en geef je een bondige, goed gestructureerde CONCLUSIE die alle input samenvat en het vraagstuk
+  helder maakt. Antwoord dan met "KLAAR:" gevolgd door die conclusie.
+- Wordt hieronder gevraagd om AF TE RONDEN (de gebruiker wil geen input meer geven)? Stel dan GEEN vraag
+  meer, maar geef direct de conclusie met "KLAAR:" op basis van wat er al ligt.
+- Verzin GEEN antwoorden namens de gebruiker. Schrijf ECHTE inhoud in de conclusie, GEEN plaatshouders,
+  GEEN prompt-template, GEEN meta-instructies.
 - Dit is voor INTERN overheidsgebruik; gebruik interne persona's, geen burger-persona's.
 - Schrijf in duidelijke, professionele taal (waar passend B1-niveau).
 
@@ -619,6 +643,7 @@ const PLAN_STEP_INTERVIEW_USER_PROMPT = (args: {
   stepTechniqueName?: string;
   outcomesSummary?: string;
   transcript?: { question: string; answer: string }[];
+  forceFinish?: boolean;
 }) => {
   const parts: string[] = [`DOEL VAN DE GEBRUIKER:\n${args.goal}`];
   if (args.outcomesSummary && args.outcomesSummary.trim()) {
@@ -633,14 +658,22 @@ const PLAN_STEP_INTERVIEW_USER_PROMPT = (args: {
     parts.push('GESPREK TOT NU TOE:\n(nog geen vragen gesteld — stel je eerste vraag)');
   } else {
     parts.push(
-      `GESPREK TOT NU TOE:\n${turns
+      `GESPREK TOT NU TOE (${turns.length} van max. 7 vragen beantwoord):\n${turns
         .map((t, i) => `V${i + 1}: ${t.question}\nA${i + 1}: ${t.answer}`)
         .join('\n')}`,
     );
   }
-  parts.push(
-    'Stel je volgende vraag ("VRAAG: …"), of rond af met de brief ("KLAAR: …") als je genoeg weet.',
-  );
+  if (args.forceFinish) {
+    parts.push(
+      'DE GEBRUIKER WIL GEEN INPUT MEER GEVEN. Stel GEEN vraag meer; geef nu direct de conclusie met "KLAAR: …" op basis van wat er al ligt.',
+    );
+  } else if (turns.length >= 7) {
+    parts.push('Je hebt het maximum van 7 vragen bereikt. Rond nu af met de conclusie ("KLAAR: …").');
+  } else {
+    parts.push(
+      'Bepaal de meest zinvolle vervolgvraag en stel die ("VRAAG: …"), of rond af met de conclusie ("KLAAR: …") als je genoeg weet.',
+    );
+  }
   return parts.join('\n\n');
 };
 
@@ -790,6 +823,62 @@ Werkwijze:
 - Dit is uitsluitend voor INTERN overheidsgebruik.
 - Schrijf in duidelijke, professionele taal (waar passend B1-niveau).
 - Geef ALLEEN het eindproduct terug, zonder inleiding vooraf of meta-uitleg achteraf.`;
+
+// --- Persona-fill-modus: vul een persona-definitie in op basis van een hint ---
+// De gebruiker geeft een korte aanduiding ("mijn teammanager"); de AI leidt af hoe
+// zo'n rol zich doorgaans gedraagt en wat die wil, en vult de zeven persona-velden
+// concreet in. De gebruiker kan alles daarna aanpassen.
+const PERSONA_FILL_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse rijksoverheid.
+De gebruiker definieert een PERSONA (een rol vanuit wie of voor wie de AI straks schrijft), maar weet
+niet alle details. Op basis van een KORTE AANDUIDING van de rol vul je een set persona-vragen concreet in.
+
+Werkwijze:
+- Leid uit de aanduiding af hoe iemand in die rol binnen de (rijks)overheid zich doorgaans gedraagt:
+  wat die wil, waar die op let, welk belang die bewaakt, hoe die communiceert en waar die minder van weet.
+- Vul ELK gevraagd veld in met een concreet, plausibel en bruikbaar voorstel. Kort en to the point
+  (één zin of een korte opsomming per veld). Verzin geen namen of feiten; blijf bij wat typisch is voor
+  de rol. Het is expliciet een SUGGESTIE die de gebruiker mag aanpassen.
+- Blijf intern gericht (de doelgroep is een overheidsmedewerker) en schrijf in helder Nederlands.
+
+${CLARITY_GATE_JSON_INSTRUCTION}
+
+Anders geef je UITSLUITEND geldige JSON terug, zonder codeblok of extra tekst, in dit formaat:
+{"fields":[{"id":"<veld-id>","value":"<voorgestelde inhoud>"}]}
+
+Gebruik alleen veld-id's die exact in de lijst voorkomen; vul elk veld uit de lijst in.`;
+
+/** Bouw de gebruikersprompt voor de persona-fill-modus. */
+const PERSONA_FILL_USER_PROMPT = (
+  hint: string,
+  questions: { id: string; label: string; why?: string }[],
+  context?: string,
+) =>
+  `KORTE AANDUIDING VAN DE PERSONA:\n${hint}\n\n` +
+  (context && context.trim() ? `CONTEXT/VRAAGSTUK WAARVOOR DE PERSONA GELDT:\n${context.trim()}\n\n` : '') +
+  `IN TE VULLEN PERSONA-VELDEN:\n` +
+  questions
+    .map((q) => `- id: ${q.id} | vraag: ${q.label}${q.why ? ` | waarom: ${q.why}` : ''}`)
+    .join('\n');
+
+/** Parseert het JSON-antwoord van de persona-fill-modus robuust. */
+function parsePersonaFill(raw: string, validIds: Set<string>): { id: string; value: string }[] | null {
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  try {
+    const parsed = JSON.parse(match[0]) as { fields?: unknown };
+    const rawFields = Array.isArray(parsed.fields) ? parsed.fields : [];
+    const fields = rawFields
+      .filter(
+        (f): f is Record<string, unknown> =>
+          !!f && typeof (f as Record<string, unknown>).id === 'string' && validIds.has((f as Record<string, unknown>).id as string),
+      )
+      .map((f) => ({ id: f.id as string, value: typeof f.value === 'string' ? f.value : '' }))
+      .filter((f) => f.value.trim());
+    return fields.length > 0 ? fields : null;
+  } catch {
+    return null;
+  }
+}
 
 const RECOMMEND_FRAMEWORK_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse rijksoverheid.
 Een interne overheidsmedewerker heeft een EIGEN prompt geschreven en wil die optimaliseren met een
@@ -963,6 +1052,25 @@ Geef UITSLUITEND geldige JSON terug, zonder codeblok of extra tekst, in dit form
 {"summary":"<1 zin: wat je uit de prompt hebt gehaald en wat je hebt aangevuld, in het Nederlands>","fields":[{"id":"<veld-id>","value":"<voorgestelde inhoud voor dit veld — detailrijk waar de gebruiker detail gaf>","source":"prompt|ai","note":"<korte toelichting>"}]}
 
 Gebruik alleen veld-id's die exact in de lijst voorkomen.`;
+
+/**
+ * Extra instructie die vóór de prefill-systeemprompt komt wanneer de aangeleverde
+ * tekst een GEÜPLOAD DOCUMENT is (Template-based Output). De AI moet het document
+ * VOLLEDIG doorlezen en de layout/structuur eruit afleiden, zodat format-, rubrieken-
+ * en regel-velden concreet worden voor-ingevuld.
+ */
+const PREFILL_DOCUMENT_INSTRUCTION = `BELANGRIJK — DE AANGELEVERDE TEKST IS EEN GEÜPLOAD DOCUMENT (voorbeelddocument).
+Lees dit document VOLLEDIG en zorgvuldig door, van kop tot staart — sla niets over. Analyseer de
+LAYOUT en STRUCTUUR van het document, niet alleen de inhoud:
+- Welk FORMAT/soort document is het (bijv. formele brief, nota, rapportage, besluit)?
+- Welke RUBRIEKEN/onderdelen bevat het en in welke VOLGORDE (bijv. briefhoofd, aanleiding, kern, slot)?
+- Welke vaste REGELS/opmaakconventies vallen op (koppen, nummering, aanhef/afsluiting, toon, lengte)?
+Verwoord die layout-analyse concreet in de betreffende velden (het taak/format-veld, het rubrieken-veld,
+het regels-veld), zodat de template exact deze structuur nabouwt. Neem letterlijke voorbeeldzinnen alleen
+over als ze de structuur verduidelijken; het doel is de VORM reproduceerbaar maken, niet de inhoud kopiëren.
+Wees volledig: laat geen rubriek of structuurregel uit het document weg.
+
+`;
 
 /** Bouw de gebruikersprompt voor de prefill-modus. */
 const PREFILL_USER_PROMPT = (
@@ -1957,7 +2065,9 @@ Deno.serve(async (req: Request) => {
                           ? 'plan-step-analyze'
                           : body.mode === 'execute'
                             ? 'execute'
-                            : 'generate';
+                            : body.mode === 'persona-fill'
+                              ? 'persona-fill'
+                              : 'generate';
     const order = buildOrder(body.preferredProvider);
     const temperature = clampTemp(body.temperature);
 
@@ -2026,6 +2136,10 @@ Deno.serve(async (req: Request) => {
         fields,
         body.clarification,
       );
+      // Is de tekst een geüpload document? Dan de layout-analyse-instructie vooraan.
+      const prefillSystem = body.fromDocument
+        ? PREFILL_DOCUMENT_INSTRUCTION + PREFILL_SYSTEM_PROMPT
+        : PREFILL_SYSTEM_PROMPT;
       let result: { summary: string; fields: PrefilledField[] } | null = null;
       let provider: Provider | 'local-template' = 'local-template';
 
@@ -2033,7 +2147,7 @@ Deno.serve(async (req: Request) => {
         try {
           const raw = await PROVIDERS[candidate](
             userMessage,
-            PREFILL_SYSTEM_PROMPT,
+            prefillSystem,
             0.3,
             resolveModel(candidate, body.preferredProvider, body.preferredModel),
           );
@@ -2279,6 +2393,7 @@ Deno.serve(async (req: Request) => {
           stepTechniqueName: body.stepTechniqueName,
           outcomesSummary: body.outcomesSummary,
           transcript,
+          forceFinish: body.forceFinish,
         });
 
         for (const candidate of order) {
@@ -2485,6 +2600,61 @@ Deno.serve(async (req: Request) => {
 
       return new Response(
         JSON.stringify({ success: true, output, provider }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    // --- Persona-fill-modus: vul de persona-velden in op basis van een hint ---
+    if (mode === 'persona-fill') {
+      const hint = body.personaHint?.trim();
+      const questions = Array.isArray(body.personaQuestions) ? body.personaQuestions : [];
+      if (!hint || questions.length === 0) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'personaHint en personaQuestions zijn verplicht' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      const validIds = new Set(questions.map((q) => q.id));
+      const userMessage = PERSONA_FILL_USER_PROMPT(hint, questions, body.personaContext);
+      let fields: { id: string; value: string }[] | null = null;
+      let provider: Provider | 'local-template' = 'local-template';
+
+      for (const candidate of order) {
+        try {
+          const raw = await PROVIDERS[candidate](
+            userMessage,
+            PERSONA_FILL_SYSTEM_PROMPT,
+            0.4,
+            resolveModel(candidate, body.preferredProvider, body.preferredModel),
+          );
+          const unclear = detectUnclearJson(raw);
+          if (unclear) {
+            return new Response(
+              JSON.stringify({ success: false, unclear: true, reason: unclear, provider: candidate }),
+              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            );
+          }
+          const parsed = parsePersonaFill(raw, validIds);
+          if (parsed) {
+            fields = parsed;
+            provider = candidate;
+            break;
+          }
+        } catch (providerErr) {
+          console.error(`${candidate} (persona-fill) mislukt, probeer volgende:`, providerErr);
+        }
+      }
+
+      if (!fields) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'De persona kon niet worden ingevuld' }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, fields, provider }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }

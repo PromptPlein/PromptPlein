@@ -9,6 +9,7 @@ import { requestCategory } from '@/services/categoryRequestService';
 import { requestFunction } from '@/services/functionRequestService';
 import { useAuth } from '@/context/AuthContext';
 import { useReferenceData } from '@/context/ReferenceDataContext';
+import RichText from './RichText';
 import ShareModal from '@/components/share/ShareModal';
 import SearchableSelect from '@/components/common/SearchableSelect';
 import VisibilityPicker from '@/components/prompts/VisibilityPicker';
@@ -259,9 +260,9 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
             De AI heeft de prompt meteen uitgevoerd. Controleer aannames (vaak cursief of tussen
             haakjes) en pas aan waar nodig.
           </p>
-          <pre className="max-h-[420px] overflow-auto whitespace-pre-wrap rounded-lg border border-emerald-200 bg-white p-4 text-[13px] leading-relaxed text-slate-800 dark:border-emerald-500/20 dark:bg-slate-900 dark:text-slate-100">
-            {executed}
-          </pre>
+          <div className="max-h-[420px] overflow-auto rounded-lg border border-emerald-200 bg-white p-4 dark:border-emerald-500/20 dark:bg-slate-900">
+            <RichText text={executed} className="text-[13px] text-slate-800 dark:text-slate-100" />
+          </div>
         </div>
       )}
 

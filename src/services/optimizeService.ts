@@ -243,6 +243,59 @@ export async function executePrompt(args: {
   }
 }
 
+/**
+ * Vult een persona-definitie in op basis van een korte aanduiding ("mijn
+ * teammanager"): de AI leidt af hoe zo'n rol zich doorgaans gedraagt en vult de
+ * meegegeven persona-velden concreet in. De gebruiker kan alles daarna aanpassen.
+ */
+export async function fillPersona(args: {
+  hint: string;
+  questions: { id: string; label: string; why?: string }[];
+  context?: string;
+  preferredProvider?: AiProvider;
+  preferredModel?: string;
+}): Promise<{ success: boolean; fields: { id: string; value: string }[]; error?: string; unclear?: boolean; reason?: string }> {
+  const { hint, questions, context, preferredProvider, preferredModel } = args;
+  const functionUrl = getFunctionUrl('optimize-prompt');
+  if (!isSupabaseConfigured || !functionUrl) {
+    return { success: false, fields: [], error: 'Geen AI-service beschikbaar om de persona in te vullen.' };
+  }
+  try {
+    const anonKey = getAnonKey();
+    const response = await fetch(functionUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(anonKey ? { Authorization: `Bearer ${anonKey}`, apikey: anonKey } : {}),
+      },
+      body: JSON.stringify({
+        mode: 'persona-fill',
+        personaHint: hint,
+        personaContext: context,
+        personaQuestions: questions,
+        preferredProvider: preferredProvider ?? 'auto',
+        preferredModel,
+      }),
+    });
+    if (!response.ok) throw new Error(`Edge function gaf status ${response.status}`);
+    const data = (await response.json()) as {
+      success?: boolean;
+      fields?: { id: string; value: string }[];
+      error?: string;
+      unclear?: boolean;
+      reason?: string;
+    };
+    if (data.unclear) return { success: false, fields: [], unclear: true, reason: data.reason };
+    if (data.success && Array.isArray(data.fields)) {
+      return { success: true, fields: data.fields };
+    }
+    return { success: false, fields: [], error: data.error ?? 'De persona kon niet worden ingevuld.' };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Onbekende fout';
+    return { success: false, fields: [], error: `Persona invullen mislukt (${message}).` };
+  }
+}
+
 /** Lokale trefwoord-matching als de backend niet beschikbaar is of faalt. */
 function localRecommend(goal: string, techniques: Technique[]): TechniqueRecommendation[] {
   const words = new Set(
@@ -613,6 +666,8 @@ export async function runPlanStep(args: {
   interactive?: boolean;
   /** Het vraag-na-vraag-transcript tot nu toe (alleen interactieve stap). */
   transcript?: TranscriptTurn[];
+  /** De gebruiker wil geen input meer geven → rond het interview af met een conclusie. */
+  forceFinish?: boolean;
   preferredProvider?: AiProvider;
   preferredModel?: string;
 }): Promise<PlanStepResult> {
@@ -623,6 +678,7 @@ export async function runPlanStep(args: {
     outcomesSummary,
     interactive,
     transcript,
+    forceFinish,
     preferredProvider,
     preferredModel,
   } = args;
@@ -655,6 +711,7 @@ export async function runPlanStep(args: {
         outcomesSummary,
         stepInteractive: Boolean(interactive),
         transcript: interactive ? (transcript ?? []) : undefined,
+        forceFinish: interactive ? Boolean(forceFinish) : undefined,
         preferredProvider: preferredProvider ?? 'auto',
         preferredModel,
       }),
@@ -734,11 +791,25 @@ export async function analyzePlanStep(args: {
   outcomesSummary?: string;
   /** Optionele extra toelichting uit de "wat mist nog"-lus. */
   clarification?: string;
+  /**
+   * Extra gelabelde velden bovenop de vervolgvragen (bijv. de gestructureerde
+   * persona-definitie uit de PersonaBuilder). Worden meegewogen bij de analyse.
+   */
+  extraAnsweredFields?: { id: string; label: string; answer: string }[];
   preferredProvider?: AiProvider;
   preferredModel?: string;
 }): Promise<PlanStepResult> {
-  const { goal, step, technique, answers, outcomesSummary, clarification, preferredProvider, preferredModel } =
-    args;
+  const {
+    goal,
+    step,
+    technique,
+    answers,
+    outcomesSummary,
+    clarification,
+    extraAnsweredFields,
+    preferredProvider,
+    preferredModel,
+  } = args;
   const functionUrl = getFunctionUrl('optimize-prompt');
 
   if (!isSupabaseConfigured || !functionUrl) {
@@ -749,10 +820,16 @@ export async function analyzePlanStep(args: {
     };
   }
 
-  // Zet de antwoorden om naar gelabelde velden (zoals de generate-modus verwacht).
-  const answeredFields = technique.follow_up_questions
-    .map((q) => ({ id: q.id, label: q.label, answer: answers[q.id] ?? '' }))
-    .filter((f) => f.answer.trim());
+  // Zet de antwoorden om naar gelabelde velden (zoals de generate-modus verwacht),
+  // plus eventuele extra velden (bijv. de persona-definitie).
+  const answeredFields = [
+    ...technique.follow_up_questions.map((q) => ({
+      id: q.id,
+      label: q.label,
+      answer: answers[q.id] ?? '',
+    })),
+    ...(extraAnsweredFields ?? []),
+  ].filter((f) => f.answer.trim());
 
   try {
     const anonKey = getAnonKey();
@@ -1131,8 +1208,14 @@ export async function prefillFields(args: {
    * Wordt meegewogen zodat die velden nu concreet ingevuld worden.
    */
   clarification?: string;
+  /**
+   * De `ownPrompt` is een GEÜPLOAD DOCUMENT (geen losse prompt). De AI leest het
+   * dan volledig door en analyseert de layout/structuur om de velden voor te vullen.
+   */
+  fromDocument?: boolean;
 }): Promise<PrefillResult> {
-  const { ownPrompt, technique, preferredProvider, preferredModel, clarification } = args;
+  const { ownPrompt, technique, preferredProvider, preferredModel, clarification, fromDocument } =
+    args;
   const content = ownPrompt.trim();
   const empty: PrefillResult = {
     summary: '',
@@ -1163,6 +1246,7 @@ export async function prefillFields(args: {
         mode: 'prefill',
         ownPrompt: content,
         clarification,
+        fromDocument,
         techniqueName: technique.name,
         analyzeFields,
         preferredProvider: preferredProvider ?? 'auto',

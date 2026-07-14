@@ -10,3 +10,12 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+// Mammoth levert geen eigen typedefinities; een minimale shim voor het enige
+// dat we gebruiken: platte tekst uit een .docx-arraybuffer halen.
+declare module 'mammoth' {
+  export function extractRawText(input: { arrayBuffer: ArrayBuffer }): Promise<{
+    value: string;
+    messages: unknown[];
+  }>;
+}
