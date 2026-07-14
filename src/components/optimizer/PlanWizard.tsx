@@ -1,16 +1,18 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
   AlertTriangle,
   ArrowRight,
   Check,
   ChevronDown,
   ChevronRight,
+  ChevronUp,
   Eraser,
+  HelpCircle,
   Info,
+  Lightbulb,
   Loader2,
-  MessageCircleQuestion,
+  Pencil,
   RotateCw,
-  Send,
   Sparkles,
   Trash2,
   Wand2,
@@ -19,9 +21,9 @@ import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import {
+  analyzePlanStep,
   generatePlan,
   generatePrompt,
-  runPlanStep,
   serializeOutcomes,
 } from '@/services/optimizeService';
 import { isContextPrompt } from '@/lib/techniques';
@@ -30,15 +32,58 @@ import { usePersistentDraft } from '@/lib/usePersistentDraft';
 import { detectPii, detectBlockedTopics, type GuardrailFinding } from '@/services/guardrails';
 import type { AiSettings } from '@/services/settingsService';
 import OptimizingLoader from './OptimizingLoader';
+import FollowUpQuestions from './FollowUpQuestions';
 import GuardrailDialog from './GuardrailDialog';
 import type {
   OptimizeResult,
   PlanStep,
+  PlanStepGap,
   PromptPlan,
+  PromptRecipe,
   StepOutcome,
   Technique,
-  TranscriptTurn,
 } from '@/types';
+
+/** localStorage-sleutel waaronder een lopende plan-run wordt bewaard (hervatten na herladen). */
+const RUN_STORAGE_KEY = 'opl.planRun';
+
+/** De naar localStorage geschreven snapshot van een lopende run. */
+interface PersistedRun {
+  goal: string;
+  plan: PromptPlan;
+  outcomes: StepOutcome[];
+  currentStepIndex: number;
+}
+
+function loadRun(): PersistedRun | null {
+  try {
+    const raw = localStorage.getItem(RUN_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as PersistedRun;
+    if (parsed && parsed.plan && Array.isArray(parsed.plan.steps) && parsed.plan.steps.length > 0) {
+      return parsed;
+    }
+  } catch {
+    /* corrupte of afwezige run → negeren */
+  }
+  return null;
+}
+
+function saveRun(run: PersistedRun): void {
+  try {
+    localStorage.setItem(RUN_STORAGE_KEY, JSON.stringify(run));
+  } catch {
+    /* bewaren is best-effort */
+  }
+}
+
+function clearRunDraft(): void {
+  try {
+    localStorage.removeItem(RUN_STORAGE_KEY);
+  } catch {
+    /* negeren */
+  }
+}
 
 /**
  * Voorbeeldantwoorden op "Wat wil je graag bereiken?". Anders dan bij de losse
@@ -51,16 +96,6 @@ const GOAL_EXAMPLES: string[] = [
   'Ik wil een adviesnota maken met een vaste structuur en een heldere onderbouwing.',
   'Help me een communicatieplan op te zetten voor een nieuw beleidstraject.',
 ];
-
-/**
- * Vat een vraag-na-vraag-transcript samen tot een platte brief. Alleen gebruikt
- * als de harde vragen-bovengrens is bereikt: dan consolideren we lokaal wat er
- * ligt i.p.v. eindeloos door te vragen (de eind-compose maakt er alsnog een
- * vloeiende template van).
- */
-function consolidateTranscript(turns: TranscriptTurn[]): string {
-  return turns.map((t) => `${t.question}\n${t.answer}`).join('\n\n');
-}
 
 /** Menselijk leesbaar label per stap-uitkomst, voor de compose-context en de UI. */
 function outcomeLabel(o: { produces: StepOutcome['produces'] }): string {
@@ -90,31 +125,29 @@ interface PlanWizardProps {
 
 /**
  * Fase van de wizard:
- *  - goal            → doel invoeren
- *  - planning        → AI stelt het plan op
- *  - plan-review     → plan inzien/aanpassen
- *  - executing       → stappen sequentieel uitvoeren (materiaal verzamelen)
- *  - awaiting-answer → interactieve stap: wacht op het antwoord van de gebruiker
- *  - error           → een stap mislukte; retry mogelijk (materiaal blijft behouden)
+ *  - goal        → doel invoeren
+ *  - planning    → AI stelt het plan op
+ *  - plan-review → plan inzien/aanpassen
+ *  - collecting  → per stap: de gebruiker vult de vragen in; na "Genereren" toont
+ *                  de AI het materiaal én wat er nog mist voor het totale plaatje
+ *  - composing   → laatste stap: alle input wordt tot één template gegoten
+ *  - error       → een stap mislukte; retry mogelijk (materiaal blijft behouden)
  */
-type Phase = 'goal' | 'planning' | 'plan-review' | 'executing' | 'awaiting-answer' | 'error';
-
-/** Harde grens op het aantal vragen per interactieve stap (voorkomt eindeloos interviewen). */
-const MAX_INTERVIEW_TURNS = 7;
+type Phase = 'goal' | 'planning' | 'plan-review' | 'collecting' | 'composing' | 'error';
 
 /**
  * Slimme meerstaps-bouwer voor de doel-flow ("Help mij met een prompt om mijn
  * doel te bereiken"). De gebruiker beschrijft het doel; de AI stelt een geordend
  * PLAN op van technieken die samen één herbruikbare template opbouwen. De
- * gebruiker ziet het plan, kan stappen verwijderen, en start dan de bouw.
+ * gebruiker ziet het plan, kan stappen aanpassen, en doorloopt daarna de stappen.
  *
- * Fase 3 (deze versie): het plan wordt STAP VOOR STAP uitgevoerd. Niet-interactieve
- * stappen verzamelen in één keer materiaal (persona, format-rubrieken); INTERACTIEVE
- * stappen (chain-of-thought / socratic) voeren een echt vraag-na-vraag-interview:
- * de AI stelt één vraag tegelijk tot er een geconsolideerde brief staat. Al het
- * verzamelde materiaal wordt als context aan de volgende stap doorgegeven ("dat
- * wat gemaakt is gebruikt voor de volgende stap"); de laatste stap giet het via de
- * bestaande generate-modus in één coherente, herbruikbare template.
+ * Fase 5 (deze versie): de INPUT van de gebruiker staat centraal. Bij ELKE stap
+ * vult de gebruiker eerst de vervolgvragen van de techniek in. Na "Genereren"
+ * denkt de AI mee: op basis van het doel, het materiaal van eerdere stappen en
+ * deze input schrijft hij het materiaal uit én benoemt hij wat er nog ONTBREEKT
+ * voor het totale plaatje (net als de framework-flow). De gebruiker vult aan tot
+ * de stap compleet is; dat materiaal gaat mee naar de volgende stap. De laatste
+ * stap giet alle input via de bestaande generate-modus in één herbruikbare template.
  */
 export default function PlanWizard({ settings, onResult, header }: PlanWizardProps) {
   const { techniques, techniqueById } = useReferenceData();
@@ -131,17 +164,71 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [outcomes, setOutcomes] = useState<StepOutcome[]>([]);
   const [stepError, setStepError] = useState<string | null>(null);
-  // Interactieve stap (vraag-na-vraag): de huidige vraag, het transcript en het
-  // antwoordveld. `interviewIndex` markeert bij welke stap het interview loopt.
-  const [currentQuestion, setCurrentQuestion] = useState<string | null>(null);
-  const [transcript, setTranscript] = useState<TranscriptTurn[]>([]);
-  const [answerDraft, setAnswerDraft] = useState('');
+  // Huidige stap — input van de gebruiker en de AI-analyse ervan.
+  const [stepAnswers, setStepAnswers] = useState<Record<string, string>>({});
+  const [analyzing, setAnalyzing] = useState(false);
+  const [stepMaterial, setStepMaterial] = useState<string | null>(null);
+  const [stepSummary, setStepSummary] = useState<string>('');
+  const [stepGaps, setStepGaps] = useState<PlanStepGap[]>([]);
+  const [clarification, setClarification] = useState('');
+  // Een bij het laden gevonden, niet-afgemaakte run — aangeboden om te hervatten.
+  const [resumable, setResumable] = useState<PersistedRun | null>(null);
 
-  const busy = phase === 'planning' || phase === 'executing';
+  const busy = phase === 'planning' || phase === 'composing';
+
+  // Bij binnenkomst: is er een niet-afgemaakte run bewaard? Bied hem aan om te
+  // hervatten (zonder hem meteen te herstellen — de gebruiker kiest).
+  useEffect(() => {
+    const run = loadRun();
+    if (run) setResumable(run);
+    // Alleen bij mount uitvoeren.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Bewaar de lopende run zodra er een plan is en we het aan het uitvoeren zijn,
+  // zodat een herlaadactie of gesloten tab niet alle voortgang wist.
+  useEffect(() => {
+    if (plan && (phase === 'plan-review' || phase === 'collecting')) {
+      saveRun({ goal, plan, outcomes, currentStepIndex });
+    }
+  }, [plan, phase, goal, outcomes, currentStepIndex]);
+
+  /** Reset de per-stap-state (input + analyse) naar leeg. */
+  function resetStepState() {
+    setStepAnswers({});
+    setStepMaterial(null);
+    setStepSummary('');
+    setStepGaps([]);
+    setClarification('');
+  }
+
+  /** Herstel een eerder bewaarde run en ga verder waar de gebruiker gebleven was. */
+  function resumeRun() {
+    if (!resumable) return;
+    const { goal: g, plan: p, outcomes: o, currentStepIndex: idx } = resumable;
+    setGoal(g);
+    setPlan(p);
+    setOutcomes(o);
+    setCurrentStepIndex(idx);
+    setStepError(null);
+    resetStepState();
+    setResumable(null);
+    // Hervat het invoerscherm exact bij de bewaarde stap, mét het al verzamelde
+    // materiaal. (Stap 0 net zo goed — de gebruiker vult daar zijn input in.)
+    setPhase(idx >= p.steps.length - 1 ? 'plan-review' : 'collecting');
+  }
+
+  /** Verwerp de bewaarde run en begin schoon. */
+  function discardRun() {
+    clearRunDraft();
+    setResumable(null);
+  }
 
   /** Wis doel + afgeleide state en begin opnieuw. */
   function handleClear() {
     clearGoal();
+    clearRunDraft();
+    setResumable(null);
     setPlan(null);
     setPhase('goal');
     setUnclearReason(null);
@@ -150,9 +237,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
     setCurrentStepIndex(0);
     setOutcomes([]);
     setStepError(null);
-    setCurrentQuestion(null);
-    setTranscript([]);
-    setAnswerDraft('');
+    resetStepState();
   }
 
   /** Vraag de AI om een plan; guardrail-check eerst. */
@@ -216,20 +301,56 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
     });
   }
 
+  /** Verplaats een stap één positie omhoog of omlaag (herordenen in plan-review). */
+  function moveStep(index: number, dir: -1 | 1) {
+    setPlan((prev) => {
+      if (!prev) return prev;
+      const target = index + dir;
+      if (target < 0 || target >= prev.steps.length) return prev;
+      const steps = [...prev.steps];
+      [steps[index], steps[target]] = [steps[target], steps[index]];
+      return { ...prev, steps };
+    });
+  }
+
+  /** Pas de titel van een stap aan (inline bewerken in plan-review). */
+  function editStepTitle(id: string, title: string) {
+    setPlan((prev) => {
+      if (!prev) return prev;
+      return { ...prev, steps: prev.steps.map((s) => (s.id === id ? { ...s, title } : s)) };
+    });
+  }
+
   /** Is dit de laatste stap? Die stelt de uiteindelijke template samen (compose). */
   function isLastStep(p: PromptPlan, index: number): boolean {
     return index >= p.steps.length - 1;
   }
 
-  /** Start de uitvoering van het plan vanaf stap 0 met een schone lei. */
+  /** Start de uitvoering: begin bij stap 0 met een schone lei. */
   function handleBuild() {
     if (!plan) return;
-    setCurrentStepIndex(0);
     setOutcomes([]);
+    beginStep(plan, 0, []);
+  }
+
+  /**
+   * Begin een stap: reset de per-stap-state en toon óf het invoerscherm
+   * (tussenstap) óf stel meteen de template samen (laatste stap).
+   */
+  function beginStep(p: PromptPlan, index: number, accumulated: StepOutcome[]) {
+    setCurrentStepIndex(index);
     setStepError(null);
     setUnclearReason(null);
-    setPhase('executing');
-    void runStep(plan, 0, []);
+    setStepAnswers({});
+    setStepMaterial(null);
+    setStepSummary('');
+    setStepGaps([]);
+    setClarification('');
+    if (isLastStep(p, index)) {
+      void composeFinal(p, accumulated);
+    } else {
+      setPhase('collecting');
+    }
   }
 
   /** Herprobeer de huidige (mislukte) stap; behoud het al verzamelde materiaal. */
@@ -237,39 +358,33 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
     if (!plan) return;
     setStepError(null);
     setUnclearReason(null);
-    const step = plan.steps[currentStepIndex];
-    // Zat de fout midden in een interview, herpak dan die beurt met het transcript.
-    if (step && step.interactive && !isLastStep(plan, currentStepIndex)) {
-      setPhase('executing');
-      void runInterviewTurn(plan, currentStepIndex, outcomes, transcript);
-      return;
+    if (isLastStep(plan, currentStepIndex)) {
+      void composeFinal(plan, outcomes);
+    } else {
+      setPhase('collecting');
     }
-    void runStep(plan, currentStepIndex, outcomes);
-  }
-
-  /** Ga naar de volgende stap met een uitkomst toegevoegd (of compose als laatste). */
-  function advanceWith(p: PromptPlan, index: number, accumulated: StepOutcome[], outcome: StepOutcome) {
-    const next = [...accumulated, outcome];
-    setOutcomes(next);
-    setCurrentQuestion(null);
-    setTranscript([]);
-    setAnswerDraft('');
-    const nextIndex = index + 1;
-    setCurrentStepIndex(nextIndex);
-    void runStep(p, nextIndex, next);
   }
 
   /**
-   * De driver. Voert stap `index` uit, waarbij `accumulated` het materiaal van
-   * álle eerdere stappen bevat (expliciet doorgegeven om stale-closure-bugs met
-   * de outcomes-state te vermijden). Dit is de thread-seam concreet:
-   *  - Laatste stap → compose: giet al het materiaal via generate in één template.
-   *  - Interactieve tussenstap → start een vraag-na-vraag-interview.
-   *  - Andere tussenstap → verzamel materiaal in één keer en ga door.
+   * Genereer een al afgeronde stap opnieuw. Omdat elke stap voortbouwt op de
+   * vorige, vervallen de uitkomsten van deze én latere stappen; we hervatten bij
+   * deze stap met alleen het materiaal ervóór.
    */
-  async function runStep(p: PromptPlan, index: number, accumulated: StepOutcome[]) {
-    const step = p.steps[index];
-    if (!step) return;
+  function regenerateStep(index: number) {
+    if (!plan) return;
+    const kept = outcomes.slice(0, index);
+    setOutcomes(kept);
+    beginStep(plan, index, kept);
+  }
+
+  /**
+   * "Genereren" op een tussenstap: stuur de input van de gebruiker naar de AI,
+   * die het materiaal uitschrijft én benoemt wat er nog ontbreekt voor het totale
+   * plaatje. `extraClarification` komt uit de "wat mist nog"-lus.
+   */
+  async function analyzeCurrentStep(extraClarification?: string) {
+    if (!plan) return;
+    const step = plan.steps[currentStepIndex];
     const technique = techniqueById(step.technique_id);
     if (!technique) {
       setStepError('Kon de techniek voor deze stap niet vinden.');
@@ -277,185 +392,126 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
       return;
     }
 
-    // Laatste stap: stel de uiteindelijke template samen uit al het materiaal.
-    if (isLastStep(p, index)) {
-      setPhase('executing');
-      try {
-        const res = await generatePrompt({
-          technique,
-          promptContent: goal.trim() || '[BESCHRIJF HIER WAT JE WILT BEREIKEN]',
-          followUpAnswers: {},
-          // Al het verzamelde materiaal als gelabelde context — exact het formaat
-          // dat de generate-modus als "ANTWOORDEN VAN DE GEBRUIKER" verwerkt.
-          extraAnsweredFields: accumulated.map((o) => ({
-            id: o.step_id,
-            label: outcomeLabel(o),
-            answer: o.material,
-          })),
-          preferredProvider: settings.provider,
-          preferredModel: settings.model,
-          systemPrompt: settings.systemPrompt.trim() || undefined,
-          toneInstruction: settings.toneInstruction.trim() || undefined,
-          temperature: settings.temperature,
-        });
-        if (res.unclear) {
-          setUnclearReason(
-            res.reason?.trim() ||
-              'Je invoer is niet duidelijk genoeg om er een zinvolle prompt van te maken.',
-          );
-          setStepError('De invoer was niet duidelijk genoeg voor de eindtemplate.');
-          setPhase('error');
-          return;
-        }
-        onResult(res, technique);
-      } catch (err) {
-        setStepError(err instanceof Error ? err.message : 'Template samenstellen mislukt.');
-        setPhase('error');
+    // Guardrail-check op de door de gebruiker ingevulde velden + toelichting.
+    const toCheck = [...Object.values(stepAnswers), extraClarification ?? '']
+      .map((v) => v.trim())
+      .filter(Boolean)
+      .join('\n');
+    if (toCheck) {
+      const findings: GuardrailFinding[] = [
+        ...(settings.pii.enabled ? detectPii(toCheck) : []),
+        ...detectBlockedTopics(toCheck, settings.blockedTopics),
+      ];
+      if (findings.length > 0) {
+        setGuardrailFindings(findings);
+        return;
       }
-      return;
     }
 
-    // Interactieve tussenstap: start het vraag-na-vraag-interview (leeg transcript).
-    if (step.interactive) {
-      setCurrentQuestion(null);
-      setTranscript([]);
-      setAnswerDraft('');
-      setPhase('executing');
-      void runInterviewTurn(p, index, accumulated, []);
-      return;
-    }
-
-    // Gewone tussenstap: verzamel het uitgeschreven materiaal en ga door.
-    setPhase('executing');
-    const res = await runPlanStep({
-      goal: goal.trim(),
-      step,
-      techniqueName: technique.name,
-      outcomesSummary: serializeOutcomes(accumulated),
-      preferredProvider: settings.provider,
-      preferredModel: settings.model,
-    });
-
-    if (res.unclear) {
-      setUnclearReason(
-        res.reason?.trim() ||
-          'Deze stap kon niet worden ingevuld. Verduidelijk je doel en probeer opnieuw.',
-      );
-      setStepError('De invoer was niet duidelijk genoeg voor deze stap.');
+    setAnalyzing(true);
+    setStepError(null);
+    setUnclearReason(null);
+    try {
+      const res = await analyzePlanStep({
+        goal: goal.trim(),
+        step,
+        technique,
+        answers: stepAnswers,
+        outcomesSummary: serializeOutcomes(outcomes),
+        clarification: extraClarification,
+        preferredProvider: settings.provider,
+        preferredModel: settings.model,
+      });
+      if (res.unclear) {
+        setUnclearReason(
+          res.reason?.trim() ||
+            'Je invoer is nog niet duidelijk genoeg. Vul de velden concreter in.',
+        );
+        return;
+      }
+      if (!res.success || !res.material) {
+        setStepError(res.error ?? 'De analyse voor deze stap kon niet worden gemaakt.');
+        setPhase('error');
+        return;
+      }
+      setStepMaterial(res.material);
+      setStepSummary(res.summary ?? '');
+      setStepGaps(res.gaps ?? []);
+      setClarification('');
+    } catch (err) {
+      setStepError(err instanceof Error ? err.message : 'Analyse mislukt.');
       setPhase('error');
-      return;
+    } finally {
+      setAnalyzing(false);
     }
-    if (!res.success || !res.material) {
-      setStepError(res.error ?? 'Materiaal voor deze stap kon niet worden gegenereerd.');
-      setPhase('error');
-      return;
-    }
+  }
 
-    advanceWith(p, index, accumulated, {
+  /** Guardrail bevestigd → alsnog analyseren met de huidige toelichting. */
+  function confirmAnalyze() {
+    setGuardrailFindings(null);
+    void analyzeCurrentStep(clarification.trim() || undefined);
+  }
+
+  /** Leg het materiaal van deze stap vast en ga naar de volgende stap. */
+  function commitStep() {
+    if (!plan || stepMaterial == null) return;
+    const step = plan.steps[currentStepIndex];
+    const outcome: StepOutcome = {
       step_id: step.id,
       technique_id: step.technique_id,
       produces: step.produces,
-      material: res.material,
-    });
+      material: stepMaterial,
+      answers: { ...stepAnswers },
+    };
+    const next = [...outcomes, outcome];
+    setOutcomes(next);
+    beginStep(plan, currentStepIndex + 1, next);
   }
 
-  /**
-   * Eén beurt van een interactieve stap. Vraagt de AI om óf de volgende vraag,
-   * óf (als er genoeg bekend is) de geconsolideerde brief. `turns` is het
-   * transcript tot nu toe (expliciet doorgegeven tegen stale closures).
-   */
-  async function runInterviewTurn(
-    p: PromptPlan,
-    index: number,
-    accumulated: StepOutcome[],
-    turns: TranscriptTurn[],
-  ) {
-    const step = p.steps[index];
+  /** Laatste stap: giet alle verzamelde input in één herbruikbare template. */
+  async function composeFinal(p: PromptPlan, accumulated: StepOutcome[]) {
+    const step = p.steps[p.steps.length - 1];
     const technique = techniqueById(step.technique_id);
     if (!technique) {
-      setStepError('Kon de techniek voor deze stap niet vinden.');
+      setStepError('Kon de techniek voor de eindstap niet vinden.');
       setPhase('error');
       return;
     }
-
-    const res = await runPlanStep({
-      goal: goal.trim(),
-      step,
-      techniqueName: technique.name,
-      outcomesSummary: serializeOutcomes(accumulated),
-      interactive: true,
-      transcript: turns,
-      preferredProvider: settings.provider,
-      preferredModel: settings.model,
-    });
-
-    if (res.unclear) {
-      setUnclearReason(
-        res.reason?.trim() ||
-          'Deze stap kon niet worden ingevuld. Verduidelijk je doel en probeer opnieuw.',
-      );
-      setStepError('De invoer was niet duidelijk genoeg voor deze stap.');
-      setPhase('error');
-      return;
-    }
-
-    // De AI heeft nog een vraag — maar respecteer de harde bovengrens.
-    if (res.success && res.needs_input && res.question) {
-      if (turns.length >= MAX_INTERVIEW_TURNS) {
-        // Genoeg gevraagd: consolideer wat er ligt tot een brief i.p.v. door te vragen.
-        advanceWith(p, index, accumulated, {
-          step_id: step.id,
-          technique_id: step.technique_id,
-          produces: step.produces,
-          material: consolidateTranscript(turns),
-          transcript: turns,
-        });
+    setPhase('composing');
+    try {
+      const res = await generatePrompt({
+        technique,
+        promptContent: goal.trim() || '[BESCHRIJF HIER WAT JE WILT BEREIKEN]',
+        followUpAnswers: {},
+        // Al het verzamelde materiaal als gelabelde context — exact het formaat
+        // dat de generate-modus als "ANTWOORDEN VAN DE GEBRUIKER" verwerkt.
+        extraAnsweredFields: accumulated.map((o) => ({
+          id: o.step_id,
+          label: outcomeLabel(o),
+          answer: o.material,
+        })),
+        preferredProvider: settings.provider,
+        preferredModel: settings.model,
+        systemPrompt: settings.systemPrompt.trim() || undefined,
+        toneInstruction: settings.toneInstruction.trim() || undefined,
+        temperature: settings.temperature,
+      });
+      if (res.unclear) {
+        setUnclearReason(
+          res.reason?.trim() ||
+            'Je invoer is niet duidelijk genoeg om er een zinvolle prompt van te maken.',
+        );
+        setStepError('De invoer was niet duidelijk genoeg voor de eindtemplate.');
+        setPhase('error');
         return;
       }
-      setCurrentQuestion(res.question);
-      setTranscript(turns);
-      setAnswerDraft('');
-      setPhase('awaiting-answer');
-      return;
+      const recipe: PromptRecipe = { goal: goal.trim(), plan: p, outcomes: accumulated };
+      clearRunDraft();
+      onResult({ ...res, recipe }, technique);
+    } catch (err) {
+      setStepError(err instanceof Error ? err.message : 'Template samenstellen mislukt.');
+      setPhase('error');
     }
-
-    // De AI rondde af met een brief (of degradeerde veilig naar materiaal).
-    if (res.success && res.material) {
-      advanceWith(p, index, accumulated, {
-        step_id: step.id,
-        technique_id: step.technique_id,
-        produces: step.produces,
-        material: res.material,
-        transcript: turns,
-      });
-      return;
-    }
-
-    setStepError(res.error ?? 'De volgende vraag kon niet worden opgehaald.');
-    setPhase('error');
-  }
-
-  /** De gebruiker beantwoordt de huidige interview-vraag; guardrail-check eerst. */
-  function submitAnswer() {
-    if (!plan || !currentQuestion) return;
-    const answer = answerDraft.trim();
-    if (!answer) {
-      toast.error('Vul eerst een antwoord in.');
-      return;
-    }
-    const findings: GuardrailFinding[] = [
-      ...(settings.pii.enabled ? detectPii(answer) : []),
-      ...detectBlockedTopics(answer, settings.blockedTopics),
-    ];
-    if (findings.length > 0) {
-      setGuardrailFindings(findings);
-      return;
-    }
-    const turns = [...transcript, { question: currentQuestion, answer }];
-    setTranscript(turns);
-    setCurrentQuestion(null);
-    setPhase('executing');
-    void runInterviewTurn(plan, currentStepIndex, outcomes, turns);
   }
 
   return (
@@ -540,6 +596,30 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
                 We stellen een slim plan op dat meerdere technieken combineert tot één sterke,
                 herbruikbare template.
               </p>
+
+              {/* Hervat-melding: er staat nog een niet-afgemaakte bouw bewaard. */}
+              {resumable && phase === 'goal' && !plan && (
+                <div className="animate-fade-in mt-3 flex flex-col gap-3 rounded-xl border border-rijksblauw-200 bg-rijksblauw-50/50 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10">
+                  <div className="flex items-start gap-2 text-slate-600 dark:text-slate-300">
+                    <RotateCw size={16} className="mt-0.5 shrink-0 text-rijksblauw-500" />
+                    <span>
+                      Je hebt nog een niet-afgemaakte bouw{' '}
+                      <span className="font-medium">
+                        ({resumable.outcomes.length}/{resumable.plan.steps.length} stappen)
+                      </span>
+                      . Verder waar je gebleven was?
+                    </span>
+                  </div>
+                  <div className="flex shrink-0 gap-2">
+                    <button type="button" className="opl-btn-secondary" onClick={discardRun}>
+                      Verwijder
+                    </button>
+                    <button type="button" className="opl-btn-primary" onClick={resumeRun}>
+                      Hervatten
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {phase !== 'plan-review' && (
@@ -573,6 +653,8 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
                 plan={plan}
                 techniqueById={techniqueById}
                 onRemoveStep={removeStep}
+                onMoveStep={moveStep}
+                onEditStepTitle={editStepTitle}
                 onBuild={handleBuild}
               />
             ) : (
@@ -581,14 +663,20 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
                 techniqueById={techniqueById}
                 currentStepIndex={currentStepIndex}
                 outcomes={outcomes}
+                phase={phase}
                 error={phase === 'error' ? stepError : null}
                 onRetry={retryStep}
-                awaitingAnswer={phase === 'awaiting-answer'}
-                currentQuestion={currentQuestion}
-                transcript={transcript}
-                answerDraft={answerDraft}
-                onAnswerChange={setAnswerDraft}
-                onSubmitAnswer={submitAnswer}
+                onRegenerateStep={regenerateStep}
+                stepAnswers={stepAnswers}
+                onStepAnswersChange={setStepAnswers}
+                analyzing={analyzing}
+                stepMaterial={stepMaterial}
+                stepSummary={stepSummary}
+                stepGaps={stepGaps}
+                clarification={clarification}
+                onClarificationChange={setClarification}
+                onAnalyze={() => void analyzeCurrentStep(clarification.trim() || undefined)}
+                onCommit={commitStep}
               />
             )}
           </div>
@@ -614,7 +702,9 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
         <GuardrailDialog
           findings={guardrailFindings}
           piiWarning={settings.pii.warning}
-          onConfirm={() => void runPlan()}
+          // In de doel-fase bevestigt dit het opstellen van het plan; tijdens een
+          // stap bevestigt het de analyse van de ingevulde input.
+          onConfirm={() => (phase === 'collecting' ? confirmAnalyze() : void runPlan())}
           onCancel={() => setGuardrailFindings(null)}
         />
       )}
@@ -622,16 +712,23 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
   );
 }
 
-/** Het inspecteerbare plan: een genummerde stepper met verwijderbare stappen. */
+/**
+ * Het inspecteerbare plan: een genummerde stepper. Stappen zijn te herordenen
+ * (omhoog/omlaag), te hernoemen (inline) en te verwijderen voordat de bouw start.
+ */
 function PlanReview({
   plan,
   techniqueById,
   onRemoveStep,
+  onMoveStep,
+  onEditStepTitle,
   onBuild,
 }: {
   plan: PromptPlan;
   techniqueById: (id?: string | null) => Technique | undefined;
   onRemoveStep: (id: string) => void;
+  onMoveStep: (index: number, dir: -1 | 1) => void;
+  onEditStepTitle: (id: string, title: string) => void;
   onBuild: () => void;
 }) {
   return (
@@ -643,55 +740,24 @@ function PlanReview({
             {stripMarkdown(plan.summary)}
           </p>
         )}
+        <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
+          Sleep­volgorde aanpassen met de pijltjes, hernoem een stap, of verwijder er een.
+        </p>
       </div>
 
       <ol className="space-y-3">
-        {plan.steps.map((step, idx) => {
-          const technique = techniqueById(step.technique_id);
-          return (
-            <li
-              key={step.id}
-              className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800"
-            >
-              <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-rijksblauw-500 text-xs font-semibold text-white">
-                {idx + 1}
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-semibold text-slate-800 dark:text-slate-100">
-                    {step.title}
-                  </span>
-                  {technique && (
-                    <span className="opl-badge bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">
-                      {technique.name}
-                    </span>
-                  )}
-                  {step.interactive && (
-                    <span className="opl-badge bg-rijksoranje/15 text-rijksoranje">
-                      vraag na vraag
-                    </span>
-                  )}
-                </div>
-                {step.rationale && (
-                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                    {stripMarkdown(step.rationale)}
-                  </p>
-                )}
-              </div>
-              {plan.steps.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => onRemoveStep(step.id)}
-                  title="Verwijder deze stap"
-                  aria-label={`Verwijder stap ${idx + 1}`}
-                  className="shrink-0 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-rijksoranje/10 hover:text-rijksoranje disabled:opacity-40 dark:text-slate-500"
-                >
-                  <Trash2 size={15} />
-                </button>
-              )}
-            </li>
-          );
-        })}
+        {plan.steps.map((step, idx) => (
+          <ReviewStepRow
+            key={step.id}
+            index={idx}
+            total={plan.steps.length}
+            step={step}
+            techniqueName={techniqueById(step.technique_id)?.name}
+            onMove={onMoveStep}
+            onEditTitle={onEditStepTitle}
+            onRemove={onRemoveStep}
+          />
+        ))}
       </ol>
 
       <div className="flex flex-wrap items-center justify-end gap-3 pt-1">
@@ -709,51 +775,187 @@ function PlanReview({
   );
 }
 
+/** Eén stap in het plan-overzicht: herordenen, hernoemen (inline) en verwijderen. */
+function ReviewStepRow({
+  index,
+  total,
+  step,
+  techniqueName,
+  onMove,
+  onEditTitle,
+  onRemove,
+}: {
+  index: number;
+  total: number;
+  step: PlanStep;
+  techniqueName?: string;
+  onMove: (index: number, dir: -1 | 1) => void;
+  onEditTitle: (id: string, title: string) => void;
+  onRemove: (id: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(step.title);
+
+  function commit() {
+    const next = draft.trim();
+    if (next && next !== step.title) onEditTitle(step.id, next);
+    else setDraft(step.title); // leeg/onveranderd → terug naar origineel
+    setEditing(false);
+  }
+
+  return (
+    <li className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+      {/* Herorden-pijltjes + nummer. */}
+      <div className="flex shrink-0 flex-col items-center gap-1">
+        <button
+          type="button"
+          onClick={() => onMove(index, -1)}
+          disabled={index === 0}
+          title="Omhoog"
+          aria-label={`Stap ${index + 1} omhoog`}
+          className="rounded p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-rijksblauw-600 disabled:opacity-30 dark:hover:bg-slate-700"
+        >
+          <ChevronUp size={15} />
+        </button>
+        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-rijksblauw-500 text-xs font-semibold text-white">
+          {index + 1}
+        </span>
+        <button
+          type="button"
+          onClick={() => onMove(index, 1)}
+          disabled={index === total - 1}
+          title="Omlaag"
+          aria-label={`Stap ${index + 1} omlaag`}
+          className="rounded p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-rijksblauw-600 disabled:opacity-30 dark:hover:bg-slate-700"
+        >
+          <ChevronDown size={15} />
+        </button>
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          {editing ? (
+            <input
+              className="opl-input h-8 max-w-xs py-1 text-sm font-semibold"
+              value={draft}
+              autoFocus
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={commit}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  commit();
+                } else if (e.key === 'Escape') {
+                  setDraft(step.title);
+                  setEditing(false);
+                }
+              }}
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                setDraft(step.title);
+                setEditing(true);
+              }}
+              title="Hernoem deze stap"
+              className="group inline-flex items-center gap-1 font-semibold text-slate-800 hover:text-rijksblauw-700 dark:text-slate-100 dark:hover:text-rijksblauw-200"
+            >
+              {step.title}
+              <Pencil size={12} className="opacity-0 transition-opacity group-hover:opacity-60" />
+            </button>
+          )}
+          {techniqueName && (
+            <span className="opl-badge bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">
+              {techniqueName}
+            </span>
+          )}
+          {step.interactive && (
+            <span className="opl-badge bg-rijksoranje/15 text-rijksoranje">vraag na vraag</span>
+          )}
+        </div>
+        {step.rationale && (
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            {stripMarkdown(step.rationale)}
+          </p>
+        )}
+      </div>
+
+      {total > 1 && (
+        <button
+          type="button"
+          onClick={() => onRemove(step.id)}
+          title="Verwijder deze stap"
+          aria-label={`Verwijder stap ${index + 1}`}
+          className="shrink-0 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-rijksoranje/10 hover:text-rijksoranje disabled:opacity-40 dark:text-slate-500"
+        >
+          <Trash2 size={15} />
+        </button>
+      )}
+    </li>
+  );
+}
+
 /**
- * De uitvoering: een voortgangsrail (stap k van N) met per stap de status. Al
- * afgeronde stappen tonen hun verzamelde materiaal inklapbaar, zodat de gebruiker
- * ziet hoe het artefact groeit. Bij een interactieve stap verschijnt een
- * vraag-na-vraag-paneel. De laatste stap stelt de template samen.
+ * De uitvoering: een voortgangsrail (stap k van N). Op de actieve stap vult de
+ * gebruiker eerst de vervolgvragen van de techniek in; na "Genereren" toont de
+ * AI het materiaal én wat er nog mist voor het totale plaatje. Al afgeronde
+ * stappen tonen hun materiaal inklapbaar. De laatste stap stelt de template samen.
  */
 function PlanExecutor({
   plan,
   techniqueById,
   currentStepIndex,
   outcomes,
+  phase,
   error,
   onRetry,
-  awaitingAnswer,
-  currentQuestion,
-  transcript,
-  answerDraft,
-  onAnswerChange,
-  onSubmitAnswer,
+  onRegenerateStep,
+  stepAnswers,
+  onStepAnswersChange,
+  analyzing,
+  stepMaterial,
+  stepSummary,
+  stepGaps,
+  clarification,
+  onClarificationChange,
+  onAnalyze,
+  onCommit,
 }: {
   plan: PromptPlan;
   techniqueById: (id?: string | null) => Technique | undefined;
   currentStepIndex: number;
   outcomes: StepOutcome[];
+  phase: Phase;
   error: string | null;
   onRetry: () => void;
-  awaitingAnswer: boolean;
-  currentQuestion: string | null;
-  transcript: TranscriptTurn[];
-  answerDraft: string;
-  onAnswerChange: (v: string) => void;
-  onSubmitAnswer: () => void;
+  onRegenerateStep: (index: number) => void;
+  stepAnswers: Record<string, string>;
+  onStepAnswersChange: (a: Record<string, string>) => void;
+  analyzing: boolean;
+  stepMaterial: string | null;
+  stepSummary: string;
+  stepGaps: PlanStepGap[];
+  clarification: string;
+  onClarificationChange: (v: string) => void;
+  onAnalyze: () => void;
+  onCommit: () => void;
 }) {
   const total = plan.steps.length;
   const outcomeByStepId = new Map(outcomes.map((o) => [o.step_id, o]));
   const isComposeStep = (idx: number) => idx >= total - 1;
+  const composing = phase === 'composing';
 
   return (
     <div className="space-y-4">
       <div>
         <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
-          Bezig met bouwen — stap {Math.min(currentStepIndex + 1, total)} van {total}
+          {composing
+            ? 'De template wordt samengesteld…'
+            : `Stap ${Math.min(currentStepIndex + 1, total)} van ${total}`}
         </p>
         <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
-          Elke stap bouwt voort op de vorige; het geheel wordt één herbruikbare template.
+          Vul je input in; de AI denkt mee wat er nog nodig is. Elke stap bouwt voort op de vorige.
         </p>
       </div>
 
@@ -764,17 +966,14 @@ function PlanExecutor({
           const done = Boolean(outcome);
           const isCurrent = idx === currentStepIndex;
           const failed = isCurrent && Boolean(error);
-          const awaiting = isCurrent && awaitingAnswer;
-          const running = isCurrent && !error && !awaiting;
+          const active = isCurrent && !error;
           const status: StepStatus = done
             ? 'done'
             : failed
               ? 'error'
-              : awaiting
-                ? 'awaiting'
-                : running
-                  ? 'running'
-                  : 'pending';
+              : active
+                ? 'active'
+                : 'pending';
           return (
             <StepRow
               key={step.id}
@@ -783,16 +982,27 @@ function PlanExecutor({
               techniqueName={technique?.name}
               status={status}
               compose={isCurrent && isComposeStep(idx)}
+              composing={composing}
               outcome={outcome}
+              // Een afgeronde tussenstap mag opnieuw doorlopen worden (niet de
+              // compose-stap, en alleen als er nu niets actief loopt).
+              onRegenerate={done && !analyzing && !composing && !isComposeStep(idx) ? () => onRegenerateStep(idx) : undefined}
             >
-              {/* Vraag-na-vraag-paneel: alleen op de actieve interactieve stap. */}
-              {awaiting && currentQuestion && (
-                <InterviewPanel
-                  question={currentQuestion}
-                  transcript={transcript}
-                  answerDraft={answerDraft}
-                  onAnswerChange={onAnswerChange}
-                  onSubmitAnswer={onSubmitAnswer}
+              {/* Actieve tussenstap: input verzamelen + analyse tonen. */}
+              {active && !isComposeStep(idx) && technique && (
+                <StepCollector
+                  technique={technique}
+                  answers={stepAnswers}
+                  onAnswersChange={onStepAnswersChange}
+                  analyzing={analyzing}
+                  material={stepMaterial}
+                  summary={stepSummary}
+                  gaps={stepGaps}
+                  clarification={clarification}
+                  onClarificationChange={onClarificationChange}
+                  onAnalyze={onAnalyze}
+                  onCommit={onCommit}
+                  isLastBeforeCompose={idx === total - 2}
                 />
               )}
             </StepRow>
@@ -812,11 +1022,7 @@ function PlanExecutor({
               <p className="mt-0.5 text-rose-700 dark:text-rose-300/90">{stripMarkdown(error)}</p>
             </div>
           </div>
-          <button
-            type="button"
-            className="opl-btn-secondary shrink-0"
-            onClick={onRetry}
-          >
+          <button type="button" className="opl-btn-secondary shrink-0" onClick={onRetry}>
             <RotateCw size={16} /> Opnieuw proberen
           </button>
         </div>
@@ -825,7 +1031,164 @@ function PlanExecutor({
   );
 }
 
-type StepStatus = 'pending' | 'running' | 'awaiting' | 'done' | 'error';
+/**
+ * Het invoer- en analysepaneel voor één actieve tussenstap. Eerst de
+ * vervolgvragen van de techniek (input van de gebruiker) + "Genereren". Daarna
+ * het door de AI uitgeschreven materiaal met de openstaande hiaten ("wat mist
+ * nog") en een toelichtingsveld om te verfijnen, of door naar de volgende stap.
+ */
+function StepCollector({
+  technique,
+  answers,
+  onAnswersChange,
+  analyzing,
+  material,
+  summary,
+  gaps,
+  clarification,
+  onClarificationChange,
+  onAnalyze,
+  onCommit,
+  isLastBeforeCompose,
+}: {
+  technique: Technique;
+  answers: Record<string, string>;
+  onAnswersChange: (a: Record<string, string>) => void;
+  analyzing: boolean;
+  material: string | null;
+  summary: string;
+  gaps: PlanStepGap[];
+  clarification: string;
+  onClarificationChange: (v: string) => void;
+  onAnalyze: () => void;
+  onCommit: () => void;
+  isLastBeforeCompose: boolean;
+}) {
+  const hasFields = technique.follow_up_questions.length > 0;
+  return (
+    <div className="mt-3 space-y-4">
+      {/* 1. Input van de gebruiker via de vervolgvragen van de techniek. */}
+      {hasFields ? (
+        <FollowUpQuestions technique={technique} answers={answers} onChange={onAnswersChange} />
+      ) : (
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          Deze techniek heeft geen vaste vragen. Klik op &quot;Genereren&quot;; de AI denkt mee wat
+          er nog nodig is.
+        </p>
+      )}
+
+      {/* 2. Genereren: analyseer de input en bepaal wat nog mist. */}
+      {material == null ? (
+        <div className="flex justify-end">
+          <button type="button" className="opl-btn-primary" onClick={onAnalyze} disabled={analyzing}>
+            {analyzing ? (
+              <>
+                <Loader2 size={16} className="animate-spin" /> Meedenken…
+              </>
+            ) : (
+              <>
+                <Sparkles size={16} /> Genereren
+              </>
+            )}
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-3 rounded-xl border border-rijksblauw-200 bg-rijksblauw-50/40 p-4 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10">
+          {summary && (
+            <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
+              {stripMarkdown(summary)}
+            </p>
+          )}
+
+          {/* Het uitgeschreven materiaal van deze stap. */}
+          <div>
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              Tussenresultaat
+            </p>
+            <pre className="max-h-56 overflow-auto whitespace-pre-wrap rounded-lg border border-slate-200 bg-white p-3 text-xs leading-relaxed text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+              {material}
+            </pre>
+          </div>
+
+          {/* "Wat mist nog voor het totale plaatje" — de doorvraag-lus. */}
+          {gaps.length > 0 && (
+            <div className="rounded-lg border border-rijksblauw-200 bg-white/70 p-3 dark:border-rijksblauw-500/30 dark:bg-slate-800/60">
+              <p className="flex items-start gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
+                <Lightbulb size={16} className="mt-0.5 shrink-0 text-rijksblauw-500" />
+                Wat je nog kunt aanleveren voor een scherper geheel
+              </p>
+              <ul className="mt-2 space-y-1.5 pl-1">
+                {gaps.map((g, i) => (
+                  <li key={i} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
+                    <HelpCircle size={15} className="mt-0.5 shrink-0 text-rijksblauw-500" />
+                    <span>
+                      {g.label && <span className="font-medium">{g.label}: </span>}
+                      {stripMarkdown(g.question)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <label className="opl-label mb-1 mt-3 block" htmlFor="plan-step-clarify">
+                Jouw aanvulling
+              </label>
+              <textarea
+                id="plan-step-clarify"
+                className="opl-input min-h-[72px] resize-y text-sm"
+                value={clarification}
+                placeholder="Vul aan wat hierboven nog mist…"
+                onChange={(e) => onClarificationChange(e.target.value)}
+                disabled={analyzing}
+              />
+              <div className="mt-2">
+                <button
+                  type="button"
+                  className="opl-btn-secondary"
+                  onClick={onAnalyze}
+                  disabled={analyzing || !clarification.trim()}
+                >
+                  {analyzing ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" /> Opnieuw meedenken…
+                    </>
+                  ) : (
+                    <>
+                      <RotateCw size={16} /> Verwerk mijn aanvulling
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Door naar de volgende stap (of de eindtemplate). */}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <button
+              type="button"
+              className="text-xs font-medium text-slate-500 hover:text-rijksblauw-600 dark:text-slate-400"
+              onClick={onAnalyze}
+              disabled={analyzing}
+            >
+              Opnieuw genereren
+            </button>
+            <button type="button" className="opl-btn-primary" onClick={onCommit} disabled={analyzing}>
+              {isLastBeforeCompose ? (
+                <>
+                  <Sparkles size={16} /> Naar de eindtemplate <ArrowRight size={16} />
+                </>
+              ) : (
+                <>
+                  Volgende stap <ArrowRight size={16} />
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+type StepStatus = 'pending' | 'active' | 'done' | 'error';
 
 /** Eén rij in de uitvoeringsrail: status-icoon + titel + inklapbaar materiaal. */
 function StepRow({
@@ -834,7 +1197,9 @@ function StepRow({
   techniqueName,
   status,
   compose,
+  composing,
   outcome,
+  onRegenerate,
   children,
 }: {
   index: number;
@@ -842,12 +1207,15 @@ function StepRow({
   techniqueName?: string;
   status: StepStatus;
   compose: boolean;
+  composing: boolean;
   outcome?: StepOutcome;
-  /** Extra inhoud onder de titel — het vraag-na-vraag-paneel bij een interview. */
+  /** Aanwezig op een afgeronde tussenstap: doorloop die stap (en de latere) opnieuw. */
+  onRegenerate?: () => void;
+  /** Extra inhoud onder de titel — het invoer-/analysepaneel op de actieve stap. */
   children?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  const active = status === 'running' || status === 'awaiting';
+  const active = status === 'active';
   return (
     <li
       className={clsx(
@@ -860,7 +1228,7 @@ function StepRow({
       )}
     >
       <div className="flex items-start gap-3">
-        <StepBadge index={index} status={status} />
+        <StepBadge index={index} status={status} composing={compose && composing} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-semibold text-slate-800 dark:text-slate-100">{step.title}</span>
@@ -869,15 +1237,9 @@ function StepRow({
                 {techniqueName}
               </span>
             )}
-            {status === 'running' && (
+            {compose && composing && (
               <span className="inline-flex items-center gap-1 text-xs text-rijksblauw-600 dark:text-rijksblauw-300">
-                <Loader2 size={13} className="animate-spin" />
-                {compose ? 'Template samenstellen…' : 'Materiaal verzamelen…'}
-              </span>
-            )}
-            {status === 'awaiting' && (
-              <span className="inline-flex items-center gap-1 text-xs font-medium text-rijksoranje">
-                <MessageCircleQuestion size={13} /> Wacht op je antwoord
+                <Loader2 size={13} className="animate-spin" /> Template samenstellen…
               </span>
             )}
           </div>
@@ -887,15 +1249,27 @@ function StepRow({
           {/* Inklapbaar: het verzamelde materiaal van een afgeronde stap. */}
           {outcome?.material && (
             <div className="mt-2">
-              <button
-                type="button"
-                onClick={() => setOpen((v) => !v)}
-                aria-expanded={open}
-                className="inline-flex items-center gap-1 text-xs font-medium text-rijksblauw-600 hover:text-rijksblauw-700 dark:text-rijksblauw-300"
-              >
-                {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                {open ? 'Verberg' : 'Bekijk'} {outcomeLabel(outcome).toLowerCase()}
-              </button>
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setOpen((v) => !v)}
+                  aria-expanded={open}
+                  className="inline-flex items-center gap-1 text-xs font-medium text-rijksblauw-600 hover:text-rijksblauw-700 dark:text-rijksblauw-300"
+                >
+                  {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                  {open ? 'Verberg' : 'Bekijk'} {outcomeLabel(outcome).toLowerCase()}
+                </button>
+                {onRegenerate && (
+                  <button
+                    type="button"
+                    onClick={onRegenerate}
+                    title="Doorloop deze stap opnieuw (latere stappen worden ook opnieuw gedaan)"
+                    className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-rijksoranje dark:text-slate-400"
+                  >
+                    <RotateCw size={13} /> Opnieuw
+                  </button>
+                )}
+              </div>
               {open && (
                 <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-relaxed text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
                   {outcome.material}
@@ -909,74 +1283,8 @@ function StepRow({
   );
 }
 
-/**
- * Het vraag-na-vraag-paneel voor een interactieve stap: het lopende transcript
- * plus de huidige vraag met een antwoordveld. Enter (zonder Shift) verstuurt.
- */
-function InterviewPanel({
-  question,
-  transcript,
-  answerDraft,
-  onAnswerChange,
-  onSubmitAnswer,
-}: {
-  question: string;
-  transcript: TranscriptTurn[];
-  answerDraft: string;
-  onAnswerChange: (v: string) => void;
-  onSubmitAnswer: () => void;
-}) {
-  return (
-    <div className="mt-3 space-y-3">
-      {/* Eerder beantwoorde vragen in dit interview. */}
-      {transcript.length > 0 && (
-        <ul className="space-y-2">
-          {transcript.map((t, i) => (
-            <li key={i} className="rounded-lg border border-slate-200 bg-white p-2.5 text-xs dark:border-slate-700 dark:bg-slate-800">
-              <p className="font-medium text-slate-600 dark:text-slate-300">{stripMarkdown(t.question)}</p>
-              <p className="mt-0.5 text-slate-500 dark:text-slate-400">{t.answer}</p>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {/* De huidige vraag + antwoordveld. */}
-      <div className="rounded-xl border border-rijksblauw-200 bg-white p-3 dark:border-rijksblauw-500/30 dark:bg-slate-800">
-        <p className="flex items-start gap-2 text-sm font-medium text-rijksblauw-700 dark:text-rijksblauw-200">
-          <MessageCircleQuestion size={16} className="mt-0.5 shrink-0" />
-          {stripMarkdown(question)}
-        </p>
-        <textarea
-          className="opl-input mt-2 min-h-[72px] resize-y"
-          value={answerDraft}
-          placeholder="Typ je antwoord…"
-          autoFocus
-          onChange={(e) => onAnswerChange(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              onSubmitAnswer();
-            }
-          }}
-        />
-        <div className="mt-2 flex items-center justify-between gap-3">
-          <p className="text-xs text-slate-400 dark:text-slate-500">Enter = versturen · Shift+Enter = nieuwe regel</p>
-          <button
-            type="button"
-            className="opl-btn-primary"
-            onClick={onSubmitAnswer}
-            disabled={!answerDraft.trim()}
-          >
-            <Send size={16} /> Antwoord
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /** Het ronde statusbadge links van een stap: nummer, spinner, vinkje of kruis. */
-function StepBadge({ index, status }: { index: number; status: StepStatus }) {
+function StepBadge({ index, status, composing }: { index: number; status: StepStatus; composing: boolean }) {
   const base = 'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold';
   if (status === 'done') {
     return (
@@ -985,24 +1293,17 @@ function StepBadge({ index, status }: { index: number; status: StepStatus }) {
       </span>
     );
   }
-  if (status === 'running') {
-    return (
-      <span className={clsx(base, 'bg-rijksblauw-500 text-white')}>
-        <Loader2 size={13} className="animate-spin" />
-      </span>
-    );
-  }
-  if (status === 'awaiting') {
-    return (
-      <span className={clsx(base, 'bg-rijksoranje text-white')}>
-        <MessageCircleQuestion size={13} />
-      </span>
-    );
-  }
   if (status === 'error') {
     return (
       <span className={clsx(base, 'bg-rose-500 text-white')}>
         <AlertTriangle size={13} />
+      </span>
+    );
+  }
+  if (status === 'active') {
+    return (
+      <span className={clsx(base, 'bg-rijksblauw-500 text-white')}>
+        {composing ? <Loader2 size={13} className="animate-spin" /> : index + 1}
       </span>
     );
   }

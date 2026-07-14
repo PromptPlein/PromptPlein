@@ -266,15 +266,37 @@ export default function OptimizerPage() {
     }
   }
 
-  /** Resultaat van de eigen-prompt-flow: toon het via dezelfde uitvoer-fase. */
+  /**
+   * Resultaat van de eigen-prompt-flow óf de plan-bouwer: toon het via dezelfde
+   * uitvoer-fase. Een aanwezig `recipe` markeert een plan-wizard-run: dan loggen
+   * we `flow:'plan-wizard'` met het aantal stappen en bewaren we het recept bij
+   * een optimalisatie (herleidbaarheid/herhaling).
+   */
   function handleOwnPromptResult(res: OptimizeResult, usedTechnique: Technique) {
+    const isPlanWizard = Boolean(res.recipe);
     void trackEvent({
       event_type: 'optimization_run',
       user_identifier: getCurrentUser(),
       prompt_id: null,
       technique_id: usedTechnique.id,
-      metadata: { provider: res.provider, flow: 'own-prompt' },
+      metadata: {
+        provider: res.provider,
+        flow: isPlanWizard ? 'plan-wizard' : 'own-prompt',
+        ...(res.recipe ? { steps: res.recipe.plan.steps.length } : {}),
+      },
     });
+    // Plan-wizard: bewaar het recept bij een optimalisatie-rij (prompt_id mag leeg).
+    if (res.recipe) {
+      void saveOptimization({
+        prompt_id: null,
+        technique_id: usedTechnique.id,
+        optimized_content: res.optimized_content,
+        follow_up_answers: {},
+        recipe: res.recipe,
+      }).catch(() => {
+        /* opslaan van het recept is best-effort; faal de UX niet */
+      });
+    }
     setTechniqueId(usedTechnique.id); // zodat OptimizedOutput de juiste techniek toont
     setPhase('transition');
     setTimeout(() => {

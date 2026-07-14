@@ -651,6 +651,103 @@ export async function runPlanStep(args: {
 }
 
 /**
+ * Analyseert één plan-stap op basis van de INPUT van de gebruiker (de antwoorden
+ * op de vervolgvragen van de techniek) plus het doel en eerdere stappen. Levert
+ * het (voorlopige) materiaal én de hiaten: wat de gebruiker nog moet aanleveren
+ * voor het totale plaatje. Herhaalbaar met een `clarification` tot de gebruiker
+ * tevreden is. Faalt de AI, dan honest-degrade (`{success:false, error}`).
+ */
+export async function analyzePlanStep(args: {
+  goal: string;
+  step: PlanStep;
+  technique: Technique;
+  /** De antwoorden van de gebruiker op de vervolgvragen van de techniek. */
+  answers: Record<string, string>;
+  /** Compact tekstblok van eerdere uitkomsten (zie {@link serializeOutcomes}). */
+  outcomesSummary?: string;
+  /** Optionele extra toelichting uit de "wat mist nog"-lus. */
+  clarification?: string;
+  preferredProvider?: AiProvider;
+  preferredModel?: string;
+}): Promise<PlanStepResult> {
+  const { goal, step, technique, answers, outcomesSummary, clarification, preferredProvider, preferredModel } =
+    args;
+  const functionUrl = getFunctionUrl('optimize-prompt');
+
+  if (!isSupabaseConfigured || !functionUrl) {
+    return {
+      success: false,
+      provider: 'local-template',
+      error: 'Geen AI-service beschikbaar om deze stap te analyseren.',
+    };
+  }
+
+  // Zet de antwoorden om naar gelabelde velden (zoals de generate-modus verwacht).
+  const answeredFields = technique.follow_up_questions
+    .map((q) => ({ id: q.id, label: q.label, answer: answers[q.id] ?? '' }))
+    .filter((f) => f.answer.trim());
+
+  try {
+    const anonKey = getAnonKey();
+    const response = await fetch(functionUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(anonKey ? { Authorization: `Bearer ${anonKey}`, apikey: anonKey } : {}),
+      },
+      body: JSON.stringify({
+        mode: 'plan-step-analyze',
+        goal,
+        stepTitle: step.title,
+        stepProduces: step.produces,
+        stepTechniqueName: technique.name,
+        outcomesSummary,
+        answeredFields,
+        clarification: clarification?.trim() || undefined,
+        preferredProvider: preferredProvider ?? 'auto',
+        preferredModel,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Edge function gaf status ${response.status}`);
+    }
+
+    const data = (await response.json()) as {
+      success?: boolean;
+      material?: string;
+      summary?: string;
+      gaps?: { label: string; question: string }[];
+      provider?: PlanStepResult['provider'];
+      unclear?: boolean;
+      reason?: string;
+      error?: string;
+    };
+
+    if (data.unclear) {
+      return { success: false, unclear: true, reason: data.reason, provider: data.provider ?? 'claude' };
+    }
+    if (data.success && data.material?.trim()) {
+      return {
+        success: true,
+        material: data.material.trim(),
+        summary: data.summary,
+        gaps: Array.isArray(data.gaps) ? data.gaps : [],
+        provider: data.provider ?? 'claude',
+      };
+    }
+    return {
+      success: false,
+      provider: data.provider ?? 'claude',
+      error: data.error ?? 'Geen analyse ontvangen voor deze stap.',
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Onbekende fout';
+    return { success: false, provider: 'local-template', error: `Stap-analyse mislukt (${message}).` };
+  }
+}
+
+/**
  * Beveelt het best passende prompt framework (CARE, CRISP, …) aan op basis van
  * de EIGEN prompt van de gebruiker. Roept de edge function in
  * 'recommend-framework'-modus aan; faalt dat, dan lokale trefwoord-matching.

@@ -113,11 +113,18 @@ export interface Prompt {
 
 export interface Optimization {
   id: string;
-  prompt_id: string;
+  /** Nullable: plan-wizard-recepten worden bewaard zonder gekoppelde prompt. */
+  prompt_id: string | null;
   technique_id: string;
   optimized_content: string;
   follow_up_answers: Record<string, string>;
   created_at: string;
+  /**
+   * Optioneel plan-wizard recept (doel + plan + verzameld materiaal). Alleen
+   * gevuld voor via de slimme meerstaps-bouwer gemaakte optimalisaties.
+   * Zie {@link PromptRecipe} (verderop in dit bestand gedefinieerd).
+   */
+  recipe?: PromptRecipe | null;
 }
 
 /** Payload om een nieuwe prompt aan te maken. */
@@ -219,6 +226,12 @@ export interface OptimizeResult {
    */
   unclear?: boolean;
   reason?: string;
+  /**
+   * Optioneel plan-wizard recept dat tot deze template leidde (doel + plan +
+   * verzameld materiaal). Alleen gezet door de slimme meerstaps-bouwer; wordt
+   * bij de optimalisatie bewaard voor herleidbaarheid/herhaling.
+   */
+  recipe?: PromptRecipe;
 }
 
 /** Eén techniekaanbeveling bij een door de gebruiker beschreven doel. */
@@ -378,10 +391,27 @@ export interface StepOutcome {
   /** Het uitgeschreven materiaal van deze stap (echte inhoud, geen plaatshouders). */
   material: string;
   /**
+   * De antwoorden die de gebruiker op de vervolgvragen van deze stap gaf. Vormen
+   * samen met het materiaal de basis voor de volgende stap en de eind-compose.
+   */
+  answers?: Record<string, string>;
+  /**
    * Alleen bij interactieve stappen: het vraag-na-vraag-transcript waaruit het
    * materiaal is geconsolideerd. Bewaard voor de UI en eventuele terugblik.
    */
   transcript?: TranscriptTurn[];
+}
+
+/**
+ * Eén ontbrekend onderdeel dat de gebruiker nog moet aanleveren om het "totale
+ * plaatje" compleet te maken (plan-step-analyse). De AI denkt per stap mee: wat
+ * heeft het al, en wat is er nog nodig? Gemodelleerd op {@link MissingField}.
+ */
+export interface PlanStepGap {
+  /** Korte naam van wat ontbreekt (bijv. "Detailniveau"). */
+  label: string;
+  /** Concrete vraag die de gebruiker helpt dit aan te vullen. */
+  question: string;
 }
 
 /**
@@ -397,6 +427,13 @@ export interface PlanStepResult {
   provider: AiProviderResult;
   /** Het uitgeschreven materiaal bij een geslaagde (of afgeronde) stap. */
   material?: string;
+  /**
+   * Analyse-stap: wat de gebruiker nog moet aanleveren voor het totale plaatje.
+   * Leeg = de AI acht deze stap compleet en de gebruiker kan door.
+   */
+  gaps?: PlanStepGap[];
+  /** Korte samenvatting van de analyse (wat is er al, wat mist nog). */
+  summary?: string;
   /** Interactieve stap: de AI heeft nog een vraag nodig voordat hij afrondt. */
   needs_input?: boolean;
   /** Interactieve stap: de ene volgende vraag aan de gebruiker. */
@@ -408,6 +445,18 @@ export interface PlanStepResult {
   /** De input voor deze stap was onduidelijk; `reason` legt uit wat. */
   unclear?: boolean;
   reason?: string;
+}
+
+/**
+ * Het volledige "recept" van een plan-wizard-run: het doel, het uitgevoerde plan
+ * en het per stap verzamelde materiaal. Wordt bij een opgeslagen optimalisatie
+ * bewaard (JSONB `recipe`-kolom) zodat een via de bouwer gemaakte template later
+ * te herleiden of te herhalen is. Ook gebruikt voor lokaal hervatten na herladen.
+ */
+export interface PromptRecipe {
+  goal: string;
+  plan: PromptPlan;
+  outcomes: StepOutcome[];
 }
 
 /**

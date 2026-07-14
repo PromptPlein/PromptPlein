@@ -37,7 +37,8 @@ type Mode =
   | 'title'
   | 'metadata'
   | 'plan'
-  | 'plan-step';
+  | 'plan-step'
+  | 'plan-step-analyze';
 
 /** Eén veld van het gekozen prompt framework waar de analyse op toetst. */
 interface AnalyzeField {
@@ -660,6 +661,115 @@ function parseInterviewTurn(raw: string): { question?: string; material?: string
   }
   // Geen herkenbare sentinel → veilige degradatie: gebruik de ruwe tekst als brief.
   return { material: text };
+}
+
+// --- Plan-step-analyze-modus: input van de gebruiker + "wat mist er nog" ---
+// Per stap levert de GEBRUIKER eerst input (de vervolgvragen van de techniek).
+// De AI analyseert dan: gegeven het doel, het materiaal van eerdere stappen en
+// deze input — wat is er al, en wat MOET de gebruiker nog aanleveren voor het
+// totale plaatje? Levert het (voorlopige) materiaal én de openstaande hiaten.
+const PLAN_STEP_ANALYZE_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse rijksoverheid.
+Je bouwt STAP VOOR STAP materiaal op waarmee straks één sterke, herbruikbare prompt-template wordt
+samengesteld. Dit is één tussenstap — nog NIET de eindtemplate.
+
+De gebruiker heeft voor deze stap zelf input gegeven. De input van de gebruiker is LEIDEND: verzin
+niets wat de gebruiker niet aanreikt, maar bouw op wat er is. Doe twee dingen:
+
+1. MATERIAAL: schrijf op basis van het doel, het materiaal van eerdere stappen en de input van de
+   gebruiker het concrete materiaal voor deze stap uit (een uitgewerkte persona, format-rubrieken of
+   een bondige brief — passend bij wat de stap oplevert). Echte inhoud, GEEN plaatshouders, GEEN
+   prompt-template, GEEN meta-instructies. Waar de gebruiker iets niet aanleverde, ga NIET zelf
+   invullen met verzonnen specifieks — houd het daar algemeen en benoem het als hiaat (zie 2).
+
+2. HIATEN: bepaal wat de gebruiker nog moet aanleveren om het TOTALE plaatje (de uiteindelijke prompt)
+   compleet en scherp te maken. Denk vooruit: wat heeft een latere stap of de eindprompt nog nodig
+   dat nu ontbreekt? Formuleer elk hiaat als een korte, concrete vraag aan de gebruiker. Lever GEEN
+   hiaten die de gebruiker al beantwoord heeft. Zijn er geen echte hiaten, geef dan een lege lijst.
+
+${CLARITY_GATE_JSON_INSTRUCTION}
+
+Anders geef je UITSLUITEND geldige JSON terug, zonder codeblok of extra tekst, in dit formaat:
+{"summary":"<1 zin: wat is er al en wat mist nog, in het Nederlands>","material":"<het uitgeschreven materiaal voor deze stap>","gaps":[{"label":"<kort onderwerp>","question":"<concrete vraag aan de gebruiker>"}]}
+
+Geef maximaal 4 hiaten, alleen de echt belangrijke. Laat "gaps" leeg als de stap compleet genoeg is.`;
+
+/** Bouw de gebruikersprompt voor de plan-step-analyze-modus. */
+const PLAN_STEP_ANALYZE_USER_PROMPT = (args: {
+  goal: string;
+  stepTitle?: string;
+  stepProduces?: string;
+  stepTechniqueName?: string;
+  outcomesSummary?: string;
+  answeredFields?: AnsweredField[];
+  clarification?: string;
+}) => {
+  const parts: string[] = [`DOEL VAN DE GEBRUIKER:\n${args.goal}`];
+  if (args.outcomesSummary && args.outcomesSummary.trim()) {
+    parts.push(`MATERIAAL UIT EERDERE STAPPEN:\n${args.outcomesSummary.trim()}`);
+  }
+  const wat: string[] = [];
+  if (args.stepTitle) wat.push(`Stap: ${args.stepTitle}`);
+  if (args.stepTechniqueName) wat.push(`Techniek: ${args.stepTechniqueName}`);
+  const producesLabel =
+    args.stepProduces === 'persona'
+      ? 'een uitgewerkte persona/doelgroep'
+      : args.stepProduces === 'format'
+        ? 'een concrete format-structuur met rubrieken'
+        : args.stepProduces === 'brief'
+          ? 'een bondige inhoudelijke brief'
+          : 'het gevraagde materiaal';
+  wat.push(`Deze stap levert: ${producesLabel}.`);
+  parts.push(`DEZE STAP:\n${wat.join('\n')}`);
+
+  const answered = (args.answeredFields ?? []).filter((f) => f.answer?.trim());
+  if (answered.length > 0) {
+    parts.push(
+      `INPUT VAN DE GEBRUIKER VOOR DEZE STAP:\n${answered
+        .map((f) => `- ${f.label}: ${f.answer.trim()}`)
+        .join('\n')}`,
+    );
+  } else {
+    parts.push('INPUT VAN DE GEBRUIKER VOOR DEZE STAP:\n(nog geen input gegeven)');
+  }
+  if (args.clarification && args.clarification.trim()) {
+    parts.push(`AANVULLENDE TOELICHTING VAN DE GEBRUIKER:\n${args.clarification.trim()}`);
+  }
+  return parts.join('\n\n');
+};
+
+/** Parseert het JSON-antwoord van de plan-step-analyze-modus robuust. */
+function parsePlanStepAnalyze(
+  raw: string,
+): { summary: string; material: string; gaps: { label: string; question: string }[] } | null {
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  try {
+    const parsed = JSON.parse(match[0]) as {
+      summary?: unknown;
+      material?: unknown;
+      gaps?: unknown;
+    };
+    const rawGaps = Array.isArray(parsed.gaps) ? parsed.gaps : [];
+    const gaps = rawGaps
+      .filter(
+        (g): g is Record<string, unknown> =>
+          !!g && typeof (g as Record<string, unknown>).question === 'string',
+      )
+      .slice(0, 4)
+      .map((g) => ({
+        label: typeof g.label === 'string' ? g.label : '',
+        question: g.question as string,
+      }));
+    const material = typeof parsed.material === 'string' ? parsed.material.trim() : '';
+    if (!material) return null;
+    return {
+      summary: typeof parsed.summary === 'string' ? parsed.summary : '',
+      material,
+      gaps,
+    };
+  } catch {
+    return null;
+  }
 }
 
 const RECOMMEND_FRAMEWORK_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse rijksoverheid.
@@ -1824,7 +1934,9 @@ Deno.serve(async (req: Request) => {
                       ? 'plan'
                       : body.mode === 'plan-step'
                         ? 'plan-step'
-                        : 'generate';
+                        : body.mode === 'plan-step-analyze'
+                          ? 'plan-step-analyze'
+                          : 'generate';
     const order = buildOrder(body.preferredProvider);
     const temperature = clampTemp(body.temperature);
 
@@ -2236,6 +2348,74 @@ Deno.serve(async (req: Request) => {
 
       return new Response(
         JSON.stringify({ success: true, material, provider }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    // --- Plan-step-analyze: verwerk gebruikersinput + bepaal wat nog mist ---
+    if (mode === 'plan-step-analyze') {
+      const goal = body.goal?.trim();
+      if (!goal) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'goal is verplicht' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      const userMessage = PLAN_STEP_ANALYZE_USER_PROMPT({
+        goal,
+        stepTitle: body.stepTitle,
+        stepProduces: body.stepProduces,
+        stepTechniqueName: body.stepTechniqueName,
+        outcomesSummary: body.outcomesSummary,
+        answeredFields: body.answeredFields,
+        clarification: body.clarification,
+      });
+      let analysis: { summary: string; material: string; gaps: { label: string; question: string }[] } | null = null;
+      let provider: Provider | 'local-template' = 'local-template';
+
+      for (const candidate of order) {
+        try {
+          const raw = await PROVIDERS[candidate](
+            userMessage,
+            PLAN_STEP_ANALYZE_SYSTEM_PROMPT,
+            0.3,
+            resolveModel(candidate, body.preferredProvider, body.preferredModel),
+          );
+          const unclear = detectUnclearJson(raw);
+          if (unclear) {
+            return new Response(
+              JSON.stringify({ success: false, unclear: true, reason: unclear, provider: candidate }),
+              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            );
+          }
+          const parsed = parsePlanStepAnalyze(raw);
+          if (parsed) {
+            analysis = parsed;
+            provider = candidate;
+            break;
+          }
+        } catch (providerErr) {
+          console.error(`${candidate} (plan-step-analyze) mislukt, probeer volgende:`, providerErr);
+        }
+      }
+
+      // Honest-degrade: geen nep-materiaal. Kon geen provider iets leveren → retry.
+      if (!analysis) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'De analyse voor deze stap kon niet worden gemaakt' }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          material: analysis.material,
+          summary: analysis.summary,
+          gaps: analysis.gaps,
+          provider,
+        }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }

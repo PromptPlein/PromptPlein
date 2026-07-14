@@ -356,12 +356,18 @@ export interface TechniquePromptLink {
  * gebruiker mag zien.
  */
 export async function listTechniquePromptLinks(): Promise<TechniquePromptLink[]> {
+  // Recept-only optimalisaties (plan-wizard) hebben geen gekoppelde prompt en
+  // vallen hier buiten: alleen rijen met een prompt_id zijn een echte koppeling.
   if (local) {
     return localStore
       .allOptimizations()
+      .filter((o): o is typeof o & { prompt_id: string } => Boolean(o.prompt_id))
       .map((o) => ({ technique_id: o.technique_id, prompt_id: o.prompt_id }));
   }
-  const { data, error } = await supabase!.from('optimizations').select('technique_id, prompt_id');
+  const { data, error } = await supabase!
+    .from('optimizations')
+    .select('technique_id, prompt_id')
+    .not('prompt_id', 'is', null);
   if (error) throw error;
   return (data ?? []) as TechniquePromptLink[];
 }
