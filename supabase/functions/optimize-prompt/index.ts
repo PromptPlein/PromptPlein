@@ -40,7 +40,10 @@ type Mode =
   | 'plan-step'
   | 'plan-step-analyze'
   | 'execute'
-  | 'persona-fill';
+  | 'persona-fill'
+  | 'fewshot-example'
+  | 'fewshot-extract'
+  | 'meta-build';
 
 /** Eén veld van het gekozen prompt framework waar de analyse op toetst. */
 interface AnalyzeField {
@@ -152,6 +155,22 @@ interface RequestBody {
   personaContext?: string;
   /** De in te vullen persona-vragen (id + label + waarom die vraag ertoe doet). */
   personaQuestions?: { id: string; label: string; why?: string }[];
+  // 'fewshot-*'-velden: de taakbeschrijving en (bij extract) de voorbeeldparen.
+  /** Beschrijving van de input die de gebruiker straks aanlevert. */
+  fsInput?: string;
+  /** Beschrijving van de gewenste output. */
+  fsOutput?: string;
+  /** Vorm van de output: vrije_tekst/gestructureerd/lijst/classificatie. */
+  fsFormat?: string;
+  /** Bij classificatie: de mogelijke labels. */
+  fsLabels?: string;
+  /** De ingevulde input→output-voorbeeldparen (voor de extractie/analyse). */
+  fsPairs?: { input: string; output: string }[];
+  // 'meta-build'-velden: het ruwe verzoek + optionele verfijn-feedback.
+  /** Het ruwe verzoek/doel van de gebruiker waar de AI een PROMPT van bouwt. */
+  metaRequest?: string;
+  /** Optionele feedback van de gebruiker om de gebouwde prompt bij te stellen. */
+  metaFeedback?: string;
   // 'analyze'-velden: toets de eigen prompt aan de eisen van het prompt framework.
   ownPrompt?: string;
   analyzeFields?: AnalyzeField[];
@@ -875,6 +894,199 @@ function parsePersonaFill(raw: string, validIds: Set<string>): { id: string; val
       .map((f) => ({ id: f.id as string, value: typeof f.value === 'string' ? f.value : '' }))
       .filter((f) => f.value.trim());
     return fields.length > 0 ? fields : null;
+  } catch {
+    return null;
+  }
+}
+
+// --- Few-shot-modus 1: genereer een concept-voorbeeldpaar ---
+// De gebruiker heeft (nog) geen eigen voorbeeld; de AI stelt er één voor op basis
+// van de taakbeschrijving, dat de gebruiker daarna kan bijstellen tot iets wat die
+// zou goedkeuren.
+const FEWSHOT_EXAMPLE_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse rijksoverheid.
+De gebruiker wil met de few-shot-techniek werken maar heeft nog geen voorbeeld. Stel op basis van de
+taakbeschrijving ÉÉN realistisch, concreet input→output-voorbeeldpaar voor dat past bij intern
+overheidswerk. Het is een CONCEPT dat de gebruiker mag aanpassen.
+
+- input: een plausibel voorbeeld van wat er binnenkomt (bijv. een burgervraag, een ruwe e-mail).
+- output: hoe daar idealiter op gereageerd wordt, in de gewenste vorm.
+- Blijf intern gericht, gebruik geen echte namen/dossiernummers, houd het bondig maar compleet.
+
+${CLARITY_GATE_JSON_INSTRUCTION}
+
+Anders geef je UITSLUITEND geldige JSON terug, zonder codeblok of extra tekst, in dit formaat:
+{"input":"<voorbeeld-input>","output":"<bijbehorende gewenste output>"}`;
+
+const FEWSHOT_EXAMPLE_USER_PROMPT = (args: {
+  input?: string;
+  output?: string;
+  format?: string;
+  labels?: string;
+}) => {
+  const parts: string[] = [];
+  if (args.input?.trim()) parts.push(`SOORT INPUT:\n${args.input.trim()}`);
+  if (args.output?.trim()) parts.push(`GEWENSTE OUTPUT:\n${args.output.trim()}`);
+  if (args.format) parts.push(`VORM: ${args.format}`);
+  if (args.labels?.trim()) parts.push(`MOGELIJKE LABELS: ${args.labels.trim()}`);
+  parts.push('Stel nu één passend voorbeeldpaar voor.');
+  return parts.join('\n\n');
+};
+
+/** Parseert het concept-voorbeeldpaar (fewshot-example). */
+function parseFewShotExample(raw: string): { input: string; output: string } | null {
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  try {
+    const p = JSON.parse(match[0]) as { input?: unknown; output?: unknown };
+    const input = typeof p.input === 'string' ? p.input.trim() : '';
+    const output = typeof p.output === 'string' ? p.output.trim() : '';
+    if (!input && !output) return null;
+    return { input, output };
+  } catch {
+    return null;
+  }
+}
+
+// --- Few-shot-modus 2: extraheer kenmerken uit de voorbeelden (de kern) ---
+// De AI analyseert de voorbeeldparen en levert: (1) welke KENMERKEN je moet
+// overnemen (opbouw, toon, lengte, …), (2) welke CASUS-SPECIFIEKE details je juist
+// moet weglaten (namen, datums, dossiernummers), en bij meerdere voorbeelden een
+// dekkings- en consistentie-analyse.
+const FEWSHOT_EXTRACT_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse rijksoverheid.
+Analyseer de meegegeven voorbeeld(en) voor een few-shot-prompt en lever een gestructureerde analyse.
+
+Doe vier dingen:
+1. KENMERKEN (overnemen): welke stijl-/vormkenmerken maken deze voorbeelden goed en moeten in de
+   prompt worden vastgelegd? Denk aan: opbouw/volgorde, toon en register, lengte, detailniveau,
+   aanhef/afsluiting, mate van stelligheid, gebruik van vaktaal, opmaak/koppen. Geef per kenmerk een
+   korte "detail" met wat je concreet in het voorbeeld zag.
+2. CASUS-SPECIFIEK (niet overnemen): welke concrete details horen bij DIT geval en moeten worden
+   geneutraliseerd of vervangen door een [plaatshouder]? Denk aan: namen, datums, dossier-/zaaknummers,
+   organisatienamen, bedragen, specifieke casusdetails.
+3. DEKKING (alleen bij meerdere voorbeelden): lijken de voorbeelden te veel op elkaar (allemaal kort,
+   allemaal standaardgevallen)? Zo ja, benoem dat kort in "dekking".
+4. CONSISTENTIE (alleen bij meerdere voorbeelden): spreken de voorbeelden elkaar tegen (bijv. het ene
+   formeel, het andere informeel)? Zo ja, beschrijf de tegenstrijdigheid kort in "consistentie".
+
+${CLARITY_GATE_JSON_INSTRUCTION}
+
+Anders geef je UITSLUITEND geldige JSON terug, zonder codeblok of extra tekst, in dit formaat:
+{"kenmerken":[{"label":"<kort>","detail":"<wat je zag>"}],"casus_specifiek":[{"label":"<kort>","detail":"<wat en waarom weg>"}],"dekking":"<zin of leeg>","consistentie":"<zin of leeg>"}
+
+Geef maximaal 8 kenmerken en 8 casus-specifieke punten; alleen de echt relevante.`;
+
+const FEWSHOT_EXTRACT_USER_PROMPT = (args: {
+  input?: string;
+  output?: string;
+  format?: string;
+  labels?: string;
+  pairs?: { input: string; output: string }[];
+}) => {
+  const parts: string[] = [];
+  const taak: string[] = [];
+  if (args.input?.trim()) taak.push(`Input: ${args.input.trim()}`);
+  if (args.output?.trim()) taak.push(`Gewenste output: ${args.output.trim()}`);
+  if (args.format) taak.push(`Vorm: ${args.format}`);
+  if (args.labels?.trim()) taak.push(`Mogelijke labels: ${args.labels.trim()}`);
+  if (taak.length > 0) parts.push(`TAAK:\n${taak.join('\n')}`);
+  const pairs = (args.pairs ?? []).filter((p) => p.input?.trim() || p.output?.trim());
+  parts.push(
+    `VOORBEELD(EN):\n${pairs
+      .map((p, i) => `Voorbeeld ${i + 1}:\nInput: ${p.input?.trim() ?? ''}\nOutput: ${p.output?.trim() ?? ''}`)
+      .join('\n\n')}`,
+  );
+  return parts.join('\n\n');
+};
+
+/** Parseert de few-shot-extractie robuust. */
+function parseFewShotExtract(raw: string): {
+  kenmerken: { label: string; detail: string }[];
+  casus_specifiek: { label: string; detail: string }[];
+  dekking: string;
+  consistentie: string;
+} | null {
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  const toList = (v: unknown) =>
+    (Array.isArray(v) ? v : [])
+      .filter((x): x is Record<string, unknown> => !!x && typeof (x as Record<string, unknown>).label === 'string')
+      .slice(0, 8)
+      .map((x) => ({ label: x.label as string, detail: typeof x.detail === 'string' ? x.detail : '' }));
+  try {
+    const p = JSON.parse(match[0]) as Record<string, unknown>;
+    const kenmerken = toList(p.kenmerken);
+    const casus = toList(p.casus_specifiek);
+    if (kenmerken.length === 0 && casus.length === 0) return null;
+    return {
+      kenmerken,
+      casus_specifiek: casus,
+      dekking: typeof p.dekking === 'string' ? p.dekking : '',
+      consistentie: typeof p.consistentie === 'string' ? p.consistentie : '',
+    };
+  } catch {
+    return null;
+  }
+}
+
+// --- Meta-build-modus: de AI BOUWT een prompt (geen antwoord) ---
+// Anders dan alle andere modi: hier is de output zelf een uitvoerbare PROMPT die
+// een ándere AI moet uitvoeren. De strenge afbakening voorkomt dat het model de
+// vraag van de gebruiker zelf beantwoordt. Het weegt bewust af of een
+// Chain-of-Thought-instructie in de prompt hoort, en motiveert dat.
+const META_BUILD_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse rijksoverheid (Meta-prompting).
+
+# AFBAKENING — LEES DIT EERST
+Jouw output is een PROMPT, geen antwoord.
+Als de gebruiker vraagt "schrijf een memo over dossier X", dan schrijf je NIET die memo. Je schrijft de
+PROMPT waarmee een andere AI die memo optimaal zou schrijven.
+
+Verschil met Chain of Thought:
+- Chain of Thought redeneert IN de taak: stap voor stap naar een ANTWOORD met zichtbare tussenstappen.
+- Meta-prompting redeneert OVER de taak: onderzoekt wat de gebruiker werkelijk nodig heeft en levert een
+  INSTRUCTIE op die een ander uitvoert.
+Chain of Thought mag een ONDERDEEL zijn van de prompt die jij bouwt ("redeneer eerst stap voor stap,
+trek pas daarna een conclusie") — dat is een bouwsteen die jij kiest, niet iets wat jij zelf doet op de
+vraag van de gebruiker.
+
+ZELFCONTROLE vóór je iets oplevert: is mijn output uitvoerbaar door een ANDERE AI, of heb ik zelf al
+geantwoord? Bij twijfel: je hebt geantwoord — begin opnieuw.
+
+# HOE JE DE PROMPT BOUWT
+- Onderzoek wat de gebruiker echt nodig heeft en bouw een rijke, uitvoerbare prompt: rol, context, taak,
+  gewenst format en grenzen. Schrijf de omliggende instructies volledig uit.
+- Laat ALLEEN de plekken die de gebruiker per keer zelf moet aanvullen staan als [plaatshouder]; verzin
+  daar geen inhoud voor.
+- Weeg EXPLICIET af of de prompt een Chain-of-Thought-instructie nodig heeft. Neem die alleen op als de
+  taak meerstaps redeneren, afweging of berekening vereist. Bij creatieve of formulerende taken werkt
+  CoT juist averechts (houterige output) — neem hem dan NIET op. Motiveer je keuze in de toelichting.
+- Intern overheidsgebruik; heldere, professionele taal (waar passend B1-niveau).
+
+${CLARITY_GATE_JSON_INSTRUCTION}
+
+Anders geef je UITSLUITEND geldige JSON terug, zonder codeblok of extra tekst, in dit formaat:
+{"prompt":"<de volledige, uitvoerbare prompt-instructie voor een andere AI>","toelichting":"<korte uitleg van je keuzes, inclusief WAAROM je wel/geen Chain-of-Thought-instructie hebt opgenomen>","cot_gebruikt":true|false}`;
+
+const META_BUILD_USER_PROMPT = (request: string, feedback?: string) =>
+  `RUW VERZOEK / DOEL VAN DE GEBRUIKER (hier bouw je een PROMPT voor — beantwoord het NIET zelf):\n"""\n${request}\n"""` +
+  (feedback && feedback.trim()
+    ? `\n\nFEEDBACK VAN DE GEBRUIKER OP JE VORIGE PROMPT (verwerk dit):\n"""\n${feedback.trim()}\n"""`
+    : '');
+
+/** Parseert het meta-build-antwoord robuust. */
+function parseMetaBuild(
+  raw: string,
+): { prompt: string; toelichting: string; cot_gebruikt: boolean } | null {
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  try {
+    const p = JSON.parse(match[0]) as { prompt?: unknown; toelichting?: unknown; cot_gebruikt?: unknown };
+    const prompt = typeof p.prompt === 'string' ? p.prompt.trim() : '';
+    if (!prompt) return null;
+    return {
+      prompt,
+      toelichting: typeof p.toelichting === 'string' ? p.toelichting.trim() : '',
+      cot_gebruikt: p.cot_gebruikt === true,
+    };
   } catch {
     return null;
   }
@@ -2067,7 +2279,13 @@ Deno.serve(async (req: Request) => {
                             ? 'execute'
                             : body.mode === 'persona-fill'
                               ? 'persona-fill'
-                              : 'generate';
+                              : body.mode === 'fewshot-example'
+                                ? 'fewshot-example'
+                                : body.mode === 'fewshot-extract'
+                                  ? 'fewshot-extract'
+                                  : body.mode === 'meta-build'
+                                    ? 'meta-build'
+                                    : 'generate';
     const order = buildOrder(body.preferredProvider);
     const temperature = clampTemp(body.temperature);
 
@@ -2655,6 +2873,136 @@ Deno.serve(async (req: Request) => {
 
       return new Response(
         JSON.stringify({ success: true, fields, provider }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    // --- Few-shot: genereer een concept-voorbeeldpaar ---
+    if (mode === 'fewshot-example') {
+      const userMessage = FEWSHOT_EXAMPLE_USER_PROMPT({
+        input: body.fsInput,
+        output: body.fsOutput,
+        format: body.fsFormat,
+        labels: body.fsLabels,
+      });
+      for (const candidate of order) {
+        try {
+          const raw = await PROVIDERS[candidate](
+            userMessage,
+            FEWSHOT_EXAMPLE_SYSTEM_PROMPT,
+            0.5,
+            resolveModel(candidate, body.preferredProvider, body.preferredModel),
+          );
+          const unclear = detectUnclearJson(raw);
+          if (unclear) {
+            return new Response(
+              JSON.stringify({ success: false, unclear: true, reason: unclear, provider: candidate }),
+              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            );
+          }
+          const parsed = parseFewShotExample(raw);
+          if (parsed) {
+            return new Response(
+              JSON.stringify({ success: true, example: parsed, provider: candidate }),
+              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            );
+          }
+        } catch (providerErr) {
+          console.error(`${candidate} (fewshot-example) mislukt, probeer volgende:`, providerErr);
+        }
+      }
+      return new Response(
+        JSON.stringify({ success: false, error: 'Kon geen voorbeeld genereren' }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    // --- Few-shot: extraheer kenmerken + casus-specifiek + dekking/consistentie ---
+    if (mode === 'fewshot-extract') {
+      const pairs = Array.isArray(body.fsPairs) ? body.fsPairs : [];
+      if (pairs.length === 0) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Geen voorbeelden om te analyseren' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+      const userMessage = FEWSHOT_EXTRACT_USER_PROMPT({
+        input: body.fsInput,
+        output: body.fsOutput,
+        format: body.fsFormat,
+        labels: body.fsLabels,
+        pairs,
+      });
+      for (const candidate of order) {
+        try {
+          const raw = await PROVIDERS[candidate](
+            userMessage,
+            FEWSHOT_EXTRACT_SYSTEM_PROMPT,
+            0.3,
+            resolveModel(candidate, body.preferredProvider, body.preferredModel),
+          );
+          const unclear = detectUnclearJson(raw);
+          if (unclear) {
+            return new Response(
+              JSON.stringify({ success: false, unclear: true, reason: unclear, provider: candidate }),
+              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            );
+          }
+          const parsed = parseFewShotExtract(raw);
+          if (parsed) {
+            return new Response(
+              JSON.stringify({ success: true, ...parsed, provider: candidate }),
+              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            );
+          }
+        } catch (providerErr) {
+          console.error(`${candidate} (fewshot-extract) mislukt, probeer volgende:`, providerErr);
+        }
+      }
+      return new Response(
+        JSON.stringify({ success: false, error: 'De analyse van de voorbeelden kon niet worden gemaakt' }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    // --- Meta-build: de AI bouwt een uitvoerbare prompt (geen antwoord) ---
+    if (mode === 'meta-build') {
+      const request = body.metaRequest?.trim();
+      if (!request) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'metaRequest is verplicht' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+      const userMessage = META_BUILD_USER_PROMPT(request, body.metaFeedback);
+      for (const candidate of order) {
+        try {
+          const raw = await PROVIDERS[candidate](
+            userMessage,
+            META_BUILD_SYSTEM_PROMPT,
+            0.4,
+            resolveModel(candidate, body.preferredProvider, body.preferredModel),
+          );
+          const unclear = detectUnclearJson(raw);
+          if (unclear) {
+            return new Response(
+              JSON.stringify({ success: false, unclear: true, reason: unclear, provider: candidate }),
+              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            );
+          }
+          const parsed = parseMetaBuild(raw);
+          if (parsed) {
+            return new Response(
+              JSON.stringify({ success: true, ...parsed, provider: candidate }),
+              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            );
+          }
+        } catch (providerErr) {
+          console.error(`${candidate} (meta-build) mislukt, probeer volgende:`, providerErr);
+        }
+      }
+      return new Response(
+        JSON.stringify({ success: false, error: 'De prompt kon niet worden gebouwd' }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }

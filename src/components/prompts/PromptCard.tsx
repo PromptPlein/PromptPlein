@@ -9,7 +9,7 @@ import {
   sharingLabel,
   formatDate,
   copyToClipboard,
-  getCurrentUser,
+  activityIdentifier,
 } from '@/lib/utils';
 import { toggleFavorite } from '@/services/repository';
 import { toggleLike } from '@/services/likeService';
@@ -27,7 +27,7 @@ interface PromptCardProps {
 export default function PromptCard({ prompt, author, onChanged }: PromptCardProps) {
   const navigate = useNavigate();
   const { categoryById, roleById, organizationById } = useReferenceData();
-  const { user, configured } = useAuth();
+  const { user, profile, configured } = useAuth();
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [likeBusy, setLikeBusy] = useState(false);
@@ -68,7 +68,7 @@ export default function PromptCard({ prompt, author, onChanged }: PromptCardProp
       onChanged?.(updated);
       void trackEvent({
         event_type: 'favorite_toggled',
-        user_identifier: getCurrentUser(),
+        user_identifier: activityIdentifier(profile, user?.email),
         prompt_id: prompt.id,
         metadata: { is_favorite: updated.is_favorite },
       });

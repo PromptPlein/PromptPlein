@@ -190,6 +190,55 @@ export interface AnalyticsEvent {
   created_at: string;
 }
 
+/**
+ * Soort actie in de fijnmazige gedragslog van de prompt-bouwer. Samen
+ * reconstrueren ze het verloop van een sessie, wat waardevol is voor analyse en
+ * AI-verbetering (waar lopen gebruikers vast, hoeveel hiaten/vragen, welke
+ * technieken combineren ze, waar breken ze af).
+ */
+export type BehaviorAction =
+  | 'session_started' // doel ingevoerd, plan aangevraagd
+  | 'plan_generated' // AI stelde een plan op
+  | 'plan_edited' // stap herordend/hernoemd/verwijderd in de review
+  | 'build_started' // gebruiker start de uitvoering van het plan
+  | 'step_started' // een stap werd actief
+  | 'analyze_run' // "Genereren" op een stap (input → materiaal + hiaten)
+  | 'gaps_shown' // de AI benoemde openstaande hiaten
+  | 'clarification_added' // gebruiker vulde een hiaat aan en her-analyseerde
+  | 'document_uploaded' // voorbeelddocument ingelezen (template-based)
+  | 'persona_ai_filled' // persona-velden door de AI ingevuld
+  | 'fewshot_example_generated' // AI stelde een concept-voorbeeldpaar voor (few-shot)
+  | 'fewshot_extracted' // AI extraheerde kenmerken uit de voorbeelden (few-shot)
+  | 'meta_built' // AI bouwde een prompt via meta-prompting
+  | 'interview_question' // AI stelde een interview-vraag (chain-of-thought)
+  | 'interview_answer' // gebruiker beantwoordde een interview-vraag
+  | 'interview_finished' // interview afgerond (door AI of door de stop-knop)
+  | 'step_committed' // materiaal van een stap vastgelegd; door naar de volgende
+  | 'step_regenerated' // een afgeronde stap opnieuw gedaan
+  | 'compose_run' // de eindtemplate werd samengesteld
+  | 'template_copied' // eindtemplate gekopieerd
+  | 'template_saved' // eindtemplate opgeslagen in de bibliotheek
+  | 'executed' // prompt direct uitgevoerd (kant-en-klaar resultaat)
+  | 'unclear_rejected' // AI vond de invoer onduidelijk (clarity-gate)
+  | 'step_error' // een stap mislukte
+  | 'cleared'; // gebruiker maakte alles leeg / begon opnieuw
+
+/** Eén regel uit de fijnmazige gedragslog (tabel `behavior_logs`). */
+export interface BehaviorLog {
+  id: string;
+  /** Groepeert alle acties van één plan-wizard-run. */
+  session_id: string;
+  /** Volgorde binnen de sessie. */
+  sequence: number;
+  user_identifier?: string | null;
+  action: BehaviorAction;
+  /** Op welke stap (index in het plan) de actie sloeg. */
+  step_index?: number | null;
+  technique_id?: string | null;
+  metadata?: Record<string, unknown>;
+  created_at: string;
+}
+
 export interface EmailShare {
   id: string;
   prompt_id: string;

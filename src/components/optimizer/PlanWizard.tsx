@@ -34,11 +34,16 @@ import { isContextPrompt, structureFormat } from '@/lib/techniques';
 import { stripMarkdown } from '@/lib/utils';
 import { usePersistentDraft } from '@/lib/usePersistentDraft';
 import { detectPii, detectBlockedTopics, type GuardrailFinding } from '@/services/guardrails';
+import { logBehavior, newBehaviorSession, type BehaviorSession } from '@/services/behaviorService';
+import { useAuth } from '@/context/AuthContext';
+import { activityIdentifier } from '@/lib/utils';
 import type { AiSettings } from '@/services/settingsService';
 import OptimizingLoader from './OptimizingLoader';
 import FollowUpQuestions from './FollowUpQuestions';
 import GuardrailDialog from './GuardrailDialog';
 import PersonaBuilder from './PersonaBuilder';
+import FewShotBuilder from './FewShotBuilder';
+import MetaBuilder from './MetaBuilder';
 import RichText from './RichText';
 import type {
   OptimizeResult,
@@ -158,6 +163,23 @@ type Phase = 'goal' | 'planning' | 'plan-review' | 'collecting' | 'composing' | 
  */
 export default function PlanWizard({ settings, onResult, header }: PlanWizardProps) {
   const { techniques, techniqueById } = useReferenceData();
+  const { profile, user } = useAuth();
+  // Gedragslog-sessie voor deze plan-wizard-run + een korte log-helper. De
+  // sessie groepeert alle acties; het loggen is fire-and-forget (blokkeert nooit).
+  const sessionRef = useRef<BehaviorSession>(newBehaviorSession());
+  function log(
+    action: Parameters<typeof logBehavior>[0]['action'],
+    extra?: { stepIndex?: number | null; techniqueId?: string | null; metadata?: Record<string, unknown> },
+  ) {
+    logBehavior({
+      session: sessionRef.current,
+      identifier: activityIdentifier(profile, user?.email),
+      action,
+      stepIndex: extra?.stepIndex ?? null,
+      techniqueId: extra?.techniqueId ?? null,
+      metadata: extra?.metadata,
+    });
+  }
   // Deelt de 'goal'-draftsleutel met OptimizerPage, zodat de pagina-brede
   // "Opschonen"-knop, hasDraftContent en OptimizedOutput's titel-fallback blijven
   // werken zonder de state omhoog te tillen.
@@ -181,6 +203,10 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
   // Geserialiseerde persona-definitie (Persona/Multi-Persona-stap); leeg voor
   // andere technieken. Gaat als gelabeld veld mee in de analyse.
   const [personaText, setPersonaText] = useState('');
+  // Geserialiseerde few-shot-definitie (Few-Shot-stap); idem.
+  const [fewShotText, setFewShotText] = useState('');
+  // Geserialiseerde meta-prompt (Meta Prompting-stap); idem.
+  const [metaText, setMetaText] = useState('');
   // Chain-of-Thought / Socratic: het adaptieve vraag-na-vraag-interview.
   const [interviewActive, setInterviewActive] = useState(false);
   const [interviewQuestion, setInterviewQuestion] = useState<string | null>(null);
@@ -217,6 +243,8 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
     setStepGaps([]);
     setClarification('');
     setPersonaText('');
+    setFewShotText('');
+    setMetaText('');
     setInterviewActive(false);
     setInterviewQuestion(null);
     setInterviewTranscript([]);
@@ -247,6 +275,10 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
 
   /** Wis doel + afgeleide state en begin opnieuw. */
   function handleClear() {
+    // Een lopende, niet-afgemaakte bouw die wordt gewist = afgebroken.
+    if (plan && phase !== 'goal') {
+      log('cleared', { metadata: { phase, at_step: currentStepIndex, of_steps: plan.steps.length } });
+    }
     clearGoal();
     clearRunDraft();
     setResumable(null);
@@ -282,6 +314,9 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
     setGuardrailFindings(null);
     setUnclearReason(null);
     setPhase('planning');
+    // Nieuwe sessie: elke plan-aanvraag is een nieuwe gedragslog-sessie.
+    sessionRef.current = newBehaviorSession();
+    log('session_started', { metadata: { goal_len: goal.trim().length } });
     try {
       // Complexe-doel-flow: alleen losse prompttechnieken plannen; complete
       // frameworks horen bij de eigen-prompt-flow.
@@ -297,6 +332,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
           res.reason?.trim() ||
             'Je omschrijving is nog niet duidelijk genoeg. Beschrijf concreet wat je wilt bereiken.',
         );
+        log('unclear_rejected', { metadata: { phase: 'plan' } });
         setPhase('goal');
         return;
       }
@@ -307,6 +343,13 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
         return;
       }
       setPlan(res.plan);
+      log('plan_generated', {
+        metadata: {
+          provider: res.provider,
+          steps: res.plan.steps.length,
+          techniques: res.plan.steps.map((s) => techniqueById(s.technique_id)?.name ?? s.technique_id),
+        },
+      });
       setPhase('plan-review');
     } catch {
       toast.error('Plan opstellen mislukt. Probeer het opnieuw.');
@@ -320,6 +363,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
       if (!prev || prev.steps.length <= 1) return prev;
       return { ...prev, steps: prev.steps.filter((s) => s.id !== id) };
     });
+    log('plan_edited', { metadata: { edit: 'remove' } });
   }
 
   /** Verplaats een stap één positie omhoog of omlaag (herordenen in plan-review). */
@@ -332,6 +376,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
       [steps[index], steps[target]] = [steps[target], steps[index]];
       return { ...prev, steps };
     });
+    log('plan_edited', { metadata: { edit: 'move', index, dir } });
   }
 
   /** Pas de titel van een stap aan (inline bewerken in plan-review). */
@@ -340,6 +385,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
       if (!prev) return prev;
       return { ...prev, steps: prev.steps.map((s) => (s.id === id ? { ...s, title } : s)) };
     });
+    log('plan_edited', { metadata: { edit: 'rename' } });
   }
 
   /** Is dit de laatste stap? Die stelt de uiteindelijke template samen (compose). */
@@ -351,6 +397,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
   function handleBuild() {
     if (!plan) return;
     setOutcomes([]);
+    log('build_started', { metadata: { steps: plan.steps.length } });
     beginStep(plan, 0, []);
   }
 
@@ -370,6 +417,16 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
     }
     setPhase('collecting');
     const step = p.steps[index];
+    log('step_started', {
+      stepIndex: index,
+      techniqueId: step?.technique_id,
+      metadata: {
+        title: step?.title,
+        produces: step?.produces,
+        interactive: Boolean(step?.interactive),
+        format: step ? techniqueById(step.technique_id) && structureFormat(techniqueById(step.technique_id)!) : undefined,
+      },
+    });
     if (step?.interactive) {
       setInterviewActive(true);
       void interviewTurn(p, index, accumulated, [], false);
@@ -401,6 +458,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
     if (!plan) return;
     const kept = outcomes.slice(0, index);
     setOutcomes(kept);
+    log('step_regenerated', { stepIndex: index, techniqueId: plan.steps[index]?.technique_id });
     beginStep(plan, index, kept);
   }
 
@@ -419,8 +477,8 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
       return;
     }
 
-    // Guardrail-check op de door de gebruiker ingevulde velden + persona + toelichting.
-    const toCheck = [...Object.values(stepAnswers), personaText, extraClarification ?? '']
+    // Guardrail-check op de ingevulde velden + persona/few-shot/meta + toelichting.
+    const toCheck = [...Object.values(stepAnswers), personaText, fewShotText, metaText, extraClarification ?? '']
       .map((v) => v.trim())
       .filter(Boolean)
       .join('\n');
@@ -438,16 +496,34 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
     setAnalyzing(true);
     setStepError(null);
     setUnclearReason(null);
+    const isClarify = Boolean(extraClarification?.trim());
+    log(isClarify ? 'clarification_added' : 'analyze_run', {
+      stepIndex: currentStepIndex,
+      techniqueId: step.technique_id,
+      metadata: {
+        answered_fields: Object.values(stepAnswers).filter((v) => v.trim()).length,
+        has_persona: Boolean(personaText.trim()),
+        clarification_len: extraClarification?.trim().length ?? 0,
+      },
+    });
     try {
       const res = await analyzePlanStep({
         goal: goal.trim(),
         step,
         technique,
         answers: stepAnswers,
-        // De gestructureerde persona-definitie gaat als gelabeld veld mee.
-        extraAnsweredFields: personaText.trim()
-          ? [{ id: 'persona_definitie', label: 'Persona-definitie', answer: personaText.trim() }]
-          : undefined,
+        // De gestructureerde persona-/few-shot-/meta-definitie gaat als gelabeld veld mee.
+        extraAnsweredFields: [
+          ...(personaText.trim()
+            ? [{ id: 'persona_definitie', label: 'Persona-definitie', answer: personaText.trim() }]
+            : []),
+          ...(fewShotText.trim()
+            ? [{ id: 'fewshot_definitie', label: 'Few-shot-definitie', answer: fewShotText.trim() }]
+            : []),
+          ...(metaText.trim()
+            ? [{ id: 'meta_prompt', label: 'Meta-prompt', answer: metaText.trim() }]
+            : []),
+        ],
         outcomesSummary: serializeOutcomes(outcomes),
         clarification: extraClarification,
         preferredProvider: settings.provider,
@@ -458,10 +534,12 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
           res.reason?.trim() ||
             'Je invoer is nog niet duidelijk genoeg. Vul de velden concreter in.',
         );
+        log('unclear_rejected', { stepIndex: currentStepIndex, metadata: { phase: 'analyze' } });
         return;
       }
       if (!res.success || !res.material) {
         setStepError(res.error ?? 'De analyse voor deze stap kon niet worden gemaakt.');
+        log('step_error', { stepIndex: currentStepIndex, metadata: { where: 'analyze', error: res.error } });
         setPhase('error');
         return;
       }
@@ -469,8 +547,15 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
       setStepSummary(res.summary ?? '');
       setStepGaps(res.gaps ?? []);
       setClarification('');
+      if ((res.gaps ?? []).length > 0) {
+        log('gaps_shown', {
+          stepIndex: currentStepIndex,
+          metadata: { count: res.gaps!.length, labels: res.gaps!.map((g) => g.label) },
+        });
+      }
     } catch (err) {
       setStepError(err instanceof Error ? err.message : 'Analyse mislukt.');
+      log('step_error', { stepIndex: currentStepIndex, metadata: { where: 'analyze' } });
       setPhase('error');
     } finally {
       setAnalyzing(false);
@@ -526,6 +611,11 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
       if (res.needs_input && res.question) {
         setInterviewQuestion(res.question);
         setInterviewAnswer('');
+        log('interview_question', {
+          stepIndex: index,
+          techniqueId: step.technique_id,
+          metadata: { turn: turns.length + 1 },
+        });
         return;
       }
       // De AI is klaar: de conclusie wordt het materiaal van deze stap. Vanaf hier
@@ -536,6 +626,11 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
         setStepMaterial(res.material);
         setStepSummary('');
         setStepGaps([]);
+        log('interview_finished', {
+          stepIndex: index,
+          techniqueId: step.technique_id,
+          metadata: { turns: turns.length, forced: forceFinish },
+        });
         return;
       }
       setStepError(res.error ?? 'De volgende vraag kon niet worden opgehaald.');
@@ -567,6 +662,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
     const turns = [...interviewTranscript, { question: interviewQuestion, answer }];
     setInterviewTranscript(turns);
     setInterviewQuestion(null);
+    log('interview_answer', { stepIndex: currentStepIndex, metadata: { turn: turns.length, answer_len: answer.length } });
     void interviewTurn(plan, currentStepIndex, outcomes, turns, false);
   }
 
@@ -578,6 +674,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
     const turns = [...interviewTranscript, { question: interviewQuestion, answer }];
     setInterviewTranscript(turns);
     setInterviewQuestion(null);
+    log('interview_answer', { stepIndex: currentStepIndex, metadata: { turn: turns.length, answer_len: answer.length } });
     void interviewTurn(plan, currentStepIndex, outcomes, turns, false);
   }
 
@@ -585,6 +682,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
   function finishInterview() {
     if (!plan) return;
     setInterviewQuestion(null);
+    log('interview_finished', { stepIndex: currentStepIndex, metadata: { turns: interviewTranscript.length, forced: true } });
     void interviewTurn(plan, currentStepIndex, outcomes, interviewTranscript, true);
   }
 
@@ -623,6 +721,11 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
       }
       return next;
     });
+    log('document_uploaded', {
+      stepIndex: currentStepIndex,
+      techniqueId: step.technique_id,
+      metadata: { chars: text.length, fields_filled: res.fields.length },
+    });
     return true;
   }
 
@@ -630,17 +733,31 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
   function commitStep() {
     if (!plan || stepMaterial == null) return;
     const step = plan.steps[currentStepIndex];
+    // Er is een gestructureerde persona-/few-shot-definitie gebruikt bij deze stap.
+    if (personaText.trim())
+      log('persona_ai_filled', { stepIndex: currentStepIndex, metadata: { persona_len: personaText.trim().length } });
+    if (fewShotText.trim())
+      log('fewshot_extracted', { stepIndex: currentStepIndex, metadata: { fewshot_len: fewShotText.trim().length } });
+    if (metaText.trim())
+      log('meta_built', { stepIndex: currentStepIndex, metadata: { meta_len: metaText.trim().length } });
+    const extraAnswers: Record<string, string> = {};
+    if (personaText.trim()) extraAnswers.persona_definitie = personaText.trim();
+    if (fewShotText.trim()) extraAnswers.fewshot_definitie = fewShotText.trim();
+    if (metaText.trim()) extraAnswers.meta_prompt = metaText.trim();
     const outcome: StepOutcome = {
       step_id: step.id,
       technique_id: step.technique_id,
       produces: step.produces,
       material: stepMaterial,
-      answers: personaText.trim()
-        ? { ...stepAnswers, persona_definitie: personaText.trim() }
-        : { ...stepAnswers },
+      answers: { ...stepAnswers, ...extraAnswers },
     };
     const next = [...outcomes, outcome];
     setOutcomes(next);
+    log('step_committed', {
+      stepIndex: currentStepIndex,
+      techniqueId: step.technique_id,
+      metadata: { material_len: stepMaterial.length },
+    });
     beginStep(plan, currentStepIndex + 1, next);
   }
 
@@ -654,6 +771,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
       return;
     }
     setPhase('composing');
+    log('compose_run', { techniqueId: step.technique_id, metadata: { steps: accumulated.length } });
     try {
       const res = await generatePrompt({
         technique,
@@ -678,6 +796,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
             'Je invoer is niet duidelijk genoeg om er een zinvolle prompt van te maken.',
         );
         setStepError('De invoer was niet duidelijk genoeg voor de eindtemplate.');
+        log('unclear_rejected', { metadata: { phase: 'compose' } });
         setPhase('error');
         return;
       }
@@ -686,6 +805,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
       onResult({ ...res, recipe }, technique);
     } catch (err) {
       setStepError(err instanceof Error ? err.message : 'Template samenstellen mislukt.');
+      log('step_error', { metadata: { where: 'compose' } });
       setPhase('error');
     }
   }
@@ -857,6 +977,8 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
                 settings={settings}
                 goal={goal}
                 onPersonaChange={setPersonaText}
+                onFewShotChange={setFewShotText}
+                onMetaChange={setMetaText}
                 interviewActive={interviewActive}
                 interviewQuestion={interviewQuestion}
                 interviewTranscript={interviewTranscript}
@@ -1118,6 +1240,8 @@ function PlanExecutor({
   settings,
   goal,
   onPersonaChange,
+  onFewShotChange,
+  onMetaChange,
   interviewActive,
   interviewQuestion,
   interviewTranscript,
@@ -1149,6 +1273,8 @@ function PlanExecutor({
   settings: AiSettings;
   goal: string;
   onPersonaChange: (text: string) => void;
+  onFewShotChange: (text: string) => void;
+  onMetaChange: (text: string) => void;
   interviewActive: boolean;
   interviewQuestion: string | null;
   interviewTranscript: TranscriptTurn[];
@@ -1223,6 +1349,8 @@ function PlanExecutor({
                   settings={settings}
                   goal={goal}
                   onPersonaChange={onPersonaChange}
+                  onFewShotChange={onFewShotChange}
+                  onMetaChange={onMetaChange}
                   interviewActive={interviewActive}
                   interviewQuestion={interviewQuestion}
                   interviewTranscript={interviewTranscript}
@@ -1365,6 +1493,8 @@ function StepCollector({
   settings,
   goal,
   onPersonaChange,
+  onFewShotChange,
+  onMetaChange,
   interviewActive,
   interviewQuestion,
   interviewTranscript,
@@ -1390,6 +1520,8 @@ function StepCollector({
   settings: AiSettings;
   goal: string;
   onPersonaChange: (text: string) => void;
+  onFewShotChange: (text: string) => void;
+  onMetaChange: (text: string) => void;
   interviewActive: boolean;
   interviewQuestion: string | null;
   interviewTranscript: TranscriptTurn[];
@@ -1408,6 +1540,10 @@ function StepCollector({
   // Persona/Multi-Persona krijgen de uitgebreide persona-builder i.p.v. de
   // generieke vragenlijst.
   const isPersona = format === 'persona' || format === 'multi-persona';
+  // Few-Shot krijgt de eigen meerstaps-bouwer (routing → voorbeelden → extractie).
+  const isFewShot = format === 'few-shot';
+  // Meta Prompting: de AI bouwt zelf de prompt (geen antwoord).
+  const isMeta = format === 'meta';
 
   // Chain-of-Thought / Socratic: het adaptieve vraag-na-vraag-interview vervangt
   // de gewone input+Genereren, tot de AI een conclusie levert (dan is material gezet).
@@ -1435,8 +1571,8 @@ function StepCollector({
         <DocumentUpload onPrefill={onPrefillFromDocument} disabled={analyzing} />
       )}
 
-      {/* 1. Input van de gebruiker. Persona/Multi-Persona → de uitgebreide
-             persona-builder; anders de vervolgvragen van de techniek. */}
+      {/* 1. Input van de gebruiker. Persona → persona-builder; Few-Shot → few-shot-
+             builder; anders de vervolgvragen van de techniek. */}
       {isPersona ? (
         material == null && (
           <PersonaBuilder
@@ -1446,6 +1582,10 @@ function StepCollector({
             onSerialized={onPersonaChange}
           />
         )
+      ) : isFewShot ? (
+        material == null && <FewShotBuilder settings={settings} onSerialized={onFewShotChange} />
+      ) : isMeta ? (
+        material == null && <MetaBuilder settings={settings} goal={goal} onSerialized={onMetaChange} />
       ) : hasFields ? (
         <FollowUpQuestions technique={technique} answers={answers} onChange={onAnswersChange} />
       ) : (

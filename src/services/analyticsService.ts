@@ -89,9 +89,9 @@ export function eventsPerDay(events: AnalyticsEvent[], days = 14): CountByLabel[
     .map(([label, value]) => ({ label, value }));
 }
 
-/** Exporteer events naar een CSV-string. */
+/** Exporteer events naar een CSV-string, inclusief de metadata als JSON-kolom. */
 export function eventsToCsv(events: AnalyticsEvent[]): string {
-  const header = ['created_at', 'event_type', 'user_identifier', 'prompt_id', 'technique_id'];
+  const header = ['created_at', 'event_type', 'user_identifier', 'prompt_id', 'technique_id', 'metadata'];
   const rows = events.map((e) =>
     [
       e.created_at,
@@ -99,6 +99,7 @@ export function eventsToCsv(events: AnalyticsEvent[]): string {
       e.user_identifier ?? '',
       e.prompt_id ?? '',
       e.technique_id ?? '',
+      e.metadata ? JSON.stringify(e.metadata) : '',
     ]
       .map((v) => `"${String(v).replace(/"/g, '""')}"`)
       .join(','),

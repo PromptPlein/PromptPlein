@@ -296,6 +296,165 @@ export async function fillPersona(args: {
   }
 }
 
+/** Gedeelde POST naar de optimize-prompt edge function; geeft de JSON terug. */
+async function postOptimize<T>(body: Record<string, unknown>): Promise<T | null> {
+  const functionUrl = getFunctionUrl('optimize-prompt');
+  if (!isSupabaseConfigured || !functionUrl) return null;
+  const anonKey = getAnonKey();
+  const response = await fetch(functionUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(anonKey ? { Authorization: `Bearer ${anonKey}`, apikey: anonKey } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) throw new Error(`Edge function gaf status ${response.status}`);
+  return (await response.json()) as T;
+}
+
+/**
+ * Genereert één concept-input→output-voorbeeldpaar voor de few-shot-bouwer, op
+ * basis van de taakbeschrijving. Gebruikt wanneer de gebruiker (nog) geen eigen
+ * voorbeeld heeft; de gebruiker stelt het daarna bij.
+ */
+export async function generateFewShotExample(args: {
+  input?: string;
+  output?: string;
+  format?: string;
+  labels?: string;
+  preferredProvider?: AiProvider;
+  preferredModel?: string;
+}): Promise<{ success: boolean; example?: { input: string; output: string }; error?: string }> {
+  try {
+    const data = await postOptimize<{
+      success?: boolean;
+      example?: { input: string; output: string };
+      error?: string;
+    }>({
+      mode: 'fewshot-example',
+      fsInput: args.input,
+      fsOutput: args.output,
+      fsFormat: args.format,
+      fsLabels: args.labels,
+      preferredProvider: args.preferredProvider ?? 'auto',
+      preferredModel: args.preferredModel,
+    });
+    if (!data) return { success: false, error: 'Geen AI-service beschikbaar.' };
+    if (data.success && data.example) return { success: true, example: data.example };
+    return { success: false, error: data.error ?? 'Kon geen voorbeeld genereren.' };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Onbekende fout.' };
+  }
+}
+
+/**
+ * Analyseert de few-shot-voorbeelden: welke KENMERKEN over te nemen, welke
+ * CASUS-SPECIFIEKE details weg te laten, plus (bij meerdere voorbeelden) een
+ * dekkings- en consistentie-observatie. Dit is de kern van de few-shot-bouwer.
+ */
+export async function extractFewShot(args: {
+  input?: string;
+  output?: string;
+  format?: string;
+  labels?: string;
+  pairs: { input: string; output: string }[];
+  preferredProvider?: AiProvider;
+  preferredModel?: string;
+}): Promise<{
+  success: boolean;
+  kenmerken?: { label: string; detail: string }[];
+  casus_specifiek?: { label: string; detail: string }[];
+  dekking?: string;
+  consistentie?: string;
+  error?: string;
+}> {
+  try {
+    const data = await postOptimize<{
+      success?: boolean;
+      kenmerken?: { label: string; detail: string }[];
+      casus_specifiek?: { label: string; detail: string }[];
+      dekking?: string;
+      consistentie?: string;
+      error?: string;
+    }>({
+      mode: 'fewshot-extract',
+      fsInput: args.input,
+      fsOutput: args.output,
+      fsFormat: args.format,
+      fsLabels: args.labels,
+      fsPairs: args.pairs,
+      preferredProvider: args.preferredProvider ?? 'auto',
+      preferredModel: args.preferredModel,
+    });
+    if (!data) return { success: false, error: 'Geen AI-service beschikbaar.' };
+    if (data.success) {
+      return {
+        success: true,
+        kenmerken: data.kenmerken ?? [],
+        casus_specifiek: data.casus_specifiek ?? [],
+        dekking: data.dekking ?? '',
+        consistentie: data.consistentie ?? '',
+      };
+    }
+    return { success: false, error: data.error ?? 'Analyse mislukt.' };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Onbekende fout.' };
+  }
+}
+
+/**
+ * Meta-prompting: laat de AI een uitvoerbare PROMPT bouwen op basis van het ruwe
+ * verzoek van de gebruiker (de AI beantwoordt het verzoek dus NIET zelf). Levert
+ * de prompt, een toelichting (incl. de Chain-of-Thought-afweging) en of CoT is
+ * opgenomen. Optionele `feedback` laat de gebruiker de prompt bijstellen.
+ */
+export async function buildMetaPrompt(args: {
+  request: string;
+  feedback?: string;
+  preferredProvider?: AiProvider;
+  preferredModel?: string;
+}): Promise<{
+  success: boolean;
+  prompt?: string;
+  toelichting?: string;
+  cotGebruikt?: boolean;
+  error?: string;
+  unclear?: boolean;
+  reason?: string;
+}> {
+  try {
+    const data = await postOptimize<{
+      success?: boolean;
+      prompt?: string;
+      toelichting?: string;
+      cot_gebruikt?: boolean;
+      error?: string;
+      unclear?: boolean;
+      reason?: string;
+    }>({
+      mode: 'meta-build',
+      metaRequest: args.request,
+      metaFeedback: args.feedback,
+      preferredProvider: args.preferredProvider ?? 'auto',
+      preferredModel: args.preferredModel,
+    });
+    if (!data) return { success: false, error: 'Geen AI-service beschikbaar.' };
+    if (data.unclear) return { success: false, unclear: true, reason: data.reason };
+    if (data.success && data.prompt) {
+      return {
+        success: true,
+        prompt: data.prompt,
+        toelichting: data.toelichting ?? '',
+        cotGebruikt: Boolean(data.cot_gebruikt),
+      };
+    }
+    return { success: false, error: data.error ?? 'De prompt kon niet worden gebouwd.' };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Onbekende fout.' };
+  }
+}
+
 /** Lokale trefwoord-matching als de backend niet beschikbaar is of faalt. */
 function localRecommend(goal: string, techniques: Technique[]): TechniqueRecommendation[] {
   const words = new Set(

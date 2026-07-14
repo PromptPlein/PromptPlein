@@ -19,6 +19,7 @@ import FollowUpQuestions from '@/components/optimizer/FollowUpQuestions';
 import OptimizingLoader from '@/components/optimizer/OptimizingLoader';
 import OptimizedOutput from '@/components/optimizer/OptimizedOutput';
 import { useReferenceData } from '@/context/ReferenceDataContext';
+import { useAuth } from '@/context/AuthContext';
 import { getPrompt, saveOptimization } from '@/services/repository';
 import { generatePrompt, prefillFields } from '@/services/optimizeService';
 import type { FieldMeta } from '@/components/optimizer/FollowUpQuestions';
@@ -26,7 +27,7 @@ import { trackEvent } from '@/services/analyticsService';
 import { getAiSettings, DEFAULT_AI_SETTINGS, type AiSettings } from '@/services/settingsService';
 import { detectPii, detectBlockedTopics, type GuardrailFinding } from '@/services/guardrails';
 import GuardrailDialog from '@/components/optimizer/GuardrailDialog';
-import { getCurrentUser, stripMarkdown } from '@/lib/utils';
+import { activityIdentifier, stripMarkdown } from '@/lib/utils';
 import { usePersistentDraft, clearAllDrafts } from '@/lib/usePersistentDraft';
 import type { OptimizeResult, Technique } from '@/types';
 
@@ -38,6 +39,9 @@ type EntryMode = 'techniques' | 'own-prompt';
 export default function OptimizerPage() {
   const { promptId } = useParams<{ promptId?: string }>();
   const { techniques } = useReferenceData();
+  // De ingelogde gebruiker, zodat analytics-events op naam/e-mail worden gelogd
+  // en een beheerder in "Recente activiteit" ziet wie iets deed (niet "Anoniem").
+  const { profile, user } = useAuth();
 
   // Eigen prompt/startpunt en doel worden in localStorage bewaard, zodat de tekst
   // niet verloren gaat bij een fout of herlaadactie. "Opschonen" maakt ze leeg.
@@ -234,7 +238,7 @@ export default function OptimizerPage() {
 
       void trackEvent({
         event_type: 'optimization_run',
-        user_identifier: getCurrentUser(),
+        user_identifier: activityIdentifier(profile, user?.email),
         prompt_id: sourcePromptId,
         technique_id: technique.id,
         metadata: { provider: res.provider },
@@ -276,7 +280,7 @@ export default function OptimizerPage() {
     const isPlanWizard = Boolean(res.recipe);
     void trackEvent({
       event_type: 'optimization_run',
-      user_identifier: getCurrentUser(),
+      user_identifier: activityIdentifier(profile, user?.email),
       prompt_id: null,
       technique_id: usedTechnique.id,
       metadata: {

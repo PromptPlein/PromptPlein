@@ -7,13 +7,15 @@ import UploadModal from '@/components/prompts/UploadModal';
 import { SkeletonGrid } from '@/components/common/Skeleton';
 import { searchPrompts } from '@/services/repository';
 import { trackEvent } from '@/services/analyticsService';
-import { getCurrentUser } from '@/lib/utils';
+import { activityIdentifier } from '@/lib/utils';
+import { useAuth } from '@/context/AuthContext';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { usePromptCommunity } from '@/hooks/usePromptCommunity';
 import type { AdvancedPromptFilters, Prompt, SortOption } from '@/types';
 
 export default function SearchPage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const { profile, user } = useAuth();
 
   const [filters, setFilters] = useState<AdvancedPromptFilters>(() => ({
     query: searchParams.get('q') ?? '',
@@ -56,7 +58,7 @@ export default function SearchPage() {
       lastTrackedQuery.current = debouncedQuery;
       void trackEvent({
         event_type: 'search',
-        user_identifier: getCurrentUser(),
+        user_identifier: activityIdentifier(profile, user?.email),
         metadata: { query: debouncedQuery },
       });
     }

@@ -103,6 +103,25 @@ export function setCurrentUser(name: string): void {
   localStorage.setItem(USER_KEY, name);
 }
 
+/**
+ * Bepaalt de identiteit die bij een activiteit/analytics-event hoort, zodat een
+ * beheerder in "Recente activiteit" ziet WIE iets deed i.p.v. "Anoniem". Neemt bij
+ * voorkeur de naam van de ingelogde gebruiker, dan het e-mailadres, en valt pas
+ * daarna terug op de (oude) lokale naam. Leeg alleen als er echt niets bekend is.
+ */
+export function activityIdentifier(
+  profile?: { full_name?: string | null; email?: string | null } | null,
+  userEmail?: string | null,
+): string {
+  return (
+    profile?.full_name?.trim() ||
+    profile?.email?.trim() ||
+    userEmail?.trim() ||
+    getCurrentUser() ||
+    ''
+  );
+}
+
 export function formatDate(iso: string): string {
   try {
     return new Date(iso).toLocaleDateString('nl-NL', {
