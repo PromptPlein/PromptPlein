@@ -1,4 +1,5 @@
-import { Check, ChevronRight, Layers, Wrench } from 'lucide-react';
+import { useState } from 'react';
+import { Check, ChevronRight, Info, Layers, Wrench, X } from 'lucide-react';
 import clsx from 'clsx';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { isContextPrompt } from '@/lib/techniques';
@@ -111,8 +112,13 @@ const ACCENT_STYLES: Record<
     cardActive: string;
     /** Naam-tekstkleur op een kaart (zowel actief als rust). */
     cardName: string;
-    /** Het ronde vinkje rechtsboven op een geselecteerde kaart. */
+    /** Het ronde vinkje op een geselecteerde kaart. */
     cardCheck: string;
+    /**
+     * Gevulde accent-cirkel met pijl rechtsboven: een altijd zichtbare "knop", zodat
+     * ook zonder hover meteen duidelijk is dat de kaart aanklikbaar is.
+     */
+    cardChevronBtn: string;
     /** Hover-rand op een niet-geselecteerde kaart. */
     cardHover: string;
   }
@@ -127,6 +133,7 @@ const ACCENT_STYLES: Record<
     cardActive: 'border-rijksoranje bg-rijksoranje/10 ring-2 ring-rijksoranje/20 dark:bg-rijksoranje/15',
     cardName: 'text-rijksoranje dark:text-rijksoranje',
     cardCheck: 'bg-rijksoranje text-white',
+    cardChevronBtn: 'bg-rijksoranje text-white shadow-sm group-hover/card:bg-rijksoranje-dark',
     cardHover: 'hover:border-rijksoranje/50',
   },
   blauw: {
@@ -137,6 +144,7 @@ const ACCENT_STYLES: Record<
     cardActive: 'border-rijksblauw-500 bg-rijksblauw-50 ring-2 ring-rijksblauw-500/20 dark:bg-rijksblauw-500/15',
     cardName: 'text-rijksblauw-700 dark:text-rijksblauw-200',
     cardCheck: 'bg-rijksblauw-500 text-white',
+    cardChevronBtn: 'bg-rijksblauw-500 text-white shadow-sm group-hover/card:bg-rijksblauw-700',
     cardHover: 'hover:border-rijksblauw-300',
   },
 };
@@ -213,16 +221,39 @@ function TechniqueCard({
   onSelect: () => void;
 }) {
   const styles = ACCENT_STYLES[accent];
+  // Standaard tonen we alleen de korte versie (titel + korte beschrijving + aantal
+  // vervolgvragen). De details (doel + voorbeelden) staan ingeklapt achter de
+  // info-knop, zodat de keuzelijst rustig blijft.
+  const [showDetails, setShowDetails] = useState(false);
+
+  // De korte beschrijving blijft altijd zichtbaar. Achter de info-knop staan alleen
+  // de extra details: het doel en de voorbeelden. Geen extra details → geen info-knop.
+  const hasDetails = Boolean(t.strength || (t.use_cases && t.use_cases.length > 0));
+
+  const followUpLabel = `${t.follow_up_questions.length} vervolgvra${
+    t.follow_up_questions.length === 1 ? 'ag' : 'gen'
+  }`;
+
+  // De kaart is een klikbare regio (selecteert de techniek). We gebruiken een div
+  // met role="button" — geen <button> — omdat er een tweede, geneste knop (de
+  // info-toggle) in zit en een knop-in-een-knop ongeldige HTML is.
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
       aria-pressed={active}
       className={clsx(
         // Diepte zodat de kaart als klikbare knop leest: een grondschaduw, en bij
         // hover komt de kaart iets omhoog met een sterkere schaduw. Bij indrukken
         // zakt hij weer terug (active:). De ring/rand markeert de gekozen kaart.
-        'group flex flex-col rounded-xl border p-4 text-left shadow-sm transition-all duration-150',
+        'group/card flex cursor-pointer flex-col rounded-xl border p-4 text-left shadow-sm transition-all duration-150',
         'hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:shadow-sm',
         'focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500/40',
         active
@@ -233,29 +264,49 @@ function TechniqueCard({
             ),
       )}
     >
-      <div className="mb-1.5 flex items-center justify-between gap-2">
+      {/* Titelregel: naam links, en rechtsboven een knoppencluster — de info-knop
+          (links) naast de altijd zichtbare, gevulde pijl-knop (rechts). De gevulde
+          cirkel maakt ook zonder hover meteen duidelijk dat de kaart aanklikbaar is;
+          bij een gekozen kaart wordt de pijl een vinkje. */}
+      <div className="mb-1.5 flex items-start justify-between gap-2">
         <span className={clsx('font-semibold', styles.cardName)}>{t.name}</span>
-        {/* Gekozen kaart toont een vinkje; anders een pijltje rechts op
-            titelhoogte dat bij hover meeschuift — een duidelijke klik-hint. */}
-        {active ? (
+        <div className="flex shrink-0 items-center gap-1.5">
+          {hasDetails && (
+            <button
+              type="button"
+              // Voorkom dat klikken op de info-knop óók de techniek selecteert.
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowDetails((v) => !v);
+              }}
+              aria-expanded={showDetails}
+              aria-label={showDetails ? 'Minder informatie' : 'Meer informatie'}
+              title={showDetails ? 'Minder informatie' : 'Meer informatie'}
+              className={clsx(
+                'flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-transparent text-slate-400 transition-colors',
+                'hover:bg-slate-100 hover:text-slate-600 focus:outline-none focus-visible:ring-2 dark:text-slate-500 dark:hover:bg-slate-700 dark:hover:text-slate-300',
+              )}
+            >
+              {showDetails ? <X size={14} /> : <Info size={15} />}
+            </button>
+          )}
           <span
+            aria-hidden="true"
             className={clsx(
-              'flex h-5 w-5 shrink-0 items-center justify-center rounded-full',
-              styles.cardCheck,
+              'flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-all',
+              active ? styles.cardCheck : styles.cardChevronBtn,
             )}
           >
-            <Check size={14} />
-          </span>
-        ) : (
-          <ChevronRight
-            size={18}
-            className={clsx(
-              'shrink-0 transition-transform duration-150 group-hover:translate-x-0.5',
-              styles.icon,
+            {active ? (
+              <Check size={16} />
+            ) : (
+              <ChevronRight
+                size={16}
+                className="transition-transform group-hover/card:translate-x-0.5"
+              />
             )}
-            aria-hidden
-          />
-        )}
+          </span>
+        </div>
       </div>
       {/* Vervagende onderlijn in de accentkleur van de groep (oranje bij
           frameworks, blauw bij technieken), net als onder de sectiekop. */}
@@ -263,17 +314,29 @@ function TechniqueCard({
         className={clsx('mb-2.5 h-0.5 w-full bg-gradient-to-r to-transparent', styles.rule)}
         aria-hidden="true"
       />
-      <span className="text-sm text-slate-600 dark:text-slate-300">{t.description}</span>
-      {t.strength && (
-        <span className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-          <span className="font-medium text-slate-600 dark:text-slate-300">Doel: </span>
-          {t.strength}
-        </span>
+      {/* Korte beschrijving: altijd zichtbaar. */}
+      {t.description && (
+        <span className="text-sm text-slate-600 dark:text-slate-300">{t.description}</span>
       )}
-      <span className="mt-2 text-xs text-slate-400 dark:text-slate-500">
-        {t.follow_up_questions.length} vervolgvraag
-        {t.follow_up_questions.length === 1 ? '' : 'en'}
-      </span>
-    </button>
+      {/* Extra details (doel + voorbeelden): ingeklapt tot de info-knop wordt geklikt. */}
+      {showDetails && (
+        <>
+          {t.strength && (
+            <span className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+              <span className="font-medium text-slate-600 dark:text-slate-300">Doel: </span>
+              {t.strength}
+            </span>
+          )}
+          {t.use_cases && t.use_cases.length > 0 && (
+            <ul className="mt-2 list-disc space-y-0.5 pl-4 text-xs text-slate-500 dark:text-slate-400">
+              {t.use_cases.slice(0, 3).map((uc, i) => (
+                <li key={i}>{uc}</li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+      <span className="mt-2 text-xs text-slate-400 dark:text-slate-500">{followUpLabel}</span>
+    </div>
   );
 }

@@ -25,6 +25,7 @@ export default defineConfig({
   server: {
     port: 5173,
     open: true,
+    allowedHosts: ['localhost', 'host.docker.internal'],
   },
   preview: {
     // Sta containernetwerk-hostnames toe (handig voor geautomatiseerde tests).

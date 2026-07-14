@@ -31,11 +31,26 @@ export default function UserManagerPage() {
   const [orgs, setOrgs] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
   const [editor, setEditor] = useState<Editor | null>(null);
+  const [orgFilter, setOrgFilter] = useState<string>('all');
+  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
 
   const orgName = useMemo(() => {
     const map = new Map(orgs.map((o) => [o.id, o.name]));
     return (id?: string | null) => (id ? map.get(id) ?? '—' : '—');
   }, [orgs]);
+
+  const visibleProfiles = useMemo(() => {
+    const filtered = profiles.filter((p) => {
+      if (orgFilter === 'all') return true;
+      if (orgFilter === 'none') return !p.organization_id;
+      return p.organization_id === orgFilter;
+    });
+    return [...filtered].sort((a, b) => {
+      const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return sortOrder === 'newest' ? tb - ta : ta - tb;
+    });
+  }, [profiles, orgFilter, sortOrder]);
 
   async function load() {
     setLoading(true);
@@ -82,12 +97,46 @@ export default function UserManagerPage() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Gebruikers beheren</h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          {profiles.length} gebruikers
-          {!canEditRoles && ' · alleen hoofdbeheerders kunnen rollen wijzigen'}
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Gebruikers beheren</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            {visibleProfiles.length}
+            {visibleProfiles.length !== profiles.length && ` van ${profiles.length}`} gebruikers
+            {!canEditRoles && ' · alleen hoofdbeheerders kunnen rollen wijzigen'}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="opl-label" htmlFor="org-filter">Organisatie</label>
+            <select
+              id="org-filter"
+              className="opl-input"
+              value={orgFilter}
+              onChange={(e) => setOrgFilter(e.target.value)}
+            >
+              <option value="all">Alle organisaties</option>
+              <option value="none">— Geen organisatie —</option>
+              {orgs.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="opl-label" htmlFor="sort-order">Sorteren</label>
+            <select
+              id="sort-order"
+              className="opl-input"
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value as 'newest' | 'oldest')}
+            >
+              <option value="newest">Nieuwste eerst</option>
+              <option value="oldest">Oudste eerst</option>
+            </select>
+          </div>
+        </div>
       </div>
 
       <div className="opl-card overflow-hidden">
@@ -105,7 +154,7 @@ export default function UserManagerPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-              {profiles.map((p) => (
+              {visibleProfiles.map((p) => (
                 <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800">
                   <td className="px-4 py-3">
                     <div className="font-medium text-slate-800 dark:text-slate-100">{p.full_name || '—'}</div>
@@ -161,10 +210,10 @@ export default function UserManagerPage() {
                   </td>
                 </tr>
               ))}
-              {profiles.length === 0 && (
+              {visibleProfiles.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-4 py-8 text-center text-sm text-slate-400 dark:text-slate-500">
-                    Nog geen gebruikers.
+                    {profiles.length === 0 ? 'Nog geen gebruikers.' : 'Geen gebruikers voor dit filter.'}
                   </td>
                 </tr>
               )}

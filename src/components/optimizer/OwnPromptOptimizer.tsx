@@ -3,14 +3,16 @@ import {
   AlertTriangle,
   Check,
   ChevronDown,
+  ChevronRight,
   ClipboardCopy,
   Compass,
   Eraser,
   Info,
-  LayoutGrid,
+  Layers,
   Loader2,
   Search,
   Sparkles,
+  ThumbsDown,
   Wand2,
 } from 'lucide-react';
 import clsx from 'clsx';
@@ -19,7 +21,12 @@ import { useReferenceData } from '@/context/ReferenceDataContext';
 import { isContextPrompt } from '@/lib/techniques';
 import { usePersistentDraft } from '@/lib/usePersistentDraft';
 import { stripMarkdown } from '@/lib/utils';
-import { generatePrompt, prefillFields, recommendFramework } from '@/services/optimizeService';
+import {
+  generatePrompt,
+  prefillFields,
+  recommendFramework,
+  recommendTechniques,
+} from '@/services/optimizeService';
 import OptimizingLoader from './OptimizingLoader';
 import FollowUpQuestions, { type FieldMeta } from './FollowUpQuestions';
 import type { AiSettings } from '@/services/settingsService';
@@ -94,9 +101,12 @@ export default function OwnPromptOptimizer({ settings, onResult, header }: OwnPr
   // gaat bij een fout of herlaadactie. "Opschonen" maakt hem (en de rest) leeg.
   const [ownPrompt, setOwnPrompt, clearOwnPromptDraft] = usePersistentDraft('ownPromptFlow');
   const [showExamples, setShowExamples] = useState(false);
-  // Toont de volledige frameworklijst zodat de gebruiker — los van het AI-advies —
-  // alsnog elk ander framework kan kiezen (met dezelfde auto-voorinvulling).
-  const [showAllFrameworks, setShowAllFrameworks] = useState(false);
+  // Korte "waarom dit ook past (of juist niet)"-zin per framework, voor de
+  // "kies een ander framework"-lijst. Per framework-id. Wordt opgehaald zodra de
+  // gebruiker die lijst uitklapt (één AI-call voor alle frameworks samen).
+  const [otherReasons, setOtherReasons] = useState<Record<string, string>>({});
+  const [otherLoading, setOtherLoading] = useState(false);
+  const otherFetchedRef = useRef(false);
   const [recommending, setRecommending] = useState(false);
   const [recommendations, setRecommendations] = useState<TechniqueRecommendation[] | null>(null);
   const [recommendSummary, setRecommendSummary] = useState('');
@@ -124,7 +134,9 @@ export default function OwnPromptOptimizer({ settings, onResult, header }: OwnPr
     setAnswers({});
     setFieldMeta({});
     setUnclearReason(null);
-    setShowAllFrameworks(false);
+    // Oude "waarom dit ook past"-uitleg vervalt; opnieuw ophalen bij uitklappen.
+    setOtherReasons({});
+    otherFetchedRef.current = false;
   }
 
   /** "Opschonen": wis de geplakte prompt (ook uit localStorage) én alle voortgang. */
@@ -166,6 +178,9 @@ export default function OwnPromptOptimizer({ settings, onResult, header }: OwnPr
     setAnswers({});
     setFieldMeta({});
     setUnclearReason(null);
+    // Oude "waarom dit ook past"-uitleg vervalt; opnieuw ophalen bij uitklappen.
+    setOtherReasons({});
+    otherFetchedRef.current = false;
     try {
       const res = await recommendFramework({
         ownPrompt: ownPrompt.trim(),
@@ -183,6 +198,43 @@ export default function OwnPromptOptimizer({ settings, onResult, header }: OwnPr
       toast.error('Aanbeveling mislukt. Probeer het opnieuw.');
     } finally {
       setRecommending(false);
+    }
+  }
+
+  /**
+   * Haal, zodra de "kies een ander framework"-lijst wordt uitgeklapt, voor elk
+   * framework dat NIET al door de eerste analyse is aanbevolen een korte "waarom
+   * dit ook past (of juist niet) voor jouw prompt"-zin op. Eén AI-call voor alle
+   * overige frameworks samen; we hergebruiken de recommend-modus met de eigen
+   * prompt als doel. Best-effort: lukt het niet, dan tonen we de beschrijving.
+   */
+  async function fetchOtherReasons() {
+    if (otherFetchedRef.current || otherLoading) return;
+    const recommendedIds = new Set((recommendations ?? []).map((r) => r.id));
+    // Alleen de frameworks zonder eigen advies-zin ophalen; de aanbevolen hebben
+    // die al uit de eerste analyse (rec.reason), dus die slaan we over.
+    const others = frameworks.filter((f) => !recommendedIds.has(f.id));
+    if (others.length === 0) return;
+    otherFetchedRef.current = true;
+    setOtherLoading(true);
+    try {
+      const res = await recommendTechniques({
+        goal: ownPrompt.trim(),
+        techniques: others,
+        preferredProvider: settings.provider,
+        preferredModel: settings.model,
+      });
+      const map: Record<string, string> = {};
+      for (const r of res.recommendations) {
+        const line = (r.reason || r.value || '').trim();
+        if (line) map[r.id] = line;
+      }
+      setOtherReasons(map);
+    } catch {
+      // Best-effort; bij een fout blijft de lijst gewoon zonder uitleg-zinnen.
+      otherFetchedRef.current = false;
+    } finally {
+      setOtherLoading(false);
     }
   }
 
@@ -494,83 +546,106 @@ export default function OwnPromptOptimizer({ settings, onResult, header }: OwnPr
         </div>
       )}
 
-      {/* "Of kies zelf een ander framework": het AI-advies toont maar 1–3 opties,
-          maar soms wil de gebruiker bewust een ander framework (bijv. de echte
-          BLUEPRINT i.p.v. BLUEPRINT Preview). Deze inklapbare lijst toont ALLE
-          frameworks; een keuze loopt via dezelfde handleSelectFramework, dus de
-          velden worden óók automatisch voor-ingevuld — geen handwerk nodig. */}
+      {/* "Kies een ander framework": het AI-advies toont maar 1–3 opties, maar soms
+          wil de gebruiker bewust een ander framework. Deze nadrukkelijke, oranje
+          uitklapknop toont ALLE frameworks met een duidelijk label — groen
+          "Aanbevolen" of amber "Niet aanbevolen" — plus een korte AI-uitleg wáárom
+          het (niet) past. Een keuze loopt via dezelfde handleSelectFramework, dus
+          de velden worden óók automatisch voor-ingevuld. De uitleg-zinnen halen we
+          pas op zodra de lijst wordt uitgeklapt (fetchOtherReasons). */}
       {recommendations && frameworks.length > 0 && (
-        <div className="rounded-xl border border-slate-200 dark:border-slate-700">
-          <button
-            type="button"
-            onClick={() => setShowAllFrameworks((v) => !v)}
-            aria-expanded={showAllFrameworks}
-            className="flex w-full items-center justify-between gap-2 rounded-xl px-4 py-3 text-left text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800"
-          >
+        <details
+          className="group/choose"
+          onToggle={(e) => {
+            if ((e.currentTarget as HTMLDetailsElement).open) void fetchOtherReasons();
+          }}
+        >
+          {/* Uitklap-knop, nadrukkelijk als oranje knop vormgegeven zodat meteen
+              duidelijk is dat hij aanklikbaar is: oranje rand + getinte vulling,
+              oranje tekst en een gevulde oranje pijl-cirkel die meedraait bij openen. */}
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-xl border-2 border-rijksoranje/60 bg-rijksoranje/10 px-4 py-3 text-sm font-semibold text-rijksoranje shadow-sm transition-all hover:border-rijksoranje hover:bg-rijksoranje/15 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rijksoranje/40 dark:border-rijksoranje/50 dark:bg-rijksoranje/15 dark:hover:bg-rijksoranje/20">
             <span className="flex items-center gap-2">
-              <LayoutGrid size={16} className="text-rijksblauw-500" />
-              Of kies zelf een ander framework
+              <Layers size={18} className="text-rijksoranje" />
+              Kies een ander framework
             </span>
-            <ChevronDown
-              size={18}
-              className={clsx(
-                'shrink-0 text-slate-400 transition-transform',
-                showAllFrameworks && 'rotate-180',
-              )}
-            />
-          </button>
-          {showAllFrameworks && (
-            <div className="border-t border-slate-200 p-4 dark:border-slate-700">
-              <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
-                Klik op een framework om het toe te passen. We vullen de velden ook dan
-                automatisch voor op basis van je prompt.
-              </p>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {frameworks.map((fw) => {
-                  const active = fw.id === techniqueId;
-                  const isRecommended = recommendations.some((r) => r.id === fw.id);
-                  return (
-                    <button
-                      key={fw.id}
-                      type="button"
-                      onClick={() => void handleSelectFramework(fw.id)}
-                      aria-pressed={active}
-                      disabled={prefilling || generating}
-                      className={clsx(
-                        'flex flex-col rounded-lg border p-3 text-left transition-all disabled:cursor-not-allowed disabled:opacity-60',
-                        active
-                          ? 'border-rijksblauw-500 bg-rijksblauw-50 ring-2 ring-rijksblauw-500/20 dark:bg-rijksblauw-500/15'
-                          : 'border-slate-200 bg-white hover:border-rijksblauw-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700/50',
-                      )}
-                    >
-                      <span className="flex items-center justify-between gap-2">
-                        <span className="font-semibold text-rijksblauw-700 dark:text-rijksblauw-200">
-                          {fw.name}
-                        </span>
-                        {active ? (
-                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-rijksblauw-500 text-white">
-                            <Check size={13} />
-                          </span>
-                        ) : (
-                          isRecommended && (
-                            <span className="opl-badge shrink-0 bg-rijksoranje/15 text-rijksoranje">
-                              Aanbevolen
-                            </span>
-                          )
-                        )}
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-rijksoranje text-white shadow-sm transition-transform group-open/choose:rotate-180">
+              <ChevronDown size={16} />
+            </span>
+          </summary>
+
+          <div className="mt-3">
+            <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
+              Klik op een framework om het toe te passen. We vullen de velden ook dan
+              automatisch voor op basis van je prompt.
+            </p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {frameworks.map((fw) => {
+                const active = fw.id === techniqueId;
+                const rec = recommendations.find((r) => r.id === fw.id);
+                const isRecommended = Boolean(rec);
+                // Uitleg-zin: aanbevolen frameworks hebben die al uit de eerste
+                // analyse (rec.reason); voor de rest komt hij uit fetchOtherReasons.
+                const reason = (rec?.reason ? stripMarkdown(rec.reason) : otherReasons[fw.id]) ?? '';
+                return (
+                  <button
+                    key={fw.id}
+                    type="button"
+                    onClick={() => void handleSelectFramework(fw.id)}
+                    aria-pressed={active}
+                    disabled={prefilling || generating}
+                    className={clsx(
+                      'group/other flex flex-col rounded-lg border p-3 text-left transition-all disabled:cursor-not-allowed disabled:opacity-60',
+                      active
+                        ? 'border-rijksblauw-500 bg-rijksblauw-50 ring-2 ring-rijksblauw-500/20 dark:bg-rijksblauw-500/15'
+                        : 'border-slate-200 bg-white hover:border-rijksoranje/50 hover:bg-rijksoranje/5 dark:border-slate-700 dark:bg-slate-800/40 dark:hover:border-rijksoranje/40 dark:hover:bg-slate-800',
+                    )}
+                  >
+                    <span className="flex items-center justify-between gap-2">
+                      <span className="font-semibold text-rijksblauw-700 dark:text-rijksblauw-200">
+                        {fw.name}
                       </span>
-                      {fw.strength && (
-                        <span className="mt-1 line-clamp-2 text-xs text-slate-500 dark:text-slate-400">
-                          {fw.strength}
+                      {active ? (
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-rijksblauw-500 text-white">
+                          <Check size={13} />
+                        </span>
+                      ) : isRecommended ? (
+                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-rijksgroen/15 px-2 py-0.5 text-xs font-semibold text-rijksgroen dark:bg-rijksgroen/20">
+                          <Sparkles size={11} />
+                          Aanbevolen
+                        </span>
+                      ) : (
+                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
+                          <ThumbsDown size={11} />
+                          Niet aanbevolen
                         </span>
                       )}
-                    </button>
-                  );
-                })}
-              </div>
+                    </span>
+                    {/* Korte "waarom dit (niet) past voor jouw prompt"-zin. Tijdens
+                        het ophalen tonen we een spinner met dezelfde tekst als de hub. */}
+                    <span className="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+                      {!reason && otherLoading && !isRecommended ? (
+                        <span className="inline-flex items-center gap-1.5 text-slate-400 dark:text-slate-500">
+                          <Loader2 size={12} className="animate-spin" /> We bekijken of dit ook past…
+                        </span>
+                      ) : (
+                        reason || fw.strength || fw.description
+                      )}
+                    </span>
+                    {!active && (
+                      <span className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-rijksoranje">
+                        Toepassen
+                        <ChevronRight
+                          size={13}
+                          className="transition-transform group-hover/other:translate-x-0.5"
+                        />
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
-          )}
-        </div>
+          </div>
+        </details>
       )}
 
       {/* Anker voor het laad-/voor-invulblok; hier scrollen we na een keuze naartoe. */}

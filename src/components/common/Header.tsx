@@ -30,21 +30,16 @@ export default function Header() {
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200 dark:border-slate-700 bg-white/90 dark:bg-slate-900/90 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        <Link to="/" className="flex items-center gap-2.5">
-          <img
-            src="/logo-rijksoverheid.webp"
-            alt="Rijksoverheid"
-            className="h-9 w-9 shrink-0 rounded-lg object-cover"
-            width={36}
-            height={36}
-          />
-          <div className="leading-tight">
-            <span className="block text-sm font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Overheid</span>
-            <span className="block text-xs font-medium text-slate-500 dark:text-slate-400">Prompt Library</span>
-          </div>
-        </Link>
+        <div className="flex items-center gap-4">
+          <Link to="/" className="flex items-center">
+            <img
+              src="/promptplein-logo.png"
+              alt="PromptPlein"
+              className="h-11 w-auto shrink-0 object-contain"
+            />
+          </Link>
 
-        <nav className="hidden items-center gap-1 lg:flex" aria-label="Hoofdnavigatie">
+          <nav className="hidden items-center gap-1 lg:flex" aria-label="Hoofdnavigatie">
           {navItems.map(({ to, label, icon: Icon, end, iconClassName }) => (
             <NavLink
               key={to}
@@ -63,7 +58,8 @@ export default function Header() {
               {label}
             </NavLink>
           ))}
-        </nav>
+          </nav>
+        </div>
 
         <div className="flex items-center gap-1">
           <NavLink
