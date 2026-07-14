@@ -3,6 +3,8 @@ import { isContextPrompt, structureFormat } from '@/lib/techniques';
 import type { AiProvider } from '@/config/aiModels';
 import type {
   AnalyzeResult,
+  FrameworkFit,
+  FrameworkFitResult,
   FrameworkRecommendResult,
   MissingField,
   OptimizeResult,
@@ -380,6 +382,113 @@ export async function recommendFramework(args: {
   return {
     summary: '',
     recommendations: localRecommend(ownPrompt, frameworks),
+    success: true,
+    provider: 'local-template',
+  };
+}
+
+/**
+ * Lokale fallback voor de framework-fit-modus (geen backend). Grove trefwoord-
+ * overlap tussen het vraagstuk en elk framework bepaalt of het "past". Levert
+ * voor ELK framework een oordeel, zodat de UI ook zonder AI een vraagstuk-
+ * gerelateerde regel per kaart kan tonen.
+ */
+function localFrameworkFit(ownPrompt: string, frameworks: Technique[]): FrameworkFit[] {
+  const words = new Set(
+    ownPrompt
+      .toLowerCase()
+      .split(/[^a-zà-ÿ0-9]+/)
+      .filter((w) => w.length > 3),
+  );
+  return frameworks.map((t) => {
+    const haystack =
+      `${t.name} ${t.description ?? ''} ${t.strength ?? ''} ${(t.use_cases ?? []).join(' ')}`.toLowerCase();
+    let score = 0;
+    for (const w of words) if (haystack.includes(w)) score += 1;
+    const fits = score >= 2;
+    const firstStrength = t.strength ? t.strength.split(/(?<=[.!?])\s/)[0] : '';
+    return {
+      id: t.id,
+      fits,
+      value: fits
+        ? firstStrength || 'Sluit aan bij wat je vraagstuk nodig heeft.'
+        : 'Sluit minder duidelijk aan op de kern van je vraagstuk.',
+      missing: fits
+        ? ''
+        : 'Maak in je prompt concreter welk onderwerp, doelgroep en soort tekst je bedoelt.',
+    };
+  });
+}
+
+/**
+ * Beoordeelt ELK meegegeven framework tegen de geplakte prompt/het vraagstuk:
+ * past het (fits), een vraagstuk-specifieke uitleg (value), en zo niet: wat er
+ * nog bij moet om het wél te laten matchen (missing). Roept de edge function in
+ * 'framework-fit'-modus aan; faalt dat, dan lokale trefwoord-matching.
+ */
+export async function explainFrameworkFit(args: {
+  ownPrompt: string;
+  frameworks: Technique[];
+  preferredProvider?: AiProvider;
+  preferredModel?: string;
+}): Promise<FrameworkFitResult> {
+  const { ownPrompt, frameworks, preferredProvider, preferredModel } = args;
+  const functionUrl = getFunctionUrl('optimize-prompt');
+
+  if (isSupabaseConfigured && functionUrl) {
+    try {
+      const anonKey = getAnonKey();
+      const response = await fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(anonKey ? { Authorization: `Bearer ${anonKey}`, apikey: anonKey } : {}),
+        },
+        body: JSON.stringify({
+          mode: 'framework-fit',
+          ownPrompt,
+          techniques: frameworks.map((t) => ({
+            id: t.id,
+            name: t.name,
+            description: t.description,
+            strength: t.strength,
+            use_cases: t.use_cases,
+          })),
+          preferredProvider: preferredProvider ?? 'auto',
+          preferredModel,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Edge function gaf status ${response.status}`);
+      }
+
+      const data = (await response.json()) as Partial<FrameworkFitResult>;
+      if (data.success && Array.isArray(data.fits)) {
+        const valid = new Set(frameworks.map((t) => t.id));
+        const fits = data.fits.filter((f) => valid.has(f.id));
+        if (fits.length > 0) {
+          return {
+            fits,
+            success: true,
+            provider: (data.provider as FrameworkFitResult['provider']) ?? 'claude',
+          };
+        }
+      }
+      throw new Error(data.error ?? 'Geen fit-oordeel ontvangen');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Onbekende fout';
+      return {
+        fits: localFrameworkFit(ownPrompt, frameworks),
+        success: true,
+        provider: 'local-template',
+        error: `Slimme fit-uitleg mislukt (${message}); lokale inschatting gebruikt.`,
+      };
+    }
+  }
+
+  return {
+    fits: localFrameworkFit(ownPrompt, frameworks),
     success: true,
     provider: 'local-template',
   };

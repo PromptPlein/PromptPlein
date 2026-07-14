@@ -12,7 +12,6 @@ import {
   Loader2,
   Search,
   Sparkles,
-  ThumbsDown,
   Wand2,
 } from 'lucide-react';
 import clsx from 'clsx';
@@ -22,15 +21,16 @@ import { isContextPrompt } from '@/lib/techniques';
 import { usePersistentDraft } from '@/lib/usePersistentDraft';
 import { stripMarkdown } from '@/lib/utils';
 import {
+  explainFrameworkFit,
   generatePrompt,
   prefillFields,
   recommendFramework,
-  recommendTechniques,
 } from '@/services/optimizeService';
 import OptimizingLoader from './OptimizingLoader';
 import FollowUpQuestions, { type FieldMeta } from './FollowUpQuestions';
 import type { AiSettings } from '@/services/settingsService';
 import type {
+  FrameworkFit,
   OptimizeResult,
   PrefillResult,
   Technique,
@@ -101,12 +101,13 @@ export default function OwnPromptOptimizer({ settings, onResult, header }: OwnPr
   // gaat bij een fout of herlaadactie. "Opschonen" maakt hem (en de rest) leeg.
   const [ownPrompt, setOwnPrompt, clearOwnPromptDraft] = usePersistentDraft('ownPromptFlow');
   const [showExamples, setShowExamples] = useState(false);
-  // Korte "waarom dit ook past (of juist niet)"-zin per framework, voor de
-  // "kies een ander framework"-lijst. Per framework-id. Wordt opgehaald zodra de
-  // gebruiker die lijst uitklapt (één AI-call voor alle frameworks samen).
-  const [otherReasons, setOtherReasons] = useState<Record<string, string>>({});
-  const [otherLoading, setOtherLoading] = useState(false);
-  const otherFetchedRef = useRef(false);
+  // Vraagstuk-specifiek fit-oordeel per framework (past het, waarom (niet), en
+  // wat er nog bij moet), voor de "kies een ander framework"-lijst. Per
+  // framework-id. Wordt opgehaald zodra de gebruiker die lijst uitklapt (één
+  // AI-call die ALLE frameworks tegen het vraagstuk beoordeelt).
+  const [frameworkFits, setFrameworkFits] = useState<Record<string, FrameworkFit>>({});
+  const [fitLoading, setFitLoading] = useState(false);
+  const fitFetchedRef = useRef(false);
   const [recommending, setRecommending] = useState(false);
   const [recommendations, setRecommendations] = useState<TechniqueRecommendation[] | null>(null);
   const [recommendSummary, setRecommendSummary] = useState('');
@@ -134,9 +135,9 @@ export default function OwnPromptOptimizer({ settings, onResult, header }: OwnPr
     setAnswers({});
     setFieldMeta({});
     setUnclearReason(null);
-    // Oude "waarom dit ook past"-uitleg vervalt; opnieuw ophalen bij uitklappen.
-    setOtherReasons({});
-    otherFetchedRef.current = false;
+    // Oude fit-oordelen vervallen; opnieuw ophalen bij uitklappen.
+    setFrameworkFits({});
+    fitFetchedRef.current = false;
   }
 
   /** "Opschonen": wis de geplakte prompt (ook uit localStorage) én alle voortgang. */
@@ -178,9 +179,9 @@ export default function OwnPromptOptimizer({ settings, onResult, header }: OwnPr
     setAnswers({});
     setFieldMeta({});
     setUnclearReason(null);
-    // Oude "waarom dit ook past"-uitleg vervalt; opnieuw ophalen bij uitklappen.
-    setOtherReasons({});
-    otherFetchedRef.current = false;
+    // Oude fit-oordelen vervallen; opnieuw ophalen bij uitklappen.
+    setFrameworkFits({});
+    fitFetchedRef.current = false;
     try {
       const res = await recommendFramework({
         ownPrompt: ownPrompt.trim(),
@@ -202,39 +203,32 @@ export default function OwnPromptOptimizer({ settings, onResult, header }: OwnPr
   }
 
   /**
-   * Haal, zodra de "kies een ander framework"-lijst wordt uitgeklapt, voor elk
-   * framework dat NIET al door de eerste analyse is aanbevolen een korte "waarom
-   * dit ook past (of juist niet) voor jouw prompt"-zin op. Eén AI-call voor alle
-   * overige frameworks samen; we hergebruiken de recommend-modus met de eigen
-   * prompt als doel. Best-effort: lukt het niet, dan tonen we de beschrijving.
+   * Haal, zodra de "kies een ander framework"-lijst wordt uitgeklapt, voor ELK
+   * framework een vraagstuk-specifiek fit-oordeel op: past het bij dít vraagstuk,
+   * waarom (wel of niet), en zo niet — wat er nog bij zou moeten om het wél te
+   * laten matchen. Eén AI-call die alle frameworks tegen de eigen prompt weegt.
+   * Best-effort: lukt het niet, dan blijft de kaart terugvallen op de beschrijving.
    */
-  async function fetchOtherReasons() {
-    if (otherFetchedRef.current || otherLoading) return;
-    const recommendedIds = new Set((recommendations ?? []).map((r) => r.id));
-    // Alleen de frameworks zonder eigen advies-zin ophalen; de aanbevolen hebben
-    // die al uit de eerste analyse (rec.reason), dus die slaan we over.
-    const others = frameworks.filter((f) => !recommendedIds.has(f.id));
-    if (others.length === 0) return;
-    otherFetchedRef.current = true;
-    setOtherLoading(true);
+  async function fetchFrameworkFits() {
+    if (fitFetchedRef.current || fitLoading) return;
+    if (frameworks.length === 0) return;
+    fitFetchedRef.current = true;
+    setFitLoading(true);
     try {
-      const res = await recommendTechniques({
-        goal: ownPrompt.trim(),
-        techniques: others,
+      const res = await explainFrameworkFit({
+        ownPrompt: ownPrompt.trim(),
+        frameworks,
         preferredProvider: settings.provider,
         preferredModel: settings.model,
       });
-      const map: Record<string, string> = {};
-      for (const r of res.recommendations) {
-        const line = (r.reason || r.value || '').trim();
-        if (line) map[r.id] = line;
-      }
-      setOtherReasons(map);
+      const map: Record<string, FrameworkFit> = {};
+      for (const f of res.fits) map[f.id] = f;
+      setFrameworkFits(map);
     } catch {
-      // Best-effort; bij een fout blijft de lijst gewoon zonder uitleg-zinnen.
-      otherFetchedRef.current = false;
+      // Best-effort; bij een fout blijft de lijst gewoon zonder fit-uitleg.
+      fitFetchedRef.current = false;
     } finally {
-      setOtherLoading(false);
+      setFitLoading(false);
     }
   }
 
@@ -548,16 +542,17 @@ export default function OwnPromptOptimizer({ settings, onResult, header }: OwnPr
 
       {/* "Kies een ander framework": het AI-advies toont maar 1–3 opties, maar soms
           wil de gebruiker bewust een ander framework. Deze nadrukkelijke, oranje
-          uitklapknop toont ALLE frameworks met een duidelijk label — groen
-          "Aanbevolen" of amber "Niet aanbevolen" — plus een korte AI-uitleg wáárom
-          het (niet) past. Een keuze loopt via dezelfde handleSelectFramework, dus
-          de velden worden óók automatisch voor-ingevuld. De uitleg-zinnen halen we
-          pas op zodra de lijst wordt uitgeklapt (fetchOtherReasons). */}
+          uitklapknop toont ALLE frameworks, elk met een vraagstuk-specifieke uitleg
+          ("Waarom voor jouw vraagstuk") — of, als het niet past, waaróm niet én wat
+          er nog bij zou moeten om het wél te laten matchen. De aanbevolen frameworks
+          krijgen een groen "Aanbevolen" label; de overige staan er zonder label bij.
+          Een keuze loopt via dezelfde handleSelectFramework, dus de velden worden óók
+          automatisch voor-ingevuld. De fit-uitleg halen we op bij het uitklappen. */}
       {recommendations && frameworks.length > 0 && (
         <details
           className="group/choose"
           onToggle={(e) => {
-            if ((e.currentTarget as HTMLDetailsElement).open) void fetchOtherReasons();
+            if ((e.currentTarget as HTMLDetailsElement).open) void fetchFrameworkFits();
           }}
         >
           {/* Uitklap-knop, nadrukkelijk als oranje knop vormgegeven zodat meteen
@@ -575,17 +570,25 @@ export default function OwnPromptOptimizer({ settings, onResult, header }: OwnPr
 
           <div className="mt-3">
             <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
-              Klik op een framework om het toe te passen. We vullen de velden ook dan
-              automatisch voor op basis van je prompt.
+              Per framework zie je waarom het (wel of niet) past bij jouw vraagstuk. Klik op een
+              framework om het toe te passen; we vullen de velden dan automatisch voor.
             </p>
             <div className="grid gap-2 sm:grid-cols-2">
               {frameworks.map((fw) => {
                 const active = fw.id === techniqueId;
                 const rec = recommendations.find((r) => r.id === fw.id);
                 const isRecommended = Boolean(rec);
-                // Uitleg-zin: aanbevolen frameworks hebben die al uit de eerste
-                // analyse (rec.reason); voor de rest komt hij uit fetchOtherReasons.
-                const reason = (rec?.reason ? stripMarkdown(rec.reason) : otherReasons[fw.id]) ?? '';
+                const fit = frameworkFits[fw.id];
+                // "Waarom voor jouw vraagstuk"-zin: bij de aanbevolen frameworks
+                // gebruiken we de vraagstuk-specifieke waarde uit de eerste analyse
+                // (rec.value); voor de rest het fit-oordeel (fetchFrameworkFits).
+                const whyForCase =
+                  (rec?.value ? stripMarkdown(rec.value) : fit?.value ? stripMarkdown(fit.value) : '') ?? '';
+                // Een framework "past niet" alleen als het niet aanbevolen is én de
+                // fit-analyse fits=false teruggaf (met wat er nog bij zou moeten).
+                const doesNotFit = !isRecommended && fit && !fit.fits;
+                const missing = fit?.missing ? stripMarkdown(fit.missing) : '';
+                const stillLoading = !isRecommended && !fit && fitLoading;
                 return (
                   <button
                     key={fw.id}
@@ -608,29 +611,48 @@ export default function OwnPromptOptimizer({ settings, onResult, header }: OwnPr
                         <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-rijksblauw-500 text-white">
                           <Check size={13} />
                         </span>
-                      ) : isRecommended ? (
-                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-rijksgroen/15 px-2 py-0.5 text-xs font-semibold text-rijksgroen dark:bg-rijksgroen/20">
-                          <Sparkles size={11} />
-                          Aanbevolen
-                        </span>
                       ) : (
-                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
-                          <ThumbsDown size={11} />
-                          Niet aanbevolen
-                        </span>
+                        // Alleen aanbevolen frameworks krijgen een label (groen
+                        // "Aanbevolen"). De overige frameworks blijven wél in de
+                        // lijst staan, maar zonder label.
+                        isRecommended && (
+                          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-rijksgroen/15 px-2 py-0.5 text-xs font-semibold text-rijksgroen dark:bg-rijksgroen/20">
+                            <Sparkles size={11} />
+                            Aanbevolen
+                          </span>
+                        )
                       )}
                     </span>
-                    {/* Korte "waarom dit (niet) past voor jouw prompt"-zin. Tijdens
-                        het ophalen tonen we een spinner met dezelfde tekst als de hub. */}
+
+                    {/* Vraagstuk-specifieke uitleg. Tijdens het ophalen een spinner;
+                        daarna "Waarom voor jouw vraagstuk" (past) of "Past minder
+                        goed" + wat er nog bij moet (past niet). */}
                     <span className="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
-                      {!reason && otherLoading && !isRecommended ? (
+                      {stillLoading ? (
                         <span className="inline-flex items-center gap-1.5 text-slate-400 dark:text-slate-500">
                           <Loader2 size={12} className="animate-spin" /> We bekijken of dit ook past…
                         </span>
+                      ) : whyForCase ? (
+                        <>
+                          <span className="font-semibold text-rijksoranje">
+                            {doesNotFit ? 'Past minder goed: ' : 'Waarom voor jouw vraagstuk: '}
+                          </span>
+                          {whyForCase}
+                        </>
                       ) : (
-                        reason || fw.strength || fw.description
+                        fw.strength || fw.description
                       )}
                     </span>
+
+                    {/* Alleen als het niet past: wat er nog bij zou moeten om het
+                        raamwerk wél zinvol te maken voor dit vraagstuk. */}
+                    {doesNotFit && missing && (
+                      <span className="mt-1.5 rounded-md bg-amber-50 px-2 py-1 text-xs leading-relaxed text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
+                        <span className="font-semibold">Nodig om te matchen: </span>
+                        {missing}
+                      </span>
+                    )}
+
                     {!active && (
                       <span className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-rijksoranje">
                         Toepassen

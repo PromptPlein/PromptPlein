@@ -235,6 +235,30 @@ export interface TechniqueRecommendation {
   value?: string;
 }
 
+/**
+ * Eén fit-oordeel per framework tegen het ingediende vraagstuk (framework-fit-
+ * modus, eigen-prompt-flow). Zegt of het raamwerk past, met een vraagstuk-
+ * specifieke uitleg, en zo niet: wat er nog bij moet om het wél te laten matchen.
+ */
+export interface FrameworkFit {
+  /** Verwijst naar een bestaande Technique.id. */
+  id: string;
+  /** Past dit raamwerk goed bij het vraagstuk? */
+  fits: boolean;
+  /** Vraagstuk-specifieke uitleg: waarom het (wel of niet) past. */
+  value: string;
+  /** Alleen bij fits=false: wat er nog aan de prompt bij zou moeten om te matchen. */
+  missing?: string;
+}
+
+/** Antwoord van de optimize-prompt service (framework-fit-modus). */
+export interface FrameworkFitResult {
+  fits: FrameworkFit[];
+  success: boolean;
+  provider: AiProviderResult;
+  error?: string;
+}
+
 /** Antwoord van de optimize-prompt service (aanbevelingsmodus). */
 export interface RecommendResult {
   recommendations: TechniqueRecommendation[];

@@ -31,6 +31,7 @@ type Mode =
   | 'generate'
   | 'recommend'
   | 'recommend-framework'
+  | 'framework-fit'
   | 'analyze'
   | 'prefill'
   | 'title'
@@ -463,6 +464,52 @@ Gebruik alleen id's die exact in de lijst voorkomen. Geef minstens 1 en maximaal
 const RECOMMEND_FRAMEWORK_USER_PROMPT = (ownPrompt: string, frameworks: TechniqueSummary[]) =>
   `PROMPT VAN DE GEBRUIKER (analyseer deze):\n"""\n${ownPrompt}\n"""\n\n` +
   `Beschikbare prompt frameworks:\n${frameworks
+    .map((t) => {
+      const parts = [`- id: ${t.id}`, `naam: ${t.name}`];
+      if (t.description) parts.push(`uitleg: ${t.description}`);
+      if (t.strength) parts.push(`kracht: ${t.strength}`);
+      if (t.use_cases && t.use_cases.length > 0)
+        parts.push(`gebruik voor: ${t.use_cases.join('; ')}`);
+      return parts.join(' | ');
+    })
+    .join('\n')}`;
+
+// --- Framework-fit-modus: beoordeel ELK meegegeven framework tegen het vraagstuk ---
+// Anders dan 'recommend'/'recommend-framework' (die alleen de top ~3 teruggeven),
+// geeft deze modus voor ÉLK framework een oordeel: past het bij dít vraagstuk, en
+// zo niet, wát moet er dan nog bij om het wel te laten passen. Zo kan de UI bij
+// elke kaart in de "kies een ander framework"-lijst een vraagstuk-specifieke
+// uitleg tonen (i.p.v. een algemene beschrijving van de techniek).
+const FRAMEWORK_FIT_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse rijksoverheid.
+Een interne overheidsmedewerker heeft een EIGEN prompt/vraagstuk beschreven. Je krijgt die prompt
+plus een lijst prompt frameworks (complete raamwerken die de hele prompt structureren, bijv. CARE,
+CRISP, CO-STAR).
+
+Beoordeel ELK framework uit de lijst afzonderlijk tegen DIT concrete vraagstuk. Geef per framework:
+- "id": de exacte framework-id uit de lijst.
+- "fits": true als het raamwerk goed past bij dit vraagstuk, anders false.
+- "value": één KORTE zin (max. ~25 woorden), altijd concreet gekoppeld aan de case (het onderwerp/
+  de doelgroep/het soort tekst uit de prompt):
+    • als fits=true: waarom dit raamwerk goed werkt voor precies dit vraagstuk.
+    • als fits=false: waarom het minder goed past bij dit vraagstuk (geen algemeenheden).
+- "missing": alleen bij fits=false — één KORTE zin die zegt WAT er nog aan het vraagstuk/de prompt
+  toegevoegd of veranderd zou moeten worden om dit raamwerk wél zinvol te maken. Bij fits=true mag
+  "missing" een lege string zijn.
+
+Wees eerlijk: als een framework echt niet bij het soort taak hoort, zeg dat en leg uit wat het wél
+nodig zou hebben. Verzin niets; baseer je op de inhoud van de prompt.
+
+${CLARITY_GATE_JSON_INSTRUCTION}
+
+Anders geef je UITSLUITEND geldige JSON terug, zonder codeblok of extra tekst, in dit formaat:
+{"fits":[{"id":"<framework-id>","fits":true,"value":"<1 korte zin, in het Nederlands>","missing":"<1 korte zin wat er nog bij moet als fits=false, anders leeg, in het Nederlands>"}]}
+
+Gebruik alleen id's die exact in de lijst voorkomen. Geef een oordeel voor ELK framework uit de lijst.`;
+
+/** Bouw de gebruikersprompt voor de framework-fit-modus (eigen-prompt-flow). */
+const FRAMEWORK_FIT_USER_PROMPT = (ownPrompt: string, frameworks: TechniqueSummary[]) =>
+  `PROMPT/VRAAGSTUK VAN DE GEBRUIKER (beoordeel elk framework hiertegen):\n"""\n${ownPrompt}\n"""\n\n` +
+  `Te beoordelen prompt frameworks:\n${frameworks
     .map((t) => {
       const parts = [`- id: ${t.id}`, `naam: ${t.name}`];
       if (t.description) parts.push(`uitleg: ${t.description}`);
@@ -1172,6 +1219,36 @@ function parseRecommendations(raw: string, valid: Set<string>): Recommendation[]
   }
 }
 
+/** Eén fit-oordeel per framework tegen het vraagstuk (framework-fit-modus). */
+interface FrameworkFit {
+  id: string;
+  fits: boolean;
+  /** Vraagstuk-specifieke uitleg: waarom het (wel of niet) past. */
+  value: string;
+  /** Alleen bij fits=false: wat er nog bij moet om het wel te laten passen. */
+  missing?: string;
+}
+
+/** Parseert het JSON-antwoord van de framework-fit-modus robuust. */
+function parseFrameworkFits(raw: string, valid: Set<string>): FrameworkFit[] {
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) return [];
+  try {
+    const parsed = JSON.parse(match[0]) as { fits?: FrameworkFit[] };
+    const fits = Array.isArray(parsed.fits) ? parsed.fits : [];
+    return fits
+      .filter((f) => f && typeof f.id === 'string' && valid.has(f.id))
+      .map((f) => ({
+        id: f.id,
+        fits: f.fits === true,
+        value: typeof f.value === 'string' ? f.value : '',
+        missing: typeof f.missing === 'string' ? f.missing : '',
+      }));
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Parseert het JSON-antwoord van de framework-aanbevelingsmodus robuust.
  * Verschilt van `parseRecommendations` doordat er ook een `summary` meekomt.
@@ -1338,6 +1415,39 @@ function localRecommend(goal: string, techniques: TechniqueSummary[]): Recommend
   }));
 }
 
+/**
+ * Lokale fallback voor de framework-fit-modus (geen AI beschikbaar). Grove
+ * trefwoord-overlap tussen het vraagstuk en de kracht/gebruikssituaties van elk
+ * framework bepaalt of het "past". Levert voor ELK framework een oordeel, zodat
+ * de UI ook zonder backend een vraagstuk-gerelateerde regel kan tonen.
+ */
+function localFrameworkFits(ownPrompt: string, frameworks: TechniqueSummary[]): FrameworkFit[] {
+  const words = new Set(
+    ownPrompt
+      .toLowerCase()
+      .split(/[^a-zà-ÿ0-9]+/)
+      .filter((w) => w.length > 3),
+  );
+  return frameworks.map((t) => {
+    const haystack =
+      `${t.name} ${t.description ?? ''} ${t.strength ?? ''} ${(t.use_cases ?? []).join(' ')}`.toLowerCase();
+    let score = 0;
+    for (const w of words) if (haystack.includes(w)) score += 1;
+    const fits = score >= 2;
+    const firstStrength = t.strength ? t.strength.split(/(?<=[.!?])\s/)[0] : '';
+    return {
+      id: t.id,
+      fits,
+      value: fits
+        ? firstStrength || 'Sluit aan bij wat je vraagstuk nodig heeft.'
+        : 'Sluit minder duidelijk aan op de kern van je vraagstuk.',
+      missing: fits
+        ? ''
+        : 'Maak in je prompt concreter welk onderwerp, doelgroep en soort tekst je bedoelt.',
+    };
+  });
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -1357,15 +1467,17 @@ Deno.serve(async (req: Request) => {
         ? 'recommend'
         : body.mode === 'recommend-framework'
           ? 'recommend-framework'
-          : body.mode === 'analyze'
-            ? 'analyze'
-            : body.mode === 'prefill'
-              ? 'prefill'
-              : body.mode === 'title'
-                ? 'title'
-                : body.mode === 'metadata'
-                  ? 'metadata'
-                  : 'generate';
+          : body.mode === 'framework-fit'
+            ? 'framework-fit'
+            : body.mode === 'analyze'
+              ? 'analyze'
+              : body.mode === 'prefill'
+                ? 'prefill'
+                : body.mode === 'title'
+                  ? 'title'
+                  : body.mode === 'metadata'
+                    ? 'metadata'
+                    : 'generate';
     const order = buildOrder(body.preferredProvider);
     const temperature = clampTemp(body.temperature);
 
@@ -1650,6 +1762,59 @@ Deno.serve(async (req: Request) => {
 
       return new Response(
         JSON.stringify({ success: true, recommendations, provider }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    // --- Framework-fit-modus: beoordeel elk framework tegen het vraagstuk ---
+    if (mode === 'framework-fit') {
+      const ownPrompt = body.ownPrompt?.trim();
+      const frameworks = Array.isArray(body.techniques) ? body.techniques : [];
+      if (!ownPrompt || frameworks.length === 0) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'ownPrompt en techniques zijn verplicht' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      const validIds = new Set(frameworks.map((t) => t.id));
+      const userMessage = FRAMEWORK_FIT_USER_PROMPT(ownPrompt, frameworks);
+      let fits: FrameworkFit[] = [];
+      let provider: Provider | 'local-template' = 'local-template';
+
+      for (const candidate of order) {
+        try {
+          const raw = await PROVIDERS[candidate](
+            userMessage,
+            FRAMEWORK_FIT_SYSTEM_PROMPT,
+            0.2,
+            resolveModel(candidate, body.preferredProvider, body.preferredModel),
+          );
+          // Clarity-gate: heeft het model de prompt als onzin beoordeeld?
+          const unclear = detectUnclearJson(raw);
+          if (unclear) {
+            return new Response(
+              JSON.stringify({ success: false, unclear: true, reason: unclear, provider: candidate }),
+              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            );
+          }
+          const parsed = parseFrameworkFits(raw, validIds);
+          if (parsed.length > 0) {
+            fits = parsed;
+            provider = candidate;
+            break;
+          }
+        } catch (providerErr) {
+          console.error(`${candidate} (framework-fit) mislukt, probeer volgende:`, providerErr);
+        }
+      }
+
+      if (fits.length === 0) {
+        fits = localFrameworkFits(ownPrompt, frameworks);
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, fits, provider }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
