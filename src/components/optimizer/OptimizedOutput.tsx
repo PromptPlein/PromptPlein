@@ -67,6 +67,13 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
   const [catRequestBusy, setCatRequestBusy] = useState(false);
   // Naam van de aangevraagde categorie zodra de aanvraag is verstuurd (pending).
   const [pendingCategory, setPendingCategory] = useState<string | null>(null);
+  // Functie-aanvraag: paneel om een ontbrekende functie aan te vragen (zelfde
+  // patroon als de categorie-aanvraag hierboven).
+  const [showRoleRequest, setShowRoleRequest] = useState(false);
+  const [roleRequestName, setRoleRequestName] = useState('');
+  const [roleRequestBusy, setRoleRequestBusy] = useState(false);
+  // Naam van de aangevraagde functie zodra de aanvraag is verstuurd (pending).
+  const [pendingRole, setPendingRole] = useState<string | null>(null);
   // Direct uitvoeren: laat de AI de prompt meteen uitvoeren en toon het resultaat.
   const [executing, setExecuting] = useState(false);
   const [executed, setExecuted] = useState<string | null>(null);
@@ -130,6 +137,34 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
       toast.error(err instanceof Error ? err.message : 'Aanvraag mislukt');
     } finally {
       setCatRequestBusy(false);
+    }
+  }
+
+  /** Dien een aanvraag in voor een ontbrekende functie. */
+  async function submitRoleRequest() {
+    const name = roleRequestName.trim();
+    if (!name) {
+      toast.error('Geef de functie een naam.');
+      return;
+    }
+    if (!user) {
+      toast.error('Log in om een functie aan te vragen.');
+      return;
+    }
+    setRoleRequestBusy(true);
+    try {
+      await requestFunction({ name, requestedBy: user.id });
+      // Functie nog niet beschikbaar: laat de keuze leeg tot een beheerder de
+      // functie goedkeurt en toon de aanvraag als pending.
+      setRoleId(null);
+      setPendingRole(name);
+      setShowRoleRequest(false);
+      setRoleRequestName('');
+      toast.success(`Aanvraag voor “${name}” verstuurd — een beheerder beoordeelt hem.`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Aanvraag mislukt');
+    } finally {
+      setRoleRequestBusy(false);
     }
   }
 
@@ -440,24 +475,72 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
               id="tpl-role"
               options={roles.map((r) => ({ id: r.id, label: r.name, hint: r.description }))}
               value={roleId}
-              onChange={(id) => setRoleId(id)}
+              onChange={(id) => {
+                setRoleId(id);
+                if (id) setPendingRole(null); // echte keuze vervangt een aanvraag
+              }}
               placeholder="Voor welke functie is deze prompt geschreven?"
               clearLabel="Geen functie"
               searchPlaceholder="Zoek een functie…"
-              onRequestNew={
-                user
-                  ? async (term) => {
-                      try {
-                        await requestFunction({ name: term, requestedBy: user.id });
-                        toast.success(`Aanvraag voor “${term}” verstuurd — een beheerder beoordeelt hem.`);
-                      } catch (err) {
-                        toast.error(err instanceof Error ? err.message : 'Aanvraag mislukt');
-                      }
-                    }
-                  : undefined
-              }
-              requestNewLabel={(term) => `“${term}” als nieuwe functie aanvragen`}
             />
+
+            {/* Aangevraagde (nog niet goedgekeurde) functie. */}
+            {pendingRole && (
+              <p className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-2.5 py-1.5 text-xs text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">
+                <Loader2 size={12} className="animate-spin" />
+                Functie “{pendingRole}” aangevraagd — in afwachting van goedkeuring.
+              </p>
+            )}
+
+            {/* Expliciete knop: mijn functie zit er niet tussen → aanvragen. */}
+            {!showRoleRequest ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowRoleRequest(true);
+                  setRoleRequestName('');
+                }}
+                className="mt-2 text-xs font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
+              >
+                Mijn functie zit er niet tussen
+              </button>
+            ) : (
+              <div className="mt-2 space-y-2 rounded-lg border border-rijksblauw-200 bg-white p-2.5 dark:border-rijksblauw-500/30 dark:bg-slate-800">
+                <label className="opl-label text-xs" htmlFor="tpl-role-request">
+                  Nieuwe functie aanvragen
+                </label>
+                <input
+                  id="tpl-role-request"
+                  className="opl-input"
+                  value={roleRequestName}
+                  onChange={(e) => setRoleRequestName(e.target.value)}
+                  placeholder="Naam van de functie, bijv. Beleidsmedewerker Inkoop"
+                  onKeyDown={(e) => e.key === 'Enter' && submitRoleRequest()}
+                  autoFocus
+                />
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    className="opl-btn-secondary px-3 py-1.5 text-xs"
+                    onClick={() => setShowRoleRequest(false)}
+                    disabled={roleRequestBusy}
+                  >
+                    Annuleren
+                  </button>
+                  <button
+                    type="button"
+                    className="opl-btn-primary px-3 py-1.5 text-xs"
+                    onClick={submitRoleRequest}
+                    disabled={roleRequestBusy}
+                  >
+                    {roleRequestBusy ? 'Versturen…' : 'Aanvragen'}
+                  </button>
+                </div>
+                <p className="text-xs text-slate-400 dark:text-slate-500">
+                  Een beheerder beoordeelt je aanvraag. Tot die tijd laat je de functie leeg.
+                </p>
+              </div>
+            )}
             <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
               Voor welke functie is deze prompt geschreven?
             </p>

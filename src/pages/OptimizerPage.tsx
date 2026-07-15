@@ -3,7 +3,6 @@ import { useParams } from 'react-router-dom';
 import {
   Sparkles,
   Loader2,
-  FileText,
   Compass,
   Check,
   Wand2,
@@ -34,7 +33,7 @@ import { getAiSettings, DEFAULT_AI_SETTINGS, type AiSettings } from '@/services/
 import { detectPii, detectBlockedTopics, type GuardrailFinding } from '@/services/guardrails';
 import GuardrailDialog from '@/components/optimizer/GuardrailDialog';
 import { activityIdentifier, stripMarkdown } from '@/lib/utils';
-import { usePersistentDraft, clearAllDrafts } from '@/lib/usePersistentDraft';
+import { usePersistentDraft, usePersistentObject, clearAllDrafts } from '@/lib/usePersistentDraft';
 import type { OptimizeResult, Technique } from '@/types';
 
 /** Instapwijze: zelf kiezen/aanbevelen, óf de eigen prompt optimaliseren. */
@@ -62,8 +61,13 @@ export default function OptimizerPage() {
   // tab meteen de juiste flow toont.
   const [techniqueMode, setTechniqueMode] = useState<TechniqueMode>('smart');
   const [entryMode, setEntryMode] = useState<EntryMode>('own-prompt');
-  const [techniqueId, setTechniqueId] = useState<string | null>(null);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  // De gekozen techniek + de ingevulde antwoorden worden in localStorage bewaard,
+  // zodat de gebruiker bij een fout, herlaadactie of per ongeluk gesloten tab
+  // terugkeert op de vragenlijst mét zijn werk. Beide delen het opl.draft.-prefix,
+  // dus "Opschonen" (clearAllDrafts) wist ze mee. Een lege string = geen techniek
+  // (technique-lookup faalt dan → null, precies zoals voorheen bij `null`).
+  const [techniqueId, setTechniqueId] = usePersistentDraft('builderTechniqueId');
+  const [answers, setAnswers] = usePersistentObject<Record<string, string>>('builderAnswers', {});
   // Geserialiseerde output van een gespecialiseerde bouwer (Persona/Few-Shot/Meta)
   // wanneer de gebruiker zo'n techniek handmatig kiest. Gaat als context mee bij het
   // genereren; leeg voor gewone technieken (die de vragenlijst gebruiken).
@@ -71,7 +75,6 @@ export default function OptimizerPage() {
   // Herkomst per voor-ingevuld veld (origin-badges) + laadstaat tijdens prefill.
   const [fieldMeta, setFieldMeta] = useState<FieldMeta>({});
   const [prefilling, setPrefilling] = useState(false);
-  const [loadingPrompt, setLoadingPrompt] = useState(Boolean(promptId));
   const [optimizing, setOptimizing] = useState(false);
   // Admin-bepaalde AI-instellingen; gebruikers kiezen niet meer zelf.
   const settingsRef = useRef<AiSettings>(DEFAULT_AI_SETTINGS);
@@ -92,7 +95,6 @@ export default function OptimizerPage() {
   useEffect(() => {
     if (!promptId) return;
     let active = true;
-    setLoadingPrompt(true);
     getPrompt(promptId)
       .then((p) => {
         if (!active) return;
@@ -100,8 +102,7 @@ export default function OptimizerPage() {
           setPromptContent(p.content);
           setSourcePromptId(p.id);
         }
-      })
-      .finally(() => active && setLoadingPrompt(false));
+      });
     return () => {
       active = false;
     };
@@ -131,6 +132,10 @@ export default function OptimizerPage() {
    * (goal of promptContent) nog in localStorage stond.
    */
   function handleSelectTechnique(id: string, source: 'goal' | 'manual' = 'manual') {
+    // Opnieuw op de reeds actieve techniek klikken (of terugkomen op een uit
+    // localStorage herstelde techniek): antwoorden NIET wissen en niet opnieuw
+    // voor-invullen — dan zou het herstelde/ingevulde werk verloren gaan.
+    if (id === techniqueId) return;
     setTechniqueId(id);
     setAnswers({}); // antwoorden resetten bij nieuwe techniek
     setFieldMeta({});
@@ -394,7 +399,7 @@ export default function OptimizerPage() {
     clearGoalDraft();
     clearAllDrafts();
     setSourcePromptId(null);
-    setTechniqueId(null);
+    setTechniqueId('');
     setAnswers({});
     setFieldMeta({});
     setBuilderText('');
@@ -575,34 +580,6 @@ export default function OptimizerPage() {
                           </div>
                         );
                       })()}
-
-                      {/* Optioneel startpunt: eigen tekst die in de template verwerkt wordt */}
-                      <div className="mt-5 border-t border-slate-100 pt-5 dark:border-slate-700">
-                        <label className="opl-label" htmlFor="draft-input">
-                          Startpunt of voorbeeldtekst{' '}
-                          <span className="font-normal text-slate-400">(optioneel)</span>
-                        </label>
-                        {loadingPrompt ? (
-                          <div className="skeleton h-24 w-full rounded-lg" />
-                        ) : (
-                          <textarea
-                            id="draft-input"
-                            className="opl-input min-h-[96px] resize-y font-mono text-[13px]"
-                            value={promptContent}
-                            onChange={(e) => {
-                              setPromptContent(e.target.value);
-                              setSourcePromptId(null); // handmatig bewerkt = niet langer gekoppeld
-                            }}
-                            placeholder="Laat leeg voor een lege template, of plak hier een bestaande prompt/tekst als startpunt…"
-                          />
-                        )}
-                        {sourcePromptId && (
-                          <p className="mt-2 inline-flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
-                            <FileText size={12} /> Gekoppeld aan een opgeslagen prompt. De generatie
-                            wordt bewaard.
-                          </p>
-                        )}
-                      </div>
                     </div>
                   </section>
                 )}

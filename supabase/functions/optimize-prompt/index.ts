@@ -43,7 +43,8 @@ type Mode =
   | 'persona-fill'
   | 'fewshot-example'
   | 'fewshot-extract'
-  | 'meta-build';
+  | 'meta-build'
+  | 'expand-field';
 
 /** Eén veld van het gekozen prompt framework waar de analyse op toetst. */
 interface AnalyzeField {
@@ -179,6 +180,17 @@ interface RequestBody {
   metaRequest?: string;
   /** Optionele feedback van de gebruiker om de gebouwde prompt bij te stellen. */
   metaFeedback?: string;
+  // 'expand-field'-velden: verrijk ÉÉN framework-veld op zijn plek.
+  /** De id van het framework-veld dat wordt uitgebreid (FollowUpQuestion.id). */
+  fieldId?: string;
+  /** Het menselijke label van dat veld, bijv. "CONTEXT — achtergrond". */
+  fieldLabel?: string;
+  /** De placeholder-hint van dat veld (bedoeling van het veld). */
+  fieldPlaceholder?: string;
+  /** Wat de gebruiker al in dit veld typte (kort mag; nooit leeg bij aanroep). */
+  currentValue?: string;
+  /** De OVERIGE velden (label + huidige waarde), voor consistentie/afstemming. */
+  siblings?: Array<{ label: string; value: string }>;
   // 'analyze'-velden: toets de eigen prompt aan de eisen van het prompt framework.
   ownPrompt?: string;
   analyzeFields?: AnalyzeField[];
@@ -1359,6 +1371,123 @@ const PREFILL_USER_PROMPT = (
     ? `\n\nAANVULLENDE TOELICHTING VAN DE GEBRUIKER (verwerk dit als extra, leidende context bij het invullen van de velden — het is bedoeld om de velden die nog ontbraken of vaag waren nu concreet te maken):\n"""\n${clarification.trim()}\n"""`
     : '');
 
+const EXPAND_FIELD_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse rijksoverheid.
+Een interne overheidsmedewerker bouwt een prompt met een prompt framework dat uit meerdere VELDEN
+(bouwstenen) bestaat. Elk veld is een SPECIFIEK ONDERDEEL van de uiteindelijke prompt met een eigen
+rol (bijv. de rol/persona, de context, de concrete opdracht/instructie, de regels, de voorbeelden, het
+outputformaat, de toon of de doelgroep). De gebruiker heeft ÉÉN veld (deels) ingevuld en klikt op
+"Vul verder aan".
+
+Jouw taak: lever een BETERE, professionelere versie van ALLEEN dit ene veld — een echte kwaliteits-
+verbetering op wat de gebruiker zelf schreef, TOEGESPITST OP PRECIES DAT WAT DIT VELD VRAAGT. Het
+resultaat moet een sterker, scherper onderdeel zijn dan de invoer van de gebruiker, zodat de complete
+prompt hierdoor kwalitatief beter wordt. Je herschrijft dus de inhoud van DIT veld; je maakt geen nieuwe
+velden en raakt de andere velden niet aan.
+
+ALLERBELANGRIJKST — VOLG DE VELD-OMSCHRIJVING VAN DE BEHEERDER:
+Het LABEL en de VOORBEELD/PLACEHOLDER van dit veld zijn door de beheerder opgesteld en beschrijven EXACT
+wat er in dit veld hoort. Die omschrijving is LEIDEND — belangrijker dan elke algemene aanname over de
+naam van het veld. Lees het label en de voorbeeldtekst zorgvuldig en vul precies dát in wat daar gevraagd
+wordt.
+- Vraagt het label/voorbeeld bijvoorbeeld om "jouw rol, het publiek en de informatie die je hebt", dan
+  MOET je die onderdelen beschrijven (dus wél de rol van de gebruiker), ook al heet het veld "CONTEXT".
+- Noemt de voorbeeldtekst concrete elementen (rol, doelgroep, onderwerp, format, stappen), neem die dan
+  allemaal mee — dat is de checklist voor dit veld.
+- Ga NIET af op je eigen aanname over wat een veld met die naam "normaal" bevat als de omschrijving iets
+  anders vraagt. De omschrijving wint altijd.
+De "ROL VAN DIT VELD"-hint (indien aanwezig) is slechts een grove suggestie; negeer die zodra hij botst
+met wat het label/voorbeeld van de beheerder vraagt.
+
+WERKWIJZE:
+1. Lees eerst het label + de voorbeeldtekst en maak een mentale checklist van ALLE onderdelen die dit veld
+   volgens de beheerder moet bevatten.
+2. Verbeter en verrijk de inhoud van de gebruiker zodat elk gevraagd onderdeel concreet, volledig,
+   professioneel en direct bruikbaar wordt ingevuld. Ontbreekt een gevraagd onderdeel in de invoer van de
+   gebruiker, vul het dan aan (algemeen of met een [plaatshouder] als je het niet zeker weet). Sluit de
+   invoer nog niet goed aan op wat het veld vraagt, buig die dan om naar een goede invulling.
+3. Stem af op de OVERIGE velden die je meekrijgt: blijf consistent met wat daar staat en herhaal hun
+   inhoud niet — dit veld heeft zijn eigen rol.
+4. Behoud de concrete details die de gebruiker noemde (namen, aantallen, onderwerpen, stappen); je mag
+   ze herformuleren en aanscherpen, maar laat ze niet vallen.
+
+REGELS:
+- Verzin GEEN feiten die de bedoeling van de gebruiker veranderen; blijf dicht bij wat de gebruiker
+  bedoelt en houd het algemeen waar je het niet zeker weet (gebruik desnoods een [plaatshouder]).
+- Schrijf in helder Nederlands (B1-taalniveau waar passend). Houd het intern gericht: de doelgroep
+  is een overheidsmedewerker, niet de burger.
+- Lever alleen de inhoud van DIT veld — geen label, geen kop, geen aanhalingstekens eromheen.
+- "changed": true als je het veld inhoudelijk hebt verbeterd/uitgebreid; false alleen als het veld al
+  uitstekend was en je het (vrijwel) onveranderd laat.
+- "improvements": een korte lijst (2 tot 4 punten) die in gewone taal benoemt WAT je concreet hebt
+  verbeterd t.o.v. de invoer van de gebruiker, bijv. "Rol concreter gemaakt" of "Stappenplan toegevoegd".
+  Elk punt max. ~8 woorden, geen hele zinnen. Bij "changed":false een lege lijst.
+
+Geef UITSLUITEND geldige JSON terug, zonder codeblok of extra tekst, in dit formaat:
+{"value":"<verbeterde inhoud voor dit veld>","changed":true|false,"improvements":["<korte verbetering>", "..."]}`;
+
+/**
+ * Grove, SECUNDAIRE trefwoord-hint over wat voor bouwsteen een veld ongeveer is.
+ * Ondergeschikt aan de eigenlijke veld-omschrijving van de beheerder (label +
+ * placeholder), die in de prompt leidend is: de hint is slechts een vangnet en wordt
+ * genegeerd zodra hij botst met wat het label/voorbeeld vraagt. Bij geen match geen
+ * hint (dan spreekt de veld-omschrijving volledig voor zich).
+ */
+function fieldRoleHint(id: string, label: string, placeholder?: string): string {
+  const hay = `${id} ${label} ${placeholder ?? ''}`.toLowerCase();
+  const has = (...words: string[]) => words.some((w) => hay.includes(w));
+  // Volgorde = prioriteit: specifieke rollen eerst, generieke laatst.
+  if (has('role', 'rol', 'persona', 'expert', 'wie ben'))
+    return 'Dit is een ROL/PERSONA-veld: beschrijf de rol, expertise en het perspectief van waaruit de AI moet werken. Geen opdracht of format hier.';
+  if (has('voorbeeld', 'example', 'few-shot', 'fewshot', 'sample'))
+    return 'Dit is een VOORBEELDEN-veld: geef of scherp concrete voorbeelden aan die de gewenste output/stijl illustreren.';
+  if (has('rule', 'regel', 'randvoorwaard', 'constraint', 'eis', 'do', 'niet', 'vermijd'))
+    return 'Dit is een REGELS/RANDVOORWAARDEN-veld: benoem heldere eisen — toon, taalniveau, lengte, AVG, wat wel/niet mag.';
+  if (has('format', 'formaat', 'structuur', 'structure', 'opbouw', 'indeling', 'pattern', 'template', 'layout', 'rubriek'))
+    return 'Dit is een FORMAT/STRUCTUUR-veld: beschrijf de gewenste opbouw/indeling van de output (koppen, volgorde, onderdelen).';
+  if (has('toon', 'tone', 'stijl', 'style', 'taalniveau'))
+    return 'Dit is een TOON/STIJL-veld: beschrijf de gewenste schrijfstijl, toon en taalniveau.';
+  if (has('doelgroep', 'publiek', 'audience', 'lezer', 'ontvanger'))
+    return 'Dit is een DOELGROEP-veld: beschrijf voor wie de output bedoeld is en wat die lezer nodig heeft.';
+  if (has('context', 'achtergrond', 'situatie', 'background'))
+    return 'Dit is een CONTEXT/ACHTERGROND-veld: beschrijf de situatie, aanleiding, doelgroep en het beschikbare materiaal. Geen instructies of rol hier.';
+  if (has('ask', 'taak', 'task', 'instruct', 'opdracht', 'vraag', 'actie', 'request', 'goal', 'doel'))
+    return 'Dit is een OPDRACHT/INSTRUCTIE-veld: maak de concrete vraag/actie scherp — wat moet de AI doen, in welke rol, in welk format, in welke stappen. Expliciet en actiegericht.';
+  if (has('stap', 'step', 'werkwijze', 'proces'))
+    return 'Dit is een STAPPEN-veld: beschrijf de gewenste tussenstappen/werkwijze die de AI moet volgen.';
+  return '';
+}
+
+/** Bouw de gebruikersprompt voor de expand-field-modus (verrijk één veld). */
+const EXPAND_FIELD_USER_PROMPT = (
+  fieldId: string,
+  fieldLabel: string,
+  fieldPlaceholder: string | undefined,
+  currentValue: string,
+  siblings: Array<{ label: string; value: string }>,
+  techniqueName: string | undefined,
+) => {
+  const roleHint = fieldRoleHint(fieldId, fieldLabel, fieldPlaceholder);
+  return (
+    `Gekozen techniek/raamwerk: ${techniqueName ?? 'onbekend'}\n\n` +
+    `VELD-OMSCHRIJVING VAN DE BEHEERDER (LEIDEND — dit bepaalt exact wat er in dit veld hoort;\n` +
+    `lees zorgvuldig en vul precies dít in, ook als de veldnaam anders doet vermoeden):\n` +
+    `- Titel van het veld: ${fieldLabel}\n` +
+    (fieldPlaceholder
+      ? `- Wat hier moet komen (voorbeeld/uitleg van de beheerder): ${fieldPlaceholder}\n`
+      : '') +
+    (roleHint
+      ? `- Grove hint (SECUNDAIR — negeer zodra dit botst met de omschrijving hierboven): ${roleHint}\n`
+      : '') +
+    `\nHUIDIGE INHOUD VAN DIT VELD (lever een betere versie die precies aan de omschrijving hierboven voldoet):\n"""\n${currentValue}\n"""\n\n` +
+    `DE OVERIGE VELDEN (alleen ter afstemming — NIET aanpassen, NIET herhalen):\n` +
+    (siblings.length
+      ? siblings
+          .map((s) => `- ${s.label}: ${s.value && s.value.trim() ? s.value.trim() : '(nog leeg)'}`)
+          .join('\n')
+      : '(geen andere velden)')
+  );
+};
+
 const TITLE_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse rijksoverheid.
 Een interne overheidsmedewerker heeft een herbruikbare prompt-template gemaakt en wil die opslaan
 in een gedeelde bibliotheek. Jouw taak: bedenk één korte, beschrijvende titel die meteen duidelijk
@@ -2115,6 +2244,44 @@ function parsePrefill(
 }
 
 /**
+ * Parseert het JSON-antwoord van de expand-field-modus robuust: haalt de
+ * verbeterde veldwaarde, de changed-vlag en de lijst met verbeteringen eruit.
+ * Ontbreekt "changed", dan leiden we die af (true zodra de waarde afwijkt van het
+ * origineel). Bij een lege waarde of parse-fout geven we null terug zodat de
+ * handler kan terugvallen.
+ */
+function parseExpandField(
+  raw: string,
+  original: string,
+): { value: string; changed: boolean; improvements: string[] } | null {
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  try {
+    const parsed = JSON.parse(match[0]) as {
+      value?: unknown;
+      changed?: unknown;
+      improvements?: unknown;
+    };
+    if (typeof parsed.value !== 'string') return null;
+    const value = parsed.value.trim();
+    if (!value) return null;
+    const changed =
+      typeof parsed.changed === 'boolean'
+        ? parsed.changed
+        : value !== original.trim();
+    // Korte, opgeschoonde verbeterpunten; max. 4 zodat het overzichtelijk blijft.
+    const improvements = (Array.isArray(parsed.improvements) ? parsed.improvements : [])
+      .filter((s): s is string => typeof s === 'string')
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, 4);
+    return { value, changed, improvements };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Lokale fallback voor de analyse: markeer een veld als ontbrekend wanneer geen
  * van de woorden uit het label (of placeholder) in de prompt voorkomt. Grof,
  * maar werkt zonder AI of backend.
@@ -2343,7 +2510,9 @@ Deno.serve(async (req: Request) => {
                                   ? 'fewshot-extract'
                                   : body.mode === 'meta-build'
                                     ? 'meta-build'
-                                    : 'generate';
+                                    : body.mode === 'expand-field'
+                                      ? 'expand-field'
+                                      : 'generate';
     const order = buildOrder(body.preferredProvider);
     const temperature = clampTemp(body.temperature);
 
@@ -2451,6 +2620,76 @@ Deno.serve(async (req: Request) => {
 
       return new Response(
         JSON.stringify({ success: true, ...result, provider }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    // --- Expand-field-modus: breid ÉÉN ingevuld framework-veld op zijn plek uit ---
+    if (mode === 'expand-field') {
+      const fieldId = body.fieldId?.trim();
+      const fieldLabel = body.fieldLabel?.trim();
+      const currentValue = body.currentValue?.trim();
+      if (!fieldId || !fieldLabel || !currentValue) {
+        // Diagnostisch: benoem precies wat ontbrak.
+        const missing = [
+          !fieldId ? 'fieldId' : null,
+          !fieldLabel ? 'fieldLabel' : null,
+          !currentValue ? 'currentValue (lege of ontbrekende tekst)' : null,
+        ].filter(Boolean);
+        console.error('expand-field 400 — ontbrekende input:', missing.join(', '));
+        return new Response(
+          JSON.stringify({ success: false, error: `expand-field: ontbrekend — ${missing.join(' en ')}` }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      const siblings = Array.isArray(body.siblings) ? body.siblings : [];
+      const userMessage = EXPAND_FIELD_USER_PROMPT(
+        fieldId,
+        fieldLabel,
+        body.fieldPlaceholder,
+        currentValue,
+        siblings,
+        body.techniqueName,
+      );
+      let result: { value: string; changed: boolean; improvements: string[] } | null = null;
+      let provider: Provider | 'local-template' = 'local-template';
+
+      for (const candidate of order) {
+        try {
+          const raw = await PROVIDERS[candidate](
+            userMessage,
+            EXPAND_FIELD_SYSTEM_PROMPT,
+            0.3,
+            resolveModel(candidate, body.preferredProvider, body.preferredModel),
+          );
+          const parsed = parseExpandField(raw, currentValue);
+          if (parsed) {
+            result = parsed;
+            provider = candidate;
+            break;
+          }
+        } catch (providerErr) {
+          console.error(`${candidate} (expand-field) mislukt, probeer volgende:`, providerErr);
+        }
+      }
+
+      // Geen AI-resultaat: laat de tekst van de gebruiker ongemoeid (UI no-op).
+      if (!result) {
+        return new Response(
+          JSON.stringify({ success: true, value: currentValue, changed: false, provider: 'local-template' }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          value: result.value,
+          changed: result.changed,
+          improvements: result.improvements,
+          provider,
+        }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }

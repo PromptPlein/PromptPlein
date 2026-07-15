@@ -1459,6 +1459,106 @@ export async function prefillFields(args: {
 }
 
 /**
+ * Verrijkt/breidt de tekst van ÉÉN framework-veld op zijn plek uit (de per-veld
+ * "Vul verder aan"-actie). Roept de edge function in 'expand-field'-modus aan.
+ * Al goed gevulde velden blijven grotendeels ongemoeid (changed:false). Faalt de
+ * call, is er geen backend, of is het veld leeg, dan een veilige no-op die de
+ * oorspronkelijke tekst van de gebruiker teruggeeft — deze helper gooit nooit.
+ * Spiegelt het fetch/header/error-patroon van {@link prefillFields}.
+ */
+export async function expandField(args: {
+  field: { id: string; label: string; placeholder?: string };
+  currentValue: string;
+  siblings: Array<{ label: string; value: string }>;
+  techniqueName?: string;
+  structureFormat?: string;
+  preferredProvider?: AiProvider;
+  preferredModel?: string;
+}): Promise<{
+  value: string;
+  changed: boolean;
+  improvements: string[];
+  provider: string;
+  success: boolean;
+  error?: string;
+}> {
+  const { field, currentValue, siblings, techniqueName, structureFormat, preferredProvider, preferredModel } =
+    args;
+  const noop = {
+    value: currentValue,
+    changed: false,
+    improvements: [] as string[],
+    provider: 'local-template',
+    success: true,
+  } as const;
+
+  const functionUrl = getFunctionUrl('optimize-prompt');
+  if (!isSupabaseConfigured || !functionUrl || !currentValue.trim()) return { ...noop };
+
+  try {
+    const anonKey = getAnonKey();
+    const response = await fetch(functionUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(anonKey ? { Authorization: `Bearer ${anonKey}`, apikey: anonKey } : {}),
+      },
+      body: JSON.stringify({
+        mode: 'expand-field',
+        fieldId: field.id,
+        fieldLabel: field.label,
+        fieldPlaceholder: field.placeholder,
+        currentValue,
+        siblings,
+        techniqueName,
+        structureFormat,
+        preferredProvider: preferredProvider ?? 'auto',
+        preferredModel,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Edge function gaf status ${response.status}`);
+    }
+
+    const data = (await response.json()) as {
+      success?: boolean;
+      value?: string;
+      changed?: boolean;
+      improvements?: unknown;
+      provider?: string;
+      error?: string;
+    };
+
+    if (data.success && typeof data.value === 'string') {
+      const improvements = (Array.isArray(data.improvements) ? data.improvements : [])
+        .filter((s): s is string => typeof s === 'string')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      return {
+        value: data.value,
+        changed: Boolean(data.changed),
+        improvements,
+        provider: data.provider ?? 'claude',
+        success: true,
+      };
+    }
+    throw new Error(data.error ?? 'Aanvullen gaf geen bruikbaar resultaat');
+  } catch (err) {
+    // Nooit gooien: behoud de tekst van de gebruiker en meld de fout niet-blokkerend.
+    const message = err instanceof Error ? err.message : 'Onbekende fout';
+    return {
+      value: currentValue,
+      changed: false,
+      improvements: [],
+      provider: 'local-template',
+      success: false,
+      error: `Aanvullen mislukt (${message}).`,
+    };
+  }
+}
+
+/**
  * Lokale fallback voor de titel: leid een korte titel af uit de gegenereerde
  * template zonder AI. Pak bij voorkeur de #Taak/vraag:-, #Rol:- of #Context:-kop,
  * anders de eerste zinvolle regel. Spiegelt de server-side `localTitle`.

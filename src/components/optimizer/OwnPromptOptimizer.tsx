@@ -117,10 +117,17 @@ export default function OwnPromptOptimizer({ settings, onResult, header }: OwnPr
   // Toelichting die de gebruiker typt om, ná het kiezen van een framework, de
   // velden aan te vullen die voor DIT raamwerk nog ontbraken. Voedt een nieuwe
   // voor-invulronde (chain-of-thought): menselijke input maakt de template scherper.
-  const [clarification, setClarification] = useState('');
+  // In localStorage bewaard, zodat een half getypte toelichting niet verloren
+  // gaat bij een fout of herlaadactie. resetDownstream() (leeg → verwijderd) en
+  // "Opschonen" maken hem weer leeg.
+  const [clarification, setClarification] = usePersistentDraft('ownPromptClarification');
   const [techniqueId, setTechniqueId] = useState<string | null>(null);
   // Voor-invulling van de velden op basis van de eigen prompt (null = nog niet gedaan).
   const [prefill, setPrefill] = useState<PrefillResult | null>(null);
+  // Bewust NIET in localStorage bewaard: deze velden worden door de AI voor-
+  // ingevuld zodra een framework wordt gekozen, en die keuze + prefill herstellen
+  // we niet over een herlaadactie heen. De geplakte prompt en de toelichting (het
+  // eigenlijke handwerk) worden wél bewaard; die volstaan om verder te gaan.
   const [answers, setAnswers] = useState<Record<string, string>>({});
   // Herkomst per voor-ingevuld veld (origin-badges); vervalt zodra de gebruiker zelf typt.
   const [fieldMeta, setFieldMeta] = useState<FieldMeta>({});

@@ -1,10 +1,16 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, ArrowRight, Check, Loader2, Pencil, Search, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Loader2, Pencil, Search, Sparkles, Wand2 } from 'lucide-react';
 import clsx from 'clsx';
+import toast from 'react-hot-toast';
 import PrefillBadge from './PrefillBadge';
 import FieldLayoutToggle from './FieldLayoutToggle';
+import ExpandProposal from './ExpandProposal';
 import { useFieldLayout } from '@/lib/useFieldLayout';
-import type { PrefillSource, Technique } from '@/types';
+import { expandField } from '@/services/optimizeService';
+import { getAiSettings, DEFAULT_AI_SETTINGS, type AiSettings } from '@/services/settingsService';
+import { structureFormat } from '@/lib/techniques';
+import type { AiProvider } from '@/config/aiModels';
+import type { FollowUpQuestion, PrefillSource, Technique } from '@/types';
 
 /** Herkomst + toelichting van een voor-ingevuld veld, per veld-id. */
 export type FieldMeta = Record<string, { source: PrefillSource; note?: string }>;
@@ -22,6 +28,13 @@ interface FollowUpQuestionsProps {
   onUserEdit?: (id: string) => void;
   /** True terwijl de velden worden voor-ingevuld; toont een laadstaat. */
   prefilling?: boolean;
+  /**
+   * AI-provider voor de per-veld "Vul verder aan"-actie. Optioneel: wanneer niet
+   * meegegeven, leest de component zelf de voorkeuren uit de instellingen.
+   */
+  preferredProvider?: AiProvider;
+  /** Concreet AI-model voor "Vul verder aan". Optioneel; zie preferredProvider. */
+  preferredModel?: string;
 }
 
 /**
@@ -37,6 +50,8 @@ export default function FollowUpQuestions({
   fieldMeta,
   onUserEdit,
   prefilling = false,
+  preferredProvider,
+  preferredModel,
 }: FollowUpQuestionsProps) {
   const questions = technique.follow_up_questions;
   const total = questions.length;
@@ -44,12 +59,37 @@ export default function FollowUpQuestions({
   const [reviewing, setReviewing] = useState(false);
   // Persoonlijke voorkeur: stap voor stap (default) of alle velden tegelijk.
   const [layout, setLayout] = useFieldLayout();
+  // Per-veld laadstaat voor de "Vul verder aan"-actie (id van het veld dat draait).
+  const [expandingId, setExpandingId] = useState<string | null>(null);
+  // Het openstaande AI-voorstel: welk veld, het voorstel en wat er is verbeterd.
+  // De gebruiker neemt het over of verwerpt het.
+  const [proposal, setProposal] = useState<{
+    fieldId: string;
+    proposed: string;
+    improvements: string[];
+  } | null>(null);
+  // Eigen AI-voorkeuren; alleen gebruikt als de props niet zijn meegegeven.
+  const [settings, setSettings] = useState<AiSettings>(DEFAULT_AI_SETTINGS);
 
   // Reset de wizard wanneer er een andere techniek wordt gekozen.
   useEffect(() => {
     setStep(0);
     setReviewing(false);
+    setProposal(null);
   }, [technique.id]);
+
+  // Laad de AI-instellingen zelf, zodat "Vul verder aan" ook werkt zonder props.
+  useEffect(() => {
+    let active = true;
+    getAiSettings()
+      .then((s) => {
+        if (active) setSettings(s);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // Laadstaat tijdens het voor-invullen: dezelfde geanimeerde accentbalk +
   // pulserend icoon als de eigen-prompt-flow, met skeletten i.p.v. lege velden.
@@ -110,6 +150,59 @@ export default function FollowUpQuestions({
     onUserEdit?.(id);
   }
 
+  /**
+   * "Vul verder aan": laat de AI de tekst van één veld verbeteren, toegespitst op
+   * de rol van dat veld. Het resultaat verschijnt als VOORSTEL (nette tekst + korte
+   * lijst met wat er is verbeterd, zie {@link ExpandProposal}) dat de gebruiker kan
+   * overnemen of verwerpen. Bereikbaar vanuit beide indelingen.
+   */
+  async function handleExpand(q: FollowUpQuestion) {
+    const currentValue = (answers[q.id] ?? '').trim();
+    if (!currentValue || expandingId) return; // niets om aan te vullen / al bezig
+    setExpandingId(q.id);
+    setProposal(null); // een eventueel eerder voorstel vervalt
+    try {
+      const siblings = questions
+        .filter((s) => s.id !== q.id)
+        .map((s) => ({ label: s.label, value: (answers[s.id] ?? '').trim() }))
+        .filter((s) => s.value); // alleen gevulde velden, voor consistentiecontext
+      const res = await expandField({
+        field: { id: q.id, label: q.label, placeholder: q.placeholder },
+        currentValue,
+        siblings,
+        techniqueName: technique.name,
+        structureFormat: structureFormat(technique),
+        preferredProvider: preferredProvider ?? settings.provider,
+        preferredModel: preferredModel ?? settings.model,
+      });
+      if (res.success && res.value && res.value.trim() && res.value.trim() !== currentValue) {
+        // Niet direct toepassen: toon een voorstel dat de gebruiker beoordeelt.
+        setProposal({ fieldId: q.id, proposed: res.value.trim(), improvements: res.improvements });
+      } else if (res.success) {
+        toast('Dit veld is al goed ingevuld.', { icon: '👍' });
+      } else {
+        toast.error(res.error ?? 'Aanvullen lukte niet — probeer het opnieuw.');
+      }
+    } catch {
+      toast.error('Aanvullen lukte niet — probeer het opnieuw.');
+    } finally {
+      setExpandingId(null);
+    }
+  }
+
+  /** Neem het openstaande voorstel over: vervang de veldwaarde en sluit het voorstel. */
+  function acceptProposal() {
+    if (!proposal) return;
+    editField(proposal.fieldId, proposal.proposed);
+    setProposal(null);
+    toast.success('AI-voorstel overgenomen.');
+  }
+
+  /** Verwerp het openstaande voorstel: het veld blijft ongewijzigd. */
+  function rejectProposal() {
+    setProposal(null);
+  }
+
   // --- Indeling "alles tegelijk": alle velden onder elkaar ---
   if (layout === 'stacked') {
     return (
@@ -130,7 +223,7 @@ export default function FollowUpQuestions({
               </div>
               <textarea
                 id={`fu-stacked-${q.id}`}
-                className="opl-input min-h-[80px] resize-y"
+                className="opl-input min-h-[100px] resize-y"
                 value={value}
                 placeholder={q.placeholder}
                 onChange={(e) => editField(q.id, e.target.value)}
@@ -143,6 +236,31 @@ export default function FollowUpQuestions({
                 <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
                   Optioneel. Wat je leeg laat, wordt een invulbare plaatshouder in de template.
                 </p>
+              )}
+              <div className="mt-1.5 flex">
+                <button
+                  type="button"
+                  onClick={() => handleExpand(q)}
+                  disabled={expandingId !== null || value.trim() === ''}
+                  title="Laat AI dit veld verder aanvullen"
+                  aria-label="Laat AI dit veld verder aanvullen"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-rijksblauw-300 bg-rijksblauw-50 px-3 py-1.5 text-xs font-semibold text-rijksblauw-700 shadow-sm transition-colors hover:border-rijksblauw-400 hover:bg-rijksblauw-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-rijksblauw-500/40 dark:bg-rijksblauw-500/10 dark:text-rijksblauw-100 dark:hover:bg-rijksblauw-500/20"
+                >
+                  {expandingId === q.id ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <Wand2 size={14} />
+                  )}
+                  Vul verder aan
+                </button>
+              </div>
+              {proposal?.fieldId === q.id && (
+                <ExpandProposal
+                  proposed={proposal.proposed}
+                  improvements={proposal.improvements}
+                  onAccept={acceptProposal}
+                  onReject={rejectProposal}
+                />
               )}
             </div>
           );
@@ -280,7 +398,7 @@ export default function FollowUpQuestions({
         <textarea
           id={`fu-${current.id}`}
           autoFocus
-          className="opl-input min-h-[96px] resize-y"
+          className="opl-input min-h-[120px] resize-y"
           value={answers[current.id] ?? ''}
           placeholder={current.placeholder}
           onChange={(e) => update(e.target.value)}
@@ -293,6 +411,31 @@ export default function FollowUpQuestions({
           <p className="mt-1.5 text-xs text-slate-400 dark:text-slate-500">
             Optioneel. Wat je leeg laat, wordt een invulbare plaatshouder in de template.
           </p>
+        )}
+        <div className="mt-1.5 flex">
+          <button
+            type="button"
+            onClick={() => handleExpand(current)}
+            disabled={expandingId !== null || (answers[current.id] ?? '').trim() === ''}
+            title="Laat AI dit veld verder aanvullen"
+            aria-label="Laat AI dit veld verder aanvullen"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-rijksblauw-300 bg-rijksblauw-50 px-3 py-1.5 text-xs font-semibold text-rijksblauw-700 shadow-sm transition-colors hover:border-rijksblauw-400 hover:bg-rijksblauw-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-rijksblauw-500/40 dark:bg-rijksblauw-500/10 dark:text-rijksblauw-100 dark:hover:bg-rijksblauw-500/20"
+          >
+            {expandingId === current.id ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Wand2 size={14} />
+            )}
+            Vul verder aan
+          </button>
+        </div>
+        {proposal?.fieldId === current.id && (
+          <ExpandProposal
+            proposed={proposal.proposed}
+            improvements={proposal.improvements}
+            onAccept={acceptProposal}
+            onReject={rejectProposal}
+          />
         )}
       </div>
 

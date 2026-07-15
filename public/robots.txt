@@ -1,0 +1,4 @@
+# PromptPlein is bedoeld voor intern overheidsgebruik en mag niet
+# worden geïndexeerd of gecrawld door zoekmachines of AI-bots.
+User-agent: *
+Disallow: /
