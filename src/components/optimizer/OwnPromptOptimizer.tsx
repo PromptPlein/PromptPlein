@@ -767,6 +767,7 @@ export default function OwnPromptOptimizer({ settings, onResult, header }: OwnPr
                   return next;
                 })
               }
+              onFinish={handleGenerate}
             />
 
             {/* Chain-of-thought-lus voor DIT framework: de velden die de AI zelf

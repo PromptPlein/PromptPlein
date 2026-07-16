@@ -241,7 +241,10 @@ export default function TechniqueManagerPage() {
     const existing = editor.followUps.map((q) => q.id);
     setEditor({
       ...editor,
-      followUps: [...editor.followUps, { id: slugifyId('', existing), label: '', placeholder: '' }],
+      followUps: [
+        ...editor.followUps,
+        { id: slugifyId('', existing), label: '', placeholder: '', why: '' },
+      ],
     });
   }
   function updateFollowUp(index: number, patch: Partial<FollowUpQuestion>) {
@@ -284,6 +287,7 @@ export default function TechniqueManagerPage() {
         id: q.id,
         label: q.label.trim(),
         placeholder: q.placeholder?.trim() || undefined,
+        why: q.why?.trim() || undefined,
       }));
 
     const ids = followUps.map((q) => q.id);
@@ -607,6 +611,17 @@ export default function TechniqueManagerPage() {
                           placeholder="Placeholder / voorbeeld, bijv. Bijv. een ervaren beleidsmedewerker of een manager"
                           onChange={(e) => updateFollowUp(i, { placeholder: e.target.value })}
                         />
+                        <div>
+                          <textarea
+                            className="opl-input min-h-[64px] resize-y text-sm"
+                            value={q.why ?? ''}
+                            placeholder="Toelichting: waarom doet deze vraag ertoe en waar moet op worden doorgevraagd?"
+                            onChange={(e) => updateFollowUp(i, { why: e.target.value })}
+                          />
+                          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+                            Staat als hulptekst onder het veld en stuurt de AI-invulhulp aan.
+                          </p>
+                        </div>
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-slate-400 dark:text-slate-500">Veld-id:</span>
                           <input

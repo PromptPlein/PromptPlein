@@ -1,16 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Loader2, Plus, Sparkles, Trash2, UserRound } from 'lucide-react';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import PrefillBadge from './PrefillBadge';
 import { fillPersona } from '@/services/optimizeService';
 import type { AiSettings } from '@/services/settingsService';
+import type { Technique } from '@/types';
 import {
-  PERSONA_QUESTIONS,
   emptyPersona,
+  resolvePersonaQuestions,
   serializePersonas,
   type PersonaEntry,
   type PersonaFieldKey,
+  type PersonaQuestion,
 } from '@/lib/persona';
 
 /** Client-side unieke id voor een nieuwe persona-kaart. */
@@ -23,6 +25,12 @@ interface PersonaBuilderProps {
   multi: boolean;
   /** Admin-AI-instellingen voor de invulhulp. */
   settings: AiSettings;
+  /**
+   * De gekozen techniek. De vragen van deze bouwer komen uit de vervolgvragen van
+   * de techniek (beheerd in de admin, inclusief de toelichting per veld). Zonder
+   * techniek — of zolang die nog geen vragen heeft — gelden de standaardvragen.
+   */
+  technique?: Technique;
   /** Optionele context (het doel), voedt de AI-invulhulp. */
   context?: string;
   /**
@@ -34,24 +42,34 @@ interface PersonaBuilderProps {
 
 /**
  * Gestructureerde persona-definitie voor de Persona-/Multi-Persona-stappen. Per
- * persona zeven gerichte vragen (rol, ervaring, belang, focus, wat-niet, toon,
- * blinde vlek). Bij Multi-Persona kan de gebruiker meerdere persona's toevoegen.
- * Weet de gebruiker de details niet, dan vult de AI de velden in op basis van een
- * korte aanduiding ("mijn teammanager") — bewerkbaar, met een AI-suggestie-label.
+ * persona een reeks gerichte vragen (standaard: rol, ervaring, belang, focus,
+ * wat-niet, toon, blinde vlek) die in de admin te beheren zijn. Bij Multi-Persona
+ * kan de gebruiker meerdere persona's toevoegen. Weet de gebruiker de details niet,
+ * dan vult de AI de velden in op basis van een korte aanduiding ("mijn teammanager")
+ * — bewerkbaar, met een AI-suggestie-label.
  */
-export default function PersonaBuilder({ multi, settings, context, onSerialized }: PersonaBuilderProps) {
+export default function PersonaBuilder({
+  multi,
+  settings,
+  technique,
+  context,
+  onSerialized,
+}: PersonaBuilderProps) {
   const [personas, setPersonas] = useState<PersonaEntry[]>(() => [emptyPersona(newId())]);
   // Per persona-id: welke velden zijn door de AI ingevuld (voor het suggestie-label).
   const [aiFields, setAiFields] = useState<Record<string, Set<PersonaFieldKey>>>({});
   // Per persona-id: draait de AI-invulhulp nu?
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  // Meld de geserialiseerde tekst terug zodra de persona's wijzigen.
+  // De vragen zoals de admin ze heeft gedefinieerd voor deze techniek.
+  const questions = useMemo(() => resolvePersonaQuestions(technique), [technique]);
+
+  // Meld de geserialiseerde tekst terug zodra de persona's (of de vragen) wijzigen.
   useEffect(() => {
-    onSerialized(serializePersonas(personas));
-    // onSerialized is stabiel genoeg (setter uit de ouder); alleen op personas reageren.
+    onSerialized(serializePersonas(personas, questions));
+    // onSerialized is stabiel genoeg (setter uit de ouder); alleen op de inhoud reageren.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [personas]);
+  }, [personas, questions]);
 
   function updateField(pid: string, key: PersonaFieldKey, value: string) {
     setPersonas((prev) =>
@@ -98,7 +116,9 @@ export default function PersonaBuilder({ multi, settings, context, onSerialized 
       const res = await fillPersona({
         hint,
         context,
-        questions: PERSONA_QUESTIONS.map((q) => ({ id: q.id, label: q.label, why: q.why })),
+        // De AI vult exact de velden die de admin heeft gedefinieerd; de toelichting
+        // per veld gaat mee als instructie.
+        questions: questions.map((q) => ({ id: q.id, label: q.label, why: q.why })),
         preferredProvider: settings.provider,
         preferredModel: settings.model,
       });
@@ -111,6 +131,9 @@ export default function PersonaBuilder({ multi, settings, context, onSerialized 
         return;
       }
       // Vul de velden in (bestaande, door de gebruiker ingevulde velden niet overschrijven).
+      // Alleen velden die de techniek kent: een veld-id dat de AI verzint, heeft
+      // geen invoerveld en zou anders onzichtbaar in de tekst belanden.
+      const known = new Set(questions.map((q) => q.id));
       const touched = new Set<PersonaFieldKey>();
       setPersonas((prev) =>
         prev.map((p) => {
@@ -118,6 +141,7 @@ export default function PersonaBuilder({ multi, settings, context, onSerialized 
           const fields = { ...p.fields };
           for (const f of res.fields) {
             const key = f.id as PersonaFieldKey;
+            if (!known.has(key)) continue;
             if (!fields[key]?.trim()) {
               fields[key] = f.value;
               touched.add(key);
@@ -148,6 +172,7 @@ export default function PersonaBuilder({ multi, settings, context, onSerialized 
           total={personas.length}
           multi={multi}
           persona={persona}
+          questions={questions}
           aiFields={aiFields[persona.id]}
           busy={busyId === persona.id}
           onHintChange={(v) => updateHint(persona.id, v)}
@@ -170,12 +195,13 @@ export default function PersonaBuilder({ multi, settings, context, onSerialized 
   );
 }
 
-/** Eén persona-kaart: de aanduiding + AI-invulhulp bovenaan, daaronder de 7 vragen. */
+/** Eén persona-kaart: de aanduiding + AI-invulhulp bovenaan, daaronder de vragen. */
 function PersonaCard({
   index,
   total,
   multi,
   persona,
+  questions,
   aiFields,
   busy,
   onHintChange,
@@ -187,6 +213,7 @@ function PersonaCard({
   total: number;
   multi: boolean;
   persona: PersonaEntry;
+  questions: PersonaQuestion[];
   aiFields?: Set<PersonaFieldKey>;
   busy: boolean;
   onHintChange: (v: string) => void;
@@ -247,9 +274,9 @@ function PersonaCard({
         </p>
       </div>
 
-      {/* De zeven persona-vragen. */}
+      {/* De persona-vragen zoals gedefinieerd bij de techniek. */}
       <div className="space-y-3">
-        {PERSONA_QUESTIONS.map((q) => {
+        {questions.map((q) => {
           const isAi = aiFields?.has(q.id);
           return (
             <div key={q.id}>
@@ -270,7 +297,9 @@ function PersonaCard({
                 placeholder={q.placeholder}
                 onChange={(e) => onFieldChange(q.id, e.target.value)}
               />
-              <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">{q.why}</p>
+              {q.why && (
+                <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">{q.why}</p>
+              )}
             </div>
           );
         })}

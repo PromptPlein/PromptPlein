@@ -1,32 +1,36 @@
 /**
  * Gestructureerde persona-definitie voor de Persona- en Multi-Persona-stappen van
  * de plan-bouwer. In plaats van twee algemene vragen krijgt de gebruiker per
- * persona zeven gerichte vragen die de rol scherp en operationeel maken. Weet de
+ * persona meerdere gerichte vragen die de rol scherp en operationeel maken. Weet de
  * gebruiker een antwoord niet, dan vult de AI de velden in op basis van een korte
  * aanduiding (bijv. "mijn teammanager"), waarna de gebruiker kan bijstellen.
+ *
+ * De vragen komen uit de techniek-definitie in de admin (`follow_up_questions`,
+ * inclusief de toelichting per veld). {@link PERSONA_QUESTIONS} hieronder is de
+ * fallback: die wordt gebruikt zolang een techniek nog geen vragen heeft staan,
+ * zodat de bouwer nooit leeg is.
  */
 
-/** Eén van de zeven persona-vragen. */
+import type { FollowUpQuestion, Technique } from '@/types';
+
+/** Eén persona-vraag zoals de bouwer hem rendert. */
 export interface PersonaQuestion {
-  /** Sleutel binnen een persona-object. */
+  /** Sleutel binnen een persona-object; komt overeen met het veld-id uit de admin. */
   id: PersonaFieldKey;
   /** De vraag zoals getoond aan de gebruiker. */
   label: string;
-  /** Korte toelichting: waarom deze vraag ertoe doet. */
+  /** Korte toelichting: waarom deze vraag ertoe doet en waar op door te vragen. */
   why: string;
   placeholder: string;
 }
 
-export type PersonaFieldKey =
-  | 'rol'
-  | 'ervaring'
-  | 'belang'
-  | 'focus'
-  | 'niet'
-  | 'communicatie'
-  | 'blinde_vlek';
+/**
+ * Veld-id binnen een persona. Vrij vorm, omdat de admin de velden definieert —
+ * de namen hieronder zijn de ids van de meegeleverde standaardvragen.
+ */
+export type PersonaFieldKey = string;
 
-/** De zeven vragen die samen één persona scherp definiëren. */
+/** De zeven standaardvragen die samen één persona scherp definiëren (fallback). */
 export const PERSONA_QUESTIONS: PersonaQuestion[] = [
   {
     id: 'rol',
@@ -72,6 +76,34 @@ export const PERSONA_QUESTIONS: PersonaQuestion[] = [
   },
 ];
 
+/**
+ * Vertaalt de vervolgvragen uit de admin naar persona-vragen. Een vraag zonder
+ * toelichting valt terug op de toelichting van de gelijknamige standaardvraag,
+ * zodat een half ingevulde techniek-definitie geen kale velden oplevert.
+ */
+export function toPersonaQuestions(followUps: FollowUpQuestion[]): PersonaQuestion[] {
+  return followUps
+    .filter((q) => q.id?.trim() && q.label?.trim())
+    .map((q) => {
+      const fallback = PERSONA_QUESTIONS.find((d) => d.id === q.id);
+      return {
+        id: q.id,
+        label: q.label,
+        why: q.why?.trim() || fallback?.why || '',
+        placeholder: q.placeholder?.trim() || fallback?.placeholder || '',
+      };
+    });
+}
+
+/**
+ * De vragen die de persona-bouwer moet tonen: die van de techniek uit de admin,
+ * of de meegeleverde standaardvragen zolang de techniek er nog geen heeft.
+ */
+export function resolvePersonaQuestions(technique?: Technique): PersonaQuestion[] {
+  const fromAdmin = toPersonaQuestions(technique?.follow_up_questions ?? []);
+  return fromAdmin.length > 0 ? fromAdmin : PERSONA_QUESTIONS;
+}
+
 /** De ingevulde waarden van één persona (per vraag-id). */
 export type PersonaData = Partial<Record<PersonaFieldKey, string>>;
 
@@ -90,17 +122,24 @@ export function emptyPersona(id: string): PersonaEntry {
 }
 
 /** Heeft deze persona minstens één ingevuld veld (of een hint)? */
-export function personaHasContent(p: PersonaEntry): boolean {
-  return Boolean(p.hint.trim()) || PERSONA_QUESTIONS.some((q) => p.fields[q.id]?.trim());
+export function personaHasContent(
+  p: PersonaEntry,
+  questions: PersonaQuestion[] = PERSONA_QUESTIONS,
+): boolean {
+  return Boolean(p.hint.trim()) || questions.some((q) => p.fields[q.id]?.trim());
 }
 
 /**
  * Serialiseert één of meer persona's tot leesbare, gelabelde tekst. Dit is wat als
  * antwoord van de stap in de analyse/compose-pipeline landt, zodat de rest van de
- * flow ongewijzigd blijft werken.
+ * flow ongewijzigd blijft werken. De labels komen uit de techniek-definitie, dus
+ * een wijziging in de admin verandert ook de tekst die de AI te zien krijgt.
  */
-export function serializePersonas(personas: PersonaEntry[]): string {
-  const filled = personas.filter(personaHasContent);
+export function serializePersonas(
+  personas: PersonaEntry[],
+  questions: PersonaQuestion[] = PERSONA_QUESTIONS,
+): string {
+  const filled = personas.filter((p) => personaHasContent(p, questions));
   if (filled.length === 0) return '';
   return filled
     .map((p, i) => {
@@ -110,7 +149,7 @@ export function serializePersonas(personas: PersonaEntry[]): string {
           : p.hint.trim()
             ? `Persona — ${p.hint.trim()}`
             : 'Persona';
-      const lines = PERSONA_QUESTIONS.filter((q) => p.fields[q.id]?.trim()).map(
+      const lines = questions.filter((q) => p.fields[q.id]?.trim()).map(
         (q) => `- ${q.label} ${p.fields[q.id]!.trim()}`,
       );
       return `${header}\n${lines.join('\n')}`;

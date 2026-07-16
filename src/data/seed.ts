@@ -36,22 +36,62 @@ export const SEED_TECHNIQUES: Technique[] = [
       'Een tekst aanscherpen vanuit het oog van een ervaren beleidsmedewerker',
       'Een stuk laten toetsen op bestuurlijke of juridische houdbaarheid',
     ],
+    // De zeven vragen van de persona-bouwer; `why` is de toelichting onder het veld
+    // en stuurt de AI-invulhulp aan. Gelijk aan migratie 0028_persona_questions.sql.
     follow_up_questions: [
-      { id: 'gewenst_doel', label: 'Gewenst doel — wat wil je bereiken?', placeholder: 'Bijv. een onderbouwd advies dat mijn manager direct kan gebruiken' },
-      { id: 'persona', label: 'Vanuit welke interne persona?', placeholder: 'Bijv. een ervaren beleidsmedewerker, een communicatieadviseur, een projectleider, een DT-lid of een manager' },
-      { id: 'belangrijk', label: 'Wat is belangrijk voor deze persona?', placeholder: 'Bijv. juridische houdbaarheid en bestuurlijke afweging (jurist), of een heldere kernboodschap (communicatieadviseur)' },
-      { id: 'weten', label: 'Waar let deze persona vooral op?', placeholder: 'Bijv. risico’s en draagvlak (manager), haalbaarheid en planning (projectleider), of de rode draad (DT-lid)' },
-      { id: 'belangen', label: 'Wat zijn de belangen van deze persona?', placeholder: 'Bijv. een onderbouwd, uitvoerbaar advies (beleidsmedewerker) of een consistent verhaal naar buiten (communicatieadviseur)' },
+      {
+        id: 'rol',
+        label: 'Welke functie of rol vervult deze persoon precies?',
+        placeholder: 'Bijv. wetgevingsjurist bij een departement',
+        why: 'Dit is de kapstok. Hoe specifieker, hoe minder de AI terugvalt op een generiek gemiddelde. "Wetgevingsjurist bij een departement" activeert echte denkkaders, "jurist" niet.',
+      },
+      {
+        id: 'ervaring',
+        label: 'Hoeveel ervaring en welke expertise heeft deze persoon?',
+        placeholder: 'Bijv. 15 jaar ervaring, senior, specialist uitvoerbaarheid',
+        why: 'Ervaring bepaalt de zekerheid waarmee de AI schrijft. Een senior nuanceert en kent uitzonderingen; een junior legt uit en volgt de regels.',
+      },
+      {
+        id: 'belang',
+        label: 'Welk belang bewaakt deze persoon?',
+        placeholder: 'Bijv. bewaakt de uitvoerbaarheid en handhaafbaarheid',
+        why: 'De belangrijkste vraag. Een rol zonder belang is een decorstuk. "Bewaakt de uitvoerbaarheid" geeft de tekst richting: de AI gaat afwegen in plaats van opsommen.',
+      },
+      {
+        id: 'focus',
+        label: 'Waar let deze persoon als eerste op?',
+        placeholder: 'Bijv. eerst naar risico’s en juridische houdbaarheid',
+        why: 'Dit stuurt de volgorde en de aandacht. Wie eerst naar risico’s kijkt schrijft een andere opbouw dan wie eerst naar kansen kijkt. Het maakt de persona operationeel.',
+      },
+      {
+        id: 'niet',
+        label: 'Wat doet of zegt deze persona juist níét?',
+        placeholder: 'Bijv. geeft geen politiek oordeel, belooft geen termijnen',
+        why: 'Negatieve afbakening is het scherpste stuurmiddel. "Geeft geen politiek oordeel", "gebruikt geen jargon". Zonder grens vult de AI de ruimte met eigen aannames.',
+      },
+      {
+        id: 'communicatie',
+        label: 'Hoe moet er gecommuniceerd worden?',
+        placeholder: 'Bijv. zakelijk en bondig, korte zinnen, minimaal jargon',
+        why: 'Toon, register, zinslengte, gebruik van vaktaal. Dit is het verschil tussen inhoudelijk kloppen en herkenbaar zijn.',
+      },
+      {
+        id: 'blinde_vlek',
+        label: 'Wat weet deze persoon niet, of waar twijfelt hij over?',
+        placeholder: 'Bijv. minder thuis in de techniek; twijfelt over de planning',
+        why: 'Dit voorkomt de alwetende AI-stem. Een persona met blinde vlekken is geloofwaardiger en benoemt onzekerheid in plaats van hem glad te strijken.',
+      },
     ],
-    template: `Gewenst doel: {{gewenst_doel}}
+    template: `Je bent {{rol}}.
 
-Je bent {{persona}}.
+Ervaring en expertise: {{ervaring}}
+Het belang dat je bewaakt: {{belang}}
+Waar je als eerste op let: {{focus}}
+Wat je juist niet doet: {{niet}}
+Hoe je communiceert: {{communicatie}}
+Wat je niet weet of waarover je twijfelt: {{blinde_vlek}}
 
-Belangrijk voor jou: {{belangrijk}}
-Je let vooral op: {{weten}}
-Jouw belangen: {{belangen}}
-
-Beantwoord, schrijf of voer de volgende opdracht uit volledig vanuit dit perspectief. Houd rekening met de toon, taal en behoeften die bij deze persona passen.
+Voer de onderstaande opdracht volledig vanuit dit perspectief uit. Houd de toon, de afwegingen en de grenzen van deze rol vast. Benoem onzekerheid waar die er is in plaats van hem glad te strijken.
 
 Oorspronkelijke opdracht:
 {{PROMPT}}`,

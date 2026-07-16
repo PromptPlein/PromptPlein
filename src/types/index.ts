@@ -53,6 +53,12 @@ export interface FollowUpQuestion {
   id: string;
   label: string;
   placeholder?: string;
+  /**
+   * Toelichting onder het veld: waarom deze vraag ertoe doet en waar de gebruiker
+   * op moet doorvragen. Voedt ook de AI-invulhulp van de persona-bouwer, die de
+   * toelichting als instructie per veld meestuurt.
+   */
+  why?: string;
 }
 
 /**
@@ -202,6 +208,7 @@ export type BehaviorAction =
   | 'plan_edited' // stap herordend/hernoemd/verwijderd in de review
   | 'build_started' // gebruiker start de uitvoering van het plan
   | 'step_started' // een stap werd actief
+  | 'step_prefilled' // velden van een stap voor-ingevuld uit doel + eerder materiaal
   | 'analyze_run' // "Genereren" op een stap (input → materiaal + hiaten)
   | 'gaps_shown' // de AI benoemde openstaande hiaten
   | 'clarification_added' // gebruiker vulde een hiaat aan en her-analyseerde
@@ -216,6 +223,9 @@ export type BehaviorAction =
   | 'step_committed' // materiaal van een stap vastgelegd; door naar de volgende
   | 'step_regenerated' // een afgeronde stap opnieuw gedaan
   | 'compose_run' // de eindtemplate werd samengesteld
+  | 'assumptions_shown' // socratische eindcontrole vond aannames in het resultaat
+  | 'assumptions_applied' // gebruiker beantwoordde aannames; template aangescherpt
+  | 'assumptions_skipped' // gebruiker sloeg de aannames-controle over
   | 'template_copied' // eindtemplate gekopieerd
   | 'template_saved' // eindtemplate opgeslagen in de bibliotheek
   | 'executed' // prompt direct uitgevoerd (kant-en-klaar resultaat)

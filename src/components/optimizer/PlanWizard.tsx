@@ -22,11 +22,13 @@ import toast from 'react-hot-toast';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import {
   analyzePlanStep,
+  checkAssumptions,
   generatePlan,
   generatePrompt,
   prefillFields,
   runPlanStep,
   serializeOutcomes,
+  type TemplateAssumption,
 } from '@/services/optimizeService';
 import { isContextPrompt, structureFormat } from '@/lib/techniques';
 import { stripMarkdown } from '@/lib/utils';
@@ -37,7 +39,7 @@ import { useAuth } from '@/context/AuthContext';
 import { activityIdentifier } from '@/lib/utils';
 import type { AiSettings } from '@/services/settingsService';
 import OptimizingLoader from './OptimizingLoader';
-import FollowUpQuestions from './FollowUpQuestions';
+import FollowUpQuestions, { type FieldMeta } from './FollowUpQuestions';
 import GuardrailDialog from './GuardrailDialog';
 import PersonaBuilder from './PersonaBuilder';
 import FewShotBuilder from './FewShotBuilder';
@@ -137,15 +139,24 @@ interface PlanWizardProps {
 
 /**
  * Fase van de wizard:
- *  - goal        → doel invoeren
- *  - planning    → AI stelt het plan op
- *  - plan-review → plan inzien/aanpassen
- *  - collecting  → per stap: de gebruiker vult de vragen in; na "Genereren" toont
- *                  de AI het materiaal én wat er nog mist voor het totale plaatje
- *  - composing   → laatste stap: alle input wordt tot één template gegoten
- *  - error       → een stap mislukte; retry mogelijk (materiaal blijft behouden)
+ *  - goal              → doel invoeren
+ *  - planning          → AI stelt het plan op
+ *  - plan-review       → plan inzien/aanpassen
+ *  - collecting        → per stap: de gebruiker vult de vragen in; na "Genereren"
+ *                        toont de AI het materiaal én wat er nog mist
+ *  - composing         → laatste stap: alle input wordt tot één template gegoten
+ *  - assumption-review → socratische eindcontrole: de AI heeft aannames in het
+ *                        resultaat gevonden; de gebruiker beantwoordt ze of slaat over
+ *  - error             → een stap mislukte; retry mogelijk (materiaal blijft behouden)
  */
-type Phase = 'goal' | 'planning' | 'plan-review' | 'collecting' | 'composing' | 'error';
+type Phase =
+  | 'goal'
+  | 'planning'
+  | 'plan-review'
+  | 'collecting'
+  | 'composing'
+  | 'assumption-review'
+  | 'error';
 
 /**
  * Slimme meerstaps-bouwer voor de doel-flow ("Help mij met een prompt om mijn
@@ -184,6 +195,11 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
   // "Opschonen"-knop, hasDraftContent en OptimizedOutput's titel-fallback blijven
   // werken zonder de state omhoog te tillen.
   const [goal, setGoal, clearGoal] = usePersistentDraft('goal');
+  // Het doel als ref, synchroon bijgewerkt. Nodig omdat `resumeRun` het doel zet
+  // én meteen daarna de stap start: de state-update is dan nog niet zichtbaar in
+  // deze closure, terwijl de AI-aanroepen het doel wél al nodig hebben.
+  const goalRef = useRef(goal);
+  goalRef.current = goal;
   const [phase, setPhase] = useState<Phase>('goal');
   const [plan, setPlan] = useState<PromptPlan | null>(null);
   const [showExamples, setShowExamples] = useState(false);
@@ -195,6 +211,12 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
   const [stepError, setStepError] = useState<string | null>(null);
   // Huidige stap — input van de gebruiker en de AI-analyse ervan.
   const [stepAnswers, setStepAnswers] = useState<Record<string, string>>({});
+  // Voor-invulling van de stap-velden uit doel + eerder materiaal: herkomst-badges
+  // per veld + laadstaat. Een oplopende teller voorkomt dat een trage prefill van
+  // een VORIGE stap de velden van de huidige stap overschrijft.
+  const [stepFieldMeta, setStepFieldMeta] = useState<FieldMeta>({});
+  const [stepPrefilling, setStepPrefilling] = useState(false);
+  const prefillRunRef = useRef(0);
   const [analyzing, setAnalyzing] = useState(false);
   const [stepMaterial, setStepMaterial] = useState<string | null>(null);
   const [stepSummary, setStepSummary] = useState<string>('');
@@ -213,6 +235,17 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
   const [interviewTranscript, setInterviewTranscript] = useState<TranscriptTurn[]>([]);
   const [interviewAnswer, setInterviewAnswer] = useState('');
   const [interviewBusy, setInterviewBusy] = useState(false);
+  // Het interview is klaar en het totaalplaatje wordt nu op hiaten getoetst; de
+  // interview-weergave blijft staan tot het materiaal er is.
+  const [interviewFinishing, setInterviewFinishing] = useState(false);
+  // De conclusie van het interview (het totaalplaatje). Een ref, niet state: de
+  // analyse start meteen na de conclusie en moet hem synchroon kunnen meesturen.
+  const interviewConclusionRef = useRef<string | null>(null);
+  // Socratische eindcontrole: het (nog niet opgeleverde) resultaat + de door de
+  // AI blootgelegde aannames + de antwoorden van de gebruiker daarop (per index).
+  const [pendingResult, setPendingResult] = useState<OptimizeResult | null>(null);
+  const [assumptions, setAssumptions] = useState<TemplateAssumption[]>([]);
+  const [assumptionAnswers, setAssumptionAnswers] = useState<Record<number, string>>({});
   // Een bij het laden gevonden, niet-afgemaakte run — aangeboden om te hervatten.
   const [resumable, setResumable] = useState<PersistedRun | null>(null);
 
@@ -237,7 +270,10 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
 
   /** Reset de per-stap-state (input + analyse) naar leeg. */
   function resetStepState() {
+    prefillRunRef.current += 1; // een eventueel lopende prefill van de vorige stap vervalt
     setStepAnswers({});
+    setStepFieldMeta({});
+    setStepPrefilling(false);
     setStepMaterial(null);
     setStepSummary('');
     setStepGaps([]);
@@ -249,6 +285,8 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
     setInterviewQuestion(null);
     setInterviewTranscript([]);
     setInterviewAnswer('');
+    setInterviewFinishing(false);
+    interviewConclusionRef.current = null;
   }
 
   /** Herstel een eerder bewaarde run en ga verder waar de gebruiker gebleven was. */
@@ -256,15 +294,22 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
     if (!resumable) return;
     const { goal: g, plan: p, outcomes: o, currentStepIndex: idx } = resumable;
     setGoal(g);
+    goalRef.current = g; // beginStep() hieronder heeft het doel meteen nodig
     setPlan(p);
     setOutcomes(o);
-    setCurrentStepIndex(idx);
     setStepError(null);
-    resetStepState();
     setResumable(null);
-    // Hervat het invoerscherm exact bij de bewaarde stap, mét het al verzamelde
-    // materiaal. (Stap 0 net zo goed — de gebruiker vult daar zijn input in.)
-    setPhase(idx >= p.steps.length - 1 ? 'plan-review' : 'collecting');
+    // Stond de gebruiker op de compose-stap, laat hem het plan dan eerst opnieuw
+    // bekijken in plaats van meteen de eindtemplate te bouwen.
+    if (idx >= p.steps.length - 1) {
+      setCurrentStepIndex(idx);
+      resetStepState();
+      setPhase('plan-review');
+      return;
+    }
+    // Anders: hervat de bewaarde stap volledig — inclusief het vraag-na-vraag-
+    // interview of de voor-invulling die bij die stap hoort.
+    beginStep(p, idx, o);
   }
 
   /** Verwerp de bewaarde run en begin schoon. */
@@ -290,6 +335,9 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
     setCurrentStepIndex(0);
     setOutcomes([]);
     setStepError(null);
+    setPendingResult(null);
+    setAssumptions([]);
+    setAssumptionAnswers({});
     resetStepState();
   }
 
@@ -404,19 +452,22 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
   /**
    * Begin een stap: reset de per-stap-state en toon óf het invoerscherm
    * (tussenstap) óf stel meteen de template samen (laatste stap). Bij een
-   * interactieve stap (chain-of-thought/socratic) start meteen het interview.
+   * interactieve stap (chain-of-thought/socratic) start meteen het interview —
+   * óók als het de laatste stap is: dan wordt eerst vraag voor vraag de context
+   * aangescherpt en gaat de conclusie als uitgewerkt materiaal de compose in,
+   * in plaats van een prompt die de dialoog nog moet "aanzetten".
    */
   function beginStep(p: PromptPlan, index: number, accumulated: StepOutcome[]) {
     setCurrentStepIndex(index);
     setStepError(null);
     setUnclearReason(null);
     resetStepState();
-    if (isLastStep(p, index)) {
+    const step = p.steps[index];
+    if (isLastStep(p, index) && !step?.interactive) {
       void composeFinal(p, accumulated);
       return;
     }
     setPhase('collecting');
-    const step = p.steps[index];
     log('step_started', {
       stepIndex: index,
       techniqueId: step?.technique_id,
@@ -430,7 +481,65 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
     if (step?.interactive) {
       setInterviewActive(true);
       void interviewTurn(p, index, accumulated, [], false);
+    } else {
+      // Slim bundelen: vul de velden van deze stap alvast voor op basis van
+      // alle context tot nu toe (doel + materiaal van eerdere stappen).
+      void prefillStepFields(p, index, accumulated);
     }
+  }
+
+  /**
+   * Vul de velden van een niet-interactieve stap alvast voor op basis van ALLE
+   * context tot nu toe: het doel + het materiaal van eerdere stappen. Zo bouwt
+   * elke stap voort op wat al is vastgesteld (bijv. een Chain-of-Thought-
+   * conclusie vult de persona- of template-velden). Best-effort: bij een fout
+   * of onduidelijke context begint de gebruiker gewoon met lege velden.
+   */
+  async function prefillStepFields(p: PromptPlan, index: number, accumulated: StepOutcome[]) {
+    const step = p.steps[index];
+    const technique = techniqueById(step?.technique_id);
+    if (!step || !technique || technique.follow_up_questions.length === 0) return;
+    const fmt = structureFormat(technique);
+    // Persona/Few-Shot/Meta hebben eigen bouwers (geen vragenlijst): niets voor te vullen.
+    if (fmt === 'persona' || fmt === 'multi-persona' || fmt === 'few-shot' || fmt === 'meta') return;
+    const context = [goalRef.current.trim(), serializeOutcomes(accumulated)].filter(Boolean).join('\n\n');
+    if (!context) return;
+    const runId = ++prefillRunRef.current;
+    setStepPrefilling(true);
+    try {
+      const res = await prefillFields({
+        ownPrompt: context,
+        technique,
+        preferredProvider: settings.provider,
+        preferredModel: settings.model,
+      });
+      // Inmiddels een andere stap actief? Dan dit (verouderde) resultaat negeren.
+      if (prefillRunRef.current !== runId) return;
+      if (res.unclear || res.fields.length === 0) return;
+      setStepAnswers(Object.fromEntries(res.fields.map((f) => [f.id, f.value])));
+      setStepFieldMeta(
+        Object.fromEntries(res.fields.map((f) => [f.id, { source: f.source, note: f.note }])),
+      );
+      log('step_prefilled', {
+        stepIndex: index,
+        techniqueId: step.technique_id,
+        metadata: { fields_filled: res.fields.length, context_len: context.length },
+      });
+    } catch {
+      /* voor-invullen is een hulp-laag; bij een fout blijven de velden leeg */
+    } finally {
+      if (prefillRunRef.current === runId) setStepPrefilling(false);
+    }
+  }
+
+  /** Laat de herkomst-badge vervallen zodra de gebruiker een stap-veld zelf aanpast. */
+  function handleStepFieldEdit(id: string) {
+    setStepFieldMeta((prev) => {
+      if (!prev[id]) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
   }
 
   /** Herprobeer de huidige (mislukte) stap; behoud het al verzamelde materiaal. */
@@ -438,15 +547,18 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
     if (!plan) return;
     setStepError(null);
     setUnclearReason(null);
+    // Mislukte de stap midden in een interview (ook op de laatste stap), herpak
+    // dan die beurt; anders is de laatste stap altijd de compose.
+    if (interviewActive) {
+      setPhase('collecting');
+      void interviewTurn(plan, currentStepIndex, outcomes, interviewTranscript, false);
+      return;
+    }
     if (isLastStep(plan, currentStepIndex)) {
       void composeFinal(plan, outcomes);
       return;
     }
     setPhase('collecting');
-    // Mislukte de stap midden in een interview, herpak dan die beurt.
-    if (interviewActive) {
-      void interviewTurn(plan, currentStepIndex, outcomes, interviewTranscript, false);
-    }
   }
 
   /**
@@ -466,9 +578,20 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
    * "Genereren" op een tussenstap: stuur de input van de gebruiker naar de AI,
    * die het materiaal uitschrijft én benoemt wat er nog ontbreekt voor het totale
    * plaatje. `extraClarification` komt uit de "wat mist nog"-lus.
+   * `fallbackMaterial` wordt gebruikt door de Chain-of-Thought-stap: mislukt de
+   * hiaten-analyse van het totaalplaatje, dan landen we zacht op de conclusie van
+   * het gesprek zelf (echte inhoud) in plaats van op een foutscherm.
    */
-  async function analyzeCurrentStep(extraClarification?: string) {
+  async function analyzeCurrentStep(extraClarification?: string, fallbackMaterial?: string) {
     if (!plan) return;
+    /** Zachte landing bij een mislukte analyse van een interview-conclusie. */
+    const softLand = () => {
+      if (!fallbackMaterial) return false;
+      setStepMaterial(fallbackMaterial);
+      setStepSummary('');
+      setStepGaps([]);
+      return true;
+    };
     const step = plan.steps[currentStepIndex];
     const technique = techniqueById(step.technique_id);
     if (!technique) {
@@ -508,12 +631,23 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
     });
     try {
       const res = await analyzePlanStep({
-        goal: goal.trim(),
+        goal: goalRef.current.trim(),
         step,
         technique,
         answers: stepAnswers,
         // De gestructureerde persona-/few-shot-/meta-definitie gaat als gelabeld veld mee.
         extraAnsweredFields: [
+          // Chain-of-Thought/Socratic: het totaalplaatje uit het gesprek IS de input
+          // van deze stap; de analyse toetst het op wat er nog ontbreekt.
+          ...(interviewConclusionRef.current
+            ? [
+                {
+                  id: 'gesprek_conclusie',
+                  label: 'Totaalplaatje uit het vraag-na-vraag-gesprek',
+                  answer: interviewConclusionRef.current,
+                },
+              ]
+            : []),
           ...(personaText.trim()
             ? [{ id: 'persona_definitie', label: 'Persona-definitie', answer: personaText.trim() }]
             : []),
@@ -530,6 +664,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
         preferredModel: settings.model,
       });
       if (res.unclear) {
+        if (softLand()) return;
         setUnclearReason(
           res.reason?.trim() ||
             'Je invoer is nog niet duidelijk genoeg. Vul de velden concreter in.',
@@ -538,6 +673,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
         return;
       }
       if (!res.success || !res.material) {
+        if (softLand()) return;
         setStepError(res.error ?? 'De analyse voor deze stap kon niet worden gemaakt.');
         log('step_error', { stepIndex: currentStepIndex, metadata: { where: 'analyze', error: res.error } });
         setPhase('error');
@@ -554,6 +690,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
         });
       }
     } catch (err) {
+      if (softLand()) return;
       setStepError(err instanceof Error ? err.message : 'Analyse mislukt.');
       log('step_error', { stepIndex: currentStepIndex, metadata: { where: 'analyze' } });
       setPhase('error');
@@ -566,6 +703,24 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
   function confirmAnalyze() {
     setGuardrailFindings(null);
     void analyzeCurrentStep(clarification.trim() || undefined);
+  }
+
+  /**
+   * Het vraag-na-vraag-gesprek leverde het totaalplaatje op. Toets dat meteen op
+   * HIATEN — wat is nog niet duidelijk? — zodat de gebruiker het kan aanvullen
+   * vóórdat de volgende technieken erop voortbouwen. De interview-weergave blijft
+   * staan tot het materiaal er is; daarna neemt de gewone materiaal-weergave het
+   * over (tussenresultaat + "wat mist nog" + volgende stap).
+   */
+  async function completeInterviewStep(conclusion: string) {
+    interviewConclusionRef.current = conclusion;
+    setInterviewFinishing(true);
+    try {
+      await analyzeCurrentStep(undefined, conclusion);
+    } finally {
+      setInterviewFinishing(false);
+      setInterviewActive(false);
+    }
   }
 
   /**
@@ -593,7 +748,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
     setUnclearReason(null);
     try {
       const res = await runPlanStep({
-        goal: goal.trim(),
+        goal: goalRef.current.trim(),
         step,
         techniqueName: technique.name,
         outcomesSummary: serializeOutcomes(accumulated),
@@ -621,16 +776,31 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
       // De AI is klaar: de conclusie wordt het materiaal van deze stap. Vanaf hier
       // loopt de gewone flow (tonen + "Volgende stap"/compose) door.
       if (res.material) {
-        setInterviewActive(false);
         setInterviewQuestion(null);
-        setStepMaterial(res.material);
-        setStepSummary('');
-        setStepGaps([]);
         log('interview_finished', {
           stepIndex: index,
           techniqueId: step.technique_id,
           metadata: { turns: turns.length, forced: forceFinish },
         });
+        // Interview op de LAATSTE stap: de conclusie gaat als uitgewerkt
+        // materiaal direct de compose in — de gebruiker hoeft niets extra's te doen.
+        if (isLastStep(p, index)) {
+          setInterviewActive(false);
+          const outcome: StepOutcome = {
+            step_id: step.id,
+            technique_id: step.technique_id,
+            produces: step.produces,
+            material: res.material,
+            answers: Object.fromEntries(turns.map((t, i) => [`vraag_${i + 1}`, `${t.question}\n${t.answer}`])),
+          };
+          const next = [...accumulated, outcome];
+          setOutcomes(next);
+          void composeFinal(p, next);
+          return;
+        }
+        // Tussenstap (normaal gesproken de vaste eerste stap): toets het
+        // totaalplaatje op hiaten zodat de gebruiker kan aanvullen.
+        void completeInterviewStep(res.material);
         return;
       }
       setStepError(res.error ?? 'De volgende vraag kon niet worden opgehaald.');
@@ -741,6 +911,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
     if (metaText.trim())
       log('meta_built', { stepIndex: currentStepIndex, metadata: { meta_len: metaText.trim().length } });
     const extraAnswers: Record<string, string> = {};
+    if (interviewConclusionRef.current) extraAnswers.gesprek_conclusie = interviewConclusionRef.current;
     if (personaText.trim()) extraAnswers.persona_definitie = personaText.trim();
     if (fewShotText.trim()) extraAnswers.fewshot_definitie = fewShotText.trim();
     if (metaText.trim()) extraAnswers.meta_prompt = metaText.trim();
@@ -761,6 +932,21 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
     beginStep(plan, currentStepIndex + 1, next);
   }
 
+  /**
+   * Is het vraag-na-vraag-gesprek al ÍN de tool gevoerd? Dan moet de compose
+   * een uitgewerkte, direct uitvoerbare prompt maken in plaats van een prompt
+   * die de chain-of-thought/socratische dialoog nog "aanzet".
+   */
+  function interviewIsResolved(technique: Technique, accumulated: StepOutcome[]): boolean {
+    const fmt = structureFormat(technique);
+    if (fmt !== 'chain-of-thought' && fmt !== 'socratic') return false;
+    return accumulated.some((o) => {
+      const t = techniqueById(o.technique_id);
+      const f = t ? structureFormat(t) : undefined;
+      return f === 'chain-of-thought' || f === 'socratic';
+    });
+  }
+
   /** Laatste stap: giet alle verzamelde input in één herbruikbare template. */
   async function composeFinal(p: PromptPlan, accumulated: StepOutcome[]) {
     const step = p.steps[p.steps.length - 1];
@@ -775,7 +961,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
     try {
       const res = await generatePrompt({
         technique,
-        promptContent: goal.trim() || '[BESCHRIJF HIER WAT JE WILT BEREIKEN]',
+        promptContent: goalRef.current.trim() || '[BESCHRIJF HIER WAT JE WILT BEREIKEN]',
         followUpAnswers: {},
         // Al het verzamelde materiaal als gelabelde context — exact het formaat
         // dat de generate-modus als "ANTWOORDEN VAN DE GEBRUIKER" verwerkt.
@@ -784,6 +970,8 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
           label: outcomeLabel(o),
           answer: o.material,
         })),
+        // Het CoT/Socratische gesprek is al gevoerd → uitgewerkte prompt.
+        interviewResolved: interviewIsResolved(technique, accumulated),
         preferredProvider: settings.provider,
         preferredModel: settings.model,
         systemPrompt: settings.systemPrompt.trim() || undefined,
@@ -800,13 +988,134 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
         setPhase('error');
         return;
       }
-      const recipe: PromptRecipe = { goal: goal.trim(), plan: p, outcomes: accumulated };
+      const recipe: PromptRecipe = { goal: goalRef.current.trim(), plan: p, outcomes: accumulated };
+      const finalResult: OptimizeResult = { ...res, recipe };
+
+      // Socratische eindcontrole (best-effort): welke aannames zitten er in het
+      // resultaat die de gebruiker niet zelf heeft aangeleverd? Gevonden aannames
+      // worden vragen; de antwoorden scherpen de template aan. Faalt de controle,
+      // dan gaat het resultaat gewoon door — de template blijft bruikbaar.
+      const check = await checkAssumptions({
+        goal: goalRef.current.trim(),
+        templateContent: res.optimized_content,
+        outcomesSummary: serializeOutcomes(accumulated),
+        preferredProvider: settings.provider,
+        preferredModel: settings.model,
+      });
+      if (check.success && check.assumptions.length > 0) {
+        setPendingResult(finalResult);
+        setAssumptions(check.assumptions);
+        setAssumptionAnswers({});
+        log('assumptions_shown', {
+          metadata: { count: check.assumptions.length, labels: check.assumptions.map((a) => a.label) },
+        });
+        setPhase('assumption-review');
+        return;
+      }
+
       clearRunDraft();
-      onResult({ ...res, recipe }, technique);
+      onResult(finalResult, technique);
     } catch (err) {
       setStepError(err instanceof Error ? err.message : 'Template samenstellen mislukt.');
       log('step_error', { metadata: { where: 'compose' } });
       setPhase('error');
+    }
+  }
+
+  /**
+   * Socratische eindcontrole — "Gebruik zoals het is": lever het al samengestelde
+   * resultaat op zonder de aannames te verwerken.
+   */
+  function skipAssumptions() {
+    if (!plan || !pendingResult) return;
+    const technique = techniqueById(plan.steps[plan.steps.length - 1]?.technique_id);
+    if (!technique) return;
+    log('assumptions_skipped', { metadata: { count: assumptions.length } });
+    clearRunDraft();
+    onResult(pendingResult, technique);
+  }
+
+  /**
+   * Socratische eindcontrole — "Verwerk mijn antwoorden": guardrail-check en dan
+   * de template opnieuw samenstellen mét de beantwoorde aannames als context.
+   * Onbeantwoorde vragen tellen niet mee; zijn ze állemaal leeg, dan is dit
+   * hetzelfde als overslaan.
+   */
+  function applyAssumptions() {
+    if (!plan || !pendingResult) return;
+    const answered = assumptions
+      .map((a, i) => ({ ...a, answer: (assumptionAnswers[i] ?? '').trim() }))
+      .filter((a) => a.answer);
+    if (answered.length === 0) {
+      skipAssumptions();
+      return;
+    }
+    const toCheck = answered.map((a) => a.answer).join('\n');
+    const findings: GuardrailFinding[] = [
+      ...(settings.pii.enabled ? detectPii(toCheck) : []),
+      ...detectBlockedTopics(toCheck, settings.blockedTopics),
+    ];
+    if (findings.length > 0) {
+      setGuardrailFindings(findings);
+      return;
+    }
+    void recomposeWithAssumptions(answered);
+  }
+
+  /** Guardrail bevestigd → verwerk de aanname-antwoorden alsnog. */
+  function confirmApplyAssumptions() {
+    const answered = assumptions
+      .map((a, i) => ({ ...a, answer: (assumptionAnswers[i] ?? '').trim() }))
+      .filter((a) => a.answer);
+    if (answered.length === 0) return;
+    void recomposeWithAssumptions(answered);
+  }
+
+  /** Stel de eindtemplate opnieuw samen met de beantwoorde aannames als extra context. */
+  async function recomposeWithAssumptions(
+    answered: (TemplateAssumption & { answer: string })[],
+  ) {
+    if (!plan || !pendingResult) return;
+    const step = plan.steps[plan.steps.length - 1];
+    const technique = techniqueById(step?.technique_id);
+    if (!technique) return;
+    setPhase('composing');
+    log('assumptions_applied', { metadata: { answered: answered.length } });
+    try {
+      const res = await generatePrompt({
+        technique,
+        promptContent: goalRef.current.trim() || '[BESCHRIJF HIER WAT JE WILT BEREIKEN]',
+        followUpAnswers: {},
+        extraAnsweredFields: [
+          ...outcomes.map((o) => ({ id: o.step_id, label: outcomeLabel(o), answer: o.material })),
+          // De beantwoorde aannames: vraag + antwoord als gelabelde context, zodat
+          // de nieuwe versie de aannames vervangt door wat de gebruiker écht wil.
+          ...answered.map((a, i) => ({
+            id: `aanname_${i + 1}`,
+            label: a.label ? `Socratische verduidelijking — ${a.label}` : 'Socratische verduidelijking',
+            answer: `${a.question}\nAntwoord van de gebruiker: ${a.answer}`,
+          })),
+        ],
+        interviewResolved: interviewIsResolved(technique, outcomes),
+        preferredProvider: settings.provider,
+        preferredModel: settings.model,
+        systemPrompt: settings.systemPrompt.trim() || undefined,
+        toneInstruction: settings.toneInstruction.trim() || undefined,
+        temperature: settings.temperature,
+      });
+      if (res.unclear || !res.optimized_content?.trim()) {
+        // Aanscherpen lukte niet → val terug op het al goedgekeurde resultaat.
+        toast('Aanscherpen lukte niet; de eerdere template is gebruikt.', { icon: 'ℹ️' });
+        clearRunDraft();
+        onResult(pendingResult, technique);
+        return;
+      }
+      clearRunDraft();
+      onResult({ ...res, recipe: pendingResult.recipe }, technique);
+    } catch {
+      toast('Aanscherpen lukte niet; de eerdere template is gebruikt.', { icon: 'ℹ️' });
+      clearRunDraft();
+      onResult(pendingResult, technique);
     }
   }
 
@@ -889,8 +1198,8 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
                 onChange={(e) => setGoal(e.target.value)}
               />
               <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-                We stellen een slim plan op dat meerdere technieken combineert tot één sterke,
-                herbruikbare template.
+                We beginnen met vragen tot je vraagstuk compleet in beeld is, en versterken dat beeld
+                daarna met meerdere technieken tot één sterke, herbruikbare template.
               </p>
 
               {/* Hervat-melding: er staat nog een niet-afgemaakte bouw bewaard. */}
@@ -953,6 +1262,15 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
                 onEditStepTitle={editStepTitle}
                 onBuild={handleBuild}
               />
+            ) : phase === 'assumption-review' && pendingResult ? (
+              <AssumptionReview
+                assumptions={assumptions}
+                answers={assumptionAnswers}
+                onAnswerChange={(i, v) => setAssumptionAnswers((prev) => ({ ...prev, [i]: v }))}
+                templateContent={pendingResult.optimized_content}
+                onApply={applyAssumptions}
+                onSkip={skipAssumptions}
+              />
             ) : (
               <PlanExecutor
                 plan={plan}
@@ -965,6 +1283,9 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
                 onRegenerateStep={regenerateStep}
                 stepAnswers={stepAnswers}
                 onStepAnswersChange={setStepAnswers}
+                stepFieldMeta={stepFieldMeta}
+                stepPrefilling={stepPrefilling}
+                onStepFieldEdit={handleStepFieldEdit}
                 analyzing={analyzing}
                 stepMaterial={stepMaterial}
                 stepSummary={stepSummary}
@@ -984,6 +1305,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
                 interviewTranscript={interviewTranscript}
                 interviewAnswer={interviewAnswer}
                 interviewBusy={interviewBusy}
+                interviewFinishing={interviewFinishing}
                 onInterviewAnswerChange={setInterviewAnswer}
                 onSubmitInterviewAnswer={submitInterviewAnswer}
                 onFinishInterview={finishInterview}
@@ -1013,11 +1335,13 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
           findings={guardrailFindings}
           piiWarning={settings.pii.warning}
           // Route naar de juiste actie: een interview-antwoord, de stap-analyse,
-          // óf het opstellen van het plan (doel-fase).
+          // de aanname-antwoorden (socratische eindcontrole), óf het opstellen
+          // van het plan (doel-fase).
           onConfirm={() => {
             setGuardrailFindings(null);
             if (interviewActive) confirmInterviewAnswer();
             else if (phase === 'collecting') confirmAnalyze();
+            else if (phase === 'assumption-review') confirmApplyAssumptions();
             else void runPlan();
           }}
           onCancel={() => setGuardrailFindings(null)}
@@ -1083,8 +1407,8 @@ function PlanReview({
 
       <p className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500">
         <Check size={13} className="text-rijksblauw-400" />
-        We doorlopen de stappen één voor één; elke stap bouwt voort op de vorige en het geheel wordt
-        één herbruikbare template.
+        We beginnen met vraag voor vraag het totaalplaatje ophalen; de volgende stappen versterken dat
+        beeld en het geheel wordt één herbruikbare template.
       </p>
     </div>
   );
@@ -1228,6 +1552,9 @@ function PlanExecutor({
   onRegenerateStep,
   stepAnswers,
   onStepAnswersChange,
+  stepFieldMeta,
+  stepPrefilling,
+  onStepFieldEdit,
   analyzing,
   stepMaterial,
   stepSummary,
@@ -1247,6 +1574,7 @@ function PlanExecutor({
   interviewTranscript,
   interviewAnswer,
   interviewBusy,
+  interviewFinishing,
   onInterviewAnswerChange,
   onSubmitInterviewAnswer,
   onFinishInterview,
@@ -1261,6 +1589,9 @@ function PlanExecutor({
   onRegenerateStep: (index: number) => void;
   stepAnswers: Record<string, string>;
   onStepAnswersChange: (a: Record<string, string>) => void;
+  stepFieldMeta: FieldMeta;
+  stepPrefilling: boolean;
+  onStepFieldEdit: (id: string) => void;
   analyzing: boolean;
   stepMaterial: string | null;
   stepSummary: string;
@@ -1280,6 +1611,8 @@ function PlanExecutor({
   interviewTranscript: TranscriptTurn[];
   interviewAnswer: string;
   interviewBusy: boolean;
+  /** Het gesprek is klaar; het totaalplaatje wordt op hiaten getoetst. */
+  interviewFinishing: boolean;
   onInterviewAnswerChange: (v: string) => void;
   onSubmitInterviewAnswer: () => void;
   onFinishInterview: () => void;
@@ -1288,6 +1621,10 @@ function PlanExecutor({
   const outcomeByStepId = new Map(outcomes.map((o) => [o.step_id, o]));
   const isComposeStep = (idx: number) => idx >= total - 1;
   const composing = phase === 'composing';
+  // Alle context tot nu toe: het doel + het materiaal van eerdere stappen. Voedt
+  // de AI-invulhulp van de persona-bouwer, zodat bijv. een CoT-conclusie de
+  // persona mede bepaalt ("slim bundelen").
+  const contextText = [goal.trim(), serializeOutcomes(outcomes)].filter(Boolean).join('\n\n');
 
   return (
     <div className="space-y-4">
@@ -1298,7 +1635,8 @@ function PlanExecutor({
             : `Stap ${Math.min(currentStepIndex + 1, total)} van ${total}`}
         </p>
         <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
-          Vul je input in; de AI denkt mee wat er nog nodig is. Elke stap bouwt voort op de vorige.
+          We halen eerst vraag voor vraag het totaalplaatje op; elke volgende stap bouwt daarop voort
+          en de AI denkt mee wat er nog nodig is.
         </p>
       </div>
 
@@ -1331,12 +1669,17 @@ function PlanExecutor({
               // compose-stap, en alleen als er nu niets actief loopt).
               onRegenerate={done && !analyzing && !composing && !isComposeStep(idx) ? () => onRegenerateStep(idx) : undefined}
             >
-              {/* Actieve tussenstap: input verzamelen + analyse tonen. */}
-              {active && !isComposeStep(idx) && technique && (
+              {/* Actieve tussenstap: input verzamelen + analyse tonen. Een
+                  interactieve LAATSTE stap (chain-of-thought/socratic) toont
+                  hier eerst het interview; de conclusie gaat daarna de compose in. */}
+              {active && technique && (!isComposeStep(idx) || interviewActive) && (
                 <StepCollector
                   technique={technique}
                   answers={stepAnswers}
                   onAnswersChange={onStepAnswersChange}
+                  fieldMeta={stepFieldMeta}
+                  prefilling={stepPrefilling}
+                  onFieldEdit={onStepFieldEdit}
                   analyzing={analyzing}
                   material={stepMaterial}
                   summary={stepSummary}
@@ -1348,6 +1691,7 @@ function PlanExecutor({
                   onPrefillFromDocument={onPrefillFromDocument}
                   settings={settings}
                   goal={goal}
+                  contextText={contextText}
                   onPersonaChange={onPersonaChange}
                   onFewShotChange={onFewShotChange}
                   onMetaChange={onMetaChange}
@@ -1356,6 +1700,7 @@ function PlanExecutor({
                   interviewTranscript={interviewTranscript}
                   interviewAnswer={interviewAnswer}
                   interviewBusy={interviewBusy}
+                  interviewFinishing={interviewFinishing}
                   onInterviewAnswerChange={onInterviewAnswerChange}
                   onSubmitInterviewAnswer={onSubmitInterviewAnswer}
                   onFinishInterview={onFinishInterview}
@@ -1398,6 +1743,9 @@ function StepCollector({
   technique,
   answers,
   onAnswersChange,
+  fieldMeta,
+  prefilling,
+  onFieldEdit,
   analyzing,
   material,
   summary,
@@ -1409,6 +1757,7 @@ function StepCollector({
   onPrefillFromDocument,
   settings,
   goal,
+  contextText,
   onPersonaChange,
   onFewShotChange,
   onMetaChange,
@@ -1417,6 +1766,7 @@ function StepCollector({
   interviewTranscript,
   interviewAnswer,
   interviewBusy,
+  interviewFinishing,
   onInterviewAnswerChange,
   onSubmitInterviewAnswer,
   onFinishInterview,
@@ -1425,6 +1775,9 @@ function StepCollector({
   technique: Technique;
   answers: Record<string, string>;
   onAnswersChange: (a: Record<string, string>) => void;
+  fieldMeta: FieldMeta;
+  prefilling: boolean;
+  onFieldEdit: (id: string) => void;
   analyzing: boolean;
   material: string | null;
   summary: string;
@@ -1436,6 +1789,8 @@ function StepCollector({
   onPrefillFromDocument: (text: string) => Promise<boolean>;
   settings: AiSettings;
   goal: string;
+  /** Doel + materiaal van eerdere stappen; voedt de persona-invulhulp. */
+  contextText: string;
   onPersonaChange: (text: string) => void;
   onFewShotChange: (text: string) => void;
   onMetaChange: (text: string) => void;
@@ -1444,6 +1799,8 @@ function StepCollector({
   interviewTranscript: TranscriptTurn[];
   interviewAnswer: string;
   interviewBusy: boolean;
+  /** Het gesprek is klaar; het totaalplaatje wordt op hiaten getoetst. */
+  interviewFinishing: boolean;
   onInterviewAnswerChange: (v: string) => void;
   onSubmitInterviewAnswer: () => void;
   onFinishInterview: () => void;
@@ -1461,6 +1818,9 @@ function StepCollector({
   const isFewShot = format === 'few-shot';
   // Meta Prompting: de AI bouwt zelf de prompt (geen antwoord).
   const isMeta = format === 'meta';
+  // De vraag-na-vraag-stap (vast de eerste stap): het materiaal is hier het
+  // totaalplaatje waarop alle volgende stappen voortbouwen.
+  const isInterviewStep = format === 'chain-of-thought' || format === 'socratic';
 
   // Chain-of-Thought / Socratic: het adaptieve vraag-na-vraag-interview vervangt
   // de gewone input+Genereren, tot de AI een conclusie levert (dan is material gezet).
@@ -1472,7 +1832,8 @@ function StepCollector({
           question={interviewQuestion}
           transcript={interviewTranscript}
           answer={interviewAnswer}
-          busy={interviewBusy}
+          busy={interviewBusy || interviewFinishing}
+          finishing={interviewFinishing}
           onAnswerChange={onInterviewAnswerChange}
           onSubmit={onSubmitInterviewAnswer}
           onFinish={onFinishInterview}
@@ -1496,7 +1857,10 @@ function StepCollector({
           <PersonaBuilder
             multi={format === 'multi-persona'}
             settings={settings}
-            context={goal}
+            technique={technique}
+            // Slim bundelen: niet alleen het doel, maar ook het materiaal van
+            // eerdere stappen (bijv. de CoT-conclusie) voedt de persona-invulhulp.
+            context={contextText || goal}
             onSerialized={onPersonaChange}
           />
         )
@@ -1505,7 +1869,14 @@ function StepCollector({
       ) : isMeta ? (
         material == null && <MetaBuilder settings={settings} goal={goal} onSerialized={onMetaChange} />
       ) : hasFields ? (
-        <FollowUpQuestions technique={technique} answers={answers} onChange={onAnswersChange} />
+        <FollowUpQuestions
+          technique={technique}
+          answers={answers}
+          onChange={onAnswersChange}
+          fieldMeta={fieldMeta}
+          onUserEdit={onFieldEdit}
+          prefilling={prefilling}
+        />
       ) : (
         <p className="text-sm text-slate-500 dark:text-slate-400">
           Deze techniek heeft geen vaste vragen. Klik op &quot;Genereren&quot;; de AI denkt mee wat
@@ -1536,10 +1907,11 @@ function StepCollector({
             </p>
           )}
 
-          {/* Het uitgeschreven materiaal van deze stap. */}
+          {/* Het uitgeschreven materiaal van deze stap. Bij de vraag-na-vraag-stap
+              is dat het totaalplaatje waar de volgende stappen op voortbouwen. */}
           <div>
             <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-              Tussenresultaat
+              {isInterviewStep ? 'Het totaalplaatje' : 'Tussenresultaat'}
             </p>
             <div className="max-h-56 overflow-auto rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
               <RichText text={material} className="text-xs text-slate-600 dark:text-slate-300" />
@@ -1551,7 +1923,9 @@ function StepCollector({
             <div className="rounded-lg border border-rijksblauw-200 bg-white/70 p-3 dark:border-rijksblauw-500/30 dark:bg-slate-800/60">
               <p className="flex items-start gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
                 <Lightbulb size={16} className="mt-0.5 shrink-0 text-rijksblauw-500" />
-                Wat je nog kunt aanleveren voor een scherper geheel
+                {isInterviewStep
+                  ? 'Dit is nog niet helemaal duidelijk — vul het aan'
+                  : 'Wat je nog kunt aanleveren voor een scherper geheel'}
               </p>
               <ul className="mt-2 space-y-1.5 pl-1">
                 {gaps.map((g, i) => (
@@ -1624,6 +1998,92 @@ function StepCollector({
   );
 }
 
+
+/**
+ * Socratische eindcontrole: de AI heeft in de samengestelde template AANNAMES
+ * gevonden die de gebruiker niet zelf heeft aangeleverd. Elke aanname is een
+ * open vraag; de antwoorden scherpen de template aan tot één sterk geheel.
+ * Overslaan mag altijd — dan wordt de template gebruikt zoals hij is.
+ */
+function AssumptionReview({
+  assumptions,
+  answers,
+  onAnswerChange,
+  templateContent,
+  onApply,
+  onSkip,
+}: {
+  assumptions: TemplateAssumption[];
+  answers: Record<number, string>;
+  onAnswerChange: (index: number, value: string) => void;
+  templateContent: string;
+  onApply: () => void;
+  onSkip: () => void;
+}) {
+  const answeredCount = assumptions.filter((_, i) => (answers[i] ?? '').trim()).length;
+  return (
+    <div className="space-y-4">
+      <div>
+        <p className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+          <Lightbulb size={16} className="text-rijksoranje" /> Socratische controle — aannames in
+          het resultaat
+        </p>
+        <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+          Je template is klaar, maar er zitten aannames in die je niet zelf hebt aangeleverd.
+          Beantwoord de vragen om die aannames te vervangen door wat jíj bedoelt, of gebruik de
+          template zoals hij is.
+        </p>
+      </div>
+
+      <ol className="space-y-3">
+        {assumptions.map((a, i) => (
+          <li
+            key={i}
+            className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800"
+          >
+            <p className="flex items-start gap-2 text-sm font-medium text-slate-800 dark:text-slate-100">
+              <HelpCircle size={15} className="mt-0.5 shrink-0 text-rijksblauw-500" />
+              <span>
+                {a.label && <span className="font-semibold">{a.label}: </span>}
+                {stripMarkdown(a.question)}
+              </span>
+            </p>
+            <textarea
+              className="opl-input mt-2 min-h-[64px] resize-y text-sm"
+              value={answers[i] ?? ''}
+              placeholder="Laat leeg als de aanname klopt…"
+              onChange={(e) => onAnswerChange(i, e.target.value)}
+            />
+          </li>
+        ))}
+      </ol>
+
+      {/* De huidige template (nog zonder de aanscherping), ter referentie. */}
+      <div>
+        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          Huidige template
+        </p>
+        <div className="max-h-56 overflow-auto rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900">
+          <RichText text={templateContent} className="text-xs text-slate-600 dark:text-slate-300" />
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <button type="button" className="opl-btn-secondary" onClick={onSkip}>
+          <Check size={16} /> Gebruik zoals het is
+        </button>
+        <button
+          type="button"
+          className="opl-btn-primary"
+          onClick={onApply}
+          disabled={answeredCount === 0}
+        >
+          <Sparkles size={16} /> Verwerk mijn antwoorden
+        </button>
+      </div>
+    </div>
+  );
+}
 
 type StepStatus = 'pending' | 'active' | 'done' | 'error';
 

@@ -35,6 +35,12 @@ interface FollowUpQuestionsProps {
   preferredProvider?: AiProvider;
   /** Concreet AI-model voor "Vul verder aan". Optioneel; zie preferredProvider. */
   preferredModel?: string;
+  /**
+   * Optioneel: wanneer meegegeven, sluit de laatste stap direct af met een
+   * genereer-actie ("Genereren en optimaliseren prompt") in plaats van het
+   * interne overzicht te tonen. De ouder start dan meteen de generatie.
+   */
+  onFinish?: () => void;
 }
 
 /**
@@ -52,6 +58,7 @@ export default function FollowUpQuestions({
   prefilling = false,
   preferredProvider,
   preferredModel,
+  onFinish,
 }: FollowUpQuestionsProps) {
   const questions = technique.follow_up_questions;
   const total = questions.length;
@@ -228,6 +235,10 @@ export default function FollowUpQuestions({
                 placeholder={q.placeholder}
                 onChange={(e) => editField(q.id, e.target.value)}
               />
+              {/* Toelichting uit de techniek-definitie: waarom deze vraag ertoe doet. */}
+              {q.why && (
+                <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">{q.why}</p>
+              )}
               {meta?.note && value.trim() ? (
                 <p className="mt-1 flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
                   <Sparkles size={12} /> {meta.note}
@@ -280,8 +291,14 @@ export default function FollowUpQuestions({
   }
 
   function next() {
-    if (isLast) setReviewing(true);
-    else setStep((s) => Math.min(s + 1, total - 1));
+    if (isLast) {
+      // Wanneer de ouder een afsluit-actie meegeeft, genereren we direct in
+      // plaats van het interne overzicht te tonen.
+      if (onFinish) onFinish();
+      else setReviewing(true);
+    } else {
+      setStep((s) => Math.min(s + 1, total - 1));
+    }
   }
 
   function back() {
@@ -403,6 +420,10 @@ export default function FollowUpQuestions({
           placeholder={current.placeholder}
           onChange={(e) => update(e.target.value)}
         />
+        {/* Toelichting uit de techniek-definitie: waarom deze vraag ertoe doet. */}
+        {current.why && (
+          <p className="mt-1.5 text-xs text-slate-400 dark:text-slate-500">{current.why}</p>
+        )}
         {currentMeta && currentMeta.note && (answers[current.id] ?? '').trim() ? (
           <p className="mt-1.5 flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
             <Sparkles size={12} /> {currentMeta.note}
@@ -451,9 +472,15 @@ export default function FollowUpQuestions({
         </button>
         <button type="button" onClick={next} className="opl-btn-primary">
           {isLast ? (
-            <>
-              <Check size={16} /> Naar overzicht
-            </>
+            onFinish ? (
+              <>
+                <Sparkles size={16} /> Genereren en optimaliseren prompt
+              </>
+            ) : (
+              <>
+                <Check size={16} /> Naar overzicht
+              </>
+            )
           ) : (
             <>
               Volgende <ArrowRight size={16} />

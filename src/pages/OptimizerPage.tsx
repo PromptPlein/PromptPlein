@@ -281,6 +281,13 @@ export default function OptimizerPage() {
       const s = settingsRef.current;
       // Leeg = de generator gebruikt een neutrale plaatshouder voor de eigen inhoud.
       const draft = promptContent.trim() || '[BESCHRIJF HIER WAT JE WILT BEREIKEN]';
+      // Chain-of-Thought/Socratic: is het vraag-na-vraag-interview al in de tool
+      // gevoerd (de conclusie staat in builderText)? Dan hoeft de prompt de
+      // dialoog niet meer "aan te zetten" — de generator maakt een uitgewerkte,
+      // direct uitvoerbare prompt.
+      const fmt = structureFormat(technique);
+      const interviewResolved =
+        (fmt === 'chain-of-thought' || fmt === 'socratic') && Boolean(builderText.trim());
       const res = await generatePrompt({
         technique,
         promptContent: draft,
@@ -288,8 +295,15 @@ export default function OptimizerPage() {
         // Output van een gespecialiseerde bouwer (Persona/Few-Shot/Meta) als
         // gelabelde context meesturen, zodat die de template mede bepaalt.
         extraAnsweredFields: builderText.trim()
-          ? [{ id: 'builder_input', label: 'Ingevulde bouwer', answer: builderText.trim() }]
+          ? [
+              {
+                id: 'builder_input',
+                label: interviewResolved ? 'Conclusie van het gesprek' : 'Ingevulde bouwer',
+                answer: builderText.trim(),
+              },
+            ]
           : undefined,
+        interviewResolved,
         preferredProvider: s.provider,
         preferredModel: s.model,
         systemPrompt: s.systemPrompt.trim() || undefined,
@@ -498,14 +512,14 @@ export default function OptimizerPage() {
                           </h2>
                           {(() => {
                             const fmt = structureFormat(technique);
-                            // Chain-of-Thought/Socratic leveren een direct bruikbare
-                            // prompt op (die een andere AI het gesprek laat voeren),
-                            // geen invulformulier — maak dat expliciet.
+                            // Chain-of-Thought/Socratic voeren het gesprek ÍN de
+                            // tool; de conclusie wordt meteen uitgewerkt tot een
+                            // direct uitvoerbare prompt — maak dat expliciet.
                             const intro =
                               fmt === 'chain-of-thought'
-                                ? 'Beantwoord de vragen; je krijgt een kant-en-klare prompt die de AI stap voor stap laat doorvragen. Kopieer hem naar je eigen chat of voer hem direct uit.'
+                                ? 'De AI denkt hier stap voor stap met je mee en vraagt door tot het beeld compleet is. Je antwoorden worden meteen uitgewerkt tot een kant-en-klare prompt — voer hem direct uit of sla hem op.'
                                 : fmt === 'socratic'
-                                  ? 'Beantwoord de vragen; je krijgt een kant-en-klare prompt die de AI socratisch laat doorvragen. Kopieer hem naar je eigen chat of voer hem direct uit.'
+                                  ? 'De AI vraagt hier socratisch door om je aannames bloot te leggen. Je inzichten worden meteen uitgewerkt tot een kant-en-klare prompt — voer hem direct uit of sla hem op.'
                                   : 'Beantwoord de vragen; zo ontstaat een herbruikbare template — kopieer hem, of laat hem direct uitvoeren voor een kant-en-klaar resultaat.';
                             return (
                               <p className="text-sm text-slate-500 dark:text-slate-400">
@@ -530,6 +544,7 @@ export default function OptimizerPage() {
                             <PersonaBuilder
                               multi={fmt === 'multi-persona'}
                               settings={s}
+                              technique={technique}
                               context={promptContent || goal}
                               onSerialized={setBuilderText}
                             />

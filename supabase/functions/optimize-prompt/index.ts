@@ -44,7 +44,8 @@ type Mode =
   | 'fewshot-example'
   | 'fewshot-extract'
   | 'meta-build'
-  | 'expand-field';
+  | 'expand-field'
+  | 'assumption-check';
 
 /** Eén veld van het gekozen prompt framework waar de analyse op toetst. */
 interface AnalyzeField {
@@ -123,6 +124,13 @@ interface RequestBody {
     | 'socratic';
   /** De ingevulde velden mét hun labels, voor analyse. */
   answeredFields?: AnsweredField[];
+  /**
+   * 'generate': het vraag-na-vraag-interview (chain-of-thought/socratic) is al
+   * ÍN de tool gevoerd; de uitgewerkte conclusie zit bij de antwoorden. De
+   * generator maakt dan een direct uitvoerbare prompt met die uitgewerkte
+   * inhoud, in plaats van een prompt die de dialoog nog moet "aanzetten".
+   */
+  interviewResolved?: boolean;
   // 'recommend'-velden
   goal?: string;
   techniques?: TechniqueSummary[];
@@ -304,6 +312,8 @@ const GENERATE_USER_PROMPT = (args: {
     | 'template-based'
     | 'meta'
     | 'socratic';
+  /** Interview al in de tool gevoerd → uitgewerkte prompt, geen dialoog-instructies. */
+  interviewResolved?: boolean;
 }) => {
   const parts: string[] = [];
 
@@ -337,7 +347,19 @@ const GENERATE_USER_PROMPT = (args: {
       `bovenstaande antwoorden combineert. Laat het doel${args.answeredFields?.some((f) => /persona/i.test(f.label)) ? ' en de persona' : ''} duidelijk naar voren komen.`,
   );
 
-  if (args.structureFormat === 'care') {
+  const resolvedInterview =
+    args.interviewResolved &&
+    (args.structureFormat === 'chain-of-thought' || args.structureFormat === 'socratic');
+
+  if (resolvedInterview) {
+    parts.push(
+      `BELANGRIJK — het verdiepende vraag-na-vraag-gesprek is al ÍN de tool gevoerd; de uitgewerkte ` +
+        `conclusie staat hierboven bij de antwoorden. Zet dus GEEN instructies in de prompt om nog een ` +
+        `dialoog te voeren of één vraag tegelijk te stellen. Schrijf een volledig uitgewerkte, direct ` +
+        `uitvoerbare prompt die deze conclusie als vaststaande context gebruikt en de AI meteen het ` +
+        `eindproduct laat maken.`,
+    );
+  } else if (args.structureFormat === 'care') {
     // De koppen verschillen per raamwerk (CARE: Context/Ask/Rules/Examples;
     // CRISPE: Context/Role/Instructions/…; CO-STAR: Context/Objective/…).
     // Leid ze af uit de template van het GEKOZEN raamwerk i.p.v. vaste koppen.
@@ -546,14 +568,19 @@ const PLAN_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Ned
 Een interne overheidsmedewerker beschrijft wat die wil bereiken. Jouw taak: stel een SLIM,
 GEORDEND PLAN op van prompttechnieken die SAMEN één sterke, herbruikbare prompt-template opbouwen.
 
-Denk na over welke technieken elkaar aanvullen en in welke VOLGORDE ze horen:
-- Bepaal EERST de context/doelgroep (persona of multi-persona) als dat relevant is.
-- Kies DAARNA een uitvoerstructuur/format (template-based output) als er een vaste vorm nodig is.
-- Gebruik verdiepende bevraging (chain-of-thought, socratic) om de inhoud scherp te krijgen.
+De EERSTE stap is ALTIJD de techniek met structuur "chain-of-thought". Daarmee halen we vraag voor
+vraag het TOTAALPLAATJE op bij de gebruiker: wat wil hij precies bereiken, voor wie, met welke inhoud
+en welke aandachtspunten. Zet die techniek dus altijd als stap 1, met produces: "brief".
+
+Denk daarna na over welke technieken dat totaalplaatje VERSTERKEN, en in welke VOLGORDE:
+- Elke volgende stap bouwt voort op het totaalplaatje: de velden van die technieken worden ermee
+  voor-ingevuld, dus kies technieken die er iets aan TOEVOEGEN wat er nog niet in zit.
+- Bepaal de context/doelgroep (persona of multi-persona) als het doel om een specifieke ontvanger vraagt.
+- Kies een uitvoerstructuur/format (template-based output) als er een vaste vorm nodig is.
 - De LAATSTE stap stelt alles samen tot de uiteindelijke template (produces: "text").
-- Gebruik HOOGSTENS één compleet raamwerk (is_framework=true) en zet dat vooraan.
+- Gebruik HOOGSTENS één compleet raamwerk (is_framework=true) en zet dat direct ná de chain-of-thought-stap.
 - Kies alleen technieken die het doel echt nodig heeft: liever 2–3 goede stappen dan alles.
-- Maximaal 5 stappen.
+- Maximaal 5 stappen, inclusief de verplichte chain-of-thought-stap.
 
 Geef per stap:
 - "technique_id": exact een id uit de lijst.
@@ -890,6 +917,70 @@ function parsePlanStepAnalyze(
       material,
       gaps,
     };
+  } catch {
+    return null;
+  }
+}
+
+// --- Assumption-check-modus: socratische controle op de eindtemplate ---
+// Sluitstuk van de plan-bouwer: nadat alle technieken zijn gebundeld tot één
+// template, toetst deze modus het resultaat socratisch — welke AANNAMES staan
+// erin die de gebruiker niet zelf heeft aangeleverd? Elke aanname wordt een
+// concrete vraag; de antwoorden scherpen de template aan tot één sterk geheel.
+const ASSUMPTION_CHECK_SYSTEM_PROMPT = `Je bent een socratische reviewer voor prompt-templates van de Nederlandse rijksoverheid.
+Je krijgt het doel van de gebruiker, het materiaal dat de gebruiker zelf heeft aangeleverd en de
+gegenereerde eindtemplate. Jouw taak: leg de AANNAMES bloot die in de template zijn geslopen.
+
+Een aanname is een inhoudelijke keuze in de template die de gebruiker NIET zelf heeft aangeleverd of
+bevestigd — bijvoorbeeld een verzonnen doelgroep, toon, scope, volgorde, prioriteit of invulling die
+niet uit het doel of het materiaal volgt. Géén aannames zijn: letterlijke input van de gebruiker,
+neutrale [plaatshouders] en gangbare vormkeuzes zonder inhoudelijk gevolg.
+
+Werkwijze:
+- Vergelijk de template zorgvuldig met het doel en het aangeleverde materiaal.
+- Benoem ALLEEN echte, inhoudelijk relevante aannames — maximaal 4, de belangrijkste eerst.
+- Formuleer per aanname één korte, open vraag waarmee de gebruiker de aanname kan bevestigen,
+  corrigeren of aanvullen. Stel geen ja/nee-vragen.
+- Staan er geen noemenswaardige aannames in, geef dan een lege lijst terug — verzin er geen.
+
+Geef UITSLUITEND geldige JSON terug, zonder codeblok of extra tekst, in dit formaat:
+{"assumptions":[{"label":"<kort onderwerp van de aanname>","question":"<open vraag aan de gebruiker, in het Nederlands>"}]}`;
+
+/** Bouw de gebruikersprompt voor de assumption-check-modus. */
+const ASSUMPTION_CHECK_USER_PROMPT = (args: {
+  goal: string;
+  outcomesSummary?: string;
+  templateContent: string;
+}) => {
+  const parts: string[] = [`DOEL VAN DE GEBRUIKER:\n${args.goal}`];
+  if (args.outcomesSummary && args.outcomesSummary.trim()) {
+    parts.push(`DOOR DE GEBRUIKER AANGELEVERD MATERIAAL:\n${args.outcomesSummary.trim()}`);
+  }
+  parts.push(`GEGENEREERDE EINDTEMPLATE:\n${args.templateContent.trim()}`);
+  parts.push(
+    'Welke aannames bevat de eindtemplate die de gebruiker niet zelf heeft aangeleverd? Geef de JSON.',
+  );
+  return parts.join('\n\n');
+};
+
+/** Parseert het JSON-antwoord van de assumption-check-modus robuust. */
+function parseAssumptions(raw: string): { label: string; question: string }[] | null {
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  try {
+    const parsed = JSON.parse(match[0]) as { assumptions?: unknown };
+    const rawList = Array.isArray(parsed.assumptions) ? parsed.assumptions : [];
+    return rawList
+      .filter(
+        (a): a is Record<string, unknown> =>
+          !!a && typeof (a as Record<string, unknown>).question === 'string',
+      )
+      .slice(0, 4)
+      .map((a) => ({
+        label: typeof a.label === 'string' ? a.label : '',
+        question: (a.question as string).trim(),
+      }))
+      .filter((a) => a.question);
   } catch {
     return null;
   }
@@ -1808,6 +1899,27 @@ Bouw de prompt ALTIJD op in deze volgorde, en stem de vragen af op de concrete s
 
 Laat alleen écht per keer in te vullen plekken staan als [plaatshouder]. Plaats GEEN codeblok-tekens (\`\`\`).`;
 
+/**
+ * Vervangt de CoT/Socratic-structuurinstructie wanneer het vraag-na-vraag-
+ * interview al ÍN de tool is gevoerd (`interviewResolved`). De conclusie van
+ * dat gesprek is dan al uitgewerkt en zit bij de antwoorden — de prompt hoeft
+ * de dialoog niet meer "aan te zetten", maar moet direct uitvoerbaar zijn.
+ */
+const INTERVIEW_RESOLVED_INSTRUCTION = `VERPLICHTE UITVOERSTRUCTUUR (uitgewerkt gesprek → direct uitvoerbare prompt):
+Het verdiepende vraag-na-vraag-gesprek (chain-of-thought/socratisch) is al in de tool gevoerd. De
+conclusie daarvan is al uitgewerkt en staat bij de antwoorden van de gebruiker. Daarom:
+
+1. Zet GEEN instructies in de prompt om een dialoog te voeren, één vraag tegelijk te stellen of eerst
+   door te vragen — dat is al gebeurd.
+2. Verwerk de conclusie van het gesprek als vaststaande context: neem de kern (doel, situatie,
+   keuzes, aandachtspunten) volledig en concreet op in de prompt.
+3. Bouw de prompt op als een direct uitvoerbare opdracht: een rol-zin, de uitgewerkte context, de
+   concrete taak, de eisen aan het resultaat (structuur, toon, lengte) en een slotinstructie dat de
+   AI aangeeft waar informatie ontbreekt.
+4. De AI die deze prompt straks krijgt, levert METEEN het eindproduct.
+
+Laat alleen écht per keer in te vullen plekken staan als [plaatshouder]. Plaats GEEN codeblok-tekens (\`\`\`).`;
+
 type StructureFormat =
   | 'care'
   | 'few-shot'
@@ -1822,8 +1934,17 @@ type StructureFormat =
  * Kies de juiste structuur-instructie (of geen) op basis van de techniek.
  * Voor context-raamwerken (`care`) zijn de koppen raamwerk-specifiek; die
  * worden uit de template afgeleid en als `headings` doorgegeven.
+ * `interviewResolved`: het CoT/Socratische gesprek is al in de tool gevoerd —
+ * dan geldt de "uitgewerkt gesprek"-instructie i.p.v. de dialoog-structuur.
  */
-function structureInstruction(format?: StructureFormat, headings: string[] = []): string | null {
+function structureInstruction(
+  format?: StructureFormat,
+  headings: string[] = [],
+  interviewResolved = false,
+): string | null {
+  if (interviewResolved && (format === 'chain-of-thought' || format === 'socratic')) {
+    return INTERVIEW_RESOLVED_INSTRUCTION;
+  }
   if (format === 'care') return contextStructureInstruction(headings);
   if (format === 'few-shot') return FEW_SHOT_STRUCTURE_INSTRUCTION;
   if (format === 'chain-of-thought') return CHAIN_OF_THOUGHT_STRUCTURE_INSTRUCTION;
@@ -1841,9 +1962,10 @@ function buildSystemPrompt(
   tone?: string,
   format?: StructureFormat,
   headings: string[] = [],
+  interviewResolved = false,
 ): string {
   const base = systemPrompt?.trim() ? systemPrompt.trim() : DEFAULT_SYSTEM_PROMPT;
-  const instruction = structureInstruction(format, headings);
+  const instruction = structureInstruction(format, headings, interviewResolved);
   const withStructure = instruction ? `${base}\n\n${instruction}` : base;
   const withTone = tone?.trim() ? `${withStructure}\n\nToon en schrijfstijl: ${tone.trim()}` : withStructure;
   // De clarity-gate komt als laatste, zodat hij ook geldt bij een aangepaste admin-systeemprompt.
@@ -2512,7 +2634,9 @@ Deno.serve(async (req: Request) => {
                                     ? 'meta-build'
                                     : body.mode === 'expand-field'
                                       ? 'expand-field'
-                                      : 'generate';
+                                      : body.mode === 'assumption-check'
+                                        ? 'assumption-check'
+                                        : 'generate';
     const order = buildOrder(body.preferredProvider);
     const temperature = clampTemp(body.temperature);
 
@@ -3080,6 +3204,51 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // --- Assumption-check: socratische controle op aannames in de eindtemplate ---
+    if (mode === 'assumption-check') {
+      const goal = body.goal?.trim();
+      const templateContent = body.templateContent?.trim();
+      if (!goal || !templateContent) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'goal en templateContent zijn verplicht' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      const userMessage = ASSUMPTION_CHECK_USER_PROMPT({
+        goal,
+        outcomesSummary: body.outcomesSummary,
+        templateContent,
+      });
+
+      for (const candidate of order) {
+        try {
+          const raw = await PROVIDERS[candidate](
+            userMessage,
+            ASSUMPTION_CHECK_SYSTEM_PROMPT,
+            0.2,
+            resolveModel(candidate, body.preferredProvider, body.preferredModel),
+          );
+          const assumptions = parseAssumptions(raw);
+          if (assumptions !== null) {
+            return new Response(
+              JSON.stringify({ success: true, assumptions, provider: candidate }),
+              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            );
+          }
+        } catch (providerErr) {
+          console.error(`${candidate} (assumption-check) mislukt, probeer volgende:`, providerErr);
+        }
+      }
+
+      // Best-effort: geen provider gaf een bruikbaar oordeel → de controle wordt
+      // client-side gewoon overgeslagen (de template blijft bruikbaar).
+      return new Response(
+        JSON.stringify({ success: false, error: 'De aannames-controle kon niet worden uitgevoerd' }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
     // --- Execute-modus: voer de samengestelde prompt direct uit ---
     if (mode === 'execute') {
       const prompt = body.promptContent?.trim();
@@ -3434,7 +3603,14 @@ Deno.serve(async (req: Request) => {
     // Koppen van DIT raamwerk afleiden uit de template, zodat de generator de
     // raamwerk-eigen koppen (CARE, CRISPE, CO-STAR, …) afdwingt i.p.v. vaste.
     const headings = extractHeadings(body.template);
-    const system = buildSystemPrompt(body.systemPrompt, body.toneInstruction, format, headings);
+    const interviewResolved = Boolean(body.interviewResolved);
+    const system = buildSystemPrompt(
+      body.systemPrompt,
+      body.toneInstruction,
+      format,
+      headings,
+      interviewResolved,
+    );
     const userMessage = GENERATE_USER_PROMPT({
       filled,
       techniqueName: body.techniqueName,
@@ -3443,6 +3619,7 @@ Deno.serve(async (req: Request) => {
       answeredFields: body.answeredFields,
       promptContent: body.promptContent,
       structureFormat: format,
+      interviewResolved,
     });
 
     // Doorloop de providers in voorkeursvolgorde; eerste succes wint.

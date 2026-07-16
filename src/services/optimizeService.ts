@@ -68,6 +68,13 @@ export async function optimizePrompt(args: {
    * verwerkt. Leeg = gewone enkele-techniek-generatie.
    */
   extraAnsweredFields?: { id: string; label: string; answer: string }[];
+  /**
+   * Het vraag-na-vraag-interview (chain-of-thought/socratic) is al ÍN de tool
+   * gevoerd; de conclusie zit bij de antwoorden. De generator maakt dan een
+   * direct uitvoerbare, uitgewerkte prompt in plaats van een prompt die de
+   * dialoog nog moet "aanzetten".
+   */
+  interviewResolved?: boolean;
 }): Promise<OptimizeResult> {
   const {
     technique,
@@ -79,6 +86,7 @@ export async function optimizePrompt(args: {
     toneInstruction,
     temperature,
     extraAnsweredFields,
+    interviewResolved,
   } = args;
 
   const functionUrl = getFunctionUrl('optimize-prompt');
@@ -109,6 +117,8 @@ export async function optimizePrompt(args: {
           // Welke vaste uitvoerstructuur de generator moet afdwingen (CARE-koppen,
           // Few-Shot-blokken, …). Undefined = de AI bepaalt zelf de vorm.
           structureFormat: structureFormat(technique),
+          // Interview al in de tool gevoerd → uitgewerkte prompt i.p.v. dialoog-aanzet.
+          interviewResolved: Boolean(interviewResolved),
           answeredFields: [
             ...technique.follow_up_questions.map((q) => ({
               id: q.id,
@@ -640,6 +650,42 @@ function decoratePlanStep(
   };
 }
 
+/**
+ * Waarborgt dat een plan ALTIJD met de Chain-of-Thought-stap BEGINT. Die stap
+ * haalt vraag voor vraag het totaalplaatje op bij de gebruiker; alle volgende
+ * stappen bouwen daarop voort (hun velden worden ermee voor-ingevuld) en
+ * versterken het beeld. De planner krijgt deze regel ook mee, maar dit is de
+ * harde garantie — ook voor het lokale fallback-plan. Staat de techniek al
+ * vooraan, dan blijft het plan ongewijzigd; staat hij verderop, dan schuift hij
+ * naar voren; ontbreekt hij, dan komt hij er vooraan bij.
+ */
+function withCotFirst(plan: PromptPlan, techniques: Technique[]): PromptPlan {
+  const cot = techniques.find((t) => structureFormat(t) === 'chain-of-thought');
+  if (!cot) return plan; // techniek niet beschikbaar → plan ongewijzigd laten
+  const index = plan.steps.findIndex((s) => s.technique_id === cot.id);
+  if (index === 0) return plan;
+  const byId = new Map(techniques.map((t) => [t.id, t]));
+  const steps =
+    index > 0
+      ? [plan.steps[index], ...plan.steps.filter((_, i) => i !== index)]
+      : [
+          decoratePlanStep(
+            {
+              technique_id: cot.id,
+              title: 'Breng je vraagstuk scherp in beeld',
+              rationale:
+                'We halen eerst vraag voor vraag het totaalplaatje op; alle volgende stappen bouwen daarop voort.',
+              produces: 'brief',
+            },
+            0,
+            byId,
+          ),
+          ...plan.steps,
+        ];
+  // Hernummer de stap-ids, zodat ze uniek blijven en de volgorde volgen.
+  return { ...plan, steps: steps.map((s, i) => ({ ...s, id: `step-${i + 1}` })) };
+}
+
 /** Bouw een eenvoudig lokaal plan (geen backend): top-techniek + compose-stap. */
 function localPlan(goal: string, techniques: Technique[]): PromptPlan {
   const recs = localRecommend(goal, techniques);
@@ -753,7 +799,8 @@ export async function generatePlan(args: {
           .map((s, i) => decoratePlanStep(s, i, byId));
         if (steps.length > 0) {
           return {
-            plan: { goal, summary: data.plan.summary ?? '', steps },
+            // Harde garantie: het plan begint altijd met de Chain-of-Thought-stap.
+            plan: withCotFirst({ goal, summary: data.plan.summary ?? '', steps }, techniques),
             success: true,
             provider: data.provider ?? 'claude',
           };
@@ -763,7 +810,7 @@ export async function generatePlan(args: {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Onbekende fout';
       return {
-        plan: localPlan(goal, techniques),
+        plan: withCotFirst(localPlan(goal, techniques), techniques),
         success: true,
         provider: 'local-template',
         error: `Slim plan mislukt (${message}); lokaal plan gebruikt.`,
@@ -772,7 +819,7 @@ export async function generatePlan(args: {
   }
 
   return {
-    plan: localPlan(goal, techniques),
+    plan: withCotFirst(localPlan(goal, techniques), techniques),
     success: true,
     provider: 'local-template',
   };
@@ -1053,6 +1100,57 @@ export async function analyzePlanStep(args: {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Onbekende fout';
     return { success: false, provider: 'local-template', error: `Stap-analyse mislukt (${message}).` };
+  }
+}
+
+/** Eén door de AI blootgelegde aanname in de eindtemplate, als vraag aan de gebruiker. */
+export interface TemplateAssumption {
+  label: string;
+  question: string;
+}
+
+/**
+ * Socratische eindcontrole van de plan-bouwer: toetst de gegenereerde
+ * eindtemplate tegen het doel en het door de gebruiker aangeleverde materiaal,
+ * en geeft de AANNAMES terug die erin geslopen zijn — elk als concrete vraag.
+ * Best-effort: faalt de call of is er geen backend, dan `{success:false}` en
+ * slaat de wizard de controle gewoon over (de template blijft bruikbaar).
+ */
+export async function checkAssumptions(args: {
+  goal: string;
+  templateContent: string;
+  /** Compact tekstblok van de stap-uitkomsten (zie {@link serializeOutcomes}). */
+  outcomesSummary?: string;
+  preferredProvider?: AiProvider;
+  preferredModel?: string;
+}): Promise<{ success: boolean; assumptions: TemplateAssumption[]; error?: string }> {
+  try {
+    const data = await postOptimize<{
+      success?: boolean;
+      assumptions?: unknown;
+      error?: string;
+    }>({
+      mode: 'assumption-check',
+      goal: args.goal,
+      templateContent: args.templateContent,
+      outcomesSummary: args.outcomesSummary,
+      preferredProvider: args.preferredProvider ?? 'auto',
+      preferredModel: args.preferredModel,
+    });
+    if (!data) return { success: false, assumptions: [], error: 'Geen AI-service beschikbaar.' };
+    if (data.success && Array.isArray(data.assumptions)) {
+      const assumptions = (data.assumptions as TemplateAssumption[])
+        .filter((a) => a && typeof a.question === 'string' && a.question.trim())
+        .map((a) => ({ label: (a.label ?? '').trim(), question: a.question.trim() }));
+      return { success: true, assumptions };
+    }
+    return { success: false, assumptions: [], error: data.error ?? 'Controle mislukt.' };
+  } catch (err) {
+    return {
+      success: false,
+      assumptions: [],
+      error: err instanceof Error ? err.message : 'Onbekende fout.',
+    };
   }
 }
 

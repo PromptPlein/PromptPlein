@@ -19,6 +19,7 @@ export function InterviewPanel({
   transcript,
   answer,
   busy,
+  finishing = false,
   onAnswerChange,
   onSubmit,
   onFinish,
@@ -29,6 +30,11 @@ export function InterviewPanel({
   transcript: TranscriptTurn[];
   answer: string;
   busy: boolean;
+  /**
+   * Het gesprek is klaar en het totaalplaatje wordt samengevat/getoetst. Alleen
+   * de laadtekst verschilt — de gebruiker wacht dan niet op een volgende vraag.
+   */
+  finishing?: boolean;
   onAnswerChange: (v: string) => void;
   onSubmit: () => void;
   onFinish: () => void;
@@ -65,7 +71,11 @@ export function InterviewPanel({
       {busy && !question ? (
         <div className="flex items-center gap-2 rounded-xl border border-rijksblauw-200 bg-white p-3 text-sm text-rijksblauw-600 dark:border-rijksblauw-500/30 dark:bg-slate-800 dark:text-rijksblauw-300">
           <Loader2 size={16} className="animate-spin" />
-          {transcript.length === 0 ? 'De eerste vraag wordt opgesteld…' : 'De AI denkt na over de volgende vraag…'}
+          {finishing
+            ? 'We zetten het totaalplaatje op een rij en kijken wat er nog mist…'
+            : transcript.length === 0
+              ? 'De eerste vraag wordt opgesteld…'
+              : 'De AI denkt na over de volgende vraag…'}
         </div>
       ) : question ? (
         <div className="rounded-xl border border-rijksblauw-200 bg-white p-3 dark:border-rijksblauw-500/30 dark:bg-slate-800">
