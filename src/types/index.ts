@@ -204,6 +204,8 @@ export interface AnalyticsEvent {
  */
 export type BehaviorAction =
   | 'session_started' // doel ingevoerd, plan aangevraagd
+  | 'plan_routing_asked' // planner kon herhaalbaarheid niet bepalen en vroeg het na
+  | 'plan_routing_answered' // gebruiker beantwoordde de herhaalbaarheidsvraag
   | 'plan_generated' // AI stelde een plan op
   | 'plan_edited' // stap herordend/hernoemd/verwijderd in de review
   | 'build_started' // gebruiker start de uitvoering van het plan
@@ -411,6 +413,32 @@ export interface PromptPlan {
 }
 
 /** Antwoord van de optimize-prompt service (plan-modus, doel-flow). */
+/**
+ * Is de taak van de gebruiker terugkerend of eenmalig? Dit is de voorwaarde voor
+ * voorbeelden (few-shot/one-shot): die werken alleen als er telkens een
+ * soortgelijke input binnenkomt waarop op dezelfde manier gereageerd moet worden.
+ * Deelt bewust de vocabulaire van `FewShotIntent` (src/lib/fewshot.ts), zodat het
+ * antwoord de few-shot-bouwer rechtstreeks kan voor-invullen.
+ */
+export type Recurrence = 'herhaalbaar' | 'eenmalig';
+
+/** Eén keuze in de routingvraag die de planner terugstelt. */
+export interface PlanRoutingOption {
+  id: Recurrence;
+  label: string;
+  hint?: string;
+}
+
+/**
+ * De planner kon de herhaalbaarheid niet uit het doel afleiden en heeft één
+ * gerichte vraag teruggesteld in plaats van een plan. Het antwoord gaat als
+ * `recurrence` mee in een nieuwe plan-aanvraag.
+ */
+export interface PlanRouting {
+  question: string;
+  options: PlanRoutingOption[];
+}
+
 export interface PlanResult {
   plan?: PromptPlan;
   success: boolean;
@@ -424,6 +452,12 @@ export interface PlanResult {
    */
   unclear?: boolean;
   reason?: string;
+  /**
+   * De planner kon niet bepalen of de taak herhaalbaar is en heeft bewust GEEN
+   * plan gemaakt. Leg {@link PlanRouting} aan de gebruiker voor en plan opnieuw
+   * met diens antwoord als `recurrence`.
+   */
+  routing?: PlanRouting;
 }
 
 /**

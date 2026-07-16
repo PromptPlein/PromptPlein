@@ -23,6 +23,7 @@ import {
   serializeFewShot,
   type FewShotData,
   type FewShotFeature,
+  type FewShotIntent,
   type FewShotPair,
 } from '@/lib/fewshot';
 
@@ -36,6 +37,12 @@ interface FewShotBuilderProps {
   settings: AiSettings;
   /** Aangeroepen met de geserialiseerde few-shot-definitie zodra die wijzigt. */
   onSerialized: (text: string) => void;
+  /**
+   * De herhaalbaarheid die bij de intake al is vastgesteld (routingvraag van de
+   * planner). Is die bekend, dan slaan we de routing-fase over: die vraag is dan
+   * al beantwoord en nogmaals vragen is alleen maar verwarrend.
+   */
+  initialIntent?: FewShotIntent;
 }
 
 /**
@@ -45,9 +52,11 @@ interface FewShotBuilderProps {
  * details voorstelt. Bij few-shot volgt nog een dekkings- en consistentiecheck.
  * Het eindresultaat wordt geserialiseerd en als antwoord van de stap doorgegeven.
  */
-export default function FewShotBuilder({ settings, onSerialized }: FewShotBuilderProps) {
-  const [d, setD] = useState<FewShotData>(() => emptyFewShot());
-  const [phase, setPhase] = useState<Phase>('routing');
+export default function FewShotBuilder({ settings, onSerialized, initialIntent }: FewShotBuilderProps) {
+  const [d, setD] = useState<FewShotData>(() =>
+    initialIntent ? { ...emptyFewShot(), intent: initialIntent } : emptyFewShot(),
+  );
+  const [phase, setPhase] = useState<Phase>(initialIntent ? 'task' : 'routing');
   const [busy, setBusy] = useState(false);
   // Analyse-observaties (dekking/consistentie) uit de extractie.
   const [dekking, setDekking] = useState('');

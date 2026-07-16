@@ -84,6 +84,30 @@ interface AnsweredField {
   answer: string;
 }
 
+/**
+ * Is de taak van de gebruiker terugkerend of eenmalig? Dit is de voorwaarde voor
+ * voorbeelden (few-shot/one-shot): die werken alleen als er telkens een
+ * soortgelijke input binnenkomt. Deelt de vocabulaire van `FewShotIntent` in
+ * src/lib/fewshot.ts, zodat het antwoord de bouwer rechtstreeks kan voor-invullen.
+ */
+type Recurrence = 'herhaalbaar' | 'eenmalig';
+
+/** Eén keuze in de routingvraag die de planner terugstelt. */
+interface RoutingOption {
+  id: Recurrence;
+  label: string;
+  hint?: string;
+}
+
+/**
+ * De planner kon de herhaalbaarheid niet uit het doel afleiden en stelt één
+ * gerichte vraag terug in plaats van een plan.
+ */
+interface PlanRouting {
+  question: string;
+  options: RoutingOption[];
+}
+
 interface RequestBody {
   mode?: Mode;
   techniqueId?: string;
@@ -134,6 +158,13 @@ interface RequestBody {
   // 'recommend'-velden
   goal?: string;
   techniques?: TechniqueSummary[];
+  /**
+   * Antwoord op de herhaalbaarheidsvraag, als de planner die eerder terugstelde.
+   * Bepaalt of voorbeelden (few-shot) überhaupt van toepassing zijn: die werken
+   * alleen bij een TERUGKERENDE input. Is dit gezet, dan neemt de planner het als
+   * gegeven aan en stelt hij de vraag niet opnieuw (dat zou een lus opleveren).
+   */
+  recurrence?: Recurrence;
   // 'plan-step'-velden: verzamel het materiaal voor één stap uit het plan.
   /** De titel van de huidige stap (bijv. "Bepaal voor wie het plan is"). */
   stepTitle?: string;
@@ -512,6 +543,21 @@ onsamenhangend, betekenisloos of pure onzin (losse letters, herhaalde tekens of 
 uitsluitend dit terug:
 {"unclear":true,"reason":"<één korte, vriendelijke zin in het Nederlands die uitlegt wat onduidelijk is en wat de gebruiker kan verduidelijken>"}`;
 
+/**
+ * Routing-gate (alleen plan-modus): kan de planner de herhaalbaarheid niet uit de
+ * doeltekst afleiden, dan stelt hij één gerichte vraag terug in plaats van een
+ * plan. Het antwoord komt als `recurrence` terug in een nieuwe plan-aanvraag.
+ * Bewust met vaste id's: de client handelt daar deterministisch op af en vult er
+ * de few-shot-bouwer mee voor.
+ */
+const PLAN_ROUTING_JSON_INSTRUCTION = `ROUTINGVRAAG — alleen als je de HERHAALBAARHEID écht niet uit de
+tekst kunt bepalen én voorbeelden het plan wezenlijk zouden veranderen. Kun je het wél bepalen, stel de
+vraag dan NIET maar geef gewoon een plan. Stel de vraag ook NOOIT als hierboven al is vastgesteld of de
+taak herhaalbaar of eenmalig is.
+Stel je de vraag wel, geef dan uitsluitend dit terug, zonder codeblok of extra tekst:
+{"needs_routing":true,"question":"<één korte vraag in het Nederlands, toegespitst op het doel van deze gebruiker>","options":[{"id":"herhaalbaar","label":"<korte keuze in de woorden van de gebruiker>","hint":"<korte toelichting>"},{"id":"eenmalig","label":"<korte keuze in de woorden van de gebruiker>","hint":"<korte toelichting>"}]}
+Gebruik exact de id's "herhaalbaar" en "eenmalig", en geef ze allebei.`;
+
 const DEFAULT_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse rijksoverheid.
 Een interne overheidsmedewerker heeft losse antwoorden gegeven via een prompting-techniek.
 Jouw taak: ANALYSEER al die antwoorden en SCHRIJF op basis daarvan één rijke, volledig
@@ -590,11 +636,25 @@ De EERSTE stap is ALTIJD de techniek met structuur "chain-of-thought". Daarmee h
 vraag het TOTAALPLAATJE op bij de gebruiker: wat wil hij precies bereiken, voor wie, met welke inhoud
 en welke aandachtspunten. Zet die techniek dus altijd als stap 1, met produces: "brief".
 
+HERHAALBAARHEID — bepaal dit EERST, vóórdat je technieken kiest:
+Voorbeelden (few-shot) werken ALLEEN bij een TERUGKERENDE input: er komt telkens een soortgelijk stuk
+binnen — een burgervraag, een type mail, een bepaald onderwerp — waarop telkens op dezelfde manier
+gereageerd moet worden. Het draait om het paar input → output. Dat een stuk een vaste vorm, sjabloon of
+huisstijl heeft, is op zichzelf GEEN reden voor voorbeelden.
+- TERUGKERENDE input herkenbaar — de gebruiker noemt een categorie of een herhaling ("burgervragen",
+  "bezwaren", "meldingen", "elke keer", "telkens", meervoud) → neem de voorbeelden-techniek op.
+- EENMALIG product — de gebruiker vraagt om één concreet stuk ("een projectplan", "deze nota",
+  "een advies") → neem de voorbeelden-techniek NIET op. De gebruiker zou dan zelf de output moeten
+  aanleveren die hij juist wil laten maken. Kies in plaats daarvan een uitvoerstructuur/format.
+- ECHT niet te bepalen uit de tekst, én voorbeelden zouden het plan wezenlijk veranderen → geef GEEN
+  plan, maar stel één routingvraag terug (zie onder). Twijfel je niet: stel die vraag dan NIET.
+
 Denk daarna na over welke technieken dat totaalplaatje VERSTERKEN, en in welke VOLGORDE:
 - Elke volgende stap bouwt voort op het totaalplaatje: de velden van die technieken worden ermee
   voor-ingevuld, dus kies technieken die er iets aan TOEVOEGEN wat er nog niet in zit.
 - Bepaal de context/doelgroep (persona of multi-persona) als het doel om een specifieke ontvanger vraagt.
 - Kies een uitvoerstructuur/format (template-based output) als er een vaste vorm nodig is.
+- Neem de voorbeelden-techniek (few-shot) alleen op als de HERHAALBAARHEIDS-analyse hierboven daartoe leidt.
 - De LAATSTE stap stelt alles samen tot de uiteindelijke template (produces: "text").
 - Gebruik HOOGSTENS één compleet raamwerk (is_framework=true) en zet dat direct ná de chain-of-thought-stap.
 - Kies alleen technieken die het doel echt nodig heeft: liever 2–3 goede stappen dan alles.
@@ -608,14 +668,28 @@ Geef per stap:
 
 ${CLARITY_GATE_JSON_INSTRUCTION}
 
+${PLAN_ROUTING_JSON_INSTRUCTION}
+
 Anders geef je UITSLUITEND geldige JSON terug, zonder codeblok of extra tekst, in dit formaat:
 {"summary":"<1–2 zinnen die het recept samenvatten, in het Nederlands>","steps":[{"technique_id":"<id>","title":"<staptitel>","rationale":"<waarom deze techniek hier, 1 zin>","produces":"persona|format|brief|text"}]}
 
 Gebruik alleen id's die exact in de lijst voorkomen. Geef minstens 1 en maximaal 5 stappen; de laatste stap produces "text".`;
 
-/** Bouw de gebruikersprompt voor de plan-modus. */
-const PLAN_USER_PROMPT = (goal: string, techniques: TechniqueSummary[]) =>
-  `Doel van de gebruiker:\n${goal}\n\nBeschikbare technieken:\n${techniques
+/**
+ * Bouw de gebruikersprompt voor de plan-modus. Is `recurrence` gezet, dan heeft de
+ * gebruiker de routingvraag al beantwoord: dat gaat als hard gegeven mee, zodat de
+ * planner niet opnieuw gaat vragen.
+ */
+const PLAN_USER_PROMPT = (goal: string, techniques: TechniqueSummary[], recurrence?: Recurrence) =>
+  `Doel van de gebruiker:\n${goal}${
+    recurrence
+      ? `\n\nAL VASTGESTELD (de gebruiker heeft de herhaalbaarheidsvraag beantwoord): de taak is ${
+          recurrence === 'herhaalbaar'
+            ? 'HERHAALBAAR — er komt telkens een soortgelijke input binnen waarop op dezelfde manier gereageerd moet worden. Voorbeelden (few-shot) zijn dus van toepassing; neem die techniek op.'
+            : 'EENMALIG — het gaat om één concreet stuk, geen terugkerende input. Voorbeelden (few-shot) zijn dus NIET van toepassing; neem die techniek niet op.'
+        }\nNeem dit als gegeven aan en stel GEEN routingvraag meer.`
+      : ''
+  }\n\nBeschikbare technieken:\n${techniques
     .map((t) => {
       const parts = [`- id: ${t.id}`, `naam: ${t.name}`];
       if (t.description) parts.push(`uitleg: ${t.description}`);
@@ -2247,6 +2321,63 @@ function detectUnclearJson(raw: string): string | null {
   return null;
 }
 
+/** Terugval-keuzes als het model wél een vraag stelde maar geen bruikbare opties. */
+const DEFAULT_ROUTING_OPTIONS: RoutingOption[] = [
+  {
+    id: 'herhaalbaar',
+    label: 'Dit komt telkens terug',
+    hint: 'Er komt steeds een soortgelijke vraag of tekst binnen die op dezelfde manier behandeld moet worden.',
+  },
+  {
+    id: 'eenmalig',
+    label: 'Dit is een eenmalig stuk',
+    hint: 'Ik wil één keer dit ene stuk laten maken.',
+  },
+];
+
+/**
+ * Routing-gate: heeft de planner een herhaalbaarheidsvraag teruggesteld in plaats
+ * van een plan? Geeft de vraag met beide keuzes terug, of null. Gaf het model
+ * onbruikbare opties, dan vullen we ze aan met de vaste terugval — de vraag zelf
+ * is dan nog steeds zinvol.
+ */
+function detectRoutingJson(raw: string): PlanRouting | null {
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  try {
+    const parsed = JSON.parse(match[0]) as {
+      needs_routing?: boolean;
+      question?: unknown;
+      options?: unknown;
+    };
+    if (parsed.needs_routing !== true) return null;
+    const question = typeof parsed.question === 'string' ? parsed.question.trim() : '';
+    if (!question) return null;
+
+    const options = (Array.isArray(parsed.options) ? parsed.options : [])
+      .map((o) => o as { id?: unknown; label?: unknown; hint?: unknown })
+      .filter(
+        (o): o is { id: Recurrence; label: string; hint?: unknown } =>
+          (o.id === 'herhaalbaar' || o.id === 'eenmalig') &&
+          typeof o.label === 'string' &&
+          o.label.trim().length > 0,
+      )
+      .map((o) => ({
+        id: o.id,
+        label: o.label.trim(),
+        ...(typeof o.hint === 'string' && o.hint.trim() ? { hint: o.hint.trim() } : {}),
+      }));
+
+    // Zonder beide keuzes kan de gebruiker niet zinvol kiezen → vaste terugval.
+    const ids = new Set(options.map((o) => o.id));
+    const complete = ids.has('herhaalbaar') && ids.has('eenmalig');
+    return { question, options: complete ? options : DEFAULT_ROUTING_OPTIONS };
+  } catch {
+    /* geen geldige JSON → geen routingvraag */
+  }
+  return null;
+}
+
 /** Parseert het JSON-antwoord van de aanbevelingsmodus robuust. */
 function parseRecommendations(raw: string, valid: Set<string>): Recommendation[] {
   // Pak het eerste JSON-object uit de respons (verwijdert eventuele codeblok-randen).
@@ -3022,7 +3153,9 @@ Deno.serve(async (req: Request) => {
       }
 
       const validIds = new Set(techniques.map((t) => t.id));
-      const userMessage = PLAN_USER_PROMPT(goal, techniques);
+      const recurrence =
+        body.recurrence === 'herhaalbaar' || body.recurrence === 'eenmalig' ? body.recurrence : undefined;
+      const userMessage = PLAN_USER_PROMPT(goal, techniques, recurrence);
       let plan: PlanOut | null = null;
       let provider: Provider | 'local-template' = 'local-template';
 
@@ -3041,6 +3174,18 @@ Deno.serve(async (req: Request) => {
               JSON.stringify({ success: false, unclear: true, reason: unclear, provider: candidate }),
               { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
             );
+          }
+          // Routing-gate: de planner kon de herhaalbaarheid niet bepalen en vraagt
+          // het na. Alleen zolang het antwoord nog niet vaststaat — met een gegeven
+          // `recurrence` negeren we de vraag, want dan zou de flow rondjes draaien.
+          if (!recurrence) {
+            const routing = detectRoutingJson(raw);
+            if (routing) {
+              return new Response(
+                JSON.stringify({ success: false, needs_routing: true, ...routing, provider: candidate }),
+                { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+              );
+            }
           }
           const parsed = parsePlan(raw, validIds);
           if (parsed && parsed.steps.length > 0) {

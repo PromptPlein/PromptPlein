@@ -49,10 +49,12 @@ import { InterviewPanel } from './InterviewPanel';
 import RichText from './RichText';
 import type {
   OptimizeResult,
+  PlanRouting,
   PlanStep,
   PlanStepGap,
   PromptPlan,
   PromptRecipe,
+  Recurrence,
   StepOutcome,
   Technique,
   TranscriptTurn,
@@ -152,6 +154,9 @@ interface PlanWizardProps {
 type Phase =
   | 'goal'
   | 'planning'
+  // De planner kon niet bepalen of de taak herhaalbaar is en stelde één vraag
+  // terug; die leggen we voor vóórdat er een plan bestaat.
+  | 'routing'
   | 'plan-review'
   | 'collecting'
   | 'composing'
@@ -204,6 +209,11 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
   const [plan, setPlan] = useState<PromptPlan | null>(null);
   const [showExamples, setShowExamples] = useState(false);
   const [unclearReason, setUnclearReason] = useState<string | null>(null);
+  // Routing-gate: de vraag die de planner terugstelde, en het antwoord erop. Het
+  // antwoord gaat mee in de nieuwe plan-aanvraag én vult de few-shot-bouwer voor,
+  // zodat die niet nóg eens vraagt wat de gebruiker hier al beantwoord heeft.
+  const [routing, setRouting] = useState<PlanRouting | null>(null);
+  const [recurrence, setRecurrence] = useState<Recurrence | null>(null);
   const [guardrailFindings, setGuardrailFindings] = useState<GuardrailFinding[] | null>(null);
   // Uitvoering: welke stap draait, het al verzamelde materiaal, en een foutmelding.
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -358,13 +368,22 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
     void runPlan();
   }
 
-  async function runPlan() {
+  /**
+   * Stelt het plan op. `answered` is het antwoord op de routingvraag: is het gezet,
+   * dan staat de herhaalbaarheid vast en vraagt de planner er niet opnieuw naar.
+   * Zonder antwoord mag de planner de vraag terugstellen i.p.v. een plan te geven.
+   */
+  async function runPlan(answered?: Recurrence) {
     setGuardrailFindings(null);
     setUnclearReason(null);
+    setRouting(null);
     setPhase('planning');
-    // Nieuwe sessie: elke plan-aanvraag is een nieuwe gedragslog-sessie.
-    sessionRef.current = newBehaviorSession();
-    log('session_started', { metadata: { goal_len: goal.trim().length } });
+    // Nieuwe sessie bij een verse aanvraag; bij een antwoord op de routingvraag
+    // loopt dezelfde sessie door — het is één poging van de gebruiker.
+    if (!answered) {
+      sessionRef.current = newBehaviorSession();
+      log('session_started', { metadata: { goal_len: goal.trim().length } });
+    }
     try {
       // Complexe-doel-flow: alleen losse prompttechnieken plannen; complete
       // frameworks horen bij de eigen-prompt-flow.
@@ -374,7 +393,16 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
         techniques: candidates,
         preferredProvider: settings.provider,
         preferredModel: settings.model,
+        recurrence: answered ?? recurrence ?? undefined,
       });
+      // Routing-gate: de planner heeft bewust geen plan gemaakt en vraagt eerst of
+      // de taak terugkeert. Voorleggen en wachten op het antwoord.
+      if (res.routing) {
+        setRouting(res.routing);
+        log('plan_routing_asked', { metadata: { question: res.routing.question } });
+        setPhase('routing');
+        return;
+      }
       if (res.unclear) {
         setUnclearReason(
           res.reason?.trim() ||
@@ -403,6 +431,16 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
       toast.error('Plan opstellen mislukt. Probeer het opnieuw.');
       setPhase('goal');
     }
+  }
+
+  /**
+   * Beantwoord de routingvraag. Het antwoord gaat mee in de nieuwe plan-aanvraag
+   * (en blijft in state staan, zodat de few-shot-bouwer het straks kan overnemen).
+   */
+  function answerRouting(answer: Recurrence) {
+    setRecurrence(answer);
+    log('plan_routing_answered', { metadata: { answer } });
+    void runPlan(answer);
   }
 
   /** Verwijder een stap uit het plan (minimaal één stap blijft staan). */
@@ -1285,6 +1323,35 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
           </div>
         </div>
 
+        {/* Routing-gate: de planner kon de herhaalbaarheid niet uit het doel
+            afleiden. Eén vraag, en dan pas een plan. */}
+        {phase === 'routing' && routing && (
+          <div className="space-y-4 bg-white p-5 dark:bg-slate-800 sm:p-6">
+            <div>
+              <h3 className="font-semibold text-slate-800 dark:text-slate-100">{routing.question}</h3>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                Dit bepaalt of voorbeelden zinvol zijn. Voorbeelden werken alleen als er telkens iets
+                soortgelijks binnenkomt waar op dezelfde manier op gereageerd moet worden.
+              </p>
+            </div>
+            <div className="space-y-2">
+              {routing.options.map((o) => (
+                <button
+                  key={o.id}
+                  type="button"
+                  onClick={() => answerRouting(o.id)}
+                  className="block w-full rounded-xl border border-slate-200 bg-white p-3 text-left transition-colors hover:border-rijksblauw-300 dark:border-slate-700 dark:bg-slate-800"
+                >
+                  <span className="font-medium text-slate-800 dark:text-slate-100">{o.label}</span>
+                  {o.hint && (
+                    <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">{o.hint}</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Adviesdeel: het opgestelde plan (review) óf de uitvoering (executing). */}
         {plan && (
           <div className="space-y-5 bg-white p-5 dark:bg-slate-800 sm:p-6">
@@ -1314,6 +1381,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
                 techniqueById={techniqueById}
                 currentStepIndex={currentStepIndex}
                 outcomes={outcomes}
+                recurrence={recurrence}
                 phase={phase}
                 error={phase === 'error' ? stepError : null}
                 onRetry={retryStep}
@@ -1605,6 +1673,7 @@ function PlanExecutor({
   onDescribeFormat,
   settings,
   goal,
+  recurrence,
   onPersonaChange,
   onFewShotChange,
   onMetaChange,
@@ -1644,6 +1713,8 @@ function PlanExecutor({
   onDescribeFormat: (brief: string) => Promise<boolean>;
   settings: AiSettings;
   goal: string;
+  /** Bij de intake vastgestelde herhaalbaarheid; vult de few-shot-bouwer voor. */
+  recurrence: Recurrence | null;
   onPersonaChange: (text: string) => void;
   onFewShotChange: (text: string) => void;
   onMetaChange: (text: string) => void;
@@ -1745,6 +1816,7 @@ function PlanExecutor({
                   settings={settings}
                   goal={goal}
                   contextText={contextText}
+                  recurrence={recurrence}
                   onPersonaChange={onPersonaChange}
                   onFewShotChange={onFewShotChange}
                   onMetaChange={onMetaChange}
@@ -1814,6 +1886,7 @@ function StepCollector({
   settings,
   goal,
   contextText,
+  recurrence,
   onPersonaChange,
   onFewShotChange,
   onMetaChange,
@@ -1849,6 +1922,11 @@ function StepCollector({
   goal: string;
   /** Doel + materiaal van eerdere stappen; voedt de persona-invulhulp. */
   contextText: string;
+  /**
+   * De bij de intake vastgestelde herhaalbaarheid, als de planner ernaar vroeg.
+   * Vult de few-shot-bouwer voor, zodat die niet nogmaals dezelfde vraag stelt.
+   */
+  recurrence: Recurrence | null;
   onPersonaChange: (text: string) => void;
   onFewShotChange: (text: string) => void;
   onMetaChange: (text: string) => void;
@@ -1927,7 +2005,13 @@ function StepCollector({
           />
         )
       ) : isFewShot ? (
-        material == null && <FewShotBuilder settings={settings} onSerialized={onFewShotChange} />
+        material == null && (
+          <FewShotBuilder
+            settings={settings}
+            onSerialized={onFewShotChange}
+            initialIntent={recurrence ?? undefined}
+          />
+        )
       ) : isMeta ? (
         material == null && <MetaBuilder settings={settings} goal={goal} onSerialized={onMetaChange} />
       ) : hasFields ? (

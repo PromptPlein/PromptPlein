@@ -11,9 +11,11 @@ import type {
   MissingField,
   OptimizeResult,
   PlanResult,
+  PlanRoutingOption,
   PlanStep,
   PlanStepResult,
   PromptPlan,
+  Recurrence,
   PrefilledField,
   PrefillResult,
   RecommendResult,
@@ -737,8 +739,13 @@ export async function generatePlan(args: {
   techniques: Technique[];
   preferredProvider?: AiProvider;
   preferredModel?: string;
+  /**
+   * Het antwoord op de routingvraag, als de planner die eerder terugstelde. Is dit
+   * gezet, dan staat de herhaalbaarheid vast en vraagt de planner niet opnieuw.
+   */
+  recurrence?: Recurrence;
 }): Promise<PlanResult> {
-  const { goal, techniques, preferredProvider, preferredModel } = args;
+  const { goal, techniques, preferredProvider, preferredModel, recurrence } = args;
   const functionUrl = getFunctionUrl('optimize-prompt');
   const byId = new Map(techniques.map((t) => [t.id, t]));
 
@@ -767,6 +774,7 @@ export async function generatePlan(args: {
           })),
           preferredProvider: preferredProvider ?? 'auto',
           preferredModel,
+          recurrence,
         }),
       });
 
@@ -781,6 +789,9 @@ export async function generatePlan(args: {
         unclear?: boolean;
         reason?: string;
         error?: string;
+        needs_routing?: boolean;
+        question?: string;
+        options?: PlanRoutingOption[];
       };
 
       // Clarity-gate: het doel was onzin → geef het verdict door i.p.v. terug te
@@ -790,6 +801,16 @@ export async function generatePlan(args: {
           success: false,
           unclear: true,
           reason: data.reason,
+          provider: data.provider ?? 'claude',
+        };
+      }
+
+      // Routing-gate: de herhaalbaarheid is niet af te leiden uit het doel. Geef de
+      // vraag door i.p.v. een lokaal plan; de wizard legt hem voor en plant opnieuw.
+      if (data.needs_routing && data.question && Array.isArray(data.options) && data.options.length > 0) {
+        return {
+          success: false,
+          routing: { question: data.question, options: data.options },
           provider: data.provider ?? 'claude',
         };
       }
