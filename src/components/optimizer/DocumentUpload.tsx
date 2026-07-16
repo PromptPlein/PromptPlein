@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Check, FileUp, Loader2 } from 'lucide-react';
+import { Check, FileUp, Loader2, Sparkles } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 /**
@@ -7,17 +7,28 @@ import toast from 'react-hot-toast';
  * tekst client-side (txt/md/pdf/docx), waarna de aanroeper (via `onPrefill`) de
  * AI het document laat doorlezen en de velden laat voor-invullen. Gedeeld door de
  * plan-bouwer en de losse techniek-keuze.
+ *
+ * Heeft de gebruiker geen voorbeeld, dan omschrijft hij via `onDescribe` wat voor
+ * document en format hij nodig heeft en stelt de AI zelf een passende structuur
+ * voor. De velden worden dus nooit ongevraagd ingevuld: de gebruiker kiest eerst.
  */
 export default function DocumentUpload({
   onPrefill,
+  onDescribe,
   disabled,
 }: {
   /** Ontvangt de geëxtraheerde tekst; geeft true terug als de velden gevuld zijn. */
   onPrefill: (text: string) => Promise<boolean>;
+  /** Ontvangt de omschrijving van het gewenste document; true als de velden gevuld zijn. */
+  onDescribe: (brief: string) => Promise<boolean>;
   disabled?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [doneName, setDoneName] = useState<string | null>(null);
+  const [brief, setBrief] = useState('');
+  const [briefOpen, setBriefOpen] = useState(false);
+  const [briefBusy, setBriefBusy] = useState(false);
+  const [briefDone, setBriefDone] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   async function handleFile(file: File | undefined) {
@@ -35,6 +46,21 @@ export default function DocumentUpload({
     } finally {
       setBusy(false);
       if (inputRef.current) inputRef.current.value = '';
+    }
+  }
+
+  async function handleDescribe() {
+    const text = brief.trim();
+    if (!text) return;
+    setBriefBusy(true);
+    setBriefDone(false);
+    try {
+      const ok = await onDescribe(text);
+      if (ok) setBriefDone(true);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Voorstellen van een structuur mislukt.');
+    } finally {
+      setBriefBusy(false);
     }
   }
 
@@ -83,6 +109,64 @@ export default function DocumentUpload({
         className="hidden"
         onChange={(e) => void handleFile(e.target.files?.[0])}
       />
+
+      {/* Geen voorbeeld? Omschrijf het gewenste document; de AI stelt dan zelf
+          een passende structuur voor. */}
+      <div className="mt-3 border-t border-rijksblauw-200/70 pt-3 dark:border-rijksblauw-500/30">
+        {!briefOpen ? (
+          <button
+            type="button"
+            className="text-sm font-medium text-rijksblauw-700 underline-offset-2 hover:underline disabled:opacity-60 dark:text-rijksblauw-200"
+            onClick={() => setBriefOpen(true)}
+            disabled={busy || disabled}
+          >
+            Ik heb geen voorbeelddocument — help me aan een structuur
+          </button>
+        ) : (
+          <div>
+            <label
+              className="opl-label mb-1 block"
+              htmlFor="doc-brief"
+            >
+              Wat voor document moet het worden, en in welk format?
+            </label>
+            <textarea
+              id="doc-brief"
+              className="opl-input min-h-[64px] resize-y text-sm"
+              value={brief}
+              placeholder="Bijv. een projectplan van maximaal 2 A4 met genummerde hoofdstukken, voor een directieteam"
+              onChange={(e) => setBrief(e.target.value)}
+              disabled={briefBusy || disabled}
+            />
+            <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
+              De AI stelt een structuur voor op basis van gangbare conventies binnen de overheid. Dat
+              is een voorstel uit eigen kennis, geen bestaand sjabloon — loop het dus even na.
+            </p>
+            <button
+              type="button"
+              className="opl-btn-secondary mt-2"
+              onClick={() => void handleDescribe()}
+              disabled={briefBusy || disabled || !brief.trim()}
+            >
+              {briefBusy ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" /> Structuur voorstellen…
+                </>
+              ) : (
+                <>
+                  <Sparkles size={16} /> Stel een structuur voor
+                </>
+              )}
+            </button>
+            {briefDone && (
+              <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+                <Check size={13} /> Structuur voorgesteld en in de velden gezet. Controleer en pas aan
+                waar nodig.
+              </p>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

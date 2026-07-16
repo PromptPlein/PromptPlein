@@ -30,7 +30,7 @@ import {
   serializeOutcomes,
   type TemplateAssumption,
 } from '@/services/optimizeService';
-import { isContextPrompt, structureFormat } from '@/lib/techniques';
+import { hasOwnInputStep, isContextPrompt, structureFormat } from '@/lib/techniques';
 import { stripMarkdown } from '@/lib/utils';
 import { usePersistentDraft } from '@/lib/usePersistentDraft';
 import { detectPii, detectBlockedTopics, type GuardrailFinding } from '@/services/guardrails';
@@ -441,6 +441,23 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
     return index >= p.steps.length - 1;
   }
 
+  /**
+   * Mag deze stap meteen doorschieten naar de compose? Alleen als er niets bij
+   * de gebruiker op te halen valt. Een laatste stap met een eigen bouwer
+   * (few-shot, persona) of met vervolgvragen moet die invoer éérst tonen —
+   * anders wordt de bouwer nooit zichtbaar en landt de gebruiker direct op de
+   * socratische controle.
+   */
+  function composesWithoutInput(p: PromptPlan, index: number): boolean {
+    const step = p.steps[index];
+    // Voorbij de laatste stap: alle input is binnen, er valt alleen nog samen
+    // te stellen.
+    if (!step) return true;
+    if (step.interactive) return false;
+    const technique = techniqueById(step.technique_id);
+    return !technique || !hasOwnInputStep(technique);
+  }
+
   /** Start de uitvoering: begin bij stap 0 met een schone lei. */
   function handleBuild() {
     if (!plan) return;
@@ -463,7 +480,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
     setUnclearReason(null);
     resetStepState();
     const step = p.steps[index];
-    if (isLastStep(p, index) && !step?.interactive) {
+    if (isLastStep(p, index) && composesWithoutInput(p, index)) {
       void composeFinal(p, accumulated);
       return;
     }
@@ -502,6 +519,10 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
     const fmt = structureFormat(technique);
     // Persona/Few-Shot/Meta hebben eigen bouwers (geen vragenlijst): niets voor te vullen.
     if (fmt === 'persona' || fmt === 'multi-persona' || fmt === 'few-shot' || fmt === 'meta') return;
+    // Template-based niet automatisch voorvullen: daar kiest de gebruiker eerst
+    // zélf een voorbeelddocument of omschrijft het gewenste format. Meteen
+    // invullen neemt die keuze uit handen.
+    if (fmt === 'template-based') return;
     const context = [goalRef.current.trim(), serializeOutcomes(accumulated)].filter(Boolean).join('\n\n');
     if (!context) return;
     const runId = ++prefillRunRef.current;
@@ -857,28 +878,44 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
   }
 
   /**
-   * Vul de velden van de huidige stap voor op basis van een geüpload document:
-   * de AI leest het document volledig door, analyseert de layout (format,
-   * rubrieken, regels) en vult de vragen voor. Alleen zinvol bij template-based.
+   * Vul de velden van de huidige stap voor vanuit een structuurbron: óf een
+   * geüpload voorbeelddocument (`source: 'document'`), óf een omschrijving van
+   * het gewenste document als de gebruiker geen voorbeeld heeft
+   * (`source: 'brief'`). Alleen zinvol bij template-based.
    */
-  async function prefillFromDocument(text: string): Promise<boolean> {
+  async function prefillFromStructure(
+    text: string,
+    source: 'document' | 'brief',
+  ): Promise<boolean> {
     if (!plan) return false;
     const step = plan.steps[currentStepIndex];
     const technique = techniqueById(step.technique_id);
     if (!technique) return false;
+    const fromDocument = source === 'document';
     const res = await prefillFields({
       ownPrompt: text,
       technique,
-      fromDocument: true,
+      fromDocument,
+      fromFormatBrief: !fromDocument,
       preferredProvider: settings.provider,
       preferredModel: settings.model,
     });
     if (res.unclear) {
-      toast.error(res.reason?.trim() || 'Uit het document kon geen bruikbare structuur worden gehaald.');
+      toast.error(
+        res.reason?.trim() ||
+          (fromDocument
+            ? 'Uit het document kon geen bruikbare structuur worden gehaald.'
+            : 'Uit deze omschrijving kon geen bruikbare structuur worden afgeleid.'),
+      );
       return false;
     }
     if (res.fields.length === 0) {
-      toast('Geen velden ingevuld uit het document. Vul ze zelf aan.', { icon: 'ℹ️' });
+      toast(
+        fromDocument
+          ? 'Geen velden ingevuld uit het document. Vul ze zelf aan.'
+          : 'Geen velden ingevuld op basis van je omschrijving. Vul ze zelf aan.',
+        { icon: 'ℹ️' },
+      );
       return false;
     }
     if (res.error) toast(res.error, { icon: '⚠️' });
@@ -891,7 +928,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
       }
       return next;
     });
-    log('document_uploaded', {
+    log(fromDocument ? 'document_uploaded' : 'format_brief_used', {
       stepIndex: currentStepIndex,
       techniqueId: step.technique_id,
       metadata: { chars: text.length, fields_filled: res.fields.length },
@@ -1294,7 +1331,8 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
                 onClarificationChange={setClarification}
                 onAnalyze={() => void analyzeCurrentStep(clarification.trim() || undefined)}
                 onCommit={commitStep}
-                onPrefillFromDocument={prefillFromDocument}
+                onPrefillFromDocument={(text) => prefillFromStructure(text, 'document')}
+                onDescribeFormat={(brief) => prefillFromStructure(brief, 'brief')}
                 settings={settings}
                 goal={goal}
                 onPersonaChange={setPersonaText}
@@ -1564,6 +1602,7 @@ function PlanExecutor({
   onAnalyze,
   onCommit,
   onPrefillFromDocument,
+  onDescribeFormat,
   settings,
   goal,
   onPersonaChange,
@@ -1601,6 +1640,8 @@ function PlanExecutor({
   onAnalyze: () => void;
   onCommit: () => void;
   onPrefillFromDocument: (text: string) => Promise<boolean>;
+  /** Geen voorbeelddocument: laat de AI een structuur voorstellen uit een omschrijving. */
+  onDescribeFormat: (brief: string) => Promise<boolean>;
   settings: AiSettings;
   goal: string;
   onPersonaChange: (text: string) => void;
@@ -1619,7 +1660,15 @@ function PlanExecutor({
 }) {
   const total = plan.steps.length;
   const outcomeByStepId = new Map(outcomes.map((o) => [o.step_id, o]));
-  const isComposeStep = (idx: number) => idx >= total - 1;
+  // Verzamelt de laatste stap zelf nog input (eigen bouwer of vervolgvragen)?
+  // Dan is hij géén zuivere compose-stap: hij toont eerst zijn invoerscherm en
+  // stelt de eindprompt pas samen zodra de gebruiker hem vastlegt.
+  const lastStep = plan.steps[total - 1];
+  const lastTechnique = techniqueById(lastStep?.technique_id);
+  const lastStepCollects = Boolean(
+    lastStep && !lastStep.interactive && lastTechnique && hasOwnInputStep(lastTechnique),
+  );
+  const isComposeStep = (idx: number) => idx >= total - 1 && !lastStepCollects;
   const composing = phase === 'composing';
   // Alle context tot nu toe: het doel + het materiaal van eerdere stappen. Voedt
   // de AI-invulhulp van de persona-bouwer, zodat bijv. een CoT-conclusie de
@@ -1665,6 +1714,9 @@ function PlanExecutor({
               compose={isCurrent && isComposeStep(idx)}
               composing={composing}
               outcome={outcome}
+              // 1 zodra de stap actief wordt, 2 zodra het resultaat er is: beide
+              // momenten brengen de stap weer in beeld.
+              focusSignal={active ? (stepMaterial != null ? 2 : 1) : 0}
               // Een afgeronde tussenstap mag opnieuw doorlopen worden (niet de
               // compose-stap, en alleen als er nu niets actief loopt).
               onRegenerate={done && !analyzing && !composing && !isComposeStep(idx) ? () => onRegenerateStep(idx) : undefined}
@@ -1689,6 +1741,7 @@ function PlanExecutor({
                   onAnalyze={onAnalyze}
                   onCommit={onCommit}
                   onPrefillFromDocument={onPrefillFromDocument}
+                  onDescribeFormat={onDescribeFormat}
                   settings={settings}
                   goal={goal}
                   contextText={contextText}
@@ -1704,7 +1757,9 @@ function PlanExecutor({
                   onInterviewAnswerChange={onInterviewAnswerChange}
                   onSubmitInterviewAnswer={onSubmitInterviewAnswer}
                   onFinishInterview={onFinishInterview}
-                  isLastBeforeCompose={idx === total - 2}
+                  // Verzamelt de laatste stap zelf input, dan volgt de compose
+                  // pas ná die stap; anders is de één-na-laatste de opmaat.
+                  isLastBeforeCompose={idx === (lastStepCollects ? total - 1 : total - 2)}
                 />
               )}
             </StepRow>
@@ -1755,6 +1810,7 @@ function StepCollector({
   onAnalyze,
   onCommit,
   onPrefillFromDocument,
+  onDescribeFormat,
   settings,
   goal,
   contextText,
@@ -1787,6 +1843,8 @@ function StepCollector({
   onAnalyze: () => void;
   onCommit: () => void;
   onPrefillFromDocument: (text: string) => Promise<boolean>;
+  /** Geen voorbeelddocument: laat de AI een structuur voorstellen uit een omschrijving. */
+  onDescribeFormat: (brief: string) => Promise<boolean>;
   settings: AiSettings;
   goal: string;
   /** Doel + materiaal van eerdere stappen; voedt de persona-invulhulp. */
@@ -1847,7 +1905,11 @@ function StepCollector({
       {/* 0. Alleen bij Template-based: upload een voorbeelddocument om de velden
              op basis van de layout automatisch voor te laten invullen. */}
       {supportsDocument && material == null && (
-        <DocumentUpload onPrefill={onPrefillFromDocument} disabled={analyzing} />
+        <DocumentUpload
+          onPrefill={onPrefillFromDocument}
+          onDescribe={onDescribeFormat}
+          disabled={analyzing}
+        />
       )}
 
       {/* 1. Input van de gebruiker. Persona → persona-builder; Few-Shot → few-shot-
@@ -2072,13 +2134,14 @@ function AssumptionReview({
         <button type="button" className="opl-btn-secondary" onClick={onSkip}>
           <Check size={16} /> Gebruik zoals het is
         </button>
-        <button
-          type="button"
-          className="opl-btn-primary"
-          onClick={onApply}
-          disabled={answeredCount === 0}
-        >
-          <Sparkles size={16} /> Verwerk mijn antwoorden
+        {/* Niet uitschakelen bij lege velden: "laat leeg als de aanname klopt" is
+            een geldig antwoord. `applyAssumptions` behandelt een lege set als
+            overslaan, dus beide knoppen komen dan op hetzelfde uit. */}
+        <button type="button" className="opl-btn-primary" onClick={onApply}>
+          <Sparkles size={16} />
+          {answeredCount === 0
+            ? 'Maak de prompt'
+            : `Verwerk mijn antwoorden (${answeredCount})`}
         </button>
       </div>
     </div>
@@ -2097,6 +2160,7 @@ function StepRow({
   composing,
   outcome,
   onRegenerate,
+  focusSignal,
   children,
 }: {
   index: number;
@@ -2108,15 +2172,34 @@ function StepRow({
   outcome?: StepOutcome;
   /** Aanwezig op een afgeronde tussenstap: doorloop die stap (en de latere) opnieuw. */
   onRegenerate?: () => void;
+  /**
+   * Verandert zodra deze stap de aandacht opeist: bij het activeren en zodra het
+   * resultaat binnen is. Elke wijziging brengt de kop van de stap in beeld.
+   */
+  focusSignal: number;
   /** Extra inhoud onder de titel — het invoer-/analysepaneel op de actieve stap. */
   children?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const active = status === 'active';
+  const rowRef = useRef<HTMLLIElement>(null);
+
+  // Na het vastleggen van een stap (of zodra het resultaat er is) staat de
+  // gebruiker onderaan de pagina; breng de kop van de actieve stap in beeld
+  // zodat hij meteen verder kan typen in plaats van eerst omhoog te scrollen.
+  useEffect(() => {
+    if (!focusSignal) return;
+    const frame = requestAnimationFrame(() => {
+      rowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [focusSignal]);
+
   return (
     <li
+      ref={rowRef}
       className={clsx(
-        'rounded-xl border p-4 shadow-sm transition-colors',
+        'scroll-mt-24 rounded-xl border p-4 shadow-sm transition-colors',
         active
           ? 'border-rijksblauw-300 bg-rijksblauw-50/40 dark:border-rijksblauw-500/40 dark:bg-rijksblauw-500/10'
           : status === 'error'

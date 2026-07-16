@@ -1,5 +1,6 @@
 import { getAnonKey, getFunctionUrl, isSupabaseConfigured } from '@/lib/supabase';
 import { isContextPrompt, structureFormat } from '@/lib/techniques';
+import { tidyPromptMarkup } from '@/lib/utils';
 import type { AiProvider } from '@/config/aiModels';
 import type {
   AnalyzeResult,
@@ -155,7 +156,9 @@ export async function optimizePrompt(args: {
       }
       if (data.success && data.optimized_content) {
         return {
-          optimized_content: data.optimized_content,
+          // Sterretjes van het model opruimen op de plek waar élke consument
+          // (tonen, kopiëren, uitvoeren, opslaan) de prompt ophaalt.
+          optimized_content: tidyPromptMarkup(data.optimized_content),
           success: true,
           provider: (data.provider as OptimizeResult['provider']) ?? 'claude',
         };
@@ -1476,9 +1479,22 @@ export async function prefillFields(args: {
    * dan volledig door en analyseert de layout/structuur om de velden voor te vullen.
    */
   fromDocument?: boolean;
+  /**
+   * De `ownPrompt` OMSCHRIJFT het gewenste document (de gebruiker heeft geen
+   * voorbeelddocument). De AI stelt dan zelf een passende structuur voor op
+   * basis van gangbare (rijks)overheidsconventies.
+   */
+  fromFormatBrief?: boolean;
 }): Promise<PrefillResult> {
-  const { ownPrompt, technique, preferredProvider, preferredModel, clarification, fromDocument } =
-    args;
+  const {
+    ownPrompt,
+    technique,
+    preferredProvider,
+    preferredModel,
+    clarification,
+    fromDocument,
+    fromFormatBrief,
+  } = args;
   const content = ownPrompt.trim();
   const empty: PrefillResult = {
     summary: '',
@@ -1510,6 +1526,7 @@ export async function prefillFields(args: {
         ownPrompt: content,
         clarification,
         fromDocument,
+        fromFormatBrief,
         techniqueName: technique.name,
         analyzeFields,
         preferredProvider: preferredProvider ?? 'auto',

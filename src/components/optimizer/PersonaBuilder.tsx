@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Loader2, Plus, Sparkles, Trash2, UserRound } from 'lucide-react';
-import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import PrefillBadge from './PrefillBadge';
 import { fillPersona } from '@/services/optimizeService';
@@ -290,12 +289,12 @@ function PersonaCard({
                 <span>{q.label}</span>
                 {isAi && <PrefillBadge source="ai" />}
               </label>
+              {/* Door de AI ingevulde velden krijgen alleen een badge, geen eigen
+                  achtergrond: de tekst is gewoon bewerkbare invoer en moet als
+                  normaal veld lezen. */}
               <textarea
                 id={`persona-${persona.id}-${q.id}`}
-                className={clsx(
-                  'opl-input min-h-[52px] resize-y text-sm',
-                  isAi && 'border-rijksoranje/40 bg-rijksoranje/5 dark:bg-rijksoranje/10',
-                )}
+                className="opl-input min-h-[52px] resize-y text-sm"
                 value={persona.fields[q.id] ?? ''}
                 placeholder={q.placeholder}
                 onChange={(e) => onFieldChange(q.id, e.target.value)}

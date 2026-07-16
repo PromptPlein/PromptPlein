@@ -132,3 +132,30 @@ export function selfDirectedBuilder(t: TechniqueIdentity): string | undefined {
   const fmt = structureFormat(t);
   return fmt ? SELF_DIRECTED_BUILDERS[fmt] : undefined;
 }
+
+/**
+ * Technieken met een eigen invoerscherm: ze halen hun input op via een eigen
+ * bouwer (persona/few-shot/meta) of een eigen keuze vooraf (template-based:
+ * voorbeelddocument of format-omschrijving), niet via de vervolgvragen.
+ */
+const OWN_INPUT_FORMATS: StructureFormat[] = [
+  'persona',
+  'multi-persona',
+  'few-shot',
+  'meta',
+  'template-based',
+];
+
+/**
+ * Heeft deze techniek een eigen invoerscherm dat de gebruiker moet zien? Zo ja,
+ * dan mag een stap er nooit overheen springen — ook niet als laatste stap, waar
+ * anders meteen de compose zou starten en de bouwer dus nooit in beeld kwam.
+ *
+ * Bewust NIET waar bij technieken die alleen vervolgvragen hebben: die worden
+ * automatisch voor-ingevuld uit de context tot dan toe, en een laatste stap mag
+ * daarmee gewoon direct de eindprompt samenstellen.
+ */
+export function hasOwnInputStep(t: TechniqueIdentity): boolean {
+  const fmt = structureFormat(t);
+  return Boolean(fmt && OWN_INPUT_FORMATS.includes(fmt));
+}

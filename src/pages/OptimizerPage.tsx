@@ -189,27 +189,39 @@ export default function OptimizerPage() {
    * layout (format, rubrieken, regels) af. Hergebruikt hetzelfde prefill-mechanisme
    * als de plan-bouwer. Bestaande, door de gebruiker ingevulde velden blijven staan.
    */
-  async function prefillFromDocument(text: string): Promise<boolean> {
+  async function prefillFromStructure(
+    text: string,
+    source: 'document' | 'brief',
+  ): Promise<boolean> {
     if (!technique) return false;
+    const fromDocument = source === 'document';
     setPrefilling(true);
     setUnclearReason(null);
     try {
       const res = await prefillFields({
         ownPrompt: text,
         technique,
-        fromDocument: true,
+        fromDocument,
+        fromFormatBrief: !fromDocument,
         preferredProvider: settingsRef.current.provider,
         preferredModel: settingsRef.current.model,
       });
       if (res.unclear) {
         setUnclearReason(
           res.reason?.trim() ||
-            'Uit het document kon geen bruikbare structuur worden gehaald.',
+            (fromDocument
+              ? 'Uit het document kon geen bruikbare structuur worden gehaald.'
+              : 'Uit deze omschrijving kon geen bruikbare structuur worden afgeleid.'),
         );
         return false;
       }
       if (res.fields.length === 0) {
-        toast('Geen velden ingevuld uit het document. Vul ze zelf aan.', { icon: 'ℹ️' });
+        toast(
+          fromDocument
+            ? 'Geen velden ingevuld uit het document. Vul ze zelf aan.'
+            : 'Geen velden ingevuld op basis van je omschrijving. Vul ze zelf aan.',
+          { icon: 'ℹ️' },
+        );
         return false;
       }
       if (res.error) toast(res.error, { icon: '⚠️' });
@@ -226,7 +238,9 @@ export default function OptimizerPage() {
       });
       return true;
     } catch {
-      toast.error('Document verwerken mislukt.');
+      toast.error(
+        fromDocument ? 'Document verwerken mislukt.' : 'Voorstellen van een structuur mislukt.',
+      );
       return false;
     } finally {
       setPrefilling(false);
@@ -582,7 +596,11 @@ export default function OptimizerPage() {
                         return (
                           <div className="space-y-4">
                             {fmt === 'template-based' && (
-                              <DocumentUpload onPrefill={prefillFromDocument} disabled={prefilling} />
+                              <DocumentUpload
+                                onPrefill={(text) => prefillFromStructure(text, 'document')}
+                                onDescribe={(brief) => prefillFromStructure(brief, 'brief')}
+                                disabled={prefilling}
+                              />
                             )}
                             <FollowUpQuestions
                               technique={technique}

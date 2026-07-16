@@ -162,6 +162,37 @@ export function stripMarkdown(input: string): string {
   );
 }
 
+/**
+ * Ruimt Markdown-vetmarkeringen op in een gegenereerde prompt. Modellen leveren
+ * koppen aan als `**1. Aanleiding en doel**`, maar de prompt wordt als platte
+ * tekst getoond en gekopieerd — dan lees je de sterretjes letterlijk terug. We
+ * halen ze weg en zetten achter een kop een dubbele punt.
+ *
+ * Bewust veel terughoudender dan {@link stripMarkdown}: `#`-koppen (de vaste
+ * structuur van de CARE-raamwerken) en lijst-streepjes blijven staan, want die
+ * horen bij de prompt zelf.
+ */
+export function tidyPromptMarkup(input: string): string {
+  if (!input) return '';
+  return input
+    .split('\n')
+    .map((line) => {
+      // Een regel die volledig vet is, is een kop: sterretjes eraf, dubbele punt erachter.
+      const heading = line.match(/^(\s*)\*\*(.+?)\*\*[ \t]*$/);
+      if (heading) {
+        const [, indent, raw] = heading;
+        const title = raw.trim();
+        // Al leesteken aan het eind, of al een dubbele punt in de kop
+        // ("Projectplan: …")? Dan niets toevoegen.
+        const needsColon = !/[:?!.]$/.test(title) && !title.includes(':');
+        return `${indent}${title}${needsColon ? ':' : ''}`;
+      }
+      // Vet middenin een regel: alleen de markeringen weghalen.
+      return line.replace(/\*\*(.+?)\*\*/g, '$1');
+    })
+    .join('\n');
+}
+
 export async function copyToClipboard(text: string): Promise<void> {
   if (navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(text);

@@ -214,6 +214,12 @@ interface RequestBody {
    * hij de layout/structuur (format, rubrieken, regels) om de velden voor te vullen.
    */
   fromDocument?: boolean;
+  /**
+   * 'prefill': de aangeleverde tekst OMSCHRIJFT het gewenste document (de
+   * gebruiker heeft geen voorbeeld). De AI stelt dan zelf een passende
+   * structuur voor volgens gangbare (rijks)overheidsconventies.
+   */
+  fromFormatBrief?: boolean;
   // 'title'-velden: vat een gegenereerde template samen tot een korte titel.
   templateContent?: string;
   // 'metadata'-velden: stel titel + omschrijving + best passende categorie voor.
@@ -481,6 +487,18 @@ Twijfel je of de input zinnig is maar zit er een herkenbare kern in? Bouw dan ge
 template op basis van wat de gebruiker écht heeft gegeven, zonder de ontbrekende delen te
 verzinnen — laat die als [plaatshouder] staan. Gebruik de ${UNCLEAR_SENTINEL}-regel alleen
 als er echt geen bruikbare bedoeling uit de input te halen valt.`;
+
+/**
+ * De prompt wordt als platte tekst getoond en gekopieerd, niet als Markdown
+ * gerenderd. Vetmarkeringen lezen de gebruiker dus letterlijk als sterretjes
+ * terug. Wordt onvoorwaardelijk aangehangen in `buildSystemPrompt`, zodat de
+ * regel ook geldt bij een aangepaste admin-systeemprompt.
+ */
+const NO_MARKDOWN_INSTRUCTION = `OPMAAK — de prompt wordt als platte tekst getoond, niet als Markdown:
+Gebruik GEEN Markdown-opmaak in je antwoord. Dus geen sterretjes voor vet of cursief
+(\`**tekst**\`, \`*tekst*\`), geen onderstrepingstekens (\`__tekst__\`) en geen codeblokken.
+Zet een kop of rubriek gewoon op een eigen regel met een dubbele punt erachter —
+bijvoorbeeld "1. Aanleiding en doel:" en niet "**1. Aanleiding en doel**".`;
 
 /**
  * JSON-variant van de clarity-gate voor modi die al JSON teruggeven (recommend,
@@ -1445,6 +1463,33 @@ Wees volledig: laat geen rubriek of structuurregel uit het document weg.
 
 `;
 
+/**
+ * Tegenhanger van {@link PREFILL_DOCUMENT_INSTRUCTION} voor gebruikers zónder
+ * voorbeelddocument: de aangeleverde tekst is dan een omschrijving van het
+ * gewenste document ("een projectplan van 2 A4 voor een DT"). De AI stelt
+ * daarvoor zelf een passende structuur voor, op basis van gangbare conventies —
+ * eerst die van de Nederlandse (rijks)overheid, dan pas bredere.
+ *
+ * Bewust géén live zoekopdracht: het model put uit eigen kennis en moet daar
+ * eerlijk over zijn, zodat de gebruiker de voorgestelde structuur zelf toetst.
+ */
+const PREFILL_FORMAT_BRIEF_INSTRUCTION = `BELANGRIJK — DE AANGELEVERDE TEKST IS EEN OMSCHRIJVING VAN EEN GEWENST DOCUMENT (geen voorbeelddocument).
+De gebruiker heeft géén voorbeeld en beschrijft alleen wat voor soort document en welk format hij nodig
+heeft. Stel op basis daarvan zelf een passende documentstructuur voor:
+- Bepaal welk SOORT document dit is (bijv. projectplan, nota, rapportage, besluit, brief).
+- Kies de RUBRIEKEN en hun VOLGORDE die voor dat documentsoort gangbaar zijn. Ga UIT VAN DE CONVENTIES
+  VAN DE NEDERLANDSE (RIJKS)OVERHEID — de opbouw zoals die bij ministeries, uitvoeringsorganisaties en
+  gemeenten gebruikelijk is. Bestaat daar geen herkenbare overheidsvorm voor, val dan terug op de
+  bredere, algemeen gangbare structuur voor dat documentsoort.
+- Benoem de vaste REGELS/opmaakconventies die daarbij horen (koppen, nummering, lengte, toon, aanhef).
+Verwoord dit concreet in de betreffende velden (het taak/format-veld, het rubrieken-veld, het regels-veld).
+
+Je hebt GEEN internettoegang: baseer je uitsluitend op je eigen kennis van deze documentsoorten en
+verzin geen bronnen, links of officiële sjabloonnamen. Neem in het samenvattingsveld één zin op die
+duidelijk maakt dat dit een voorstel op basis van gangbare conventies is, dat de gebruiker kan aanpassen.
+
+`;
+
 /** Bouw de gebruikersprompt voor de prefill-modus. */
 const PREFILL_USER_PROMPT = (
   ownPrompt: string,
@@ -1968,8 +2013,9 @@ function buildSystemPrompt(
   const instruction = structureInstruction(format, headings, interviewResolved);
   const withStructure = instruction ? `${base}\n\n${instruction}` : base;
   const withTone = tone?.trim() ? `${withStructure}\n\nToon en schrijfstijl: ${tone.trim()}` : withStructure;
-  // De clarity-gate komt als laatste, zodat hij ook geldt bij een aangepaste admin-systeemprompt.
-  return `${withTone}\n\n${CLARITY_GATE_INSTRUCTION}`;
+  // De clarity-gate en de opmaak-regel komen als laatste, zodat ze ook gelden
+  // bij een aangepaste admin-systeemprompt.
+  return `${withTone}\n\n${NO_MARKDOWN_INSTRUCTION}\n\n${CLARITY_GATE_INSTRUCTION}`;
 }
 
 /**
@@ -2705,10 +2751,14 @@ Deno.serve(async (req: Request) => {
         fields,
         body.clarification,
       );
-      // Is de tekst een geüpload document? Dan de layout-analyse-instructie vooraan.
+      // Is de tekst een geüpload document? Dan de layout-analyse-instructie
+      // vooraan. Is het een omschrijving van het gewenste document? Dan de
+      // instructie die zélf een passende structuur voorstelt.
       const prefillSystem = body.fromDocument
         ? PREFILL_DOCUMENT_INSTRUCTION + PREFILL_SYSTEM_PROMPT
-        : PREFILL_SYSTEM_PROMPT;
+        : body.fromFormatBrief
+          ? PREFILL_FORMAT_BRIEF_INSTRUCTION + PREFILL_SYSTEM_PROMPT
+          : PREFILL_SYSTEM_PROMPT;
       let result: { summary: string; fields: PrefilledField[] } | null = null;
       let provider: Provider | 'local-template' = 'local-template';
 

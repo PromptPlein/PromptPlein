@@ -213,6 +213,7 @@ export type BehaviorAction =
   | 'gaps_shown' // de AI benoemde openstaande hiaten
   | 'clarification_added' // gebruiker vulde een hiaat aan en her-analyseerde
   | 'document_uploaded' // voorbeelddocument ingelezen (template-based)
+  | 'format_brief_used' // geen voorbeeld: AI stelde een structuur voor uit een omschrijving
   | 'persona_ai_filled' // persona-velden door de AI ingevuld
   | 'fewshot_example_generated' // AI stelde een concept-voorbeeldpaar voor (few-shot)
   | 'fewshot_extracted' // AI extraheerde kenmerken uit de voorbeelden (few-shot)
