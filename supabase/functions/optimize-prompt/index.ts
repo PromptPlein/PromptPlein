@@ -1695,7 +1695,7 @@ function localTitle(templateContent: string): string {
     const sentence = firstLine.split(/(?<=[.!?])\s/)[0];
     return cleanTitle(sentence);
   }
-  return 'Nieuwe template';
+  return 'Nieuwe prompt';
 }
 
 /**

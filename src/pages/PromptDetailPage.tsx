@@ -179,7 +179,7 @@ export default function PromptDetailPage() {
       setPrompt(updated);
       setEditing(false);
       setVersionRefresh((n) => n + 1); // versiegeschiedenis verversen
-      toast.success('Template opgeslagen');
+      toast.success('Prompt opgeslagen');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Opslaan mislukt');
     } finally {
@@ -229,7 +229,7 @@ export default function PromptDetailPage() {
               className="opl-input flex-1 text-xl font-bold"
               value={draftTitle}
               onChange={(e) => setDraftTitle(e.target.value)}
-              placeholder="Titel van de template"
+              placeholder="Titel van de prompt"
               aria-label="Titel"
             />
           ) : (
@@ -315,7 +315,7 @@ export default function PromptDetailPage() {
           {editing ? (
             <>
               <button onClick={handleSaveEdit} disabled={saving} className="opl-btn-primary">
-                <Save size={16} /> {saving ? 'Opslaan…' : 'Template opslaan'}
+                <Save size={16} /> {saving ? 'Opslaan…' : 'Prompt opslaan'}
               </button>
               <button onClick={cancelEditing} disabled={saving} className="opl-btn-secondary">
                 <X size={16} /> Annuleren

@@ -439,8 +439,8 @@ export default function OptimizerPage() {
             <Sparkles className="text-rijksoranje" /> Prompt genereren
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Genereer een herbruikbare prompt-template. De inhoud vul je zelf aan in je eigen chat.
-            Kopieer en plak de template telkens wanneer je hem nodig hebt.
+            Genereer een herbruikbare prompt. De inhoud vul je zelf aan in je eigen chat.
+            Kopieer en plak de prompt telkens wanneer je hem nodig hebt.
           </p>
         </div>
         {/* Opschonen: maakt de bewaarde tekst en alle voortgang leeg voor een
@@ -508,7 +508,7 @@ export default function OptimizerPage() {
                         </span>
                         <div>
                           <h2 className="font-semibold text-slate-800 dark:text-slate-100">
-                            Bouw je template
+                            Bouw je prompt
                           </h2>
                           {(() => {
                             const fmt = structureFormat(technique);
@@ -520,7 +520,7 @@ export default function OptimizerPage() {
                                 ? 'De AI denkt hier stap voor stap met je mee en vraagt door tot het beeld compleet is. Je antwoorden worden meteen uitgewerkt tot een kant-en-klare prompt — voer hem direct uit of sla hem op.'
                                 : fmt === 'socratic'
                                   ? 'De AI vraagt hier socratisch door om je aannames bloot te leggen. Je inzichten worden meteen uitgewerkt tot een kant-en-klare prompt — voer hem direct uit of sla hem op.'
-                                  : 'Beantwoord de vragen; zo ontstaat een herbruikbare template — kopieer hem, of laat hem direct uitvoeren voor een kant-en-klaar resultaat.';
+                                  : 'Beantwoord de vragen; zo ontstaat een herbruikbare prompt — kopieer hem, of laat hem direct uitvoeren voor een kant-en-klaar resultaat.';
                             return (
                               <p className="text-sm text-slate-500 dark:text-slate-400">
                                 Voor{' '}
@@ -631,11 +631,11 @@ export default function OptimizerPage() {
                     >
                       {optimizing ? (
                         <>
-                          <Loader2 size={18} className="animate-spin" /> Template bouwen…
+                          <Loader2 size={18} className="animate-spin" /> Prompt bouwen…
                         </>
                       ) : (
                         <>
-                          <Sparkles size={18} /> Bouw template
+                          <Sparkles size={18} /> Bouw prompt
                         </>
                       )}
                     </button>

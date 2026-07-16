@@ -203,7 +203,7 @@ export async function createPrompt(input: NewPromptInput): Promise<Prompt> {
   // ingelogd toont. Een verlopen sessie → duidelijke foutmelding i.p.v. een 403.
   const valid = await ensureValidSession();
   if (!valid) {
-    throw new Error('Je sessie is verlopen. Log opnieuw in om de template op te slaan.');
+    throw new Error('Je sessie is verlopen. Log opnieuw in om de prompt op te slaan.');
   }
   const { sharing_levels, ...rest } = input;
   // De prompt-rij houdt één representatief sharing_level (voor badge/filters);

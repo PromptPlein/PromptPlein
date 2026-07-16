@@ -707,8 +707,8 @@ function localPlan(goal: string, techniques: Technique[]): PromptPlan {
       decoratePlanStep(
         {
           technique_id: base.id,
-          title: 'Stel de complete template samen',
-          rationale: 'Giet het verzamelde materiaal in één herbruikbare template.',
+          title: 'Stel de complete prompt samen',
+          rationale: 'Giet het verzamelde materiaal in één herbruikbare prompt.',
           produces: 'text',
         },
         1,
@@ -1679,7 +1679,7 @@ function localTitle(templateContent: string): string {
     .map((l) => l.trim())
     .find((l) => l && !l.startsWith('#'));
   if (firstLine) return clean(firstLine.split(/(?<=[.!?])\s/)[0]);
-  return 'Nieuwe template';
+  return 'Nieuwe prompt';
 }
 
 /**
@@ -1694,7 +1694,7 @@ export async function generateTitle(args: {
 }): Promise<string> {
   const { templateContent, preferredProvider, preferredModel } = args;
   const content = templateContent.trim();
-  if (!content) return 'Nieuwe template';
+  if (!content) return 'Nieuwe prompt';
 
   const functionUrl = getFunctionUrl('optimize-prompt');
 
@@ -1757,7 +1757,7 @@ export async function generateMetadata(args: {
 }): Promise<MetadataSuggestion> {
   const { templateContent, categories, preferredProvider, preferredModel } = args;
   const content = templateContent.trim();
-  if (!content) return { title: 'Nieuwe template', description: '', category_id: null };
+  if (!content) return { title: 'Nieuwe prompt', description: '', category_id: null };
 
   const functionUrl = getFunctionUrl('optimize-prompt');
 

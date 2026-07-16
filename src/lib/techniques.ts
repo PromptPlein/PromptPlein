@@ -19,8 +19,15 @@ const CONTEXT_PROMPT_NAMES = new Set([
   'react',
 ]);
 
+/**
+ * De velden waaruit de aard van een techniek is af te leiden. Losser dan een
+ * volledige {@link Technique}, zodat ook het admin-formulier (dat nog niet is
+ * opgeslagen) kan bepalen met wat voor techniek het te maken heeft.
+ */
+type TechniqueIdentity = Pick<Technique, 'id' | 'name' | 'family'>;
+
 /** Is deze techniek een prompt framework (raamwerk) i.p.v. een losse techniek? */
-export function isContextPrompt(t: Technique): boolean {
+export function isContextPrompt(t: TechniqueIdentity): boolean {
   if (t.family) return t.family === 'context';
   return CONTEXT_PROMPT_IDS.has(t.id) || CONTEXT_PROMPT_NAMES.has(t.name.trim().toLowerCase());
 }
@@ -70,7 +77,7 @@ const SOCRATIC_IDS = new Set(['tech-socratic']);
 const SOCRATIC_NAMES = new Set(['socratic prompting', 'socratisch prompting', 'socratisch prompten']);
 
 /** Welke vaste uitvoerstructuur hoort bij deze techniek (indien van toepassing)? */
-export function structureFormat(t: Technique): StructureFormat | undefined {
+export function structureFormat(t: TechniqueIdentity): StructureFormat | undefined {
   if (isContextPrompt(t)) return 'care';
   const id = t.id;
   const name = t.name.trim().toLowerCase();
@@ -94,4 +101,34 @@ export function structureFormat(t: Technique): StructureFormat | undefined {
   if (META_IDS.has(id) || META_NAMES.has(name) || name.includes('meta')) return 'meta';
   if (SOCRATIC_IDS.has(id) || SOCRATIC_NAMES.has(name) || name.includes('socrat')) return 'socratic';
   return undefined;
+}
+
+/**
+ * Technieken waarvan de bouwer zélf bepaalt wat hij vraagt: stap voor stap, of
+ * afhankelijk van wat de gebruiker aanlevert. Ze hebben dus geen vaste
+ * vervolgvragen, en er valt in de admin niets aan vragen te beheren. De tekst
+ * hieronder legt uit wat de bouwer in plaats daarvan doet.
+ *
+ * Persona en Multi-Persona staan hier bewust NIET tussen: die bouwers renderen
+ * juist wél de vervolgvragen uit de admin (zie {@link ../lib/persona}).
+ */
+const SELF_DIRECTED_BUILDERS: Partial<Record<StructureFormat, string>> = {
+  'chain-of-thought':
+    'Deze techniek voert een interview: de AI stelt één vraag tegelijk, vraagt door op elk antwoord en werkt zo toe naar een conclusie. Welke vragen dat zijn hangt af van het vraagstuk van de gebruiker, dus er is geen vaste vragenlijst.',
+  socratic:
+    'Deze techniek voert een Socratisch interview: de AI stelt één vraag tegelijk om verborgen aannames bloot te leggen en uit te dagen. Elke vraag bouwt voort op het vorige antwoord, dus er is geen vaste vragenlijst.',
+  'few-shot':
+    'Deze techniek gebruikt een eigen bouwer in fasen: de gebruiker beschrijft de taak, geeft voorbeelden van input en output, en de AI haalt daar de over te nemen kenmerken uit. Welke stappen er komen hangt af van de keuzes van de gebruiker, dus er is geen vaste vragenlijst.',
+  meta:
+    'Bij deze techniek bouwt de AI zélf een prompt. De gebruiker beschrijft in één veld wat hij nodig heeft; daarna levert de AI een uitvoerbare prompt die met feedback bij te stellen is. Er zijn dus geen in te vullen velden om te beheren.',
+};
+
+/**
+ * Bepaalt de bouwer van deze techniek zijn eigen vragen? Zo ja: de uitleg over
+ * wat die bouwer doet. Zo nee (undefined): de techniek gebruikt de vervolgvragen
+ * uit de admin.
+ */
+export function selfDirectedBuilder(t: TechniqueIdentity): string | undefined {
+  const fmt = structureFormat(t);
+  return fmt ? SELF_DIRECTED_BUILDERS[fmt] : undefined;
 }

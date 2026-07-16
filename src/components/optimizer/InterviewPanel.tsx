@@ -255,7 +255,7 @@ export default function InterviewFlow({
           {done}
         </pre>
         <p className="text-xs text-emerald-700/80 dark:text-emerald-300/70">
-          Klik hieronder op &quot;Bouw template&quot; om hier een herbruikbare prompt van te maken.
+          Klik hieronder op &quot;Bouw prompt&quot; om hier een herbruikbare prompt van te maken.
         </p>
       </div>
     );

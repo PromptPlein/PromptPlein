@@ -107,10 +107,9 @@ Oorspronkelijke opdracht:
       'Een risico- of impactanalyse onderbouwen',
       'Een complex vraagstuk ontleden voordat je tot een advies komt',
     ],
-    follow_up_questions: [
-      { id: 'doel', label: 'Gewenst doel — wat wil je bereiken?', placeholder: 'Bijv. een onderbouwd advies waarin de afweging navolgbaar is' },
-      { id: 'stappen', label: 'Welke tussenstappen zijn belangrijk?', placeholder: 'Bijv. eerst de feiten, dan de afweging' },
-    ],
+    // Geen vaste vragen: deze techniek voert een interview en bepaalt zelf wat hij
+    // vraagt. Zie migratie 0029_clear_self_directed_questions.sql.
+    follow_up_questions: [],
     template: `Voer de volgende opdracht stap voor stap uit. Redeneer hardop en maak elke tussenstap expliciet voordat je tot een conclusie komt.
 
 Einddoel: {{doel}}
@@ -135,12 +134,9 @@ Oorspronkelijke opdracht:
       'Een bestaand sjabloon (memo, nota, samenvatting) consequent laten volgen',
       'Output uniform maken over meerdere stukken heen',
     ],
-    follow_up_questions: [
-      { id: 'gewenst_doel', label: 'Gewenst doel — wat wil je bereiken?', placeholder: 'Bijv. notities consistent in onze huisstijl laten herschrijven' },
-      { id: 'voorbeeld1', label: 'Voorbeeld 1 (gewenste output)', placeholder: 'Plak een goed voorbeeld' },
-      { id: 'voorbeeld2', label: 'Voorbeeld 2 (optioneel)', placeholder: 'Nog een voorbeeld' },
-      { id: 'stijl', label: 'Wat kenmerkt de gewenste stijl?', placeholder: 'Bijv. formeel, beknopt, B1-taalniveau' },
-    ],
+    // Geen vaste vragen: de few-shot-bouwer doorloopt zijn eigen fasen.
+    // Zie migratie 0029_clear_self_directed_questions.sql.
+    follow_up_questions: [],
     template: `Gewenst doel: {{gewenst_doel}}
 
 Gebruik onderstaande voorbeelden als referentie voor toon, stijl en structuur.
@@ -238,11 +234,9 @@ Oorspronkelijke opdracht:
       'Verborgen aannames in een beleidsstuk opsporen',
       'Een vraagstuk verkennen voordat je een richting kiest',
     ],
-    follow_up_questions: [
-      { id: 'gewenst_doel', label: 'Gewenst doel — wat wil je bereiken?', placeholder: 'Bijv. blinde vlekken in mijn aanpak blootleggen voordat ik verderga' },
-      { id: 'aannames', label: 'Wat zijn de kern-aannames in de input?', placeholder: 'Bijv. dat de aanpak uitvoerbaar is binnen de huidige capaciteit van het team' },
-      { id: 'ontdekken', label: 'Wat wil je eigenlijk ontdekken?', placeholder: 'Bijv. of de aanpak wel klopt' },
-    ],
+    // Geen vaste vragen: deze techniek voert een Socratisch interview en bepaalt
+    // zelf wat hij vraagt. Zie migratie 0029_clear_self_directed_questions.sql.
+    follow_up_questions: [],
     template: `Gewenst doel: {{gewenst_doel}}
 
 Analyseer de aannames in onderstaande tekst en pas de Socratische methode toe.

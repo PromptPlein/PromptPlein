@@ -171,7 +171,7 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
   async function handleCopy() {
     await copyToClipboard(result.optimized_content);
     setCopied(true);
-    toast.success('Prompt-template gekopieerd');
+    toast.success('Prompt gekopieerd');
     setTimeout(() => setCopied(false), 1500);
   }
 
@@ -202,21 +202,21 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
 
   async function handleSave() {
     if (!title.trim()) {
-      toast.error('Geef je template een titel.');
+      toast.error('Geef je prompt een titel.');
       return;
     }
     // Opslaan vereist een ingelogde gebruiker: de RLS-policy op `prompts` staat
     // alleen inserts toe voor de rol `authenticated`. Zonder sessie geeft Supabase
     // een 403 die voor de gebruiker nietszeggend is — vang dat hier af.
     if (!isAuthenticated) {
-      toast.error('Log in om deze template op te slaan in de bibliotheek.');
+      toast.error('Log in om deze prompt op te slaan in de bibliotheek.');
       return;
     }
     // Afdeling/ministerie delen vereist een organisatie om op te richten — anders
     // weet niemand met welke afdeling de template gedeeld is.
     const needsOrg = sharingLevels.includes('department') || sharingLevels.includes('ministry');
     if (needsOrg && !organizationId) {
-      toast.error('Kies een organisatie om de template met je afdeling of ministerie te delen.');
+      toast.error('Kies een organisatie om de prompt met je afdeling of ministerie te delen.');
       return;
     }
     setSaving(true);
@@ -233,7 +233,7 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
       });
       setSaved(prompt);
       setShowSave(false);
-      toast.success('Template opgeslagen in de bibliotheek');
+      toast.success('Prompt opgeslagen in de bibliotheek');
     } catch (err) {
       toast.error(humanizeSaveError(err));
     } finally {
@@ -244,11 +244,11 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
   return (
     <div className="space-y-4 animate-fade-in">
       <h3 className="text-lg font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
-        Je herbruikbare template
+        Je herbruikbare prompt
       </h3>
 
       <p className="text-sm text-slate-500 dark:text-slate-400">
-        Kopieer deze template naar je eigen AI-chat, sla hem op voor je collega&apos;s, of laat de AI
+        Kopieer deze prompt naar je eigen AI-chat, sla hem op voor je collega&apos;s, of laat de AI
         hem <span className="font-medium">direct uitvoeren</span> voor een kant-en-klaar resultaat.
         Vul de plekken tussen <span className="font-mono text-xs">[haakjes]</span> per keer aan met je
         eigen inhoud.
@@ -305,7 +305,7 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
       {saved && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-300">
           <span className="inline-flex items-center gap-2">
-            <FolderCheck size={16} /> Opgeslagen als herbruikbare template.
+            <FolderCheck size={16} /> Opgeslagen als herbruikbare prompt.
           </span>
           <Link
             to={`/prompt/${saved.id}`}
@@ -323,19 +323,19 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
               meteen duidelijk in plaats van een 401 bij het opslaan. */}
           {!isAuthenticated && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300">
-              Je bent niet ingelogd. Om een template in de bibliotheek op te slaan moet je eerst{' '}
+              Je bent niet ingelogd. Om een prompt in de bibliotheek op te slaan moet je eerst{' '}
               <Link
                 to="/auth/login"
                 className="font-medium underline underline-offset-2 hover:no-underline"
               >
                 inloggen
               </Link>
-              . Je kunt de template ondertussen wel kopiëren.
+              . Je kunt de prompt ondertussen wel kopiëren.
             </div>
           )}
           <div>
             <label className="opl-label" htmlFor="tpl-title">
-              Titel van de template
+              Titel van de prompt
             </label>
             <div className="relative">
               <input
@@ -383,7 +383,7 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
                 setDescription(e.target.value);
               }}
               placeholder={
-                metaLoading ? 'Omschrijving wordt bedacht…' : 'Korte uitleg over wat deze template doet'
+                metaLoading ? 'Omschrijving wordt bedacht…' : 'Korte uitleg over wat deze prompt doet'
               }
             />
           </div>
@@ -575,8 +575,8 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
               </select>
               <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
                 {isAdmin
-                  ? 'Koppel deze template aan een ministerie of afdeling, zodat hij vindbaar is via de netwerkverkenner.'
-                  : 'Deze template wordt gekoppeld aan jouw eigen organisatie, zodat hij vindbaar is via de netwerkverkenner.'}
+                  ? 'Koppel deze prompt aan een ministerie of afdeling, zodat hij vindbaar is via de netwerkverkenner.'
+                  : 'Deze prompt wordt gekoppeld aan jouw eigen organisatie, zodat hij vindbaar is via de netwerkverkenner.'}
               </p>
             </div>
           )}
@@ -626,7 +626,7 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
         </button>
         <button className="opl-btn-primary" onClick={handleCopy}>
           {copied ? <Check size={16} /> : <Copy size={16} />}
-          {copied ? 'Gekopieerd' : 'Kopieer template'}
+          {copied ? 'Gekopieerd' : 'Kopieer prompt'}
         </button>
       </div>
 
@@ -653,7 +653,7 @@ function humanizeSaveError(err: unknown): string {
     msg.includes('row-level security') ||
     msg.includes('row level security');
   if (isAuthIssue) {
-    return 'Je bent niet (meer) ingelogd. Log opnieuw in om de template op te slaan.';
+    return 'Je bent niet (meer) ingelogd. Log opnieuw in om de prompt op te slaan.';
   }
   return e?.message || 'Opslaan mislukt';
 }
@@ -666,5 +666,5 @@ function defaultTitle(technique?: Technique | null, goal?: string): string {
     // Eerste letter hoofdletter voor een nettere titel.
     return short.charAt(0).toUpperCase() + short.slice(1);
   }
-  return technique ? `${technique.name}-template` : 'Nieuwe template';
+  return technique ? `${technique.name}-prompt` : 'Nieuwe prompt';
 }

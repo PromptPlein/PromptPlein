@@ -145,7 +145,7 @@ export default function FollowUpQuestions({
   if (total === 0) {
     return (
       <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-600 dark:bg-slate-900/40 dark:text-slate-400">
-        Deze techniek heeft geen invulvelden. Je kunt de template direct bouwen.
+        Deze techniek heeft geen invulvelden. Je kunt de prompt direct bouwen.
       </div>
     );
   }
@@ -245,7 +245,7 @@ export default function FollowUpQuestions({
                 </p>
               ) : (
                 <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-                  Optioneel. Wat je leeg laat, wordt een invulbare plaatshouder in de template.
+                  Optioneel. Wat je leeg laat, wordt een invulbare plaatshouder in de prompt.
                 </p>
               )}
               <div className="mt-1.5 flex">
@@ -319,7 +319,7 @@ export default function FollowUpQuestions({
         <p className="text-sm text-slate-500 dark:text-slate-400">
           {hasPrefill
             ? 'We hebben deze velden alvast voor je ingevuld op basis van je prompt. Controleer en pas aan waar nodig — vooral de AI-suggesties met het oranje label "Controleren".'
-            : 'Dit zijn de bouwstenen van je template. Klopt alles? Bouw dan de herbruikbare template.'}
+            : 'Dit zijn de bouwstenen van je prompt. Klopt alles? Bouw dan de herbruikbare prompt.'}
         </p>
         <ul className="divide-y divide-slate-100 dark:divide-slate-700">
           {questions.map((q, i) => {
@@ -338,7 +338,7 @@ export default function FollowUpQuestions({
                       value ? 'text-slate-600 dark:text-slate-300' : 'italic text-slate-400 dark:text-slate-500',
                     )}
                   >
-                    {value || 'Nog niet ingevuld — blijft een plaatshouder in de template.'}
+                    {value || 'Nog niet ingevuld — blijft een plaatshouder in de prompt.'}
                   </p>
                 </div>
                 <button
@@ -430,7 +430,7 @@ export default function FollowUpQuestions({
           </p>
         ) : (
           <p className="mt-1.5 text-xs text-slate-400 dark:text-slate-500">
-            Optioneel. Wat je leeg laat, wordt een invulbare plaatshouder in de template.
+            Optioneel. Wat je leeg laat, wordt een invulbare plaatshouder in de prompt.
           </p>
         )}
         <div className="mt-1.5 flex">

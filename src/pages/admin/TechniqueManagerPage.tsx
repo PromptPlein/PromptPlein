@@ -1,5 +1,16 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2, Eye, EyeOff, ArrowUp, ArrowDown, GripVertical, X } from 'lucide-react';
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  Eye,
+  EyeOff,
+  ArrowUp,
+  ArrowDown,
+  GripVertical,
+  Info,
+  X,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
   DndContext,
@@ -29,6 +40,7 @@ import {
 } from '@/services/repository';
 import { logAdminAction } from '@/services/adminService';
 import { fillTemplate } from '@/services/optimizeService';
+import { selfDirectedBuilder } from '@/lib/techniques';
 import type { FollowUpQuestion, Technique, TechniqueFamily } from '@/types';
 
 interface EditorState {
@@ -159,8 +171,14 @@ function SortableRow({
           {(t.family ?? 'technique') === 'context' ? 'Framework' : 'Techniek'}
         </span>
       </td>
+      {/* Een eigen bouwer stelt zijn vragen zelf; "0" zou hier ten onrechte als
+          onvolledig lezen. */}
       <td className="hidden px-4 py-3 text-slate-600 sm:table-cell dark:text-slate-300">
-        {t.follow_up_questions.length}
+        {selfDirectedBuilder(t) ? (
+          <span className="text-xs text-slate-400 dark:text-slate-500">Eigen bouwer</span>
+        ) : (
+          t.follow_up_questions.length
+        )}
       </td>
       <td className="px-4 py-3">
         <span
@@ -225,6 +243,13 @@ export default function TechniqueManagerPage() {
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [toDelete, setToDelete] = useState<Technique | null>(null);
 
+  // Heeft deze techniek een bouwer die zijn eigen vragen stelt (interview, few-shot-
+  // fasen, meta)? Dan is er geen vragenlijst te beheren en tonen we uitleg. Wordt
+  // afgeleid uit de naam, dus het volgt meteen wat de beheerder intypt.
+  const ownBuilder = editor
+    ? selfDirectedBuilder({ id: editor.id ?? '', name: editor.name, family: editor.family })
+    : undefined;
+
   async function load() {
     setLoading(true);
     const t = await getTechniques(true); // inclusief inactieve
@@ -280,15 +305,20 @@ export default function TechniqueManagerPage() {
       toast.error('Naam is verplicht');
       return;
     }
+    // Technieken met een eigen bouwer kennen geen vragenlijst: sla er geen op, ook
+    // niet als er nog oude vragen in de rij stonden. Anders zou de admin data tonen
+    // die de gebruiker nooit te zien krijgt.
     // Lege vragen (zonder label) eruit filteren; placeholder is optioneel.
-    const followUps: FollowUpQuestion[] = editor.followUps
-      .filter((q) => q.label.trim())
-      .map((q) => ({
-        id: q.id,
-        label: q.label.trim(),
-        placeholder: q.placeholder?.trim() || undefined,
-        why: q.why?.trim() || undefined,
-      }));
+    const followUps: FollowUpQuestion[] = ownBuilder
+      ? []
+      : editor.followUps
+          .filter((q) => q.label.trim())
+          .map((q) => ({
+            id: q.id,
+            label: q.label.trim(),
+            placeholder: q.placeholder?.trim() || undefined,
+            why: q.why?.trim() || undefined,
+          }));
 
     const ids = followUps.map((q) => q.id);
     if (new Set(ids).size !== ids.length) {
@@ -545,6 +575,26 @@ export default function TechniqueManagerPage() {
               />
             </div>
 
+            {/* Technieken met een eigen bouwer stellen hun vragen zelf: geen
+                vragenlijst, maar uitleg over wat de bouwer doet. */}
+            {ownBuilder ? (
+              <div>
+                <label className="opl-label">Vervolgvragen</label>
+                <div className="flex items-start gap-2 rounded-xl border border-rijksblauw-200 bg-rijksblauw-50/40 p-3 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10">
+                  <Info size={16} className="mt-0.5 shrink-0 text-rijksblauw-500" />
+                  <div className="text-sm text-slate-600 dark:text-slate-300">
+                    <p className="font-medium text-slate-800 dark:text-slate-100">
+                      Deze techniek heeft een eigen bouwer en geen vaste vragen.
+                    </p>
+                    <p className="mt-1">{ownBuilder}</p>
+                    <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
+                      Wat je hier wél stuurt: de beschrijving en het doel hierboven, en de template
+                      hieronder.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : (
             <div>
               <label className="opl-label">
                 Vervolgvragen{' '}
@@ -652,6 +702,7 @@ export default function TechniqueManagerPage() {
                 <Plus size={15} /> Vraag toevoegen
               </button>
             </div>
+            )}
 
             <div>
               <label className="opl-label">

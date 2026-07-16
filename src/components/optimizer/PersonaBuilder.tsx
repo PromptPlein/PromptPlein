@@ -247,9 +247,12 @@ function PersonaCard({
       </div>
 
       {/* Korte aanduiding + AI-invulhulp. */}
-      <div className="mb-4 rounded-lg border border-rijksblauw-200 bg-rijksblauw-50/40 p-3 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10">
-        <label className="opl-label mb-1 block" htmlFor={`persona-hint-${persona.id}`}>
-          Korte aanduiding <span className="font-normal text-slate-400">(optioneel)</span>
+      <div className="mb-4 rounded-lg border border-rijksblauw-300 bg-rijksblauw-100 p-3 dark:border-rijksblauw-500/50 dark:bg-rijksblauw-500/20">
+        <label
+          className="opl-label mb-1 block text-rijksblauw-800 dark:text-rijksblauw-100"
+          htmlFor={`persona-hint-${persona.id}`}
+        >
+          Korte aanduiding <span className="font-normal text-rijksblauw-600 dark:text-rijksblauw-300">(optioneel)</span>
         </label>
         <div className="flex flex-wrap items-center gap-2">
           <input
@@ -261,7 +264,7 @@ function PersonaCard({
           />
           <button
             type="button"
-            className="opl-btn-secondary shrink-0"
+            className="opl-btn-primary shrink-0"
             onClick={onAiFill}
             disabled={busy || !persona.hint.trim()}
           >
@@ -269,7 +272,7 @@ function PersonaCard({
             {busy ? 'Invullen…' : 'Vul aan met AI'}
           </button>
         </div>
-        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+        <p className="mt-1 text-xs text-rijksblauw-700 dark:text-rijksblauw-200">
           Weet je de details niet? Geef een korte aanduiding en laat de AI de velden hieronder invullen.
         </p>
       </div>

@@ -44,20 +44,17 @@ INSERT INTO techniques (name, description, follow_up_questions, template) VALUES
 (
   'Chain-of-Thought',
   'Laat het model stap voor stap redeneren voor complexere taken.',
-  '[
-    {"id":"doel","label":"Wat is het einddoel?","placeholder":"Bijv. een onderbouwd advies"},
-    {"id":"stappen","label":"Welke tussenstappen zijn belangrijk?","placeholder":"Bijv. eerst de feiten, dan de afweging"}
-  ]'::jsonb,
+  -- Geen vaste vragen: deze techniek voert een interview en bepaalt zelf wat hij
+  -- vraagt. Zie migratie 0029_clear_self_directed_questions.sql.
+  '[]'::jsonb,
   E'Voer de volgende opdracht stap voor stap uit. Redeneer hardop en maak elke tussenstap expliciet voordat je tot een conclusie komt.\n\nEinddoel: {{doel}}\nBelangrijke tussenstappen: {{stappen}}\n\nWerkwijze:\n1. Verzamel en benoem de relevante feiten.\n2. Weeg de opties expliciet tegen elkaar af.\n3. Trek een onderbouwde conclusie.\n\nOorspronkelijke opdracht:\n{{PROMPT}}'
 ),
 (
   'Few-Shot Voorbeelden',
   'Geef het model enkele voorbeelden zodat het de gewenste stijl en structuur overneemt.',
-  '[
-    {"id":"voorbeeld1","label":"Voorbeeld 1 (gewenste output)","placeholder":"Plak een goed voorbeeld"},
-    {"id":"voorbeeld2","label":"Voorbeeld 2 (optioneel)","placeholder":"Nog een voorbeeld"},
-    {"id":"stijl","label":"Wat kenmerkt de gewenste stijl?","placeholder":"Bijv. formeel, beknopt, B1-taalniveau"}
-  ]'::jsonb,
+  -- Geen vaste vragen: de few-shot-bouwer doorloopt zijn eigen fasen.
+  -- Zie migratie 0029_clear_self_directed_questions.sql.
+  '[]'::jsonb,
   E'Gebruik onderstaande voorbeelden als referentie voor toon, stijl en structuur.\n\nVoorbeeld 1:\n{{voorbeeld1}}\n\nVoorbeeld 2:\n{{voorbeeld2}}\n\nGewenste stijl: {{stijl}}\n\nVoer nu de opdracht uit en volg dezelfde stijl en structuur als de voorbeelden.\n\nOorspronkelijke opdracht:\n{{PROMPT}}'
 ),
 (

@@ -983,7 +983,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
           res.reason?.trim() ||
             'Je invoer is niet duidelijk genoeg om er een zinvolle prompt van te maken.',
         );
-        setStepError('De invoer was niet duidelijk genoeg voor de eindtemplate.');
+        setStepError('De invoer was niet duidelijk genoeg voor de eindprompt.');
         log('unclear_rejected', { metadata: { phase: 'compose' } });
         setPhase('error');
         return;
@@ -1016,7 +1016,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
       clearRunDraft();
       onResult(finalResult, technique);
     } catch (err) {
-      setStepError(err instanceof Error ? err.message : 'Template samenstellen mislukt.');
+      setStepError(err instanceof Error ? err.message : 'Prompt samenstellen mislukt.');
       log('step_error', { metadata: { where: 'compose' } });
       setPhase('error');
     }
@@ -1105,7 +1105,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
       });
       if (res.unclear || !res.optimized_content?.trim()) {
         // Aanscherpen lukte niet → val terug op het al goedgekeurde resultaat.
-        toast('Aanscherpen lukte niet; de eerdere template is gebruikt.', { icon: 'ℹ️' });
+        toast('Aanscherpen lukte niet; de eerdere prompt is gebruikt.', { icon: 'ℹ️' });
         clearRunDraft();
         onResult(pendingResult, technique);
         return;
@@ -1113,7 +1113,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
       clearRunDraft();
       onResult({ ...res, recipe: pendingResult.recipe }, technique);
     } catch {
-      toast('Aanscherpen lukte niet; de eerdere template is gebruikt.', { icon: 'ℹ️' });
+      toast('Aanscherpen lukte niet; de eerdere prompt is gebruikt.', { icon: 'ℹ️' });
       clearRunDraft();
       onResult(pendingResult, technique);
     }
@@ -1199,7 +1199,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
               />
               <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
                 We beginnen met vragen tot je vraagstuk compleet in beeld is, en versterken dat beeld
-                daarna met meerdere technieken tot één sterke, herbruikbare template.
+                daarna met meerdere technieken tot één sterke, herbruikbare prompt.
               </p>
 
               {/* Hervat-melding: er staat nog een niet-afgemaakte bouw bewaard. */}
@@ -1408,7 +1408,7 @@ function PlanReview({
       <p className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500">
         <Check size={13} className="text-rijksblauw-400" />
         We beginnen met vraag voor vraag het totaalplaatje ophalen; de volgende stappen versterken dat
-        beeld en het geheel wordt één herbruikbare template.
+        beeld en het geheel wordt één herbruikbare prompt.
       </p>
     </div>
   );
@@ -1631,7 +1631,7 @@ function PlanExecutor({
       <div>
         <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
           {composing
-            ? 'De template wordt samengesteld…'
+            ? 'De prompt wordt samengesteld…'
             : `Stap ${Math.min(currentStepIndex + 1, total)} van ${total}`}
         </p>
         <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
@@ -1983,7 +1983,7 @@ function StepCollector({
             <button type="button" className="opl-btn-primary" onClick={onCommit} disabled={analyzing}>
               {isLastBeforeCompose ? (
                 <>
-                  <Sparkles size={16} /> Naar de eindtemplate <ArrowRight size={16} />
+                  <Sparkles size={16} /> Naar de eindprompt <ArrowRight size={16} />
                 </>
               ) : (
                 <>
@@ -2029,9 +2029,9 @@ function AssumptionReview({
           het resultaat
         </p>
         <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
-          Je template is klaar, maar er zitten aannames in die je niet zelf hebt aangeleverd.
+          Je prompt is klaar, maar er zitten aannames in die je niet zelf hebt aangeleverd.
           Beantwoord de vragen om die aannames te vervangen door wat jíj bedoelt, of gebruik de
-          template zoals hij is.
+          prompt zoals hij is.
         </p>
       </div>
 
@@ -2061,7 +2061,7 @@ function AssumptionReview({
       {/* De huidige template (nog zonder de aanscherping), ter referentie. */}
       <div>
         <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-          Huidige template
+          Huidige prompt
         </p>
         <div className="max-h-56 overflow-auto rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900">
           <RichText text={templateContent} className="text-xs text-slate-600 dark:text-slate-300" />
@@ -2136,7 +2136,7 @@ function StepRow({
             )}
             {compose && composing && (
               <span className="inline-flex items-center gap-1 text-xs text-rijksblauw-600 dark:text-rijksblauw-300">
-                <Loader2 size={13} className="animate-spin" /> Template samenstellen…
+                <Loader2 size={13} className="animate-spin" /> Prompt samenstellen…
               </span>
             )}
           </div>
