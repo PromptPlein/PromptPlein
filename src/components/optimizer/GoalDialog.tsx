@@ -1,0 +1,867 @@
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  AlertTriangle,
+  ArrowRight,
+  Check,
+  ChevronDown,
+  Eraser,
+  Info,
+  Loader2,
+  MessageCircleQuestion,
+  Package,
+  RotateCw,
+  Sparkles,
+} from 'lucide-react';
+import clsx from 'clsx';
+import toast from 'react-hot-toast';
+import { useReferenceData } from '@/context/ReferenceDataContext';
+import { generatePrompt, recommendFramework, runClarifyTurn } from '@/services/optimizeService';
+import { isContextPrompt } from '@/lib/techniques';
+import { activityIdentifier, stripMarkdown } from '@/lib/utils';
+import { usePersistentDraft } from '@/lib/usePersistentDraft';
+import { detectPii, detectBlockedTopics, type GuardrailFinding } from '@/services/guardrails';
+import { logBehavior, newBehaviorSession, type BehaviorSession } from '@/services/behaviorService';
+import { useAuth } from '@/context/AuthContext';
+import type { AiSettings } from '@/services/settingsService';
+import OptimizingLoader from './OptimizingLoader';
+import GuardrailDialog from './GuardrailDialog';
+import { InterviewPanel } from './InterviewPanel';
+import type {
+  OptimizeResult,
+  PromptDialogue,
+  Technique,
+  TechniqueRecommendation,
+  TranscriptTurn,
+} from '@/types';
+
+/** localStorage-sleutel voor een lopend gesprek (hervatten na herladen). */
+const RUN_STORAGE_KEY = 'opl.goalDialog';
+
+/** Voorbeelddoelen; klikken vult het doelveld. Bewust overheidscontext. */
+const GOAL_EXAMPLES = [
+  'Er moet een projectplan geschreven worden voor de invoering van een nieuwe interne tool.',
+  'Ik wil een formele brief opstellen die aansluit bij verschillende doelgroepen.',
+  'Ik wil een adviesnota maken met een vaste structuur en een heldere onderbouwing.',
+  'Help me een communicatieplan op te zetten voor een nieuwe dienstverlening.',
+];
+
+/** De naar localStorage geschreven snapshot van een lopend gesprek. */
+interface PersistedRun {
+  goal: string;
+  transcript: TranscriptTurn[];
+}
+
+function loadRun(): PersistedRun | null {
+  try {
+    const raw = localStorage.getItem(RUN_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as PersistedRun;
+    if (parsed && typeof parsed.goal === 'string' && Array.isArray(parsed.transcript)) {
+      // Een gesprek zonder beantwoorde vragen valt niets aan te hervatten.
+      if (parsed.goal.trim() && parsed.transcript.length > 0) return parsed;
+    }
+  } catch {
+    /* corrupte of afwezige run → negeren */
+  }
+  return null;
+}
+
+function saveRun(run: PersistedRun): void {
+  try {
+    localStorage.setItem(RUN_STORAGE_KEY, JSON.stringify(run));
+  } catch {
+    /* bewaren is best-effort */
+  }
+}
+
+function clearRunDraft(): void {
+  try {
+    localStorage.removeItem(RUN_STORAGE_KEY);
+  } catch {
+    /* negeren */
+  }
+}
+
+/** Zet het gesprek om in één gelabeld tekstblok voor de generator. */
+function serializeTranscript(turns: TranscriptTurn[]): string {
+  return turns.map((t, i) => `Vraag ${i + 1}: ${t.question}\nAntwoord: ${t.answer}`).join('\n\n');
+}
+
+interface GoalDialogProps {
+  /** Admin-bepaalde AI-instellingen (provider, systeemprompt, toon, temperatuur). */
+  settings: AiSettings;
+  /** Het uiteindelijke resultaat + het framework waarin het is opgebouwd. */
+  onResult: (result: OptimizeResult, technique: Technique) => void;
+  /** De instap-tabs; vallen bovenin het omrande generator-blok. */
+  header?: ReactNode;
+}
+
+/**
+ * Fase van de doel-flow:
+ *  - goal      → beschrijf in eigen woorden wat je wilt bereiken
+ *  - dialogue  → de AI denkt stap voor stap mee en stelt vraag na vraag tot het
+ *                vraagstuk compleet is; de laatste vragen gaan over gebruik en
+ *                vorm, want daarop rust de frameworkkeuze
+ *  - framework → de AI analyseert de opdrachtbeschrijving en stelt het best
+ *                passende framework voor; de gebruiker kiest
+ *  - composing → de prompt wordt in dat framework opgebouwd
+ *  - done      → de prompt staat onder het blok; hier alleen nog opnieuw beginnen
+ *  - error     → een beurt mislukte; retry mogelijk (het gesprek blijft staan)
+ */
+type Phase = 'goal' | 'dialogue' | 'framework' | 'composing' | 'done' | 'error';
+
+/**
+ * De doel-flow: "Bouw een prompt rond je doel". De gebruiker beschrijft in eigen
+ * woorden wat die wil bereiken en gaat daarna direct het gesprek in — de AI
+ * redeneert stap voor stap mee en stelt één vraag per keer, tot het beeld
+ * compleet is. Er wordt bewust géén plan vooraf getoond en geen techniek bij naam
+ * genoemd: de gebruiker praat over zijn vraagstuk, niet over prompt-methodes.
+ *
+ * Pas ná het gesprek volgt de analyse: uit de opdrachtbeschrijving én de
+ * antwoorden over gebruik (chat, zelfstandige assistent of programma) en vorm
+ * (tekst, code, beeld, …) bepaalt de AI welk framework past. De gebruiker kiest
+ * daaruit — of pakt zelf een ander framework — en dán pas wordt de prompt gebouwd.
+ */
+export default function GoalDialog({ settings, onResult, header }: GoalDialogProps) {
+  const { techniques, techniqueById } = useReferenceData();
+  const { profile, user } = useAuth();
+
+  // Gedragslog-sessie voor deze run + een korte log-helper (fire-and-forget).
+  const sessionRef = useRef<BehaviorSession>(newBehaviorSession());
+  function log(
+    action: Parameters<typeof logBehavior>[0]['action'],
+    extra?: { techniqueId?: string | null; metadata?: Record<string, unknown> },
+  ) {
+    logBehavior({
+      session: sessionRef.current,
+      identifier: activityIdentifier(profile, user?.email),
+      action,
+      techniqueId: extra?.techniqueId ?? null,
+      metadata: extra?.metadata,
+    });
+  }
+
+  // Deelt de 'goal'-draftsleutel met de pagina, zodat de "Opschonen"-knop en de
+  // titel-fallback van het resultaat blijven werken.
+  const [goal, setGoal, clearGoal] = usePersistentDraft('goal');
+  // Het doel als ref: `resumeRun` zet het doel én start meteen de volgende beurt;
+  // de state-update is dan nog niet zichtbaar in deze closure.
+  const goalRef = useRef(goal);
+  goalRef.current = goal;
+
+  const [phase, setPhase] = useState<Phase>('goal');
+  const [showExamples, setShowExamples] = useState(false);
+  const [unclearReason, setUnclearReason] = useState<string | null>(null);
+  const [guardrailFindings, setGuardrailFindings] = useState<GuardrailFinding[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // Het gesprek: gestelde vraag, het transcript en het antwoordveld.
+  const [question, setQuestion] = useState<string | null>(null);
+  const [transcript, setTranscript] = useState<TranscriptTurn[]>([]);
+  const [answer, setAnswer] = useState('');
+  const [busy, setBusy] = useState(false);
+  // Het gesprek is klaar; de opdrachtbeschrijving wordt nog opgesteld.
+  const [finishing, setFinishing] = useState(false);
+  // De uitgeschreven opdrachtbeschrijving (het resultaat van het gesprek).
+  const [brief, setBrief] = useState<string | null>(null);
+
+  // Frameworkkeuze: de aanbevelingen, of we ze nog ophalen, en het bouwen zelf.
+  const [frameworkFits, setFrameworkFits] = useState<TechniqueRecommendation[]>([]);
+  const [fitting, setFitting] = useState(false);
+
+  // Een bij het laden gevonden, niet-afgemaakt gesprek — aangeboden om te hervatten.
+  const [resumable, setResumable] = useState<PersistedRun | null>(null);
+
+  // Het laadscherm tijdens het bouwen van de prompt; wordt in beeld gescrold
+  // zodra "Bouw mijn prompt" is geklikt.
+  const composingRef = useRef<HTMLDivElement>(null);
+
+  const inputDisabled = phase !== 'goal';
+
+  // Bij binnenkomst: staat er nog een niet-afgemaakt gesprek klaar?
+  useEffect(() => {
+    const run = loadRun();
+    if (run) setResumable(run);
+    // Alleen bij mount uitvoeren.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Scroll het laadscherm in beeld zodra het bouwen begint. De rAF wacht tot het
+  // blok gerenderd is; anders scrollen we naar een plek die er nog niet staat.
+  useEffect(() => {
+    if (phase !== 'composing') return;
+    const id = requestAnimationFrame(() => {
+      composingRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [phase]);
+
+  // Bewaar het lopende gesprek, zodat een herlaadactie de antwoorden niet wist.
+  useEffect(() => {
+    if (phase === 'dialogue' && transcript.length > 0) {
+      saveRun({ goal, transcript });
+    }
+  }, [phase, goal, transcript]);
+
+  /** Wis doel + gesprek en begin schoon. */
+  function handleClear() {
+    if (transcript.length > 0 && phase !== 'goal') {
+      log('cleared', { metadata: { phase, answered: transcript.length } });
+    }
+    clearGoal();
+    clearRunDraft();
+    setResumable(null);
+    setPhase('goal');
+    setQuestion(null);
+    setTranscript([]);
+    setAnswer('');
+    setBrief(null);
+    setFrameworkFits([]);
+    setFitting(false);
+    setError(null);
+    setUnclearReason(null);
+    setShowExamples(false);
+    setGuardrailFindings(null);
+  }
+
+  /** Verwerp het bewaarde gesprek en begin schoon. */
+  function discardRun() {
+    clearRunDraft();
+    setResumable(null);
+  }
+
+  /** Hervat het bewaarde gesprek: haal de volgende vraag op bij het transcript. */
+  function resumeRun() {
+    if (!resumable) return;
+    const { goal: g, transcript: turns } = resumable;
+    setGoal(g);
+    goalRef.current = g; // de beurt hieronder heeft het doel meteen nodig
+    setTranscript(turns);
+    setResumable(null);
+    setError(null);
+    setUnclearReason(null);
+    sessionRef.current = newBehaviorSession();
+    log('session_started', { metadata: { resumed: true, answered: turns.length } });
+    void turn(turns, false);
+  }
+
+  /** Start het gesprek; guardrail-check op de doelbeschrijving eerst. */
+  function handleStart() {
+    if (!goal.trim()) {
+      toast.error('Beschrijf eerst wat je wilt bereiken.');
+      return;
+    }
+    const findings: GuardrailFinding[] = [
+      ...(settings.pii.enabled ? detectPii(goal) : []),
+      ...detectBlockedTopics(goal, settings.blockedTopics),
+    ];
+    if (findings.length > 0) {
+      setGuardrailFindings(findings);
+      return;
+    }
+    startDialogue();
+  }
+
+  /** Guardrail bevestigd (of niet nodig) → begin met de eerste vraag. */
+  function startDialogue() {
+    setGuardrailFindings(null);
+    setUnclearReason(null);
+    setError(null);
+    setTranscript([]);
+    setQuestion(null);
+    setAnswer('');
+    setBrief(null);
+    clearRunDraft();
+    setResumable(null);
+    sessionRef.current = newBehaviorSession();
+    log('session_started', { metadata: { goal_len: goal.trim().length } });
+    void turn([], false);
+  }
+
+  /**
+   * Eén beurt in het gesprek. `forceFinish` = de gebruiker wil geen vragen meer
+   * beantwoorden; de AI rondt dan af met wat er ligt.
+   */
+  async function turn(turns: TranscriptTurn[], forceFinish: boolean) {
+    setPhase('dialogue');
+    setBusy(true);
+    setFinishing(forceFinish);
+    setError(null);
+    try {
+      const res = await runClarifyTurn({
+        goal: goalRef.current.trim(),
+        transcript: turns,
+        forceFinish,
+        preferredProvider: settings.provider,
+        preferredModel: settings.model,
+      });
+      if (res.unclear) {
+        // De beschrijving is onbruikbaar: terug naar het doelveld met uitleg.
+        setUnclearReason(res.reason?.trim() || 'Je beschrijving is nog niet duidelijk genoeg.');
+        log('unclear_rejected', { metadata: { phase: 'clarify' } });
+        setPhase('goal');
+        return;
+      }
+      if (res.needs_input && res.question) {
+        setQuestion(res.question);
+        setAnswer('');
+        log('interview_question', { metadata: { turn: turns.length + 1 } });
+        return;
+      }
+      if (res.done && res.brief) {
+        setQuestion(null);
+        setBrief(res.brief);
+        clearRunDraft();
+        log('interview_finished', { metadata: { turns: turns.length, forced: forceFinish } });
+        void offerFramework(res.brief, turns);
+        return;
+      }
+      setError(res.error ?? 'De volgende vraag kon niet worden opgehaald.');
+      setPhase('error');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Het gesprek is mislukt.');
+      setPhase('error');
+    } finally {
+      setBusy(false);
+      setFinishing(false);
+    }
+  }
+
+  /** De gebruiker beantwoordt de huidige vraag; guardrail-check eerst. */
+  function submitAnswer() {
+    if (!question) return;
+    const a = answer.trim();
+    if (!a) {
+      toast.error('Vul eerst een antwoord in, of rond het gesprek af.');
+      return;
+    }
+    const findings: GuardrailFinding[] = [
+      ...(settings.pii.enabled ? detectPii(a) : []),
+      ...detectBlockedTopics(a, settings.blockedTopics),
+    ];
+    if (findings.length > 0) {
+      setGuardrailFindings(findings);
+      return;
+    }
+    commitAnswer(a);
+  }
+
+  /** Verwerk het antwoord en vraag de volgende beurt op. */
+  function commitAnswer(a: string) {
+    if (!question) return;
+    const turns = [...transcript, { question, answer: a }];
+    setTranscript(turns);
+    setQuestion(null);
+    log('interview_answer', { metadata: { turn: turns.length, answer_len: a.length } });
+    void turn(turns, false);
+  }
+
+  /** "Ik heb genoeg gedeeld": rond het gesprek af met wat er ligt. */
+  function finishDialogue() {
+    setQuestion(null);
+    void turn(transcript, true);
+  }
+
+  /**
+   * Na het gesprek: laat de AI op basis van de opdrachtbeschrijving bepalen welk
+   * framework het best past. Mislukt dat, dan toont de picker gewoon de volledige
+   * lijst — de gebruiker kan altijd zelf kiezen.
+   */
+  async function offerFramework(briefText: string, turns: TranscriptTurn[]) {
+    const frameworks = techniques.filter((tq) => isContextPrompt(tq));
+    if (frameworks.length === 0) {
+      setError('Er zijn geen frameworks beschikbaar om je prompt in op te bouwen.');
+      setPhase('error');
+      return;
+    }
+    setPhase('framework');
+    setFitting(true);
+    setFrameworkFits([]);
+    log('framework_fit_run', {
+      metadata: { candidates: frameworks.length, answered: turns.length },
+    });
+    try {
+      const fit = await recommendFramework({
+        // De opdrachtbeschrijving is de basis; het gesprek gaat mee als
+        // onderbouwing, zodat de keuze op de echte antwoorden rust.
+        ownPrompt: `${briefText}\n\nGESPREK:\n${serializeTranscript(turns)}`,
+        frameworks,
+        fromDialogue: true,
+        preferredProvider: settings.provider,
+        preferredModel: settings.model,
+      });
+      setFrameworkFits(fit.recommendations);
+    } catch {
+      setFrameworkFits([]);
+    } finally {
+      setFitting(false);
+    }
+  }
+
+  /**
+   * Bouw de prompt in het gekozen framework: het gesprek en de
+   * opdrachtbeschrijving gaan als gelabelde velden mee naar de generator. Het
+   * gesprek is al ÍN de tool gevoerd, dus het resultaat is een direct bruikbare
+   * prompt en geen prompt die de dialoog nog moet aanzwengelen.
+   */
+  async function compose(frameworkId: string) {
+    const framework = techniqueById(frameworkId);
+    if (!framework || !brief) return;
+    setPhase('composing');
+    setError(null);
+    log('compose_run', { techniqueId: frameworkId, metadata: { answered: transcript.length } });
+    try {
+      const res = await generatePrompt({
+        technique: framework,
+        promptContent: goalRef.current.trim() || '[BESCHRIJF HIER WAT JE WILT BEREIKEN]',
+        followUpAnswers: {},
+        extraAnsweredFields: [
+          { id: 'opdracht', label: 'Opdrachtbeschrijving uit het gesprek', answer: brief },
+          ...(transcript.length > 0
+            ? [
+                {
+                  id: 'gesprek',
+                  label: 'Vragen en antwoorden uit het gesprek',
+                  answer: serializeTranscript(transcript),
+                },
+              ]
+            : []),
+        ],
+        interviewResolved: true,
+        preferredProvider: settings.provider,
+        preferredModel: settings.model,
+        systemPrompt: settings.systemPrompt.trim() || undefined,
+        toneInstruction: settings.toneInstruction.trim() || undefined,
+        temperature: settings.temperature,
+      });
+      if (res.unclear || !res.optimized_content?.trim()) {
+        setUnclearReason(
+          res.reason?.trim() ||
+            'De verzamelde informatie is niet duidelijk genoeg om er een prompt van te maken.',
+        );
+        setError('De prompt kon niet worden gebouwd.');
+        log('unclear_rejected', { metadata: { phase: 'compose' } });
+        setPhase('error');
+        return;
+      }
+      const fit = frameworkFits.find((f) => f.id === frameworkId);
+      const dialogue: PromptDialogue = {
+        goal: goalRef.current.trim(),
+        transcript,
+        brief,
+        frameworkName: framework.name,
+        frameworkReason: (fit?.value ?? fit?.reason ?? '').trim() || undefined,
+      };
+      log('framework_packaged', { techniqueId: frameworkId });
+      clearRunDraft();
+      // De prompt verschijnt in de resultaatsectie onder dit blok; hier blijft
+      // alleen een korte bevestiging staan (anders zou het laadscherm blijven hangen).
+      setPhase('done');
+      onResult({ ...res, dialogue }, framework);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'De prompt kon niet worden gebouwd.');
+      log('step_error', { metadata: { where: 'compose' } });
+      setPhase('error');
+    }
+  }
+
+  /** Herprobeer de mislukte beurt; het gesprek tot nu toe blijft staan. */
+  function retry() {
+    setError(null);
+    setUnclearReason(null);
+    if (brief) {
+      void offerFramework(brief, transcript);
+      return;
+    }
+    void turn(transcript, false);
+  }
+
+  const showConversation = phase !== 'goal';
+
+  return (
+    <div className="space-y-5">
+      {/* Blauwe rand: deze doel-flow hoort bij de blauwe instap-tab. */}
+      <div className="overflow-hidden rounded-2xl border border-rijksblauw-500/60 shadow-sm dark:border-rijksblauw-500/50">
+        <div
+          className={clsx(
+            'overflow-hidden',
+            showConversation && 'border-b border-slate-200 dark:border-slate-700',
+          )}
+        >
+          {header}
+          <div className="space-y-5 bg-white p-5 dark:bg-slate-800 sm:p-6">
+            <div>
+              <div className="mb-1 flex items-center gap-1.5">
+                <label className="opl-label mb-0" htmlFor="goal-dialog-input">
+                  Wat wil je graag bereiken?
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowExamples((v) => !v)}
+                  aria-expanded={showExamples}
+                  aria-controls="goal-dialog-examples"
+                  title="Bekijk voorbeelden"
+                  className={clsx(
+                    'inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-medium transition-colors',
+                    showExamples
+                      ? 'text-rijksblauw-700 dark:text-rijksblauw-200'
+                      : 'text-slate-500 hover:text-rijksblauw-600 dark:text-slate-400 dark:hover:text-rijksblauw-300',
+                  )}
+                >
+                  <Info size={15} />
+                  <span>Voorbeelden</span>
+                </button>
+                {goal.trim() && (
+                  <button
+                    type="button"
+                    onClick={handleClear}
+                    title="Wis je doel en begin opnieuw"
+                    className="ml-auto inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-rose-50 hover:text-rose-600 dark:text-slate-200 dark:hover:bg-rose-500/10 dark:hover:text-rose-400"
+                  >
+                    <Eraser size={15} />
+                    <span>Opschonen</span>
+                  </button>
+                )}
+              </div>
+
+              {showExamples && (
+                <div
+                  id="goal-dialog-examples"
+                  className="animate-fade-in mb-3 space-y-2 rounded-xl border border-rijksblauw-200 bg-rijksblauw-50/40 p-3 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10"
+                >
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Voorbeelden van samengestelde doelen. Klik om er één in te vullen.
+                  </p>
+                  {GOAL_EXAMPLES.map((ex) => (
+                    <button
+                      key={ex}
+                      type="button"
+                      onClick={() => {
+                        setGoal(ex);
+                        setShowExamples(false);
+                      }}
+                      className="block w-full rounded-lg border border-slate-200 bg-white p-2.5 text-left text-sm leading-relaxed text-slate-600 transition-colors hover:border-rijksblauw-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700/60"
+                    >
+                      {ex}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <textarea
+                id="goal-dialog-input"
+                className="opl-input min-h-[120px] resize-y"
+                value={goal}
+                disabled={inputDisabled}
+                placeholder="Bijv. er moet een projectplan geschreven worden voor de invoering van een nieuwe interne tool"
+                onChange={(e) => setGoal(e.target.value)}
+              />
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                We denken stap voor stap met je mee en stellen vraag voor vraag alles wat we moeten
+                weten. Zodra het beeld compleet is, bepalen we welk framework past en bouwen we je
+                prompt.
+              </p>
+
+              {/* Hervat-melding: er staat nog een niet-afgemaakt gesprek klaar. */}
+              {resumable && phase === 'goal' && (
+                <div className="animate-fade-in mt-3 flex flex-col gap-3 rounded-xl border border-rijksblauw-200 bg-rijksblauw-50/50 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10">
+                  <div className="flex items-start gap-2 text-slate-600 dark:text-slate-300">
+                    <RotateCw size={16} className="mt-0.5 shrink-0 text-rijksblauw-500" />
+                    <span>
+                      Je hebt nog een lopend gesprek met {resumable.transcript.length} beantwoorde
+                      vragen. Verder waar je gebleven was?
+                    </span>
+                  </div>
+                  <div className="flex shrink-0 gap-2">
+                    <button type="button" className="opl-btn-secondary" onClick={discardRun}>
+                      Verwijder
+                    </button>
+                    <button type="button" className="opl-btn-primary" onClick={resumeRun}>
+                      Hervatten
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {phase === 'goal' && (
+              <button
+                type="button"
+                className="opl-btn-primary"
+                onClick={handleStart}
+                disabled={!goal.trim()}
+              >
+                <MessageCircleQuestion size={18} /> Start het gesprek
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Het gesprek, de frameworkkeuze of het bouwen. */}
+        {showConversation && (
+          <div className="space-y-5 bg-white p-5 dark:bg-slate-800 sm:p-6">
+            {phase === 'error' ? (
+              <div className="flex flex-col gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 sm:flex-row sm:items-center sm:justify-between dark:border-rose-500/30 dark:bg-rose-500/15 dark:text-rose-200">
+                <span>{stripMarkdown(error ?? 'Het gesprek is mislukt.')}</span>
+                <button type="button" className="opl-btn-secondary shrink-0" onClick={retry}>
+                  Opnieuw proberen
+                </button>
+              </div>
+            ) : phase === 'composing' ? (
+              <div ref={composingRef} className="scroll-mt-24">
+                <OptimizingLoader techniqueName="je prompt" />
+              </div>
+            ) : phase === 'done' ? (
+              <div className="flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50/50 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between dark:border-emerald-500/30 dark:bg-emerald-500/10">
+                <span className="flex items-start gap-2 text-emerald-800 dark:text-emerald-200">
+                  <Check size={16} className="mt-0.5 shrink-0" />
+                  Je prompt is klaar en staat hieronder.
+                </span>
+                <button type="button" className="opl-btn-secondary shrink-0" onClick={handleClear}>
+                  Begin opnieuw
+                </button>
+              </div>
+            ) : phase === 'framework' ? (
+              <FrameworkChoice
+                fits={frameworkFits}
+                fitting={fitting}
+                frameworks={techniques.filter((tq) => isContextPrompt(tq))}
+                onChoose={(id) => void compose(id)}
+              />
+            ) : (
+              <InterviewPanel
+                socratic={false}
+                intro="We stellen één vraag per keer, tot je vraagstuk compleet in beeld is. De laatste vragen gaan over hoe en waar je de prompt straks gebruikt. Klaar met antwoorden? Rond dan af — we werken verder met wat er ligt."
+                question={question}
+                transcript={transcript}
+                answer={answer}
+                busy={busy}
+                finishing={finishing}
+                onAnswerChange={setAnswer}
+                onSubmit={submitAnswer}
+                onFinish={finishDialogue}
+              />
+            )}
+          </div>
+        )}
+      </div>
+
+      {unclearReason && (
+        <div
+          role="alert"
+          className="animate-fade-in flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
+        >
+          <AlertTriangle size={18} className="mt-0.5 shrink-0" />
+          <div>
+            <p className="font-medium">Je omschrijving is nog niet duidelijk genoeg</p>
+            <p className="mt-0.5 text-amber-700 dark:text-amber-300/90">
+              {stripMarkdown(unclearReason)}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {guardrailFindings && (
+        <GuardrailDialog
+          findings={guardrailFindings}
+          piiWarning={settings.pii.warning}
+          // Route naar de juiste actie: een antwoord in het gesprek, of de start
+          // van het gesprek vanuit het doelveld.
+          onConfirm={() => {
+            setGuardrailFindings(null);
+            if (question) commitAnswer(answer.trim());
+            else startDialogue();
+          }}
+          onCancel={() => setGuardrailFindings(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * De frameworkkeuze ná het gesprek. De AI analyseert de opdrachtbeschrijving —
+ * inclusief hoe de prompt gebruikt wordt en welke uitkomst die moet krijgen —
+ * en zet de best passende raamwerken bovenaan; de eerste is voorgeselecteerd.
+ * Wie liever zelf kiest, klapt de volledige lijst uit. Mislukt de analyse, dan
+ * blijft de lijst over: de gebruiker komt nooit vast te zitten.
+ */
+function FrameworkChoice({
+  fits,
+  fitting,
+  frameworks,
+  onChoose,
+}: {
+  fits: TechniqueRecommendation[];
+  fitting: boolean;
+  frameworks: Technique[];
+  onChoose: (frameworkId: string) => void;
+}) {
+  const byId = new Map(frameworks.map((f) => [f.id, f]));
+  // Toon maximaal 3 aanbevelingen; de eerste is de aanbevolen keuze.
+  const options = fits.filter((f) => byId.has(f.id)).slice(0, 3);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [showAll, setShowAll] = useState(false);
+
+  // De voorselectie volgt de aanbeveling zodra die binnen is (de analyse loopt
+  // nog wanneer dit paneel voor het eerst rendert).
+  useEffect(() => {
+    setSelected((prev) => prev ?? options[0]?.id ?? null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [options[0]?.id]);
+
+  if (fitting) {
+    return (
+      <div className="flex items-center gap-2 rounded-xl border border-rijksblauw-200 bg-white p-3 text-sm text-rijksblauw-600 dark:border-rijksblauw-500/30 dark:bg-slate-800 dark:text-rijksblauw-300">
+        <Loader2 size={16} className="animate-spin" />
+        We analyseren je antwoorden en zoeken het best passende framework…
+      </div>
+    );
+  }
+
+  // Zonder aanbevelingen is de volledige lijst de enige route: meteen open.
+  const listOpen = showAll || options.length === 0;
+  const rest = frameworks.filter((f) => !options.some((o) => o.id === f.id));
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <p className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+          <Package size={16} className="text-rijksblauw-500" />
+          Het best passende framework
+        </p>
+        <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+          {options.length > 0
+            ? 'Op basis van je antwoorden — wat je wilt bereiken, hoe je de prompt straks gebruikt en welke uitkomst je zoekt — past dit framework het beste. Je kunt ook zelf een ander kiezen.'
+            : 'Kies zelf het framework waarin je prompt wordt opgebouwd.'}
+        </p>
+      </div>
+
+      {options.length > 0 && (
+        <ul className="space-y-3">
+          {options.map((f, idx) => {
+            const tech = byId.get(f.id);
+            if (!tech) return null;
+            const isSel = selected === f.id;
+            const reason = (f.value ?? f.reason ?? '').trim();
+            return (
+              <li key={f.id}>
+                <button
+                  type="button"
+                  onClick={() => setSelected(f.id)}
+                  aria-pressed={isSel}
+                  className={clsx(
+                    'flex w-full items-start gap-3 rounded-xl border p-4 text-left shadow-sm transition-colors',
+                    isSel
+                      ? 'border-rijksblauw-400 bg-rijksblauw-50/50 dark:border-rijksblauw-500/50 dark:bg-rijksblauw-500/10'
+                      : 'border-slate-200 bg-white hover:border-rijksblauw-300 dark:border-slate-700 dark:bg-slate-800',
+                  )}
+                >
+                  <span
+                    className={clsx(
+                      'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2',
+                      isSel
+                        ? 'border-rijksblauw-500 bg-rijksblauw-500 text-white'
+                        : 'border-slate-300 dark:border-slate-600',
+                    )}
+                  >
+                    {isSel && <Check size={12} />}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-semibold text-slate-800 dark:text-slate-100">
+                        {tech.name}
+                      </span>
+                      {idx === 0 && (
+                        <span className="opl-badge bg-rijksblauw-500/15 text-rijksblauw-700 dark:text-rijksblauw-200">
+                          aanbevolen
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                      {stripMarkdown(reason || 'Past goed bij de opbouw van je prompt.')}
+                    </p>
+                  </div>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {/* Zelf kiezen: alle overige frameworks, ingeklapt achter één regel. */}
+      {rest.length > 0 && (
+        <div>
+          {options.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowAll((v) => !v)}
+              aria-expanded={listOpen}
+              className="flex items-center gap-1.5 text-sm font-medium text-slate-500 transition-colors hover:text-rijksblauw-600 dark:text-slate-400 dark:hover:text-rijksblauw-300"
+            >
+              <ChevronDown
+                size={16}
+                className={clsx('transition-transform', listOpen && 'rotate-180')}
+              />
+              Zelf een ander framework kiezen
+            </button>
+          )}
+          {listOpen && (
+            <ul className="animate-fade-in mt-3 grid gap-2 sm:grid-cols-2">
+              {rest.map((f) => {
+                const isSel = selected === f.id;
+                return (
+                  <li key={f.id}>
+                    <button
+                      type="button"
+                      onClick={() => setSelected(f.id)}
+                      aria-pressed={isSel}
+                      className={clsx(
+                        'flex w-full items-start gap-2 rounded-lg border p-3 text-left text-sm transition-colors',
+                        isSel
+                          ? 'border-rijksblauw-400 bg-rijksblauw-50/50 dark:border-rijksblauw-500/50 dark:bg-rijksblauw-500/10'
+                          : 'border-slate-200 bg-white hover:border-rijksblauw-300 dark:border-slate-700 dark:bg-slate-800',
+                      )}
+                    >
+                      <span
+                        className={clsx(
+                          'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2',
+                          isSel
+                            ? 'border-rijksblauw-500 bg-rijksblauw-500 text-white'
+                            : 'border-slate-300 dark:border-slate-600',
+                        )}
+                      >
+                        {isSel && <Check size={10} />}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block font-medium text-slate-800 dark:text-slate-100">
+                          {f.name}
+                        </span>
+                        {f.strength && (
+                          <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
+                            {stripMarkdown(f.strength)}
+                          </span>
+                        )}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      )}
+
+      <div className="flex justify-end pt-1">
+        <button
+          type="button"
+          className="opl-btn-primary px-6 py-2.5"
+          onClick={() => selected && onChoose(selected)}
+          disabled={!selected}
+        >
+          <Sparkles size={18} /> Bouw mijn prompt <ArrowRight size={16} />
+        </button>
+      </div>
+    </div>
+  );
+}

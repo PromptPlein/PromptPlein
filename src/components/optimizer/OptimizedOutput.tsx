@@ -1,5 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
-import { Copy, Check, RotateCcw, Save, Share2, Loader2, FolderCheck, Sparkles, Play } from 'lucide-react';
+import {
+  Copy,
+  Check,
+  ChevronDown,
+  RotateCcw,
+  Save,
+  Share2,
+  Loader2,
+  FolderCheck,
+  Sparkles,
+  Play,
+} from 'lucide-react';
+import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import { Link } from 'react-router-dom';
 import { copyToClipboard, getCurrentUser } from '@/lib/utils';
@@ -13,7 +25,13 @@ import RichText from './RichText';
 import ShareModal from '@/components/share/ShareModal';
 import SearchableSelect from '@/components/common/SearchableSelect';
 import VisibilityPicker from '@/components/prompts/VisibilityPicker';
-import type { OptimizeResult, Prompt, Technique, VisibilityLevel } from '@/types';
+import type {
+  OptimizeResult,
+  Prompt,
+  PromptDialogue,
+  Technique,
+  VisibilityLevel,
+} from '@/types';
 
 interface OptimizedOutputProps {
   result: OptimizeResult;
@@ -263,6 +281,12 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
       <pre className="max-h-[420px] overflow-auto whitespace-pre-wrap rounded-xl border border-slate-200 bg-slate-50 p-4 font-mono text-[13px] leading-relaxed text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
         {result.optimized_content}
       </pre>
+
+      {/* Kwam deze prompt uit de doel-dialoog? Dan is navolgbaar waar hij vandaan
+          komt: het beschreven doel, de gestelde vragen met je antwoorden, de
+          opdrachtbeschrijving die eruit volgde en het gekozen framework. Bewust
+          ingeklapt — de prompt zelf is de hoofdzaak. */}
+      {result.dialogue && <DialogueSummary dialogue={result.dialogue} />}
 
       {/* Direct-uitvoeren-resultaat: het eindproduct dat de AI meteen afleverde. */}
       {executed && (
@@ -656,6 +680,92 @@ function humanizeSaveError(err: unknown): string {
     return 'Je bent niet (meer) ingelogd. Log opnieuw in om de prompt op te slaan.';
   }
   return e?.message || 'Opslaan mislukt';
+}
+
+/**
+ * De toelichting bij een prompt uit de doel-dialoog: hoeveel vragen er zijn
+ * gesteld, welke antwoorden je gaf, welke opdrachtbeschrijving daaruit volgde en
+ * waarom dit framework is gekozen. Ingeklapt tenzij de gebruiker hem opent.
+ */
+function DialogueSummary({ dialogue }: { dialogue: PromptDialogue }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="rounded-xl border border-slate-200 dark:border-slate-700">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+      >
+        <span>
+          <span className="block text-sm font-medium text-slate-700 dark:text-slate-200">
+            Hoe deze prompt tot stand kwam
+          </span>
+          <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
+            {dialogue.transcript.length} vragen beantwoord · framework:{' '}
+            {dialogue.frameworkName ?? '—'}
+          </span>
+        </span>
+        <ChevronDown
+          size={18}
+          className={clsx('shrink-0 text-slate-400 transition-transform', open && 'rotate-180')}
+        />
+      </button>
+
+      {open && (
+        <div className="animate-fade-in space-y-4 border-t border-slate-200 px-4 py-4 text-sm dark:border-slate-700">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              Wat je wilde bereiken
+            </p>
+            <p className="mt-1 text-slate-700 dark:text-slate-200">{dialogue.goal}</p>
+          </div>
+
+          {dialogue.transcript.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                Gestelde vragen ({dialogue.transcript.length})
+              </p>
+              <ol className="mt-1 space-y-2">
+                {dialogue.transcript.map((turn, i) => (
+                  <li
+                    key={i}
+                    className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs dark:border-slate-700 dark:bg-slate-900"
+                  >
+                    <p className="font-medium text-slate-600 dark:text-slate-300">
+                      {i + 1}. {turn.question}
+                    </p>
+                    <p className="mt-0.5 text-slate-500 dark:text-slate-400">{turn.answer}</p>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              Opdrachtbeschrijving uit het gesprek
+            </p>
+            <pre className="mt-1 max-h-64 overflow-auto whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-relaxed text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+              {dialogue.brief}
+            </pre>
+          </div>
+
+          {dialogue.frameworkName && (
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                Gekozen framework
+              </p>
+              <p className="mt-1 text-slate-700 dark:text-slate-200">
+                <span className="font-medium">{dialogue.frameworkName}</span>
+                {dialogue.frameworkReason ? ` — ${dialogue.frameworkReason}` : ''}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /** Stel een zinvolle standaardtitel voor op basis van techniek en doel. */

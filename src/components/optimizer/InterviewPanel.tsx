@@ -15,6 +15,7 @@ import type { PlanStep, Technique, TranscriptTurn } from '@/types';
  */
 export function InterviewPanel({
   socratic,
+  intro,
   question,
   transcript,
   answer,
@@ -26,6 +27,12 @@ export function InterviewPanel({
 }: {
   /** Socratisch: de AI stelt alleen vragen zodat JIJ tot inzicht komt (geen conclusie). */
   socratic: boolean;
+  /**
+   * Eigen introtekst boven het gesprek. Leeg = de standaardtekst die bij de
+   * gekozen toon (socratisch of niet) hoort. De doel-flow zet hier zijn eigen
+   * tekst neer: die dialoog kent een ander vragenmaximum.
+   */
+  intro?: string;
   question: string | null;
   transcript: TranscriptTurn[];
   answer: string;
@@ -44,9 +51,10 @@ export function InterviewPanel({
       <div className="flex items-start gap-2">
         <MessageCircleQuestion size={18} className="mt-0.5 shrink-0 text-rijksblauw-500" />
         <p className="text-sm text-slate-600 dark:text-slate-300">
-          {socratic
-            ? 'De AI stelt alleen vragen (max. 7) zodat jij je eigen denken aanscherpt — geen antwoorden of adviezen. Klaar? Rond af voor een neutrale samenvatting van jouw inzichten.'
-            : 'De AI stelt op basis van je antwoorden telkens de volgende vraag (max. 7), tot het beeld compleet is. Klaar met input geven? Rond dan af — de AI trekt dan meteen een conclusie.'}
+          {intro ??
+            (socratic
+              ? 'De AI stelt alleen vragen (max. 7) zodat jij je eigen denken aanscherpt — geen antwoorden of adviezen. Klaar? Rond af voor een neutrale samenvatting van jouw inzichten.'
+              : 'De AI stelt op basis van je antwoorden telkens de volgende vraag (max. 7), tot het beeld compleet is. Klaar met input geven? Rond dan af — de AI trekt dan meteen een conclusie.')}
         </p>
       </div>
 

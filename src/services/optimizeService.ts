@@ -4,6 +4,7 @@ import { tidyPromptMarkup } from '@/lib/utils';
 import type { AiProvider } from '@/config/aiModels';
 import type {
   AnalyzeResult,
+  ClarifyResult,
   ExecuteResult,
   FrameworkFit,
   FrameworkFitResult,
@@ -1127,6 +1128,93 @@ export async function analyzePlanStep(args: {
   }
 }
 
+/**
+ * Eén beurt van de doel-dialoog (clarify-modus): de gebruiker beschrijft in eigen
+ * woorden wat die wil bereiken en de AI denkt stap voor stap mee met één vraag per
+ * beurt — eerst over het vraagstuk zelf, dan verdiepend, en tot slot over gebruik
+ * en vorm (chatgesprek, zelfstandige assistent of programma; tekst, code, beeld, …).
+ * Die laatste antwoorden bepalen straks welk framework past.
+ *
+ * Levert óf `needs_input`+`question` (de volgende vraag), óf `done`+`brief` (de
+ * uitgeschreven opdrachtbeschrijving). Er komt bewust GEEN template uit deze
+ * modus. Faalt de AI, dan honest-degrade: `{success:false, error}` zodat de UI
+ * een retry toont in plaats van een verzonnen vraag.
+ */
+export async function runClarifyTurn(args: {
+  /** Wat de gebruiker in eigen woorden beschreef; blijft de hele dialoog gelijk. */
+  goal: string;
+  /** Het vraag-en-antwoordgesprek tot nu toe. */
+  transcript?: TranscriptTurn[];
+  /** De gebruiker wil geen vragen meer beantwoorden → rond af met wat er ligt. */
+  forceFinish?: boolean;
+  preferredProvider?: AiProvider;
+  preferredModel?: string;
+}): Promise<ClarifyResult> {
+  try {
+    const data = await postOptimize<{
+      success?: boolean;
+      needs_input?: boolean;
+      question?: string;
+      asked?: number;
+      max?: number;
+      done?: boolean;
+      brief?: string;
+      provider?: ClarifyResult['provider'];
+      unclear?: boolean;
+      reason?: string;
+      error?: string;
+    }>({
+      mode: 'clarify',
+      goal: args.goal,
+      transcript: args.transcript ?? [],
+      forceFinish: Boolean(args.forceFinish),
+      preferredProvider: args.preferredProvider ?? 'auto',
+      preferredModel: args.preferredModel,
+    });
+    if (!data) {
+      return {
+        success: false,
+        provider: 'local-template',
+        error: 'Geen AI-service beschikbaar voor het gesprek.',
+      };
+    }
+    if (data.unclear) {
+      return {
+        success: false,
+        unclear: true,
+        reason: data.reason,
+        provider: data.provider ?? 'claude',
+      };
+    }
+    if (data.success && data.needs_input && data.question?.trim()) {
+      return {
+        success: true,
+        needs_input: true,
+        question: data.question.trim(),
+        asked: data.asked,
+        max: data.max,
+        provider: data.provider ?? 'claude',
+      };
+    }
+    if (data.success && data.brief?.trim()) {
+      return {
+        success: true,
+        done: true,
+        brief: data.brief.trim(),
+        provider: data.provider ?? 'claude',
+      };
+    }
+    return {
+      success: false,
+      provider: data.provider ?? 'claude',
+      error: data.error ?? 'Er kwam geen vraag of samenvatting terug.',
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Onbekende fout';
+    return { success: false, provider: 'local-template', error: `Gesprek mislukt (${message}).` };
+  }
+}
+
 /** Eén door de AI blootgelegde aanname in de eindtemplate, als vraag aan de gebruiker. */
 export interface TemplateAssumption {
   label: string;
@@ -1194,8 +1282,16 @@ export async function recommendFramework(args: {
    * Wordt bij de heranalyse meegewogen zodat de aanbeveling beter aansluit.
    */
   clarification?: string;
+  /**
+   * De `ownPrompt` is de OPDRACHTBESCHRIJVING uit de doel-dialoog, geen door de
+   * gebruiker geschreven prompt. De server weegt dan expliciet mee hoe de prompt
+   * straks gebruikt wordt (chat / zelfstandige assistent / programma) en in welke
+   * vorm de uitkomst moet landen.
+   */
+  fromDialogue?: boolean;
 }): Promise<FrameworkRecommendResult> {
-  const { ownPrompt, frameworks, preferredProvider, preferredModel, clarification } = args;
+  const { ownPrompt, frameworks, preferredProvider, preferredModel, clarification, fromDialogue } =
+    args;
   const functionUrl = getFunctionUrl('optimize-prompt');
 
   if (isSupabaseConfigured && functionUrl) {
@@ -1211,6 +1307,7 @@ export async function recommendFramework(args: {
           mode: 'recommend-framework',
           ownPrompt,
           clarification,
+          fromDialogue: Boolean(fromDialogue),
           techniques: frameworks.map((t) => ({
             id: t.id,
             name: t.name,

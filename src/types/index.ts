@@ -225,6 +225,8 @@ export type BehaviorAction =
   | 'interview_finished' // interview afgerond (door AI of door de stop-knop)
   | 'step_committed' // materiaal van een stap vastgelegd; door naar de volgende
   | 'step_regenerated' // een afgeronde stap opnieuw gedaan
+  | 'framework_fit_run' // de AI zocht het best passende framework bij het vraagstuk
+  | 'framework_packaged' // de prompt werd in het gekozen framework opgebouwd
   | 'compose_run' // de eindtemplate werd samengesteld
   | 'assumptions_shown' // socratische eindcontrole vond aannames in het resultaat
   | 'assumptions_applied' // gebruiker beantwoordde aannames; template aangescherpt
@@ -294,6 +296,12 @@ export interface OptimizeResult {
    * bij de optimalisatie bewaard voor herleidbaarheid/herhaling.
    */
   recipe?: PromptRecipe;
+  /**
+   * De neerslag van de doel-dialoog die tot deze prompt leidde (doel, gesprek,
+   * opdrachtbeschrijving en gekozen framework). Alleen gezet door de doel-flow;
+   * voedt de inklapbare toelichting onder het resultaat.
+   */
+  dialogue?: PromptDialogue;
 }
 
 /** Eén techniekaanbeveling bij een door de gebruiker beschreven doel. */
@@ -539,6 +547,48 @@ export interface PlanStepResult {
   /** De input voor deze stap was onduidelijk; `reason` legt uit wat. */
   unclear?: boolean;
   reason?: string;
+}
+
+/**
+ * Antwoord van de optimize-prompt service voor één beurt van de doel-dialoog
+ * (clarify-modus): óf `needs_input`+`question` (de volgende vraag), óf
+ * `done`+`brief` (het vraagstuk is compleet en uitgeschreven als
+ * opdrachtbeschrijving). Plus de gedeelde clarity-gate en foutafhandeling.
+ */
+export interface ClarifyResult {
+  success: boolean;
+  provider: AiProviderResult;
+  /** Er is nog een vraag nodig voordat de AI het vraagstuk compleet acht. */
+  needs_input?: boolean;
+  /** De ene volgende vraag aan de gebruiker. */
+  question?: string;
+  /** Het hoeveelste vraag dit is, en het absolute maximum (server-bepaald). */
+  asked?: number;
+  max?: number;
+  /** De dialoog is afgerond. */
+  done?: boolean;
+  /** De uitgeschreven opdrachtbeschrijving (doel, context, gebruik, vorm, …). */
+  brief?: string;
+  /** Blokkerende fout (bijv. AI onbereikbaar); de UI toont dan een retry. */
+  error?: string;
+  /** De beschrijving was onbruikbaar; `reason` legt uit wat onduidelijk is. */
+  unclear?: boolean;
+  reason?: string;
+}
+
+/**
+ * De neerslag van een doel-dialoog bij een gegenereerde prompt: het beschreven
+ * doel, het volledige vraag-en-antwoordgesprek, de daaruit afgeleide
+ * opdrachtbeschrijving en het gekozen framework. Voedt de inklapbare toelichting
+ * onder het resultaat, zodat navolgbaar is waar de prompt vandaan komt.
+ */
+export interface PromptDialogue {
+  goal: string;
+  transcript: TranscriptTurn[];
+  brief: string;
+  frameworkName?: string;
+  /** De motivatie van de AI waarom dit framework bij dit vraagstuk past. */
+  frameworkReason?: string;
 }
 
 /**

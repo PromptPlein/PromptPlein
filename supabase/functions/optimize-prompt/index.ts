@@ -39,6 +39,7 @@ type Mode =
   | 'plan'
   | 'plan-step'
   | 'plan-step-analyze'
+  | 'clarify'
   | 'execute'
   | 'persona-fill'
   | 'fewshot-example'
@@ -239,6 +240,13 @@ interface RequestBody {
    * gebruiker dit aan; de heranalyse weegt het mee als extra context.
    */
   clarification?: string;
+  /**
+   * 'recommend-framework': de `ownPrompt` is de OPDRACHTBESCHRIJVING uit de
+   * doel-dialoog (clarify-modus), niet een door de gebruiker geschreven prompt.
+   * De keuze weegt dan expliciet mee hoe de prompt straks gebruikt wordt (chat /
+   * zelfstandige assistent / programma) en in welke vorm de uitkomst moet landen.
+   */
+  fromDialogue?: boolean;
   /**
    * 'prefill': de aangeleverde tekst is een GEÜPLOAD DOCUMENT (geen losse prompt).
    * Dan leest de AI het document volledig van kop tot staart door en analyseert
@@ -1372,18 +1380,54 @@ Geef UITSLUITEND geldige JSON terug, zonder codeblok of extra tekst, in dit form
 
 Gebruik alleen id's die exact in de lijst voorkomen. Geef minstens 1 en maximaal 3 aanbevelingen.`;
 
+// Variant voor de doel-flow: de input is geen geschreven prompt maar de
+// OPDRACHTBESCHRIJVING uit de clarify-dialoog. De keuze moet dan expliciet op
+// gebruik (chat / zelfstandige assistent / programma) en vorm (tekst, code,
+// beeld, …) rusten — precies waar de laatste vragenronde naar vroeg.
+const DIALOGUE_FRAMEWORK_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse rijksoverheid.
+Een interne overheidsmedewerker heeft via een vraaggesprek een uitgewerkte OPDRACHTBESCHRIJVING
+opgeleverd: wat die wil bereiken, voor wie, wat eruit moet komen, hoe de prompt straks gebruikt wordt
+en in welke vorm.
+
+Analyseer die opdrachtbeschrijving en bepaal welk prompt framework (een compleet raamwerk dat de hele
+prompt structureert, bijv. CARE, CRISP, CO-STAR) de opdracht het best draagt. Weeg expliciet mee:
+- GEBRUIK: voert de medewerker de prompt zelf uit in een chatgesprek, gaat een AI-assistent er
+  zelfstandig mee aan het werk, of roept een programma de prompt automatisch aan?
+- VORM van de uitkomst: tekst, een plan of analyse, code of software, beeld, video of een gesprek.
+- Eenmalig gebruik of steeds opnieuw met wisselende invoer.
+Een raamwerk dat niet bij het gebruik of de vorm past, val je af — hoe sterk het verder ook is.
+
+Kies de best passende frameworks (maximaal 3), gerangschikt van meest naar minst geschikt.
+
+Geef per aanbeveling TWEE dingen:
+- "reason": één korte zin die de kracht van het raamwerk koppelt aan deze opdracht.
+- "value": één KORTE, bondige zin (max. ~20 woorden) die concreet zegt waarom dit raamwerk past bij
+  precies DIT vraagstuk, inclusief het gebruik en de vorm. Geen opsomming, geen algemeenheden.
+
+Het gesprek is al gevoerd, dus "missingContext" is normaal gesproken een lege lijst; noem alleen iets
+als er echt een blinde vlek in de opdrachtbeschrijving zit.
+
+Geef UITSLUITEND geldige JSON terug, zonder codeblok of extra tekst, in dit formaat:
+{"summary":"<1 zin: wat voor opdracht dit is en wat het beste raamwerk eraan toevoegt, in het Nederlands>","missingContext":[],"recommendations":[{"id":"<framework-id>","reason":"<korte motivatie in 1 zin, in het Nederlands>","value":"<1 korte zin (max ~20 woorden) waarom dit raamwerk past bij dit vraagstuk, in het Nederlands>"}]}
+
+Gebruik alleen id's die exact in de lijst voorkomen. Geef minstens 1 en maximaal 3 aanbevelingen.`;
+
 /**
  * Bouw de gebruikersprompt voor de framework-aanbevelingsmodus (eigen-prompt-flow).
  * `clarification` (optioneel) bevat eerdere toelichtingen van de gebruiker uit de
  * heranalyse-lus: extra context die de gebruiker zelf heeft aangevuld nadat de AI
- * aangaf wat er nog ontbrak. Die weegt de AI expliciet mee.
+ * aangaf wat er nog ontbrak. Die weegt de AI expliciet mee. `fromDialogue` schakelt
+ * de aanhef om: dan is de input de opdrachtbeschrijving uit de doel-dialoog.
  */
 const RECOMMEND_FRAMEWORK_USER_PROMPT = (
   ownPrompt: string,
   frameworks: TechniqueSummary[],
   clarification?: string,
+  fromDialogue = false,
 ) =>
-  `PROMPT VAN DE GEBRUIKER (analyseer deze):\n"""\n${ownPrompt}\n"""\n\n` +
+  (fromDialogue
+    ? `OPDRACHTBESCHRIJVING UIT HET GESPREK (analyseer deze):\n"""\n${ownPrompt}\n"""\n\n`
+    : `PROMPT VAN DE GEBRUIKER (analyseer deze):\n"""\n${ownPrompt}\n"""\n\n`) +
   (clarification && clarification.trim()
     ? `AANVULLENDE TOELICHTING VAN DE GEBRUIKER (weeg dit mee als extra context bij de prompt):\n"""\n${clarification.trim()}\n"""\n\n`
     : '') +
@@ -1397,6 +1441,111 @@ const RECOMMEND_FRAMEWORK_USER_PROMPT = (
       return parts.join(' | ');
     })
     .join('\n')}`;
+
+// --- Clarify-modus: de doel-flow. Eén vraag per beurt tot het vraagstuk staat ---
+// De medewerker beschrijft in eigen woorden wat die wil bereiken; daarna denkt de
+// AI stap voor stap mee en stelt vraag na vraag tot het beeld compleet is. Levert
+// géén template op maar een uitgewerkte OPDRACHTBESCHRIJVING (brief) waarmee daarna
+// het best passende framework wordt gekozen en de prompt wordt samengesteld.
+//
+// De laatste vragenronde gaat bewust over GEBRUIK EN VORM (chat, zelfstandige
+// assistent of programma; tekst, code, beeld, …). Die antwoorden bepalen straks
+// welk framework past — zonder ze zou de keuze op een aanname rusten.
+//
+// Namen van technieken/frameworks komen in de vragen NOOIT voor: de gebruiker
+// beschrijft zijn vraagstuk, niet zijn prompt-methode.
+const CLARIFY_MAX_QUESTIONS = 10;
+
+const CLARIFY_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse rijksoverheid.
+Een interne overheidsmedewerker beschrijft in eigen woorden wat die wil bereiken. Jouw taak: dat
+vraagstuk VOLLEDIG helder krijgen door STAP VOOR STAP vragen te stellen — één vraag per beurt — zodat
+er daarna één sterke, herbruikbare prompt van gemaakt kan worden. Je schrijft in deze fase NOG GEEN prompt.
+
+Werkwijze — houd je STRIKT aan dit protocol:
+- REDENEER EERST voor jezelf (niet zichtbaar voor de gebruiker): wat wil deze persoon werkelijk
+  bereiken, welke aannames zitten er in de beschrijving, en wat weet je nog niet? Bepaal daaruit de
+  ENE vraag die nu het meeste toevoegt.
+- Stel nooit meerdere vragen tegelijk, herhaal geen eerder gestelde vraag en vraag nooit naar iets
+  wat de gebruiker al heeft verteld.
+- Stel open vragen in gewone, begrijpelijke taal. Noem NOOIT namen van prompttechnieken of
+  frameworks en gebruik geen vakjargon uit prompt-engineering.
+- Beoordeel na ELK antwoord opnieuw of het beeld compleet genoeg is. Is het compleet, rond dan
+  meteen af — ook als je nog vragen over had.
+- Houd rekening met de overheidscontext (zorgvuldigheid, doelgroep, formele kaders), maar vul niets
+  in over de organisatie, sector of het beleid van de gebruiker als die dat niet zelf aangeeft.
+
+Je stelt drie soorten vragen, in deze volgorde:
+1. HET VRAAGSTUK (maximaal 7 vragen): wat wil de gebruiker bereiken, voor wie, in welke situatie,
+   wat is de gewenste uitkomst, wat zijn de randvoorwaarden en wat mag juist niet.
+2. VERDIEPING (maximaal 3 extra vragen, alleen als het beeld daarna nog niet scherp is): vraag door
+   op wat nog vaag, tegenstrijdig of onbenoemd is.
+3. GEBRUIK EN VORM (stel deze vragen vóór je afrondt, tenzij het antwoord al ondubbelzinnig uit het
+   gesprek blijkt): de vragen die nodig zijn om te bepalen in welke vorm de prompt moet landen, zoals
+   - Wie voert de prompt straks uit: de gebruiker zelf in een chatgesprek met een AI, een
+     AI-assistent die zelfstandig taken uitvoert, of een programma dat de prompt automatisch aanroept?
+   - Wat moet eruit komen: tekst, een plan of analyse, code of software, beeld, video, of een gesprek?
+   - Wordt de prompt één keer gebruikt, of steeds opnieuw met wisselende invoer?
+   Sla een vraag over als het antwoord al vaststaat.
+
+ABSOLUUT MAXIMUM: ${CLARIFY_MAX_QUESTIONS} vragen in totaal. Daarna rond je altijd af.
+
+PROTOCOL (strikt):
+- Stel je een vraag? Antwoord dan met exact één regel die begint met "VRAAG:" gevolgd door je vraag.
+  Geen inleiding, geen extra tekst.
+- Rond je af? Antwoord dan met "KLAAR:" gevolgd door de uitgewerkte opdrachtbeschrijving, met deze
+  kopjes elk op een eigen regel (laat een kopje weg als er echt niets over te zeggen valt):
+  DOEL:
+  CONTEXT:
+  DOELGROEP:
+  GEWENSTE UITKOMST:
+  GEBRUIK: (chatgesprek, zelfstandige AI-assistent of programma; eenmalig of herbruikbaar)
+  VORM: (tekst, plan/analyse, code, beeld, video of gesprek)
+  RANDVOORWAARDEN:
+  OPEN PUNTEN: (wat de gebruiker straks per keer zelf aanvult; laat weg als die er niet zijn)
+- Wordt hieronder gevraagd om AF TE RONDEN? Stel dan GEEN vraag meer, maar geef direct de
+  opdrachtbeschrijving met "KLAAR:" op basis van wat er ligt.
+- Schrijf in de opdrachtbeschrijving ECHTE inhoud uit het gesprek. Verzin niets namens de gebruiker,
+  gebruik geen plaatshouders behalve onder OPEN PUNTEN, en schrijf GEEN prompt-template.
+
+${CLARITY_GATE_JSON_INSTRUCTION}`;
+
+/** Bouwt de gebruikersprompt voor één beurt van de clarify-dialoog. */
+const CLARIFY_USER_PROMPT = (args: {
+  goal: string;
+  transcript?: { question: string; answer: string }[];
+  forceFinish?: boolean;
+}) => {
+  const turns = args.transcript ?? [];
+  const parts: string[] = [`WAT DE GEBRUIKER WIL BEREIKEN (eigen woorden):\n${args.goal.trim()}`];
+  if (turns.length === 0) {
+    parts.push(
+      'GESPREK TOT NU TOE:\n(nog geen vragen gesteld). Bepaal op basis van de beschrijving hierboven ' +
+        'welke vraag het meeste toevoegt en stel die als eerste. Vraag niet naar wat er al staat.',
+    );
+  } else {
+    parts.push(
+      `GESPREK TOT NU TOE (${turns.length} van maximaal ${CLARIFY_MAX_QUESTIONS} vragen beantwoord):\n${turns
+        .map((t, i) => `V${i + 1}: ${t.question}\nA${i + 1}: ${t.answer}`)
+        .join('\n')}`,
+    );
+  }
+  if (args.forceFinish) {
+    parts.push(
+      'DE GEBRUIKER WIL GEEN VRAGEN MEER BEANTWOORDEN. Stel GEEN vraag meer; geef nu direct de ' +
+        'opdrachtbeschrijving met "KLAAR: …" op basis van wat er ligt. Benoem wat nog ontbreekt onder OPEN PUNTEN.',
+    );
+  } else if (turns.length >= CLARIFY_MAX_QUESTIONS) {
+    parts.push(
+      `Je hebt het maximum van ${CLARIFY_MAX_QUESTIONS} vragen bereikt. Rond nu af met de opdrachtbeschrijving ("KLAAR: …").`,
+    );
+  } else {
+    parts.push(
+      'Bepaal de meest zinvolle vervolgvraag en stel die ("VRAAG: …"), of rond af met de ' +
+        'opdrachtbeschrijving ("KLAAR: …") als het beeld compleet is en ook gebruik en vorm bekend zijn.',
+    );
+  }
+  return parts.join('\n\n');
+};
 
 // --- Framework-fit-modus: beoordeel ELK meegegeven framework tegen het vraagstuk ---
 // Anders dan 'recommend'/'recommend-framework' (die alleen de top ~3 teruggeven),
@@ -2799,6 +2948,8 @@ Deno.serve(async (req: Request) => {
                         ? 'plan-step'
                         : body.mode === 'plan-step-analyze'
                           ? 'plan-step-analyze'
+                          : body.mode === 'clarify'
+                          ? 'clarify'
                           : body.mode === 'execute'
                             ? 'execute'
                             : body.mode === 'persona-fill'
@@ -3099,8 +3250,16 @@ Deno.serve(async (req: Request) => {
       }
 
       const validIds = new Set(frameworks.map((t) => t.id));
+      // Doel-flow: de input is de opdrachtbeschrijving uit de dialoog, niet een
+      // geschreven prompt. Dan weegt de keuze expliciet gebruik en vorm mee.
+      const fromDialogue = Boolean(body.fromDialogue);
       // Eventuele eerdere toelichting uit de heranalyse-lus meewegen als extra context.
-      const userMessage = RECOMMEND_FRAMEWORK_USER_PROMPT(ownPrompt, frameworks, body.clarification);
+      const userMessage = RECOMMEND_FRAMEWORK_USER_PROMPT(
+        ownPrompt,
+        frameworks,
+        body.clarification,
+        fromDialogue,
+      );
       let result:
         | { summary: string; recommendations: Recommendation[]; missingContext: string[] }
         | null = null;
@@ -3110,7 +3269,7 @@ Deno.serve(async (req: Request) => {
         try {
           const raw = await PROVIDERS[candidate](
             userMessage,
-            RECOMMEND_FRAMEWORK_SYSTEM_PROMPT,
+            fromDialogue ? DIALOGUE_FRAMEWORK_SYSTEM_PROMPT : RECOMMEND_FRAMEWORK_SYSTEM_PROMPT,
             0.2,
             resolveModel(candidate, body.preferredProvider, body.preferredModel),
           );
@@ -3395,6 +3554,71 @@ Deno.serve(async (req: Request) => {
           gaps: analysis.gaps,
           provider,
         }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    // --- Clarify: één beurt van de doel-dialoog (vraag-na-vraag → opdrachtbeschrijving) ---
+    if (mode === 'clarify') {
+      const goal = body.goal?.trim() ?? '';
+      if (!goal) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'goal is verplicht' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+      const transcript = Array.isArray(body.transcript) ? body.transcript : [];
+      const clarifyMessage = CLARIFY_USER_PROMPT({
+        goal,
+        transcript,
+        forceFinish: body.forceFinish,
+      });
+
+      for (const candidate of order) {
+        try {
+          const raw = await PROVIDERS[candidate](
+            clarifyMessage,
+            CLARIFY_SYSTEM_PROMPT,
+            0.3,
+            resolveModel(candidate, body.preferredProvider, body.preferredModel),
+          );
+          const unclear = detectUnclearJson(raw);
+          if (unclear) {
+            return new Response(
+              JSON.stringify({ success: false, unclear: true, reason: unclear, provider: candidate }),
+              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            );
+          }
+          // Zelfde VRAAG:/KLAAR:-protocol als het plan-step-interview.
+          const turn = parseInterviewTurn(raw);
+          if (turn.question) {
+            return new Response(
+              JSON.stringify({
+                success: true,
+                needs_input: true,
+                question: turn.question,
+                asked: transcript.length + 1,
+                max: CLARIFY_MAX_QUESTIONS,
+                provider: candidate,
+              }),
+              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            );
+          }
+          if (turn.material) {
+            return new Response(
+              JSON.stringify({ success: true, done: true, brief: turn.material, provider: candidate }),
+              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            );
+          }
+        } catch (providerErr) {
+          console.error(`${candidate} (clarify) mislukt, probeer volgende:`, providerErr);
+        }
+      }
+
+      // Honest-degrade: geen enkele provider leverde iets bruikbaars. De client
+      // toont een retry; er wordt nooit een verzonnen vraag of brief getoond.
+      return new Response(
+        JSON.stringify({ success: false, error: 'De volgende vraag kon niet worden opgehaald' }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }

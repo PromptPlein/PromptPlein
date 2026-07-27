@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import TechniqueSelector from '@/components/optimizer/TechniqueSelector';
-import PlanWizard from '@/components/optimizer/PlanWizard';
+import GoalDialog from '@/components/optimizer/GoalDialog';
 import EntryTab from '@/components/optimizer/EntryTab';
 import OwnPromptOptimizer from '@/components/optimizer/OwnPromptOptimizer';
 import FollowUpQuestions from '@/components/optimizer/FollowUpQuestions';
@@ -52,7 +52,7 @@ export default function OptimizerPage() {
   // niet verloren gaat bij een fout of herlaadactie. "Opschonen" maakt ze leeg.
   const [promptContent, setPromptContent, clearPromptDraft] = usePersistentDraft('ownPrompt');
   const [sourcePromptId, setSourcePromptId] = useState<string | null>(null);
-  // De doel-flow (PlanWizard) beheert dit veld zelf via dezelfde 'goal'-sleutel;
+  // De doel-flow (GoalDialog) beheert dit veld zelf via dezelfde 'goal'-sleutel;
   // de pagina leest het alleen nog (titel-fallback, hasDraftContent, opschonen).
   const [goal, , clearGoalDraft] = usePersistentDraft('goal');
   // Standaard staat de eigen-prompt-flow uitgeklapt: dat is het meest gebruikte
@@ -378,6 +378,9 @@ export default function OptimizerPage() {
    */
   function handleOwnPromptResult(res: OptimizeResult, usedTechnique: Technique) {
     const isPlanWizard = Boolean(res.recipe);
+    // De doel-flow levert een `dialogue` mee (het gevoerde gesprek); zo blijft in
+    // de analytics zichtbaar via welke instap de prompt tot stand kwam.
+    const flow = isPlanWizard ? 'plan-wizard' : res.dialogue ? 'goal' : 'own-prompt';
     void trackEvent({
       event_type: 'optimization_run',
       user_identifier: activityIdentifier(profile, user?.email),
@@ -385,8 +388,9 @@ export default function OptimizerPage() {
       technique_id: usedTechnique.id,
       metadata: {
         provider: res.provider,
-        flow: isPlanWizard ? 'plan-wizard' : 'own-prompt',
+        flow,
         ...(res.recipe ? { steps: res.recipe.plan.steps.length } : {}),
+        ...(res.dialogue ? { answered: res.dialogue.transcript.length } : {}),
       },
     });
     // Plan-wizard: bewaar het recept bij een optimalisatie-rij (prompt_id mag leeg).
@@ -700,10 +704,12 @@ export default function OptimizerPage() {
             );
 
             // De eigen-prompt-flow rendert de tabs zelf als header (oranje rand om
-            // chat + advies; frameworklijst eronder). De doel-flow toont de slimme
-            // meerstaps-bouwer (PlanWizard) met de tabs als header. De handmatige
-            // techniekenlijst + template-velden vallen daaronder (buiten de rand),
-            // net als bij de eigen-prompt-flow — zie de render onder deze functie.
+            // chat + advies; frameworklijst eronder). De doel-flow toont de
+            // vragen-dialoog (GoalDialog) met de tabs als header: de gebruiker
+            // beschrijft zijn doel, de AI denkt stap voor stap mee met één vraag
+            // per keer, analyseert daarna het gesprek en stelt het best passende
+            // framework voor. De handmatige techniekenlijst + template-velden
+            // vallen daaronder (buiten de rand), net als bij de eigen-prompt-flow.
             return ownActive ? (
               <OwnPromptOptimizer
                 settings={settingsRef.current}
@@ -711,7 +717,7 @@ export default function OptimizerPage() {
                 header={tabs}
               />
             ) : (
-              <PlanWizard
+              <GoalDialog
                 settings={settingsRef.current}
                 onResult={handleOwnPromptResult}
                 header={tabs}
