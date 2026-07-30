@@ -12,11 +12,14 @@ import {
   Bot,
   Layers,
   Coins,
+  ExternalLink,
+  KeyRound,
 } from 'lucide-react';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import {
   AI_MODELS,
+  API_PORTALS,
   PROVIDER_MODELS,
   defaultModelFor,
   modelLabel,
@@ -165,15 +168,65 @@ export default function SettingsPage() {
           })}
         </div>
 
+        {/* Directe links naar de sleutelbeheer-pagina's. Staan buiten de kaarten:
+            een <a> in een <button> nesten is geen geldige HTML, en zo blijft de
+            hele kaart één klikvlak voor het kiezen van de provider. */}
+        <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-slate-200 pt-4 text-sm dark:border-slate-700">
+          <span className="inline-flex items-center gap-1.5 font-medium text-slate-600 dark:text-slate-300">
+            <KeyRound size={14} className="text-slate-400" />
+            API-sleutels beheren:
+          </span>
+          {API_PORTALS.map((portal) => (
+            <a
+              key={portal.id}
+              href={portal.apiKeysUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={clsx(
+                'inline-flex items-center gap-1 rounded-lg px-2 py-1 font-medium transition-colors',
+                portal.id === settings.provider
+                  ? 'bg-rijksblauw-50 text-rijksblauw-700 hover:bg-rijksblauw-100 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-rijksblauw-700 dark:text-slate-300 dark:hover:bg-slate-700',
+              )}
+            >
+              {portal.label}
+              <ExternalLink size={12} />
+            </a>
+          ))}
+        </div>
+        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+          De sleutel zelf zet je niet hier, maar als secret op de server:{' '}
+          <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[11px] dark:bg-slate-700">
+            supabase secrets set CLAUDE_API_KEY=…
+          </code>{' '}
+          (idem <code className="font-mono text-[11px]">OPENAI_API_KEY</code>,{' '}
+          <code className="font-mono text-[11px]">DEEPSEEK_API_KEY</code>,{' '}
+          <code className="font-mono text-[11px]">MISTRAL_API_KEY</code>).
+        </p>
+
         {/* Modelkeuze binnen de gekozen provider. Verschijnt zodra een concrete
             provider (geen 'Automatisch') is geselecteerd. */}
         {settings.provider !== 'auto' && (
           <div className="mt-5 border-t border-slate-200 pt-5 dark:border-slate-700">
-            <div className="mb-3 flex items-center gap-2">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
               <Layers size={16} className="text-rijksblauw-500" />
               <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
                 Model voor {AI_MODELS.find((m) => m.id === settings.provider)?.label}
               </h3>
+              {(() => {
+                const portal = AI_MODELS.find((m) => m.id === settings.provider)?.apiKeysUrl;
+                return portal ? (
+                  <a
+                    href={portal}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
+                  >
+                    Naar het API-portaal
+                    <ExternalLink size={11} />
+                  </a>
+                ) : null;
+              })()}
             </div>
             <p className="mb-3 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
               Kies welk specifiek API-model van deze provider voor alle optimalisaties wordt gebruikt.

@@ -6,15 +6,49 @@ export interface AiModelOption {
   id: AiProvider;
   label: string;
   hint: string;
+  /**
+   * Directe link naar de pagina waar je de API-sleutel van deze provider beheert.
+   * Ontbreekt bij 'auto': die keten gebruikt alle providers, dus daar hoort geen
+   * enkele portal bij.
+   */
+  apiKeysUrl?: string;
 }
 
 export const AI_MODELS: AiModelOption[] = [
   { id: 'auto', label: 'Automatisch', hint: 'Claude → GPT-5 → DeepSeek → Mistral, met fallback' },
-  { id: 'claude', label: 'Claude (Anthropic)', hint: 'Hoogste kwaliteit' },
-  { id: 'openai', label: 'GPT-5 (OpenAI)', hint: 'Alternatief model' },
-  { id: 'deepseek', label: 'DeepSeek', hint: 'Kostenefficiënt' },
-  { id: 'mistral', label: 'Mistral', hint: 'Snel en goedkoop' },
+  {
+    id: 'claude',
+    label: 'Claude (Anthropic)',
+    hint: 'Hoogste kwaliteit',
+    apiKeysUrl: 'https://console.anthropic.com/settings/keys',
+  },
+  {
+    id: 'openai',
+    label: 'GPT-5 (OpenAI)',
+    hint: 'Alternatief model',
+    apiKeysUrl: 'https://platform.openai.com/api-keys',
+  },
+  {
+    id: 'deepseek',
+    label: 'DeepSeek',
+    hint: 'Kostenefficiënt',
+    apiKeysUrl: 'https://platform.deepseek.com/api_keys',
+  },
+  {
+    id: 'mistral',
+    label: 'Mistral',
+    hint: 'Snel en goedkoop',
+    apiKeysUrl: 'https://console.mistral.ai/api-keys',
+  },
 ];
+
+/**
+ * De providers met een eigen API-portal, in de volgorde van de fallback-keten.
+ * Gebruikt voor de "beheer je sleutels"-rij onder de modelkeuze.
+ */
+export const API_PORTALS = AI_MODELS.filter(
+  (m): m is AiModelOption & { apiKeysUrl: string } => Boolean(m.apiKeysUrl),
+);
 
 /** Prijs per 1 miljoen tokens (USD). Bron: officiële provider-prijslijsten. */
 export interface ModelPricing {
