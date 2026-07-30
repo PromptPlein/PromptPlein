@@ -206,6 +206,8 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
   const goalRef = useRef(goal);
   goalRef.current = goal;
   const [phase, setPhase] = useState<Phase>('goal');
+  // De eindprompt zoals de AI hem op dit moment schrijft (live meelezen).
+  const [composeStream, setComposeStream] = useState('');
   const [plan, setPlan] = useState<PromptPlan | null>(null);
   const [showExamples, setShowExamples] = useState(false);
   const [unclearReason, setUnclearReason] = useState<string | null>(null);
@@ -1032,6 +1034,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
       return;
     }
     setPhase('composing');
+    setComposeStream(''); // meegelezen tekst van een vorige poging wissen
     log('compose_run', { techniqueId: step.technique_id, metadata: { steps: accumulated.length } });
     try {
       const res = await generatePrompt({
@@ -1052,6 +1055,8 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
         systemPrompt: settings.systemPrompt.trim() || undefined,
         toneInstruction: settings.toneInstruction.trim() || undefined,
         temperature: settings.temperature,
+        // Meelezen terwijl de eindprompt wordt geschreven.
+        onChunk: setComposeStream,
       });
       if (res.unclear) {
         setUnclearReason(
@@ -1155,6 +1160,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
     const technique = techniqueById(step?.technique_id);
     if (!technique) return;
     setPhase('composing');
+    setComposeStream(''); // meegelezen tekst van een vorige poging wissen
     log('assumptions_applied', { metadata: { answered: answered.length } });
     try {
       const res = await generatePrompt({
@@ -1177,6 +1183,8 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
         systemPrompt: settings.systemPrompt.trim() || undefined,
         toneInstruction: settings.toneInstruction.trim() || undefined,
         temperature: settings.temperature,
+        // Meelezen terwijl de eindprompt wordt geschreven.
+        onChunk: setComposeStream,
       });
       if (res.unclear || !res.optimized_content?.trim()) {
         // Aanscherpen lukte niet → val terug op het al goedgekeurde resultaat.
@@ -1415,6 +1423,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
                 onInterviewAnswerChange={setInterviewAnswer}
                 onSubmitInterviewAnswer={submitInterviewAnswer}
                 onFinishInterview={finishInterview}
+                composeStream={composeStream}
               />
             )}
           </div>
@@ -1686,6 +1695,7 @@ function PlanExecutor({
   onInterviewAnswerChange,
   onSubmitInterviewAnswer,
   onFinishInterview,
+  composeStream,
 }: {
   plan: PromptPlan;
   techniqueById: (id?: string | null) => Technique | undefined;
@@ -1728,6 +1738,8 @@ function PlanExecutor({
   onInterviewAnswerChange: (v: string) => void;
   onSubmitInterviewAnswer: () => void;
   onFinishInterview: () => void;
+  /** De eindprompt zoals de AI hem op dit moment schrijft; leeg = nog niets. */
+  composeStream: string;
 }) {
   const total = plan.steps.length;
   const outcomeByStepId = new Map(outcomes.map((o) => [o.step_id, o]));
@@ -1838,6 +1850,12 @@ function PlanExecutor({
           );
         })}
       </ol>
+
+      {/* Eindstap: laat de prompt meelezen terwijl hij wordt samengesteld, in
+          plaats van alleen een spinner bij de laatste stap. */}
+      {composing && (
+        <OptimizingLoader techniqueName="je prompt" streamText={composeStream} />
+      )}
 
       {error && (
         <div

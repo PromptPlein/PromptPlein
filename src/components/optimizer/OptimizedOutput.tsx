@@ -196,14 +196,22 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
   /** Voer de samengestelde prompt direct uit en toon het eindproduct zelf. */
   async function handleExecute() {
     setExecuting(true);
+    // Resultaat van een vorige uitvoering wissen; de stream vult dit veld
+    // vervolgens regel voor regel, zodat de gebruiker meteen meeleest.
+    setExecuted(null);
     try {
-      const res = await executePrompt({ prompt: result.optimized_content });
+      const res = await executePrompt({
+        prompt: result.optimized_content,
+        onChunk: setExecuted,
+      });
       if (res.success && res.output) {
         setExecuted(res.output);
       } else {
+        setExecuted(null);
         toast.error(res.error ?? 'Uitvoeren mislukt. Probeer het opnieuw.');
       }
     } catch (err) {
+      setExecuted(null);
       toast.error(err instanceof Error ? err.message : 'Uitvoeren mislukt.');
     } finally {
       setExecuting(false);
@@ -294,6 +302,7 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h4 className="flex items-center gap-2 text-sm font-semibold text-emerald-800 dark:text-emerald-300">
               <Play size={15} /> Resultaat van de uitvoering
+              {executing && <Loader2 size={14} className="animate-spin" />}
             </h4>
             <div className="flex items-center gap-2">
               <button
@@ -316,8 +325,14 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
             </div>
           </div>
           <p className="text-xs text-emerald-700/80 dark:text-emerald-300/70">
-            De AI heeft de prompt meteen uitgevoerd. Controleer aannames (vaak cursief of tussen
-            haakjes) en pas aan waar nodig.
+            {executing ? (
+              <>De AI voert je prompt nu uit — je leest live mee.</>
+            ) : (
+              <>
+                De AI heeft de prompt meteen uitgevoerd. Controleer aannames (vaak cursief of tussen
+                haakjes) en pas aan waar nodig.
+              </>
+            )}
           </p>
           <div className="max-h-[420px] overflow-auto rounded-lg border border-emerald-200 bg-white p-4 dark:border-emerald-500/20 dark:bg-slate-900">
             <RichText text={executed} className="text-[13px] text-slate-800 dark:text-slate-100" />

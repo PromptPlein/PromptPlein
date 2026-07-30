@@ -150,6 +150,8 @@ export default function GoalDialog({ settings, onResult, header }: GoalDialogPro
   goalRef.current = goal;
 
   const [phase, setPhase] = useState<Phase>('goal');
+  // De prompt zoals de AI hem op dit moment schrijft (live meelezen).
+  const [streamText, setStreamText] = useState('');
   const [showExamples, setShowExamples] = useState(false);
   const [unclearReason, setUnclearReason] = useState<string | null>(null);
   const [guardrailFindings, setGuardrailFindings] = useState<GuardrailFinding[] | null>(null);
@@ -409,6 +411,7 @@ export default function GoalDialog({ settings, onResult, header }: GoalDialogPro
     if (!framework || !brief) return;
     setPhase('composing');
     setError(null);
+    setStreamText(''); // meegelezen tekst van een vorige poging wissen
     log('compose_run', { techniqueId: frameworkId, metadata: { answered: transcript.length } });
     try {
       const res = await generatePrompt({
@@ -433,6 +436,8 @@ export default function GoalDialog({ settings, onResult, header }: GoalDialogPro
         systemPrompt: settings.systemPrompt.trim() || undefined,
         toneInstruction: settings.toneInstruction.trim() || undefined,
         temperature: settings.temperature,
+        // Meelezen terwijl de prompt wordt geschreven.
+        onChunk: setStreamText,
       });
       if (res.unclear || !res.optimized_content?.trim()) {
         setUnclearReason(
@@ -609,7 +614,7 @@ export default function GoalDialog({ settings, onResult, header }: GoalDialogPro
               </div>
             ) : phase === 'composing' ? (
               <div ref={composingRef} className="scroll-mt-24">
-                <OptimizingLoader techniqueName="je prompt" />
+                <OptimizingLoader techniqueName="je prompt" streamText={streamText} />
               </div>
             ) : phase === 'done' ? (
               <div className="flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50/50 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between dark:border-emerald-500/30 dark:bg-emerald-500/10">

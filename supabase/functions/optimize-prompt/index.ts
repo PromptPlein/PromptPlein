@@ -263,6 +263,14 @@ interface RequestBody {
   templateContent?: string;
   // 'metadata'-velden: stel titel + omschrijving + best passende categorie voor.
   metaCategories?: { id: string; name: string; description?: string }[];
+  /**
+   * Streamend antwoord gevraagd? Alleen ondersteund door de vrije-tekstmodi
+   * ('generate' en 'execute'); de JSON-modi moeten hun antwoord in één keer
+   * kunnen parsen. De respons is dan NDJSON (zie `streamTextResponse`) in plaats
+   * van één JSON-object. Oudere clients sturen dit veld niet en krijgen
+   * ongewijzigd de complete JSON terug.
+   */
+  stream?: boolean;
   preferredProvider?: PreferredProvider;
   /**
    * Het concrete API-model binnen de gekozen provider (bijv. 'claude-opus-4-8').
@@ -388,7 +396,7 @@ const GENERATE_USER_PROMPT = (args: {
   );
 
   parts.push(
-    `Schrijf nu één rijke, volledig uitgewerkte en direct bruikbare prompt-template die alle ` +
+    `Schrijf nu één samenhangende, direct bruikbare prompt-template die alle ` +
       `bovenstaande antwoorden combineert. Laat het doel${args.answeredFields?.some((f) => /persona/i.test(f.label)) ? ' en de persona' : ''} duidelijk naar voren komen.`,
   );
 
@@ -540,6 +548,35 @@ Zet een kop of rubriek gewoon op een eigen regel met een dubbele punt erachter �
 bijvoorbeeld "1. Aanleiding en doel:" en niet "**1. Aanleiding en doel**".`;
 
 /**
+ * Lengtebudget dat aan de schrijvende modi wordt meegegeven.
+ *
+ * Waarom dit er is: de wachttijd van de gebruiker wordt vrijwel volledig bepaald
+ * door het AANTAL UITVOERTOKENS. Elke provider schrijft ruwweg 40–60 tokens per
+ * seconde, dus een antwoord dat twee keer zo lang is, laat de gebruiker ook twee
+ * keer zo lang wachten — ongeacht welk model er gekozen is. Zonder een expliciete
+ * rem schrijven modellen consequent naar hun plafond toe, zeker als de prompt
+ * elders om "rijk" en "volledig uitgewerkt" vraagt.
+ *
+ * Dit begrenst de OMVANG, niet de inhoudelijke volledigheid: details die de
+ * gebruiker zélf heeft aangeleverd zijn expliciet uitgezonderd, want die
+ * weglaten zou de kwaliteit wél raken.
+ *
+ * @param target Concrete richtlijn voor deze modus, bijv. "300–500 woorden".
+ */
+function lengthBudgetInstruction(target: string): string {
+  return `LENGTE — houd het compact; hier is korter beter:
+- Richt op ${target}. Ga daar alleen overheen wanneer de gebruiker zoveel concrete
+  details heeft aangeleverd dat die er anders uit zouden vallen — nooit om
+  vollediger of grondiger over te komen.
+- Geen inleiding vooraf, geen samenvatting achteraf en geen uitleg over wat je
+  hebt gedaan of waarom.
+- Zeg elk ding precies één keer: herhaal geen instructie die al eerder in de tekst
+  staat en parafraseer niet wat elders al is gezegd.
+- Kies korte bullets boven lange lopende alinea's, en concrete formuleringen boven
+  algemene bespiegelingen. Schrap elk woord dat niets toevoegt.`;
+}
+
+/**
  * JSON-variant van de clarity-gate voor modi die al JSON teruggeven (recommend,
  * prefill). Het model geeft dan {"unclear":true,"reason":"…"} i.p.v. de normale
  * payload. `detectUnclearJson` vangt dit server-side af.
@@ -568,8 +605,8 @@ Gebruik exact de id's "herhaalbaar" en "eenmalig", en geef ze allebei.`;
 
 const DEFAULT_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse rijksoverheid.
 Een interne overheidsmedewerker heeft losse antwoorden gegeven via een prompting-techniek.
-Jouw taak: ANALYSEER al die antwoorden en SCHRIJF op basis daarvan één rijke, volledig
-uitgewerkte, direct bruikbare prompt-template in het Nederlands die de gebruiker in hun eigen
+Jouw taak: ANALYSEER al die antwoorden en SCHRIJF op basis daarvan één samenhangende,
+direct bruikbare prompt-template in het Nederlands die de gebruiker in hun eigen
 AI-chat kan plakken.
 
 WERKWIJZE — analyseren en uitschrijven (niet letterlijk overnemen):
@@ -577,8 +614,9 @@ WERKWIJZE — analyseren en uitschrijven (niet letterlijk overnemen):
 - Verwerk elk antwoord betekenisvol: leid uit de losse antwoorden een compleet beeld af van de
   persona, de context, het doel en de gewenste uitkomst, en schrijf dat volledig uit.
 - Laat het specifieke doel en (waar van toepassing) de persona duidelijk en expliciet naar voren komen.
-- Maak de prompt uitgebreider en concreter dan de input: voeg passende structuur, duidelijke
-  instructies en waar nuttig een gewenst format toe — zonder de intentie van de gebruiker te veranderen.
+- Maak de prompt concreter en beter bruikbaar dan de input: voeg passende structuur, duidelijke
+  instructies en waar nuttig een gewenst format toe — zonder de intentie van de gebruiker te
+  veranderen en zonder hem langer te maken dan nodig.
 - Pas de gekozen techniek consequent en herkenbaar toe (bijv. echt redeneren bij Chain-of-Thought,
   echt vanuit de persona schrijven bij Persona Prompting).
 
@@ -1102,7 +1140,12 @@ Werkwijze:
   ze makkelijk kan aanpassen.
 - Dit is uitsluitend voor INTERN overheidsgebruik.
 - Schrijf in duidelijke, professionele taal (waar passend B1-niveau).
-- Geef ALLEEN het eindproduct terug, zonder inleiding vooraf of meta-uitleg achteraf.`;
+- Geef ALLEEN het eindproduct terug, zonder inleiding vooraf of meta-uitleg achteraf.
+
+${lengthBudgetInstruction(
+  'de lengte die het gevraagde document echt nodig heeft — vraagt de instructie geen ' +
+    'omvang, houd dan 400–700 woorden aan',
+)}`;
 
 // --- Persona-fill-modus: vul een persona-definitie in op basis van een hint ---
 // De gebruiker geeft een korte aanduiding ("mijn teammanager"); de AI leidt af hoe
@@ -1651,6 +1694,10 @@ REGELS:
 - Volledigheid gaat vóór beknoptheid bij "source":"prompt"-velden: liever een compleet, detailrijk veld
   dan een korte samenvatting waarin informatie van de gebruiker verloren gaat. Knip lange opsommingen op
   in leesbare bullets in plaats van ze in te korten.
+- Bij "source":"ai"-velden geldt het omgekeerde: houd die kort en functioneel (richtlijn ~60 woorden).
+  Daar vul je iets in wat de gebruiker niet heeft gezegd, dus een beknopt, controleerbaar voorstel is
+  bruikbaarder dan een uitgebreide invulling die hij toch helemaal moet nalopen.
+- Herhaal geen inhoud tussen velden: elk detail hoort in het veld waar het thuishoort, en daar één keer.
 - Schrijf in helder Nederlands (B1-taalniveau waar passend). Houd het intern gericht: de doelgroep
   is een overheidsmedewerker, niet de burger.
 - "note": één heel korte toelichting (max ~12 woorden) per veld, bijv. "Afgeleid uit je prompt" of
@@ -1780,6 +1827,8 @@ REGELS:
 - "improvements": een korte lijst (2 tot 4 punten) die in gewone taal benoemt WAT je concreet hebt
   verbeterd t.o.v. de invoer van de gebruiker, bijv. "Rol concreter gemaakt" of "Stappenplan toegevoegd".
   Elk punt max. ~8 woorden, geen hele zinnen. Bij "changed":false een lege lijst.
+
+${lengthBudgetInstruction('maximaal ~150 woorden voor dit ene veld')}
 
 Geef UITSLUITEND geldige JSON terug, zonder codeblok of extra tekst, in dit formaat:
 {"value":"<verbeterde inhoud voor dit veld>","changed":true|false,"improvements":["<korte verbetering>", "..."]}`;
@@ -2236,10 +2285,28 @@ function buildSystemPrompt(
   const instruction = structureInstruction(format, headings, interviewResolved);
   const withStructure = instruction ? `${base}\n\n${instruction}` : base;
   const withTone = tone?.trim() ? `${withStructure}\n\nToon en schrijfstijl: ${tone.trim()}` : withStructure;
-  // De clarity-gate en de opmaak-regel komen als laatste, zodat ze ook gelden
-  // bij een aangepaste admin-systeemprompt.
-  return `${withTone}\n\n${NO_MARKDOWN_INSTRUCTION}\n\n${CLARITY_GATE_INSTRUCTION}`;
+  // De clarity-gate, het lengtebudget en de opmaak-regel komen als laatste,
+  // zodat ze ook gelden bij een aangepaste admin-systeemprompt.
+  const budget = lengthBudgetInstruction('300–500 woorden voor de hele template');
+  return `${withTone}\n\n${NO_MARKDOWN_INSTRUCTION}\n\n${budget}\n\n${CLARITY_GATE_INSTRUCTION}`;
 }
+
+/**
+ * Opmaakmarkeringen die van een regel worden gestript voordat hij met de
+ * sentinel wordt vergeleken: codeblok-randen, vet/cursief, kop-hekjes, quotes
+ * en witruimte. Modellen zetten de sentinel er nog wel eens tussen.
+ */
+const MARKUP_CHARS = /[`*_#>\s]/g;
+
+/**
+ * De sentinel ná dezelfde opschoning als de regel waarmee hij wordt vergeleken.
+ * Cruciaal: MARKUP_CHARS strípt ook de underscore, dus de rúwe sentinel
+ * ('ONDUIDELIJKE_INVOER') zou nooit matchen op een opgeschoonde regel
+ * ('ONDUIDELIJKEINVOER'). Vergelijk daarom altijd tegen deze genormaliseerde
+ * variant — anders slaat de clarity-gate stilzwijgend nooit aan en krijgt de
+ * gebruiker de sentinel zelf als "prompt" te zien.
+ */
+const UNCLEAR_SENTINEL_NORMALIZED = UNCLEAR_SENTINEL.replace(MARKUP_CHARS, '');
 
 /**
  * Detecteert of het model de input als onbruikbaar heeft beoordeeld (zie
@@ -2251,10 +2318,8 @@ function detectUnclear(raw: string): string | null {
   const lines = raw.split('\n');
   const firstIdx = lines.findIndex((l) => l.trim());
   if (firstIdx === -1) return null;
-  const firstLine = lines[firstIdx]
-    .replace(/[`*_#>\s]/g, '') // codeblok, vet, kop-hekjes, witruimte
-    .toUpperCase();
-  if (!firstLine.startsWith(UNCLEAR_SENTINEL)) return null;
+  const firstLine = lines[firstIdx].replace(MARKUP_CHARS, '').toUpperCase();
+  if (!firstLine.startsWith(UNCLEAR_SENTINEL_NORMALIZED)) return null;
   // De uitleg is alles ná de sentinel-regel; val terug op een nette standaardtekst.
   const reason = lines
     .slice(firstIdx + 1)
@@ -2274,26 +2339,180 @@ function clampTemp(t?: number): number {
   return Math.min(1, Math.max(0, t));
 }
 
+/**
+ * Uitvoerbudget (max_tokens) per modus. Outputtokens zijn de dominante factor in
+ * de wachttijd (~40–60 tokens/seconde bij elke provider), dus een modus krijgt
+ * precies zoveel ruimte als hij nodig heeft en niet meer. Een titel van zes
+ * woorden had hiervoor hetzelfde plafond van 16384 als een volledig projectplan.
+ *
+ * Deze waarden zijn plafonds, geen doelen: het model stopt vanzelf eerder. Ze
+ * begrenzen alleen de uitschieters. De inhoudelijke lengte wordt gestuurd door
+ * de LENGTE-instructies in de systeemprompts (zie LENGTH_BUDGET_INSTRUCTION).
+ * Verruim een waarde alleen als je in de logs ziet dat een antwoord wordt
+ * afgekapt (bij JSON-modi merk je dat als een parse-fout → onnodige fallback).
+ */
+const MODE_MAX_TOKENS: Record<Mode, number> = {
+  generate: 4096,
+  execute: 6144,
+  // Prefill vult álle velden van een raamwerk in één keer en mag detailrijk zijn.
+  prefill: 8192,
+  'meta-build': 4096,
+  'fewshot-extract': 4096,
+  plan: 3072,
+  'plan-step': 2048,
+  'plan-step-analyze': 2048,
+  'expand-field': 2048,
+  analyze: 2560,
+  'framework-fit': 2560,
+  'recommend-framework': 2560,
+  recommend: 2048,
+  'persona-fill': 2048,
+  'fewshot-example': 1536,
+  'assumption-check': 1536,
+  clarify: 1536,
+  metadata: 512,
+  title: 128,
+};
+
+/** Vangnet voor het geval een modus (nog) geen expliciet budget heeft. */
+const DEFAULT_MAX_TOKENS = 4096;
+
+function maxTokensFor(mode: Mode): number {
+  return MODE_MAX_TOKENS[mode] ?? DEFAULT_MAX_TOKENS;
+}
+
+/**
+ * Callback die per tekstfragment wordt aangeroepen zodra het model het
+ * produceert. Aanwezig = streamen; afwezig = wachten op het volledige antwoord.
+ */
+type DeltaHandler = (chunk: string) => void;
+
+/**
+ * Leest een OpenAI-compatibele SSE-stream (OpenAI, DeepSeek, Mistral) uit en
+ * geeft de volledige tekst terug, terwijl elk fragment via `onDelta` doorgaat.
+ * Onbekende of half binnengekomen events worden overgeslagen; de buffer houdt
+ * regels vast tot ze compleet zijn.
+ */
+async function readSseDeltas(
+  response: Response,
+  label: string,
+  onDelta: DeltaHandler,
+): Promise<string> {
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error(`${label} gaf geen stream-body`);
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let text = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    let newline: number;
+    while ((newline = buffer.indexOf('\n')) !== -1) {
+      const line = buffer.slice(0, newline).trim();
+      buffer = buffer.slice(newline + 1);
+      if (!line.startsWith('data:')) continue;
+      const payload = line.slice(5).trim();
+      if (!payload || payload === '[DONE]') continue;
+      try {
+        const json = JSON.parse(payload);
+        const delta: string = json?.choices?.[0]?.delta?.content ?? '';
+        if (delta) {
+          text += delta;
+          onDelta(delta);
+        }
+      } catch {
+        // Onvolledig of onbekend event: negeren, de volgende regel volgt.
+      }
+    }
+  }
+
+  return text;
+}
+
+/** Gedeelde aanroep voor de drie OpenAI-compatibele providers. */
+async function runOpenAiCompatible(args: {
+  url: string;
+  apiKey: string;
+  label: string;
+  model: string;
+  system: string;
+  userMessage: string;
+  temperature: number;
+  maxTokens: number;
+  onDelta?: DeltaHandler;
+}): Promise<string> {
+  const { url, apiKey, label, model, system, userMessage, temperature, maxTokens, onDelta } = args;
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: maxTokens,
+      temperature,
+      stream: Boolean(onDelta),
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: userMessage },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`${label} gaf status ${response.status}`);
+  }
+
+  const text = onDelta
+    ? (await readSseDeltas(response, label, onDelta)).trim()
+    : ((await response.json())?.choices?.[0]?.message?.content?.trim() ?? '');
+
+  if (!text) throw new Error(`${label} gaf een lege respons`);
+  return text;
+}
+
 async function runClaude(
   userMessage: string,
   system: string,
   temperature: number,
   model: string = CLAUDE_MODEL,
+  maxTokens: number = DEFAULT_MAX_TOKENS,
+  onDelta?: DeltaHandler,
 ): Promise<string> {
   const apiKey = Deno.env.get('CLAUDE_API_KEY');
   if (!apiKey) throw new Error('CLAUDE_API_KEY ontbreekt');
 
   const client = new Anthropic({ apiKey });
-  const response = await client.messages.create({
+  const params = {
     model,
-    // Claude (primaire provider) mag royaal: genoeg ruimte voor detailrijke
-    // prefill van veel velden zonder dat de JSON wordt afgekapt.
-    max_tokens: 16384,
+    max_tokens: maxTokens,
     temperature,
     system,
-    messages: [{ role: 'user', content: userMessage }],
-  });
+    messages: [{ role: 'user' as const, content: userMessage }],
+  };
 
+  // Streamend: tekst doorgeven zodra het model hem produceert, zodat de
+  // gebruiker na ~1 seconde de eerste regels ziet in plaats van na 30–60.
+  if (onDelta) {
+    let text = '';
+    const stream = client.messages.stream(params);
+    for await (const event of stream) {
+      if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+        text += event.delta.text;
+        onDelta(event.delta.text);
+      }
+    }
+    const trimmed = text.trim();
+    if (!trimmed) throw new Error('Claude gaf een lege respons');
+    return trimmed;
+  }
+
+  const response = await client.messages.create(params);
   const text = response.content
     .filter((b): b is Anthropic.TextBlock => b.type === 'text')
     .map((b) => b.text)
@@ -2309,40 +2528,24 @@ async function runDeepSeek(
   system: string,
   temperature: number,
   model: string = DEEPSEEK_MODEL,
+  maxTokens: number = DEFAULT_MAX_TOKENS,
+  onDelta?: DeltaHandler,
 ): Promise<string> {
   const apiKey = Deno.env.get('DEEPSEEK_API_KEY');
   if (!apiKey) throw new Error('DEEPSEEK_API_KEY ontbreekt');
 
   // DeepSeek gebruikt een OpenAI-compatibele API.
-  const response = await fetch('https://api.deepseek.com/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      // DeepSeek V4 (Flash/Pro) ondersteunt zeer hoge output-limieten (V4 Pro tot
-      // 384k). 16384 is ruim genoeg voor detailrijke prefill en veilig voor beide
-      // modellen; hoger heeft hier geen meerwaarde (je betaalt alleen voor wat
-      // daadwerkelijk gegenereerd wordt, niet voor het plafond).
-      max_tokens: 16384,
-      temperature,
-      messages: [
-        { role: 'system', content: system },
-        { role: 'user', content: userMessage },
-      ],
-    }),
+  return runOpenAiCompatible({
+    url: 'https://api.deepseek.com/chat/completions',
+    apiKey,
+    label: 'DeepSeek',
+    model,
+    system,
+    userMessage,
+    temperature,
+    maxTokens,
+    onDelta,
   });
-
-  if (!response.ok) {
-    throw new Error(`DeepSeek gaf status ${response.status}`);
-  }
-
-  const data = await response.json();
-  const text: string = data?.choices?.[0]?.message?.content?.trim() ?? '';
-  if (!text) throw new Error('DeepSeek gaf een lege respons');
-  return text;
 }
 
 async function runOpenAI(
@@ -2350,35 +2553,23 @@ async function runOpenAI(
   system: string,
   temperature: number,
   model: string = OPENAI_MODEL,
+  maxTokens: number = DEFAULT_MAX_TOKENS,
+  onDelta?: DeltaHandler,
 ): Promise<string> {
   const apiKey = Deno.env.get('OPENAI_API_KEY');
   if (!apiKey) throw new Error('OPENAI_API_KEY ontbreekt');
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: 16384,
-      temperature,
-      messages: [
-        { role: 'system', content: system },
-        { role: 'user', content: userMessage },
-      ],
-    }),
+  return runOpenAiCompatible({
+    url: 'https://api.openai.com/v1/chat/completions',
+    apiKey,
+    label: 'OpenAI',
+    model,
+    system,
+    userMessage,
+    temperature,
+    maxTokens,
+    onDelta,
   });
-
-  if (!response.ok) {
-    throw new Error(`OpenAI gaf status ${response.status}`);
-  }
-
-  const data = await response.json();
-  const text: string = data?.choices?.[0]?.message?.content?.trim() ?? '';
-  if (!text) throw new Error('OpenAI gaf een lege respons');
-  return text;
 }
 
 async function runMistral(
@@ -2386,36 +2577,25 @@ async function runMistral(
   system: string,
   temperature: number,
   model: string = MISTRAL_MODEL,
+  maxTokens: number = DEFAULT_MAX_TOKENS,
+  onDelta?: DeltaHandler,
 ): Promise<string> {
   const apiKey = Deno.env.get('MISTRAL_API_KEY');
   if (!apiKey) throw new Error('MISTRAL_API_KEY ontbreekt');
 
-  // Mistral gebruikt een OpenAI-compatibele API.
-  const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: 4096,
-      temperature,
-      messages: [
-        { role: 'system', content: system },
-        { role: 'user', content: userMessage },
-      ],
-    }),
+  // Mistral gebruikt een OpenAI-compatibele API. Mistral Small/Ministral hebben
+  // een lager plafond dan de andere providers; begrens daarom op 4096.
+  return runOpenAiCompatible({
+    url: 'https://api.mistral.ai/v1/chat/completions',
+    apiKey,
+    label: 'Mistral',
+    model,
+    system,
+    userMessage,
+    temperature,
+    maxTokens: Math.min(maxTokens, 4096),
+    onDelta,
   });
-
-  if (!response.ok) {
-    throw new Error(`Mistral gaf status ${response.status}`);
-  }
-
-  const data = await response.json();
-  const text: string = data?.choices?.[0]?.message?.content?.trim() ?? '';
-  if (!text) throw new Error('Mistral gaf een lege respons');
-  return text;
 }
 
 type ProviderFn = (
@@ -2423,6 +2603,8 @@ type ProviderFn = (
   system: string,
   temperature: number,
   model?: string,
+  maxTokens?: number,
+  onDelta?: DeltaHandler,
 ) => Promise<string>;
 
 const PROVIDERS: Record<Provider, ProviderFn> = {
@@ -2433,6 +2615,168 @@ const PROVIDERS: Record<Provider, ProviderFn> = {
 };
 
 const DEFAULT_ORDER: Provider[] = ['claude', 'openai', 'deepseek', 'mistral'];
+
+/**
+ * Incrementele variant van de clarity-gate voor streamende modi. Bepaalt op de
+ * tot nu toe binnengekomen tekst of de eerste niet-lege regel de
+ * ONDUIDELIJKE_INVOER-sentinel is:
+ *
+ *   'unclear' — het is de sentinel; niets doorsturen naar de gebruiker.
+ *   'clear'   — het is de sentinel zeker niet; vanaf nu vrij doorstromen.
+ *   'pending' — nog te weinig tekens om het te weten; even vasthouden.
+ *
+ * Zodra de kop afwijkt van de sentinel valt het meteen op 'clear', dus in het
+ * normale geval houden we hooguit een paar tekens tegen — de gebruiker ziet de
+ * tekst nog steeds vrijwel direct verschijnen.
+ */
+function clarityGateState(buffer: string): 'unclear' | 'clear' | 'pending' {
+  const lines = buffer.split('\n');
+  const idx = lines.findIndex((l) => l.trim());
+  // Nog uitsluitend witruimte: wachten, maar niet eindeloos.
+  if (idx === -1) return buffer.length > 200 ? 'clear' : 'pending';
+
+  const stripped = lines[idx].replace(MARKUP_CHARS, '').toUpperCase();
+  // De eerste regel is compleet (er volgt al een regeleinde) óf we hebben genoeg
+  // tekens om de sentinel volledig te kunnen vergelijken.
+  if (idx < lines.length - 1 || stripped.length >= UNCLEAR_SENTINEL_NORMALIZED.length) {
+    return stripped.startsWith(UNCLEAR_SENTINEL_NORMALIZED) ? 'unclear' : 'clear';
+  }
+  // Korter dan de sentinel: alleen vasthouden zolang het er nog een kan worden.
+  return UNCLEAR_SENTINEL_NORMALIZED.startsWith(stripped) ? 'pending' : 'clear';
+}
+
+/**
+ * Streamt een vrije-tekstmodus (generate, execute) regel voor regel naar de
+ * client als NDJSON, zodat de gebruiker na ~1 seconde de eerste tekst ziet in
+ * plaats van na de volledige generatie. Eén JSON-object per regel:
+ *
+ *   {"type":"meta","provider":"claude"}          eerste teken binnen
+ *   {"type":"delta","text":"…"}                  tekstfragment
+ *   {"type":"done","text":"…","provider":"…"}    volledige tekst tot slot
+ *   {"type":"unclear","reason":"…"}              clarity-gate sloeg aan
+ *   {"type":"error","error":"…"}                 alle providers faalden
+ *
+ * De fallback-keten blijft werken zolang er nog niets naar de client is gestuurd;
+ * daarna kan er niet meer teruggespoeld worden en volgt een eerlijke foutmelding.
+ */
+function streamTextResponse(args: {
+  order: Provider[];
+  userMessage: string;
+  system: string;
+  temperature: number;
+  maxTokens: number;
+  preferredProvider?: PreferredProvider;
+  preferredModel?: string;
+  /** Logregel-aanduiding van de modus, bijv. 'generate'. */
+  label: string;
+  /** Clarity-gate toepassen? Aan voor 'generate', uit voor 'execute'. */
+  gate: boolean;
+}): Response {
+  const {
+    order,
+    userMessage,
+    system,
+    temperature,
+    maxTokens,
+    preferredProvider,
+    preferredModel,
+    label,
+    gate,
+  } = args;
+
+  const encoder = new TextEncoder();
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (event: Record<string, unknown>) => {
+        controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+      };
+
+      // Is er al tekst naar de client gegaan? Zo ja, dan kunnen we niet meer
+      // stilletjes naar een andere provider overstappen.
+      let emitted = false;
+      let lastError = '';
+
+      for (const candidate of order) {
+        // Kop die we vasthouden tot de clarity-gate uitsluitsel geeft.
+        let held = '';
+        let state: 'unclear' | 'clear' | 'pending' = gate ? 'pending' : 'clear';
+        let announced = false;
+
+        try {
+          const raw = await PROVIDERS[candidate](
+            userMessage,
+            system,
+            temperature,
+            resolveModel(candidate, preferredProvider, preferredModel),
+            maxTokens,
+            (chunk) => {
+              if (!announced) {
+                announced = true;
+                send({ type: 'meta', provider: candidate });
+              }
+              if (state === 'unclear') return;
+              if (state === 'pending') {
+                held += chunk;
+                state = clarityGateState(held);
+                if (state === 'clear') {
+                  send({ type: 'delta', text: held });
+                  emitted = true;
+                  held = '';
+                }
+                return;
+              }
+              send({ type: 'delta', text: chunk });
+              emitted = true;
+            },
+          );
+
+          // Definitieve toets op de volledige tekst — dezelfde als in de
+          // niet-streamende route, zodat beide paden identiek beslissen.
+          const unclear = gate ? detectUnclear(raw) : null;
+          if (unclear) {
+            send({ type: 'unclear', reason: unclear, provider: candidate });
+            controller.close();
+            return;
+          }
+
+          // Restant dat de gate nog vasthield alsnog doorsturen.
+          if (held) {
+            send({ type: 'delta', text: held });
+            emitted = true;
+          }
+          send({ type: 'done', text: raw, provider: candidate });
+          controller.close();
+          return;
+        } catch (providerErr) {
+          lastError = providerErr instanceof Error ? providerErr.message : 'Onbekende fout';
+          console.error(`${candidate} (${label}, stream) mislukt:`, providerErr);
+          // Al tekst verstuurd? Dan is overstappen geen optie meer.
+          if (emitted) {
+            send({ type: 'error', error: lastError });
+            controller.close();
+            return;
+          }
+          // Anders: gewoon de volgende provider in de keten proberen.
+        }
+      }
+
+      send({ type: 'error', error: lastError || 'Geen enkele AI-provider was beschikbaar' });
+      controller.close();
+    },
+  });
+
+  return new Response(stream, {
+    status: 200,
+    headers: {
+      ...corsHeaders,
+      'Content-Type': 'application/x-ndjson; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      // Voorkomt dat een tussenliggende proxy de stream buffert.
+      'X-Accel-Buffering': 'no',
+    },
+  });
+}
 
 /** Bouw de fallback-volgorde op basis van de voorkeur van de client. */
 function buildOrder(preferred?: PreferredProvider): Provider[] {
@@ -2967,6 +3311,9 @@ Deno.serve(async (req: Request) => {
                                         : 'generate';
     const order = buildOrder(body.preferredProvider);
     const temperature = clampTemp(body.temperature);
+    // Uitvoerbudget van deze modus: bepaalt het max_tokens-plafond van elke
+    // providerkeuze hieronder (zie MODE_MAX_TOKENS voor de afweging).
+    const maxTokens = maxTokensFor(mode);
 
     // --- Analysemodus: toets de eigen prompt aan de velden van het prompt framework ---
     if (mode === 'analyze') {
@@ -2990,6 +3337,7 @@ Deno.serve(async (req: Request) => {
             ANALYZE_SYSTEM_PROMPT,
             0.2,
             resolveModel(candidate, body.preferredProvider, body.preferredModel),
+            maxTokens,
           );
           analysis = parseAnalysis(raw, fields);
           provider = candidate;
@@ -3051,6 +3399,7 @@ Deno.serve(async (req: Request) => {
             prefillSystem,
             0.3,
             resolveModel(candidate, body.preferredProvider, body.preferredModel),
+            maxTokens,
           );
           // Clarity-gate: is de prompt zelf onzin? Dan eerlijk terugkoppelen.
           const unclear = detectUnclearJson(raw);
@@ -3118,6 +3467,7 @@ Deno.serve(async (req: Request) => {
             EXPAND_FIELD_SYSTEM_PROMPT,
             0.3,
             resolveModel(candidate, body.preferredProvider, body.preferredModel),
+            maxTokens,
           );
           const parsed = parseExpandField(raw, currentValue);
           if (parsed) {
@@ -3171,6 +3521,7 @@ Deno.serve(async (req: Request) => {
             TITLE_SYSTEM_PROMPT,
             0.3,
             resolveModel(candidate, body.preferredProvider, body.preferredModel),
+            maxTokens,
           );
           const cleaned = cleanTitle(raw);
           if (cleaned) {
@@ -3214,6 +3565,7 @@ Deno.serve(async (req: Request) => {
             METADATA_SYSTEM_PROMPT,
             0.3,
             resolveModel(candidate, body.preferredProvider, body.preferredModel),
+            maxTokens,
           );
           const parsed = parseMetadata(raw, validCatIds);
           if (parsed.title) {
@@ -3272,6 +3624,7 @@ Deno.serve(async (req: Request) => {
             fromDialogue ? DIALOGUE_FRAMEWORK_SYSTEM_PROMPT : RECOMMEND_FRAMEWORK_SYSTEM_PROMPT,
             0.2,
             resolveModel(candidate, body.preferredProvider, body.preferredModel),
+            maxTokens,
           );
           const parsed = parseFrameworkRecommendations(raw, validIds);
           if (parsed.recommendations.length > 0) {
@@ -3325,6 +3678,7 @@ Deno.serve(async (req: Request) => {
             PLAN_SYSTEM_PROMPT,
             0.2,
             resolveModel(candidate, body.preferredProvider, body.preferredModel),
+            maxTokens,
           );
           // Clarity-gate: heeft het model het doel als onzin beoordeeld?
           const unclear = detectUnclearJson(raw);
@@ -3405,6 +3759,7 @@ Deno.serve(async (req: Request) => {
               interviewSystem,
               0.3,
               resolveModel(candidate, body.preferredProvider, body.preferredModel),
+              maxTokens,
             );
             const unclear = detectUnclearJson(raw);
             if (unclear) {
@@ -3455,6 +3810,7 @@ Deno.serve(async (req: Request) => {
             PLAN_STEP_MATERIAL_SYSTEM_PROMPT,
             0.3,
             resolveModel(candidate, body.preferredProvider, body.preferredModel),
+            maxTokens,
           );
           // Clarity-gate: alleen deze STAP wordt afgekort, niet het hele plan.
           const unclear = detectUnclearJson(raw);
@@ -3519,6 +3875,7 @@ Deno.serve(async (req: Request) => {
             PLAN_STEP_ANALYZE_SYSTEM_PROMPT,
             0.3,
             resolveModel(candidate, body.preferredProvider, body.preferredModel),
+            maxTokens,
           );
           const unclear = detectUnclearJson(raw);
           if (unclear) {
@@ -3581,6 +3938,7 @@ Deno.serve(async (req: Request) => {
             CLARIFY_SYSTEM_PROMPT,
             0.3,
             resolveModel(candidate, body.preferredProvider, body.preferredModel),
+            maxTokens,
           );
           const unclear = detectUnclearJson(raw);
           if (unclear) {
@@ -3647,6 +4005,7 @@ Deno.serve(async (req: Request) => {
             ASSUMPTION_CHECK_SYSTEM_PROMPT,
             0.2,
             resolveModel(candidate, body.preferredProvider, body.preferredModel),
+            maxTokens,
           );
           const assumptions = parseAssumptions(raw);
           if (assumptions !== null) {
@@ -3683,6 +4042,23 @@ Deno.serve(async (req: Request) => {
       // Iets hogere temperatuur: dit is creatief eindwerk, geen JSON.
       const execTemp = clampTemp(body.temperature ?? 0.5);
 
+      // Streamend: het eindproduct is het langste antwoord dat de tool maakt, dus
+      // hier levert meelezen tijdens het schrijven de meeste tijdwinst op.
+      // Geen clarity-gate: de invoer is een al gevalideerde prompt.
+      if (body.stream) {
+        return streamTextResponse({
+          order,
+          userMessage: prompt,
+          system: EXECUTE_SYSTEM_PROMPT,
+          temperature: execTemp,
+          maxTokens,
+          preferredProvider: body.preferredProvider,
+          preferredModel: body.preferredModel,
+          label: 'execute',
+          gate: false,
+        });
+      }
+
       for (const candidate of order) {
         try {
           const raw = await PROVIDERS[candidate](
@@ -3690,6 +4066,7 @@ Deno.serve(async (req: Request) => {
             EXECUTE_SYSTEM_PROMPT,
             execTemp,
             resolveModel(candidate, body.preferredProvider, body.preferredModel),
+            maxTokens,
           );
           const trimmed = raw.trim();
           if (trimmed) {
@@ -3739,6 +4116,7 @@ Deno.serve(async (req: Request) => {
             PERSONA_FILL_SYSTEM_PROMPT,
             0.4,
             resolveModel(candidate, body.preferredProvider, body.preferredModel),
+            maxTokens,
           );
           const unclear = detectUnclearJson(raw);
           if (unclear) {
@@ -3786,6 +4164,7 @@ Deno.serve(async (req: Request) => {
             FEWSHOT_EXAMPLE_SYSTEM_PROMPT,
             0.5,
             resolveModel(candidate, body.preferredProvider, body.preferredModel),
+            maxTokens,
           );
           const unclear = detectUnclearJson(raw);
           if (unclear) {
@@ -3834,6 +4213,7 @@ Deno.serve(async (req: Request) => {
             FEWSHOT_EXTRACT_SYSTEM_PROMPT,
             0.3,
             resolveModel(candidate, body.preferredProvider, body.preferredModel),
+            maxTokens,
           );
           const unclear = detectUnclearJson(raw);
           if (unclear) {
@@ -3876,6 +4256,7 @@ Deno.serve(async (req: Request) => {
             META_BUILD_SYSTEM_PROMPT,
             0.4,
             resolveModel(candidate, body.preferredProvider, body.preferredModel),
+            maxTokens,
           );
           const unclear = detectUnclearJson(raw);
           if (unclear) {
@@ -3923,6 +4304,7 @@ Deno.serve(async (req: Request) => {
             RECOMMEND_SYSTEM_PROMPT,
             0.2,
             resolveModel(candidate, body.preferredProvider, body.preferredModel),
+            maxTokens,
           );
           // Clarity-gate: heeft het model het doel als onzin beoordeeld?
           const unclear = detectUnclearJson(raw);
@@ -3976,6 +4358,7 @@ Deno.serve(async (req: Request) => {
             FRAMEWORK_FIT_SYSTEM_PROMPT,
             0.2,
             resolveModel(candidate, body.preferredProvider, body.preferredModel),
+            maxTokens,
           );
           // Clarity-gate: heeft het model de prompt als onzin beoordeeld?
           const unclear = detectUnclearJson(raw);
@@ -4041,6 +4424,24 @@ Deno.serve(async (req: Request) => {
       interviewResolved,
     });
 
+    // Streamend: de gebruiker ziet de template regel voor regel ontstaan in
+    // plaats van een spinner tot alles klaar is. De clarity-gate blijft actief;
+    // hij houdt de kop van de tekst vast tot zeker is dat het geen
+    // ONDUIDELIJKE_INVOER-melding wordt.
+    if (body.stream) {
+      return streamTextResponse({
+        order,
+        userMessage,
+        system,
+        temperature,
+        maxTokens,
+        preferredProvider: body.preferredProvider,
+        preferredModel: body.preferredModel,
+        label: 'generate',
+        gate: true,
+      });
+    }
+
     // Doorloop de providers in voorkeursvolgorde; eerste succes wint.
     // Faalt alles (of ontbreken alle keys), dan de ruwe template.
     let optimized = filled;
@@ -4053,6 +4454,7 @@ Deno.serve(async (req: Request) => {
           system,
           temperature,
           resolveModel(candidate, body.preferredProvider, body.preferredModel),
+          maxTokens,
         );
         // Clarity-gate: heeft het model de input als onbruikbaar beoordeeld?
         // Dan geen verzonnen casus teruggeven, maar eerlijk terugkoppelen.

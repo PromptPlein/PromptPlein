@@ -83,6 +83,9 @@ export default function OptimizerPage() {
   // maar een blokkerende uitleg zodat de gebruiker zijn invoer kan verduidelijken.
   const [unclearReason, setUnclearReason] = useState<string | null>(null);
   const [result, setResult] = useState<OptimizeResult | null>(null);
+  // De prompt zoals de AI hem op dit moment schrijft; voedt het laadscherm zodat
+  // de gebruiker meeleest in plaats van naar een spinner te kijken.
+  const [streamText, setStreamText] = useState('');
   // 'input' = invoerpaneel zichtbaar, 'transition' = uitfaden, 'output' = resultaat
   const [phase, setPhase] = useState<'input' | 'transition' | 'output'>('input');
   const followUpRef = useRef<HTMLElement>(null);
@@ -285,6 +288,7 @@ export default function OptimizerPage() {
     if (!technique) return;
     setGuardrailFindings(null);
     setUnclearReason(null); // nieuwe poging: oude onduidelijk-melding wissen
+    setStreamText(''); // meegelezen tekst van een vorige poging wissen
     setOptimizing(true);
     // Wacht tot het laadscherm is gerenderd en scroll het rustig in beeld, zodat
     // de gebruiker de analyse ziet i.p.v. naar de onderkant van het formulier te staren.
@@ -323,6 +327,8 @@ export default function OptimizerPage() {
         systemPrompt: s.systemPrompt.trim() || undefined,
         toneInstruction: s.toneInstruction.trim() || undefined,
         temperature: s.temperature,
+        // Meelezen terwijl de prompt wordt geschreven.
+        onChunk: setStreamText,
       });
 
       // Clarity-gate: de AI vond de input onzin en maakte bewust geen template.
@@ -639,7 +645,7 @@ export default function OptimizerPage() {
                     auto-scroll bij genereren. */}
                 {optimizing && (
                   <div ref={optimizingRef} className="scroll-mt-24">
-                    <OptimizingLoader techniqueName={technique?.name} />
+                    <OptimizingLoader techniqueName={technique?.name} streamText={streamText} />
                   </div>
                 )}
 

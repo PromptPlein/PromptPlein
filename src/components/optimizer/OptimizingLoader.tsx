@@ -1,8 +1,15 @@
+import { useEffect, useRef } from 'react';
 import { Loader2, Sparkles } from 'lucide-react';
 
 interface OptimizingLoaderProps {
   /** Naam van de gekozen techniek/raamwerk, voor een persoonlijke melding. */
   techniqueName?: string;
+  /**
+   * De tekst die de AI tot nu toe heeft geschreven. Zodra hier iets in staat,
+   * vervangt de meelezende tekst het skelet: de gebruiker ziet de prompt
+   * ontstaan in plaats van te wachten op het complete antwoord.
+   */
+  streamText?: string;
 }
 
 /**
@@ -11,7 +18,17 @@ interface OptimizingLoaderProps {
  * accentbalk + pulserend icoon), maar met een tekst-skelet dat de opbouw van de
  * prompt suggereert. Gedeeld door de techniek-flow en de eigen-prompt-flow.
  */
-export default function OptimizingLoader({ techniqueName }: OptimizingLoaderProps) {
+export default function OptimizingLoader({ techniqueName, streamText }: OptimizingLoaderProps) {
+  const streaming = Boolean(streamText?.trim());
+  const streamRef = useRef<HTMLDivElement>(null);
+
+  // Meeschuiven met de tekst die binnenkomt, zodat de laatst geschreven regel in
+  // beeld blijft zonder dat de pagina zelf verspringt.
+  useEffect(() => {
+    const el = streamRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [streamText]);
+
   return (
     <div className="animate-fade-in overflow-hidden rounded-2xl border border-rijksblauw-200 bg-white shadow-sm dark:border-rijksblauw-500/30 dark:bg-slate-800">
       {/* Geanimeerde accentbalk bovenaan */}
@@ -30,30 +47,50 @@ export default function OptimizingLoader({ techniqueName }: OptimizingLoaderProp
               <Loader2 size={15} className="animate-spin text-rijksblauw-500" />
             </p>
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              We verwerken je antwoorden tot een rijke, direct bruikbare prompt
-              {techniqueName ? (
+              {streaming ? (
+                <>Je prompt wordt nu geschreven — je leest live mee</>
+              ) : (
                 <>
-                  {' '}volgens{' '}
-                  <span className="font-medium text-rijksblauw-700 dark:text-rijksblauw-200">
-                    {techniqueName}
-                  </span>
+                  We verwerken je antwoorden tot een rijke, direct bruikbare prompt
+                  {techniqueName ? (
+                    <>
+                      {' '}volgens{' '}
+                      <span className="font-medium text-rijksblauw-700 dark:text-rijksblauw-200">
+                        {techniqueName}
+                      </span>
+                    </>
+                  ) : null}
+                  …
                 </>
-              ) : null}
-              …
+              )}
             </p>
           </div>
         </div>
 
-        {/* Skelet dat een opgebouwde prompt-tekst suggereert. */}
-        <div className="mt-5 space-y-2.5">
-          <div className="skeleton h-3.5 w-1/4 rounded" />
-          <div className="skeleton h-3 w-full rounded" />
-          <div className="skeleton h-3 w-11/12 rounded" />
-          <div className="skeleton h-3 w-4/5 rounded" />
-          <div className="mt-4 skeleton h-3.5 w-1/3 rounded" />
-          <div className="skeleton h-3 w-full rounded" />
-          <div className="skeleton h-3 w-3/4 rounded" />
-        </div>
+        {streaming ? (
+          /* Meelezen: de tekst zoals de AI hem op dit moment schrijft. */
+          <div
+            ref={streamRef}
+            aria-live="polite"
+            aria-busy="true"
+            className="mt-5 max-h-72 overflow-y-auto whitespace-pre-wrap break-words rounded-xl bg-slate-50 p-4 text-sm leading-relaxed text-slate-700 dark:bg-slate-900/50 dark:text-slate-200"
+          >
+            {streamText}
+            {/* Knipperende cursor op de plek waar de tekst verder groeit. */}
+            <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse rounded-sm bg-rijksblauw-500 align-text-bottom" />
+          </div>
+        ) : (
+          /* Skelet dat een opgebouwde prompt-tekst suggereert. */
+          <div className="mt-5 space-y-2.5">
+            <div className="skeleton h-3.5 w-1/4 rounded" />
+            <div className="skeleton h-3 w-full rounded" />
+            <div className="skeleton h-3 w-11/12 rounded" />
+            <div className="skeleton h-3 w-4/5 rounded" />
+            <div className="mt-4 skeleton h-3.5 w-1/3 rounded" />
+            <div className="skeleton h-3 w-full rounded" />
+            <div className="skeleton h-3 w-3/4 rounded" />
+          </div>
+        )}
       </div>
     </div>
   );

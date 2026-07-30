@@ -48,6 +48,144 @@ export function fillTemplate(
 }
 
 /**
+ * Callback die tijdens het streamen wordt aangeroepen met de VOLLEDIGE tekst tot
+ * nu toe (niet alleen het nieuwe fragment). Zo kan een component de waarde direct
+ * in state zetten zonder zelf te hoeven optellen.
+ */
+export type StreamHandler = (textSoFar: string) => void;
+
+/** Uitkomst van een streamende aanroep van de edge function. */
+interface StreamOutcome {
+  text: string;
+  provider?: string;
+  unclear?: boolean;
+  reason?: string;
+  error?: string;
+}
+
+/**
+ * Roept de edge function in streamende modus aan en leest de NDJSON-respons uit:
+ * één JSON-object per regel ({"type":"delta"|"done"|"unclear"|"error"|"meta"}).
+ *
+ * Waarom streamen: het volledige antwoord duurt tientallen seconden, maar het
+ * eerste fragment komt na ongeveer een seconde binnen. Door mee te lezen ziet de
+ * gebruiker de tekst ontstaan in plaats van naar een spinner te kijken.
+ *
+ * @param tidy Opschoonfunctie voor de tussenstand (bijv. sterretjes weghalen),
+ *             zodat de live meegelezen tekst er hetzelfde uitziet als het
+ *             eindresultaat.
+ */
+async function streamFromFunction(
+  body: Record<string, unknown>,
+  onChunk: StreamHandler,
+  tidy: (text: string) => string = (t) => t,
+): Promise<StreamOutcome> {
+  const functionUrl = getFunctionUrl('optimize-prompt');
+  if (!functionUrl) throw new Error('Geen edge function geconfigureerd');
+
+  const anonKey = getAnonKey();
+  const response = await fetch(functionUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(anonKey ? { Authorization: `Bearer ${anonKey}`, apikey: anonKey } : {}),
+    },
+    body: JSON.stringify({ ...body, stream: true }),
+  });
+
+  if (!response.ok) throw new Error(`Edge function gaf status ${response.status}`);
+
+  // Draait er nog een oudere edge function, zonder stream-ondersteuning? Die
+  // negeert de `stream`-vlag en antwoordt gewoon met één JSON-object. Herken dat
+  // aan het content-type en handel het af als een normaal antwoord.
+  //
+  // Zonder deze tak zou de client tijdens elke uitrol — en op localhost vóór de
+  // deploy — stilletjes terugvallen op de lokale template: de NDJSON-parser
+  // vindt dan geen enkel `type`-veld en houdt lege tekst over.
+  const contentType = response.headers.get('content-type') ?? '';
+  if (!contentType.includes('ndjson')) {
+    const data = (await response.json()) as {
+      success?: boolean;
+      optimized_content?: string;
+      output?: string;
+      provider?: string;
+      unclear?: boolean;
+      reason?: string;
+      error?: string;
+    };
+    if (data.unclear) {
+      return { text: '', provider: data.provider, unclear: true, reason: data.reason };
+    }
+    const text = (data.optimized_content ?? data.output ?? '').trim();
+    if (text) onChunk(tidy(text));
+    return {
+      text,
+      provider: data.provider,
+      error: text ? undefined : (data.error ?? 'De AI-service gaf een leeg antwoord'),
+    };
+  }
+
+  if (!response.body) throw new Error('De AI-service gaf geen leesbare stream terug');
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let accumulated = '';
+  const outcome: StreamOutcome = { text: '' };
+
+  const handleLine = (line: string): void => {
+    const trimmed = line.trim();
+    if (!trimmed) return;
+    let event: { type?: string; text?: string; provider?: string; reason?: string; error?: string };
+    try {
+      event = JSON.parse(trimmed);
+    } catch {
+      // Onvolledige of onbekende regel: overslaan, de stream loopt door.
+      return;
+    }
+    switch (event.type) {
+      case 'meta':
+        outcome.provider = event.provider;
+        break;
+      case 'delta':
+        accumulated += event.text ?? '';
+        onChunk(tidy(accumulated));
+        break;
+      case 'done':
+        // De server stuurt de volledige tekst mee; die is leidend boven onze
+        // eigen optelsom.
+        outcome.text = event.text ?? accumulated;
+        if (event.provider) outcome.provider = event.provider;
+        break;
+      case 'unclear':
+        outcome.unclear = true;
+        outcome.reason = event.reason;
+        if (event.provider) outcome.provider = event.provider;
+        break;
+      case 'error':
+        outcome.error = event.error ?? 'Onbekende fout van de AI-service';
+        break;
+    }
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let newline: number;
+    while ((newline = buffer.indexOf('\n')) !== -1) {
+      handleLine(buffer.slice(0, newline));
+      buffer = buffer.slice(newline + 1);
+    }
+  }
+  // Laatste regel zonder afsluitende newline.
+  handleLine(buffer);
+
+  if (!outcome.text) outcome.text = accumulated;
+  return outcome;
+}
+
+/**
  * Optimaliseer een prompt. Roept de Supabase Edge Function aan (Claude met
  * DeepSeek-fallback) wanneer geconfigureerd; anders een lokale template-fill.
  */
@@ -79,6 +217,14 @@ export async function optimizePrompt(args: {
    * dialoog nog moet "aanzetten".
    */
   interviewResolved?: boolean;
+  /**
+   * Meelezen terwijl de AI schrijft. Geef je dit mee, dan vraagt de service een
+   * streamend antwoord en roept `onChunk` aan met de tekst tot dan toe — de
+   * gebruiker ziet de prompt ontstaan in plaats van tientallen seconden een
+   * spinner. De uiteindelijke retourwaarde is identiek aan die zonder streamen,
+   * dus bestaande aanroepers hoeven niets te veranderen.
+   */
+  onChunk?: StreamHandler;
 }): Promise<OptimizeResult> {
   const {
     technique,
@@ -91,6 +237,7 @@ export async function optimizePrompt(args: {
     temperature,
     extraAnsweredFields,
     interviewResolved,
+    onChunk,
   } = args;
 
   const functionUrl = getFunctionUrl('optimize-prompt');
@@ -98,46 +245,70 @@ export async function optimizePrompt(args: {
   if (isSupabaseConfigured && functionUrl) {
     try {
       const anonKey = getAnonKey();
+      const payload = {
+        mode: 'generate',
+        techniqueId: technique.id,
+        template: technique.template,
+        promptContent,
+        followUpAnswers,
+        // Verrijkende context zodat het model de antwoorden kan analyseren
+        // en uitschrijven i.p.v. de template letterlijk in te vullen.
+        techniqueName: technique.name,
+        techniqueDescription: technique.description,
+        techniqueStrength: technique.strength,
+        // Context-raamwerken (CARE, CRISP, …) krijgen server-side de vaste
+        // #-koppenstructuur opgelegd; losse technieken houden hun eigen vorm.
+        isContextPrompt: isContextPrompt(technique),
+        // Welke vaste uitvoerstructuur de generator moet afdwingen (CARE-koppen,
+        // Few-Shot-blokken, …). Undefined = de AI bepaalt zelf de vorm.
+        structureFormat: structureFormat(technique),
+        // Interview al in de tool gevoerd → uitgewerkte prompt i.p.v. dialoog-aanzet.
+        interviewResolved: Boolean(interviewResolved),
+        answeredFields: [
+          ...technique.follow_up_questions.map((q) => ({
+            id: q.id,
+            label: q.label,
+            answer: followUpAnswers[q.id] ?? '',
+          })),
+          // Materiaal uit eerdere plan-stappen als gelabelde context (plan-bouwer).
+          ...(extraAnsweredFields ?? []),
+        ].filter((f) => f.answer.trim()),
+        preferredProvider: preferredProvider ?? 'auto',
+        preferredModel,
+        systemPrompt,
+        toneInstruction,
+        temperature,
+      };
+
+      // Meelezen gevraagd? Dan de streamende route: de eerste regels staan er na
+      // ongeveer een seconde in plaats van na de volledige generatie.
+      if (onChunk) {
+        const streamed = await streamFromFunction(payload, onChunk, tidyPromptMarkup);
+        if (streamed.unclear) {
+          return {
+            optimized_content: '',
+            success: false,
+            unclear: true,
+            reason: streamed.reason,
+            provider: (streamed.provider as OptimizeResult['provider']) ?? 'claude',
+          };
+        }
+        if (streamed.error) throw new Error(streamed.error);
+        if (!streamed.text.trim()) throw new Error('De AI-service gaf een lege prompt terug');
+        return {
+          optimized_content: tidyPromptMarkup(streamed.text),
+          success: true,
+          provider: (streamed.provider as OptimizeResult['provider']) ?? 'claude',
+        };
+      }
+
       const response = await fetch(functionUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(anonKey ? { Authorization: `Bearer ${anonKey}`, apikey: anonKey } : {}),
         },
-        body: JSON.stringify({
-          mode: 'generate',
-          techniqueId: technique.id,
-          template: technique.template,
-          promptContent,
-          followUpAnswers,
-          // Verrijkende context zodat het model de antwoorden kan analyseren
-          // en uitschrijven i.p.v. de template letterlijk in te vullen.
-          techniqueName: technique.name,
-          techniqueDescription: technique.description,
-          techniqueStrength: technique.strength,
-          // Context-raamwerken (CARE, CRISP, …) krijgen server-side de vaste
-          // #-koppenstructuur opgelegd; losse technieken houden hun eigen vorm.
-          isContextPrompt: isContextPrompt(technique),
-          // Welke vaste uitvoerstructuur de generator moet afdwingen (CARE-koppen,
-          // Few-Shot-blokken, …). Undefined = de AI bepaalt zelf de vorm.
-          structureFormat: structureFormat(technique),
-          // Interview al in de tool gevoerd → uitgewerkte prompt i.p.v. dialoog-aanzet.
-          interviewResolved: Boolean(interviewResolved),
-          answeredFields: [
-            ...technique.follow_up_questions.map((q) => ({
-              id: q.id,
-              label: q.label,
-              answer: followUpAnswers[q.id] ?? '',
-            })),
-            // Materiaal uit eerdere plan-stappen als gelabelde context (plan-bouwer).
-            ...(extraAnsweredFields ?? []),
-          ].filter((f) => f.answer.trim()),
-          preferredProvider: preferredProvider ?? 'auto',
-          preferredModel,
-          systemPrompt,
-          toneInstruction,
-          temperature,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -203,8 +374,13 @@ export async function executePrompt(args: {
   preferredProvider?: AiProvider;
   preferredModel?: string;
   temperature?: number;
+  /**
+   * Meelezen terwijl de AI het eindproduct schrijft. Dit is het langste antwoord
+   * dat de tool maakt, dus hier scheelt meelezen de meeste gevoelde wachttijd.
+   */
+  onChunk?: StreamHandler;
 }): Promise<ExecuteResult> {
-  const { prompt, preferredProvider, preferredModel, temperature } = args;
+  const { prompt, preferredProvider, preferredModel, temperature, onChunk } = args;
   const functionUrl = getFunctionUrl('optimize-prompt');
 
   if (!isSupabaseConfigured || !functionUrl) {
@@ -216,21 +392,50 @@ export async function executePrompt(args: {
     };
   }
 
+  const payload = {
+    mode: 'execute',
+    promptContent: prompt,
+    preferredProvider: preferredProvider ?? 'auto',
+    preferredModel,
+    temperature,
+  };
+
   try {
     const anonKey = getAnonKey();
+
+    if (onChunk) {
+      const streamed = await streamFromFunction(payload, onChunk, tidyPromptMarkup);
+      if (streamed.error) {
+        return {
+          output: '',
+          success: false,
+          provider: (streamed.provider as ExecuteResult['provider']) ?? 'claude',
+          error: streamed.error,
+        };
+      }
+      const output = tidyPromptMarkup(streamed.text).trim();
+      if (!output) {
+        return {
+          output: '',
+          success: false,
+          provider: (streamed.provider as ExecuteResult['provider']) ?? 'claude',
+          error: 'De prompt kon niet worden uitgevoerd.',
+        };
+      }
+      return {
+        output,
+        success: true,
+        provider: (streamed.provider as ExecuteResult['provider']) ?? 'claude',
+      };
+    }
+
     const response = await fetch(functionUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         ...(anonKey ? { Authorization: `Bearer ${anonKey}`, apikey: anonKey } : {}),
       },
-      body: JSON.stringify({
-        mode: 'execute',
-        promptContent: prompt,
-        preferredProvider: preferredProvider ?? 'auto',
-        preferredModel,
-        temperature,
-      }),
+      body: JSON.stringify(payload),
     });
 
     if (!response.ok) {

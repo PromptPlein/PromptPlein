@@ -133,6 +133,8 @@ export default function OwnPromptOptimizer({ settings, onResult, header }: OwnPr
   const [fieldMeta, setFieldMeta] = useState<FieldMeta>({});
   const [prefilling, setPrefilling] = useState(false);
   const [generating, setGenerating] = useState(false);
+  // De prompt zoals de AI hem op dit moment schrijft (live meelezen).
+  const [streamText, setStreamText] = useState('');
   // Terugkoppeling bij onzin-input: geen resultaat, wél uitleg.
   const [unclearReason, setUnclearReason] = useState<string | null>(null);
   // Anker voor het voor-invul-/laadblok zodat we er na een keuze naartoe scrollen.
@@ -309,6 +311,7 @@ export default function OwnPromptOptimizer({ settings, onResult, header }: OwnPr
     if (!technique) return;
     setGenerating(true);
     setUnclearReason(null); // nieuwe poging: oude onduidelijk-melding wissen
+    setStreamText(''); // meegelezen tekst van een vorige poging wissen
     // Het laadscherm verschijnt boven de genereerknop; scroll het in beeld zodat
     // de gebruiker de analyse ziet i.p.v. naar de (nu verdwenen) knop te staren.
     requestAnimationFrame(() => {
@@ -324,6 +327,8 @@ export default function OwnPromptOptimizer({ settings, onResult, header }: OwnPr
         systemPrompt: settings.systemPrompt.trim() || undefined,
         toneInstruction: settings.toneInstruction.trim() || undefined,
         temperature: settings.temperature,
+        // Meelezen terwijl de prompt wordt geschreven.
+        onChunk: setStreamText,
       });
       // Clarity-gate: de AI vond de input onzin en maakte bewust geen prompt.
       if (res.unclear) {
@@ -739,7 +744,7 @@ export default function OwnPromptOptimizer({ settings, onResult, header }: OwnPr
         )}
 
         {/* Mooi laadscherm tijdens het genereren van de uiteindelijke prompt. */}
-        {generating && <OptimizingLoader techniqueName={technique?.name} />}
+        {generating && <OptimizingLoader techniqueName={technique?.name} streamText={streamText} />}
 
         {/* 5. Voor-ingevulde velden — controleer en pas aan. Indeling (stap voor
             stap of alles tegelijk) is een persoonlijke voorkeur in FollowUpQuestions. */}
