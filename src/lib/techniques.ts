@@ -33,6 +33,36 @@ export function isContextPrompt(t: TechniqueIdentity): boolean {
 }
 
 /**
+ * Ruwe trefwoord-match tussen de eigen prompt en de frameworks, zodat er meteen
+ * iets op het scherm staat terwijl de AI nog nadenkt. Bewust dezelfde aanpak als
+ * de `localRecommend`-fallback in de edge function.
+ *
+ * Dit is nadrukkelijk een VOORLOPIGE suggestie: zodra het AI-antwoord binnen is
+ * vervangt de aanroeper hem. Levert de prompt geen enkele overlap op, dan geven
+ * we niets terug — een willekeurig framework tonen zou misleidend zijn.
+ */
+export function localFrameworkGuess(ownPrompt: string, frameworks: Technique[]): Technique[] {
+  const words = new Set(
+    ownPrompt
+      .toLowerCase()
+      .split(/[^a-zà-ÿ0-9]+/)
+      .filter((w) => w.length > 3),
+  );
+  if (words.size === 0) return [];
+  const scored = frameworks
+    .map((t) => {
+      const haystack =
+        `${t.name} ${t.description ?? ''} ${t.strength ?? ''} ${(t.use_cases ?? []).join(' ')}`.toLowerCase();
+      let score = 0;
+      for (const w of words) if (haystack.includes(w)) score += 1;
+      return { t, score };
+    })
+    .filter((s) => s.score > 0)
+    .sort((a, b) => b.score - a.score);
+  return scored.slice(0, 2).map((s) => s.t);
+}
+
+/**
  * Vaste uitvoerstructuur die de generator moet afdwingen voor bepaalde
  * technieken. De waarde wordt naar de edge function gestuurd, die er de
  * bijbehorende structuur-instructie aan koppelt.

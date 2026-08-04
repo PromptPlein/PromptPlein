@@ -20,7 +20,7 @@ import {
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import { useReferenceData } from '@/context/ReferenceDataContext';
-import { isContextPrompt } from '@/lib/techniques';
+import { isContextPrompt, localFrameworkGuess } from '@/lib/techniques';
 import { usePersistentDraft } from '@/lib/usePersistentDraft';
 import { stripMarkdown } from '@/lib/utils';
 import {
@@ -28,6 +28,7 @@ import {
   generatePrompt,
   prefillFields,
   recommendFramework,
+  type FrameworkSearchPhase,
 } from '@/services/optimizeService';
 import OptimizingLoader from './OptimizingLoader';
 import FollowUpQuestions, { type FieldMeta } from './FollowUpQuestions';
@@ -97,6 +98,16 @@ const PROMPT_EXAMPLES: { framework: string; prompt: string }[] = [
 ];
 
 /**
+ * Wat de knop toont terwijl de AI zoekt. Een spinner die 10 seconden stilstaat
+ * voelt kapot; benoemen wát er gebeurt maakt dezelfde wachttijd draaglijk.
+ */
+const PHASE_LABEL: Record<FrameworkSearchPhase, string> = {
+  analyzing: 'Je prompt analyseren…',
+  weighing: 'Frameworks tegen je vraagstuk wegen…',
+  writing: 'Motivatie schrijven…',
+};
+
+/**
  * Flow om een EIGEN prompt te optimaliseren. De gebruiker plakt zijn prompt en
  * laat de AI bepalen welk prompt framework (CARE, CRISP, …) het beste past.
  * Uit de aanbevelingen (1–3) kiest de gebruiker er één. Daarna analyseren we de
@@ -126,6 +137,17 @@ export default function OwnPromptOptimizer({
   const [recommending, setRecommending] = useState(false);
   const [recommendations, setRecommendations] = useState<TechniqueRecommendation[] | null>(null);
   const [recommendSummary, setRecommendSummary] = useState('');
+  // Waar de zoekactie mee bezig is; voedt de voortgangstekst op de knop.
+  const [searchPhase, setSearchPhase] = useState<FrameworkSearchPhase>('analyzing');
+  // De getoonde lijst is (nog) de lokale trefwoord-gok, niet het AI-oordeel.
+  // Zo staat er meteen iets op het scherm zonder dat het zich voordoet als advies.
+  const [provisional, setProvisional] = useState(false);
+  // De gebruiker klapte "kies een ander framework" uit terwijl de aanbeveling nog
+  // liep: het fit-oordeel wachten we dan af tot die klaar is (twee zware calls
+  // tegelijk vechten om dezelfde provider-ratelimit en vertragen elkaar).
+  const [fitsRequested, setFitsRequested] = useState(false);
+  // Het uitklapblok zelf, zodat we de echte open-stand kunnen uitlezen.
+  const chooseRef = useRef<HTMLDetailsElement>(null);
   // Toelichting die de gebruiker typt om, ná het kiezen van een framework, de
   // velden aan te vullen die voor DIT raamwerk nog ontbraken. Voedt een nieuwe
   // voor-invulronde (chain-of-thought): menselijke input maakt de template scherper.
@@ -157,6 +179,8 @@ export default function OwnPromptOptimizer({
   /** Reset alles wat van de (oude) prompt afhangt: aanbevelingen, keuze, voor-invulling. */
   function resetDownstream() {
     setRecommendations(null);
+    setProvisional(false);
+    setFitsRequested(false);
     setRecommendSummary('');
     setClarification('');
     setTechniqueId(null);
@@ -218,6 +242,7 @@ export default function OwnPromptOptimizer({
       return;
     }
     setRecommending(true);
+    setSearchPhase('analyzing');
     // Een nieuwe zoekopdracht maakt de vorige keuze en voor-invulling ongeldig.
     setTechniqueId(null);
     setPrefill(null);
@@ -225,23 +250,53 @@ export default function OwnPromptOptimizer({
     setFieldMeta({});
     setUnclearReason(null);
     setClarification('');
-    // Oude fit-oordelen vervallen; opnieuw ophalen bij uitklappen.
+    setRecommendSummary('');
+    // Oude fit-oordelen vervallen; opnieuw ophalen bij uitklappen. Staat het blok
+    // op dit moment open, dan volgt dat vanzelf zodra deze zoekactie klaar is.
     setFrameworkFits({});
     fitFetchedRef.current = false;
+    setFitsRequested(chooseRef.current?.open ?? false);
+
+    // Meteen een voorlopige suggestie op basis van trefwoorden, zodat er iets
+    // staat terwijl de AI nog werkt. Levert dat niets op, dan blijft het blok
+    // leeg — een willekeurig framework tonen zou misleidend zijn.
+    const guess = localFrameworkGuess(ownPrompt, frameworks);
+    setProvisional(guess.length > 0);
+    setRecommendations(
+      guess.length > 0 ? guess.map((t) => ({ id: t.id, reason: '', value: '' })) : null,
+    );
+
+    // De aanbevelingen die de stream tot nu toe heeft opgeleverd. Bewust een
+    // gewone array naast de state: de callback kan zo idempotent ontdubbelen.
+    const streamed: TechniqueRecommendation[] = [];
     try {
       const res = await recommendFramework({
         ownPrompt: ownPrompt.trim(),
         frameworks,
         preferredProvider: settings.provider,
         preferredModel: settings.model,
+        onPhase: setSearchPhase,
+        onSummary: setRecommendSummary,
+        onRecommendation: (rec) => {
+          if (streamed.some((r) => r.id === rec.id)) return;
+          streamed.push(rec);
+          // De eerste échte aanbeveling vervangt de voorlopige gok.
+          setProvisional(false);
+          setRecommendations([...streamed]);
+        },
       });
       setRecommendations(res.recommendations);
+      setProvisional(false);
       setRecommendSummary(res.summary);
       if (res.error) toast(res.error, { icon: '⚠️' });
       if (res.recommendations.length === 0) {
         toast('Geen duidelijke match. Kies hieronder zelf een framework.', { icon: 'ℹ️' });
       }
     } catch {
+      // Alleen de voorlopige gok laten staan is misleidend als de AI faalde:
+      // dan hoort de gebruiker te weten dat dit geen advies is.
+      setRecommendations(streamed.length > 0 ? streamed : null);
+      setProvisional(false);
       toast.error('Aanbeveling mislukt. Probeer het opnieuw.');
     } finally {
       setRecommending(false);
@@ -258,6 +313,10 @@ export default function OwnPromptOptimizer({
   async function fetchFrameworkFits() {
     if (fitFetchedRef.current || fitLoading) return;
     if (frameworks.length === 0) return;
+    // Nooit gelijktijdig met de framework-aanbeveling: twee zware AI-calls op
+    // dezelfde provider vertragen elkaar. Het effect wordt afgehandeld zodra
+    // `recommending` weer false is.
+    if (recommending) return;
     fitFetchedRef.current = true;
     setFitLoading(true);
     try {
@@ -277,6 +336,15 @@ export default function OwnPromptOptimizer({
       setFitLoading(false);
     }
   }
+
+  // Uitgesteld fit-oordeel: is de lijst uitgeklapt terwijl de aanbeveling nog
+  // liep, dan halen we het alsnog op zodra die klaar is.
+  useEffect(() => {
+    if (fitsRequested && !recommending) void fetchFrameworkFits();
+    // fetchFrameworkFits is stabiel binnen deze component; alleen de vraag en de
+    // loopstatus bepalen of dit opnieuw moet lopen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fitsRequested, recommending]);
 
   /** Stap 2: gebruiker kiest één aanbevolen framework → velden alvast voor-invullen. */
   async function handleSelectFramework(id: string) {
@@ -509,7 +577,7 @@ export default function OwnPromptOptimizer({
           >
             {recommending ? (
               <>
-                <Loader2 size={18} className="animate-spin" /> Beste framework zoeken…
+                <Loader2 size={18} className="animate-spin" /> {PHASE_LABEL[searchPhase]}
               </>
             ) : (
               <>
@@ -536,9 +604,11 @@ export default function OwnPromptOptimizer({
           )}
 
           <p className="text-sm text-slate-600 dark:text-slate-300">
-            {recommendations.length === 1
-              ? 'Dit framework past het beste bij jouw prompt. Kies het om verder te gaan:'
-              : 'Deze frameworks passen het beste bij jouw prompt. Kies welke je wilt toepassen:'}
+            {provisional
+              ? 'Alvast een eerste indruk op basis van trefwoorden — de AI-analyse verfijnt dit zo:'
+              : recommendations.length === 1
+                ? 'Dit framework past het beste bij jouw prompt. Kies het om verder te gaan:'
+                : 'Deze frameworks passen het beste bij jouw prompt. Kies welke je wilt toepassen:'}
           </p>
           {recommendations.map((rec, idx) => {
             const fw = techniqueById(rec.id);
@@ -561,9 +631,11 @@ export default function OwnPromptOptimizer({
               >
                 <div className="mb-1 flex items-center justify-between gap-2">
                   <span className="flex items-center gap-2 font-semibold text-rijksblauw-700 dark:text-rijksblauw-200">
-                    {idx === 0 && <Sparkles size={15} className="text-rijksoranje" />}
+                    {idx === 0 && !provisional && <Sparkles size={15} className="text-rijksoranje" />}
                     {fw.name}
-                    {idx === 0 && recommendations.length > 1 && (
+                    {/* "Beste match" pas claimen als het AI-oordeel binnen is; de
+                        voorlopige gok is trefwoord-overlap, geen rangschikking. */}
+                    {idx === 0 && !provisional && recommendations.length > 1 && (
                       <span className="opl-badge bg-rijksoranje/15 text-rijksoranje">
                         Beste match
                       </span>
@@ -609,8 +681,11 @@ export default function OwnPromptOptimizer({
       {recommendations && frameworks.length > 0 && (
         <details
           className="group/choose"
+          ref={chooseRef}
           onToggle={(e) => {
-            if ((e.currentTarget as HTMLDetailsElement).open) void fetchFrameworkFits();
+            // Alleen de open-stand registreren: loopt de aanbeveling nog, dan
+            // haalt het effect het fit-oordeel op zodra die klaar is.
+            setFitsRequested((e.currentTarget as HTMLDetailsElement).open);
           }}
         >
           {/* Uitklap-knop, nadrukkelijk als oranje knop vormgegeven zodat meteen

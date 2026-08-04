@@ -81,6 +81,12 @@ interface TechniqueSummary {
   /** Concrete gebruikssituaties. */
   use_cases?: string[];
   /**
+   * Groepering: 'context' = compleet prompt framework (CARE, CRISP, …),
+   * 'technique' = losse techniek. De framework-aanbeveling weegt uitsluitend
+   * frameworks; losse technieken horen daar niet in mee.
+   */
+  family?: string;
+  /**
    * Alleen voor de plan-modus: is dit een compleet raamwerk (CARE, CRISP, …)?
    * De planner mag hoogstens één raamwerk kiezen en zet dat vooraan.
    */
@@ -511,6 +517,10 @@ const corsHeaders = {
   'Access-Control-Allow-Headers':
     'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  // Zonder deze kop herhaalt de browser de OPTIONS-preflight vóór ELKE POST.
+  // In de productielogs kostte dat 90–190 ms bovenop iedere aanroep. Een dag
+  // cachen scheelt die round-trip zonder dat er iets aan het gedrag verandert.
+  'Access-Control-Max-Age': '86400',
 };
 
 /** Vult {{PROMPT}} en {{vraag_id}} placeholders in de template. */
@@ -2551,7 +2561,11 @@ const MODE_MAX_TOKENS: Record<Mode, number> = {
   'expand-field': 2048,
   analyze: 2560,
   'framework-fit': 2560,
-  'recommend-framework': 2560,
+  // Het antwoord is hoogstens 3 aanbevelingen van elk twee korte zinnen, plus
+  // een samenvatting en maximaal 4 ontbrekende-context-punten. Gemeten blijft
+  // dat ruim onder de 400 tokens; 2560 was zwaar overbudget en verhoogde alleen
+  // het afgeleide timeoutplafond.
+  'recommend-framework': 1024,
   recommend: 2048,
   'persona-fill': 2048,
   'fewshot-example': 1536,
@@ -2602,6 +2616,15 @@ function providerTimeoutMs(maxTokens: number): number {
 }
 
 /**
+ * Hard plafond voor de korte JSON-modi (recommend-framework). Die leveren een
+ * klein, strak begrensd antwoord: duurt het langer dan dit, dan is de provider
+ * niet traag maar stuk, en is doorschakelen altijd sneller dan blijven wachten.
+ * Bewust losgekoppeld van {@link providerTimeoutMs}, dat met zijn 20s opstart-
+ * speling voor de lange schrijfmodi is ontworpen.
+ */
+const JSON_MODE_TIMEOUT_MS = 25_000;
+
+/**
  * Bewaakt één provider-poging en breekt hem af bij stilte (streamend) of bij het
  * overschrijden van het totaalplafond, zodat de aanroeper kan doorschakelen in
  * plaats van te blijven wachten.
@@ -2617,9 +2640,15 @@ interface ProviderWatchdog {
   reason(): string | null;
 }
 
-function watchProvider(label: string, maxTokens: number, streaming: boolean): ProviderWatchdog {
+function watchProvider(
+  label: string,
+  maxTokens: number,
+  streaming: boolean,
+  /** Vast totaalplafond i.p.v. de afleiding uit maxTokens (korte JSON-modi). */
+  timeoutMs?: number,
+): ProviderWatchdog {
   const controller = new AbortController();
-  const totalMs = providerTimeoutMs(maxTokens);
+  const totalMs = timeoutMs ?? providerTimeoutMs(maxTokens);
   let reason: string | null = null;
   let idleTimer: number | undefined;
   let idleMs = FIRST_DELTA_TIMEOUT_MS;
@@ -2726,10 +2755,12 @@ async function runOpenAiCompatible(args: {
   temperature: number;
   maxTokens: number;
   onDelta?: DeltaHandler;
+  timeoutMs?: number;
 }): Promise<string> {
-  const { url, apiKey, label, model, system, userMessage, temperature, maxTokens, onDelta } = args;
+  const { url, apiKey, label, model, system, userMessage, temperature, maxTokens, onDelta, timeoutMs } =
+    args;
 
-  const dog = watchProvider(label, maxTokens, Boolean(onDelta));
+  const dog = watchProvider(label, maxTokens, Boolean(onDelta), timeoutMs);
   try {
     const response = await fetch(url, {
       method: 'POST',
@@ -2779,6 +2810,7 @@ async function runClaude(
   model: string = CLAUDE_MODEL,
   maxTokens: number = DEFAULT_MAX_TOKENS,
   onDelta?: DeltaHandler,
+  timeoutMs?: number,
 ): Promise<string> {
   const apiKey = Deno.env.get('CLAUDE_API_KEY');
   if (!apiKey) throw new Error('CLAUDE_API_KEY ontbreekt');
@@ -2796,7 +2828,7 @@ async function runClaude(
     messages: toChatTurns(userMessage),
   };
 
-  const dog = watchProvider('Claude', maxTokens, Boolean(onDelta));
+  const dog = watchProvider('Claude', maxTokens, Boolean(onDelta), timeoutMs);
   try {
     // Streamend: tekst doorgeven zodra het model hem produceert, zodat de
     // gebruiker na ~1 seconde de eerste regels ziet in plaats van na 30–60.
@@ -2838,6 +2870,7 @@ async function runDeepSeek(
   model: string = DEEPSEEK_MODEL,
   maxTokens: number = DEFAULT_MAX_TOKENS,
   onDelta?: DeltaHandler,
+  timeoutMs?: number,
 ): Promise<string> {
   const apiKey = Deno.env.get('DEEPSEEK_API_KEY');
   if (!apiKey) throw new Error('DEEPSEEK_API_KEY ontbreekt');
@@ -2853,6 +2886,7 @@ async function runDeepSeek(
     temperature,
     maxTokens,
     onDelta,
+    timeoutMs,
   });
 }
 
@@ -2863,6 +2897,7 @@ async function runOpenAI(
   model: string = OPENAI_MODEL,
   maxTokens: number = DEFAULT_MAX_TOKENS,
   onDelta?: DeltaHandler,
+  timeoutMs?: number,
 ): Promise<string> {
   const apiKey = Deno.env.get('OPENAI_API_KEY');
   if (!apiKey) throw new Error('OPENAI_API_KEY ontbreekt');
@@ -2877,6 +2912,7 @@ async function runOpenAI(
     temperature,
     maxTokens,
     onDelta,
+    timeoutMs,
   });
 }
 
@@ -2887,6 +2923,7 @@ async function runMistral(
   model: string = MISTRAL_MODEL,
   maxTokens: number = DEFAULT_MAX_TOKENS,
   onDelta?: DeltaHandler,
+  timeoutMs?: number,
 ): Promise<string> {
   const apiKey = Deno.env.get('MISTRAL_API_KEY');
   if (!apiKey) throw new Error('MISTRAL_API_KEY ontbreekt');
@@ -2903,6 +2940,7 @@ async function runMistral(
     temperature,
     maxTokens: Math.min(maxTokens, 4096),
     onDelta,
+    timeoutMs,
   });
 }
 
@@ -2913,6 +2951,8 @@ type ProviderFn = (
   model?: string,
   maxTokens?: number,
   onDelta?: DeltaHandler,
+  /** Vast totaalplafond i.p.v. de afleiding uit maxTokens (korte JSON-modi). */
+  timeoutMs?: number,
 ) => Promise<string>;
 
 const PROVIDERS: Record<Provider, ProviderFn> = {
@@ -3110,6 +3150,267 @@ function streamTextResponse(args: {
   });
 }
 
+/**
+ * Bekende prompt framework-ids/namen. Spiegelt `src/lib/techniques.ts`, zodat de
+ * server dezelfde scheiding hanteert als de client wanneer het `family`-veld nog
+ * niet is ingevuld.
+ */
+const CONTEXT_PROMPT_IDS = new Set(['tech-crisp', 'tech-care']);
+const CONTEXT_PROMPT_NAMES = new Set([
+  'crisp',
+  'crispe',
+  'care',
+  'raise',
+  'co-star',
+  'craft',
+  'create',
+  'react',
+]);
+
+/** Is dit een compleet prompt framework (raamwerk) i.p.v. een losse techniek? */
+function isFrameworkSummary(t: TechniqueSummary): boolean {
+  if (t.family) return t.family === 'context';
+  return CONTEXT_PROMPT_IDS.has(t.id) || CONTEXT_PROMPT_NAMES.has(t.name.trim().toLowerCase());
+}
+
+/**
+ * Houdt uitsluitend de prompt frameworks over. De framework-aanbeveling mag
+ * alleen raamwerken tegen elkaar afwegen — losse technieken (few-shot, persona,
+ * chain-of-thought, …) horen daar niet in thuis en vertroebelen zowel de keuze
+ * als de inputtokens.
+ *
+ * Levert het filter niets op (oude client die `family` nog niet meestuurt én
+ * onbekende namen), dan geven we de lijst ongefilterd terug: de client filtert
+ * zelf al met dezelfde regel, dus een lege lijst zou de flow onnodig breken.
+ */
+function frameworksOnly(list: TechniqueSummary[]): TechniqueSummary[] {
+  const frameworks = list.filter(isFrameworkSummary);
+  return frameworks.length > 0 ? frameworks : list;
+}
+
+/**
+ * Geeft de eerste taak terug die een bruikbaar resultaat oplevert, zonder op de
+ * rest te wachten. Levert niemand iets bruikbaars, dan null. Nodig omdat
+ * `Promise.any` al bij de eerste *vervulling* stopt — ook als dat resultaat
+ * onbruikbaar is (bijv. JSON die niet parseert).
+ */
+function firstUsable<T>(tasks: Promise<T | null>[], ok: (value: T) => boolean): Promise<T | null> {
+  return new Promise((resolve) => {
+    let open = tasks.length;
+    if (open === 0) {
+      resolve(null);
+      return;
+    }
+    const settle = (value: T | null) => {
+      if (value !== null && ok(value)) {
+        resolve(value); // latere resolves zijn no-ops
+        return;
+      }
+      if (--open === 0) resolve(null);
+    };
+    for (const task of tasks) task.then(settle, () => settle(null));
+  });
+}
+
+/**
+ * Streamt de framework-aanbeveling, met twee providers die tegen elkaar racen.
+ *
+ * Twee dingen tegelijk, want ze lossen twee verschillende oorzaken op:
+ *
+ * 1. RACE — de providers draaien gelijktijdig in plaats van na elkaar. Serieel
+ *    betekende dat een trage of hangende eerste provider de tweede pas ná zijn
+ *    eigen timeout liet beginnen; in de productielogs gaf dat aanroepen van 25
+ *    tot 91 seconden. Nu bepaalt de snelste van de twee de wachttijd.
+ * 2. INCREMENTEEL — het antwoord is JSON, dus er valt pas iets te tonen zodra een
+ *    veld compleet is. We sturen de samenvatting en elke aanbeveling door zodra
+ *    ze afgerond binnen zijn, in plaats van na het laatste teken.
+ *
+ * De verliezer van de race loopt door tot zijn eigen watchdog hem afkapt (max.
+ * {@link JSON_MODE_TIMEOUT_MS}); zijn uitvoer wordt genegeerd. Dat kost één
+ * kleine extra completion per zoekopdracht — een bewuste ruil: dit zijn de twee
+ * goedkoopste providers, en het weghalen van de staart is die tokens waard.
+ *
+ * Leveren beide racers niets bruikbaars, dan volgt alsnog de seriële keten en
+ * daarna de lokale trefwoord-fallback. Het afsluitende `done`-event bevat altijd
+ * het volledige, gezaghebbende resultaat: de client vervangt daarmee wat hij
+ * tussentijds heeft opgebouwd, zodat een half binnengekomen race nooit blijft staan.
+ */
+function streamFrameworkResponse(args: {
+  racers: Provider[];
+  fallback: Provider[];
+  userMessage: string;
+  system: string;
+  temperature: number;
+  maxTokens: number;
+  preferredProvider?: PreferredProvider;
+  preferredModel?: string;
+  validIds: Set<string>;
+  ownPrompt: string;
+  frameworks: TechniqueSummary[];
+}): Response {
+  const {
+    racers,
+    fallback,
+    userMessage,
+    system,
+    temperature,
+    maxTokens,
+    preferredProvider,
+    preferredModel,
+    validIds,
+    ownPrompt,
+    frameworks,
+  } = args;
+
+  const encoder = new TextEncoder();
+  let closed = false;
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (event: Record<string, unknown>) => {
+        if (closed) return;
+        try {
+          controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+        } catch {
+          closed = true;
+        }
+      };
+      const close = () => {
+        if (closed) return;
+        closed = true;
+        try {
+          controller.close();
+        } catch {
+          /* al gesloten */
+        }
+      };
+
+      // Welke provider de race won; alleen zijn fragmenten gaan naar de client.
+      let winner: Provider | null = null;
+      let sawDelta = false;
+      let sentSummary = false;
+      const sentRecs: Recommendation[] = [];
+
+      send({ type: 'phase', phase: 'analyzing' });
+
+      /**
+       * Verwerkt de tot nu toe ontvangen tekst van één provider: claimt de race
+       * bij het eerste afgeronde veld en stuurt door wat nog niet verstuurd is.
+       */
+      const pump = (candidate: Provider, buf: string) => {
+        if (winner && winner !== candidate) return;
+
+        if (!sawDelta) {
+          sawDelta = true;
+          send({ type: 'phase', phase: 'weighing' });
+        }
+
+        const summary = readJsonString(buf, 'summary');
+        const recs = readJsonObjects(buf, 'recommendations')
+          .map((chunk) => parseOneRecommendation(chunk, validIds))
+          .filter((r): r is Recommendation => r !== null);
+
+        // De race wordt geclaimd door het eerste ECHT afgeronde veld, niet door
+        // het eerste teken: zo kunnen we bij een provider die alleen maar ruis
+        // produceert nog stilletjes naar de ander overstappen.
+        if (!winner) {
+          const milestone = (summary !== null && summary.trim() !== '') || recs.length > 0;
+          if (!milestone) return;
+          winner = candidate;
+          send({ type: 'meta', provider: candidate });
+          send({ type: 'phase', phase: 'writing' });
+        }
+
+        if (summary && !sentSummary) {
+          sentSummary = true;
+          send({ type: 'summary', text: summary });
+        }
+        for (const rec of recs) {
+          if (sentRecs.length >= 3) break;
+          if (sentRecs.some((r) => r.id === rec.id)) continue;
+          sentRecs.push(rec);
+          send({ type: 'recommendation', rec });
+        }
+      };
+
+      const attempt = async (candidate: Provider): Promise<{ provider: Provider; raw: string } | null> => {
+        let buf = '';
+        try {
+          const raw = await PROVIDERS[candidate](
+            userMessage,
+            system,
+            temperature,
+            resolveModel(candidate, preferredProvider, preferredModel),
+            maxTokens,
+            (chunk) => {
+              buf += chunk;
+              pump(candidate, buf);
+            },
+            JSON_MODE_TIMEOUT_MS,
+          );
+          return { provider: candidate, raw };
+        } catch (providerErr) {
+          console.error(`${candidate} (recommend-framework, race) mislukt:`, providerErr);
+          return null;
+        }
+      };
+
+      const usable = (r: { provider: Provider; raw: string }) =>
+        parseFrameworkRecommendations(r.raw, validIds).recommendations.length > 0;
+
+      // 1. De twee racers gelijktijdig.
+      let won = await firstUsable(racers.map(attempt), usable);
+
+      // 2. Niets bruikbaars? Dan alsnog de seriële keten als vangnet.
+      if (!won) {
+        for (const candidate of fallback) {
+          const result = await attempt(candidate);
+          if (result && usable(result)) {
+            won = result;
+            break;
+          }
+        }
+      }
+
+      if (won) {
+        const parsed = parseFrameworkRecommendations(won.raw, validIds);
+        send({
+          type: 'done',
+          summary: parsed.summary,
+          recommendations: parsed.recommendations,
+          missingContext: parsed.missingContext,
+          provider: won.provider,
+        });
+        close();
+        return;
+      }
+
+      // 3. Geen enkele provider leverde iets: lokale trefwoord-fallback, zodat de
+      //    gebruiker nooit met lege handen staat.
+      send({
+        type: 'done',
+        summary: '',
+        recommendations: localRecommend(ownPrompt, frameworks),
+        missingContext: [],
+        provider: 'local-template',
+      });
+      close();
+    },
+    cancel() {
+      closed = true;
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      ...corsHeaders,
+      'Content-Type': 'application/x-ndjson; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      'X-Accel-Buffering': 'no',
+    },
+  });
+}
+
 /** Bouw de fallback-volgorde op basis van de voorkeur van de client. */
 function buildOrder(preferred?: PreferredProvider): Provider[] {
   if (!preferred || preferred === 'auto') return DEFAULT_ORDER;
@@ -3290,6 +3591,99 @@ function parseFrameworkRecommendations(
     };
   } catch {
     return { summary: '', recommendations: [], missingContext: [] };
+  }
+}
+
+// --- Incrementeel JSON lezen tijdens het streamen -------------------------
+//
+// De framework-aanbeveling levert JSON, geen vrije tekst: je kunt er pas iets
+// mee zodra een veld compleet is. Deze helpers halen afgeronde stukken uit een
+// nog groeiende buffer, zodat de samenvatting en elke aanbeveling naar de
+// gebruiker gaan zodra ze af zijn — in plaats van pas na het laatste teken.
+
+/** Index van de afsluitende quote van de string die op `start` begint, of -1. */
+function findStringEnd(buf: string, start: number): number {
+  for (let i = start + 1; i < buf.length; i++) {
+    if (buf[i] === '\\') {
+      i++; // ontsnapt teken overslaan
+      continue;
+    }
+    if (buf[i] === '"') return i;
+  }
+  return -1;
+}
+
+/**
+ * Leest de waarde van een stringveld uit een mogelijk onvolledige JSON-tekst.
+ * Geeft null zolang de afsluitende quote nog niet binnen is — half binnengekomen
+ * tekst tonen zou woorden laten verspringen.
+ */
+function readJsonString(buf: string, key: string): string | null {
+  const at = buf.indexOf(`"${key}"`);
+  if (at === -1) return null;
+  let i = at + key.length + 2;
+  while (i < buf.length && (buf[i] === ' ' || buf[i] === ':' || buf[i] === '\n' || buf[i] === '\r' || buf[i] === '\t')) {
+    i++;
+  }
+  if (buf[i] !== '"') return null;
+  const end = findStringEnd(buf, i);
+  if (end === -1) return null;
+  try {
+    return JSON.parse(buf.slice(i, end + 1)) as string;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Haalt de volledig afgesloten objecten uit een array-veld van een mogelijk
+ * onvolledige JSON-tekst. Een object dat nog openstaat blijft buiten beschouwing
+ * tot zijn accolade sluit.
+ */
+function readJsonObjects(buf: string, key: string): string[] {
+  const at = buf.indexOf(`"${key}"`);
+  if (at === -1) return [];
+  const open = buf.indexOf('[', at);
+  if (open === -1) return [];
+  const out: string[] = [];
+  let depth = 0;
+  let objStart = -1;
+  for (let i = open + 1; i < buf.length; i++) {
+    const ch = buf[i];
+    if (ch === '"') {
+      const end = findStringEnd(buf, i);
+      if (end === -1) break; // string loopt nog — verder lezen heeft geen zin
+      i = end;
+      continue;
+    }
+    if (ch === '{') {
+      if (depth === 0) objStart = i;
+      depth++;
+    } else if (ch === '}') {
+      depth--;
+      if (depth === 0 && objStart !== -1) {
+        out.push(buf.slice(objStart, i + 1));
+        objStart = -1;
+      }
+    } else if (ch === ']' && depth === 0) {
+      break;
+    }
+  }
+  return out;
+}
+
+/** Eén afgeronde aanbeveling uit de stream, of null als hij onbruikbaar is. */
+function parseOneRecommendation(chunk: string, valid: Set<string>): Recommendation | null {
+  try {
+    const r = JSON.parse(chunk) as Recommendation;
+    if (!r || typeof r.id !== 'string' || !valid.has(r.id)) return null;
+    return {
+      id: r.id,
+      reason: typeof r.reason === 'string' ? r.reason : '',
+      value: typeof r.value === 'string' ? r.value : '',
+    };
+  } catch {
+    return null;
   }
 }
 
@@ -3935,47 +4329,94 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      const validIds = new Set(frameworks.map((t) => t.id));
+      // Alleen raamwerken wegen, nooit losse technieken: die horen niet in deze
+      // keuze thuis en zouden de aanbeveling én de inputtokens vertroebelen.
+      const candidates = frameworksOnly(frameworks);
+      const validIds = new Set(candidates.map((t) => t.id));
       // Doel-flow: de input is de opdrachtbeschrijving uit de dialoog, niet een
       // geschreven prompt. Dan weegt de keuze expliciet gebruik en vorm mee.
       const fromDialogue = Boolean(body.fromDialogue);
       // Eventuele eerdere toelichting uit de heranalyse-lus meewegen als extra context.
       const userMessage = RECOMMEND_FRAMEWORK_USER_PROMPT(
         ownPrompt,
-        frameworks,
+        candidates,
         body.clarification,
         fromDialogue,
       );
+      const system = fromDialogue
+        ? DIALOGUE_FRAMEWORK_SYSTEM_PROMPT
+        : RECOMMEND_FRAMEWORK_SYSTEM_PROMPT;
+
+      // Streamend: DeepSeek en Mistral racen, en elk afgerond veld gaat meteen
+      // door. Claude en OpenAI blijven als vangnet achter de hand.
+      if (body.stream) {
+        return streamFrameworkResponse({
+          racers: ['deepseek', 'mistral'],
+          fallback: order.filter((p) => p !== 'deepseek' && p !== 'mistral'),
+          userMessage,
+          system,
+          temperature: 0.2,
+          maxTokens,
+          preferredProvider: body.preferredProvider,
+          preferredModel: body.preferredModel,
+          validIds,
+          ownPrompt,
+          frameworks: candidates,
+        });
+      }
+
       let result:
         | { summary: string; recommendations: Recommendation[]; missingContext: string[] }
         | null = null;
       let provider: Provider | 'local-template' = 'local-template';
 
-      for (const candidate of order) {
+      // Niet-streamend (oudere client): dezelfde race, alleen zonder tussentijdse
+      // events. De wachttijd wordt bepaald door de snelste van de twee.
+      const tryProvider = async (
+        candidate: Provider,
+      ): Promise<{ provider: Provider; raw: string } | null> => {
         try {
           const raw = await PROVIDERS[candidate](
             userMessage,
-            fromDialogue ? DIALOGUE_FRAMEWORK_SYSTEM_PROMPT : RECOMMEND_FRAMEWORK_SYSTEM_PROMPT,
+            system,
             0.2,
             resolveModel(candidate, body.preferredProvider, body.preferredModel),
             maxTokens,
+            undefined,
+            JSON_MODE_TIMEOUT_MS,
           );
-          const parsed = parseFrameworkRecommendations(raw, validIds);
-          if (parsed.recommendations.length > 0) {
-            result = parsed;
-            provider = candidate;
-            break;
-          }
+          return { provider: candidate, raw };
         } catch (providerErr) {
           console.error(`${candidate} (recommend-framework) mislukt, probeer volgende:`, providerErr);
+          return null;
         }
+      };
+      const isUsable = (r: { provider: Provider; raw: string }) =>
+        parseFrameworkRecommendations(r.raw, validIds).recommendations.length > 0;
+
+      let won = await firstUsable(
+        (['deepseek', 'mistral'] as Provider[]).map(tryProvider),
+        isUsable,
+      );
+      if (!won) {
+        for (const candidate of order.filter((p) => p !== 'deepseek' && p !== 'mistral')) {
+          const attempted = await tryProvider(candidate);
+          if (attempted && isUsable(attempted)) {
+            won = attempted;
+            break;
+          }
+        }
+      }
+      if (won) {
+        result = parseFrameworkRecommendations(won.raw, validIds);
+        provider = won.provider;
       }
 
       // Geen AI-resultaat: val terug op trefwoord-matching over de eigen prompt.
       if (!result) {
         result = {
           summary: '',
-          recommendations: localRecommend(ownPrompt, frameworks),
+          recommendations: localRecommend(ownPrompt, candidates),
           missingContext: [],
         };
       }

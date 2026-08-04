@@ -29,6 +29,105 @@ function isAbortError(err: unknown): boolean {
     : err instanceof Error && err.name === 'AbortError';
 }
 
+/** Eén NDJSON-regel van de edge function; `type` bepaalt wat de rest betekent. */
+export type NdjsonEvent = Record<string, unknown> & { type?: string };
+
+/** Uitkomst van {@link readNdjsonEvents}. */
+export interface NdjsonReadResult {
+  /** De respons was een echte NDJSON-stream en is regel voor regel afgeleverd. */
+  streamed: boolean;
+  /**
+   * Draait er nog een oudere edge function zonder stream-ondersteuning, dan
+   * staat hier het gewone JSON-antwoord zodat de aanroeper kan terugvallen.
+   */
+  json?: unknown;
+  /** Via het AbortSignal afgebroken. */
+  aborted?: boolean;
+}
+
+/**
+ * Leest een NDJSON-respons en levert elke regel als los event af.
+ *
+ * Anders dan {@link streamNdjson} — die alleen tekstfragmenten kent — laat deze
+ * lezer de vorm van de events aan de aanroeper. Nodig voor modi die geen vrije
+ * tekst maar afgeronde brokjes sturen (de framework-aanbeveling stuurt een
+ * samenvatting, losse aanbevelingen en fase-meldingen).
+ */
+export async function readNdjsonEvents(args: {
+  url: string;
+  headers: Record<string, string>;
+  body: Record<string, unknown>;
+  onEvent: (event: NdjsonEvent) => void;
+  signal?: AbortSignal;
+}): Promise<NdjsonReadResult> {
+  const { url, headers, body, onEvent, signal } = args;
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...headers },
+      body: JSON.stringify({ ...body, stream: true }),
+      signal,
+    });
+  } catch (err) {
+    if (isAbortError(err)) return { streamed: false, aborted: true };
+    throw err;
+  }
+
+  if (!response.ok) {
+    let message = `Edge function gaf status ${response.status}`;
+    try {
+      const data = (await response.json()) as { error?: string };
+      if (typeof data.error === 'string' && data.error.trim()) message = data.error;
+    } catch {
+      /* geen JSON-body — generieke melding volstaat */
+    }
+    throw new Error(message);
+  }
+
+  // Oudere edge function zonder stream-ondersteuning: gewoon één JSON-object.
+  const contentType = response.headers.get('content-type') ?? '';
+  if (!contentType.includes('ndjson')) {
+    return { streamed: false, json: await response.json() };
+  }
+
+  if (!response.body) throw new Error('De AI-service gaf geen leesbare stream terug');
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  const handleLine = (line: string): void => {
+    const trimmed = line.trim();
+    if (!trimmed) return;
+    try {
+      onEvent(JSON.parse(trimmed) as NdjsonEvent);
+    } catch {
+      // Onvolledige of onbekende regel: overslaan, de stream loopt door.
+    }
+  };
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let newline: number;
+      while ((newline = buffer.indexOf('\n')) !== -1) {
+        handleLine(buffer.slice(0, newline));
+        buffer = buffer.slice(newline + 1);
+      }
+    }
+  } catch (err) {
+    if (isAbortError(err) || signal?.aborted) return { streamed: true, aborted: true };
+    throw err;
+  }
+  handleLine(buffer); // laatste regel zonder afsluitende newline
+
+  return { streamed: true };
+}
+
 /**
  * Roept de edge function streamend aan en leest de NDJSON-respons uit.
  *

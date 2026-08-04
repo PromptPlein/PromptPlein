@@ -1,5 +1,5 @@
 import { getAnonKey, getFunctionUrl, isSupabaseConfigured } from '@/lib/supabase';
-import { streamNdjson, type StreamOutcome } from '@/lib/ndjsonStream';
+import { readNdjsonEvents, streamNdjson, type StreamOutcome } from '@/lib/ndjsonStream';
 import { isContextPrompt, structureFormat } from '@/lib/techniques';
 import { tidyPromptMarkup } from '@/lib/utils';
 import type { AiProvider } from '@/config/aiModels';
@@ -1366,9 +1366,30 @@ export async function checkAssumptions(args: {
 }
 
 /**
+ * Waar de framework-zoekactie op dit moment mee bezig is. Voedt de voortgangs-
+ * tekst in de UI: dezelfde wachttijd voelt korter als zichtbaar is wát er gebeurt.
+ *  - 'analyzing' → de prompt is verstuurd, de AI leest hem
+ *  - 'weighing'  → er komt antwoord binnen; de frameworks worden afgewogen
+ *  - 'writing'   → de motivaties worden geschreven (eerste veld is compleet)
+ */
+export type FrameworkSearchPhase = 'analyzing' | 'weighing' | 'writing';
+
+/** Het afsluitende 'done'-event van de streamende framework-aanbeveling. */
+interface FrameworkDoneEvent {
+  summary?: string;
+  recommendations?: unknown;
+  missingContext?: unknown;
+  provider?: string;
+}
+
+/**
  * Beveelt het best passende prompt framework (CARE, CRISP, …) aan op basis van
  * de EIGEN prompt van de gebruiker. Roept de edge function in
  * 'recommend-framework'-modus aan; faalt dat, dan lokale trefwoord-matching.
+ *
+ * Streamt: de samenvatting en elke afgeronde aanbeveling worden via de
+ * `on*`-callbacks doorgegeven zodra ze binnen zijn, zodat de gebruiker niet naar
+ * een stilstaande spinner kijkt tot het hele JSON-antwoord af is.
  */
 export async function recommendFramework(args: {
   ownPrompt: string;
@@ -1388,21 +1409,48 @@ export async function recommendFramework(args: {
    * vorm de uitkomst moet landen.
    */
   fromDialogue?: boolean;
+  /**
+   * Voortgangsmelding terwijl de AI werkt. De aanroeper kan hiermee tonen wát er
+   * gebeurt in plaats van een stilstaande spinner.
+   */
+  onPhase?: (phase: FrameworkSearchPhase) => void;
+  /** De samenvatting is afgerond binnen (nog vóór de aanbevelingen). */
+  onSummary?: (text: string) => void;
+  /** Eén afgeronde aanbeveling; komt binnen zodra hij compleet is. */
+  onRecommendation?: (rec: TechniqueRecommendation) => void;
 }): Promise<FrameworkRecommendResult> {
-  const { ownPrompt, frameworks, preferredProvider, preferredModel, clarification, fromDialogue } =
-    args;
+  const {
+    ownPrompt,
+    frameworks,
+    preferredProvider,
+    preferredModel,
+    clarification,
+    fromDialogue,
+    onPhase,
+    onSummary,
+    onRecommendation,
+  } = args;
   const functionUrl = getFunctionUrl('optimize-prompt');
 
   if (isSupabaseConfigured && functionUrl) {
     try {
       const anonKey = getAnonKey();
-      const response = await fetch(functionUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(anonKey ? { Authorization: `Bearer ${anonKey}`, apikey: anonKey } : {}),
-        },
-        body: JSON.stringify({
+      const valid = new Set(frameworks.map((t) => t.id));
+      const keep = (list: unknown): TechniqueRecommendation[] =>
+        (Array.isArray(list) ? (list as TechniqueRecommendation[]) : []).filter(
+          (r) => r && typeof r.id === 'string' && valid.has(r.id),
+        );
+
+      // Tussenstand uit de stream; het afsluitende 'done'-event is leidend.
+      let streamedSummary = '';
+      const streamedRecs: TechniqueRecommendation[] = [];
+      let done: FrameworkDoneEvent | null = null;
+      let streamError = '';
+
+      const read = await readNdjsonEvents({
+        url: functionUrl,
+        headers: anonKey ? { Authorization: `Bearer ${anonKey}`, apikey: anonKey } : {},
+        body: {
           mode: 'recommend-framework',
           ownPrompt,
           clarification,
@@ -1410,24 +1458,49 @@ export async function recommendFramework(args: {
           techniques: frameworks.map((t) => ({
             id: t.id,
             name: t.name,
+            // Beschrijving, doel (strength) en gebruikssituaties bepalen samen of
+            // een raamwerk bij dit vraagstuk past; die gaan dus alle drie mee.
             description: t.description,
             strength: t.strength,
             use_cases: t.use_cases,
+            // Laat de server dezelfde scheiding raamwerk/techniek toepassen.
+            family: t.family,
           })),
           preferredProvider: preferredProvider ?? 'auto',
           preferredModel,
-        }),
+        },
+        onEvent: (ev) => {
+          switch (ev.type) {
+            case 'phase':
+              onPhase?.(ev.phase as FrameworkSearchPhase);
+              break;
+            case 'summary':
+              streamedSummary = typeof ev.text === 'string' ? ev.text : '';
+              if (streamedSummary) onSummary?.(streamedSummary);
+              break;
+            case 'recommendation': {
+              const [rec] = keep([ev.rec]);
+              if (rec && !streamedRecs.some((r) => r.id === rec.id)) {
+                streamedRecs.push(rec);
+                onRecommendation?.(rec);
+              }
+              break;
+            }
+            case 'done':
+              done = ev as FrameworkDoneEvent;
+              break;
+            case 'error':
+              streamError = typeof ev.error === 'string' ? ev.error : 'Onbekende fout';
+              break;
+          }
+        },
       });
 
-      if (!response.ok) {
-        throw new Error(`Edge function gaf status ${response.status}`);
-      }
-
-      const data = (await response.json()) as Partial<FrameworkRecommendResult>;
-      if (data.success && Array.isArray(data.recommendations)) {
-        const valid = new Set(frameworks.map((t) => t.id));
-        const recommendations = data.recommendations.filter((r) => valid.has(r.id));
-        if (recommendations.length > 0) {
+      // Oudere edge function zonder stream-ondersteuning: gewoon één JSON-object.
+      if (!read.streamed) {
+        const data = (read.json ?? {}) as Partial<FrameworkRecommendResult>;
+        const recommendations = keep(data.recommendations);
+        if (data.success && recommendations.length > 0) {
           return {
             summary: data.summary ?? '',
             recommendations,
@@ -1436,8 +1509,40 @@ export async function recommendFramework(args: {
             provider: (data.provider as FrameworkRecommendResult['provider']) ?? 'claude',
           };
         }
+        throw new Error(data.error ?? 'Geen passend prompt framework gevonden');
       }
-      throw new Error(data.error ?? 'Geen passend prompt framework gevonden');
+
+      // Via de cast, omdat TypeScript de toekenning binnen de callback niet in
+      // de control-flow meeneemt en `done` anders tot `never` versmalt.
+      const settled = done as FrameworkDoneEvent | null;
+      if (settled) {
+        const recommendations = keep(settled.recommendations);
+        if (recommendations.length > 0) {
+          return {
+            summary: settled.summary ?? streamedSummary,
+            recommendations,
+            missingContext: Array.isArray(settled.missingContext)
+              ? (settled.missingContext as string[])
+              : [],
+            success: true,
+            provider: (settled.provider as FrameworkRecommendResult['provider']) ?? 'claude',
+          };
+        }
+      }
+
+      // De stream brak af nadat er al aanbevelingen binnen waren: die zijn geldig
+      // en bruikbaar, dus daar gaan we mee door in plaats van alles weg te gooien.
+      if (streamedRecs.length > 0) {
+        return {
+          summary: streamedSummary,
+          recommendations: streamedRecs,
+          missingContext: [],
+          success: true,
+          provider: 'claude',
+        };
+      }
+
+      throw new Error(streamError || 'Geen passend prompt framework gevonden');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Onbekende fout';
       return {
