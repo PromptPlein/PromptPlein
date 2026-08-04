@@ -9,6 +9,7 @@
 import { getAnonKey, getFunctionUrl, isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { streamNdjson, type StreamHandler } from '@/lib/ndjsonStream';
 import { CHAT_PREFIX } from '@/lib/chatStorage';
+import { tidyChatReply } from '@/lib/utils';
 import { composeChatSystemPrompt, type ChatSettings } from '@/services/settingsService';
 
 /**
@@ -67,16 +68,19 @@ export async function sendChatMessage(args: {
         systemPrompt: composeChatSystemPrompt(settings),
       },
       onChunk,
+      // Huisregels ook afdwingen op wat het model teruggeeft (zie tidyChatReply);
+      // tijdens het streamen én op de eindtekst, zodat beide gelijk zijn.
+      tidy: tidyChatReply,
       signal,
     });
 
     if (outcome.aborted) {
-      return { text: outcome.text, provider: outcome.provider, aborted: true };
+      return { text: tidyChatReply(outcome.text), provider: outcome.provider, aborted: true };
     }
     if (outcome.error) {
-      return { text: outcome.text, provider: outcome.provider, error: outcome.error };
+      return { text: tidyChatReply(outcome.text), provider: outcome.provider, error: outcome.error };
     }
-    const text = outcome.text.trim();
+    const text = tidyChatReply(outcome.text).trim();
     if (!text) {
       return { text: '', provider: outcome.provider, error: 'De AI-service gaf een leeg antwoord.' };
     }

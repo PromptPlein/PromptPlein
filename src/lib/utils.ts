@@ -193,6 +193,39 @@ export function tidyPromptMarkup(input: string): string {
     .join('\n');
 }
 
+/**
+ * Dwingt de huisregels van de chat af op een AI-antwoord. De systeemprompt
+ * vraagt er al om, maar modellen wijken er soms van af; dit is het vangnet dat
+ * elk antwoord er hetzelfde uit laat zien:
+ *
+ * • opsommingen beginnen met •, niet met - of *;
+ * • vet alleen op een kopregel, niet middenin een zin;
+ * • geen streepje als leesteken (— – of een los -), wel streepjes binnen een
+ *   woord zoals e-mailadres.
+ */
+export function tidyChatReply(input: string): string {
+  if (!input) return '';
+  return input
+    .split('\n')
+    .map((raw) => {
+      // Opsommingstekens gelijktrekken naar •.
+      let line = raw.replace(/^(\s*)[-*+][ \t]+/, '$1• ');
+
+      // Een regel die volledig vet is, is een kop en mag vet blijven; vet
+      // middenin een zin halen we weg.
+      const isHeading = /^\s*\*\*[^*]+\*\*[ \t]*$/.test(line);
+      if (!isHeading) line = line.replace(/\*\*(.+?)\*\*/g, '$1');
+
+      // Gedachtestreepjes (— –) worden altijd een komma; een gewoon streepje
+      // alleen wanneer het los tussen twee woorden staat.
+      line = line.replace(/\s*[—–]\s*/g, ', ').replace(/(\S)[ \t]+-[ \t]+(\S)/g, '$1, $2');
+
+      // Dubbele leestekens die daardoor kunnen ontstaan opruimen.
+      return line.replace(/,\s*([.,;:!?])/g, '$1').replace(/,\s*$/, '');
+    })
+    .join('\n');
+}
+
 export async function copyToClipboard(text: string): Promise<void> {
   if (navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(text);

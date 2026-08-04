@@ -405,7 +405,8 @@ export default function SettingsPage() {
               <span>
                 Gaat mee bij <strong>elk</strong> bericht van <strong>iedere</strong> gebruiker en
                 bepaalt taal, toon en opmaak van de antwoorden. Laat leeg om de ingebouwde
-                standaard te gebruiken.
+                standaard te gebruiken. De opmaakregels (opsomming met •, vet alleen in koppen,
+                geen streepje als leesteken) worden daarnaast automatisch nagelopen op elk antwoord.
               </span>
               {chat.systemPrompt.trim() !== DEFAULT_CHAT_SYSTEM_PROMPT && (
                 <button
