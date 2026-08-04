@@ -226,6 +226,7 @@ export type BehaviorAction =
   | 'step_committed' // materiaal van een stap vastgelegd; door naar de volgende
   | 'step_regenerated' // een afgeronde stap opnieuw gedaan
   | 'framework_fit_run' // de AI zocht het best passende framework bij het vraagstuk
+  | 'framework_prefilled' // de velden van het gekozen framework voor-ingevuld uit het gesprek
   | 'framework_packaged' // de prompt werd in het gekozen framework opgebouwd
   | 'compose_run' // de eindtemplate werd samengesteld
   | 'assumptions_shown' // socratische eindcontrole vond aannames in het resultaat

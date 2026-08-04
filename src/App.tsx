@@ -92,9 +92,9 @@ export default function App() {
               <Route path="/auth/wachtwoord-vergeten" element={<PasswordResetPage />} />
               <Route path="/auth/nieuw-wachtwoord" element={<UpdatePasswordPage />} />
 
-              <Route path="/chat" element={<ChatPage />} />
               {/* Vereist een ingelogde gebruiker */}
               <Route element={<RequireAuth />}>
+                <Route path="/chat" element={<ChatPage />} />
                 <Route path="/bibliotheek" element={<MyLibraryPage />} />
                 <Route path="/profiel" element={<ProfilePage />} />
                 <Route path="/netwerk" element={<NetworkPage />} />

@@ -10,12 +10,18 @@ import {
   MessageCircleQuestion,
   Package,
   RotateCw,
+  Search,
   Sparkles,
 } from 'lucide-react';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import { useReferenceData } from '@/context/ReferenceDataContext';
-import { generatePrompt, recommendFramework, runClarifyTurn } from '@/services/optimizeService';
+import {
+  generatePrompt,
+  prefillFields,
+  recommendFramework,
+  runClarifyTurn,
+} from '@/services/optimizeService';
 import { isContextPrompt } from '@/lib/techniques';
 import { activityIdentifier, stripMarkdown } from '@/lib/utils';
 import { usePersistentDraft } from '@/lib/usePersistentDraft';
@@ -26,8 +32,10 @@ import type { AiSettings } from '@/services/settingsService';
 import OptimizingLoader from './OptimizingLoader';
 import GuardrailDialog from './GuardrailDialog';
 import { InterviewPanel } from './InterviewPanel';
+import FollowUpQuestions, { type FieldMeta } from './FollowUpQuestions';
 import type {
   OptimizeResult,
+  PrefillResult,
   PromptDialogue,
   Technique,
   TechniqueRecommendation,
@@ -104,11 +112,13 @@ interface GoalDialogProps {
  *                vorm, want daarop rust de frameworkkeuze
  *  - framework → de AI analyseert de opdrachtbeschrijving en stelt het best
  *                passende framework voor; de gebruiker kiest
+ *  - fields    → de velden van dat framework worden voor-ingevuld uit het
+ *                gesprek; de gebruiker controleert en past aan
  *  - composing → de prompt wordt in dat framework opgebouwd
  *  - done      → de prompt staat onder het blok; hier alleen nog opnieuw beginnen
  *  - error     → een beurt mislukte; retry mogelijk (het gesprek blijft staan)
  */
-type Phase = 'goal' | 'dialogue' | 'framework' | 'composing' | 'done' | 'error';
+type Phase = 'goal' | 'dialogue' | 'framework' | 'fields' | 'composing' | 'done' | 'error';
 
 /**
  * De doel-flow: "Bouw een prompt rond je doel". De gebruiker beschrijft in eigen
@@ -171,12 +181,23 @@ export default function GoalDialog({ settings, onResult, header }: GoalDialogPro
   const [frameworkFits, setFrameworkFits] = useState<TechniqueRecommendation[]>([]);
   const [fitting, setFitting] = useState(false);
 
+  // Het gekozen framework en zijn voor-ingevulde velden. Dezelfde stap als in
+  // "optimaliseer je eigen prompt": de AI verdeelt de opbrengst van het gesprek
+  // over de velden van het raamwerk, waarna de gebruiker ze nog kan bijstellen.
+  const [frameworkId, setFrameworkId] = useState<string | null>(null);
+  const [prefill, setPrefill] = useState<PrefillResult | null>(null);
+  const [prefilling, setPrefilling] = useState(false);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [fieldMeta, setFieldMeta] = useState<FieldMeta>({});
+
   // Een bij het laden gevonden, niet-afgemaakt gesprek — aangeboden om te hervatten.
   const [resumable, setResumable] = useState<PersistedRun | null>(null);
 
   // Het laadscherm tijdens het bouwen van de prompt; wordt in beeld gescrold
   // zodra "Bouw mijn prompt" is geklikt.
   const composingRef = useRef<HTMLDivElement>(null);
+  // Het velden-blok; komt in beeld zodra er een framework is gekozen.
+  const fieldsRef = useRef<HTMLDivElement>(null);
 
   const inputDisabled = phase !== 'goal';
 
@@ -220,10 +241,20 @@ export default function GoalDialog({ settings, onResult, header }: GoalDialogPro
     setBrief(null);
     setFrameworkFits([]);
     setFitting(false);
+    resetFields();
     setError(null);
     setUnclearReason(null);
     setShowExamples(false);
     setGuardrailFindings(null);
+  }
+
+  /** Wis het gekozen framework en zijn voor-ingevulde velden. */
+  function resetFields() {
+    setFrameworkId(null);
+    setPrefill(null);
+    setPrefilling(false);
+    setAnswers({});
+    setFieldMeta({});
   }
 
   /** Verwerp het bewaarde gesprek en begin schoon. */
@@ -401,10 +432,69 @@ export default function GoalDialog({ settings, onResult, header }: GoalDialogPro
   }
 
   /**
-   * Bouw de prompt in het gekozen framework: het gesprek en de
-   * opdrachtbeschrijving gaan als gelabelde velden mee naar de generator. Het
-   * gesprek is al ÍN de tool gevoerd, dus het resultaat is een direct bruikbare
-   * prompt en geen prompt die de dialoog nog moet aanzwengelen.
+   * De gebruiker koos een framework. Nog niet meteen bouwen: eerst de velden van
+   * dat raamwerk voor-invullen uit het gesprek — precies zoals "optimaliseer je
+   * eigen prompt" dat met een eigen prompt doet. Zo ziet de gebruiker wat er in
+   * elk veld terechtkomt en kan die het bijstellen vóórdat de prompt ontstaat,
+   * in plaats van achteraf een blok tekst te moeten herschrijven.
+   *
+   * De opdrachtbeschrijving én het gesprek gaan als bron mee: het gesprek bevat
+   * de details, de beschrijving de rode draad.
+   */
+  async function chooseFramework(id: string) {
+    const framework = techniqueById(id);
+    if (!framework || !brief) return;
+    resetFields();
+    setFrameworkId(id);
+    setPhase('fields');
+    setError(null);
+    setPrefilling(true);
+    log('framework_prefilled', {
+      techniqueId: id,
+      metadata: { fields: framework.follow_up_questions.length, answered: transcript.length },
+    });
+    requestAnimationFrame(() => {
+      fieldsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    try {
+      const res = await prefillFields({
+        ownPrompt:
+          transcript.length > 0
+            ? `${brief}\n\nGESPREK:\n${serializeTranscript(transcript)}`
+            : brief,
+        technique: framework,
+        preferredProvider: settings.provider,
+        preferredModel: settings.model,
+      });
+      // Onduidelijk is hier vrijwel uitgesloten — de tekst komt uit ons eigen
+      // gesprek. Gebeurt het toch, dan blijven de velden leeg en kan de
+      // gebruiker ze zelf invullen; de flow loopt niet vast.
+      if (res.unclear) {
+        setPrefill({ summary: '', fields: [], success: true, provider: res.provider });
+        return;
+      }
+      setPrefill(res);
+      setAnswers(Object.fromEntries(res.fields.map((f) => [f.id, f.value])));
+      setFieldMeta(
+        Object.fromEntries(res.fields.map((f) => [f.id, { source: f.source, note: f.note }])),
+      );
+      if (res.error) toast(res.error, { icon: 'ℹ️' });
+    } catch {
+      // Voor-invullen is een hulpmiddel, geen voorwaarde: bij een fout tonen we
+      // gewoon de lege velden zodat de gebruiker verder kan.
+      setPrefill({ summary: '', fields: [], success: false, provider: 'local-template' });
+      toast('De velden konden niet worden voor-ingevuld; vul ze zelf aan.', { icon: 'ℹ️' });
+    } finally {
+      setPrefilling(false);
+    }
+  }
+
+  /**
+   * Bouw de prompt in het gekozen framework. De (voor-ingevulde en door de
+   * gebruiker bijgestelde) velden zijn nu de hoofdinvoer; de opdrachtbeschrijving
+   * gaat als rode draad mee. Het gesprek is al ÍN de tool gevoerd, dus het
+   * resultaat is een direct bruikbare prompt en geen prompt die de dialoog nog
+   * moet aanzwengelen.
    */
   async function compose(frameworkId: string) {
     const framework = techniqueById(frameworkId);
@@ -412,15 +502,23 @@ export default function GoalDialog({ settings, onResult, header }: GoalDialogPro
     setPhase('composing');
     setError(null);
     setStreamText(''); // meegelezen tekst van een vorige poging wissen
-    log('compose_run', { techniqueId: frameworkId, metadata: { answered: transcript.length } });
+    // Zit de opbrengst van het gesprek al in de velden, dan hoeft het ruwe
+    // transcript er niet nog eens bij: dat levert dubbele invoer op en maakt de
+    // generatie alleen maar trager. Bleven de velden leeg (voor-invullen
+    // mislukt), dan is het transcript juist de enige inhoud die we hebben.
+    const fieldsFilled = Object.values(answers).some((v) => v.trim());
+    log('compose_run', {
+      techniqueId: frameworkId,
+      metadata: { answered: transcript.length, prefilled_fields: fieldsFilled },
+    });
     try {
       const res = await generatePrompt({
         technique: framework,
         promptContent: goalRef.current.trim() || '[BESCHRIJF HIER WAT JE WILT BEREIKEN]',
-        followUpAnswers: {},
+        followUpAnswers: answers,
         extraAnsweredFields: [
           { id: 'opdracht', label: 'Opdrachtbeschrijving uit het gesprek', answer: brief },
-          ...(transcript.length > 0
+          ...(!fieldsFilled && transcript.length > 0
             ? [
                 {
                   id: 'gesprek',
@@ -474,6 +572,12 @@ export default function GoalDialog({ settings, onResult, header }: GoalDialogPro
   function retry() {
     setError(null);
     setUnclearReason(null);
+    // Stonden de velden al klaar? Dan alleen het bouwen opnieuw proberen — de
+    // aanpassingen van de gebruiker gaan zo niet verloren.
+    if (frameworkId && prefill) {
+      void compose(frameworkId);
+      return;
+    }
     if (brief) {
       void offerFramework(brief, transcript);
       return;
@@ -482,6 +586,7 @@ export default function GoalDialog({ settings, onResult, header }: GoalDialogPro
   }
 
   const showConversation = phase !== 'goal';
+  const chosenFramework = frameworkId ? techniqueById(frameworkId) : null;
 
   return (
     <div className="space-y-5">
@@ -626,12 +731,107 @@ export default function GoalDialog({ settings, onResult, header }: GoalDialogPro
                   Begin opnieuw
                 </button>
               </div>
+            ) : phase === 'fields' ? (
+              <div ref={fieldsRef} className="scroll-mt-24">
+                {prefilling ? (
+                  /* De AI verdeelt de opbrengst van het gesprek over de velden;
+                     de skeletons laten zien wat er zo komt te staan. */
+                  <div className="animate-fade-in space-y-5">
+                    <div className="flex items-center gap-3">
+                      <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-rijksblauw-50 text-rijksblauw-600 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rijksblauw-400/30" />
+                        <Search size={18} className="relative" />
+                      </span>
+                      <div>
+                        <p className="flex items-center gap-2 font-semibold text-slate-800 dark:text-slate-100">
+                          We vullen de velden alvast voor
+                          <Loader2 size={15} className="animate-spin text-rijksblauw-500" />
+                        </p>
+                        <p className="text-sm text-slate-500 dark:text-slate-400">
+                          We verdelen wat je in het gesprek hebt verteld over de velden van{' '}
+                          <span className="font-medium text-rijksblauw-700 dark:text-rijksblauw-200">
+                            {chosenFramework?.name}
+                          </span>
+                          …
+                        </p>
+                      </div>
+                    </div>
+                    <div className="space-y-4">
+                      {[0, 1, 2].map((i) => (
+                        <div key={i} className="space-y-2">
+                          <div className="skeleton h-3.5 w-1/3 rounded" />
+                          <div className="skeleton h-16 w-full rounded-lg" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : chosenFramework ? (
+                  <div className="animate-fade-in space-y-4">
+                    <div>
+                      <p className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+                        <Package size={16} className="text-rijksblauw-500" />
+                        {chosenFramework.name} — controleer de velden
+                      </p>
+                      <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+                        {stripMarkdown(prefill?.summary ?? '') ||
+                          'We hebben de velden alvast ingevuld met wat je in het gesprek hebt verteld.'}
+                      </p>
+                      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                        Pas aan waar nodig — vooral de AI-suggesties met het oranje label{' '}
+                        <span className="font-medium">Controleren</span>. Wat je leeg laat, blijft een
+                        plaatshouder in je prompt.
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl border border-rijksblauw-200 bg-rijksblauw-50/40 p-4 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10">
+                      <FollowUpQuestions
+                        technique={chosenFramework}
+                        answers={answers}
+                        onChange={setAnswers}
+                        fieldMeta={fieldMeta}
+                        preferredProvider={settings.provider}
+                        preferredModel={settings.model}
+                        // Zelf aangepast veld = geen AI-suggestie meer; het label vervalt.
+                        onUserEdit={(id) =>
+                          setFieldMeta((prev) => {
+                            if (!prev[id]) return prev;
+                            const next = { ...prev };
+                            delete next[id];
+                            return next;
+                          })
+                        }
+                        onFinish={() => void compose(chosenFramework.id)}
+                      />
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <button
+                        type="button"
+                        className="text-sm font-medium text-slate-500 transition-colors hover:text-rijksblauw-600 dark:text-slate-400 dark:hover:text-rijksblauw-300"
+                        onClick={() => {
+                          resetFields();
+                          setPhase('framework');
+                        }}
+                      >
+                        Toch een ander framework kiezen
+                      </button>
+                      <button
+                        type="button"
+                        className="opl-btn-primary px-6 py-2.5"
+                        onClick={() => void compose(chosenFramework.id)}
+                      >
+                        <Sparkles size={18} /> Bouw mijn prompt <ArrowRight size={16} />
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
             ) : phase === 'framework' ? (
               <FrameworkChoice
                 fits={frameworkFits}
                 fitting={fitting}
                 frameworks={techniques.filter((tq) => isContextPrompt(tq))}
-                onChoose={(id) => void compose(id)}
+                onChoose={(id) => void chooseFramework(id)}
               />
             ) : (
               <InterviewPanel

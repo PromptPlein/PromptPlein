@@ -41,6 +41,12 @@ interface FollowUpQuestionsProps {
    * interne overzicht te tonen. De ouder start dan meteen de generatie.
    */
   onFinish?: () => void;
+  /**
+   * Opschrift van die afsluit-knop. Standaard de tekst van de eigen-prompt-flow;
+   * de doel-flow bouwt geen losse prompt maar een prompt rond een gesprek en
+   * gebruikt daar zijn eigen bewoording voor.
+   */
+  finishLabel?: string;
 }
 
 /**
