@@ -1,4 +1,5 @@
 import { getAnonKey, getFunctionUrl, isSupabaseConfigured } from '@/lib/supabase';
+import { streamNdjson, type StreamOutcome } from '@/lib/ndjsonStream';
 import { isContextPrompt, structureFormat } from '@/lib/techniques';
 import { tidyPromptMarkup } from '@/lib/utils';
 import type { AiProvider } from '@/config/aiModels';
@@ -52,28 +53,13 @@ export function fillTemplate(
  * nu toe (niet alleen het nieuwe fragment). Zo kan een component de waarde direct
  * in state zetten zonder zelf te hoeven optellen.
  */
-export type StreamHandler = (textSoFar: string) => void;
-
-/** Uitkomst van een streamende aanroep van de edge function. */
-interface StreamOutcome {
-  text: string;
-  provider?: string;
-  unclear?: boolean;
-  reason?: string;
-  error?: string;
-}
+export type { StreamHandler } from '@/lib/ndjsonStream';
+import type { StreamHandler } from '@/lib/ndjsonStream';
 
 /**
- * Roept de edge function in streamende modus aan en leest de NDJSON-respons uit:
- * één JSON-object per regel ({"type":"delta"|"done"|"unclear"|"error"|"meta"}).
- *
- * Waarom streamen: het volledige antwoord duurt tientallen seconden, maar het
- * eerste fragment komt na ongeveer een seconde binnen. Door mee te lezen ziet de
- * gebruiker de tekst ontstaan in plaats van naar een spinner te kijken.
- *
- * @param tidy Opschoonfunctie voor de tussenstand (bijv. sterretjes weghalen),
- *             zodat de live meegelezen tekst er hetzelfde uitziet als het
- *             eindresultaat.
+ * Roept de edge function in streamende modus aan. De eigenlijke NDJSON-lezer
+ * staat in `@/lib/ndjsonStream` (gedeeld met de chat); deze wrapper vult alleen
+ * de url en de anon-headers in. Alle bestaande aanroepen blijven ongewijzigd.
  */
 async function streamFromFunction(
   body: Record<string, unknown>,
@@ -84,105 +70,13 @@ async function streamFromFunction(
   if (!functionUrl) throw new Error('Geen edge function geconfigureerd');
 
   const anonKey = getAnonKey();
-  const response = await fetch(functionUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(anonKey ? { Authorization: `Bearer ${anonKey}`, apikey: anonKey } : {}),
-    },
-    body: JSON.stringify({ ...body, stream: true }),
+  return streamNdjson({
+    url: functionUrl,
+    headers: anonKey ? { Authorization: `Bearer ${anonKey}`, apikey: anonKey } : {},
+    body,
+    onChunk,
+    tidy,
   });
-
-  if (!response.ok) throw new Error(`Edge function gaf status ${response.status}`);
-
-  // Draait er nog een oudere edge function, zonder stream-ondersteuning? Die
-  // negeert de `stream`-vlag en antwoordt gewoon met één JSON-object. Herken dat
-  // aan het content-type en handel het af als een normaal antwoord.
-  //
-  // Zonder deze tak zou de client tijdens elke uitrol — en op localhost vóór de
-  // deploy — stilletjes terugvallen op de lokale template: de NDJSON-parser
-  // vindt dan geen enkel `type`-veld en houdt lege tekst over.
-  const contentType = response.headers.get('content-type') ?? '';
-  if (!contentType.includes('ndjson')) {
-    const data = (await response.json()) as {
-      success?: boolean;
-      optimized_content?: string;
-      output?: string;
-      provider?: string;
-      unclear?: boolean;
-      reason?: string;
-      error?: string;
-    };
-    if (data.unclear) {
-      return { text: '', provider: data.provider, unclear: true, reason: data.reason };
-    }
-    const text = (data.optimized_content ?? data.output ?? '').trim();
-    if (text) onChunk(tidy(text));
-    return {
-      text,
-      provider: data.provider,
-      error: text ? undefined : (data.error ?? 'De AI-service gaf een leeg antwoord'),
-    };
-  }
-
-  if (!response.body) throw new Error('De AI-service gaf geen leesbare stream terug');
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-  let accumulated = '';
-  const outcome: StreamOutcome = { text: '' };
-
-  const handleLine = (line: string): void => {
-    const trimmed = line.trim();
-    if (!trimmed) return;
-    let event: { type?: string; text?: string; provider?: string; reason?: string; error?: string };
-    try {
-      event = JSON.parse(trimmed);
-    } catch {
-      // Onvolledige of onbekende regel: overslaan, de stream loopt door.
-      return;
-    }
-    switch (event.type) {
-      case 'meta':
-        outcome.provider = event.provider;
-        break;
-      case 'delta':
-        accumulated += event.text ?? '';
-        onChunk(tidy(accumulated));
-        break;
-      case 'done':
-        // De server stuurt de volledige tekst mee; die is leidend boven onze
-        // eigen optelsom.
-        outcome.text = event.text ?? accumulated;
-        if (event.provider) outcome.provider = event.provider;
-        break;
-      case 'unclear':
-        outcome.unclear = true;
-        outcome.reason = event.reason;
-        if (event.provider) outcome.provider = event.provider;
-        break;
-      case 'error':
-        outcome.error = event.error ?? 'Onbekende fout van de AI-service';
-        break;
-    }
-  };
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    let newline: number;
-    while ((newline = buffer.indexOf('\n')) !== -1) {
-      handleLine(buffer.slice(0, newline));
-      buffer = buffer.slice(newline + 1);
-    }
-  }
-  // Laatste regel zonder afsluitende newline.
-  handleLine(buffer);
-
-  if (!outcome.text) outcome.text = accumulated;
-  return outcome;
 }
 
 /**

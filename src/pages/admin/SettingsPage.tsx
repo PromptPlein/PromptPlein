@@ -4,6 +4,7 @@ import {
   Loader2,
   Check,
   MessageSquareText,
+  MessagesSquare,
   ShieldAlert,
   Ban,
   Plus,
@@ -29,26 +30,35 @@ import type { AiProvider } from '@/config/aiModels';
 import {
   getAiSettings,
   saveAiSettings,
+  getChatSettings,
+  saveChatSettings,
   DEFAULT_AI_SETTINGS,
+  DEFAULT_CHAT_SETTINGS,
+  DEFAULT_CHAT_SYSTEM_PROMPT,
   DEFAULT_SYSTEM_PROMPT,
   type AiSettings,
+  type ChatSettings,
 } from '@/services/settingsService';
 import { logAdminAction } from '@/services/adminService';
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<AiSettings>(DEFAULT_AI_SETTINGS);
   const [initial, setInitial] = useState<AiSettings>(DEFAULT_AI_SETTINGS);
+  const [chat, setChat] = useState<ChatSettings>(DEFAULT_CHAT_SETTINGS);
+  const [chatInitial, setChatInitial] = useState<ChatSettings>(DEFAULT_CHAT_SETTINGS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [topicDraft, setTopicDraft] = useState('');
 
   useEffect(() => {
     let active = true;
-    getAiSettings()
-      .then((s) => {
+    Promise.all([getAiSettings(), getChatSettings()])
+      .then(([s, c]) => {
         if (!active) return;
         setSettings(s);
         setInitial(s);
+        setChat(c);
+        setChatInitial(c);
       })
       .finally(() => active && setLoading(false));
     return () => {
@@ -56,18 +66,31 @@ export default function SettingsPage() {
     };
   }, []);
 
-  const dirty = useMemo(
+  const aiDirty = useMemo(
     () => JSON.stringify(settings) !== JSON.stringify(initial),
     [settings, initial],
   );
+  const chatDirty = useMemo(
+    () => JSON.stringify(chat) !== JSON.stringify(chatInitial),
+    [chat, chatInitial],
+  );
+  const dirty = aiDirty || chatDirty;
 
   function patch(p: Partial<AiSettings>) {
     setSettings((s) => ({ ...s, ...p }));
   }
 
+  function patchChat(p: Partial<ChatSettings>) {
+    setChat((s) => ({ ...s, ...p }));
+  }
+
   /** Kies een provider én zet meteen het standaardmodel van die provider klaar. */
   function selectProvider(provider: AiProvider) {
     patch({ provider, model: defaultModelFor(provider) });
+  }
+
+  function selectChatProvider(provider: AiProvider) {
+    patchChat({ provider, model: defaultModelFor(provider) });
   }
 
   function addTopic() {
@@ -88,22 +111,41 @@ export default function SettingsPage() {
   async function handleSave() {
     setSaving(true);
     try {
-      await saveAiSettings(settings);
-      await logAdminAction({
-        action: 'update_setting',
-        entity_type: 'app_setting',
-        entity_id: 'ai_settings',
-        changes: {
-          provider: settings.provider,
-          temperature: settings.temperature,
-          pii_enabled: settings.pii.enabled,
-          blocked_topics: settings.blockedTopics.length,
-        },
-      }).catch(() => {
-        /* audit is best-effort */
-      });
-      setInitial(settings);
-      toast.success('AI-instellingen opgeslagen. Gelden voor alle optimalisaties.');
+      if (aiDirty) {
+        await saveAiSettings(settings);
+        await logAdminAction({
+          action: 'update_setting',
+          entity_type: 'app_setting',
+          entity_id: 'ai_settings',
+          changes: {
+            provider: settings.provider,
+            temperature: settings.temperature,
+            pii_enabled: settings.pii.enabled,
+            blocked_topics: settings.blockedTopics.length,
+          },
+        }).catch(() => {
+          /* audit is best-effort */
+        });
+        setInitial(settings);
+      }
+      if (chatDirty) {
+        await saveChatSettings(chat);
+        await logAdminAction({
+          action: 'update_setting',
+          entity_type: 'app_setting',
+          entity_id: 'chat_settings',
+          changes: {
+            enabled: chat.enabled,
+            provider: chat.provider,
+            model: chat.model,
+            temperature: chat.temperature,
+          },
+        }).catch(() => {
+          /* audit is best-effort */
+        });
+        setChatInitial(chat);
+      }
+      toast.success('AI-instellingen opgeslagen. Gelden voor alle gebruikers.');
     } catch {
       toast.error('Opslaan mislukt. Probeer het opnieuw.');
     } finally {
@@ -138,35 +180,7 @@ export default function SettingsPage() {
         <SectionHeader icon={Cpu} title="AI-model voor optimalisatie">
           De gekozen API wordt gebruikt voor alle optimalisaties. Gebruikers kiezen zelf geen model.
         </SectionHeader>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {AI_MODELS.map((m) => {
-            const active = m.id === settings.provider;
-            return (
-              <button
-                key={m.id}
-                type="button"
-                onClick={() => selectProvider(m.id)}
-                aria-pressed={active}
-                className={clsx(
-                  'flex items-start justify-between gap-3 rounded-xl border p-4 text-left transition-all',
-                  active
-                    ? 'border-rijksblauw-500 bg-rijksblauw-50 ring-2 ring-rijksblauw-500/20 dark:bg-rijksblauw-500/15'
-                    : 'border-slate-200 bg-white hover:border-rijksblauw-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-800',
-                )}
-              >
-                <span className="flex flex-col">
-                  <span className="font-semibold text-rijksblauw-700 dark:text-rijksblauw-200">{m.label}</span>
-                  <span className="mt-0.5 text-sm text-slate-600 dark:text-slate-300">{m.hint}</span>
-                </span>
-                {active && (
-                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-rijksblauw-500 text-white">
-                    <Check size={14} />
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
+        <ProviderCards value={settings.provider} onSelect={selectProvider} />
 
         {/* Directe links naar de sleutelbeheer-pagina's. Staan buiten de kaarten:
             een <a> in een <button> nesten is geen geldige HTML, en zo blijft de
@@ -233,44 +247,11 @@ export default function SettingsPage() {
               Prijzen zijn richtbedragen in USD per 1 miljoen tokens (in = je prompt, uit = het
               antwoord); duurdere modellen leveren doorgaans meer kwaliteit.
             </p>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {PROVIDER_MODELS[settings.provider].map((mdl) => {
-                const active = mdl.id === settings.model;
-                return (
-                  <button
-                    key={mdl.id}
-                    type="button"
-                    onClick={() => patch({ model: mdl.id })}
-                    aria-pressed={active}
-                    className={clsx(
-                      'flex items-start justify-between gap-3 rounded-xl border p-4 text-left transition-all',
-                      active
-                        ? 'border-rijksblauw-500 bg-rijksblauw-50 ring-2 ring-rijksblauw-500/20 dark:bg-rijksblauw-500/15'
-                        : 'border-slate-200 bg-white hover:border-rijksblauw-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-800',
-                    )}
-                  >
-                    <span className="flex flex-col">
-                      <span className="font-semibold text-rijksblauw-700 dark:text-rijksblauw-200">
-                        {mdl.label}
-                      </span>
-                      <span className="mt-0.5 text-sm text-slate-600 dark:text-slate-300">{mdl.hint}</span>
-                      <span className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-slate-500 dark:text-slate-400">
-                        <Coins size={12} className="text-slate-400" />
-                        {pricingSummary(mdl.pricing)}
-                      </span>
-                      <span className="mt-1 font-mono text-xs text-slate-400 dark:text-slate-500">
-                        {mdl.id}
-                      </span>
-                    </span>
-                    {active && (
-                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-rijksblauw-500 text-white">
-                        <Check size={14} />
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+            <ModelCards
+              provider={settings.provider}
+              value={settings.model}
+              onSelect={(id) => patch({ model: id })}
+            />
             <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
               Gekozen model:{' '}
               <span className="font-semibold text-rijksblauw-700 dark:text-rijksblauw-200">
@@ -356,7 +337,111 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      {/* 3. Guardrail: persoonsgegevens */}
+      {/* 3. Chat */}
+      <section className="opl-card p-6">
+        <SectionHeader icon={MessagesSquare} title="Chat">
+          De chatpagina waar ingelogde gebruikers rechtstreeks met het model praten en documenten
+          laten analyseren. Deze instellingen staan <strong>los</strong> van het
+          optimalisatie-model hierboven.
+        </SectionHeader>
+
+        <label className="flex cursor-pointer items-center gap-3">
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded accent-rijksblauw-500"
+            checked={chat.enabled}
+            onChange={(e) => patchChat({ enabled: e.target.checked })}
+          />
+          <span className="text-sm text-slate-700 dark:text-slate-200">
+            Chat ingeschakeld (menu-item zichtbaar voor ingelogde gebruikers)
+          </span>
+        </label>
+
+        <div className={clsx('mt-5 space-y-6', !chat.enabled && 'pointer-events-none opacity-50')}>
+          <div>
+            <div className="mb-3 flex items-center gap-2">
+              <Cpu size={16} className="text-rijksblauw-500" />
+              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                AI-model voor de chat
+              </h3>
+            </div>
+            <ProviderCards value={chat.provider} onSelect={selectChatProvider} />
+            {chat.provider !== 'auto' && (
+              <div className="mt-4">
+                <ModelCards
+                  provider={chat.provider}
+                  value={chat.model}
+                  onSelect={(id) => patchChat({ model: id })}
+                />
+              </div>
+            )}
+            <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+              Het gekozen model is voor gebruikers zichtbaar als badge rechtsonder in de chat
+              {chat.provider !== 'auto' && (
+                <>
+                  {' '}
+                  (nu: <strong>{AI_MODELS.find((m) => m.id === chat.provider)?.label}
+                  {modelLabel(chat.provider, chat.model) ? ` · ${modelLabel(chat.provider, chat.model)}` : ''}</strong>)
+                </>
+              )}
+              .
+            </p>
+          </div>
+
+          <div>
+            <label className="opl-label" htmlFor="chatSystemPrompt">
+              Systeemprompt van de chatassistent
+            </label>
+            <textarea
+              id="chatSystemPrompt"
+              className="opl-input min-h-[140px] resize-y font-mono text-[13px]"
+              value={chat.systemPrompt}
+              onChange={(e) => patchChat({ systemPrompt: e.target.value })}
+              placeholder="Bijv. Je bent een behulpzame AI-assistent…"
+            />
+            <p className="mt-1 flex items-center gap-2 text-xs text-slate-400 dark:text-slate-500">
+              <span>Bepaalt hoe de chatassistent zich gedraagt. Laat leeg om de ingebouwde default te gebruiken.</span>
+              {chat.systemPrompt.trim() !== DEFAULT_CHAT_SYSTEM_PROMPT && (
+                <button
+                  type="button"
+                  className="shrink-0 font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
+                  onClick={() => patchChat({ systemPrompt: DEFAULT_CHAT_SYSTEM_PROMPT })}
+                >
+                  Herstel standaard
+                </button>
+              )}
+            </p>
+          </div>
+
+          <div>
+            <div className="mb-1 flex items-center gap-2">
+              <Sliders size={15} className="text-slate-400" />
+              <label className="opl-label mb-0" htmlFor="chatTemperature">
+                Creativiteit
+              </label>
+              <span className="ml-auto text-sm font-medium tabular-nums text-rijksblauw-700 dark:text-rijksblauw-200">
+                {chat.temperature.toFixed(2)}
+              </span>
+            </div>
+            <input
+              id="chatTemperature"
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={chat.temperature}
+              onChange={(e) => patchChat({ temperature: Number(e.target.value) })}
+              className="w-full accent-rijksblauw-500"
+            />
+            <div className="flex justify-between text-xs text-slate-400 dark:text-slate-500">
+              <span>Voorspelbaar</span>
+              <span>Creatief</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 4. Guardrail: persoonsgegevens */}
       <section className="opl-card p-6">
         <SectionHeader icon={ShieldAlert} title="Guardrail: persoonsgegevens (AVG)">
           Detecteert mogelijke persoonsgegevens (e-mail, BSN, telefoonnummer, IBAN) in de invoer. Bij
@@ -388,7 +473,7 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      {/* 4. Verboden onderwerpen */}
+      {/* 5. Verboden onderwerpen */}
       <section className="opl-card p-6">
         <SectionHeader icon={Ban} title="Verboden onderwerpen">
           Bevat de prompt een van deze termen, dan wordt de gebruiker gewaarschuwd en moet die bevestigen
@@ -478,6 +563,99 @@ function SectionHeader({
         <h2 className="font-semibold text-slate-800 dark:text-slate-100">{title}</h2>
       </div>
       <p className="max-w-2xl text-sm text-slate-500 dark:text-slate-400">{children}</p>
+    </div>
+  );
+}
+
+/** Providerkeuze als klikbare kaarten; gedeeld door de generator- en chat-sectie. */
+function ProviderCards({
+  value,
+  onSelect,
+}: {
+  value: AiProvider;
+  onSelect: (provider: AiProvider) => void;
+}) {
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      {AI_MODELS.map((m) => {
+        const active = m.id === value;
+        return (
+          <button
+            key={m.id}
+            type="button"
+            onClick={() => onSelect(m.id)}
+            aria-pressed={active}
+            className={clsx(
+              'flex items-start justify-between gap-3 rounded-xl border p-4 text-left transition-all',
+              active
+                ? 'border-rijksblauw-500 bg-rijksblauw-50 ring-2 ring-rijksblauw-500/20 dark:bg-rijksblauw-500/15'
+                : 'border-slate-200 bg-white hover:border-rijksblauw-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-800',
+            )}
+          >
+            <span className="flex flex-col">
+              <span className="font-semibold text-rijksblauw-700 dark:text-rijksblauw-200">{m.label}</span>
+              <span className="mt-0.5 text-sm text-slate-600 dark:text-slate-300">{m.hint}</span>
+            </span>
+            {active && (
+              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-rijksblauw-500 text-white">
+                <Check size={14} />
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Modelkeuze binnen een provider, met richtprijzen; gedeeld door beide secties. */
+function ModelCards({
+  provider,
+  value,
+  onSelect,
+}: {
+  provider: Exclude<AiProvider, 'auto'>;
+  value: string;
+  onSelect: (modelId: string) => void;
+}) {
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      {PROVIDER_MODELS[provider].map((mdl) => {
+        const active = mdl.id === value;
+        return (
+          <button
+            key={mdl.id}
+            type="button"
+            onClick={() => onSelect(mdl.id)}
+            aria-pressed={active}
+            className={clsx(
+              'flex items-start justify-between gap-3 rounded-xl border p-4 text-left transition-all',
+              active
+                ? 'border-rijksblauw-500 bg-rijksblauw-50 ring-2 ring-rijksblauw-500/20 dark:bg-rijksblauw-500/15'
+                : 'border-slate-200 bg-white hover:border-rijksblauw-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-800',
+            )}
+          >
+            <span className="flex flex-col">
+              <span className="font-semibold text-rijksblauw-700 dark:text-rijksblauw-200">
+                {mdl.label}
+              </span>
+              <span className="mt-0.5 text-sm text-slate-600 dark:text-slate-300">{mdl.hint}</span>
+              <span className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-slate-500 dark:text-slate-400">
+                <Coins size={12} className="text-slate-400" />
+                {pricingSummary(mdl.pricing)}
+              </span>
+              <span className="mt-1 font-mono text-xs text-slate-400 dark:text-slate-500">
+                {mdl.id}
+              </span>
+            </span>
+            {active && (
+              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-rijksblauw-500 text-white">
+                <Check size={14} />
+              </span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }

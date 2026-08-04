@@ -13,15 +13,15 @@ import {
 } from 'lucide-react';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { copyToClipboard, getCurrentUser } from '@/lib/utils';
 import { createPrompt } from '@/services/repository';
-import { executePrompt, generateMetadata } from '@/services/optimizeService';
+import { generateMetadata } from '@/services/optimizeService';
+import { writeHandoff } from '@/services/chatService';
 import { requestCategory } from '@/services/categoryRequestService';
 import { requestFunction } from '@/services/functionRequestService';
 import { useAuth } from '@/context/AuthContext';
 import { useReferenceData } from '@/context/ReferenceDataContext';
-import RichText from './RichText';
 import ShareModal from '@/components/share/ShareModal';
 import SearchableSelect from '@/components/common/SearchableSelect';
 import VisibilityPicker from '@/components/prompts/VisibilityPicker';
@@ -92,10 +92,8 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
   const [roleRequestBusy, setRoleRequestBusy] = useState(false);
   // Naam van de aangevraagde functie zodra de aanvraag is verstuurd (pending).
   const [pendingRole, setPendingRole] = useState<string | null>(null);
-  // Direct uitvoeren: laat de AI de prompt meteen uitvoeren en toon het resultaat.
-  const [executing, setExecuting] = useState(false);
-  const [executed, setExecuted] = useState<string | null>(null);
-  const [copiedResult, setCopiedResult] = useState(false);
+  // Voor "Uitvoeren in chat": prompt klaarzetten en naar /chat navigeren.
+  const navigate = useNavigate();
 
   // Het profiel laadt asynchroon: zodra de organisatie van de gebruiker bekend is
   // en de gebruiker het veld nog niet zelf koos, vullen we de organisatie voor op
@@ -193,37 +191,14 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
     setTimeout(() => setCopied(false), 1500);
   }
 
-  /** Voer de samengestelde prompt direct uit en toon het eindproduct zelf. */
-  async function handleExecute() {
-    setExecuting(true);
-    // Resultaat van een vorige uitvoering wissen; de stream vult dit veld
-    // vervolgens regel voor regel, zodat de gebruiker meteen meeleest.
-    setExecuted(null);
-    try {
-      const res = await executePrompt({
-        prompt: result.optimized_content,
-        onChunk: setExecuted,
-      });
-      if (res.success && res.output) {
-        setExecuted(res.output);
-      } else {
-        setExecuted(null);
-        toast.error(res.error ?? 'Uitvoeren mislukt. Probeer het opnieuw.');
-      }
-    } catch (err) {
-      setExecuted(null);
-      toast.error(err instanceof Error ? err.message : 'Uitvoeren mislukt.');
-    } finally {
-      setExecuting(false);
-    }
-  }
-
-  async function handleCopyResult() {
-    if (!executed) return;
-    await copyToClipboard(executed);
-    setCopiedResult(true);
-    toast.success('Resultaat gekopieerd');
-    setTimeout(() => setCopiedResult(false), 1500);
+  /**
+   * Voer de samengestelde prompt uit in de chat: de prompt gaat via een
+   * sessionStorage-handoff mee (overleeft óók de login-redirect van
+   * RequireAuth) en draait daar automatisch als eerste bericht.
+   */
+  function handleExecute() {
+    writeHandoff(result.optimized_content);
+    navigate('/chat');
   }
 
   async function handleSave() {
@@ -295,50 +270,6 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
           opdrachtbeschrijving die eruit volgde en het gekozen framework. Bewust
           ingeklapt — de prompt zelf is de hoofdzaak. */}
       {result.dialogue && <DialogueSummary dialogue={result.dialogue} />}
-
-      {/* Direct-uitvoeren-resultaat: het eindproduct dat de AI meteen afleverde. */}
-      {executed && (
-        <div className="animate-fade-in space-y-2 rounded-xl border border-emerald-200 bg-emerald-50/40 p-4 dark:border-emerald-500/30 dark:bg-emerald-500/10">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h4 className="flex items-center gap-2 text-sm font-semibold text-emerald-800 dark:text-emerald-300">
-              <Play size={15} /> Resultaat van de uitvoering
-              {executing && <Loader2 size={14} className="animate-spin" />}
-            </h4>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 hover:text-emerald-800 dark:text-emerald-300"
-                onClick={handleCopyResult}
-              >
-                {copiedResult ? <Check size={13} /> : <Copy size={13} />}
-                {copiedResult ? 'Gekopieerd' : 'Kopieer resultaat'}
-              </button>
-              <button
-                type="button"
-                className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-emerald-700 disabled:opacity-50 dark:text-slate-400"
-                onClick={handleExecute}
-                disabled={executing}
-              >
-                {executing ? <Loader2 size={13} className="animate-spin" /> : <RotateCcw size={13} />}
-                Opnieuw
-              </button>
-            </div>
-          </div>
-          <p className="text-xs text-emerald-700/80 dark:text-emerald-300/70">
-            {executing ? (
-              <>De AI voert je prompt nu uit — je leest live mee.</>
-            ) : (
-              <>
-                De AI heeft de prompt meteen uitgevoerd. Controleer aannames (vaak cursief of tussen
-                haakjes) en pas aan waar nodig.
-              </>
-            )}
-          </p>
-          <div className="max-h-[420px] overflow-auto rounded-lg border border-emerald-200 bg-white p-4 dark:border-emerald-500/20 dark:bg-slate-900">
-            <RichText text={executed} className="text-[13px] text-slate-800 dark:text-slate-100" />
-          </div>
-        </div>
-      )}
 
       {/* Opgeslagen-bevestiging */}
       {saved && (
@@ -658,10 +589,9 @@ export default function OptimizedOutput({ result, technique, goal, onReset }: Op
             <Save size={16} /> Opslaan in bibliotheek
           </button>
         )}
-        {/* Direct uitvoeren: laat de AI de prompt meteen uitvoeren i.p.v. kopiëren. */}
-        <button className="opl-btn-secondary" onClick={handleExecute} disabled={executing}>
-          {executing ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
-          {executing ? 'Uitvoeren…' : 'Direct uitvoeren'}
+        {/* Uitvoeren in chat: de AI voert de prompt daar meteen uit, met vervolgvragen. */}
+        <button className="opl-btn-secondary" onClick={handleExecute}>
+          <Play size={16} /> Uitvoeren in chat
         </button>
         <button className="opl-btn-primary" onClick={handleCopy}>
           {copied ? <Check size={16} /> : <Copy size={16} />}

@@ -9,6 +9,7 @@ import {
 } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
+import { wipeAllChatStorage } from '@/lib/chatStorage';
 import * as authService from '@/services/authService';
 import { fetchMyModeratorOrgIds } from '@/services/orgService';
 import type { AppRole, Profile } from '@/types';
@@ -84,7 +85,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (active) setLoading(false);
     });
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      // Privacy-afspraak: bij uitloggen (ook token-verval of uitloggen in een
+      // andere tab) verdwijnt álle chatgeschiedenis van dit apparaat.
+      if (event === 'SIGNED_OUT') wipeAllChatStorage();
       setSession(nextSession);
       void loadProfile(nextSession?.user.id);
     });
@@ -113,6 +117,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     await authService.signOut();
+    // Belt-and-braces naast het SIGNED_OUT-event: ook wissen wanneer dat event
+    // niet vuurt (bijv. zonder Supabase-configuratie).
+    wipeAllChatStorage();
     setSession(null);
     setProfile(null);
     setModeratorOrgIds([]);

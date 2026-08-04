@@ -614,6 +614,54 @@ export interface ExecuteResult {
   error?: string;
 }
 
+// --- Chat: rechtstreeks gesprek met het door de admin gekozen model ---
+
+/** Eén bericht in een chatgesprek. */
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  createdAt: string;
+  /** De provider die dit antwoord daadwerkelijk gaf (kan een fallback zijn). */
+  provider?: AiProviderResult;
+  /** Het gebruikte model, voor de badge bij het bericht. */
+  model?: string;
+  /** Foutmelding wanneer het antwoord (deels) mislukte. */
+  error?: string;
+  /** De gebruiker heeft het antwoord met de stop-knop afgebroken. */
+  stopped?: boolean;
+}
+
+/** Een geüpload document dat het hele gesprek als bronmateriaal meegaat. */
+export interface ChatAttachment {
+  id: string;
+  name: string;
+  /** Aantal tekens van de (eventueel afgekapte) tekst. */
+  chars: number;
+  text: string;
+  /** De tekst is afgekapt op de bijlagelimiet. */
+  truncated: boolean;
+}
+
+/** Eén gesprek, zoals opgeslagen in localStorage (nooit in de database). */
+export interface ChatConversation {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  messages: ChatMessage[];
+  attachments: ChatAttachment[];
+}
+
+/** Regel in de gesprekkenlijst (aparte kleine index-key in localStorage). */
+export interface ChatIndexEntry {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  messageCount: number;
+}
+
 /**
  * Antwoord van de optimize-prompt service (framework-aanbevelingsmodus,
  * eigen-prompt-flow). Beveelt het best passende prompt framework aan op basis

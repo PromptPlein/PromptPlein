@@ -20,6 +20,7 @@ import ContactPage from '@/pages/ContactPage';
 const NetworkPage = lazy(() => import('@/pages/NetworkPage'));
 const CommunityPage = lazy(() => import('@/pages/CommunityPage'));
 const PublicProfilePage = lazy(() => import('@/pages/PublicProfilePage'));
+const ChatPage = lazy(() => import('@/pages/ChatPage'));
 
 // Chart-/admin-zware pagina's lazy laden (houdt recharts uit de hoofdbundle).
 const TrendingPage = lazy(() => import('@/pages/TrendingPage'));
@@ -93,6 +94,7 @@ export default function App() {
 
               {/* Vereist een ingelogde gebruiker */}
               <Route element={<RequireAuth />}>
+                <Route path="/chat" element={<ChatPage />} />
                 <Route path="/bibliotheek" element={<MyLibraryPage />} />
                 <Route path="/profiel" element={<ProfilePage />} />
                 <Route path="/netwerk" element={<NetworkPage />} />
