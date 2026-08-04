@@ -1,13 +1,43 @@
-import { useRef, useState, type ReactNode } from 'react';
-import { Loader2, Paperclip, Scissors, Send, Square, X } from 'lucide-react';
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { GripHorizontal, Loader2, Paperclip, Scissors, Send, Square, X } from 'lucide-react';
 import clsx from 'clsx';
 import { ACCEPTED_DOC_ACCEPT } from '@/lib/extractDocument';
 import { MAX_CHAT_ATTACHMENTS } from './useChatController';
 import type { ChatAttachment } from '@/types';
 
+/** Starthoogte van het tekstvak: ruimte voor drie regels. */
+const DEFAULT_HEIGHT = 88;
+/** Ondergrens bij het slepen. */
+const MIN_HEIGHT = 56;
+/** Bovengrens: daarboven blijft er te weinig van het gesprek zichtbaar. */
+const MAX_HEIGHT = 320;
+/** Stapgrootte bij bedienen met de pijltjestoetsen. */
+const KEY_STEP = 24;
+/** Zelfgekozen hoogte onthouden we per apparaat (los van de chatinhoud). */
+const HEIGHT_KEY = 'opl.ui.chatComposerHeight';
+
+function clampHeight(px: number): number {
+  return Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, Math.round(px)));
+}
+
+function readStoredHeight(): number | null {
+  try {
+    const raw = localStorage.getItem(HEIGHT_KEY);
+    if (!raw) return null;
+    const value = Number(raw);
+    return Number.isFinite(value) ? clampHeight(value) : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Invoerbalk van de chat: tekstveld (Enter = verzenden, Shift+Enter = nieuwe
  * regel), bijlagen (paperclip + chips) en de stop-knop tijdens het streamen.
+ *
+ * Het tekstvak begint op drie regels en groeit mee met wat je typt. Wie meer
+ * ruimte wil, sleept het met de greep rechtsonder groter; die keuze blijft
+ * bewaard tot je hem met een dubbelklik weer loslaat.
  */
 export default function ChatComposer({
   disabled,
@@ -34,6 +64,71 @@ export default function ChatComposer({
 }) {
   const [text, setText] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // Zelf ingestelde hoogte; null = automatisch meegroeien met de tekst.
+  const [manualHeight, setManualHeight] = useState<number | null>(readStoredHeight);
+  const dragRef = useRef<{ startY: number; startHeight: number } | null>(null);
+
+  // Hoogte bijwerken: bij een eigen keuze precies die hoogte, anders meegroeien
+  // met de inhoud tussen de start- en maximumhoogte.
+  useLayoutEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    if (manualHeight !== null) {
+      el.style.height = `${manualHeight}px`;
+      return;
+    }
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(MAX_HEIGHT, Math.max(DEFAULT_HEIGHT, el.scrollHeight))}px`;
+  }, [text, manualHeight]);
+
+  function storeHeight(next: number | null) {
+    setManualHeight(next);
+    try {
+      if (next === null) localStorage.removeItem(HEIGHT_KEY);
+      else localStorage.setItem(HEIGHT_KEY, String(next));
+    } catch {
+      /* opslag niet beschikbaar — de hoogte geldt dan alleen deze sessie */
+    }
+  }
+
+  function startDrag(e: React.PointerEvent<HTMLButtonElement>) {
+    const el = textareaRef.current;
+    if (!el) return;
+    e.preventDefault();
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // Zonder pointer-capture werkt slepen nog steeds, alleen niet meer buiten
+      // de greep; geen reden om af te breken.
+    }
+    dragRef.current = { startY: e.clientY, startHeight: el.getBoundingClientRect().height };
+  }
+
+  function onDrag(e: React.PointerEvent<HTMLButtonElement>) {
+    const drag = dragRef.current;
+    if (!drag) return;
+    // Omlaag slepen maakt het vak groter.
+    setManualHeight(clampHeight(drag.startHeight + (e.clientY - drag.startY)));
+  }
+
+  function endDrag(e: React.PointerEvent<HTMLButtonElement>) {
+    if (!dragRef.current) return;
+    dragRef.current = null;
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      /* nooit vastgelegd — niets vrij te geven */
+    }
+    if (manualHeight !== null) storeHeight(manualHeight);
+  }
+
+  function resizeByKey(e: React.KeyboardEvent<HTMLButtonElement>) {
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+    e.preventDefault();
+    const current = manualHeight ?? textareaRef.current?.getBoundingClientRect().height ?? DEFAULT_HEIGHT;
+    storeHeight(clampHeight(current + (e.key === 'ArrowDown' ? KEY_STEP : -KEY_STEP)));
+  }
 
   const canSend = !disabled && !streaming && text.trim().length > 0;
 
@@ -107,21 +202,44 @@ export default function ChatComposer({
           }}
         />
 
-        <textarea
-          className="opl-input max-h-40 min-h-[2.75rem] flex-1 resize-none py-2.5"
-          rows={1}
-          placeholder={disabled ? 'Chat wordt geladen…' : 'Stel je vraag…'}
-          value={text}
-          disabled={disabled}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            // Enter verzendt; Shift+Enter maakt een nieuwe regel.
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              submit();
+        <div className="relative flex-1">
+          <textarea
+            ref={textareaRef}
+            className="opl-input w-full resize-none py-2.5 pb-6"
+            rows={3}
+            placeholder={disabled ? 'Chat wordt geladen…' : 'Stel je vraag…'}
+            value={text}
+            disabled={disabled}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              // Enter verzendt; Shift+Enter maakt een nieuwe regel.
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                submit();
+              }
+            }}
+          />
+          {/* Greep om het tekstvak zelf groter te slepen. Dubbelklikken zet hem
+              terug op automatisch meegroeien. */}
+          <button
+            type="button"
+            className="absolute bottom-1 right-1 flex h-5 w-6 cursor-ns-resize touch-none items-center justify-center rounded text-slate-300 transition-colors hover:bg-slate-100 hover:text-slate-500 focus:outline-none focus:ring-2 focus:ring-rijksblauw-500/40 dark:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300"
+            onPointerDown={startDrag}
+            onPointerMove={onDrag}
+            onPointerUp={endDrag}
+            onPointerCancel={endDrag}
+            onDoubleClick={() => storeHeight(null)}
+            onKeyDown={resizeByKey}
+            title={
+              manualHeight === null
+                ? 'Sleep omlaag om het invoerveld groter te maken'
+                : 'Sleep om de hoogte aan te passen, dubbelklik om automatisch mee te groeien'
             }
-          }}
-        />
+            aria-label="Hoogte van het invoerveld aanpassen"
+          >
+            <GripHorizontal size={14} />
+          </button>
+        </div>
 
         {streaming ? (
           <button
