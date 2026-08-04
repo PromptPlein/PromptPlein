@@ -1,4 +1,5 @@
 import { FileText, MessageSquare, ShieldCheck } from 'lucide-react';
+import clsx from 'clsx';
 
 /** Startervragen in overheidscontext; klikken verstuurt de vraag meteen. */
 const STARTERS = [
@@ -24,12 +25,17 @@ export default function ChatEmptyState({ onPick }: { onPick: (text: string) => v
         </p>
       </div>
 
+      {/* Op kleine schermen tonen we twee suggesties, zodat de chat klein begint
+          en pas met het gesprek meegroeit. */}
       <div className="grid w-full max-w-lg gap-2 sm:grid-cols-2">
-        {STARTERS.map((starter) => (
+        {STARTERS.map((starter, i) => (
           <button
             key={starter}
             type="button"
-            className="rounded-xl border border-slate-200 px-3 py-2.5 text-left text-xs text-slate-600 transition-colors hover:border-rijksblauw-300 hover:bg-rijksblauw-50 dark:border-slate-700 dark:text-slate-300 dark:hover:border-rijksblauw-500/40 dark:hover:bg-rijksblauw-500/10"
+            className={clsx(
+              'rounded-xl border border-slate-200 px-3 py-2.5 text-left text-xs text-slate-600 transition-colors hover:border-rijksblauw-300 hover:bg-rijksblauw-50 dark:border-slate-700 dark:text-slate-300 dark:hover:border-rijksblauw-500/40 dark:hover:bg-rijksblauw-500/10',
+              i >= 2 && 'hidden sm:block',
+            )}
             onClick={() => onPick(starter)}
           >
             {starter}
@@ -39,11 +45,11 @@ export default function ChatEmptyState({ onPick }: { onPick: (text: string) => v
 
       <div className="flex flex-col items-center gap-1 text-[11px] text-slate-400 dark:text-slate-500">
         <span className="inline-flex items-center gap-1.5">
-          <ShieldCheck size={12} />
+          <ShieldCheck size={12} className="shrink-0" />
           Gesprekken worden alleen op dit apparaat bewaard en verdwijnen bij uitloggen.
         </span>
-        <span className="inline-flex items-center gap-1.5">
-          <FileText size={12} />
+        <span className="hidden items-center gap-1.5 sm:inline-flex">
+          <FileText size={12} className="shrink-0" />
           Bijlagen blijven het hele gesprek beschikbaar als bronmateriaal.
         </span>
       </div>

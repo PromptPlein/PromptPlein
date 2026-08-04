@@ -30,7 +30,7 @@ export default function ChatModelBadge({
   return (
     <span
       className={clsx(
-        'opl-badge',
+        'opl-badge whitespace-nowrap',
         fallback
           ? 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400'
           : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',

@@ -146,11 +146,11 @@ export default function ChatComposer({
       </div>
 
       <div className="mt-1.5 flex items-center justify-between gap-2">
-        <p className="text-[11px] text-slate-400 dark:text-slate-500">
-          Enter = verzenden · Shift+Enter = nieuwe regel · max. {MAX_CHAT_ATTACHMENTS} bijlagen,
-          10&nbsp;MB per stuk
+        <p className="min-w-0 text-[11px] text-slate-400 dark:text-slate-500">
+          <span className="hidden sm:inline">Enter = verzenden · Shift+Enter = nieuwe regel · </span>
+          max. {MAX_CHAT_ATTACHMENTS} bijlagen, 10&nbsp;MB per stuk
         </p>
-        {badge}
+        <span className="shrink-0">{badge}</span>
       </div>
     </div>
   );
