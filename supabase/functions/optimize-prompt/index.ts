@@ -773,7 +773,8 @@ BELANGRIJK:
 - Bouw voort op het materiaal van eerdere stappen; herhaal het niet, maar sluit erop aan.
 - Dit is voor INTERN overheidsgebruik; gebruik interne persona's, geen burger-persona's.
 - Schrijf in duidelijke, professionele taal (waar passend B1-niveau).
-- Houd het bondig en bruikbaar (enkele zinnen tot een korte opsomming).
+
+${lengthBudgetInstruction('150–250 woorden — enkele zinnen tot een korte opsomming')}
 
 ${CLARITY_GATE_JSON_INSTRUCTION}
 
@@ -837,6 +838,8 @@ Werkwijze — houd je STRIKT aan dit protocol:
   GEEN prompt-template, GEEN meta-instructies.
 - Dit is voor INTERN overheidsgebruik; gebruik interne persona's, geen burger-persona's.
 - Schrijf in duidelijke, professionele taal (waar passend B1-niveau).
+- LENGTE: een "VRAAG:" is exact één regel. Een "KLAAR:"-conclusie is maximaal ~250 woorden: alleen de
+  uitkomst, zonder inleiding en zonder de gestelde vragen te herhalen.
 
 ${CLARITY_GATE_JSON_INSTRUCTION}`;
 
@@ -875,6 +878,8 @@ Is er nog geen scherpe STELLING (een uitspraak, voorgenomen besluit of aanname) 
 - MAXIMUM 7 vragen. Vraagt de gebruiker af te ronden, of bij de 7e beurt: antwoord met "KLAAR:" gevolgd
   door een korte, neutrale SAMENVATTING van wat de GEBRUIKER zelf heeft aangescherpt (de stelling zoals
   die nu luidt, de eigen inzichten en de nog openstaande vragen). Voeg GEEN eigen oordeel of advies toe.
+- LENGTE: een "VRAAG:" is exact één regel. Een "KLAAR:"-samenvatting is maximaal ~200 woorden, zonder
+  inleiding en zonder de gestelde vragen te herhalen.
 
 ${CLARITY_GATE_JSON_INSTRUCTION}`;
 
@@ -973,6 +978,10 @@ niets wat de gebruiker niet aanreikt, maar bouw op wat er is. Doe twee dingen:
    compleet en scherp te maken. Denk vooruit: wat heeft een latere stap of de eindprompt nog nodig
    dat nu ontbreekt? Formuleer elk hiaat als een korte, concrete vraag aan de gebruiker. Lever GEEN
    hiaten die de gebruiker al beantwoord heeft. Zijn er geen echte hiaten, geef dan een lege lijst.
+
+${lengthBudgetInstruction(
+  '150–250 woorden voor "material", precies één zin voor "summary" en één korte vraag van één regel per hiaat',
+)}
 
 ${CLARITY_GATE_JSON_INSTRUCTION}
 
@@ -1680,10 +1689,9 @@ WERKWIJZE PER VELD:
    rol → het rol-veld, achtergrond/situatie → het context-veld, de opdracht → het taak-veld).
    Vind je die? Neem dan ALLE relevante details voor dit veld over en zet "source":"prompt".
    BEHOUD concrete specifieke inhoud die de gebruiker noemt — denk aan aantallen, namen, categorieën,
-   opsommingen, voorbeelden, schermen/views, filters en stappen. Vat NIET samen tot één regel als de
-   gebruiker meer detail heeft gegeven: je mag herformuleren en ordenen (bijv. in korte bullets), maar
-   laat geen door de gebruiker genoemde details weg. Een rijke beschrijving hoort te leiden tot een rijk
-   ingevuld veld. Verdeel details over het veld waar ze inhoudelijk thuishoren; stop niet alles in één veld.
+   opsommingen, voorbeelden, schermen/views, filters en stappen. Je mag herformuleren, inkorten en
+   ordenen (bijv. in korte bullets), maar laat geen door de gebruiker genoemde details weg.
+   Verdeel details over het veld waar ze inhoudelijk thuishoren; stop niet alles in één veld.
 2. Staat er in de tekst niets voor dit veld? Bedenk dan zelf een passend, plausibel voorstel dat
    logisch aansluit op de rest van de tekst, en zet "source":"ai". Verzin GEEN feiten die de
    bedoeling van de gebruiker veranderen; blijf dicht bij wat de tekst impliceert en houd het
@@ -1691,26 +1699,29 @@ WERKWIJZE PER VELD:
 
 REGELS:
 - Vul ELK veld in (laat "value" nooit leeg): of afgeleid uit de tekst ("prompt"), of als suggestie ("ai").
-- Volledigheid gaat vóór beknoptheid bij "source":"prompt"-velden: liever een compleet, detailrijk veld
-  dan een korte samenvatting waarin informatie van de gebruiker verloren gaat. Knip lange opsommingen op
-  in leesbare bullets in plaats van ze in te korten.
-- Bij "source":"ai"-velden geldt het omgekeerde: houd die kort en functioneel (richtlijn ~60 woorden).
-  Daar vul je iets in wat de gebruiker niet heeft gezegd, dus een beknopt, controleerbaar voorstel is
-  bruikbaarder dan een uitgebreide invulling die hij toch helemaal moet nalopen.
+- Bij "source":"prompt"-velden mag geen informatie van de gebruiker verloren gaan. Dat betekent NIET dat
+  het veld lang moet worden: schrijf de details compact op (korte bullets), zonder er eigen toelichting,
+  inleiding of herhaling omheen te zetten.
+- Bij "source":"ai"-velden: houd die kort en functioneel (richtlijn ~60 woorden). Daar vul je iets in wat
+  de gebruiker niet heeft gezegd, dus een beknopt, controleerbaar voorstel is bruikbaarder dan een
+  uitgebreide invulling die hij toch helemaal moet nalopen.
 - Herhaal geen inhoud tussen velden: elk detail hoort in het veld waar het thuishoort, en daar één keer.
 - Schrijf in helder Nederlands (B1-taalniveau waar passend). Houd het intern gericht: de doelgroep
   is een overheidsmedewerker, niet de burger.
 - "note": één heel korte toelichting (max ~12 woorden) per veld, bijv. "Afgeleid uit je prompt" of
   "Suggestie — controleer of dit klopt".
+
+${lengthBudgetInstruction(
+  'maximaal ~120 woorden per veld, ~60 woorden voor velden die je zelf invult ("source":"ai") ' +
+    'en precies één zin voor "summary"',
+)}
+
 ${CLARITY_GATE_JSON_INSTRUCTION}
 
-CONTROLE VOORDAT JE ANTWOORDT: als de gebruiker een lange of gedetailleerde tekst heeft aangeleverd,
-mag vrijwel geen enkel concreet detail (aantal, naam, categorie, view, filter, stap) ontbreken in de
-gevulde velden. Loop de tekst van de gebruiker na en zorg dat elk genoemd detail ergens terechtkomt in
-het veld waar het thuishoort. Een detail mag je herformuleren of verplaatsen, maar niet stilzwijgend laten vallen.
+Een door de gebruiker genoemd detail mag je herformuleren of verplaatsen, maar niet stilzwijgend laten vallen.
 
 Geef UITSLUITEND geldige JSON terug, zonder codeblok of extra tekst, in dit formaat:
-{"summary":"<1 zin: wat je uit de prompt hebt gehaald en wat je hebt aangevuld, in het Nederlands>","fields":[{"id":"<veld-id>","value":"<voorgestelde inhoud voor dit veld — detailrijk waar de gebruiker detail gaf>","source":"prompt|ai","note":"<korte toelichting>"}]}
+{"summary":"<1 zin: wat je uit de prompt hebt gehaald en wat je hebt aangevuld, in het Nederlands>","fields":[{"id":"<veld-id>","value":"<voorgestelde inhoud voor dit veld — compact, maar zonder details van de gebruiker weg te laten>","source":"prompt|ai","note":"<korte toelichting>"}]}
 
 Gebruik alleen veld-id's die exact in de lijst voorkomen.`;
 
@@ -2388,6 +2399,102 @@ function maxTokensFor(mode: Mode): number {
 type DeltaHandler = (chunk: string) => void;
 
 /**
+ * Hoe lang een provider mag zwijgen voordat we hem opgeven. Alleen zinvol bij
+ * STREAMENDE aanroepen: daar hoort het eerste fragment binnen een paar seconden
+ * binnen te komen. Bij een niet-streamende aanroep stuurt de provider pas iets
+ * zodra het hele antwoord af is — daar geldt alleen het totaalplafond hieronder.
+ */
+const FIRST_DELTA_TIMEOUT_MS = 20_000;
+
+/** Streamend: valt de toevoer zo lang stil, dan is de verbinding dood. */
+const STALL_TIMEOUT_MS = 20_000;
+
+/**
+ * Absoluut plafond voor één provider-poging, afgeleid van het uitvoerbudget van
+ * de modus: een titel van 128 tokens hoort nooit zo lang te mogen duren als een
+ * prefill van 8192. Gerekend met ~40 uitvoertokens per seconde (de traagste
+ * provider) plus 20s speling voor verbinding en modelopstart, en nooit meer dan
+ * twee minuten.
+ *
+ * Waarom dit er is: zonder plafond houdt één hangende provider de hele aanroep
+ * onbegrensd op. In de productielogs leverde dat aanroepen van 76 tot 91
+ * seconden op, plus een 502 na 43s. Met een plafond faalt zo'n poging netjes en
+ * schakelt de keten door naar de volgende provider.
+ */
+function providerTimeoutMs(maxTokens: number): number {
+  return Math.min(120_000, 20_000 + maxTokens * 25);
+}
+
+/**
+ * Bewaakt één provider-poging en breekt hem af bij stilte (streamend) of bij het
+ * overschrijden van het totaalplafond, zodat de aanroeper kan doorschakelen in
+ * plaats van te blijven wachten.
+ */
+interface ProviderWatchdog {
+  /** Meegeven aan fetch/de SDK, zodat de aanroep écht wordt afgebroken. */
+  signal: AbortSignal;
+  /** Melden dat er voortgang is: respons begonnen of fragment binnen. */
+  ping(): void;
+  /** Timers opruimen — altijd aanroepen, ook wanneer er een fout optreedt. */
+  done(): void;
+  /** De reden van afbreken, of null als er niet is afgebroken. */
+  reason(): string | null;
+}
+
+function watchProvider(label: string, maxTokens: number, streaming: boolean): ProviderWatchdog {
+  const controller = new AbortController();
+  const totalMs = providerTimeoutMs(maxTokens);
+  let reason: string | null = null;
+  let idleTimer: number | undefined;
+  let idleMs = FIRST_DELTA_TIMEOUT_MS;
+
+  const abortWith = (why: string) => {
+    if (reason) return;
+    reason = why;
+    controller.abort();
+  };
+
+  const totalTimer = setTimeout(
+    () => abortWith(`${label} deed er langer over dan ${Math.round(totalMs / 1000)} seconden`),
+    totalMs,
+  );
+
+  const armIdle = () => {
+    if (!streaming) return;
+    if (idleTimer !== undefined) clearTimeout(idleTimer);
+    idleTimer = setTimeout(
+      () => abortWith(`${label} stuurde ${Math.round(idleMs / 1000)} seconden lang niets`),
+      idleMs,
+    );
+  };
+  armIdle();
+
+  return {
+    signal: controller.signal,
+    ping() {
+      // Na het eerste teken van leven geldt de (kortere) stilte-drempel.
+      idleMs = STALL_TIMEOUT_MS;
+      armIdle();
+    },
+    done() {
+      clearTimeout(totalTimer);
+      if (idleTimer !== undefined) clearTimeout(idleTimer);
+    },
+    reason: () => reason,
+  };
+}
+
+/**
+ * Vervangt de kale abort-fout door de reden waaróm er is afgebroken, zodat de
+ * logregel bruikbaar is ("Claude stuurde 20 seconden lang niets" in plaats van
+ * "The signal has been aborted").
+ */
+function withAbortReason(dog: ProviderWatchdog, err: unknown): unknown {
+  const why = dog.reason();
+  return why ? new Error(why) : err;
+}
+
+/**
  * Leest een OpenAI-compatibele SSE-stream (OpenAI, DeepSeek, Mistral) uit en
  * geeft de volledige tekst terug, terwijl elk fragment via `onDelta` doorgaat.
  * Onbekende of half binnengekomen events worden overgeslagen; de buffer houdt
@@ -2446,34 +2553,50 @@ async function runOpenAiCompatible(args: {
 }): Promise<string> {
   const { url, apiKey, label, model, system, userMessage, temperature, maxTokens, onDelta } = args;
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: maxTokens,
-      temperature,
-      stream: Boolean(onDelta),
-      messages: [
-        { role: 'system', content: system },
-        { role: 'user', content: userMessage },
-      ],
-    }),
-  });
+  const dog = watchProvider(label, maxTokens, Boolean(onDelta));
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: maxTokens,
+        temperature,
+        stream: Boolean(onDelta),
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: userMessage },
+        ],
+      }),
+      signal: dog.signal,
+    });
 
-  if (!response.ok) {
-    throw new Error(`${label} gaf status ${response.status}`);
+    if (!response.ok) {
+      throw new Error(`${label} gaf status ${response.status}`);
+    }
+
+    // De respons is begonnen; vanaf hier bewaakt de watchdog de stiltes ertussen.
+    dog.ping();
+
+    const text = onDelta
+      ? (
+          await readSseDeltas(response, label, (chunk) => {
+            dog.ping();
+            onDelta(chunk);
+          })
+        ).trim()
+      : ((await response.json())?.choices?.[0]?.message?.content?.trim() ?? '');
+
+    if (!text) throw new Error(`${label} gaf een lege respons`);
+    return text;
+  } catch (err) {
+    throw withAbortReason(dog, err);
+  } finally {
+    dog.done();
   }
-
-  const text = onDelta
-    ? (await readSseDeltas(response, label, onDelta)).trim()
-    : ((await response.json())?.choices?.[0]?.message?.content?.trim() ?? '');
-
-  if (!text) throw new Error(`${label} gaf een lege respons`);
-  return text;
 }
 
 async function runClaude(
@@ -2487,7 +2610,11 @@ async function runClaude(
   const apiKey = Deno.env.get('CLAUDE_API_KEY');
   if (!apiKey) throw new Error('CLAUDE_API_KEY ontbreekt');
 
-  const client = new Anthropic({ apiKey });
+  // maxRetries omlaag: de SDK herhaalt standaard tot twee keer bij een 429/5xx,
+  // en die wachttijd komt bovenop de onze. We hebben een eigen fallback-keten
+  // over vier providers — één herkansing is genoeg, daarna is doorschakelen
+  // sneller dan blijven aankloppen.
+  const client = new Anthropic({ apiKey, maxRetries: 1 });
   const params = {
     model,
     max_tokens: maxTokens,
@@ -2496,31 +2623,39 @@ async function runClaude(
     messages: [{ role: 'user' as const, content: userMessage }],
   };
 
-  // Streamend: tekst doorgeven zodra het model hem produceert, zodat de
-  // gebruiker na ~1 seconde de eerste regels ziet in plaats van na 30–60.
-  if (onDelta) {
-    let text = '';
-    const stream = client.messages.stream(params);
-    for await (const event of stream) {
-      if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-        text += event.delta.text;
-        onDelta(event.delta.text);
+  const dog = watchProvider('Claude', maxTokens, Boolean(onDelta));
+  try {
+    // Streamend: tekst doorgeven zodra het model hem produceert, zodat de
+    // gebruiker na ~1 seconde de eerste regels ziet in plaats van na 30–60.
+    if (onDelta) {
+      let text = '';
+      const stream = client.messages.stream(params, { signal: dog.signal });
+      for await (const event of stream) {
+        if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+          dog.ping();
+          text += event.delta.text;
+          onDelta(event.delta.text);
+        }
       }
+      const trimmed = text.trim();
+      if (!trimmed) throw new Error('Claude gaf een lege respons');
+      return trimmed;
     }
-    const trimmed = text.trim();
-    if (!trimmed) throw new Error('Claude gaf een lege respons');
-    return trimmed;
+
+    const response = await client.messages.create(params, { signal: dog.signal });
+    const text = response.content
+      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+      .map((b) => b.text)
+      .join('\n')
+      .trim();
+
+    if (!text) throw new Error('Claude gaf een lege respons');
+    return text;
+  } catch (err) {
+    throw withAbortReason(dog, err);
+  } finally {
+    dog.done();
   }
-
-  const response = await client.messages.create(params);
-  const text = response.content
-    .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-    .map((b) => b.text)
-    .join('\n')
-    .trim();
-
-  if (!text) throw new Error('Claude gaf een lege respons');
-  return text;
 }
 
 async function runDeepSeek(
