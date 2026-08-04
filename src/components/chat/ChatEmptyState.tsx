@@ -11,9 +11,9 @@ const STARTERS = [
 /** Lege staat van een nieuw gesprek: uitleg + klikbare startervragen. */
 export default function ChatEmptyState({ onPick }: { onPick: (text: string) => void }) {
   return (
-    <div className="flex min-h-full flex-col items-center justify-center gap-6 px-6 py-10 text-center">
-      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">
-        <MessageSquare size={22} />
+    <div className="flex flex-col items-center gap-4 px-6 py-6 text-center">
+      <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">
+        <MessageSquare size={20} />
       </div>
       <div>
         <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">

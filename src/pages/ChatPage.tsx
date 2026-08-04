@@ -8,6 +8,7 @@ import ChatMessageList from '@/components/chat/ChatMessageList';
 import ChatModelBadge from '@/components/chat/ChatModelBadge';
 import ChatSidebar from '@/components/chat/ChatSidebar';
 import useChatController from '@/components/chat/useChatController';
+import useFitHeight from '@/components/chat/useFitHeight';
 import { consumeHandoff } from '@/services/chatService';
 import { getChatSettingsCached, type ChatSettings } from '@/services/settingsService';
 
@@ -23,6 +24,8 @@ export default function ChatPage() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
   const handoffDone = useRef(false);
+  // Hoogteplafond van de chatkaart: precies wat het venster overlaat.
+  const [cardRef, cardMaxHeight] = useFitHeight<HTMLDivElement>();
 
   useEffect(() => {
     let active = true;
@@ -80,10 +83,14 @@ export default function ChatPage() {
     : false;
 
   return (
-    <div className="mx-auto flex h-[calc(100dvh-7.75rem)] w-full max-w-6xl gap-4 px-4 py-4 sm:px-6 lg:h-[calc(100dvh-4.5rem)] lg:px-8">
+    /* Geen vaste hoogte: de chatkaart groeit mee met het gesprek tot de hoogte
+       die het venster toelaat. `items-start` houdt de zijbalk daarbij op zijn
+       eigen hoogte in plaats van meegerekt te worden. */
+    <div className="mx-auto flex w-full max-w-6xl items-start gap-4 px-4 py-4 sm:px-6 lg:px-8">
       <ChatSidebar
         entries={controller.index}
         activeId={conversation?.id ?? null}
+        maxHeight={cardMaxHeight}
         disabled={controller.streaming}
         onSelect={controller.selectConversation}
         onNew={controller.newConversation}
@@ -91,7 +98,7 @@ export default function ChatPage() {
         onRequestDeleteAll={() => setConfirmDeleteAll(true)}
       />
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col">
         {/* Mobiel: gesprekswissel + nieuw/verwijderen boven de berichtenlijst. */}
         <div className="mb-3 flex items-center gap-2 lg:hidden">
           <select
@@ -132,7 +139,14 @@ export default function ChatPage() {
           )}
         </div>
 
-        <div className="opl-card flex min-h-0 flex-1 flex-col overflow-hidden">
+        {/* Het plafond komt uit useFitHeight; de CSS-waarde is het vangnet voor
+            de eerste render. Tot dat plafond bepaalt de inhoud de hoogte —
+            daarboven scrollt alleen de berichtenlijst. */}
+        <div
+          ref={cardRef}
+          style={cardMaxHeight ? { maxHeight: cardMaxHeight } : undefined}
+          className="opl-card flex max-h-[calc(100dvh-13rem)] flex-col overflow-hidden lg:max-h-[calc(100dvh-10.5rem)]"
+        >
           <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3 dark:border-slate-700 sm:px-6">
             <MessageSquare size={18} className="text-rijksblauw-500" />
             <h1 className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
@@ -141,7 +155,7 @@ export default function ChatPage() {
           </div>
 
           {messages.length === 0 ? (
-            <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="min-h-0 flex-auto overflow-y-auto">
               <ChatEmptyState onPick={(text) => void controller.send(text)} />
             </div>
           ) : (

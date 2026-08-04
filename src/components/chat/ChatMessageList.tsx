@@ -32,10 +32,13 @@ export default function ChatMessageList({
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages.length, last?.content]);
 
+  // flex-auto (niet flex-1): de lijst houdt zijn inhoudshoogte zolang de kaart
+  // nog groeit, en krimpt pas — met interne scroll — zodra het hoogteplafond
+  // van de kaart is bereikt.
   return (
     <div
       ref={scrollRef}
-      className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-6"
+      className="min-h-0 flex-auto space-y-4 overflow-y-auto px-4 py-4 sm:px-6"
       aria-live="polite"
       aria-busy={streaming}
     >
