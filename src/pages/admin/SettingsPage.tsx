@@ -36,6 +36,7 @@ import {
   DEFAULT_CHAT_SETTINGS,
   DEFAULT_CHAT_SYSTEM_PROMPT,
   DEFAULT_SYSTEM_PROMPT,
+  MAX_CHAT_BASE_INFO_CHARS,
   type AiSettings,
   type ChatSettings,
 } from '@/services/settingsService';
@@ -139,6 +140,7 @@ export default function SettingsPage() {
             provider: chat.provider,
             model: chat.model,
             temperature: chat.temperature,
+            base_info_chars: chat.baseInfo.length,
           },
         }).catch(() => {
           /* audit is best-effort */
@@ -390,17 +392,21 @@ export default function SettingsPage() {
 
           <div>
             <label className="opl-label" htmlFor="chatSystemPrompt">
-              Systeemprompt van de chatassistent
+              Systeemprompt: huisregels voor elk antwoord
             </label>
             <textarea
               id="chatSystemPrompt"
-              className="opl-input min-h-[140px] resize-y font-mono text-[13px]"
+              className="opl-input min-h-[220px] resize-y font-mono text-[13px]"
               value={chat.systemPrompt}
               onChange={(e) => patchChat({ systemPrompt: e.target.value })}
               placeholder="Bijv. Je bent een behulpzame AI-assistent…"
             />
-            <p className="mt-1 flex items-center gap-2 text-xs text-slate-400 dark:text-slate-500">
-              <span>Bepaalt hoe de chatassistent zich gedraagt. Laat leeg om de ingebouwde default te gebruiken.</span>
+            <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400 dark:text-slate-500">
+              <span>
+                Gaat mee bij <strong>elk</strong> bericht van <strong>iedere</strong> gebruiker en
+                bepaalt taal, toon en opmaak van de antwoorden. Laat leeg om de ingebouwde
+                standaard te gebruiken.
+              </span>
               {chat.systemPrompt.trim() !== DEFAULT_CHAT_SYSTEM_PROMPT && (
                 <button
                   type="button"
@@ -410,6 +416,34 @@ export default function SettingsPage() {
                   Herstel standaard
                 </button>
               )}
+            </p>
+          </div>
+
+          <div>
+            <label className="opl-label" htmlFor="chatBaseInfo">
+              Basisinformatie voor alle gebruikers
+            </label>
+            <textarea
+              id="chatBaseInfo"
+              className="opl-input min-h-[140px] resize-y text-[13px]"
+              value={chat.baseInfo}
+              maxLength={MAX_CHAT_BASE_INFO_CHARS}
+              onChange={(e) => patchChat({ baseInfo: e.target.value })}
+              placeholder={
+                'Bijv. Deze chat is voor medewerkers van [organisatie].\n' +
+                'Verwijs voor vragen over personeelszaken naar het serviceportaal.\n' +
+                'Noem nooit namen van burgers in voorbeelden.'
+              }
+            />
+            <p className="mt-1 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400 dark:text-slate-500">
+              <span className="max-w-xl">
+                Vaste context die de assistent bij elk gesprek meekrijgt: over welke organisatie het
+                gaat, vaste afspraken, waar de chat wel en niet over gaat. Komt onder de
+                huisregels te staan, zodat die blijven gelden.
+              </span>
+              <span className="shrink-0 tabular-nums">
+                {chat.baseInfo.length}/{MAX_CHAT_BASE_INFO_CHARS}
+              </span>
             </p>
           </div>
 

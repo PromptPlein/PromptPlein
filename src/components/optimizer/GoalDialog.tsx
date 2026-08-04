@@ -801,6 +801,7 @@ export default function GoalDialog({ settings, onResult, header }: GoalDialogPro
                           })
                         }
                         onFinish={() => void compose(chosenFramework.id)}
+                        finishLabel="Bouw mijn prompt"
                       />
                     </div>
 

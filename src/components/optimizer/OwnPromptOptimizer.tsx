@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   AlertTriangle,
   Check,
@@ -53,6 +53,13 @@ interface OwnPromptOptimizerProps {
    * kaarten eronder, buiten het oranje element.
    */
   header?: ReactNode;
+  /**
+   * Optionele startwaarde voor het invoerveld: de inhoud van een bibliotheek-
+   * prompt waarmee de gebruiker via /genereren/:promptId binnenkomt. Wordt één
+   * keer toegepast per aangeleverde tekst, zodat eigen bewerkingen daarna niet
+   * worden overschreven.
+   */
+  initialPrompt?: string | null;
 }
 
 /** Voorbeeldprompts per raamwerk; uitklapbaar als hulp/inspiratie en om te testen. */
@@ -96,7 +103,12 @@ const PROMPT_EXAMPLES: { framework: string; prompt: string }[] = [
  * prompt tegen de eisen van dat raamwerk, tonen we wat nog ontbreekt als extra
  * invulvelden, en genereren we de volledig geoptimaliseerde prompt.
  */
-export default function OwnPromptOptimizer({ settings, onResult, header }: OwnPromptOptimizerProps) {
+export default function OwnPromptOptimizer({
+  settings,
+  onResult,
+  header,
+  initialPrompt,
+}: OwnPromptOptimizerProps) {
   const { techniques, techniqueById } = useReferenceData();
   const frameworks = techniques.filter(isContextPrompt);
 
@@ -156,6 +168,22 @@ export default function OwnPromptOptimizer({ settings, onResult, header }: OwnPr
     setFrameworkFits({});
     fitFetchedRef.current = false;
   }
+
+  // Komt de gebruiker binnen via /genereren/:promptId, dan zetten we die prompt
+  // in het invoerveld en laten we alles wat van een vorige prompt afhing
+  // vervallen. Eén keer per aangeleverde tekst (ref-bewaakt), zodat wat de
+  // gebruiker daarna zelf typt blijft staan.
+  const appliedInitialRef = useRef<string | null>(null);
+  useEffect(() => {
+    const text = initialPrompt?.trim();
+    if (!text || appliedInitialRef.current === text) return;
+    appliedInitialRef.current = text;
+    setOwnPrompt(text);
+    resetDownstream();
+    // resetDownstream/setOwnPrompt zijn stabiel binnen deze component; alleen de
+    // aangeleverde tekst bepaalt of dit opnieuw moet lopen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialPrompt]);
 
   /** "Opschonen": wis de geplakte prompt (ook uit localStorage) én alle voortgang. */
   function handleClearAll() {

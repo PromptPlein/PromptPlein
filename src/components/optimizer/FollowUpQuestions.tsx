@@ -65,6 +65,7 @@ export default function FollowUpQuestions({
   preferredProvider,
   preferredModel,
   onFinish,
+  finishLabel = 'Genereren en optimaliseren prompt',
 }: FollowUpQuestionsProps) {
   const questions = technique.follow_up_questions;
   const total = questions.length;
@@ -480,7 +481,7 @@ export default function FollowUpQuestions({
           {isLast ? (
             onFinish ? (
               <>
-                <Sparkles size={16} /> Genereren en optimaliseren prompt
+                <Sparkles size={16} /> {finishLabel}
               </>
             ) : (
               <>

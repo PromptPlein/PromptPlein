@@ -9,7 +9,7 @@
 import { getAnonKey, getFunctionUrl, isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { streamNdjson, type StreamHandler } from '@/lib/ndjsonStream';
 import { CHAT_PREFIX } from '@/lib/chatStorage';
-import type { ChatSettings } from '@/services/settingsService';
+import { composeChatSystemPrompt, type ChatSettings } from '@/services/settingsService';
 
 /**
  * Schuivend venster: alleen de recentste berichten gaan mee. Houdt de payload
@@ -63,7 +63,8 @@ export async function sendChatMessage(args: {
         preferredProvider: settings.provider,
         preferredModel: settings.model,
         temperature: settings.temperature,
-        systemPrompt: settings.systemPrompt,
+        // Huisregels van de beheerder + zijn basisinformatie, in één instructie.
+        systemPrompt: composeChatSystemPrompt(settings),
       },
       onChunk,
       signal,
