@@ -24,12 +24,20 @@ function prefetchChatPage() {
   void import('@/pages/ChatPage');
 }
 
+/**
+ * De nav bevat twee soorten items: plekken (Dashboard, Zoeken, …) en gereedschap.
+ * Gereedschap — Genereren maakt een prompt, Chat gebruikt hem — krijgt een gevuld
+ * icoonblokje in zijn eigen kleur, zodat de twee AI-acties uit de balk springen.
+ */
+type NavAccent = 'oranje' | 'blauw';
+
 interface NavItem {
   to: string;
   label: string;
   icon: typeof LayoutDashboard;
   end: boolean;
-  iconClassName?: string;
+  /** Markeert dit item als gereedschap en bepaalt de kleur van het icoonblokje. */
+  accent?: NavAccent;
   /** Alleen tonen voor ingelogde gebruikers (en zolang de chat aanstaat). */
   authOnly?: boolean;
   /** Lazy chunk alvast laden bij hover/aanraken. */
@@ -39,13 +47,61 @@ interface NavItem {
 const navItems: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/zoeken', label: 'Zoeken', icon: Search, end: false },
-  { to: '/genereren', label: 'Genereren', icon: Sparkles, end: false, iconClassName: 'text-rijksoranje' },
+  { to: '/genereren', label: 'Genereren', icon: Sparkles, end: false, accent: 'oranje' },
   // Chat is alleen zichtbaar voor ingelogde gebruikers (en als de admin hem aan heeft).
-  { to: '/chat', label: 'Chat', icon: MessageSquare, end: false, authOnly: true, prefetch: prefetchChatPage },
+  {
+    to: '/chat',
+    label: 'Chat',
+    icon: MessageSquare,
+    end: false,
+    accent: 'blauw',
+    authOnly: true,
+    prefetch: prefetchChatPage,
+  },
   { to: '/bibliotheek', label: 'Mijn prompts', icon: Library, end: false },
   { to: '/community', label: 'Community', icon: Users, end: false },
   { to: '/netwerk', label: 'Netwerk', icon: Network, end: false },
 ];
+
+/** Verloop + gekleurde gloed per accent. */
+const accentChip: Record<NavAccent, string> = {
+  oranje: 'from-rijksoranje to-rijksoranje-dark shadow-rijksoranje/40',
+  blauw: 'from-rijksblauw-400 to-rijksblauw-600 shadow-rijksblauw-500/40',
+};
+
+interface NavIconProps {
+  icon: typeof LayoutDashboard;
+  accent?: NavAccent;
+  isActive: boolean;
+  /** Mobiel toont het icoon boven het label en mag iets forser. */
+  variant: 'balk' | 'mobiel';
+}
+
+/**
+ * Icoon in een vaste 24px-doos, zodat blokjes en kale iconen even hoog blijven
+ * en alle nav-items dezelfde hoogte houden.
+ */
+function NavIcon({ icon: Icon, accent, isActive, variant }: NavIconProps) {
+  if (!accent) {
+    return (
+      <span className="flex h-6 w-6 items-center justify-center">
+        <Icon size={variant === 'balk' ? 16 : 18} />
+      </span>
+    );
+  }
+  return (
+    <span
+      className={clsx(
+        'flex h-6 w-6 items-center justify-center rounded-lg bg-gradient-to-br text-white transition-all duration-200',
+        accentChip[accent],
+        isActive ? 'shadow-md' : 'shadow-sm',
+        'group-hover:shadow-md motion-safe:group-hover:-translate-y-px',
+      )}
+    >
+      <Icon size={14} strokeWidth={2.25} />
+    </span>
+  );
+}
 
 export default function Header() {
   const { isAdmin, isModerator, isAuthenticated } = useAuth();
@@ -75,7 +131,7 @@ export default function Header() {
           </Link>
 
           <nav className="hidden items-center gap-1 lg:flex" aria-label="Hoofdnavigatie">
-          {items.map(({ to, label, icon: Icon, end, iconClassName, prefetch }) => (
+          {items.map(({ to, label, icon: Icon, end, accent, prefetch }) => (
             <NavLink
               key={to}
               to={to}
@@ -84,15 +140,19 @@ export default function Header() {
               onFocus={prefetch}
               className={({ isActive }) =>
                 clsx(
-                  'flex items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                  'group flex items-center gap-2 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
                   isActive
                     ? 'bg-rijksblauw-50 dark:bg-rijksblauw-500/15 text-rijksblauw-700 dark:text-rijksblauw-200'
                     : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100',
                 )
               }
             >
-              <Icon size={16} className={iconClassName} />
-              {label}
+              {({ isActive }) => (
+                <>
+                  <NavIcon icon={Icon} accent={accent} isActive={isActive} variant="balk" />
+                  {label}
+                </>
+              )}
             </NavLink>
           ))}
           </nav>
@@ -151,7 +211,7 @@ export default function Header() {
         className="flex items-center justify-around border-t border-slate-200 dark:border-slate-700 lg:hidden"
         aria-label="Mobiele navigatie"
       >
-        {items.map(({ to, label, icon: Icon, end, iconClassName, prefetch }) => (
+        {items.map(({ to, label, icon: Icon, end, accent, prefetch }) => (
           <NavLink
             key={to}
             to={to}
@@ -159,13 +219,17 @@ export default function Header() {
             onTouchStart={prefetch}
             className={({ isActive }) =>
               clsx(
-                'flex flex-1 flex-col items-center gap-0.5 py-2 text-xs font-medium',
+                'group flex flex-1 flex-col items-center gap-0.5 py-2 text-xs font-medium',
                 isActive ? 'text-rijksblauw-700 dark:text-rijksblauw-200' : 'text-slate-500 dark:text-slate-400',
               )
             }
           >
-            <Icon size={18} className={iconClassName} />
-            {label}
+            {({ isActive }) => (
+              <>
+                <NavIcon icon={Icon} accent={accent} isActive={isActive} variant="mobiel" />
+                {label}
+              </>
+            )}
           </NavLink>
         ))}
       </nav>
