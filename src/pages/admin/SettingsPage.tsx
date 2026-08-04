@@ -431,16 +431,17 @@ export default function SettingsPage() {
               maxLength={MAX_CHAT_BASE_INFO_CHARS}
               onChange={(e) => patchChat({ baseInfo: e.target.value })}
               placeholder={
-                'Bijv. Deze chat is voor medewerkers van [organisatie].\n' +
-                'Verwijs voor vragen over personeelszaken naar het serviceportaal.\n' +
-                'Noem nooit namen van burgers in voorbeelden.'
+                'Bijv. Deze chat is van [naam organisatie].\n' +
+                'De gebruikers zijn [doelgroep, bijv. beleidsmedewerkers, juristen en IT].\n' +
+                'Verwijs voor personeelszaken naar het serviceportaal.\n' +
+                'Wij werken volgens [interne werkwijze of afspraak].'
               }
             />
             <p className="mt-1 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400 dark:text-slate-500">
               <span className="max-w-xl">
-                Vaste context die de assistent bij elk gesprek meekrijgt: over welke organisatie het
-                gaat, vaste afspraken, waar de chat wel en niet over gaat. Komt onder de
-                huisregels te staan, zodat die blijven gelden.
+                Vaste context die de assistent bij elk gesprek meekrijgt: om welke organisatie het
+                gaat, wie de gebruikers zijn, vaste afspraken en waar de chat wel en niet over gaat.
+                Komt onder de huisregels te staan, zodat die blijven gelden.
               </span>
               <span className="shrink-0 tabular-nums">
                 {chat.baseInfo.length}/{MAX_CHAT_BASE_INFO_CHARS}
