@@ -626,20 +626,53 @@ export default function OwnPromptOptimizer({
       <div className={clsx(expanded ? 'space-y-5 bg-white p-5 dark:bg-slate-800 sm:p-6' : 'space-y-5')}>
         {/* 3. Aanbevolen frameworks — kies er één om toe te passen */}
       {recommendations && recommendations.length > 0 && (
-        <div className="space-y-3">
+        /* Zolang de zoekactie loopt is deze lijst een TUSSENSTAND, geen advies:
+           de voorlopige trefwoord-gok en de eerste binnengekomen aanbeveling zien
+           er anders exact zo uit als het eindresultaat. Bij een trage verbinding
+           lijkt het dan klaar terwijl de AI nog weegt — en een klik zou een keuze
+           vastleggen op een lijst die nog verandert. Daarom tijdens het zoeken:
+           een duidelijk gemarkeerd voorbeeldvlak, niet klikbaar, met wat er nog
+           komt in beeld. Pas als de analyse klaar is worden de kaarten volwaardig
+           en aanklikbaar. */
+        <div
+          className={clsx(
+            'space-y-3',
+            recommending &&
+              'rounded-2xl border border-dashed border-rijksblauw-300 bg-rijksblauw-50/40 p-4 dark:border-rijksblauw-500/40 dark:bg-rijksblauw-500/10',
+          )}
+          aria-busy={recommending}
+        >
+          {recommending && (
+            <div className="flex items-start gap-2.5">
+              <Loader2 size={16} className="mt-0.5 shrink-0 animate-spin text-rijksblauw-500" />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                  Voorbeeld — {PHASE_LABEL[searchPhase]}
+                </p>
+                <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-300">
+                  {provisional
+                    ? 'Dit is nog een eerste gok op basis van trefwoorden, geen advies. De AI weegt de frameworks nu tegen je vraagstuk.'
+                    : 'De AI vult deze lijst nog aan; de volgorde en de onderbouwing kunnen nog veranderen.'}{' '}
+                  Kiezen kan zodra de analyse klaar is.
+                </p>
+              </div>
+            </div>
+          )}
+
           {recommendSummary && (
             <div className="rounded-xl border border-l-4 border-rijksoranje/30 border-l-rijksoranje bg-rijksoranje/5 p-3.5 text-sm font-medium leading-relaxed text-slate-700 dark:border-rijksoranje/25 dark:border-l-rijksoranje dark:bg-rijksoranje/10 dark:text-slate-200">
               {stripMarkdown(recommendSummary)}
             </div>
           )}
 
-          <p className="text-sm text-slate-600 dark:text-slate-300">
-            {provisional
-              ? 'Alvast een eerste indruk op basis van trefwoorden — de AI-analyse verfijnt dit zo:'
-              : recommendations.length === 1
+          {!recommending && (
+            <p className="text-sm text-slate-600 dark:text-slate-300">
+              {recommendations.length === 1
                 ? 'Dit framework past het beste bij jouw prompt. Kies het om verder te gaan:'
                 : 'Deze frameworks passen het beste bij jouw prompt. Kies welke je wilt toepassen:'}
-          </p>
+            </p>
+          )}
+
           {recommendations.map((rec, idx) => {
             const fw = techniqueById(rec.id);
             if (!fw) return null;
@@ -650,37 +683,59 @@ export default function OwnPromptOptimizer({
                 type="button"
                 onClick={() => void handleSelectFramework(fw.id)}
                 aria-pressed={active}
+                // Tijdens het zoeken bewust onklikbaar: de lijst is nog niet af.
+                disabled={recommending}
                 className={clsx(
-                  'flex w-full flex-col rounded-xl border p-4 text-left shadow-sm transition-all duration-150',
-                  'hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:shadow-sm',
-                  'focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500/40',
-                  active
-                    ? 'border-rijksblauw-500 bg-rijksblauw-50 ring-2 ring-rijksblauw-500/20 dark:bg-rijksblauw-500/15'
-                    : 'border-slate-200 bg-white hover:border-rijksblauw-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-800',
+                  'flex w-full flex-col rounded-xl border p-4 text-left transition-all duration-150',
+                  recommending
+                    ? 'cursor-default border-dashed border-slate-300 bg-white/70 dark:border-slate-600 dark:bg-slate-800/60'
+                    : [
+                        'shadow-sm hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:shadow-sm',
+                        'focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500/40',
+                        active
+                          ? 'border-rijksblauw-500 bg-rijksblauw-50 ring-2 ring-rijksblauw-500/20 dark:bg-rijksblauw-500/15'
+                          : 'border-slate-200 bg-white hover:border-rijksblauw-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-800',
+                      ],
                 )}
               >
                 <div className="mb-1 flex items-center justify-between gap-2">
                   <span className="flex items-center gap-2 font-semibold text-rijksblauw-700 dark:text-rijksblauw-200">
-                    {idx === 0 && !provisional && <Sparkles size={15} className="text-rijksoranje" />}
+                    {idx === 0 && !recommending && (
+                      <Sparkles size={15} className="text-rijksoranje" />
+                    )}
                     {fw.name}
                     {/* "Beste match" pas claimen als het AI-oordeel binnen is; de
                         voorlopige gok is trefwoord-overlap, geen rangschikking. */}
-                    {idx === 0 && !provisional && recommendations.length > 1 && (
+                    {idx === 0 && !recommending && recommendations.length > 1 && (
                       <span className="opl-badge bg-rijksoranje/15 text-rijksoranje">
                         Beste match
                       </span>
                     )}
+                    {recommending && (
+                      <span className="opl-badge bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300">
+                        wordt nog geanalyseerd
+                      </span>
+                    )}
                   </span>
-                  {active && (
+                  {active && !recommending && (
                     <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-rijksblauw-500 text-white">
                       <Check size={14} />
                     </span>
                   )}
                 </div>
-                {rec.reason && (
+                {rec.reason ? (
                   <span className="text-sm text-slate-600 dark:text-slate-300">
                     {stripMarkdown(rec.reason)}
                   </span>
+                ) : (
+                  // Onderbouwing nog onderweg: laat zien dát er nog tekst komt,
+                  // in plaats van een kaart die af lijkt maar leeg is.
+                  recommending && (
+                    <span className="mt-1 block space-y-1.5">
+                      <span className="skeleton block h-3 w-full rounded" />
+                      <span className="skeleton block h-3 w-4/5 rounded" />
+                    </span>
+                  )
                 )}
                 {rec.value && (
                   <span className="mt-2 rounded-lg border border-rijksoranje/30 bg-rijksoranje/5 p-2.5 text-xs leading-relaxed text-slate-600 dark:border-rijksoranje/20 dark:bg-rijksoranje/10 dark:text-slate-300">
@@ -697,6 +752,21 @@ export default function OwnPromptOptimizer({
               </button>
             );
           })}
+
+          {/* Plaatshouder voor wat er nog kan komen: de AI levert 1–3 opties, dus
+              een lege plek maakt zichtbaar dat de lijst nog niet af is. */}
+          {recommending && (
+            <div className="rounded-xl border border-dashed border-slate-300 p-4 dark:border-slate-600">
+              <div className="skeleton h-3.5 w-1/4 rounded" />
+              <div className="mt-2.5 space-y-1.5">
+                <div className="skeleton h-3 w-full rounded" />
+                <div className="skeleton h-3 w-2/3 rounded" />
+              </div>
+              <p className="mt-2.5 text-xs text-slate-400 dark:text-slate-500">
+                Mogelijk komt hier nog een suggestie bij…
+              </p>
+            </div>
+          )}
         </div>
       )}
 

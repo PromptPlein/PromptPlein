@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, FlaskConical, Loader2, Play, Wand2 } from 'lucide-react';
+import { ChevronDown, FlaskConical, Loader2, Maximize2, Minimize2, Play, Wand2 } from 'lucide-react';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
@@ -15,6 +15,30 @@ import type { OptimizeResult, Technique } from '@/types';
 
 /** Snelle feedbackpunten; aanvinken vult de feedback zonder typwerk. */
 const FEEDBACK_CHIPS = ['Te lang', 'Te kort', 'Verkeerde toon', 'Mist context', 'Te algemeen'];
+
+/** localStorage-sleutel voor de zelfgekozen hoogte van het antwoordvenster. */
+const HEIGHT_KEY = 'promptTesterHeight';
+/** Grenzen van dat venster: klein genoeg voor een laptop, groot genoeg om te lezen. */
+const MIN_HEIGHT = 280;
+const MAX_HEIGHT = 1000;
+/** Stapgrootte van de knoppen "kleiner"/"groter". */
+const HEIGHT_STEP = 160;
+
+function clampHeight(px: number): number {
+  return Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, Math.round(px)));
+}
+
+/**
+ * Beginhoogte van het antwoordvenster: ruim genoeg om een echt antwoord te lezen
+ * zonder direct te scrollen, maar nooit meer dan het scherm aankan. Een eerder
+ * zelf ingestelde hoogte gaat vóór — dat is een voorkeur, geen toevalligheid.
+ */
+function initialHeight(): number {
+  if (typeof window === 'undefined') return 520;
+  const saved = Number(window.localStorage.getItem(HEIGHT_KEY));
+  if (Number.isFinite(saved) && saved >= MIN_HEIGHT) return clampHeight(saved);
+  return clampHeight(Math.min(640, Math.max(420, window.innerHeight * 0.55)));
+}
 
 interface TestRoomProps {
   /** De getoonde (actieve) versie van de gegenereerde prompt. */
@@ -34,7 +58,7 @@ interface TestRoomProps {
 }
 
 /**
- * De Testkamer: een ingebed uitvoergesprek direct onder de gegenereerde prompt.
+ * De prompt tester: een ingebed uitvoergesprek direct onder de gegenereerde prompt.
  * De prompt draait hier meteen (ephemeer — niets wordt bewaard, zie
  * useChatController met `ephemeral`), de gebruiker ziet het echte antwoord en
  * stuurt met feedback een gerichte verbetering aan — de bouw-test-verbeter-lus
@@ -51,6 +75,57 @@ export default function TestRoom({
   const { isAuthenticated, configured } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  // Het blok zelf, zodat we het na het openklappen in beeld kunnen brengen.
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Hoogte van het antwoordvenster. De gebruiker kan hem met de knoppen zetten
+  // of de onderrand slepen; beide landen hier, zodat de keuze bewaard blijft.
+  const [height, setHeight] = useState(initialHeight);
+  const answerBoxRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * Een handmatige sleep zet de hoogte rechtstreeks op het element. Zonder deze
+   * synchronisatie zou de eerstvolgende render (en die volgen elkaar snel op
+   * tijdens het streamen) de oude hoogte er weer overheen zetten en het venster
+   * terugklappen. We nemen de gesleepte hoogte daarom over als nieuwe waarde.
+   */
+  useEffect(() => {
+    const el = answerBoxRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => {
+      const measured = el.offsetHeight;
+      setHeight((prev) => (Math.abs(prev - measured) > 1 ? clampHeight(measured) : prev));
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [open]);
+
+  // De gekozen hoogte onthouden voor een volgende prompt.
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(HEIGHT_KEY, String(height));
+    } catch {
+      /* privémodus of vol quotum: de hoogte geldt dan alleen deze sessie */
+    }
+  }, [height]);
+
+  /**
+   * Openen/sluiten. Bij openen scrollen we het blok naar boven in beeld: de
+   * tester staat onder een lange prompt, dus de chat die eronder uitklapt valt
+   * anders buiten het scherm en lijkt er niets te gebeuren.
+   */
+  function toggleOpen() {
+    setOpen((wasOpen) => {
+      if (!wasOpen) {
+        // Wachten tot het paneel gerenderd is; anders scrollen we naar de
+        // hoogte van de nog ingeklapte kop.
+        requestAnimationFrame(() => {
+          panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+      }
+      return !wasOpen;
+    });
+  }
 
   const enabled = chatSettings?.enabled !== false && configured;
   const controller = useChatController(chatSettings, { ephemeral: true, kind: 'execution' });
@@ -129,7 +204,7 @@ export default function TestRoom({
   }
 
   /**
-   * Inloggen vanuit de Testkamer: bewaar het resultaat éérst als snapshot in
+   * Inloggen vanuit de prompt tester: bewaar het resultaat éérst als snapshot in
    * sessionStorage, zodat de generator het na de login-roundtrip kan herstellen
    * in plaats van leeg te openen.
    */
@@ -139,32 +214,76 @@ export default function TestRoom({
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 dark:border-slate-700">
+    /* Nadrukkelijk oranje omrand blok: de prompt tester is de logische
+       vervolgstap na het genereren, maar werd als grijze uitklapregel over het
+       hoofd gezien. Dezelfde oranje accentkleur als de generator zelf, met een
+       echte knop ernaast in plaats van alleen een chevron. */
+    <div
+      ref={panelRef}
+      className={clsx(
+        // scroll-mt houdt het blok vrij van de sticky paginakop bij het scrollen.
+        'scroll-mt-24 overflow-hidden rounded-2xl border-2 transition-colors',
+        open
+          ? 'border-rijksoranje/60 bg-white dark:bg-slate-800'
+          : 'border-rijksoranje/60 bg-rijksoranje/5 hover:bg-rijksoranje/10 dark:bg-rijksoranje/10 dark:hover:bg-rijksoranje/15',
+      )}
+    >
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggleOpen}
         aria-expanded={open}
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+        aria-controls="prompt-tester-panel"
+        className="flex w-full items-center justify-between gap-4 px-4 py-4 text-left sm:px-5"
       >
-        <span className="flex items-start gap-2.5">
-          <FlaskConical size={18} className="mt-0.5 shrink-0 text-rijksoranje" />
-          <span>
-            <span className="block text-sm font-medium text-slate-700 dark:text-slate-200">
-              Testkamer — probeer je prompt direct uit
+        <span className="flex items-start gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-rijksoranje/15 text-rijksoranje">
+            <FlaskConical size={20} />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-base font-semibold text-slate-800 dark:text-slate-100">
+              Prompt tester
             </span>
-            <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
-              De AI voert je prompt hier meteen uit. Niet tevreden? Verbeter hem met één klik.
+            <span className="mt-0.5 block text-sm text-slate-600 dark:text-slate-300">
+              Voer je prompt hier meteen uit en zie het echte antwoord. Niet tevreden? Verbeter hem
+              met één klik.
             </span>
           </span>
         </span>
+
+        {/* Ziet eruit als een knop, maar de hele kop is de klikzone — vandaar
+            span in plaats van een geneste button. */}
+        <span
+          className={clsx(
+            'hidden shrink-0 items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-semibold transition-colors sm:inline-flex',
+            open
+              ? 'text-slate-600 hover:text-rijksoranje dark:text-slate-300'
+              : 'bg-rijksoranje text-white hover:bg-rijksoranje-dark',
+          )}
+        >
+          {open ? (
+            <>
+              Verbergen <ChevronDown size={16} className="rotate-180" />
+            </>
+          ) : (
+            <>
+              <Play size={16} /> Prompt testen
+            </>
+          )}
+        </span>
         <ChevronDown
-          size={18}
-          className={clsx('shrink-0 text-slate-400 transition-transform', open && 'rotate-180')}
+          size={20}
+          className={clsx(
+            'shrink-0 text-rijksoranje transition-transform sm:hidden',
+            open && 'rotate-180',
+          )}
         />
       </button>
 
       {open && (
-        <div className="animate-fade-in border-t border-slate-200 dark:border-slate-700">
+        <div
+          id="prompt-tester-panel"
+          className="animate-fade-in border-t border-rijksoranje/30 dark:border-rijksoranje/25"
+        >
           {!enabled ? (
             <p className="px-4 py-4 text-sm text-amber-700 dark:text-amber-400">
               {!configured
@@ -183,10 +302,10 @@ export default function TestRoom({
             </div>
           ) : !chatSettings ? (
             <p className="flex items-center gap-2 px-4 py-4 text-sm text-slate-500 dark:text-slate-400">
-              <Loader2 size={16} className="animate-spin" /> Testkamer wordt geladen…
+              <Loader2 size={16} className="animate-spin" /> De prompt tester wordt geladen…
             </p>
           ) : (
-            <div className="flex max-h-[480px] flex-col">
+            <div className="flex flex-col">
               {/* Nieuwe (verbeterde) versie nog niet getest: bied de herstart aan
                   in plaats van hem stilletjes te draaien. */}
               {untestedVersion && !controller.streaming && (
@@ -205,12 +324,51 @@ export default function TestRoom({
                 </div>
               )}
 
-              <ChatMessageList
-                messages={messages}
-                streaming={controller.streaming}
-                expectedProvider={chatSettings.provider}
-                onRetry={controller.retry}
-              />
+              {/* Regelbalk voor de leeshoogte: het antwoord is de reden dat je hier
+                  bent, dus het moet groot genoeg te maken zijn. */}
+              <div className="flex items-center justify-end gap-1.5 border-b border-slate-200 px-4 py-1.5 dark:border-slate-700">
+                <span className="mr-auto hidden text-[11px] text-slate-400 dark:text-slate-500 sm:block">
+                  Sleep de onderrand van het antwoord om zelf te schalen
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setHeight((h) => clampHeight(h - HEIGHT_STEP))}
+                  disabled={height <= MIN_HEIGHT}
+                  title="Kleiner weergeven"
+                  aria-label="Antwoordvenster kleiner maken"
+                  className="rounded-md p-1.5 text-slate-500 transition-colors hover:bg-slate-100 hover:text-rijksblauw-600 disabled:opacity-40 disabled:hover:bg-transparent dark:text-slate-400 dark:hover:bg-slate-700"
+                >
+                  <Minimize2 size={15} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHeight((h) => clampHeight(h + HEIGHT_STEP))}
+                  disabled={height >= MAX_HEIGHT}
+                  title="Groter weergeven"
+                  aria-label="Antwoordvenster groter maken"
+                  className="rounded-md p-1.5 text-slate-500 transition-colors hover:bg-slate-100 hover:text-rijksblauw-600 disabled:opacity-40 disabled:hover:bg-transparent dark:text-slate-400 dark:hover:bg-slate-700"
+                >
+                  <Maximize2 size={15} />
+                </button>
+              </div>
+
+              {/* Alleen het antwoordvenster schaalt mee; de invoerbalk eronder
+                  houdt zijn eigen hoogte, zodat de sleepgreep nooit over de
+                  verstuurknop valt. */}
+              <div
+                ref={answerBoxRef}
+                className="flex resize-y flex-col overflow-hidden"
+                // min/max ook in CSS, zodat het slepen zelf binnen dezelfde
+                // grenzen blijft als de knoppen.
+                style={{ height, minHeight: MIN_HEIGHT, maxHeight: MAX_HEIGHT }}
+              >
+                <ChatMessageList
+                  messages={messages}
+                  streaming={controller.streaming}
+                  expectedProvider={chatSettings.provider}
+                  onRetry={controller.retry}
+                />
+              </div>
 
               {/* Verbeter-paneel: pas zichtbaar zodra er een echt testantwoord
                   ligt om feedback op te geven. */}

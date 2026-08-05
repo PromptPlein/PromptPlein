@@ -2,6 +2,7 @@ import { memo, useEffect, useRef } from 'react';
 import { AlertTriangle, Lightbulb, RotateCcw, Save, Wand2, X } from 'lucide-react';
 import clsx from 'clsx';
 import RichText from '@/components/optimizer/RichText';
+import CopyMessageButton from './CopyMessageButton';
 import { PROVIDER_LABELS } from '@/config/aiModels';
 import type { AiProvider } from '@/config/aiModels';
 import type { ChatMessage } from '@/types';
@@ -97,36 +98,42 @@ const ChatMessageRow = memo(function ChatMessageRow({
   onNudgeDismiss?: () => void;
 }) {
   if (message.role === 'user') {
-    const hasActions = Boolean(onImprove || onSaveAsPrompt);
     return (
       <div className="group flex flex-col items-end">
         <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-rijksblauw-50 px-4 py-2.5 text-sm text-slate-900 dark:bg-rijksblauw-500/15 dark:text-slate-100">
           {message.content}
         </div>
 
-        {/* Acties onder het eigen bericht: pas zichtbaar bij hover of
-            toetsenbordfocus, zodat het gesprek rustig blijft. */}
-        {hasActions && (
-          <div className="mt-1 flex gap-3 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
-            {onImprove && (
-              <button
-                type="button"
-                className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-400 hover:text-rijksblauw-600 dark:text-slate-500 dark:hover:text-rijksblauw-300"
-                onClick={() => onImprove(message.content)}
-                title="Maak hier in de generator een sterkere, herbruikbare prompt van"
-              >
-                <Wand2 size={12} /> Verbeter in generator
-              </button>
-            )}
-            {onSaveAsPrompt && (
-              <button
-                type="button"
-                className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-400 hover:text-rijksblauw-600 dark:text-slate-500 dark:hover:text-rijksblauw-300"
-                onClick={() => onSaveAsPrompt(message.content)}
-                title="Sla dit bericht op als prompt in de bibliotheek"
-              >
-                <Save size={12} /> Bewaar als prompt
-              </button>
+        {/* Acties onder het eigen bericht. Kopiëren staat er altijd (ook op
+            aanraakschermen, waar hover niet bestaat); de zwaardere acties
+            verschijnen pas bij hover of toetsenbordfocus, zodat het gesprek
+            rustig blijft. */}
+        {message.content.trim() && (
+          <div className="mt-1 flex items-center gap-3">
+            <CopyMessageButton text={message.content} label="" />
+            {(onImprove || onSaveAsPrompt) && (
+              <span className="flex gap-3 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+                {onImprove && (
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-400 hover:text-rijksblauw-600 dark:text-slate-500 dark:hover:text-rijksblauw-300"
+                    onClick={() => onImprove(message.content)}
+                    title="Maak hier in de generator een sterkere, herbruikbare prompt van"
+                  >
+                    <Wand2 size={12} /> Verbeter in generator
+                  </button>
+                )}
+                {onSaveAsPrompt && (
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-400 hover:text-rijksblauw-600 dark:text-slate-500 dark:hover:text-rijksblauw-300"
+                    onClick={() => onSaveAsPrompt(message.content)}
+                    title="Sla dit bericht op als prompt in de bibliotheek"
+                  >
+                    <Save size={12} /> Bewaar als prompt
+                  </button>
+                )}
+              </span>
             )}
           </div>
         )}
@@ -188,6 +195,14 @@ const ChatMessageRow = memo(function ChatMessageRow({
           />
         )}
       </div>
+
+      {/* Kopieerknop onder het antwoord: dit is de tekst waar de gebruiker voor
+          kwam, dus die moet in één klik mee naar een document of e-mail. Pas
+          zichtbaar zodra het antwoord af is — halverwege kopiëren levert een
+          afgekapte tekst op. */}
+      {!isStreaming && message.content.trim() && (
+        <CopyMessageButton text={message.content} label="Kopieer antwoord" className="-ml-1.5" />
+      )}
 
       {message.stopped && (
         <p className="text-[11px] text-slate-400 dark:text-slate-500">Gestopt door jou.</p>

@@ -1,7 +1,8 @@
-import { useEffect, useRef } from 'react';
-import { Check, Loader2, PenLine, Sparkles } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Loader2, PenLine, Sparkles, Timer } from 'lucide-react';
 import clsx from 'clsx';
 import ModelRace from './ModelRace';
+import PhaseSteps from './PhaseSteps';
 
 interface OptimizingLoaderProps {
   /** Naam van de gekozen techniek/raamwerk, voor een persoonlijke melding. */
@@ -27,6 +28,14 @@ function countWords(text: string): number {
 }
 
 /**
+ * De stappen van het bouwen. De eerste is meteen af (de aanvraag is de deur uit),
+ * de tweede loopt tot het eerste tekstfragment binnen is — dat is de fase waarin
+ * het model nadenkt en er nog niets te lezen valt — en de derde loopt zolang de
+ * prompt wordt uitgeschreven.
+ */
+const BUILD_STEPS = ['Antwoorden verstuurd', 'Modellen denken na', 'Prompt schrijven'];
+
+/**
  * Mooi laadscherm tijdens het genereren/optimaliseren van de uiteindelijke
  * prompt. Spiegelt de stijl van het voor-invul-laadscherm (geanimeerde
  * accentbalk + pulserend icoon), met de meegelezen tekst zodra die begint te
@@ -47,6 +56,15 @@ export default function OptimizingLoader({
   const streaming = Boolean(streamText?.trim());
   const streamRef = useRef<HTMLDivElement>(null);
   const words = countWords(streamText ?? '');
+
+  // Verstreken tijd sinds het laadscherm verscheen. Tijdens de denkfase komt er
+  // nog geen tekst binnen; een lopende teller is dan het enige eerlijke bewijs
+  // dat er iets gebeurt in plaats van dat het scherm hangt.
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setElapsed((s) => s + 1), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Meeschuiven met de tekst die binnenkomt, zodat de laatst geschreven regel in
   // beeld blijft zonder dat de pagina zelf verspringt.
@@ -75,8 +93,12 @@ export default function OptimizingLoader({
             <p className="text-sm text-slate-500 dark:text-slate-400">
               {streaming ? (
                 <>Je prompt wordt nu geschreven — je leest live mee</>
-              ) : phase === 'drafting' && models.length > 1 ? (
-                <>Twee modellen beginnen tegelijk aan je prompt; de snelste schrijft hem uit…</>
+              ) : models.length > 1 ? (
+                <>
+                  {phase === 'writing'
+                    ? 'Het snelste model begint te schrijven…'
+                    : 'Twee modellen lezen je antwoorden; de snelste schrijft je prompt uit…'}
+                </>
               ) : (
                 <>
                   We verwerken je antwoorden tot een rijke, direct bruikbare prompt
@@ -95,12 +117,16 @@ export default function OptimizingLoader({
           </div>
         </div>
 
+        {/* Stappenspoor: maakt de denkfase (nog geen tekst) zichtbaar als werk,
+            in plaats van als stilstand. */}
+        <PhaseSteps steps={BUILD_STEPS} activeIndex={streaming ? 2 : 1} className="mt-4" />
+
         {models.length > 0 && (
           <ModelRace models={models} winner={winner} verb="schrijft je prompt" className="mt-4" />
         )}
 
-        {/* Voortgangsregel: bij een lange prompt is de woordenteller het bewijs
-            dat er nog steeds tekst bij komt. */}
+        {/* Voortgangsregel: tijdens het schrijven telt hij de woorden mee, tijdens
+            het nadenken de seconden — er is altijd iets dat beweegt. */}
         <p
           className={clsx(
             'mt-4 flex items-center gap-1.5 text-xs font-medium',
@@ -113,12 +139,12 @@ export default function OptimizingLoader({
           {streaming ? (
             <>
               <PenLine size={12} className="text-rijksoranje" />
-              {words} {words === 1 ? 'woord' : 'woorden'} geschreven
+              {words} {words === 1 ? 'woord' : 'woorden'} geschreven · {elapsed}s
             </>
           ) : (
             <>
-              <Check size={12} className="text-emerald-500" />
-              Je antwoorden zijn verstuurd
+              <Timer size={12} className="text-rijksblauw-500" />
+              {elapsed}s bezig — het model leest je antwoorden en bepaalt de opbouw
             </>
           )}
         </p>

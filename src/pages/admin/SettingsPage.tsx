@@ -435,7 +435,7 @@ export default function SettingsPage() {
             <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400 dark:text-slate-500">
               <span>
                 Geldt alleen wanneer een <strong>gegenereerde prompt wordt uitgevoerd</strong> (de
-                Testkamer in de generator en &ldquo;Uitvoeren in chat&rdquo;). De huisregels
+                prompt tester in de generator en &ldquo;Uitvoeren in chat&rdquo;). De huisregels
                 hierboven gelden daar bewust niet: de prompt van de gebruiker bepaalt zelf taal,
                 toon en opmaak. Laat leeg om de ingebouwde standaard te gebruiken.
               </span>

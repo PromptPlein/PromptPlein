@@ -1,6 +1,6 @@
 import { Check, Loader2, Search } from 'lucide-react';
-import clsx from 'clsx';
 import ModelRace from './ModelRace';
+import PhaseSteps from './PhaseSteps';
 import type { PrefillPhase } from '@/services/optimizeService';
 import type { PrefilledField } from '@/types';
 
@@ -92,36 +92,7 @@ export default function PrefillLoader({
         </div>
 
         {/* Stappenspoor: welke fase loopt er nu. */}
-        <ol className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-          {STEPS.map((step, i) => {
-            const passed = i < stepIndex;
-            const active = i === stepIndex;
-            return (
-              <li key={step.phase} className="flex items-center gap-2">
-                <span
-                  className={clsx(
-                    'flex items-center gap-1.5 rounded-full px-2 py-0.5 font-medium transition-colors',
-                    passed
-                      ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
-                      : active
-                        ? 'bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200'
-                        : 'text-slate-400 dark:text-slate-500',
-                  )}
-                >
-                  {passed ? (
-                    <Check size={11} />
-                  ) : active ? (
-                    <Loader2 size={11} className="animate-spin" />
-                  ) : null}
-                  {step.label}
-                </span>
-                {i < STEPS.length - 1 && (
-                  <span className="h-px w-3 bg-slate-200 dark:bg-slate-700" aria-hidden />
-                )}
-              </li>
-            );
-          })}
-        </ol>
+        <PhaseSteps steps={STEPS.map((s) => s.label)} activeIndex={stepIndex} className="mt-4" />
 
         {models.length > 0 && (
           <ModelRace
