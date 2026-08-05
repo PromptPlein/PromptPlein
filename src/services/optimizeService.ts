@@ -6,7 +6,6 @@ import type { AiProvider } from '@/config/aiModels';
 import type {
   AnalyzeResult,
   ClarifyResult,
-  ExecuteResult,
   FrameworkFit,
   FrameworkFitResult,
   FrameworkRecommendResult,
@@ -259,36 +258,48 @@ export async function optimizePrompt(args: {
 export const generatePrompt = optimizePrompt;
 
 /**
- * Voert een samengestelde prompt DIRECT uit en levert het eindproduct (bijv. het
- * projectplan) i.p.v. een template. Roept de edge function in 'execute'-modus
- * aan. Zonder backend of bij een fout: honest-degrade (`{success:false, error}`).
+ * Maximale omvang van het testantwoord dat mee de refine in gaat: genoeg om te
+ * laten zien wat de template doet, zonder de aanroep onnodig groot te maken.
  */
-export async function executePrompt(args: {
-  prompt: string;
+const MAX_REFINE_TEST_ANSWER_CHARS = 6_000;
+
+/**
+ * Herschrijft een gegenereerde template op basis van een testrun in de
+ * Testkamer: het testantwoord plus de feedback van de gebruiker sturen een
+ * gerichte revisie (mode 'refine'). Anders dan `generatePrompt` behoudt dit wat
+ * werkte; er is geen lokale fallback — zonder AI-service honest-degrade.
+ */
+export async function refinePrompt(args: {
+  /** De te verbeteren prompt-template (de actieve versie). */
+  previousPrompt: string;
+  /** Het antwoord dat de testrun opleverde; wordt hier afgekapt. */
+  testAnswer: string;
+  /** De feedback van de gebruiker (vrije tekst en/of aangevinkte punten). */
+  feedback: string;
   preferredProvider?: AiProvider;
   preferredModel?: string;
   temperature?: number;
-  /**
-   * Meelezen terwijl de AI het eindproduct schrijft. Dit is het langste antwoord
-   * dat de tool maakt, dus hier scheelt meelezen de meeste gevoelde wachttijd.
-   */
+  /** Meelezen terwijl de AI de herschreven template schrijft. */
   onChunk?: StreamHandler;
-}): Promise<ExecuteResult> {
-  const { prompt, preferredProvider, preferredModel, temperature, onChunk } = args;
+}): Promise<OptimizeResult> {
+  const { previousPrompt, testAnswer, feedback, preferredProvider, preferredModel, temperature, onChunk } =
+    args;
   const functionUrl = getFunctionUrl('optimize-prompt');
 
   if (!isSupabaseConfigured || !functionUrl) {
     return {
-      output: '',
+      optimized_content: '',
       success: false,
       provider: 'local-template',
-      error: 'Geen AI-service beschikbaar om de prompt uit te voeren.',
+      error: 'Geen AI-service beschikbaar om de prompt te verbeteren.',
     };
   }
 
   const payload = {
-    mode: 'execute',
-    promptContent: prompt,
+    mode: 'refine',
+    refinePrompt: previousPrompt,
+    refineTestAnswer: testAnswer.slice(0, MAX_REFINE_TEST_ANSWER_CHARS),
+    refineFeedback: feedback,
     preferredProvider: preferredProvider ?? 'auto',
     preferredModel,
     temperature,
@@ -299,27 +310,13 @@ export async function executePrompt(args: {
 
     if (onChunk) {
       const streamed = await streamFromFunction(payload, onChunk, tidyPromptMarkup);
-      if (streamed.error) {
-        return {
-          output: '',
-          success: false,
-          provider: (streamed.provider as ExecuteResult['provider']) ?? 'claude',
-          error: streamed.error,
-        };
-      }
-      const output = tidyPromptMarkup(streamed.text).trim();
-      if (!output) {
-        return {
-          output: '',
-          success: false,
-          provider: (streamed.provider as ExecuteResult['provider']) ?? 'claude',
-          error: 'De prompt kon niet worden uitgevoerd.',
-        };
-      }
+      if (streamed.error) throw new Error(streamed.error);
+      const content = tidyPromptMarkup(streamed.text).trim();
+      if (!content) throw new Error('De AI-service gaf een lege prompt terug');
       return {
-        output,
+        optimized_content: content,
         success: true,
-        provider: (streamed.provider as ExecuteResult['provider']) ?? 'claude',
+        provider: (streamed.provider as OptimizeResult['provider']) ?? 'claude',
       };
     }
 
@@ -331,30 +328,25 @@ export async function executePrompt(args: {
       },
       body: JSON.stringify(payload),
     });
+    if (!response.ok) throw new Error(`Edge function gaf status ${response.status}`);
 
-    if (!response.ok) {
-      throw new Error(`Edge function gaf status ${response.status}`);
+    const data = (await response.json()) as Partial<OptimizeResult>;
+    if (data.success && data.optimized_content) {
+      return {
+        optimized_content: tidyPromptMarkup(data.optimized_content),
+        success: true,
+        provider: (data.provider as OptimizeResult['provider']) ?? 'claude',
+      };
     }
-
-    const data = (await response.json()) as {
-      success?: boolean;
-      output?: string;
-      provider?: ExecuteResult['provider'];
-      error?: string;
-    };
-
-    if (data.success && data.output?.trim()) {
-      return { output: data.output.trim(), success: true, provider: data.provider ?? 'claude' };
-    }
-    return {
-      output: '',
-      success: false,
-      provider: data.provider ?? 'claude',
-      error: data.error ?? 'De prompt kon niet worden uitgevoerd.',
-    };
+    throw new Error(data.error ?? 'De prompt kon niet worden verbeterd');
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Onbekende fout';
-    return { output: '', success: false, provider: 'local-template', error: `Uitvoeren mislukt (${message}).` };
+    return {
+      optimized_content: '',
+      success: false,
+      provider: 'local-template',
+      error: `Verbeteren mislukt (${message}).`,
+    };
   }
 }
 

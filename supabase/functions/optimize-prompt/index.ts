@@ -47,7 +47,8 @@ type Mode =
   | 'meta-build'
   | 'expand-field'
   | 'assumption-check'
-  | 'chat';
+  | 'chat'
+  | 'refine';
 
 /**
  * Eén beurt in een chatgesprek. De chat-modus stuurt de volledige (al
@@ -293,6 +294,20 @@ interface RequestBody {
    */
   messages?: { role?: string; content?: string }[];
   attachments?: { name?: string; text?: string }[];
+  /**
+   * 'chat': dit gesprek voert een gegenereerde prompt UIT (Testkamer of
+   * "Uitvoeren in chat"). Het antwoord volgt dan de instructies in de prompt
+   * zelf (taal, toon, opmaak) in plaats van de B1-huisregels, en krijgt het
+   * ruimere execute-tokenplafond. Oude clients sturen dit veld niet.
+   */
+  chatKind?: 'execute';
+  // 'refine'-velden: herschrijf een gegenereerde template op basis van een testrun.
+  /** De te verbeteren prompt-template. */
+  refinePrompt?: string;
+  /** Het antwoord dat de testrun opleverde (client kapt af; hier nogmaals). */
+  refineTestAnswer?: string;
+  /** De feedback van de gebruiker op dat testantwoord. */
+  refineFeedback?: string;
   /**
    * Streamend antwoord gevraagd? Alleen ondersteund door de vrije-tekstmodi
    * ('generate' en 'execute'); de JSON-modi moeten hun antwoord in één keer
@@ -1231,6 +1246,68 @@ Zorgvuldigheid
 • Neem geen persoonsgegevens van burgers over in je antwoord. Heb je een voorbeeld nodig, gebruik dan een verzonnen naam of een omschrijving zoals "de aanvrager".
 • Dit is uitsluitend voor intern gebruik binnen de overheid.`;
 
+// --- Uitvoergesprek: een gegenereerde prompt draait in de chat ---
+// Anders dan het gewone chatgesprek gelden hier NIET de B1-huisregels: de
+// prompt-template bepaalt zelf taal, toon, opmaak en lengte. Vervolgbeurten
+// gaan over het gemaakte werk (bijstellen, uitbreiden), dus multi-turn.
+// Houd deze tekst gelijk aan DEFAULT_EXECUTION_SYSTEM_PROMPT in
+// src/services/settingsService.ts; de client stuurt normaal de (door de admin
+// beheerde) versie mee en dit is het vangnet als dat veld leeg is.
+const EXECUTION_CHAT_SYSTEM_PROMPT = `Je bent een deskundige assistent voor de Nederlandse overheid.
+Je krijgt een volledig uitgewerkte prompt-instructie van de gebruiker. VOER die instructie UIT en
+lever het gevraagde eindproduct (bijv. het projectplan, de nota of de brief) direct en volledig af.
+
+Werkwijze:
+- Volg de instructies in de prompt letterlijk, ook voor taal, toon, opmaak en lengte.
+- Gebruik gangbare opmaak (koppen, vet, lijsten) waar dat het eindproduct beter maakt, tenzij de
+  prompt om iets anders vraagt.
+- Zijn er nog [plaatshouders] die niet zijn ingevuld, vul die dan in met redelijke, passende aannames
+  en markeer zulke aannames kort en herkenbaar (bijv. tussen haakjes), zodat de gebruiker ze
+  makkelijk kan aanpassen.
+- Vervolgvragen van de gebruiker gaan over het gemaakte werk: werk het eindproduct aan de hand
+  daarvan bij in plaats van opnieuw te beginnen.
+- Verzin geen bronnen, wetsartikelen of links die niet in de prompt of een bijlage staan.
+- Dit is uitsluitend voor intern overheidsgebruik.
+
+${lengthBudgetInstruction(
+  'de lengte die het gevraagde eindproduct echt nodig heeft — vraagt de prompt geen ' +
+    'omvang, houd dan 400–700 woorden aan',
+)}`;
+
+// --- Refine-modus: herschrijf een gegenereerde template op basis van een testrun ---
+// De gebruiker heeft de template in de Testkamer uitgevoerd, het testantwoord
+// gezien en feedback gegeven. Anders dan 'generate' (dat een verse template
+// synthetiseert) is dit een GERICHTE revisie: behoud wat werkte, verwerk elk
+// feedbackpunt aantoonbaar. Geen clarity-gate: de invoer is al gevalideerd.
+const REFINE_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse overheid.
+Je krijgt een bestaande PROMPT-TEMPLATE, het TESTANTWOORD dat die template opleverde en FEEDBACK
+van de gebruiker op dat testantwoord.
+
+Werkwijze:
+- HERSCHRIJF de template zo dat de feedback aantoonbaar is verwerkt. Gebruik het testantwoord als
+  bewijs van wat de huidige template doet en waar dat tekortschiet.
+- Wijzig gericht: behoud de structuur, de koppen en de [plaatshouders] die goed werkten en verander
+  de intentie van de prompt niet.
+- Los elk feedbackpunt op met een concrete instructie in de template (bijv. "te lang" → een
+  expliciete lengte-instructie; "verkeerde toon" → een duidelijke tooninstructie).
+- Voeg niets toe waar de feedback niet om vraagt.
+- Geef ALLEEN de herschreven prompt-template terug, zonder uitleg vooraf of toelichting achteraf.
+
+${lengthBudgetInstruction('ongeveer de omvang van de aangeleverde template (300–500 woorden)')}`;
+
+/** Bouwt het gebruikersbericht voor de refine-modus op. */
+function buildRefineUserMessage(prompt: string, testAnswer: string, feedback: string): string {
+  const parts = [`TE VERBETEREN PROMPT-TEMPLATE:\n"""\n${prompt}\n"""`];
+  if (testAnswer) {
+    parts.push(`TESTANTWOORD VAN DE TEMPLATE (kan ingekort zijn):\n"""\n${testAnswer}\n"""`);
+  }
+  parts.push(`FEEDBACK VAN DE GEBRUIKER:\n${feedback}`);
+  return parts.join('\n\n');
+}
+
+/** Maximale omvang van het meegestuurde testantwoord (de client kapt eerder af). */
+const MAX_REFINE_TEST_ANSWER_CHARS = 8_000;
+
 /** Maximum aantal gespreksbeurten dat aan het model wordt voorgelegd. */
 const MAX_CHAT_TURNS = 16;
 /** Maximale totale omvang van de geschiedenis; de recentste beurten winnen. */
@@ -1294,13 +1371,17 @@ function sanitizeChatAttachments(
 
 /**
  * Stelt de systeemprompt voor de chat samen: de admin-prompt (of de default)
- * plus de bijlagen als duidelijk afgebakende bronblokken.
+ * plus de bijlagen als duidelijk afgebakende bronblokken. Bij een
+ * uitvoergesprek (`isExecution`) is het vangnet de neutrale uitvoerprompt in
+ * plaats van de B1-huisregels.
  */
 function buildChatSystem(
   adminPrompt: string | undefined,
   attachments: { name: string; text: string }[],
+  isExecution = false,
 ): string {
-  const base = adminPrompt?.trim() ? adminPrompt.trim() : CHAT_SYSTEM_PROMPT;
+  const fallback = isExecution ? EXECUTION_CHAT_SYSTEM_PROMPT : CHAT_SYSTEM_PROMPT;
+  const base = adminPrompt?.trim() ? adminPrompt.trim() : fallback;
   if (attachments.length === 0) return base;
   const blocks = attachments
     .map((a, i) => `Bijlage ${i + 1} — "${a.name}":\n"""\n${a.text}\n"""`)
@@ -2550,7 +2631,11 @@ const MODE_MAX_TOKENS: Record<Mode, number> = {
   generate: 4096,
   execute: 6144,
   // Chat: een gespreksantwoord, geen document. Kort plafond = snelle beurten.
+  // Een uitvoergesprek (chatKind 'execute') krijgt in de handler het
+  // execute-plafond: daar is het antwoord juist wél een document.
   chat: 2048,
+  // Refine: een herschreven prompt-template, vergelijkbaar met generate.
+  refine: 4096,
   // Prefill vult álle velden van een raamwerk in één keer en mag detailrijk zijn.
   prefill: 8192,
   'meta-build': 4096,
@@ -4036,7 +4121,9 @@ Deno.serve(async (req: Request) => {
                                       ? 'expand-field'
                                       : body.mode === 'assumption-check'
                                         ? 'assumption-check'
-                                        : 'generate';
+                                        : body.mode === 'refine'
+                                          ? 'refine'
+                                          : 'generate';
     const order = buildOrder(body.preferredProvider);
     const temperature = clampTemp(body.temperature);
     // Uitvoerbudget van deze modus: bepaalt het max_tokens-plafond van elke
@@ -4890,8 +4977,13 @@ Deno.serve(async (req: Request) => {
         );
       }
 
+      // Uitvoergesprek: een gegenereerde prompt draait hier. Neutrale
+      // systeemprompt (de prompt bepaalt zelf de huisregels) en het ruimere
+      // execute-plafond, want het antwoord is een document, geen gespreksbeurt.
+      const isExecution = body.chatKind === 'execute';
       const attachments = sanitizeChatAttachments(body.attachments);
-      const system = buildChatSystem(body.systemPrompt, attachments);
+      const system = buildChatSystem(body.systemPrompt, attachments, isExecution);
+      const chatMaxTokens = isExecution ? MODE_MAX_TOKENS.execute : maxTokens;
       // Iets hogere temperatuur: dit is een gesprek, geen JSON.
       const chatTemp = clampTemp(body.temperature ?? 0.5);
 
@@ -4903,10 +4995,10 @@ Deno.serve(async (req: Request) => {
           userMessage: turns,
           system,
           temperature: chatTemp,
-          maxTokens,
+          maxTokens: chatMaxTokens,
           preferredProvider: body.preferredProvider,
           preferredModel: body.preferredModel,
-          label: 'chat',
+          label: isExecution ? 'chat-exec' : 'chat',
           gate: false,
         });
       }
@@ -4920,7 +5012,7 @@ Deno.serve(async (req: Request) => {
             system,
             chatTemp,
             resolveModel(candidate, body.preferredProvider, body.preferredModel),
-            maxTokens,
+            chatMaxTokens,
           );
           const trimmed = raw.trim();
           if (trimmed) {
@@ -4943,6 +5035,72 @@ Deno.serve(async (req: Request) => {
 
       return new Response(
         JSON.stringify({ success: true, output, provider }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    // --- Refine-modus: herschrijf een template op basis van testrun + feedback ---
+    if (mode === 'refine') {
+      const refineTarget = body.refinePrompt?.trim();
+      const feedback = body.refineFeedback?.trim();
+      if (!refineTarget || !feedback) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'refinePrompt en refineFeedback zijn verplicht' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+      const testAnswer = (body.refineTestAnswer ?? '').trim().slice(0, MAX_REFINE_TEST_ANSWER_CHARS);
+      const userMessage = buildRefineUserMessage(refineTarget, testAnswer, feedback);
+      const refineTemp = clampTemp(body.temperature ?? 0.5);
+
+      // Streamend: de herschreven template verschijnt al tijdens het schrijven.
+      // Geen clarity-gate: de invoer is een al gevalideerde template + feedback.
+      if (body.stream) {
+        return streamTextResponse({
+          order,
+          userMessage,
+          system: REFINE_SYSTEM_PROMPT,
+          temperature: refineTemp,
+          maxTokens,
+          preferredProvider: body.preferredProvider,
+          preferredModel: body.preferredModel,
+          label: 'refine',
+          gate: false,
+        });
+      }
+
+      let output = '';
+      let provider: Provider | 'local-template' = 'local-template';
+      for (const candidate of order) {
+        try {
+          const raw = await PROVIDERS[candidate](
+            userMessage,
+            REFINE_SYSTEM_PROMPT,
+            refineTemp,
+            resolveModel(candidate, body.preferredProvider, body.preferredModel),
+            maxTokens,
+          );
+          const trimmed = raw.trim();
+          if (trimmed) {
+            output = trimmed;
+            provider = candidate;
+            break;
+          }
+        } catch (providerErr) {
+          console.error(`${candidate} (refine) mislukt, probeer volgende:`, providerErr);
+        }
+      }
+
+      // Honest-degrade: geen backend-resultaat → duidelijke fout, geen nep-output.
+      if (!output) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'De prompt kon niet worden verbeterd' }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, optimized_content: output, provider }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }

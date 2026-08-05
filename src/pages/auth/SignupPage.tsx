@@ -1,5 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/context/AuthContext';
 import { useReferenceData } from '@/context/ReferenceDataContext';
@@ -11,6 +11,10 @@ export default function SignupPage() {
   const { signUp, configured } = useAuth();
   const { organizations, loading: orgsLoading } = useReferenceData();
   const navigate = useNavigate();
+  // Kwam de gebruiker via RequireAuth (bijv. met een chat-handoff klaar in
+  // sessionStorage)? Geef het oorspronkelijke doel dan door aan de loginpagina,
+  // zodat registreren-in-plaats-van-inloggen de round-trip niet breekt.
+  const from = (useLocation().state as { from?: string } | null)?.from;
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -44,7 +48,7 @@ export default function SignupPage() {
         organizationId,
       });
       toast.success('Account aangemaakt. Controleer je e-mail om te bevestigen.');
-      navigate('/auth/login', { replace: true });
+      navigate('/auth/login', { replace: true, state: from ? { from } : undefined });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Registreren mislukt.');
     } finally {
@@ -59,7 +63,11 @@ export default function SignupPage() {
       footer={
         <>
           Al een account?{' '}
-          <Link to="/auth/login" className="font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300">
+          <Link
+            to="/auth/login"
+            state={from ? { from } : undefined}
+            className="font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
+          >
             Inloggen
           </Link>
         </>

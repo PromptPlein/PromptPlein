@@ -604,17 +604,6 @@ export interface PromptRecipe {
   outcomes: StepOutcome[];
 }
 
-/**
- * Resultaat van het DIRECT uitvoeren van een samengestelde prompt: het door de
- * AI afgeleverde eindproduct (bijv. het projectplan zelf), i.p.v. een template.
- */
-export interface ExecuteResult {
-  output: string;
-  success: boolean;
-  provider: AiProviderResult;
-  error?: string;
-}
-
 // --- Chat: rechtstreeks gesprek met het door de admin gekozen model ---
 
 /** Eén bericht in een chatgesprek. */
@@ -652,6 +641,12 @@ export interface ChatConversation {
   updatedAt: string;
   messages: ChatMessage[];
   attachments: ChatAttachment[];
+  /**
+   * 'execution': dit gesprek voert een gegenereerde prompt uit (Testkamer of
+   * "Uitvoeren in chat"). Alle beurten draaien dan onder de neutrale
+   * uitvoer-systeemprompt i.p.v. de B1-huisregels, zonder opmaak-afvlakking.
+   */
+  kind?: 'execution';
 }
 
 /** Regel in de gesprekkenlijst (aparte kleine index-key in localStorage). */

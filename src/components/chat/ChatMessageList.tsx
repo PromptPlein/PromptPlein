@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef } from 'react';
-import { AlertTriangle, RotateCcw } from 'lucide-react';
+import { AlertTriangle, Lightbulb, RotateCcw, Save, Wand2, X } from 'lucide-react';
 import clsx from 'clsx';
 import RichText from '@/components/optimizer/RichText';
 import { PROVIDER_LABELS } from '@/config/aiModels';
@@ -15,12 +15,27 @@ export default function ChatMessageList({
   streaming,
   expectedProvider,
   onRetry,
+  onImprove,
+  onSaveAsPrompt,
+  nudgeMessageId,
+  onNudgeDismiss,
 }: {
   messages: ChatMessage[];
   streaming: boolean;
   /** De provider die volgens de instellingen zou moeten antwoorden. */
   expectedProvider: AiProvider;
   onRetry: () => void;
+  /**
+   * "Verbeter in generator" op eigen berichten (omgekeerde handoff). Niet
+   * meegegeven (bijv. in de Testkamer — je bent daar al in de generator) =
+   * geen actie zichtbaar.
+   */
+  onImprove?: (text: string) => void;
+  /** "Bewaar als prompt": sla een eigen bericht op in de bibliotheek. */
+  onSaveAsPrompt?: (text: string) => void;
+  /** Onder dit eigen bericht staat de bouw-een-prompt-tip (zie ChatPage). */
+  nudgeMessageId?: string | null;
+  onNudgeDismiss?: () => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -50,6 +65,10 @@ export default function ChatMessageList({
           expectedProvider={expectedProvider}
           onRetry={onRetry}
           canRetry={!streaming && i === messages.length - 1}
+          onImprove={onImprove}
+          onSaveAsPrompt={onSaveAsPrompt}
+          showNudge={message.id === nudgeMessageId}
+          onNudgeDismiss={onNudgeDismiss}
         />
       ))}
     </div>
@@ -62,19 +81,86 @@ const ChatMessageRow = memo(function ChatMessageRow({
   expectedProvider,
   onRetry,
   canRetry,
+  onImprove,
+  onSaveAsPrompt,
+  showNudge,
+  onNudgeDismiss,
 }: {
   message: ChatMessage;
   isStreaming: boolean;
   expectedProvider: AiProvider;
   onRetry: () => void;
   canRetry: boolean;
+  onImprove?: (text: string) => void;
+  onSaveAsPrompt?: (text: string) => void;
+  showNudge?: boolean;
+  onNudgeDismiss?: () => void;
 }) {
   if (message.role === 'user') {
+    const hasActions = Boolean(onImprove || onSaveAsPrompt);
     return (
-      <div className="flex justify-end">
+      <div className="group flex flex-col items-end">
         <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-rijksblauw-50 px-4 py-2.5 text-sm text-slate-900 dark:bg-rijksblauw-500/15 dark:text-slate-100">
           {message.content}
         </div>
+
+        {/* Acties onder het eigen bericht: pas zichtbaar bij hover of
+            toetsenbordfocus, zodat het gesprek rustig blijft. */}
+        {hasActions && (
+          <div className="mt-1 flex gap-3 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+            {onImprove && (
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-400 hover:text-rijksblauw-600 dark:text-slate-500 dark:hover:text-rijksblauw-300"
+                onClick={() => onImprove(message.content)}
+                title="Maak hier in de generator een sterkere, herbruikbare prompt van"
+              >
+                <Wand2 size={12} /> Verbeter in generator
+              </button>
+            )}
+            {onSaveAsPrompt && (
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-400 hover:text-rijksblauw-600 dark:text-slate-500 dark:hover:text-rijksblauw-300"
+                onClick={() => onSaveAsPrompt(message.content)}
+                title="Sla dit bericht op als prompt in de bibliotheek"
+              >
+                <Save size={12} /> Bewaar als prompt
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* De bouw-een-prompt-tip: dit bericht leek een opdracht zonder
+            structuur (zie looksLikeMessyPrompt). Subtiel, en definitief weg te
+            klikken. */}
+        {showNudge && onImprove && (
+          <div className="mt-1.5 flex max-w-[85%] items-center gap-2 rounded-lg border border-rijksblauw-200 bg-rijksblauw-50/60 px-3 py-2 text-xs text-slate-600 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10 dark:text-slate-300">
+            <Lightbulb size={14} className="shrink-0 text-rijksoranje" />
+            <span>
+              Tip: dit lijkt op een opdracht. In de generator bouw je er een sterkere, herbruikbare
+              prompt van.
+            </span>
+            <button
+              type="button"
+              className="shrink-0 font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
+              onClick={() => onImprove(message.content)}
+            >
+              Bouw in generator
+            </button>
+            {onNudgeDismiss && (
+              <button
+                type="button"
+                className="shrink-0 rounded p-0.5 text-slate-400 hover:bg-slate-200 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300"
+                onClick={onNudgeDismiss}
+                aria-label="Verberg deze tip voortaan"
+                title="Verberg deze tip voortaan"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
+        )}
       </div>
     );
   }

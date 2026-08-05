@@ -12,7 +12,8 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const redirectTo = (location.state as { from?: string } | null)?.from ?? '/';
+  const from = (location.state as { from?: string } | null)?.from;
+  const redirectTo = from ?? '/';
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -36,7 +37,13 @@ export default function LoginPage() {
       footer={
         <>
           Nog geen account?{' '}
-          <Link to="/auth/registreren" className="font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300">
+          {/* Geef het oorspronkelijke doel (from) door: wie eerst registreert
+              en dan terugkomt om in te loggen, landt alsnog waar hij heen wilde. */}
+          <Link
+            to="/auth/registreren"
+            state={from ? { from } : undefined}
+            className="font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
+          >
             Registreren
           </Link>
         </>

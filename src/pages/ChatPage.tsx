@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, MessageSquare, Plus, Trash2 } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { AlertTriangle, MessageSquare, Play, Plus, Trash2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import ChatComposer from '@/components/chat/ChatComposer';
@@ -9,8 +10,14 @@ import ChatModelBadge from '@/components/chat/ChatModelBadge';
 import ChatSidebar from '@/components/chat/ChatSidebar';
 import useChatController from '@/components/chat/useChatController';
 import useFitHeight from '@/components/chat/useFitHeight';
+import SavePromptModal from '@/components/prompts/SavePromptModal';
+import { looksLikeMessyPrompt } from '@/lib/promptHeuristics';
 import { consumeHandoff } from '@/services/chatService';
+import { writeGeneratorHandoff } from '@/services/handoffService';
 import { getChatSettingsCached, type ChatSettings } from '@/services/settingsService';
+
+/** Permanente afmelding voor de bouw-een-prompt-tip (per apparaat). */
+const NUDGE_DISMISSED_KEY = 'opl.ui.chatNudgeDismissed';
 
 /**
  * /chat — rechtstreeks gesprek met het door de admin gekozen model (basis:
@@ -38,19 +45,73 @@ export default function ChatPage() {
   }, []);
 
   // Handoff vanuit de generator ("Uitvoeren in chat"): prompt klaargezet in
-  // sessionStorage — overleeft ook de login-roundtrip van RequireAuth.
+  // sessionStorage — overleeft ook de login-roundtrip van RequireAuth. Een
+  // execute-handoff start een UITVOERgesprek: de prompt draait dan onder de
+  // neutrale uitvoer-systeemprompt in plaats van de B1-huisregels.
   const { sendInNewConversation } = controller;
   useEffect(() => {
     if (!user || !settings?.enabled || handoffDone.current) return;
-    const prompt = consumeHandoff();
-    if (prompt) {
+    const handoff = consumeHandoff();
+    if (handoff) {
       handoffDone.current = true;
-      sendInNewConversation(prompt);
+      sendInNewConversation(handoff.prompt, handoff.kind === 'execute' ? 'execution' : undefined);
     }
   }, [user, settings, sendInNewConversation]);
 
   const conversation = controller.conversation;
   const messages = conversation?.messages ?? [];
+
+  // --- Chat → generator: omgekeerde handoff en opslaan als prompt ---
+  const navigate = useNavigate();
+  const handleImprove = useCallback(
+    (text: string) => {
+      writeGeneratorHandoff(text);
+      navigate('/genereren');
+    },
+    [navigate],
+  );
+  // Inhoud die via "Bewaar als prompt" in de modal staat; null = dicht.
+  const [saveContent, setSaveContent] = useState<string | null>(null);
+  const handleSaveAsPrompt = useCallback((text: string) => setSaveContent(text), []);
+
+  // --- De bouw-een-prompt-tip (nudge) ---
+  // Puur lokale heuristiek, hoogstens één keer per gesprek, nooit in een
+  // uitvoergesprek, en definitief uit te zetten. Alleen onder het laatste
+  // eigen bericht — verschijnt pas als het antwoord binnen is (niet-streamend).
+  const [nudgeMessageId, setNudgeMessageId] = useState<string | null>(null);
+  const nudgedConvsRef = useRef<Set<string>>(new Set());
+  const [nudgeOptOut, setNudgeOptOut] = useState(() => {
+    try {
+      return localStorage.getItem(NUDGE_DISMISSED_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    const lastUser = conversation
+      ? [...conversation.messages].reverse().find((m) => m.role === 'user')
+      : null;
+    // Bestaande tip opruimen zodra hij niet meer onder het laatste bericht staat.
+    if (nudgeMessageId && (!lastUser || lastUser.id !== nudgeMessageId)) {
+      setNudgeMessageId(null);
+    }
+    if (nudgeOptOut || !conversation || conversation.kind === 'execution') return;
+    if (controller.streaming || !lastUser) return;
+    if (nudgedConvsRef.current.has(conversation.id)) return;
+    if (!looksLikeMessyPrompt(lastUser.content)) return;
+    nudgedConvsRef.current.add(conversation.id);
+    setNudgeMessageId(lastUser.id);
+  }, [conversation, controller.streaming, nudgeOptOut, nudgeMessageId]);
+
+  const dismissNudge = useCallback(() => {
+    setNudgeMessageId(null);
+    setNudgeOptOut(true);
+    try {
+      localStorage.setItem(NUDGE_DISMISSED_KEY, '1');
+    } catch {
+      /* opslag niet beschikbaar — dan geldt de afmelding alleen deze sessie */
+    }
+  }, []);
 
   // De provider van het laatste AI-antwoord: wijkt die af van de instelling
   // (fallback), dan laat de badge dat zien.
@@ -152,6 +213,16 @@ export default function ChatPage() {
             <h1 className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
               {conversation && messages.length > 0 ? conversation.title : 'Chat'}
             </h1>
+            {/* Uitvoergesprek: hier draait een gegenereerde prompt (neutrale
+                systeemprompt, geen B1-huisregels) — maak dat zichtbaar. */}
+            {conversation?.kind === 'execution' && (
+              <span
+                className="opl-badge inline-flex shrink-0 items-center gap-1 bg-rijksoranje/10 text-rijksoranje"
+                title="In dit gesprek wordt een gegenereerde prompt uitgevoerd; de prompt bepaalt zelf taal, toon en opmaak."
+              >
+                <Play size={11} /> Uitvoering
+              </span>
+            )}
           </div>
 
           {messages.length === 0 ? (
@@ -164,6 +235,10 @@ export default function ChatPage() {
               streaming={controller.streaming}
               expectedProvider={settings?.provider ?? 'mistral'}
               onRetry={controller.retry}
+              onImprove={handleImprove}
+              onSaveAsPrompt={handleSaveAsPrompt}
+              nudgeMessageId={nudgeMessageId}
+              onNudgeDismiss={dismissNudge}
             />
           )}
 
@@ -199,6 +274,11 @@ export default function ChatPage() {
           if (confirmDeleteId) controller.removeConversation(confirmDeleteId);
         }}
         onClose={() => setConfirmDeleteId(null)}
+      />
+      <SavePromptModal
+        open={saveContent !== null}
+        content={saveContent ?? ''}
+        onClose={() => setSaveContent(null)}
       />
       <ConfirmDialog
         open={confirmDeleteAll}

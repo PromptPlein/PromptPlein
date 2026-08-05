@@ -6,8 +6,10 @@ import EntryTab from '@/components/optimizer/EntryTab';
 import OwnPromptOptimizer from '@/components/optimizer/OwnPromptOptimizer';
 import OptimizedOutput from '@/components/optimizer/OptimizedOutput';
 import { useAuth } from '@/context/AuthContext';
+import { useReferenceData } from '@/context/ReferenceDataContext';
 import { getPrompt, saveOptimization } from '@/services/repository';
 import { trackEvent } from '@/services/analyticsService';
+import { consumeGeneratorHandoff, consumeResultSnapshot } from '@/services/handoffService';
 import { getAiSettings, DEFAULT_AI_SETTINGS, type AiSettings } from '@/services/settingsService';
 import { activityIdentifier } from '@/lib/utils';
 import { usePersistentDraft } from '@/lib/usePersistentDraft';
@@ -39,11 +41,18 @@ export default function OptimizerPage() {
   const [entryMode, setEntryMode] = useState<EntryMode>('own-prompt');
   // Admin-bepaalde AI-instellingen; gebruikers kiezen niet meer zelf.
   const settingsRef = useRef<AiSettings>(DEFAULT_AI_SETTINGS);
-  const [result, setResult] = useState<OptimizeResult | null>(null);
+  // Versiegeschiedenis van het resultaat: v1 is de gegenereerde prompt, elke
+  // verbeter-ronde uit de Testkamer voegt een versie toe. Alleen in-memory;
+  // "Opnieuw" wist de historie. Het getoonde resultaat is de actieve versie.
+  const [versions, setVersions] = useState<OptimizeResult[]>([]);
+  const [activeVersion, setActiveVersion] = useState(0);
+  const result = versions[activeVersion] ?? null;
   // De techniek waarmee het getoonde resultaat is gemaakt (komt uit de flow mee).
   const [resultTechnique, setResultTechnique] = useState<Technique | null>(null);
   // 'input' = invoerpaneel zichtbaar, 'transition' = uitfaden, 'output' = resultaat
   const [phase, setPhase] = useState<'input' | 'transition' | 'output'>('input');
+  // Voor het herstellen van een resultaat-snapshot (login vanuit de Testkamer).
+  const { techniqueById } = useReferenceData();
 
   // Laad de bronprompt als er via de URL een prompt is meegegeven.
   useEffect(() => {
@@ -74,6 +83,42 @@ export default function OptimizerPage() {
       active = false;
     };
   }, []);
+
+  // Twee sessionStorage-instromen (één keer, bij mount):
+  // 1. Resultaat-snapshot: wie vanuit de Testkamer ging inloggen, krijgt zijn
+  //    gegenereerde prompt hier terug in plaats van een lege generator.
+  // 2. Omgekeerde handoff ("Verbeter in generator" in de chat): het chatbericht
+  //    start als eigen prompt in de own-prompt-flow.
+  // Niet bij een bibliotheekroute (/genereren/:promptId): die bron wint.
+  const snapTechniqueIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (promptId) return;
+    const snap = consumeResultSnapshot();
+    if (snap) {
+      snapTechniqueIdRef.current = snap.techniqueId;
+      setVersions([snap.result]);
+      setActiveVersion(0);
+      setPhase('output');
+      return;
+    }
+    const handoffText = consumeGeneratorHandoff();
+    if (handoffText) {
+      setInitialPrompt(handoffText);
+      setEntryMode('own-prompt');
+    }
+    // Bewust alleen bij mount: latere promptId-wijzigingen zijn navigaties
+    // binnen de generator en mogen een al geconsumeerd snapshot niet herhalen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // De techniek uit het snapshot alsnog koppelen zodra de referentiedata er is
+  // (die laadt asynchroon; zonder techniek werkt het resultaat ook, alleen de
+  // standaardtitel en de categorie-suggestie missen dan context).
+  useEffect(() => {
+    if (!snapTechniqueIdRef.current || resultTechnique) return;
+    const t = techniqueById(snapTechniqueIdRef.current);
+    if (t) setResultTechnique(t);
+  }, [techniqueById, resultTechnique]);
 
   /**
    * Resultaat van de eigen-prompt-flow óf de doel-flow: toon het via dezelfde
@@ -115,14 +160,35 @@ export default function OptimizerPage() {
     setResultTechnique(usedTechnique);
     setPhase('transition');
     setTimeout(() => {
-      setResult(res);
+      setVersions([res]);
+      setActiveVersion(0);
       setPhase('output');
     }, 400);
   }
 
+  /**
+   * Een verbeter-ronde uit de Testkamer leverde een nieuwe versie op: achteraan
+   * toevoegen en meteen actief maken. `versions.length` is hier de index van de
+   * nieuwe versie — de Testkamer is single-flight, dus er lopen nooit twee
+   * verbeter-rondes tegelijk.
+   */
+  function handleRefined(res: OptimizeResult) {
+    void trackEvent({
+      event_type: 'optimization_run',
+      user_identifier: activityIdentifier(profile, user?.email),
+      prompt_id: sourcePromptId,
+      technique_id: resultTechnique?.id,
+      metadata: { provider: res.provider, flow: 'refine', version: versions.length + 1 },
+    });
+    setVersions((cur) => [...cur, res]);
+    setActiveVersion(versions.length);
+  }
+
   function handleReset() {
-    setResult(null);
+    setVersions([]);
+    setActiveVersion(0);
     setResultTechnique(null);
+    snapTechniqueIdRef.current = null;
     setPhase('input');
   }
 
@@ -147,6 +213,11 @@ export default function OptimizerPage() {
             technique={resultTechnique}
             goal={goal}
             onReset={handleReset}
+            versions={versions}
+            activeVersion={activeVersion}
+            onSelectVersion={setActiveVersion}
+            onRefined={handleRefined}
+            aiSettings={settingsRef.current}
           />
         </div>
       ) : (

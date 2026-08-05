@@ -220,6 +220,13 @@ export interface ChatSettings {
   /** Systeemprompt van de chatassistent. Leeg = ingebouwde default. */
   systemPrompt: string;
   /**
+   * Systeemprompt voor UITVOERgesprekken: een gegenereerde prompt draait in de
+   * chat (Testkamer of "Uitvoeren in chat"). Bewust los van `systemPrompt`,
+   * want hier gelden de B1-huisregels juist NIET — de prompt-template bepaalt
+   * zelf taal, toon en opmaak. Leeg = ingebouwde default.
+   */
+  executionSystemPrompt: string;
+  /**
    * Vrije basisinformatie die voor ALLE gebruikers van de chat geldt (bijv. om
    * welke organisatie het gaat, vaste afspraken, waar de assistent wel en niet
    * over gaat). Staat los van de systeemprompt zodat de huisregels hierboven
@@ -276,12 +283,42 @@ Zorgvuldigheid
 • Neem geen persoonsgegevens van burgers over in je antwoord. Heb je een voorbeeld nodig, gebruik dan een verzonnen naam of een omschrijving zoals "de aanvrager".
 • Dit is uitsluitend voor intern gebruik binnen de overheid.`;
 
+/**
+ * Ingebouwde systeemprompt voor uitvoergesprekken. Spiegel van
+ * EXECUTION_CHAT_SYSTEM_PROMPT in supabase/functions/optimize-prompt/index.ts —
+ * de server gebruikt zijn eigen exemplaar wanneer de client niets meestuurt.
+ * Bewust ZONDER de B1-huisregels en zonder de basisinformatie van de
+ * beheerder: de prompt-template bepaalt zelf taal, toon, opmaak en lengte.
+ */
+export const DEFAULT_EXECUTION_SYSTEM_PROMPT = `Je bent een deskundige assistent voor de Nederlandse overheid.
+Je krijgt een volledig uitgewerkte prompt-instructie van de gebruiker. VOER die instructie UIT en
+lever het gevraagde eindproduct (bijv. het projectplan, de nota of de brief) direct en volledig af.
+
+Werkwijze:
+- Volg de instructies in de prompt letterlijk, ook voor taal, toon, opmaak en lengte.
+- Gebruik gangbare opmaak (koppen, vet, lijsten) waar dat het eindproduct beter maakt, tenzij de
+  prompt om iets anders vraagt.
+- Zijn er nog [plaatshouders] die niet zijn ingevuld, vul die dan in met redelijke, passende aannames
+  en markeer zulke aannames kort en herkenbaar (bijv. tussen haakjes), zodat de gebruiker ze
+  makkelijk kan aanpassen.
+- Vervolgvragen van de gebruiker gaan over het gemaakte werk: werk het eindproduct aan de hand
+  daarvan bij in plaats van opnieuw te beginnen.
+- Verzin geen bronnen, wetsartikelen of links die niet in de prompt of een bijlage staan.
+- Dit is uitsluitend voor intern overheidsgebruik.
+
+LENGTE — houd het compact; hier is korter beter:
+- Richt op de lengte die het gevraagde eindproduct echt nodig heeft. Vraagt de prompt geen
+  omvang, houd dan 400–700 woorden aan. Ga daar alleen overheen wanneer de gebruiker zoveel
+  concrete details heeft aangeleverd dat die er anders uit zouden vallen.
+- Geen inleiding vooraf, geen samenvatting achteraf en geen uitleg over wat je hebt gedaan.`;
+
 export const DEFAULT_CHAT_SETTINGS: ChatSettings = {
   enabled: true,
   // Mistral is de afgesproken basis voor de chat (Europees, snel en goedkoop).
   provider: 'mistral',
   model: 'mistral-small-latest',
   systemPrompt: DEFAULT_CHAT_SYSTEM_PROMPT,
+  executionSystemPrompt: DEFAULT_EXECUTION_SYSTEM_PROMPT,
   baseInfo: '',
   temperature: 0.5,
 };
@@ -295,6 +332,15 @@ export function composeChatSystemPrompt(settings: ChatSettings): string {
   const info = settings.baseInfo.trim();
   if (!info) return rules;
   return `${rules}\n\nBasisinformatie over de organisatie en de doelgroep. Laat je antwoorden hierop aansluiten:\n${info}`;
+}
+
+/**
+ * Systeeminstructie voor een UITVOERgesprek. Bewust zonder de basisinformatie
+ * van de beheerder: die zou het testresultaat kleuren, terwijl de uitvoering
+ * juist trouw moet laten zien wat de prompt zelf doet.
+ */
+export function composeExecutionSystemPrompt(settings: ChatSettings): string {
+  return settings.executionSystemPrompt.trim() || DEFAULT_EXECUTION_SYSTEM_PROMPT;
 }
 
 const CHAT_SETTINGS_KEY = 'chat_settings';
@@ -312,6 +358,10 @@ function normalizeChat(raw: Partial<ChatSettings> | null | undefined): ChatSetti
     provider,
     model,
     systemPrompt: typeof raw.systemPrompt === 'string' ? raw.systemPrompt : d.systemPrompt,
+    executionSystemPrompt:
+      typeof raw.executionSystemPrompt === 'string'
+        ? raw.executionSystemPrompt
+        : d.executionSystemPrompt,
     baseInfo:
       typeof raw.baseInfo === 'string' ? raw.baseInfo.slice(0, MAX_CHAT_BASE_INFO_CHARS) : d.baseInfo,
     temperature: Math.min(1, Math.max(0, temp)),

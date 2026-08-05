@@ -75,6 +75,10 @@ export function loadConversation(userId: string, conversationId: string): ChatCo
       updatedAt: typeof parsed.updatedAt === 'string' ? parsed.updatedAt : new Date().toISOString(),
       messages: parsed.messages,
       attachments: Array.isArray(parsed.attachments) ? parsed.attachments : [],
+      // Niet vergeten bij nieuwe velden: deze reconstructie laat onbekende
+      // velden stilletjes vallen. Zonder deze regel zou een herladen
+      // uitvoergesprek terugvallen op de B1-huisregels.
+      ...(parsed.kind === 'execution' ? { kind: parsed.kind } : {}),
     };
   } catch {
     return null;
@@ -177,15 +181,27 @@ export function wipeAllChatStorage(): void {
   }
   try {
     sessionStorage.removeItem(`${CHAT_PREFIX}handoff`);
+    // Ook de omgekeerde handoff (chat → generator) en het resultaat-snapshot
+    // van de Testkamer-login: op een gedeelde werkplek blijft niets achter.
+    sessionStorage.removeItem(`${CHAT_PREFIX}generator-handoff`);
+    sessionStorage.removeItem('opl.gen.result');
   } catch {
     /* negeren */
   }
 }
 
 /** Start een nieuw, leeg gesprek (nog niet opgeslagen tot het eerste bericht). */
-export function createConversation(): ChatConversation {
+export function createConversation(kind?: ChatConversation['kind']): ChatConversation {
   const now = new Date().toISOString();
-  return { id: uuid(), title: 'Nieuw gesprek', createdAt: now, updatedAt: now, messages: [], attachments: [] };
+  return {
+    id: uuid(),
+    title: 'Nieuw gesprek',
+    createdAt: now,
+    updatedAt: now,
+    messages: [],
+    attachments: [],
+    ...(kind ? { kind } : {}),
+  };
 }
 
 /** Leid de gesprekstitel af uit het eerste bericht (max ~48 tekens). */

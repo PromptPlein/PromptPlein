@@ -10,7 +10,11 @@ import { getAnonKey, getFunctionUrl, isSupabaseConfigured, supabase } from '@/li
 import { streamNdjson, type StreamHandler } from '@/lib/ndjsonStream';
 import { CHAT_PREFIX } from '@/lib/chatStorage';
 import { tidyChatReply } from '@/lib/utils';
-import { composeChatSystemPrompt, type ChatSettings } from '@/services/settingsService';
+import {
+  composeChatSystemPrompt,
+  composeExecutionSystemPrompt,
+  type ChatSettings,
+} from '@/services/settingsService';
 
 /**
  * Schuivend venster: alleen de recentste berichten gaan mee. Houdt de payload
@@ -35,8 +39,16 @@ export async function sendChatMessage(args: {
   settings: ChatSettings;
   onChunk: StreamHandler;
   signal?: AbortSignal;
+  /**
+   * 'execution': dit gesprek voert een gegenereerde prompt uit. Het draait dan
+   * onder de neutrale uitvoer-systeemprompt (de prompt-template bepaalt zelf
+   * taal, toon en opmaak), met het ruimere token-plafond server-side, en de
+   * B1-huisregels worden NIET op het antwoord afgedwongen (geen tidyChatReply).
+   */
+  kind?: 'execution';
 }): Promise<ChatSendResult> {
-  const { messages, attachments, settings, onChunk, signal } = args;
+  const { messages, attachments, settings, onChunk, signal, kind } = args;
+  const isExecution = kind === 'execution';
 
   const functionUrl = getFunctionUrl('optimize-prompt');
   if (!isSupabaseConfigured || !supabase || !functionUrl) {
@@ -50,6 +62,10 @@ export async function sendChatMessage(args: {
   }
 
   const anonKey = getAnonKey();
+  // Uitvoergesprek: de prompt-template bepaalt zelf de huisregels, dus geen
+  // B1-opschoning van het antwoord — anders zou de test misleiden over wat de
+  // prompt echt doet (vet en opmaak zouden eruit worden gestript).
+  const tidy = isExecution ? (text: string) => text : tidyChatReply;
   try {
     const outcome = await streamNdjson({
       url: functionUrl,
@@ -59,28 +75,32 @@ export async function sendChatMessage(args: {
       },
       body: {
         mode: 'chat',
+        ...(isExecution ? { chatKind: 'execute' } : {}),
         messages: messages.slice(-CHAT_WINDOW_MESSAGES),
         attachments,
         preferredProvider: settings.provider,
         preferredModel: settings.model,
         temperature: settings.temperature,
-        // Huisregels van de beheerder + zijn basisinformatie, in één instructie.
-        systemPrompt: composeChatSystemPrompt(settings),
+        // Huisregels van de beheerder + zijn basisinformatie, in één instructie;
+        // bij een uitvoergesprek juist de neutrale uitvoerinstructie.
+        systemPrompt: isExecution
+          ? composeExecutionSystemPrompt(settings)
+          : composeChatSystemPrompt(settings),
       },
       onChunk,
       // Huisregels ook afdwingen op wat het model teruggeeft (zie tidyChatReply);
       // tijdens het streamen én op de eindtekst, zodat beide gelijk zijn.
-      tidy: tidyChatReply,
+      tidy,
       signal,
     });
 
     if (outcome.aborted) {
-      return { text: tidyChatReply(outcome.text), provider: outcome.provider, aborted: true };
+      return { text: tidy(outcome.text), provider: outcome.provider, aborted: true };
     }
     if (outcome.error) {
-      return { text: tidyChatReply(outcome.text), provider: outcome.provider, error: outcome.error };
+      return { text: tidy(outcome.text), provider: outcome.provider, error: outcome.error };
     }
-    const text = tidyChatReply(outcome.text).trim();
+    const text = tidy(outcome.text).trim();
     if (!text) {
       return { text: '', provider: outcome.provider, error: 'De AI-service gaf een leeg antwoord.' };
     }
@@ -98,27 +118,36 @@ export async function sendChatMessage(args: {
 const HANDOFF_KEY = `${CHAT_PREFIX}handoff`;
 const HANDOFF_TTL_MS = 15 * 60 * 1000;
 
+/** De klaargezette prompt plus hoe de chat ermee om moet gaan. */
+export interface ChatHandoff {
+  prompt: string;
+  /** 'execute' = draai als uitvoergesprek (neutrale systeemprompt, ruim plafond). */
+  kind: 'chat' | 'execute';
+}
+
 /** Zet een gegenereerde prompt klaar om in de chat uit te voeren. */
-export function writeHandoff(prompt: string): void {
+export function writeHandoff(prompt: string, kind: ChatHandoff['kind'] = 'execute'): void {
   try {
-    sessionStorage.setItem(HANDOFF_KEY, JSON.stringify({ prompt, createdAt: Date.now() }));
+    sessionStorage.setItem(HANDOFF_KEY, JSON.stringify({ prompt, kind, createdAt: Date.now() }));
   } catch {
     /* sessieopslag niet beschikbaar — de chat opent dan gewoon leeg */
   }
 }
 
 /** Lees en verwijder de klaargezette prompt; verlopen of ongeldig -> null. */
-export function consumeHandoff(): string | null {
+export function consumeHandoff(): ChatHandoff | null {
   try {
     const raw = sessionStorage.getItem(HANDOFF_KEY);
     if (!raw) return null;
     sessionStorage.removeItem(HANDOFF_KEY);
-    const parsed = JSON.parse(raw) as { prompt?: unknown; createdAt?: unknown };
+    const parsed = JSON.parse(raw) as { prompt?: unknown; kind?: unknown; createdAt?: unknown };
     if (typeof parsed.prompt !== 'string' || !parsed.prompt.trim()) return null;
     if (typeof parsed.createdAt !== 'number' || Date.now() - parsed.createdAt > HANDOFF_TTL_MS) {
       return null;
     }
-    return parsed.prompt;
+    // Een payload zonder kind is door een oudere versie geschreven; de enige
+    // schrijver was toen "Uitvoeren in chat", dus uitvoeren is dan correct.
+    return { prompt: parsed.prompt, kind: parsed.kind === 'chat' ? 'chat' : 'execute' };
   } catch {
     return null;
   }

@@ -31,6 +31,17 @@ export const MAX_CHAT_ATTACHMENTS = 3;
 /** Maximale tekstomvang per bijlage (zelfde grens als server-side). */
 export const MAX_CHAT_ATTACHMENT_CHARS = 50_000;
 
+export interface ChatControllerOptions {
+  /**
+   * Niet in localStorage/index bewaren; het gesprek leeft alleen in-memory.
+   * Voor de Testkamer in de generator: testruns zijn wegwerp en zouden anders
+   * de 30-gesprekken-cap en de opslagquota van echte gesprekken opeten.
+   */
+  ephemeral?: boolean;
+  /** Alle gesprekken van deze controller draaien als prompt-uitvoering. */
+  kind?: ChatConversation['kind'];
+}
+
 export interface ChatController {
   conversation: ChatConversation | null;
   index: ChatIndexEntry[];
@@ -38,7 +49,7 @@ export interface ChatController {
   extracting: boolean;
   send: (text: string) => Promise<void>;
   /** Start een vers gesprek en verstuur `text` daarin (generator-handoff). */
-  sendInNewConversation: (text: string) => void;
+  sendInNewConversation: (text: string, kind?: ChatConversation['kind']) => void;
   stop: () => void;
   /** Probeer het laatste, mislukte antwoord opnieuw. */
   retry: () => void;
@@ -50,9 +61,17 @@ export interface ChatController {
   removeAttachment: (id: string) => void;
 }
 
-export default function useChatController(settings: ChatSettings | null): ChatController {
+export default function useChatController(
+  settings: ChatSettings | null,
+  options?: ChatControllerOptions,
+): ChatController {
   const { user } = useAuth();
   const userId = user?.id ?? null;
+  // Primitieven i.p.v. het options-object in de dependencies: de aanroeper
+  // geeft doorgaans een inline object mee en dat zou elke render alle
+  // callbacks verversen.
+  const ephemeral = options?.ephemeral ?? false;
+  const defaultKind = options?.kind;
 
   const [conversation, setConversation] = useState<ChatConversation | null>(null);
   const [index, setIndex] = useState<ChatIndexEntry[]>([]);
@@ -72,13 +91,13 @@ export default function useChatController(settings: ChatSettings | null): ChatCo
   }, []);
 
   const refreshIndex = useCallback(() => {
-    setIndex(userId ? loadChatIndex(userId) : []);
-  }, [userId]);
+    setIndex(userId && !ephemeral ? loadChatIndex(userId) : []);
+  }, [userId, ephemeral]);
 
   /** Direct (niet-debounced) opslaan; waarschuwt eenmalig bij een volle opslag. */
   const persistNow = useCallback(
     (conv: ChatConversation) => {
-      if (!userId || conv.messages.length === 0) return;
+      if (ephemeral || !userId || conv.messages.length === 0) return;
       const ok = saveConversation(userId, conv);
       if (!ok && !quotaWarnedRef.current) {
         quotaWarnedRef.current = true;
@@ -88,12 +107,13 @@ export default function useChatController(settings: ChatSettings | null): ChatCo
       }
       refreshIndex();
     },
-    [userId, refreshIndex],
+    [ephemeral, userId, refreshIndex],
   );
 
   // Init per account: recentste gesprek hervatten, anders een vers gesprek.
   // Valt de gebruiker weg (uitloggen), breek dan de lopende stream af en wis
   // de in-memory state — de opslag zelf is al gewist door wipeAllChatStorage.
+  // Ephemeer (Testkamer): niets laden of hervatten, altijd een vers gesprek.
   useEffect(() => {
     if (!userId) {
       abortRef.current?.abort();
@@ -101,11 +121,16 @@ export default function useChatController(settings: ChatSettings | null): ChatCo
       setIndex([]);
       return;
     }
+    if (ephemeral) {
+      setIndex([]);
+      update(createConversation(defaultKind));
+      return;
+    }
     const entries = loadChatIndex(userId);
     setIndex(entries);
     const recent = entries[0] ? loadConversation(userId, entries[0].id) : null;
     update(recent ?? createConversation());
-  }, [userId, update]);
+  }, [userId, ephemeral, defaultKind, update]);
 
   // Multi-tab: bij terugkeer naar dit tabblad de gesprekkenlijst herlezen.
   useEffect(() => {
@@ -140,7 +165,7 @@ export default function useChatController(settings: ChatSettings | null): ChatCo
       const text = rawText.trim();
       if (!text || streamingRef.current || !settings || !userId) return;
 
-      const base = conversationRef.current ?? createConversation();
+      const base = conversationRef.current ?? createConversation(defaultKind);
       const now = new Date().toISOString();
       const userMsg: ChatMessage = { id: uuid(), role: 'user', content: text, createdAt: now };
       const assistantMsg: ChatMessage = { id: uuid(), role: 'assistant', content: '', createdAt: now };
@@ -191,6 +216,9 @@ export default function useChatController(settings: ChatSettings | null): ChatCo
         messages: history,
         attachments: updated.attachments.map((a) => ({ name: a.name, text: a.text })),
         settings,
+        // Het gesprek zelf bepaalt de modus: een uitvoergesprek blijft dat ook
+        // voor vervolgbeurten, óók na een refresh (kind overleeft de opslag).
+        kind: updated.kind,
         onChunk: (textSoFar) => {
           pendingText = textSoFar;
           if (!rafId) rafId = requestAnimationFrame(flushPending);
@@ -220,16 +248,16 @@ export default function useChatController(settings: ChatSettings | null): ChatCo
       streamingRef.current = false;
       setStreaming(false);
     },
-    [settings, userId, update, persistNow, modelForProvider],
+    [settings, userId, defaultKind, update, persistNow, modelForProvider],
   );
 
   const sendInNewConversation = useCallback(
-    (text: string) => {
+    (text: string, kind?: ChatConversation['kind']) => {
       if (streamingRef.current) return;
-      update(createConversation());
+      update(createConversation(kind ?? defaultKind));
       void send(text);
     },
-    [send, update],
+    [send, update, defaultKind],
   );
 
   const stop = useCallback(() => {

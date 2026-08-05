@@ -49,6 +49,7 @@ export default function ChatComposer({
   onAddFile,
   onRemoveAttachment,
   badge,
+  allowAttachments = true,
 }: {
   /** Volledig uitgeschakeld (bijv. chat uitgezet of geen AI-service). */
   disabled: boolean;
@@ -61,6 +62,8 @@ export default function ChatComposer({
   onRemoveAttachment: (id: string) => void;
   /** De modelbadge, rechtsonder in de chat weergegeven. */
   badge?: ReactNode;
+  /** Bijlagen toestaan? De Testkamer zet dit uit: daar test je de prompt zelf. */
+  allowAttachments?: boolean;
 }) {
   const [text, setText] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -141,7 +144,7 @@ export default function ChatComposer({
 
   return (
     <div className="border-t border-slate-200 px-4 pb-3 pt-3 dark:border-slate-700 sm:px-6">
-      {attachments.length > 0 && (
+      {allowAttachments && attachments.length > 0 && (
         <div className="mb-2 flex flex-wrap gap-2">
           {attachments.map((a, i) => (
             <span
@@ -179,31 +182,37 @@ export default function ChatComposer({
           op telefoon en tablet is de ruimte om te typen belangrijker dan een
           rij naast elkaar. Vanaf lg staat alles weer op één regel. */}
       <div className="flex flex-wrap items-end gap-2">
-        <button
-          type="button"
-          className="opl-btn-ghost order-2 shrink-0 !px-2.5 lg:order-none"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={disabled || streaming || extracting || attachments.length >= MAX_CHAT_ATTACHMENTS}
-          title={
-            attachments.length >= MAX_CHAT_ATTACHMENTS
-              ? `Maximaal ${MAX_CHAT_ATTACHMENTS} bijlagen per gesprek`
-              : 'Document toevoegen (PDF, Word, tekst — max. 10 MB)'
-          }
-          aria-label="Document toevoegen"
-        >
-          {extracting ? <Loader2 size={18} className="animate-spin" /> : <Paperclip size={18} />}
-        </button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept={ACCEPTED_DOC_ACCEPT}
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) onAddFile(file);
-            e.target.value = '';
-          }}
-        />
+        {allowAttachments && (
+          <>
+            <button
+              type="button"
+              className="opl-btn-ghost order-2 shrink-0 !px-2.5 lg:order-none"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={
+                disabled || streaming || extracting || attachments.length >= MAX_CHAT_ATTACHMENTS
+              }
+              title={
+                attachments.length >= MAX_CHAT_ATTACHMENTS
+                  ? `Maximaal ${MAX_CHAT_ATTACHMENTS} bijlagen per gesprek`
+                  : 'Document toevoegen (PDF, Word, tekst — max. 10 MB)'
+              }
+              aria-label="Document toevoegen"
+            >
+              {extracting ? <Loader2 size={18} className="animate-spin" /> : <Paperclip size={18} />}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={ACCEPTED_DOC_ACCEPT}
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) onAddFile(file);
+                e.target.value = '';
+              }}
+            />
+          </>
+        )}
 
         <div className="relative order-1 w-full lg:order-none lg:w-auto lg:flex-1">
           <textarea
@@ -271,9 +280,14 @@ export default function ChatComposer({
 
       <div className="mt-1.5 flex items-center justify-between gap-2">
         <p className="min-w-0 text-[11px] text-slate-400 dark:text-slate-500">
-          <span className="hidden sm:inline">Enter = verzenden · Shift+Enter = nieuwe regel · </span>
-          max. {MAX_CHAT_ATTACHMENTS} bijlagen, 10&nbsp;MB
-          <span className="hidden sm:inline"> per stuk</span>
+          <span className="hidden sm:inline">Enter = verzenden · Shift+Enter = nieuwe regel</span>
+          {allowAttachments && (
+            <>
+              <span className="hidden sm:inline"> · </span>
+              max. {MAX_CHAT_ATTACHMENTS} bijlagen, 10&nbsp;MB
+              <span className="hidden sm:inline"> per stuk</span>
+            </>
+          )}
         </p>
         <span className="shrink-0">{badge}</span>
       </div>

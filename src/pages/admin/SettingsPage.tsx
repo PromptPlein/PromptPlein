@@ -35,6 +35,7 @@ import {
   DEFAULT_AI_SETTINGS,
   DEFAULT_CHAT_SETTINGS,
   DEFAULT_CHAT_SYSTEM_PROMPT,
+  DEFAULT_EXECUTION_SYSTEM_PROMPT,
   DEFAULT_SYSTEM_PROMPT,
   MAX_CHAT_BASE_INFO_CHARS,
   type AiSettings,
@@ -413,6 +414,36 @@ export default function SettingsPage() {
                   type="button"
                   className="shrink-0 font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
                   onClick={() => patchChat({ systemPrompt: DEFAULT_CHAT_SYSTEM_PROMPT })}
+                >
+                  Herstel standaard
+                </button>
+              )}
+            </p>
+          </div>
+
+          <div>
+            <label className="opl-label" htmlFor="chatExecutionPrompt">
+              Systeemprompt bij het uitvoeren van een prompt
+            </label>
+            <textarea
+              id="chatExecutionPrompt"
+              className="opl-input min-h-[160px] resize-y font-mono text-[13px]"
+              value={chat.executionSystemPrompt}
+              onChange={(e) => patchChat({ executionSystemPrompt: e.target.value })}
+              placeholder="Bijv. Voer de prompt-instructie van de gebruiker letterlijk uit…"
+            />
+            <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400 dark:text-slate-500">
+              <span>
+                Geldt alleen wanneer een <strong>gegenereerde prompt wordt uitgevoerd</strong> (de
+                Testkamer in de generator en &ldquo;Uitvoeren in chat&rdquo;). De huisregels
+                hierboven gelden daar bewust niet: de prompt van de gebruiker bepaalt zelf taal,
+                toon en opmaak. Laat leeg om de ingebouwde standaard te gebruiken.
+              </span>
+              {chat.executionSystemPrompt.trim() !== DEFAULT_EXECUTION_SYSTEM_PROMPT && (
+                <button
+                  type="button"
+                  className="shrink-0 font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
+                  onClick={() => patchChat({ executionSystemPrompt: DEFAULT_EXECUTION_SYSTEM_PROMPT })}
                 >
                   Herstel standaard
                 </button>
