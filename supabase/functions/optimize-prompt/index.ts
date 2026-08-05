@@ -3091,6 +3091,13 @@ function clarityGateState(buffer: string): 'unclear' | 'clear' | 'pending' {
  *
  * De fallback-keten blijft werken zolang er nog niets naar de client is gestuurd;
  * daarna kan er niet meer teruggespoeld worden en volgt een eerlijke foutmelding.
+ *
+ * Optioneel racen twee providers om de eerste regel (`racers`, gebruikt door de
+ * generatiemodus). Dan komen er twee extra events bij, zodat de client kan tonen
+ * wát er gebeurt in plaats van alleen een spinner:
+ *
+ *   {"type":"models","providers":["claude","openai"]}   wie er meedoen
+ *   {"type":"phase","phase":"drafting"|"writing"}       waar we zijn
  */
 function streamTextResponse(args: {
   order: Provider[];
@@ -3104,6 +3111,12 @@ function streamTextResponse(args: {
   label: string;
   /** Clarity-gate toepassen? Aan voor 'generate', uit voor 'execute'. */
   gate: boolean;
+  /**
+   * Twee (of meer) providers die gelijktijdig aan het antwoord beginnen; de
+   * eerste met bruikbare tekst wint en schrijft de hele uitvoer. Leeg/afwezig =
+   * de klassieke seriële keten over `order`.
+   */
+  racers?: Provider[];
 }): Response {
   const {
     order,
@@ -3116,6 +3129,10 @@ function streamTextResponse(args: {
     label,
     gate,
   } = args;
+  const racers = args.racers ?? [];
+  const racing = racers.length > 1;
+  // Na een race is de seriële keten alleen nog vangnet voor wie niet meedeed.
+  const serialOrder = racing ? order.filter((p) => !racers.includes(p)) : order;
 
   const encoder = new TextEncoder();
 
@@ -3148,7 +3165,105 @@ function streamTextResponse(args: {
       let emitted = false;
       let lastError = '';
 
-      for (const candidate of order) {
+      // --- Racefase: twee modellen beginnen tegelijk, de snelste schrijft ---
+      if (racing) {
+        send({ type: 'models', providers: racers });
+        send({ type: 'phase', phase: 'drafting' });
+
+        // Wie de race won; alleen zijn fragmenten gaan naar de client.
+        let winner: Provider | null = null;
+        let unclearSeen: { reason: string; provider: Provider } | null = null;
+
+        const attempt = async (
+          candidate: Provider,
+        ): Promise<{ provider: Provider; raw: string } | null> => {
+          // Kop die we vasthouden tot de clarity-gate uitsluitsel geeft; daarna
+          // buffer voor wat er binnenkomt terwijl de race nog niet geclaimd is.
+          let held = '';
+          let state: 'unclear' | 'clear' | 'pending' = gate ? 'pending' : 'clear';
+
+          try {
+            const raw = await PROVIDERS[candidate](
+              userMessage,
+              system,
+              temperature,
+              resolveModel(candidate, preferredProvider, preferredModel),
+              maxTokens,
+              (chunk) => {
+                if (winner && winner !== candidate) return;
+                if (state === 'unclear') return;
+                held += chunk;
+                if (state === 'pending') {
+                  state = clarityGateState(held);
+                  // Nog niet zeker of dit een ONDUIDELIJKE_INVOER-melding wordt:
+                  // vasthouden. Wél onduidelijk: niets doorsturen, deze provider
+                  // doet niet meer mee aan de race.
+                  if (state !== 'clear') return;
+                }
+                // Eerste bruikbare tekst claimt de race. Vanaf hier is dit het
+                // model dat de gebruiker leest; de ander wordt genegeerd.
+                if (!winner) {
+                  winner = candidate;
+                  send({ type: 'meta', provider: candidate });
+                  send({ type: 'phase', phase: 'writing' });
+                }
+                if (winner !== candidate) return;
+                send({ type: 'delta', text: held });
+                emitted = true;
+                held = '';
+              },
+            );
+
+            // Definitieve toets op de volledige tekst — dezelfde als in de
+            // seriële route, zodat beide paden identiek beslissen.
+            const unclear = gate ? detectUnclear(raw) : null;
+            if (unclear) {
+              if (!unclearSeen) unclearSeen = { reason: unclear, provider: candidate };
+              return null;
+            }
+            // Restant dat de gate nog vasthield alsnog doorsturen.
+            if (winner === candidate && held) {
+              send({ type: 'delta', text: held });
+              emitted = true;
+            }
+            return { provider: candidate, raw };
+          } catch (providerErr) {
+            lastError = providerErr instanceof Error ? providerErr.message : 'Onbekende fout';
+            console.error(`${candidate} (${label}, race) mislukt:`, providerErr);
+            return null;
+          }
+        };
+
+        // Alleen de winnaar telt: de verliezer kan eerder klaar zijn, maar zijn
+        // tekst is nooit verstuurd — die alsnog als eindresultaat sturen zou de
+        // meegelezen tekst onder de gebruiker vandaan wisselen.
+        const usable = (r: { provider: Provider; raw: string }) =>
+          r.raw.trim().length > 0 && (winner === null || winner === r.provider);
+
+        const won = await firstUsable(racers.map(attempt), usable);
+        if (won) {
+          send({ type: 'done', text: won.raw, provider: won.provider });
+          close();
+          return;
+        }
+        if (unclearSeen) {
+          const verdict = unclearSeen as { reason: string; provider: Provider };
+          send({ type: 'unclear', reason: verdict.reason, provider: verdict.provider });
+          close();
+          return;
+        }
+        // Er stond al tekst op het scherm en toch geen bruikbaar eindresultaat:
+        // terugspoelen kan niet meer, dus eerlijk melden.
+        if (emitted) {
+          send({ type: 'error', error: lastError || 'De AI-service brak de tekst af' });
+          close();
+          return;
+        }
+        // Anders: niets verstuurd, dus de seriële keten hieronder mag het nog
+        // proberen met de providers die niet meededen aan de race.
+      }
+
+      for (const candidate of serialOrder) {
         // Kop die we vasthouden tot de clarity-gate uitsluitsel geeft.
         let held = '';
         let state: 'unclear' | 'clear' | 'pending' = gate ? 'pending' : 'clear';
@@ -3496,10 +3611,237 @@ function streamFrameworkResponse(args: {
   });
 }
 
+/**
+ * Streamt de voor-invulling van de raamwerkvelden, met twee providers die tegen
+ * elkaar racen — dezelfde opzet als {@link streamFrameworkResponse}, maar dan
+ * voor de velden in plaats van de frameworkkeuze.
+ *
+ * Waarom hetzelfde recept: het voor-invullen is met een budget van 8192 tokens
+ * de traagste JSON-modus van de flow. Serieel wachten betekende dat één trage
+ * provider de hele wachttijd bepaalde; nu bepaalt de snelste van de twee. En
+ * omdat het antwoord JSON is, sturen we elk AFGEROND veld meteen door, zodat de
+ * gebruiker de velden één voor één ziet vollopen in plaats van naar skeletten
+ * te staren tot alles binnen is.
+ *
+ * De racers zijn de eerste twee providers uit de voorkeursvolgorde (normaal
+ * Claude en GPT-5): anders dan bij de frameworkkeuze — een korte classificatie —
+ * is dit inhoudelijk schrijfwerk, en daar hoort de sterkste keten. De verliezer
+ * loopt door tot zijn eigen watchdog hem afkapt; dat kost één extra completion
+ * per voor-invulronde. Bewuste ruil: de staart uit de wachttijd is die tokens
+ * waard. Heeft de beheerder één provider vastgezet, dan racen we niet (zie de
+ * prefill-handler) — een vastgezette keuze hoort niet stilletjes te worden
+ * ingehaald door een andere provider.
+ *
+ * Levert de race niets bruikbaars, dan volgt alsnog de seriële keten; het
+ * afsluitende `done`-event bevat altijd het volledige, gezaghebbende resultaat.
+ */
+function streamPrefillResponse(args: {
+  racers: Provider[];
+  fallback: Provider[];
+  userMessage: string;
+  system: string;
+  temperature: number;
+  maxTokens: number;
+  preferredProvider?: PreferredProvider;
+  preferredModel?: string;
+  fields: AnalyzeField[];
+}): Response {
+  const {
+    racers,
+    fallback,
+    userMessage,
+    system,
+    temperature,
+    maxTokens,
+    preferredProvider,
+    preferredModel,
+    fields,
+  } = args;
+
+  const validIds = new Set(fields.map((f) => f.id));
+  const encoder = new TextEncoder();
+  let closed = false;
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (event: Record<string, unknown>) => {
+        if (closed) return;
+        try {
+          controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+        } catch {
+          closed = true;
+        }
+      };
+      const close = () => {
+        if (closed) return;
+        closed = true;
+        try {
+          controller.close();
+        } catch {
+          /* al gesloten */
+        }
+      };
+
+      // Welke provider de race won; alleen zijn velden gaan naar de client.
+      let winner: Provider | null = null;
+      let sawDelta = false;
+      let sentSummary = false;
+      const sentIds = new Set<string>();
+      // Een provider die de invoer als onzin bestempelde. Bewaard zodat we dat
+      // verdict kunnen doorgeven wanneer niemand bruikbare velden oplevert.
+      let unclearSeen: { reason: string; provider: Provider } | null = null;
+
+      // Welke modellen meedoen — de client toont ze, zodat zichtbaar is dát er
+      // twee modellen tegelijk aan het werk zijn.
+      send({ type: 'models', providers: racers });
+      send({ type: 'phase', phase: 'reading' });
+
+      /**
+       * Verwerkt de tot nu toe ontvangen tekst van één provider: claimt de race
+       * bij het eerste afgeronde veld en stuurt door wat nog niet verstuurd is.
+       */
+      const pump = (candidate: Provider, buf: string) => {
+        if (winner && winner !== candidate) return;
+
+        if (!sawDelta) {
+          sawDelta = true;
+          send({ type: 'phase', phase: 'matching' });
+        }
+
+        const summary = readJsonString(buf, 'summary');
+        const found = readJsonObjects(buf, 'fields')
+          .map((chunk) => parseOnePrefilledField(chunk, validIds))
+          .filter((f): f is PrefilledField => f !== null);
+
+        // De race wordt geclaimd door het eerste ECHT afgeronde veld, niet door
+        // het eerste teken: bij een provider die alleen ruis produceert kunnen we
+        // zo nog stilletjes naar de ander overstappen.
+        if (!winner) {
+          if (found.length === 0) return;
+          winner = candidate;
+          send({ type: 'meta', provider: candidate });
+          send({ type: 'phase', phase: 'filling' });
+        }
+
+        if (summary && !sentSummary) {
+          sentSummary = true;
+          send({ type: 'summary', text: summary });
+        }
+        for (const field of found) {
+          if (sentIds.has(field.id)) continue;
+          sentIds.add(field.id);
+          send({ type: 'field', field });
+        }
+      };
+
+      const attempt = async (
+        candidate: Provider,
+      ): Promise<{ provider: Provider; raw: string } | null> => {
+        let buf = '';
+        try {
+          const raw = await PROVIDERS[candidate](
+            userMessage,
+            system,
+            temperature,
+            resolveModel(candidate, preferredProvider, preferredModel),
+            maxTokens,
+            (chunk) => {
+              buf += chunk;
+              pump(candidate, buf);
+            },
+          );
+          // Clarity-gate: vond dit model de invoer onzin? Dan levert het bewust
+          // geen velden; onthouden en pas gebruiken als niemand iets oplevert.
+          const unclear = detectUnclearJson(raw);
+          if (unclear) {
+            if (!unclearSeen) unclearSeen = { reason: unclear, provider: candidate };
+            return null;
+          }
+          return { provider: candidate, raw };
+        } catch (providerErr) {
+          console.error(`${candidate} (prefill, race) mislukt:`, providerErr);
+          return null;
+        }
+      };
+
+      const usable = (r: { provider: Provider; raw: string }) =>
+        parsePrefill(r.raw, fields).fields.length > 0;
+
+      // 1. De racers gelijktijdig.
+      let won = await firstUsable(racers.map(attempt), usable);
+
+      // 2. Niets bruikbaars? Dan alsnog de seriële keten als vangnet.
+      if (!won) {
+        for (const candidate of fallback) {
+          const result = await attempt(candidate);
+          if (result && usable(result)) {
+            won = result;
+            break;
+          }
+        }
+      }
+
+      if (won) {
+        const parsed = parsePrefill(won.raw, fields);
+        send({
+          type: 'done',
+          summary: parsed.summary,
+          fields: parsed.fields,
+          provider: won.provider,
+        });
+        close();
+        return;
+      }
+
+      // 3. Geen velden, maar wél een onduidelijk-verdict: dat is het antwoord.
+      if (unclearSeen) {
+        const verdict = unclearSeen as { reason: string; provider: Provider };
+        send({ type: 'unclear', reason: verdict.reason, provider: verdict.provider });
+        close();
+        return;
+      }
+
+      // 4. Niets bruikbaars van wie dan ook: lege voor-invulling. De UI toont dan
+      //    gewoon lege velden — precies zoals de niet-streamende route doet.
+      send({ type: 'done', summary: '', fields: [], provider: 'local-template' });
+      close();
+    },
+    cancel() {
+      closed = true;
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      ...corsHeaders,
+      'Content-Type': 'application/x-ndjson; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      'X-Accel-Buffering': 'no',
+    },
+  });
+}
+
 /** Bouw de fallback-volgorde op basis van de voorkeur van de client. */
 function buildOrder(preferred?: PreferredProvider): Provider[] {
   if (!preferred || preferred === 'auto') return DEFAULT_ORDER;
   return [preferred, ...DEFAULT_ORDER.filter((p) => p !== preferred)];
+}
+
+/**
+ * Welke providers tegen elkaar racen in de zware schrijfmodi (voor-invullen en
+ * genereren): de eerste twee uit de voorkeursvolgorde, dus normaal Claude en
+ * GPT-5. Anders dan bij de frameworkkeuze — een korte classificatie waar de twee
+ * goedkoopste providers volstaan — is dit inhoudelijk schrijfwerk; racen met de
+ * goedkope keten zou de kwaliteit omlaag halen in plaats van alleen de wachttijd.
+ *
+ * Heeft de beheerder één provider vastgezet (geen 'auto'), dan racen we niet:
+ * die keuze betekent "gebruik dít model", en een tweede model dat hem inhaalt
+ * zou die instelling stilletjes overrulen. Levert een lege lijst op; de
+ * aanroeper valt dan terug op de gewone seriële keten.
+ */
+function raceProviders(order: Provider[], preferred?: PreferredProvider): Provider[] {
+  if (preferred && preferred !== 'auto') return [];
+  return order.slice(0, 2);
 }
 
 interface Recommendation {
@@ -3843,6 +4185,30 @@ function parsePrefill(
     };
   } catch {
     return { summary: '', fields: [] };
+  }
+}
+
+/**
+ * Eén afgerond voor-ingevuld veld uit de stream, of null als het onbruikbaar is.
+ * De streamende tegenhanger van {@link parsePrefill}: die leest het volledige
+ * antwoord, deze één object uit een nog groeiende buffer.
+ */
+function parseOnePrefilledField(chunk: string, valid: Set<string>): PrefilledField | null {
+  try {
+    const f = JSON.parse(chunk) as { id?: unknown; value?: unknown; source?: unknown; note?: unknown };
+    if (typeof f.id !== 'string' || !valid.has(f.id)) return null;
+    if (typeof f.value !== 'string') return null;
+    const value = f.value.trim();
+    // Een leeg voorstel is nutteloos; dat veld blijft gewoon leeg.
+    if (!value) return null;
+    return {
+      id: f.id,
+      value,
+      source: f.source === 'ai' ? 'ai' : 'prompt',
+      note: typeof f.note === 'string' ? f.note.trim() : '',
+    };
+  } catch {
+    return null;
   }
 }
 
@@ -4204,6 +4570,40 @@ Deno.serve(async (req: Request) => {
         : body.fromFormatBrief
           ? PREFILL_FORMAT_BRIEF_INSTRUCTION + PREFILL_SYSTEM_PROMPT
           : PREFILL_SYSTEM_PROMPT;
+
+      // Streamend: twee modellen vullen tegelijk in, en elk afgerond veld gaat
+      // meteen door — de gebruiker ziet de velden vollopen in plaats van te
+      // wachten tot alles binnen is.
+      if (body.stream) {
+        const racers = raceProviders(order, body.preferredProvider);
+        if (racers.length > 1) {
+          return streamPrefillResponse({
+            racers,
+            fallback: order.filter((p) => !racers.includes(p)),
+            userMessage,
+            system: prefillSystem,
+            temperature: 0.3,
+            maxTokens,
+            preferredProvider: body.preferredProvider,
+            preferredModel: body.preferredModel,
+            fields,
+          });
+        }
+        // Provider vastgezet: geen race, wél streamen — de velden komen dan van
+        // dat ene model, maar nog steeds veld voor veld binnen.
+        return streamPrefillResponse({
+          racers: order.slice(0, 1),
+          fallback: order.slice(1),
+          userMessage,
+          system: prefillSystem,
+          temperature: 0.3,
+          maxTokens,
+          preferredProvider: body.preferredProvider,
+          preferredModel: body.preferredModel,
+          fields,
+        });
+      }
+
       let result: { summary: string; fields: PrefilledField[] } | null = null;
       let provider: Provider | 'local-template' = 'local-template';
 
@@ -5451,6 +5851,10 @@ Deno.serve(async (req: Request) => {
         preferredModel: body.preferredModel,
         label: 'generate',
         gate: true,
+        // Twee modellen tegelijk aan het schrijven, de snelste bruikbare regel
+        // wint. Alleen op automatisch: heeft de beheerder één provider
+        // vastgezet, dan hoort die de prompt te schrijven en niemand anders.
+        racers: raceProviders(order, body.preferredProvider),
       });
     }
 

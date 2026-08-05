@@ -12,6 +12,24 @@
 /** Callback met de volledige tot-nu-toe opgebouwde (opgeschoonde) tekst. */
 export type StreamHandler = (textSoFar: string) => void;
 
+/**
+ * Voortgang van een streamende schrijfmodus, los van de tekst zelf. De server
+ * laat twee modellen tegelijk aan een antwoord beginnen; hiermee kan de UI tonen
+ * wie er meedoen, wie er won en waar we in het proces zijn — zodat een wachttijd
+ * zichtbaar iets doet in plaats van stil te staan.
+ */
+export interface StreamStatus {
+  /** Provider-ids die tegelijk aan het antwoord begonnen zijn. */
+  models?: string[];
+  /** 'drafting' = beide modellen zijn begonnen, 'writing' = de winnaar schrijft. */
+  phase?: string;
+  /** De provider die de race won en de tekst levert. */
+  provider?: string;
+}
+
+/** Callback voor {@link StreamStatus}-updates; elke update bevat één veld. */
+export type StatusHandler = (status: StreamStatus) => void;
+
 /** Uitkomst van een streamende aanroep van de edge function. */
 export interface StreamOutcome {
   text: string;
@@ -144,8 +162,10 @@ export async function streamNdjson(args: {
   onChunk: StreamHandler;
   tidy?: (text: string) => string;
   signal?: AbortSignal;
+  /** Voortgang naast de tekst: welke modellen meedoen, wie wint, welke fase. */
+  onStatus?: StatusHandler;
 }): Promise<StreamOutcome> {
-  const { url, headers, body, onChunk, signal } = args;
+  const { url, headers, body, onChunk, signal, onStatus } = args;
   const tidy = args.tidy ?? ((t: string) => t);
 
   let response: Response;
