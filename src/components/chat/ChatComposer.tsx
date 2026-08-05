@@ -1,5 +1,15 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { GripHorizontal, Loader2, Paperclip, Scissors, Send, Square, X } from 'lucide-react';
+import {
+  GripHorizontal,
+  Loader2,
+  Paperclip,
+  Scissors,
+  Send,
+  Sparkles,
+  Square,
+  Undo2,
+  X,
+} from 'lucide-react';
 import clsx from 'clsx';
 import { ACCEPTED_DOC_ACCEPT } from '@/lib/extractDocument';
 import { MAX_CHAT_ATTACHMENTS } from './useChatController';
@@ -31,6 +41,13 @@ function readStoredHeight(): number | null {
   }
 }
 
+/** Uitkomst van een verbeterslag op de getypte tekst. */
+export interface OptimizeResult {
+  text: string;
+  changed: boolean;
+  error?: string;
+}
+
 /**
  * Invoerbalk van de chat: tekstveld (Enter = verzenden, Shift+Enter = nieuwe
  * regel), bijlagen (paperclip + chips) en de stop-knop tijdens het streamen.
@@ -38,6 +55,10 @@ function readStoredHeight(): number | null {
  * Het tekstvak begint op drie regels en groeit mee met wat je typt. Wie meer
  * ruimte wil, sleept het met de greep rechtsonder groter; die keuze blijft
  * bewaard tot je hem met een dubbelklik weer loslaat.
+ *
+ * Staat er tekst in het veld en is `onOptimize` meegegeven, dan verschijnt
+ * rechtsboven het oranje sterretje: één klik en de AI herschrijft wat er staat
+ * tot een scherpere vraag. De oorspronkelijke tekst blijft daarna één klik weg.
  */
 export default function ChatComposer({
   disabled,
@@ -48,6 +69,7 @@ export default function ChatComposer({
   onStop,
   onAddFile,
   onRemoveAttachment,
+  onOptimize,
   badge,
   allowAttachments = true,
 }: {
@@ -60,12 +82,24 @@ export default function ChatComposer({
   onStop: () => void;
   onAddFile: (file: File) => void;
   onRemoveAttachment: (id: string) => void;
+  /**
+   * Verbetert de getypte tekst. Afwezig = geen sterretje (bijv. wanneer de
+   * beheerder de functie uit heeft staan). Mag nooit gooien: bij een fout hoort
+   * de oorspronkelijke tekst terug te komen met een melding.
+   */
+  onOptimize?: (text: string) => Promise<OptimizeResult>;
   /** De modelbadge, rechtsonder in de chat weergegeven. */
   badge?: ReactNode;
   /** Bijlagen toestaan? De Testkamer zet dit uit: daar test je de prompt zelf. */
   allowAttachments?: boolean;
 }) {
   const [text, setText] = useState('');
+  const [optimizing, setOptimizing] = useState(false);
+  // De tekst van vóór de laatste verbetering, met wat eruit kwam. Zolang het
+  // veld nog exact het resultaat bevat, kan de gebruiker terug.
+  const [beforeOptimize, setBeforeOptimize] = useState<{ before: string; after: string } | null>(
+    null,
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   // Zelf ingestelde hoogte; null = automatisch meegroeien met de tekst.
@@ -133,13 +167,41 @@ export default function ChatComposer({
     storeHeight(clampHeight(current + (e.key === 'ArrowDown' ? KEY_STEP : -KEY_STEP)));
   }
 
-  const canSend = !disabled && !streaming && text.trim().length > 0;
+  const canSend = !disabled && !streaming && !optimizing && text.trim().length > 0;
+  const canOptimize = Boolean(onOptimize) && !disabled && !streaming && text.trim().length > 0;
+  // Alleen terugdraaien zolang het veld nog precies het verbeterde resultaat
+  // bevat; typt de gebruiker verder, dan slaat "herstellen" nergens meer op.
+  const canUndo = beforeOptimize !== null && text === beforeOptimize.after && !optimizing;
 
   function submit() {
     if (!canSend) return;
     const value = text.trim();
     setText('');
+    setBeforeOptimize(null);
     onSend(value);
+  }
+
+  async function optimize() {
+    if (!onOptimize || !canOptimize || optimizing) return;
+    const before = text;
+    setOptimizing(true);
+    try {
+      const result = await onOptimize(before);
+      // Niets veranderd (fout of al goed genoeg): laat de tekst met rust.
+      if (result.error || !result.changed || !result.text.trim()) return;
+      setText(result.text);
+      setBeforeOptimize({ before, after: result.text });
+    } finally {
+      setOptimizing(false);
+      textareaRef.current?.focus();
+    }
+  }
+
+  function undoOptimize() {
+    if (!canUndo || !beforeOptimize) return;
+    setText(beforeOptimize.before);
+    setBeforeOptimize(null);
+    textareaRef.current?.focus();
   }
 
   return (
@@ -217,11 +279,17 @@ export default function ChatComposer({
         <div className="relative order-1 w-full lg:order-none lg:w-auto lg:flex-1">
           <textarea
             ref={textareaRef}
-            className="opl-input w-full resize-none py-2.5 pb-6"
+            className={clsx(
+              'opl-input w-full resize-none py-2.5 pb-6',
+              // Ruimte rechtsboven voor het sterretje, zodat de tekst er niet
+              // onder doorloopt. Vast (niet afhankelijk van of de knop er staat),
+              // anders zou de tekst verspringen zodra je begint te typen.
+              onOptimize && 'pr-11',
+            )}
             rows={3}
             placeholder={disabled ? 'Chat wordt geladen…' : 'Stel je vraag…'}
             value={text}
-            disabled={disabled}
+            disabled={disabled || optimizing}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {
               // Enter verzendt; Shift+Enter maakt een nieuwe regel.
@@ -231,6 +299,37 @@ export default function ChatComposer({
               }
             }}
           />
+          {/* Sterretje rechtsboven: verbetert in één klik wat er staat. Verschijnt
+              pas zodra er tekst is, zodat een leeg veld rustig blijft. Zelfde
+              oranje verloop als het gereedschap "Genereren" in de menubalk. */}
+          {onOptimize && (text.trim().length > 0 || optimizing) && (
+            <button
+              type="button"
+              className={clsx(
+                'absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-lg',
+                'bg-gradient-to-br from-rijksoranje to-rijksoranje-dark text-white shadow-sm',
+                'transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-rijksoranje/40',
+                canOptimize && !optimizing
+                  ? 'hover:shadow-md motion-safe:hover:-translate-y-px'
+                  : 'cursor-default opacity-60',
+              )}
+              onClick={() => void optimize()}
+              disabled={!canOptimize || optimizing}
+              title={
+                optimizing
+                  ? 'Bezig met verbeteren…'
+                  : 'Verbeter mijn tekst met AI — je oorspronkelijke tekst kun je daarna terughalen'
+              }
+              aria-label="Verbeter mijn tekst met AI"
+            >
+              {optimizing ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Sparkles size={14} strokeWidth={2.25} />
+              )}
+            </button>
+          )}
+
           {/* Greep om het tekstvak zelf groter te slepen. Dubbelklikken zet hem
               terug op automatisch meegroeien. */}
           <button
@@ -277,6 +376,22 @@ export default function ChatComposer({
           </button>
         )}
       </div>
+
+      {/* Na een verbetering: één klik terug naar de eigen tekst. Verdwijnt zodra
+          de gebruiker zelf verder typt of het bericht verstuurt. */}
+      {canUndo && (
+        <div className="mt-1.5 flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+          <Sparkles size={12} className="shrink-0 text-rijksoranje" />
+          <span className="min-w-0">Je tekst is verbeterd. Lees hem na en pas gerust aan.</span>
+          <button
+            type="button"
+            className="shrink-0 inline-flex items-center gap-1 font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
+            onClick={undoOptimize}
+          >
+            <Undo2 size={12} /> Herstel mijn tekst
+          </button>
+        </div>
+      )}
 
       <div className="mt-1.5 flex items-center justify-between gap-2">
         <p className="min-w-0 text-[11px] text-slate-400 dark:text-slate-500">

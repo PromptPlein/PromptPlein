@@ -48,6 +48,7 @@ type Mode =
   | 'expand-field'
   | 'assumption-check'
   | 'chat'
+  | 'chat-optimize'
   | 'refine';
 
 /**
@@ -301,6 +302,12 @@ interface RequestBody {
    * ruimere execute-tokenplafond. Oude clients sturen dit veld niet.
    */
   chatKind?: 'execute';
+  /**
+   * 'chat-optimize': de tekst die de gebruiker in het invoerveld van de chat
+   * heeft getypt en in één klik scherper wil hebben. Server-side nogmaals
+   * afgekapt op MAX_CHAT_OPTIMIZE_CHARS.
+   */
+  chatInput?: string;
   // 'refine'-velden: herschrijf een gegenereerde template op basis van een testrun.
   /** De te verbeteren prompt-template. */
   refinePrompt?: string;
@@ -1273,6 +1280,60 @@ ${lengthBudgetInstruction(
   'de lengte die het gevraagde eindproduct echt nodig heeft — vraagt de prompt geen ' +
     'omvang, houd dan 400–700 woorden aan',
 )}`;
+
+// --- Chat-optimize-modus: verbeter snel wat de gebruiker in de chat typte ---
+// Bewust GEEN volwaardige generator: geen framework, geen techniek, geen
+// [plaatshouders]. De gebruiker heeft één bericht getypt en wil dat in één klik
+// scherper hebben, zodat het direct verstuurbaar blijft. Houd deze tekst gelijk
+// aan DEFAULT_CHAT_OPTIMIZE_PROMPT in src/services/settingsService.ts; de client
+// stuurt normaal de (door de admin beheerde) versie mee en dit is het vangnet
+// als dat veld leeg is.
+const CHAT_OPTIMIZE_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse overheid.
+Je krijgt de tekst die een medewerker zojuist in een AI-chat heeft getypt. Herschrijf die tekst tot
+een duidelijkere, completere vraag of opdracht die de gebruiker meteen zo kan versturen.
+
+Werkwijze:
+- Behoud de bedoeling, de inhoud en de taal van de gebruiker. Verander nooit waar de vraag over gaat.
+- Maak impliciete wensen expliciet: benoem kort het doel, de gewenste vorm (bijv. lijst, memo, e-mail)
+  en de lengte, maar alleen als dat redelijkerwijs uit de tekst volgt.
+- Verzin geen feiten, namen, cijfers, bronnen of context die de gebruiker niet heeft gegeven.
+- Ontbreekt er informatie die de gebruiker zelf moet aanleveren, laat dat dan staan als één duidelijke
+  [plaatshouder]. Gebruik er hoogstens twee.
+- Het resultaat blijft één chatbericht: vloeiend geschreven, hooguit een korte opsomming. Geen koppen,
+  geen kopjes als "Rol" of "Context", geen sjabloon.
+- Houd het compact: normaal gesproken niet meer dan twee keer zo lang als de oorspronkelijke tekst.
+- Is de tekst al helder en volledig, breid hem dan niet kunstmatig uit; verbeter alleen wat beter kan.
+- Geef ALLEEN de verbeterde tekst terug, zonder inleiding, uitleg, aanhalingstekens of opmaak-markeringen.`;
+
+/** Bouwt het gebruikersbericht voor de chat-optimize-modus op. */
+function buildChatOptimizeUserMessage(text: string): string {
+  return `TEKST VAN DE GEBRUIKER:\n"""\n${text}\n"""\n\nGeef de verbeterde versie.`;
+}
+
+/** Bovengrens voor de te verbeteren chattekst; de client kapt op dezelfde grens af. */
+const MAX_CHAT_OPTIMIZE_CHARS = 6_000;
+
+/**
+ * Haalt aanhalingstekens weg die het model om zijn hele antwoord heeft gezet.
+ * Alleen als ze het complete antwoord omsluiten — een citaat middenin blijft staan.
+ */
+function stripWrappingQuotes(text: string): string {
+  const pairs: [string, string][] = [
+    ['"', '"'],
+    ['“', '”'],
+    ['„', '”'],
+    ["'", "'"],
+    ['‘', '’'],
+  ];
+  for (const [open, close] of pairs) {
+    if (text.length > 2 && text.startsWith(open) && text.endsWith(close)) {
+      const inner = text.slice(open.length, -close.length).trim();
+      // Alleen strippen als het echt één omhulsel was (geen "…" + "…" naast elkaar).
+      if (inner && !inner.includes(close)) return inner;
+    }
+  }
+  return text;
+}
 
 // --- Refine-modus: herschrijf een gegenereerde template op basis van een testrun ---
 // De gebruiker heeft de template in de Testkamer uitgevoerd, het testantwoord
@@ -2634,6 +2695,8 @@ const MODE_MAX_TOKENS: Record<Mode, number> = {
   // Een uitvoergesprek (chatKind 'execute') krijgt in de handler het
   // execute-plafond: daar is het antwoord juist wél een document.
   chat: 2048,
+  // Chat-optimize: één herschreven chatbericht, hooguit een paar alinea's.
+  'chat-optimize': 1024,
   // Refine: een herschreven prompt-template, vergelijkbaar met generate.
   refine: 4096,
   // Prefill vult álle velden van een raamwerk in één keer en mag detailrijk zijn.
@@ -4473,6 +4536,8 @@ Deno.serve(async (req: Request) => {
     const mode: Mode =
       body.mode === 'chat'
         ? 'chat'
+        : body.mode === 'chat-optimize'
+        ? 'chat-optimize'
         : body.mode === 'recommend'
         ? 'recommend'
         : body.mode === 'recommend-framework'
@@ -5457,6 +5522,70 @@ Deno.serve(async (req: Request) => {
 
       return new Response(
         JSON.stringify({ success: true, output, provider }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    // --- Chat-optimize-modus: verbeter de tekst in het invoerveld van de chat ---
+    // Klein en synchroon: één korte tekst in, één korte tekst uit. Bewust niet
+    // streamend — de gebruiker ziet zijn eigen tekst in het veld pas wisselen
+    // zodra het volledige resultaat er is.
+    if (mode === 'chat-optimize') {
+      // Zelfde poort als de chat zelf: alleen ingelogde gebruikers (de anon key
+      // is óók een geldige JWT, dus verify_jwt alleen is niet genoeg).
+      if (!isAuthenticatedRequest(req)) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Log in om de chat te gebruiken.' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      const chatInput = (body.chatInput ?? '').trim().slice(0, MAX_CHAT_OPTIMIZE_CHARS);
+      if (!chatInput) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'chatInput is verplicht' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      const system = body.systemPrompt?.trim() || CHAT_OPTIMIZE_SYSTEM_PROMPT;
+      const userMessage = buildChatOptimizeUserMessage(chatInput);
+      // Laag: herschrijven is een precisieklus, geen creatieve.
+      const optimizeTemp = clampTemp(body.temperature ?? 0.3);
+
+      let output = '';
+      let provider: Provider | 'local-template' = 'local-template';
+      for (const candidate of order) {
+        try {
+          const raw = await PROVIDERS[candidate](
+            userMessage,
+            system,
+            optimizeTemp,
+            resolveModel(candidate, body.preferredProvider, body.preferredModel),
+            maxTokens,
+          );
+          const trimmed = stripWrappingQuotes(raw.trim());
+          if (trimmed) {
+            output = trimmed;
+            provider = candidate;
+            break;
+          }
+        } catch (providerErr) {
+          console.error(`${candidate} (chat-optimize) mislukt, probeer volgende:`, providerErr);
+        }
+      }
+
+      // Honest-degrade: geen backend-resultaat → duidelijke fout, geen nep-output.
+      // De client laat de tekst van de gebruiker dan ongemoeid staan.
+      if (!output) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'De tekst kon niet worden verbeterd' }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, optimized: output, provider }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }

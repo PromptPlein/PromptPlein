@@ -235,6 +235,17 @@ export interface ChatSettings {
   baseInfo: string;
   /** Creativiteit (temperature) van 0 tot 1. */
   temperature: number;
+  /**
+   * Mag de gebruiker zijn getypte tekst in één klik laten verbeteren (het
+   * oranje sterretje rechtsboven in het invoerveld)? Uit = knop verdwijnt.
+   */
+  optimizeEnabled: boolean;
+  /**
+   * Systeemprompt van díe snelle verbeterslag. Bewust los van de generator:
+   * dit is een lichte herschrijving van één chatbericht, geen framework-opbouw.
+   * Leeg = ingebouwde default.
+   */
+  optimizeSystemPrompt: string;
 }
 
 /** Bovengrens voor de basisinformatie; houdt de prompt (en de kosten) beheersbaar. */
@@ -312,6 +323,36 @@ LENGTE — houd het compact; hier is korter beter:
   concrete details heeft aangeleverd dat die er anders uit zouden vallen.
 - Geen inleiding vooraf, geen samenvatting achteraf en geen uitleg over wat je hebt gedaan.`;
 
+/**
+ * Ingebouwde systeemprompt voor de snelle verbeterslag in het chat-invoerveld.
+ * Spiegel van CHAT_OPTIMIZE_SYSTEM_PROMPT in
+ * supabase/functions/optimize-prompt/index.ts — de server gebruikt zijn eigen
+ * exemplaar wanneer de client niets meestuurt.
+ *
+ * Bewust géén volwaardige generator: geen framework, geen techniek, geen
+ * sjabloon. De gebruiker heeft één bericht getypt en wil dat in één klik
+ * scherper hebben, zodat het direct verstuurbaar blijft.
+ */
+export const DEFAULT_CHAT_OPTIMIZE_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse overheid.
+Je krijgt de tekst die een medewerker zojuist in een AI-chat heeft getypt. Herschrijf die tekst tot
+een duidelijkere, completere vraag of opdracht die de gebruiker meteen zo kan versturen.
+
+Werkwijze:
+- Behoud de bedoeling, de inhoud en de taal van de gebruiker. Verander nooit waar de vraag over gaat.
+- Maak impliciete wensen expliciet: benoem kort het doel, de gewenste vorm (bijv. lijst, memo, e-mail)
+  en de lengte, maar alleen als dat redelijkerwijs uit de tekst volgt.
+- Verzin geen feiten, namen, cijfers, bronnen of context die de gebruiker niet heeft gegeven.
+- Ontbreekt er informatie die de gebruiker zelf moet aanleveren, laat dat dan staan als één duidelijke
+  [plaatshouder]. Gebruik er hoogstens twee.
+- Het resultaat blijft één chatbericht: vloeiend geschreven, hooguit een korte opsomming. Geen koppen,
+  geen kopjes als "Rol" of "Context", geen sjabloon.
+- Houd het compact: normaal gesproken niet meer dan twee keer zo lang als de oorspronkelijke tekst.
+- Is de tekst al helder en volledig, breid hem dan niet kunstmatig uit; verbeter alleen wat beter kan.
+- Geef ALLEEN de verbeterde tekst terug, zonder inleiding, uitleg, aanhalingstekens of opmaak-markeringen.`;
+
+/** Bovengrens voor de te verbeteren tekst; de server kapt op dezelfde grens af. */
+export const MAX_CHAT_OPTIMIZE_CHARS = 6000;
+
 export const DEFAULT_CHAT_SETTINGS: ChatSettings = {
   enabled: true,
   // Mistral is de afgesproken basis voor de chat (Europees, snel en goedkoop).
@@ -321,6 +362,8 @@ export const DEFAULT_CHAT_SETTINGS: ChatSettings = {
   executionSystemPrompt: DEFAULT_EXECUTION_SYSTEM_PROMPT,
   baseInfo: '',
   temperature: 0.5,
+  optimizeEnabled: true,
+  optimizeSystemPrompt: DEFAULT_CHAT_OPTIMIZE_PROMPT,
 };
 
 /**
@@ -341,6 +384,15 @@ export function composeChatSystemPrompt(settings: ChatSettings): string {
  */
 export function composeExecutionSystemPrompt(settings: ChatSettings): string {
   return settings.executionSystemPrompt.trim() || DEFAULT_EXECUTION_SYSTEM_PROMPT;
+}
+
+/**
+ * Systeeminstructie voor de snelle verbeterslag in het chat-invoerveld. Bewust
+ * zonder de basisinformatie van de beheerder: die hoort in het antwoord thuis,
+ * niet in de vraag die de gebruiker zelf gaat versturen.
+ */
+export function composeChatOptimizePrompt(settings: ChatSettings): string {
+  return settings.optimizeSystemPrompt.trim() || DEFAULT_CHAT_OPTIMIZE_PROMPT;
 }
 
 const CHAT_SETTINGS_KEY = 'chat_settings';
@@ -365,6 +417,12 @@ function normalizeChat(raw: Partial<ChatSettings> | null | undefined): ChatSetti
     baseInfo:
       typeof raw.baseInfo === 'string' ? raw.baseInfo.slice(0, MAX_CHAT_BASE_INFO_CHARS) : d.baseInfo,
     temperature: Math.min(1, Math.max(0, temp)),
+    optimizeEnabled:
+      typeof raw.optimizeEnabled === 'boolean' ? raw.optimizeEnabled : d.optimizeEnabled,
+    optimizeSystemPrompt:
+      typeof raw.optimizeSystemPrompt === 'string'
+        ? raw.optimizeSystemPrompt
+        : d.optimizeSystemPrompt,
   };
 }
 

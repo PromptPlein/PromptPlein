@@ -10,6 +10,7 @@ import {
   Plus,
   X,
   Sliders,
+  Sparkles,
   Bot,
   Layers,
   Coins,
@@ -34,6 +35,7 @@ import {
   saveChatSettings,
   DEFAULT_AI_SETTINGS,
   DEFAULT_CHAT_SETTINGS,
+  DEFAULT_CHAT_OPTIMIZE_PROMPT,
   DEFAULT_CHAT_SYSTEM_PROMPT,
   DEFAULT_EXECUTION_SYSTEM_PROMPT,
   DEFAULT_SYSTEM_PROMPT,
@@ -142,6 +144,7 @@ export default function SettingsPage() {
             model: chat.model,
             temperature: chat.temperature,
             base_info_chars: chat.baseInfo.length,
+            optimize_enabled: chat.optimizeEnabled,
           },
         }).catch(() => {
           /* audit is best-effort */
@@ -449,6 +452,64 @@ export default function SettingsPage() {
                 </button>
               )}
             </p>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+            <div className="mb-3 flex items-center gap-2">
+              <Sparkles size={16} className="text-rijksoranje" />
+              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                Tekst verbeteren in het invoerveld
+              </h3>
+            </div>
+            <p className="mb-4 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
+              Typt een gebruiker iets in de chat, dan verschijnt rechtsboven in het invoerveld een
+              oranje sterretje. Eén klik herschrijft de getypte tekst tot een scherpere vraag, die de
+              gebruiker daarna zelf kan nalezen, aanpassen of terugdraaien. Dit is een{' '}
+              <strong>lichte</strong> verbetering; de volledige generator blijft achter
+              &ldquo;Genereren&rdquo;.
+            </p>
+
+            <label className="flex cursor-pointer items-center gap-3">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded accent-rijksblauw-500"
+                checked={chat.optimizeEnabled}
+                onChange={(e) => patchChat({ optimizeEnabled: e.target.checked })}
+              />
+              <span className="text-sm text-slate-700 dark:text-slate-200">
+                Sterretje tonen in het invoerveld van de chat
+              </span>
+            </label>
+
+            <div className={clsx('mt-4', !chat.optimizeEnabled && 'pointer-events-none opacity-50')}>
+              <label className="opl-label" htmlFor="chatOptimizePrompt">
+                Instructie voor de verbetering
+              </label>
+              <textarea
+                id="chatOptimizePrompt"
+                className="opl-input min-h-[200px] resize-y font-mono text-[13px]"
+                value={chat.optimizeSystemPrompt}
+                onChange={(e) => patchChat({ optimizeSystemPrompt: e.target.value })}
+                placeholder="Bijv. Herschrijf de tekst van de gebruiker tot een duidelijkere vraag…"
+              />
+              <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400 dark:text-slate-500">
+                <span>
+                  Bepaalt hoe ver de verbetering gaat: wat wél mag worden toegevoegd (doel, gewenste
+                  vorm, lengte) en wat niet (verzonnen feiten, een heel sjabloon). Het model krijgt
+                  alleen de getypte tekst te zien, niet het gesprek of de bijlagen. Laat leeg om de
+                  ingebouwde standaard te gebruiken.
+                </span>
+                {chat.optimizeSystemPrompt.trim() !== DEFAULT_CHAT_OPTIMIZE_PROMPT && (
+                  <button
+                    type="button"
+                    className="shrink-0 font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
+                    onClick={() => patchChat({ optimizeSystemPrompt: DEFAULT_CHAT_OPTIMIZE_PROMPT })}
+                  >
+                    Herstel standaard
+                  </button>
+                )}
+              </p>
+            </div>
           </div>
 
           <div>

@@ -11,8 +11,10 @@ import { streamNdjson, type StreamHandler } from '@/lib/ndjsonStream';
 import { CHAT_PREFIX } from '@/lib/chatStorage';
 import { tidyChatReply } from '@/lib/utils';
 import {
+  composeChatOptimizePrompt,
   composeChatSystemPrompt,
   composeExecutionSystemPrompt,
+  MAX_CHAT_OPTIMIZE_CHARS,
   type ChatSettings,
 } from '@/services/settingsService';
 
@@ -107,6 +109,74 @@ export async function sendChatMessage(args: {
     return { text, provider: outcome.provider };
   } catch (err) {
     return { text: '', error: err instanceof Error ? err.message : 'De chat-aanroep is mislukt.' };
+  }
+}
+
+/**
+ * Verbetert in één klik de tekst die de gebruiker in het invoerveld heeft
+ * staan (het oranje sterretje). Bewust een lichte herschrijving, geen
+ * generator: het resultaat blijft één verstuurbaar chatbericht.
+ *
+ * Gooit nooit; bij een fout komt de oorspronkelijke tekst terug met een
+ * melding, zodat de UI de tekst van de gebruiker ongemoeid kan laten.
+ */
+export async function optimizeChatInput(args: {
+  text: string;
+  settings: ChatSettings;
+  signal?: AbortSignal;
+}): Promise<{ text: string; changed: boolean; provider?: string; error?: string }> {
+  const { settings, signal } = args;
+  const text = args.text.trim().slice(0, MAX_CHAT_OPTIMIZE_CHARS);
+  const noop = { text: args.text, changed: false };
+
+  const functionUrl = getFunctionUrl('optimize-prompt');
+  if (!isSupabaseConfigured || !supabase || !functionUrl) {
+    return { ...noop, error: 'Geen AI-service geconfigureerd. Neem contact op met de beheerder.' };
+  }
+  if (!text) return noop;
+
+  const { data } = await supabase.auth.getSession();
+  const accessToken = data.session?.access_token;
+  if (!accessToken) return { ...noop, error: 'Log in om de chat te gebruiken.' };
+
+  const anonKey = getAnonKey();
+  try {
+    const response = await fetch(functionUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+        ...(anonKey ? { apikey: anonKey } : {}),
+      },
+      body: JSON.stringify({
+        mode: 'chat-optimize',
+        chatInput: text,
+        preferredProvider: settings.provider,
+        preferredModel: settings.model,
+        // De door de beheerder ingestelde instructie voor déze verbeterslag.
+        systemPrompt: composeChatOptimizePrompt(settings),
+      }),
+      signal,
+    });
+
+    if (!response.ok) throw new Error(`Edge function gaf status ${response.status}`);
+
+    const result = (await response.json()) as {
+      success?: boolean;
+      optimized?: string;
+      provider?: string;
+      error?: string;
+    };
+    const optimized = typeof result.optimized === 'string' ? result.optimized.trim() : '';
+    if (result.success && optimized) {
+      return { text: optimized, changed: optimized !== args.text.trim(), provider: result.provider };
+    }
+    throw new Error(result.error ?? 'De verbetering gaf geen bruikbaar resultaat.');
+  } catch (err) {
+    // Afgebroken door de gebruiker: geen foutmelding, gewoon niets doen.
+    if (err instanceof DOMException && err.name === 'AbortError') return noop;
+    const message = err instanceof Error ? err.message : 'Onbekende fout';
+    return { ...noop, error: `Verbeteren mislukt (${message}).` };
   }
 }
 

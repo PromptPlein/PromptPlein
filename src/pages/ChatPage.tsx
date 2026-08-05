@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, MessageSquare, Play, Plus, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { useAuth } from '@/context/AuthContext';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import ChatComposer from '@/components/chat/ChatComposer';
@@ -12,7 +13,7 @@ import useChatController from '@/components/chat/useChatController';
 import useFitHeight from '@/components/chat/useFitHeight';
 import SavePromptModal from '@/components/prompts/SavePromptModal';
 import { looksLikeMessyPrompt } from '@/lib/promptHeuristics';
-import { consumeHandoff } from '@/services/chatService';
+import { consumeHandoff, optimizeChatInput } from '@/services/chatService';
 import { writeGeneratorHandoff } from '@/services/handoffService';
 import { getChatSettingsCached, type ChatSettings } from '@/services/settingsService';
 
@@ -70,6 +71,21 @@ export default function ChatPage() {
     },
     [navigate],
   );
+  // --- Snel verbeteren van de getypte tekst (het oranje sterretje) ---
+  // Lichte herschrijving in het invoerveld zelf; de volledige generator zit
+  // achter de nudge en "Bouw hier een prompt van". Faalt de aanroep, dan blijft
+  // de tekst van de gebruiker staan met een niet-blokkerende melding.
+  const handleOptimizeInput = useCallback(
+    async (text: string) => {
+      if (!settings) return { text, changed: false };
+      const res = await optimizeChatInput({ text, settings });
+      if (res.error) toast.error(res.error);
+      else if (!res.changed) toast('Je tekst was al duidelijk genoeg.', { icon: '✨' });
+      return { text: res.text, changed: res.changed, error: res.error };
+    },
+    [settings],
+  );
+
   // Inhoud die via "Bewaar als prompt" in de modal staat; null = dicht.
   const [saveContent, setSaveContent] = useState<string | null>(null);
   const handleSaveAsPrompt = useCallback((text: string) => setSaveContent(text), []);
@@ -251,6 +267,8 @@ export default function ChatPage() {
             onStop={controller.stop}
             onAddFile={(file) => void controller.addAttachment(file)}
             onRemoveAttachment={controller.removeAttachment}
+            // Sterretje alleen tonen als de beheerder de functie aan heeft staan.
+            onOptimize={settings?.optimizeEnabled ? handleOptimizeInput : undefined}
             badge={
               settings ? (
                 <ChatModelBadge
