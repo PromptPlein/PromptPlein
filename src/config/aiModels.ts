@@ -1,6 +1,25 @@
 /** Selecteerbare AI-modellen voor het optimaliseren van prompts. */
 
+/**
+ * Alle providers die de code kent. Claude en OpenAI staan er nog in zodat oude,
+ * opgeslagen instellingen blijven parsen — welke providers écht gebruikt mogen
+ * worden staat in {@link ENABLED_PROVIDERS}.
+ */
 export type AiProvider = 'auto' | 'claude' | 'openai' | 'deepseek' | 'mistral';
+
+/**
+ * De providers die PromptPlein daadwerkelijk gebruikt: alleen Mistral en
+ * DeepSeek (beide Europees of goedkoop, en de sleutels die er zijn). Claude en
+ * OpenAI zijn bewust uitgezet: hun code blijft staan zodat ze later weer aan
+ * kunnen, maar ze zijn niet te kiezen en de fallback-keten slaat ze over.
+ * Houd dit in sync met `ENABLED_PROVIDERS` in de `optimize-prompt` edge function.
+ */
+export const ENABLED_PROVIDERS: AiProvider[] = ['auto', 'deepseek', 'mistral'];
+
+/** Mag deze provider gebruikt worden? Onbekend/uitgezet → false. */
+export function isEnabledProvider(id: string | undefined): id is AiProvider {
+  return Boolean(id) && ENABLED_PROVIDERS.includes(id as AiProvider);
+}
 
 export interface AiModelOption {
   id: AiProvider;
@@ -14,20 +33,9 @@ export interface AiModelOption {
   apiKeysUrl?: string;
 }
 
+/** De keuzes in de admin: alleen wat er ook echt draait (zie ENABLED_PROVIDERS). */
 export const AI_MODELS: AiModelOption[] = [
-  { id: 'auto', label: 'Automatisch', hint: 'Claude → GPT-5 → DeepSeek → Mistral, met fallback' },
-  {
-    id: 'claude',
-    label: 'Claude (Anthropic)',
-    hint: 'Hoogste kwaliteit',
-    apiKeysUrl: 'https://console.anthropic.com/settings/keys',
-  },
-  {
-    id: 'openai',
-    label: 'GPT-5 (OpenAI)',
-    hint: 'Alternatief model',
-    apiKeysUrl: 'https://platform.openai.com/api-keys',
-  },
+  { id: 'auto', label: 'Automatisch', hint: 'DeepSeek → Mistral, met fallback' },
   {
     id: 'deepseek',
     label: 'DeepSeek',
@@ -75,6 +83,9 @@ export interface ProviderModelOption {
  * EERSTE model in elke lijst is de standaard (en moet matchen met de server-side
  * default in de `optimize-prompt` edge function). Bij `auto` kiest de
  * fallback-keten zelf, dus daar is geen modelkeuze.
+ *
+ * Claude en OpenAI staan er nog in — ze zijn niet te kiezen (zie AI_MODELS),
+ * maar oude opgeslagen model-ids moeten wel te valideren blijven.
  *
  * Prijzen zijn USD per 1M tokens, geverifieerd in juni 2026 tegen de officiële
  * prijslijsten. Houd dit in sync met `PROVIDER_MODELS` in de edge function.

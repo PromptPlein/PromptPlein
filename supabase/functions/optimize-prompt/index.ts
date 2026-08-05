@@ -10,16 +10,18 @@
 //     gerangschikt met een korte motivatie.
 //
 // Multi-model met fallback-keten. De client kan een voorkeursprovider sturen
-// (`preferredProvider`: 'auto' | 'claude' | 'openai' | 'deepseek' | 'mistral');
-// 'auto' gebruikt de standaardvolgorde Claude → GPT-4 → DeepSeek → Mistral.
-// Faalt alles (of ontbreken de keys), dan valt de functie terug op de ruwe
-// template (generate) of lokale trefwoord-matching (recommend).
+// (`preferredProvider`), maar alleen DeepSeek en Mistral staan aan (zie
+// ENABLED_PROVIDERS); 'auto' gebruikt de volgorde DeepSeek → Mistral. De
+// Claude- en OpenAI-code blijft staan zodat ze later weer aan kunnen, maar geen
+// enkele modus roept ze nog aan. Faalt alles (of ontbreken de keys), dan valt de
+// functie terug op de ruwe template (generate) of lokale trefwoord-matching
+// (recommend).
 //
 // Deploy:  supabase functions deploy optimize-prompt
-// Secrets: supabase secrets set CLAUDE_API_KEY=sk-ant-...     (Anthropic)
-//          supabase secrets set OPENAI_API_KEY=sk-...         (OpenAI, optioneel)
-//          supabase secrets set DEEPSEEK_API_KEY=sk-...       (DeepSeek, optioneel)
-//          supabase secrets set MISTRAL_API_KEY=...           (Mistral, optioneel)
+// Secrets: supabase secrets set DEEPSEEK_API_KEY=sk-...       (DeepSeek)
+//          supabase secrets set MISTRAL_API_KEY=...           (Mistral)
+//          supabase secrets set CLAUDE_API_KEY=sk-ant-...     (Anthropic, nu uit)
+//          supabase secrets set OPENAI_API_KEY=sk-...         (OpenAI, nu uit)
 //
 // Runtime: Deno (Supabase Edge Functions)
 
@@ -3110,7 +3112,19 @@ const PROVIDERS: Record<Provider, ProviderFn> = {
   mistral: runMistral,
 };
 
-const DEFAULT_ORDER: Provider[] = ['claude', 'openai', 'deepseek', 'mistral'];
+/**
+ * De providers die PromptPlein daadwerkelijk gebruikt. Claude en OpenAI zijn
+ * bewust uitgezet: hun code hierboven blijft staan zodat ze later weer aan
+ * kunnen, maar geen enkele modus mag ze nog aanroepen. Houd dit in sync met
+ * `ENABLED_PROVIDERS` in src/config/aiModels.ts.
+ */
+const ENABLED_PROVIDERS: Provider[] = ['deepseek', 'mistral'];
+
+/**
+ * De fallback-keten voor 'auto'. DeepSeek voorop (sterker redeneren), Mistral
+ * als snelle achtervang.
+ */
+const DEFAULT_ORDER: Provider[] = ['deepseek', 'mistral'];
 
 /**
  * Incrementele variant van de clarity-gate voor streamende modi. Bepaalt op de
@@ -3908,16 +3922,18 @@ function streamPrefillResponse(args: {
 
 /** Bouw de fallback-volgorde op basis van de voorkeur van de client. */
 function buildOrder(preferred?: PreferredProvider): Provider[] {
-  if (!preferred || preferred === 'auto') return DEFAULT_ORDER;
+  // Een uitgezette provider (of een oude instelling die er nog naar wijst)
+  // negeren we: dan gewoon de standaardketen.
+  if (!preferred || preferred === 'auto' || !ENABLED_PROVIDERS.includes(preferred)) {
+    return DEFAULT_ORDER;
+  }
   return [preferred, ...DEFAULT_ORDER.filter((p) => p !== preferred)];
 }
 
 /**
  * Welke providers tegen elkaar racen in de zware schrijfmodi (voor-invullen en
- * genereren): de eerste twee uit de voorkeursvolgorde, dus normaal Claude en
- * GPT-5. Anders dan bij de frameworkkeuze — een korte classificatie waar de twee
- * goedkoopste providers volstaan — is dit inhoudelijk schrijfwerk; racen met de
- * goedkope keten zou de kwaliteit omlaag halen in plaats van alleen de wachttijd.
+ * genereren): de eerste twee uit de voorkeursvolgorde, dus normaal DeepSeek en
+ * Mistral — de twee providers die aan staan.
  *
  * Heeft de beheerder één provider vastgezet (geen 'auto'), dan racen we niet:
  * die keuze betekent "gebruik dít model", en een tweede model dat hem inhaalt

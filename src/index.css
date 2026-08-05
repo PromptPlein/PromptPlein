@@ -85,6 +85,49 @@ html.dark body {
   .opl-badge {
     @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium;
   }
+
+  /*
+   * Slanke, rustige schuifbalk voor vakken die kunnen overlopen (o.a. het
+   * invoerveld van de chat). De brede systeembalk viel daar lelijk op en botste
+   * met de knoppen in de hoeken. `scrollbar-gutter: stable` houdt de ruimte
+   * altijd vrij, zodat de tekst niet verspringt zodra de balk verschijnt.
+   */
+  .opl-scroll-slim {
+    scrollbar-gutter: stable;
+    /* Firefox */
+    scrollbar-width: thin;
+    scrollbar-color: theme('colors.slate.300') transparent;
+  }
+
+  .opl-scroll-slim::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .opl-scroll-slim::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .opl-scroll-slim::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    background-color: theme('colors.slate.300');
+  }
+
+  .opl-scroll-slim:hover::-webkit-scrollbar-thumb {
+    background-color: theme('colors.slate.400');
+  }
+
+  html.dark .opl-scroll-slim {
+    scrollbar-color: theme('colors.slate.600') transparent;
+  }
+
+  html.dark .opl-scroll-slim::-webkit-scrollbar-thumb {
+    background-color: theme('colors.slate.600');
+  }
+
+  html.dark .opl-scroll-slim:hover::-webkit-scrollbar-thumb {
+    background-color: theme('colors.slate.500');
+  }
 }
 
 /* Skeleton-shimmer voor laadstatussen */

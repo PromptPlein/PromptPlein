@@ -1,5 +1,10 @@
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
-import { defaultModelFor, isValidModelFor, type AiProvider } from '@/config/aiModels';
+import {
+  defaultModelFor,
+  isEnabledProvider,
+  isValidModelFor,
+  type AiProvider,
+} from '@/config/aiModels';
 
 /**
  * App-brede AI-instellingen die de admin beheert. Gelden voor ALLE
@@ -98,10 +103,14 @@ const PROVIDER_KEY = 'optimize_provider';
 const SETTINGS_KEY = 'ai_settings';
 const LOCAL_PROVIDER_KEY = 'opl.settings.optimize_provider';
 const LOCAL_SETTINGS_KEY = 'opl.settings.ai_settings';
-const VALID_PROVIDERS: AiProvider[] = ['auto', 'claude', 'openai', 'deepseek', 'mistral'];
-
+/**
+ * Alleen providers die ook echt draaien tellen als geldige keuze. Stond er nog
+ * een uitgezette provider (Claude/OpenAI) opgeslagen van vóór die beperking,
+ * dan valt de instelling hieronder terug op de default in plaats van een keten
+ * te kiezen die nergens op uitkomt.
+ */
 function isProvider(value: unknown): value is AiProvider {
-  return typeof value === 'string' && VALID_PROVIDERS.includes(value as AiProvider);
+  return typeof value === 'string' && isEnabledProvider(value);
 }
 
 /** Vul ontbrekende velden aan met defaults en saneer types. */

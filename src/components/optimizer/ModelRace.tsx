@@ -1,6 +1,5 @@
 import { Check, Loader2 } from 'lucide-react';
 import clsx from 'clsx';
-import { providerShortLabel } from '@/config/aiModels';
 
 interface ModelRaceProps {
   /** Provider-ids die tegelijk aan hetzelfde antwoord begonnen zijn. */
@@ -20,6 +19,11 @@ interface ModelRaceProps {
  * blijft: de gebruiker ziet één spinner en weet niet of er iets gebeurt. Twee
  * banen met een lopende balk maken de race zichtbaar — en zodra er een winnaar
  * is, valt de ander netjes terug in plaats van te verdwijnen.
+ *
+ * Welke AI-dienst achter een baan zit, staat er bewust NIET bij: welke leverancier
+ * het werk doet is een keuze van de beheerder en gaat de gebruiker niet aan. De
+ * banen heten daarom neutraal "Model 1" en "Model 2"; de provider-id dient alleen
+ * nog als sleutel, zodat een baan bij een wisselende winnaar op zijn plek blijft.
  */
 export default function ModelRace({ models, winner, verb, className }: ModelRaceProps) {
   // Won een provider die niet meedeed aan de race (de seriële keten sprong bij
@@ -34,13 +38,13 @@ export default function ModelRace({ models, winner, verb, className }: ModelRace
       <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
         {lanes.length > 1
           ? decided
-            ? `${providerShortLabel(winner as string)} was als eerste klaar en ${verb ?? 'levert het antwoord'}`
+            ? `Het snelste model was als eerste klaar en ${verb ?? 'levert het antwoord'}`
             : `${lanes.length} modellen werken tegelijk — de snelste wint`
-          : `${providerShortLabel(lanes[0])} ${verb ?? 'is aan het werk'}`}
+          : `Het model ${verb ?? 'is aan het werk'}`}
       </p>
 
       <div className={clsx('grid gap-2', lanes.length > 1 && 'sm:grid-cols-2')}>
-        {lanes.map((model) => {
+        {lanes.map((model, i) => {
           const won = decided && model === winner;
           const lost = decided && model !== winner;
           return (
@@ -66,7 +70,7 @@ export default function ModelRace({ models, winner, verb, className }: ModelRace
                         : 'text-rijksblauw-700 dark:text-rijksblauw-200',
                   )}
                 >
-                  {providerShortLabel(model)}
+                  {lanes.length > 1 ? `Model ${i + 1}` : 'Model'}
                 </span>
                 <span
                   className={clsx(

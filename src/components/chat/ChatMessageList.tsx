@@ -99,20 +99,20 @@ const ChatMessageRow = memo(function ChatMessageRow({
 }) {
   if (message.role === 'user') {
     return (
-      <div className="group flex flex-col items-end">
+      <div className="flex flex-col items-end">
         <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-rijksblauw-50 px-4 py-2.5 text-sm text-slate-900 dark:bg-rijksblauw-500/15 dark:text-slate-100">
           {message.content}
         </div>
 
-        {/* Acties onder het eigen bericht. Kopiëren staat er altijd (ook op
-            aanraakschermen, waar hover niet bestaat); de zwaardere acties
-            verschijnen pas bij hover of toetsenbordfocus, zodat het gesprek
-            rustig blijft. */}
+        {/* Acties onder het eigen bericht. Staan er altijd: op aanraakschermen
+            bestaat hover niet, en verborgen acties worden simpelweg niet
+            gevonden. Ze blijven wel klein en grijs, zodat het gesprek rustig
+            oogt en het antwoord de aandacht houdt. */}
         {message.content.trim() && (
           <div className="mt-1 flex items-center gap-3">
             <CopyMessageButton text={message.content} label="" />
             {(onImprove || onSaveAsPrompt) && (
-              <span className="flex gap-3 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+              <span className="flex gap-3">
                 {onImprove && (
                   <button
                     type="button"

@@ -217,11 +217,10 @@ export default function SettingsPage() {
         <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
           De sleutel zelf zet je niet hier, maar als secret op de server:{' '}
           <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[11px] dark:bg-slate-700">
-            supabase secrets set CLAUDE_API_KEY=…
+            supabase secrets set DEEPSEEK_API_KEY=…
           </code>{' '}
-          (idem <code className="font-mono text-[11px]">OPENAI_API_KEY</code>,{' '}
-          <code className="font-mono text-[11px]">DEEPSEEK_API_KEY</code>,{' '}
-          <code className="font-mono text-[11px]">MISTRAL_API_KEY</code>).
+          (idem <code className="font-mono text-[11px]">MISTRAL_API_KEY</code>). PromptPlein gebruikt
+          alleen deze twee diensten; Claude en OpenAI staan uit.
         </p>
 
         {/* Modelkeuze binnen de gekozen provider. Verschijnt zodra een concrete

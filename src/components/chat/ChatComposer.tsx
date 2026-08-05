@@ -116,7 +116,11 @@ export default function ChatComposer({
       return;
     }
     el.style.height = 'auto';
-    el.style.height = `${Math.min(MAX_HEIGHT, Math.max(DEFAULT_HEIGHT, el.scrollHeight))}px`;
+    // Het vak rekent met border-box, dus de randen tellen mee in de hoogte.
+    // Alleen scrollHeight aanhouden laat de tekst er twee pixels overheen lopen
+    // en dat is precies genoeg voor een schuifbalk bij tekst die eigenlijk past.
+    const borders = el.offsetHeight - el.clientHeight;
+    el.style.height = `${Math.min(MAX_HEIGHT, Math.max(DEFAULT_HEIGHT, el.scrollHeight + borders))}px`;
   }, [text, manualHeight]);
 
   function storeHeight(next: number | null) {
@@ -280,11 +284,15 @@ export default function ChatComposer({
           <textarea
             ref={textareaRef}
             className={clsx(
-              'opl-input w-full resize-none py-2.5 pb-6',
+              // opl-scroll-slim: een slanke schuifbalk met vaste goot, zodat een
+              // langere tekst geen brede systeembalk oplevert die tegen de
+              // knoppen in de hoeken aan botst — en de tekst niet verspringt op
+              // het moment dat de balk verschijnt.
+              'opl-input opl-scroll-slim w-full resize-none py-2.5 pb-6',
               // Ruimte rechtsboven voor het sterretje, zodat de tekst er niet
               // onder doorloopt. Vast (niet afhankelijk van of de knop er staat),
               // anders zou de tekst verspringen zodra je begint te typen.
-              onOptimize && 'pr-11',
+              onOptimize && 'pr-12',
             )}
             rows={3}
             placeholder={disabled ? 'Chat wordt geladen…' : 'Stel je vraag…'}
@@ -306,7 +314,9 @@ export default function ChatComposer({
             <button
               type="button"
               className={clsx(
-                'absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-lg',
+                // right-3 laat de schuifbalk vrij; zonder balk oogt het als een
+                // bewuste marge in plaats van een knop tegen de rand.
+                'absolute right-3 top-2 flex h-7 w-7 items-center justify-center rounded-lg',
                 'bg-gradient-to-br from-rijksoranje to-rijksoranje-dark text-white shadow-sm',
                 'transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-rijksoranje/40',
                 canOptimize && !optimizing
@@ -334,7 +344,7 @@ export default function ChatComposer({
               terug op automatisch meegroeien. */}
           <button
             type="button"
-            className="absolute bottom-1 right-1 flex h-5 w-6 cursor-ns-resize touch-none items-center justify-center rounded text-slate-300 transition-colors hover:bg-slate-100 hover:text-slate-500 focus:outline-none focus:ring-2 focus:ring-rijksblauw-500/40 dark:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300"
+            className="absolute bottom-1.5 right-2.5 flex h-5 w-6 cursor-ns-resize touch-none items-center justify-center rounded text-slate-300 transition-colors hover:bg-slate-100 hover:text-slate-500 focus:outline-none focus:ring-2 focus:ring-rijksblauw-500/40 dark:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300"
             onPointerDown={startDrag}
             onPointerMove={onDrag}
             onPointerUp={endDrag}
