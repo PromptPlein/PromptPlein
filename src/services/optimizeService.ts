@@ -1,5 +1,10 @@
 import { getAnonKey, getFunctionUrl, isSupabaseConfigured } from '@/lib/supabase';
-import { readNdjsonEvents, streamNdjson, type StreamOutcome } from '@/lib/ndjsonStream';
+import {
+  readNdjsonEvents,
+  streamNdjson,
+  type StatusHandler,
+  type StreamOutcome,
+} from '@/lib/ndjsonStream';
 import { isContextPrompt, structureFormat } from '@/lib/techniques';
 import { tidyPromptMarkup } from '@/lib/utils';
 import type { AiProvider } from '@/config/aiModels';
@@ -64,6 +69,7 @@ async function streamFromFunction(
   body: Record<string, unknown>,
   onChunk: StreamHandler,
   tidy: (text: string) => string = (t) => t,
+  onStatus?: StatusHandler,
 ): Promise<StreamOutcome> {
   const functionUrl = getFunctionUrl('optimize-prompt');
   if (!functionUrl) throw new Error('Geen edge function geconfigureerd');
@@ -75,6 +81,7 @@ async function streamFromFunction(
     body,
     onChunk,
     tidy,
+    onStatus,
   });
 }
 
@@ -118,6 +125,12 @@ export async function optimizePrompt(args: {
    * dus bestaande aanroepers hoeven niets te veranderen.
    */
   onChunk?: StreamHandler;
+  /**
+   * Voortgang naast de tekst: welke modellen tegelijk aan de prompt begonnen,
+   * welke de race won en in welke fase we zitten. Alleen gevuld bij streamen
+   * (`onChunk`); zonder deze callback verandert er niets aan het gedrag.
+   */
+  onStatus?: StatusHandler;
 }): Promise<OptimizeResult> {
   const {
     technique,
@@ -131,6 +144,7 @@ export async function optimizePrompt(args: {
     extraAnsweredFields,
     interviewResolved,
     onChunk,
+    onStatus,
   } = args;
 
   const functionUrl = getFunctionUrl('optimize-prompt');
@@ -176,7 +190,7 @@ export async function optimizePrompt(args: {
       // Meelezen gevraagd? Dan de streamende route: de eerste regels staan er na
       // ongeveer een seconde in plaats van na de volledige generatie.
       if (onChunk) {
-        const streamed = await streamFromFunction(payload, onChunk, tidyPromptMarkup);
+        const streamed = await streamFromFunction(payload, onChunk, tidyPromptMarkup, onStatus);
         if (streamed.unclear) {
           return {
             optimized_content: '',
@@ -1770,6 +1784,22 @@ export async function analyzePrompt(args: {
 }
 
 /**
+ * Waar het voor-invullen op dit moment mee bezig is. Voedt de voortgangstekst in
+ * het laadscherm: dezelfde wachttijd voelt korter als zichtbaar is wát er gebeurt.
+ *  - 'reading'  → de tekst is verstuurd, de modellen lezen hem
+ *  - 'matching' → er komt antwoord binnen; de inhoud wordt aan velden gekoppeld
+ *  - 'filling'  → de velden worden geschreven (het eerste veld is compleet)
+ */
+export type PrefillPhase = 'reading' | 'matching' | 'filling';
+
+/** Het afsluitende 'done'-event van de streamende voor-invulling. */
+interface PrefillDoneEvent {
+  summary?: string;
+  fields?: unknown;
+  provider?: string;
+}
+
+/**
  * Ontleedt de eigen tekst/prompt van de gebruiker en vult de velden van de gekozen
  * techniek alvast voor: per veld een voorstel met herkomst ('prompt' = afgeleid uit
  * de tekst, 'ai' = suggestie) en een korte toelichting. Zo begint de gebruiker niet
@@ -1799,6 +1829,16 @@ export async function prefillFields(args: {
    * basis van gangbare (rijks)overheidsconventies.
    */
   fromFormatBrief?: boolean;
+  /**
+   * Voortgang naast de velden: welke modellen tegelijk aan het invullen begonnen
+   * ({@link StreamStatus.models}), welke fase loopt ({@link PrefillPhase}) en
+   * welke provider de race won.
+   */
+  onStatus?: StatusHandler;
+  /** De samenvatting is afgerond binnen (nog vóór alle velden). */
+  onSummary?: (text: string) => void;
+  /** Eén afgerond veld; komt binnen zodra het compleet is. */
+  onField?: (field: PrefilledField) => void;
 }): Promise<PrefillResult> {
   const {
     ownPrompt,
@@ -1808,6 +1848,9 @@ export async function prefillFields(args: {
     clarification,
     fromDocument,
     fromFormatBrief,
+    onStatus,
+    onSummary,
+    onField,
   } = args;
   const content = ownPrompt.trim();
   const empty: PrefillResult = {
@@ -1827,15 +1870,27 @@ export async function prefillFields(args: {
     placeholder: q.placeholder,
   }));
 
+  // Behoud alleen voorstellen die naar bestaande velden van de techniek verwijzen.
+  const valid = new Set(technique.follow_up_questions.map((q) => q.id));
+  const keep = (list: unknown): PrefilledField[] =>
+    (Array.isArray(list) ? (list as PrefilledField[]) : []).filter(
+      (f) => f && typeof f.id === 'string' && valid.has(f.id) && typeof f.value === 'string',
+    );
+
   try {
     const anonKey = getAnonKey();
-    const response = await fetch(functionUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(anonKey ? { Authorization: `Bearer ${anonKey}`, apikey: anonKey } : {}),
-      },
-      body: JSON.stringify({
+
+    // Tussenstand uit de stream; het afsluitende 'done'-event is leidend.
+    let streamedSummary = '';
+    const streamedFields: PrefilledField[] = [];
+    let done: PrefillDoneEvent | null = null;
+    let unclear: { reason?: string; provider?: string } | null = null;
+    let streamError = '';
+
+    const read = await readNdjsonEvents({
+      url: functionUrl,
+      headers: anonKey ? { Authorization: `Bearer ${anonKey}`, apikey: anonKey } : {},
+      body: {
         mode: 'prefill',
         ownPrompt: content,
         clarification,
@@ -1845,40 +1900,113 @@ export async function prefillFields(args: {
         analyzeFields,
         preferredProvider: preferredProvider ?? 'auto',
         preferredModel,
-      }),
+      },
+      onEvent: (ev) => {
+        switch (ev.type) {
+          case 'models':
+            if (Array.isArray(ev.providers)) {
+              onStatus?.({
+                models: ev.providers.filter((p): p is string => typeof p === 'string'),
+              });
+            }
+            break;
+          case 'phase':
+            if (typeof ev.phase === 'string') onStatus?.({ phase: ev.phase });
+            break;
+          // De provider die de race won en de velden levert.
+          case 'meta':
+            if (typeof ev.provider === 'string') onStatus?.({ provider: ev.provider });
+            break;
+          case 'summary':
+            streamedSummary = typeof ev.text === 'string' ? ev.text : '';
+            if (streamedSummary) onSummary?.(streamedSummary);
+            break;
+          case 'field': {
+            const [field] = keep([ev.field]);
+            if (field && !streamedFields.some((f) => f.id === field.id)) {
+              streamedFields.push(field);
+              onField?.(field);
+            }
+            break;
+          }
+          case 'done':
+            done = ev as PrefillDoneEvent;
+            break;
+          case 'unclear':
+            unclear = {
+              reason: typeof ev.reason === 'string' ? ev.reason : undefined,
+              provider: typeof ev.provider === 'string' ? ev.provider : undefined,
+            };
+            break;
+          case 'error':
+            streamError = typeof ev.error === 'string' ? ev.error : 'Onbekende fout';
+            break;
+        }
+      },
     });
 
-    if (!response.ok) {
-      // Diagnostisch: lees de servermelding mee zodat de echte reden zichtbaar wordt.
-      const detail = await response.text().catch(() => '');
-      console.error('[prefill] edge function', response.status, detail);
-      throw new Error(`Edge function gaf status ${response.status}${detail ? ` — ${detail}` : ''}`);
+    // Oudere edge function zonder stream-ondersteuning: gewoon één JSON-object.
+    if (!read.streamed) {
+      const data = (read.json ?? {}) as Partial<PrefillResult>;
+      // Clarity-gate: de prompt was onzin → geef het verdict door.
+      if (data.unclear) {
+        return {
+          summary: '',
+          fields: [],
+          success: false,
+          unclear: true,
+          reason: data.reason,
+          provider: (data.provider as PrefillResult['provider']) ?? 'claude',
+        };
+      }
+      if (data.success && Array.isArray(data.fields)) {
+        return {
+          summary: data.summary ?? '',
+          fields: keep(data.fields),
+          success: true,
+          provider: (data.provider as PrefillResult['provider']) ?? 'claude',
+        };
+      }
+      throw new Error(data.error ?? 'Prefill gaf geen bruikbaar resultaat');
     }
 
-    const data = (await response.json()) as Partial<PrefillResult>;
     // Clarity-gate: de prompt was onzin → geef het verdict door.
-    if (data.unclear) {
+    const rejected = unclear as { reason?: string; provider?: string } | null;
+    if (rejected) {
       return {
         summary: '',
         fields: [],
         success: false,
         unclear: true,
-        reason: data.reason,
-        provider: (data.provider as PrefillResult['provider']) ?? 'claude',
+        reason: rejected.reason,
+        provider: (rejected.provider as PrefillResult['provider']) ?? 'claude',
       };
     }
-    if (data.success && Array.isArray(data.fields)) {
-      // Behoud alleen voorstellen die naar bestaande velden van de techniek verwijzen.
-      const valid = new Set(technique.follow_up_questions.map((q) => q.id));
-      const fields: PrefilledField[] = data.fields.filter((f) => valid.has(f.id));
+
+    // Via de cast, omdat TypeScript de toekenning binnen de callback niet in de
+    // control-flow meeneemt en `done` anders tot `never` versmalt.
+    const settled = done as PrefillDoneEvent | null;
+    if (settled) {
       return {
-        summary: data.summary ?? '',
-        fields,
+        summary: settled.summary ?? streamedSummary,
+        fields: keep(settled.fields),
         success: true,
-        provider: (data.provider as PrefillResult['provider']) ?? 'claude',
+        provider: (settled.provider as PrefillResult['provider']) ?? 'claude',
       };
     }
-    throw new Error(data.error ?? 'Prefill gaf geen bruikbaar resultaat');
+
+    // De stream brak af nadat er al velden binnen waren: die zijn bruikbaar, dus
+    // daar gaan we mee door in plaats van alles weg te gooien.
+    if (streamedFields.length > 0) {
+      return {
+        summary: streamedSummary,
+        fields: streamedFields,
+        success: true,
+        provider: 'claude',
+      };
+    }
+
+    throw new Error(streamError || 'Prefill gaf geen bruikbaar resultaat');
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Onbekende fout';
     // Voor-invullen is een hulp-laag: bij een fout gewoon lege velden, met een

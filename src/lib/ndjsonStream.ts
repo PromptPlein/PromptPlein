@@ -231,7 +231,17 @@ export async function streamNdjson(args: {
   const handleLine = (line: string): void => {
     const trimmed = line.trim();
     if (!trimmed) return;
-    let event: { type?: string; text?: string; provider?: string; reason?: string; error?: string };
+    let event: {
+      type?: string;
+      text?: string;
+      provider?: string;
+      reason?: string;
+      error?: string;
+      /** Alleen bij 'models': de providers die tegelijk aan het antwoord beginnen. */
+      providers?: unknown;
+      /** Alleen bij 'phase': waar de generatie is. */
+      phase?: string;
+    };
     try {
       event = JSON.parse(trimmed);
     } catch {
@@ -239,8 +249,17 @@ export async function streamNdjson(args: {
       return;
     }
     switch (event.type) {
+      case 'models':
+        if (Array.isArray(event.providers)) {
+          onStatus?.({ models: event.providers.filter((p): p is string => typeof p === 'string') });
+        }
+        break;
+      case 'phase':
+        if (event.phase) onStatus?.({ phase: event.phase });
+        break;
       case 'meta':
         outcome.provider = event.provider;
+        onStatus?.({ provider: event.provider });
         break;
       case 'delta':
         accumulated += event.text ?? '';

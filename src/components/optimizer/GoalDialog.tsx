@@ -10,7 +10,6 @@ import {
   MessageCircleQuestion,
   Package,
   RotateCw,
-  Search,
   Sparkles,
 } from 'lucide-react';
 import clsx from 'clsx';
@@ -21,6 +20,7 @@ import {
   prefillFields,
   recommendFramework,
   runClarifyTurn,
+  type PrefillPhase,
 } from '@/services/optimizeService';
 import { isContextPrompt } from '@/lib/techniques';
 import { activityIdentifier, stripMarkdown } from '@/lib/utils';
@@ -30,11 +30,14 @@ import { logBehavior, newBehaviorSession, type BehaviorSession } from '@/service
 import { useAuth } from '@/context/AuthContext';
 import type { AiSettings } from '@/services/settingsService';
 import OptimizingLoader from './OptimizingLoader';
+import PrefillLoader from './PrefillLoader';
 import GuardrailDialog from './GuardrailDialog';
 import { InterviewPanel } from './InterviewPanel';
 import FollowUpQuestions, { type FieldMeta } from './FollowUpQuestions';
+import type { StreamStatus } from '@/lib/ndjsonStream';
 import type {
   OptimizeResult,
+  PrefilledField,
   PrefillResult,
   PromptDialogue,
   Technique,
@@ -187,6 +190,16 @@ export default function GoalDialog({ settings, onResult, header }: GoalDialogPro
   const [frameworkId, setFrameworkId] = useState<string | null>(null);
   const [prefill, setPrefill] = useState<PrefillResult | null>(null);
   const [prefilling, setPrefilling] = useState(false);
+  // Live voortgang van het voor-invullen (racende modellen, fase, binnengekomen
+  // velden), zodat het laadscherm laat zien wát er gebeurt.
+  const [prefillProgress, setPrefillProgress] = useState<{
+    models: string[];
+    winner: string | null;
+    phase: PrefillPhase;
+    fields: PrefilledField[];
+  }>({ models: [], winner: null, phase: 'reading', fields: [] });
+  // Dezelfde voortgang, maar dan voor het bouwen van de prompt zelf.
+  const [composeProgress, setComposeProgress] = useState<StreamStatus>({});
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [fieldMeta, setFieldMeta] = useState<FieldMeta>({});
 
@@ -449,6 +462,7 @@ export default function GoalDialog({ settings, onResult, header }: GoalDialogPro
     setPhase('fields');
     setError(null);
     setPrefilling(true);
+    setPrefillProgress({ models: [], winner: null, phase: 'reading', fields: [] });
     log('framework_prefilled', {
       techniqueId: id,
       metadata: { fields: framework.follow_up_questions.length, answered: transcript.length },
@@ -465,6 +479,17 @@ export default function GoalDialog({ settings, onResult, header }: GoalDialogPro
         technique: framework,
         preferredProvider: settings.provider,
         preferredModel: settings.model,
+        onStatus: (status) =>
+          setPrefillProgress((p) => ({
+            ...p,
+            ...(status.models ? { models: status.models } : {}),
+            ...(status.phase ? { phase: status.phase as PrefillPhase } : {}),
+            ...(status.provider ? { winner: status.provider } : {}),
+          })),
+        onField: (field) =>
+          setPrefillProgress((p) =>
+            p.fields.some((f) => f.id === field.id) ? p : { ...p, fields: [...p.fields, field] },
+          ),
       });
       // Onduidelijk is hier vrijwel uitgesloten — de tekst komt uit ons eigen
       // gesprek. Gebeurt het toch, dan blijven de velden leeg en kan de
@@ -502,6 +527,7 @@ export default function GoalDialog({ settings, onResult, header }: GoalDialogPro
     setPhase('composing');
     setError(null);
     setStreamText(''); // meegelezen tekst van een vorige poging wissen
+    setComposeProgress({}); // en de voortgang van die poging ook
     // Zit de opbrengst van het gesprek al in de velden, dan hoeft het ruwe
     // transcript er niet nog eens bij: dat levert dubbele invoer op en maakt de
     // generatie alleen maar trager. Bleven de velden leeg (voor-invullen
@@ -536,6 +562,8 @@ export default function GoalDialog({ settings, onResult, header }: GoalDialogPro
         temperature: settings.temperature,
         // Meelezen terwijl de prompt wordt geschreven.
         onChunk: setStreamText,
+        // Welke modellen meeschrijven en wie de race wint.
+        onStatus: (status) => setComposeProgress((p) => ({ ...p, ...status })),
       });
       if (res.unclear || !res.optimized_content?.trim()) {
         setUnclearReason(
@@ -719,7 +747,13 @@ export default function GoalDialog({ settings, onResult, header }: GoalDialogPro
               </div>
             ) : phase === 'composing' ? (
               <div ref={composingRef} className="scroll-mt-24">
-                <OptimizingLoader techniqueName="je prompt" streamText={streamText} />
+                <OptimizingLoader
+                  techniqueName="je prompt"
+                  streamText={streamText}
+                  models={composeProgress.models}
+                  winner={composeProgress.provider}
+                  phase={composeProgress.phase}
+                />
               </div>
             ) : phase === 'done' ? (
               <div className="flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50/50 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between dark:border-emerald-500/30 dark:bg-emerald-500/10">
@@ -735,36 +769,19 @@ export default function GoalDialog({ settings, onResult, header }: GoalDialogPro
               <div ref={fieldsRef} className="scroll-mt-24">
                 {prefilling ? (
                   /* De AI verdeelt de opbrengst van het gesprek over de velden;
-                     de skeletons laten zien wat er zo komt te staan. */
-                  <div className="animate-fade-in space-y-5">
-                    <div className="flex items-center gap-3">
-                      <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-rijksblauw-50 text-rijksblauw-600 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">
-                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rijksblauw-400/30" />
-                        <Search size={18} className="relative" />
-                      </span>
-                      <div>
-                        <p className="flex items-center gap-2 font-semibold text-slate-800 dark:text-slate-100">
-                          We vullen de velden alvast voor
-                          <Loader2 size={15} className="animate-spin text-rijksblauw-500" />
-                        </p>
-                        <p className="text-sm text-slate-500 dark:text-slate-400">
-                          We verdelen wat je in het gesprek hebt verteld over de velden van{' '}
-                          <span className="font-medium text-rijksblauw-700 dark:text-rijksblauw-200">
-                            {chosenFramework?.name}
-                          </span>
-                          …
-                        </p>
-                      </div>
-                    </div>
-                    <div className="space-y-4">
-                      {[0, 1, 2].map((i) => (
-                        <div key={i} className="space-y-2">
-                          <div className="skeleton h-3.5 w-1/3 rounded" />
-                          <div className="skeleton h-16 w-full rounded-lg" />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                     die lopen één voor één vol terwijl de modellen werken. */
+                  <PrefillLoader
+                    techniqueName={chosenFramework?.name}
+                    source="wat je in het gesprek hebt verteld"
+                    fields={chosenFramework?.follow_up_questions.map((q) => ({
+                      id: q.id,
+                      label: q.label,
+                    }))}
+                    filled={prefillProgress.fields}
+                    models={prefillProgress.models}
+                    winner={prefillProgress.winner}
+                    phase={prefillProgress.phase}
+                  />
                 ) : chosenFramework ? (
                   <div className="animate-fade-in space-y-4">
                     <div>

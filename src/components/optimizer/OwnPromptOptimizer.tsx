@@ -13,7 +13,6 @@ import {
   Lightbulb,
   Loader2,
   RefreshCw,
-  Search,
   Sparkles,
   Wand2,
 } from 'lucide-react';
@@ -29,13 +28,17 @@ import {
   prefillFields,
   recommendFramework,
   type FrameworkSearchPhase,
+  type PrefillPhase,
 } from '@/services/optimizeService';
 import OptimizingLoader from './OptimizingLoader';
+import PrefillLoader from './PrefillLoader';
 import FollowUpQuestions, { type FieldMeta } from './FollowUpQuestions';
 import type { AiSettings } from '@/services/settingsService';
+import type { StreamStatus } from '@/lib/ndjsonStream';
 import type {
   FrameworkFit,
   OptimizeResult,
+  PrefilledField,
   PrefillResult,
   Technique,
   TechniqueRecommendation,
@@ -166,9 +169,20 @@ export default function OwnPromptOptimizer({
   // Herkomst per voor-ingevuld veld (origin-badges); vervalt zodra de gebruiker zelf typt.
   const [fieldMeta, setFieldMeta] = useState<FieldMeta>({});
   const [prefilling, setPrefilling] = useState(false);
+  // Live voortgang van het voor-invullen: welke modellen racen, wie wint, welke
+  // fase loopt en welke velden al binnen zijn. Voedt het laadscherm, zodat de
+  // gebruiker de velden ziet vollopen in plaats van naar skeletten te kijken.
+  const [prefillProgress, setPrefillProgress] = useState<{
+    models: string[];
+    winner: string | null;
+    phase: PrefillPhase;
+    fields: PrefilledField[];
+  }>({ models: [], winner: null, phase: 'reading', fields: [] });
   const [generating, setGenerating] = useState(false);
   // De prompt zoals de AI hem op dit moment schrijft (live meelezen).
   const [streamText, setStreamText] = useState('');
+  // Dezelfde voortgang, maar dan voor het bouwen van de prompt zelf.
+  const [genProgress, setGenProgress] = useState<StreamStatus>({});
   // Terugkoppeling bij onzin-input: geen resultaat, wél uitleg.
   const [unclearReason, setUnclearReason] = useState<string | null>(null);
   // Anker voor het voor-invul-/laadblok zodat we er na een keuze naartoe scrollen.
@@ -372,6 +386,8 @@ export default function OwnPromptOptimizer({
    */
   async function runPrefill(chosen: Technique, clarify?: string) {
     setPrefilling(true);
+    // Voortgang van een vorige ronde wissen; het laadscherm begint weer leeg.
+    setPrefillProgress({ models: [], winner: null, phase: 'reading', fields: [] });
     try {
       const res = await prefillFields({
         ownPrompt: ownPrompt.trim(),
@@ -379,6 +395,17 @@ export default function OwnPromptOptimizer({
         clarification: clarify?.trim() || undefined,
         preferredProvider: settings.provider,
         preferredModel: settings.model,
+        onStatus: (status) =>
+          setPrefillProgress((p) => ({
+            ...p,
+            ...(status.models ? { models: status.models } : {}),
+            ...(status.phase ? { phase: status.phase as PrefillPhase } : {}),
+            ...(status.provider ? { winner: status.provider } : {}),
+          })),
+        onField: (field) =>
+          setPrefillProgress((p) =>
+            p.fields.some((f) => f.id === field.id) ? p : { ...p, fields: [...p.fields, field] },
+          ),
       });
       // De prompt was onzin → toon de terugkoppeling i.p.v. velden voor te vullen.
       if (res.unclear) {
@@ -408,6 +435,7 @@ export default function OwnPromptOptimizer({
     setGenerating(true);
     setUnclearReason(null); // nieuwe poging: oude onduidelijk-melding wissen
     setStreamText(''); // meegelezen tekst van een vorige poging wissen
+    setGenProgress({}); // en de voortgang van die poging ook
     // Het laadscherm verschijnt boven de genereerknop; scroll het in beeld zodat
     // de gebruiker de analyse ziet i.p.v. naar de (nu verdwenen) knop te staren.
     requestAnimationFrame(() => {
@@ -425,6 +453,8 @@ export default function OwnPromptOptimizer({
         temperature: settings.temperature,
         // Meelezen terwijl de prompt wordt geschreven.
         onChunk: setStreamText,
+        // Welke modellen meeschrijven en wie de race wint.
+        onStatus: (status) => setGenProgress((p) => ({ ...p, ...status })),
       });
       // Clarity-gate: de AI vond de input onzin en maakte bewust geen prompt.
       if (res.unclear) {
@@ -805,49 +835,30 @@ export default function OwnPromptOptimizer({
 
       {/* Anker voor het laad-/voor-invulblok; hier scrollen we na een keuze naartoe. */}
       <div ref={analysisRef} className="scroll-mt-24">
-        {/* 4. Mooi laadscherm: de AI ontleedt de prompt en vult de velden voor. */}
+        {/* 4. Mooi laadscherm: de AI ontleedt de prompt en vult de velden voor.
+            De velden lopen één voor één vol terwijl de modellen werken. */}
         {prefilling && (
-          <div className="animate-fade-in overflow-hidden rounded-2xl border border-rijksblauw-200 bg-white shadow-sm dark:border-rijksblauw-500/30 dark:bg-slate-800">
-            {/* Geanimeerde accentbalk bovenaan */}
-            <div className="h-1 w-full overflow-hidden bg-rijksblauw-100 dark:bg-rijksblauw-500/20">
-              <div className="h-full w-1/3 animate-loading-bar bg-gradient-to-r from-rijksblauw-400 via-rijksoranje to-rijksblauw-600" />
-            </div>
-            <div className="p-5 sm:p-6">
-              <div className="flex items-center gap-3">
-                <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-rijksblauw-50 text-rijksblauw-600 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rijksblauw-400/30" />
-                  <Search size={18} className="relative" />
-                </span>
-                <div>
-                  <p className="flex items-center gap-2 font-semibold text-slate-800 dark:text-slate-100">
-                    We vullen de velden alvast voor
-                    <Loader2 size={15} className="animate-spin text-rijksblauw-500" />
-                  </p>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">
-                    We ontleden je prompt en verdelen de inhoud over de velden van{' '}
-                    <span className="font-medium text-rijksblauw-700 dark:text-rijksblauw-200">
-                      {technique?.name}
-                    </span>
-                    …
-                  </p>
-                </div>
-              </div>
-
-              {/* Skeleton-placeholders: suggereren de velden die zo verschijnen. */}
-              <div className="mt-5 space-y-4">
-                {[0, 1, 2].map((i) => (
-                  <div key={i} className="space-y-2">
-                    <div className="skeleton h-3.5 w-1/3 rounded" />
-                    <div className="skeleton h-16 w-full rounded-lg" />
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+          <PrefillLoader
+            techniqueName={technique?.name}
+            source="je prompt"
+            fields={technique?.follow_up_questions.map((q) => ({ id: q.id, label: q.label }))}
+            filled={prefillProgress.fields}
+            models={prefillProgress.models}
+            winner={prefillProgress.winner}
+            phase={prefillProgress.phase}
+          />
         )}
 
         {/* Mooi laadscherm tijdens het genereren van de uiteindelijke prompt. */}
-        {generating && <OptimizingLoader techniqueName={technique?.name} streamText={streamText} />}
+        {generating && (
+          <OptimizingLoader
+            techniqueName={technique?.name}
+            streamText={streamText}
+            models={genProgress.models}
+            winner={genProgress.provider}
+            phase={genProgress.phase}
+          />
+        )}
 
         {/* 5. Voor-ingevulde velden — controleer en pas aan. Indeling (stap voor
             stap of alles tegelijk) is een persoonlijke voorkeur in FollowUpQuestions. */}

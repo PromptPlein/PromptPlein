@@ -1,19 +1,32 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, ArrowRight, Check, Loader2, Pencil, Search, Sparkles, Wand2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Loader2, Pencil, Sparkles, Wand2 } from 'lucide-react';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import PrefillBadge from './PrefillBadge';
+import PrefillLoader from './PrefillLoader';
 import FieldLayoutToggle from './FieldLayoutToggle';
 import ExpandProposal from './ExpandProposal';
 import { useFieldLayout } from '@/lib/useFieldLayout';
-import { expandField } from '@/services/optimizeService';
+import { expandField, type PrefillPhase } from '@/services/optimizeService';
 import { getAiSettings, DEFAULT_AI_SETTINGS, type AiSettings } from '@/services/settingsService';
 import { structureFormat } from '@/lib/techniques';
 import type { AiProvider } from '@/config/aiModels';
-import type { FollowUpQuestion, PrefillSource, Technique } from '@/types';
+import type { FollowUpQuestion, PrefilledField, PrefillSource, Technique } from '@/types';
 
 /** Herkomst + toelichting van een voor-ingevuld veld, per veld-id. */
 export type FieldMeta = Record<string, { source: PrefillSource; note?: string }>;
+
+/**
+ * Live voortgang van het voor-invullen: welke modellen tegelijk aan het werk
+ * zijn, wie de race won, welke fase loopt en welke velden al binnen zijn. De
+ * ouder vult dit vanuit de `on*`-callbacks van `prefillFields`.
+ */
+export interface PrefillProgress {
+  models?: string[];
+  winner?: string | null;
+  phase?: PrefillPhase;
+  fields?: PrefilledField[];
+}
 
 interface FollowUpQuestionsProps {
   technique: Technique;
@@ -28,6 +41,11 @@ interface FollowUpQuestionsProps {
   onUserEdit?: (id: string) => void;
   /** True terwijl de velden worden voor-ingevuld; toont een laadstaat. */
   prefilling?: boolean;
+  /**
+   * Live voortgang van dat voor-invullen. Zonder deze prop toont het laadscherm
+   * gewoon skeletten; met de prop lopen de velden zichtbaar vol.
+   */
+  prefillProgress?: PrefillProgress;
   /**
    * AI-provider voor de per-veld "Vul verder aan"-actie. Optioneel: wanneer niet
    * meegegeven, leest de component zelf de voorkeuren uit de instellingen.
@@ -62,6 +80,7 @@ export default function FollowUpQuestions({
   fieldMeta,
   onUserEdit,
   prefilling = false,
+  prefillProgress,
   preferredProvider,
   preferredModel,
   onFinish,
@@ -105,47 +124,19 @@ export default function FollowUpQuestions({
     };
   }, []);
 
-  // Laadstaat tijdens het voor-invullen: dezelfde geanimeerde accentbalk +
-  // pulserend icoon als de eigen-prompt-flow, met skeletten i.p.v. lege velden.
+  // Laadstaat tijdens het voor-invullen: hetzelfde laadscherm als de andere
+  // flows, met de velden die één voor één vollopen zodra ze binnen zijn.
   if (prefilling) {
     return (
-      <div className="animate-fade-in overflow-hidden rounded-2xl border border-rijksblauw-200 bg-white shadow-sm dark:border-rijksblauw-500/30 dark:bg-slate-800">
-        {/* Geanimeerde accentbalk bovenaan */}
-        <div className="h-1 w-full overflow-hidden bg-rijksblauw-100 dark:bg-rijksblauw-500/20">
-          <div className="h-full w-1/3 animate-loading-bar bg-gradient-to-r from-rijksblauw-400 via-rijksoranje to-rijksblauw-600" />
-        </div>
-        <div className="p-5 sm:p-6">
-          <div className="flex items-center gap-3">
-            <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-rijksblauw-50 text-rijksblauw-600 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rijksblauw-400/30" />
-              <Search size={18} className="relative" />
-            </span>
-            <div>
-              <p className="flex items-center gap-2 font-semibold text-slate-800 dark:text-slate-100">
-                We vullen de velden alvast voor
-                <Loader2 size={15} className="animate-spin text-rijksblauw-500" />
-              </p>
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                We ontleden je vraagstuk en verdelen de inhoud over de velden van{' '}
-                <span className="font-medium text-rijksblauw-700 dark:text-rijksblauw-200">
-                  {technique.name}
-                </span>
-                …
-              </p>
-            </div>
-          </div>
-
-          {/* Skeleton-placeholders: suggereren de velden die zo verschijnen. */}
-          <div className="mt-5 space-y-4">
-            {[0, 1, 2].map((i) => (
-              <div key={i} className="space-y-2">
-                <div className="skeleton h-3.5 w-1/3 rounded" />
-                <div className="skeleton h-16 w-full rounded-lg" />
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+      <PrefillLoader
+        techniqueName={technique.name}
+        source="je vraagstuk"
+        fields={questions.map((q) => ({ id: q.id, label: q.label }))}
+        filled={prefillProgress?.fields}
+        models={prefillProgress?.models}
+        winner={prefillProgress?.winner}
+        phase={prefillProgress?.phase}
+      />
     );
   }
 

@@ -3686,6 +3686,9 @@ function streamPrefillResponse(args: {
       let winner: Provider | null = null;
       let sawDelta = false;
       let sentSummary = false;
+      // De velden die al naar de client zijn gegaan; vangnet voor het geval de
+      // winnaar halverwege afbreekt (dan is dit alles wat we hebben).
+      const sentFields: PrefilledField[] = [];
       const sentIds = new Set<string>();
       // Een provider die de invoer als onzin bestempelde. Bewaard zodat we dat
       // verdict kunnen doorgeven wanneer niemand bruikbare velden oplevert.
@@ -3730,6 +3733,7 @@ function streamPrefillResponse(args: {
         for (const field of found) {
           if (sentIds.has(field.id)) continue;
           sentIds.add(field.id);
+          sentFields.push(field);
           send({ type: 'field', field });
         }
       };
@@ -3764,8 +3768,12 @@ function streamPrefillResponse(args: {
         }
       };
 
+      // Alleen de winnaar telt: de verliezer kan eerder klaar zijn, maar zijn
+      // velden zijn nooit verstuurd — die alsnog als eindresultaat sturen zou de
+      // velden die de gebruiker net zag vollopen door andere vervangen.
       const usable = (r: { provider: Provider; raw: string }) =>
-        parsePrefill(r.raw, fields).fields.length > 0;
+        parsePrefill(r.raw, fields).fields.length > 0 &&
+        (winner === null || winner === r.provider);
 
       // 1. De racers gelijktijdig.
       let won = await firstUsable(racers.map(attempt), usable);
@@ -3793,7 +3801,21 @@ function streamPrefillResponse(args: {
         return;
       }
 
-      // 3. Geen velden, maar wél een onduidelijk-verdict: dat is het antwoord.
+      // 3. Geen bruikbaar eindantwoord, maar de winnaar had al velden geleverd
+      //    voordat hij afbrak: die zijn geldig, dus die houden we.
+      const claimed = winner as Provider | null;
+      if (sentFields.length > 0) {
+        send({
+          type: 'done',
+          summary: '',
+          fields: sentFields,
+          provider: claimed ?? 'local-template',
+        });
+        close();
+        return;
+      }
+
+      // 4. Geen velden, maar wél een onduidelijk-verdict: dat is het antwoord.
       if (unclearSeen) {
         const verdict = unclearSeen as { reason: string; provider: Provider };
         send({ type: 'unclear', reason: verdict.reason, provider: verdict.provider });
@@ -3801,7 +3823,7 @@ function streamPrefillResponse(args: {
         return;
       }
 
-      // 4. Niets bruikbaars van wie dan ook: lege voor-invulling. De UI toont dan
+      // 5. Niets bruikbaars van wie dan ook: lege voor-invulling. De UI toont dan
       //    gewoon lege velden — precies zoals de niet-streamende route doet.
       send({ type: 'done', summary: '', fields: [], provider: 'local-template' });
       close();

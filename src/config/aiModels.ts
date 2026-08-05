@@ -215,3 +215,19 @@ export const PROVIDER_LABELS: Record<string, string> = {
   mistral: 'Mistral',
   'local-template': 'Lokale template (geen AI)',
 };
+
+/**
+ * Korte providernaam voor krappe plekken (de voortgangsweergave tijdens het
+ * werken, waar twee modellen naast elkaar staan). Onbekende id's geven we
+ * ongewijzigd terug: liever de ruwe naam dan een lege plek.
+ */
+export function providerShortLabel(id: string): string {
+  const short: Record<string, string> = {
+    claude: 'Claude',
+    openai: 'GPT-5',
+    deepseek: 'DeepSeek',
+    mistral: 'Mistral',
+    'local-template': 'Lokale template',
+  };
+  return short[id] ?? id;
+}

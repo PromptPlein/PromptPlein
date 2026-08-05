@@ -28,6 +28,7 @@ import {
   prefillFields,
   runPlanStep,
   serializeOutcomes,
+  type PrefillPhase,
   type TemplateAssumption,
 } from '@/services/optimizeService';
 import { hasOwnInputStep, isContextPrompt, structureFormat } from '@/lib/techniques';
@@ -39,7 +40,8 @@ import { useAuth } from '@/context/AuthContext';
 import { activityIdentifier } from '@/lib/utils';
 import type { AiSettings } from '@/services/settingsService';
 import OptimizingLoader from './OptimizingLoader';
-import FollowUpQuestions, { type FieldMeta } from './FollowUpQuestions';
+import type { StreamStatus } from '@/lib/ndjsonStream';
+import FollowUpQuestions, { type FieldMeta, type PrefillProgress } from './FollowUpQuestions';
 import GuardrailDialog from './GuardrailDialog';
 import PersonaBuilder from './PersonaBuilder';
 import FewShotBuilder from './FewShotBuilder';
@@ -208,6 +210,9 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
   const [phase, setPhase] = useState<Phase>('goal');
   // De eindprompt zoals de AI hem op dit moment schrijft (live meelezen).
   const [composeStream, setComposeStream] = useState('');
+  // Welke modellen aan de eindprompt werken en wie de race wint (voedt het
+  // laadscherm, zodat zichtbaar is dat er meer dan één model meeschrijft).
+  const [composeProgress, setComposeProgress] = useState<StreamStatus>({});
   const [plan, setPlan] = useState<PromptPlan | null>(null);
   const [showExamples, setShowExamples] = useState(false);
   const [unclearReason, setUnclearReason] = useState<string | null>(null);
@@ -228,6 +233,9 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
   // een VORIGE stap de velden van de huidige stap overschrijft.
   const [stepFieldMeta, setStepFieldMeta] = useState<FieldMeta>({});
   const [stepPrefilling, setStepPrefilling] = useState(false);
+  // Live voortgang van dat voor-invullen: racende modellen, fase en de velden
+  // die al binnen zijn. Voedt het laadscherm van de stap.
+  const [stepPrefillProgress, setStepPrefillProgress] = useState<PrefillProgress>({});
   const prefillRunRef = useRef(0);
   const [analyzing, setAnalyzing] = useState(false);
   const [stepMaterial, setStepMaterial] = useState<string | null>(null);
@@ -567,12 +575,31 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
     if (!context) return;
     const runId = ++prefillRunRef.current;
     setStepPrefilling(true);
+    setStepPrefillProgress({ models: [], winner: null, phase: 'reading', fields: [] });
     try {
       const res = await prefillFields({
         ownPrompt: context,
         technique,
         preferredProvider: settings.provider,
         preferredModel: settings.model,
+        // Voortgang van een inmiddels achterhaalde stap negeren.
+        onStatus: (status) => {
+          if (prefillRunRef.current !== runId) return;
+          setStepPrefillProgress((p) => ({
+            ...p,
+            ...(status.models ? { models: status.models } : {}),
+            ...(status.phase ? { phase: status.phase as PrefillPhase } : {}),
+            ...(status.provider ? { winner: status.provider } : {}),
+          }));
+        },
+        onField: (field) => {
+          if (prefillRunRef.current !== runId) return;
+          setStepPrefillProgress((p) =>
+            (p.fields ?? []).some((f) => f.id === field.id)
+              ? p
+              : { ...p, fields: [...(p.fields ?? []), field] },
+          );
+        },
       });
       // Inmiddels een andere stap actief? Dan dit (verouderde) resultaat negeren.
       if (prefillRunRef.current !== runId) return;
@@ -1035,6 +1062,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
     }
     setPhase('composing');
     setComposeStream(''); // meegelezen tekst van een vorige poging wissen
+    setComposeProgress({}); // en de voortgang van die poging ook
     log('compose_run', { techniqueId: step.technique_id, metadata: { steps: accumulated.length } });
     try {
       const res = await generatePrompt({
@@ -1057,6 +1085,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
         temperature: settings.temperature,
         // Meelezen terwijl de eindprompt wordt geschreven.
         onChunk: setComposeStream,
+        onStatus: (status) => setComposeProgress((p) => ({ ...p, ...status })),
       });
       if (res.unclear) {
         setUnclearReason(
@@ -1161,6 +1190,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
     if (!technique) return;
     setPhase('composing');
     setComposeStream(''); // meegelezen tekst van een vorige poging wissen
+    setComposeProgress({}); // en de voortgang van die poging ook
     log('assumptions_applied', { metadata: { answered: answered.length } });
     try {
       const res = await generatePrompt({
@@ -1185,6 +1215,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
         temperature: settings.temperature,
         // Meelezen terwijl de eindprompt wordt geschreven.
         onChunk: setComposeStream,
+        onStatus: (status) => setComposeProgress((p) => ({ ...p, ...status })),
       });
       if (res.unclear || !res.optimized_content?.trim()) {
         // Aanscherpen lukte niet → val terug op het al goedgekeurde resultaat.
@@ -1398,6 +1429,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
                 onStepAnswersChange={setStepAnswers}
                 stepFieldMeta={stepFieldMeta}
                 stepPrefilling={stepPrefilling}
+                stepPrefillProgress={stepPrefillProgress}
                 onStepFieldEdit={handleStepFieldEdit}
                 analyzing={analyzing}
                 stepMaterial={stepMaterial}
@@ -1424,6 +1456,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
                 onSubmitInterviewAnswer={submitInterviewAnswer}
                 onFinishInterview={finishInterview}
                 composeStream={composeStream}
+                composeProgress={composeProgress}
               />
             )}
           </div>
@@ -1669,6 +1702,7 @@ function PlanExecutor({
   onStepAnswersChange,
   stepFieldMeta,
   stepPrefilling,
+  stepPrefillProgress,
   onStepFieldEdit,
   analyzing,
   stepMaterial,
@@ -1696,6 +1730,7 @@ function PlanExecutor({
   onSubmitInterviewAnswer,
   onFinishInterview,
   composeStream,
+  composeProgress,
 }: {
   plan: PromptPlan;
   techniqueById: (id?: string | null) => Technique | undefined;
@@ -1709,6 +1744,8 @@ function PlanExecutor({
   onStepAnswersChange: (a: Record<string, string>) => void;
   stepFieldMeta: FieldMeta;
   stepPrefilling: boolean;
+  /** Live voortgang van dat voor-invullen (racende modellen, binnengekomen velden). */
+  stepPrefillProgress: PrefillProgress;
   onStepFieldEdit: (id: string) => void;
   analyzing: boolean;
   stepMaterial: string | null;
@@ -1740,6 +1777,7 @@ function PlanExecutor({
   onFinishInterview: () => void;
   /** De eindprompt zoals de AI hem op dit moment schrijft; leeg = nog niets. */
   composeStream: string;
+  composeProgress: StreamStatus;
 }) {
   const total = plan.steps.length;
   const outcomeByStepId = new Map(outcomes.map((o) => [o.step_id, o]));
@@ -1814,6 +1852,7 @@ function PlanExecutor({
                   onAnswersChange={onStepAnswersChange}
                   fieldMeta={stepFieldMeta}
                   prefilling={stepPrefilling}
+                  prefillProgress={stepPrefillProgress}
                   onFieldEdit={onStepFieldEdit}
                   analyzing={analyzing}
                   material={stepMaterial}
@@ -1854,7 +1893,13 @@ function PlanExecutor({
       {/* Eindstap: laat de prompt meelezen terwijl hij wordt samengesteld, in
           plaats van alleen een spinner bij de laatste stap. */}
       {composing && (
-        <OptimizingLoader techniqueName="je prompt" streamText={composeStream} />
+        <OptimizingLoader
+          techniqueName="je prompt"
+          streamText={composeStream}
+          models={composeProgress.models}
+          winner={composeProgress.provider}
+          phase={composeProgress.phase}
+        />
       )}
 
       {error && (
@@ -1890,6 +1935,7 @@ function StepCollector({
   onAnswersChange,
   fieldMeta,
   prefilling,
+  prefillProgress,
   onFieldEdit,
   analyzing,
   material,
@@ -1924,6 +1970,7 @@ function StepCollector({
   onAnswersChange: (a: Record<string, string>) => void;
   fieldMeta: FieldMeta;
   prefilling: boolean;
+  prefillProgress: PrefillProgress;
   onFieldEdit: (id: string) => void;
   analyzing: boolean;
   material: string | null;
@@ -2040,6 +2087,7 @@ function StepCollector({
           fieldMeta={fieldMeta}
           onUserEdit={onFieldEdit}
           prefilling={prefilling}
+          prefillProgress={prefillProgress}
         />
       ) : (
         <p className="text-sm text-slate-500 dark:text-slate-400">
