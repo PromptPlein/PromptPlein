@@ -1,4 +1,4 @@
-import { FileText, MessageSquare, ShieldCheck } from 'lucide-react';
+import { FileText, ShieldCheck } from 'lucide-react';
 import clsx from 'clsx';
 
 /** Startervragen in overheidscontext; klikken verstuurt de vraag meteen. */
@@ -13,9 +13,16 @@ const STARTERS = [
 export default function ChatEmptyState({ onPick }: { onPick: (text: string) => void }) {
   return (
     <div className="flex flex-col items-center gap-4 px-6 py-6 text-center">
-      <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">
-        <MessageSquare size={20} />
-      </div>
+      {/* Het merkteken van PromptPlein in plaats van een generiek chat-icoon: dit
+          is het eerste wat je ziet in een leeg gesprek. In donkere modus krijgt
+          het een zacht vlak, anders vallen de donkerblauwe tegels weg tegen de
+          achtergrond. */}
+      <img
+        src="/promptplein-mark.png"
+        alt=""
+        aria-hidden="true"
+        className="h-14 w-14 rounded-2xl object-contain dark:bg-white/10 dark:p-1.5 dark:ring-1 dark:ring-white/15"
+      />
       <div>
         <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
           Waarmee kan ik je helpen?

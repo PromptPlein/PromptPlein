@@ -1,5 +1,5 @@
 import { Check, Loader2, Search } from 'lucide-react';
-import ModelRace from './ModelRace';
+import ModelStatus from './ModelStatus';
 import PhaseSteps from './PhaseSteps';
 import type { PrefillPhase } from '@/services/optimizeService';
 import type { PrefilledField } from '@/types';
@@ -13,9 +13,9 @@ interface PrefillLoaderProps {
   fields?: { id: string; label: string }[];
   /** Velden die al binnen zijn (komen één voor één uit de stream). */
   filled?: PrefilledField[];
-  /** Provider-ids die tegelijk aan het invullen begonnen zijn. */
+  /** Providers die zijn geprobeerd, in volgorde; de laatste is aan het werk. */
   models?: string[];
-  /** De provider die de race won. */
+  /** De provider die de velden daadwerkelijk levert. */
   winner?: string | null;
   /** Waar het invullen op dit moment mee bezig is. */
   phase?: PrefillPhase;
@@ -32,8 +32,8 @@ const STEPS: { phase: PrefillPhase; label: string }[] = [
  * Laadscherm terwijl de AI de velden van een raamwerk voor-invult. Gedeeld door
  * de eigen-prompt-flow, de doel-dialoog en de plan-bouwer.
  *
- * Het toont niet alleen dát er iets gebeurt, maar wát: welke modellen tegelijk
- * aan het werk zijn, welke stap loopt, en — het duidelijkst — de velden die één
+ * Het toont niet alleen dát er iets gebeurt, maar wát: welk model eraan werkt,
+ * welke stap loopt, en — het duidelijkst — de velden die één
  * voor één vollopen. De server stuurt elk veld door zodra het af is, dus het
  * skelet van een veld wordt vervangen door de echte tekst terwijl de rest nog
  * loopt. Een voortgangsbalk op het aantal ingevulde velden maakt het af: die
@@ -95,7 +95,7 @@ export default function PrefillLoader({
         <PhaseSteps steps={STEPS.map((s) => s.label)} activeIndex={stepIndex} className="mt-4" />
 
         {models.length > 0 && (
-          <ModelRace
+          <ModelStatus
             models={models}
             winner={winner}
             verb="vult je velden in"

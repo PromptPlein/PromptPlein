@@ -10,7 +10,6 @@ import type { ChatIndexEntry } from '@/types';
 export default function ChatSidebar({
   entries,
   activeId,
-  maxHeight,
   disabled,
   onSelect,
   onNew,
@@ -19,8 +18,6 @@ export default function ChatSidebar({
 }: {
   entries: ChatIndexEntry[];
   activeId: string | null;
-  /** Zelfde hoogteplafond als de chatkaart ernaast (px). */
-  maxHeight?: number;
   /** Tijdens het streamen is wisselen/verwijderen uitgeschakeld. */
   disabled: boolean;
   onSelect: (id: string) => void;
@@ -29,10 +26,10 @@ export default function ChatSidebar({
   onRequestDeleteAll: () => void;
 }) {
   return (
-    <aside
-      style={maxHeight ? { maxHeight } : undefined}
-      className="hidden w-64 shrink-0 flex-col lg:flex lg:max-h-[calc(100dvh-10.5rem)]"
-    >
+    /* Zit binnen dezelfde kaart als het gesprek: geen eigen rand of schaduw,
+       alleen een scheidingslijn en een iets rustiger vlak. Zo lezen de lijst en
+       het gesprek als één omgeving in plaats van twee losse blokken. */
+    <aside className="hidden w-64 shrink-0 flex-col border-r border-slate-200 bg-slate-50/70 p-3 lg:flex dark:border-slate-700 dark:bg-slate-900/40">
       <button type="button" className="opl-btn-primary w-full" onClick={onNew} disabled={disabled}>
         <Plus size={16} /> Nieuw gesprek
       </button>

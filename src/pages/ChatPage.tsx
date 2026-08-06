@@ -160,125 +160,123 @@ export default function ChatPage() {
     : false;
 
   return (
-    /* Geen vaste hoogte: de chatkaart groeit mee met het gesprek tot de hoogte
-       die het venster toelaat. `items-start` houdt de zijbalk daarbij op zijn
-       eigen hoogte in plaats van meegerekt te worden. */
-    <div className="mx-auto flex w-full max-w-6xl items-start gap-4 px-4 py-4 sm:px-6 lg:px-8">
-      <ChatSidebar
-        entries={controller.index}
-        activeId={conversation?.id ?? null}
-        maxHeight={cardMaxHeight}
-        disabled={controller.streaming}
-        onSelect={controller.selectConversation}
-        onNew={controller.newConversation}
-        onRequestDelete={setConfirmDeleteId}
-        onRequestDeleteAll={() => setConfirmDeleteAll(true)}
-      />
+    /* Gesprekkenlijst en gesprek zitten in ÉÉN kaart: de lijst is geen los
+       zwevend blok naast de chat maar hoort er zichtbaar bij, gescheiden door
+       niet meer dan een lijn. Geen vaste hoogte — de kaart groeit mee met het
+       gesprek tot de hoogte die het venster toelaat (useFitHeight); daarboven
+       scrollt alleen de berichtenlijst. */
+    <div className="mx-auto w-full max-w-6xl px-4 py-4 sm:px-6 lg:px-8">
+      <div
+        ref={cardRef}
+        style={cardMaxHeight ? { maxHeight: cardMaxHeight } : undefined}
+        className="opl-card flex max-h-[calc(100dvh-13rem)] overflow-hidden lg:max-h-[calc(100dvh-10.5rem)]"
+      >
+        <ChatSidebar
+          entries={controller.index}
+          activeId={conversation?.id ?? null}
+          disabled={controller.streaming}
+          onSelect={controller.selectConversation}
+          onNew={controller.newConversation}
+          onRequestDelete={setConfirmDeleteId}
+          onRequestDeleteAll={() => setConfirmDeleteAll(true)}
+        />
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        {/* Mobiel: gesprekswissel + nieuw/verwijderen boven de berichtenlijst. */}
-        <div className="mb-3 flex items-center gap-2 lg:hidden">
-          <select
-            className="opl-input flex-1"
-            value={conversation?.id ?? ''}
-            disabled={controller.streaming}
-            onChange={(e) => controller.selectConversation(e.target.value)}
-            aria-label="Kies een gesprek"
-          >
-            {conversation && !activeInIndex && (
-              <option value={conversation.id}>Nieuw gesprek</option>
-            )}
-            {controller.index.map((entry) => (
-              <option key={entry.id} value={entry.id}>
-                {entry.title}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            className="opl-btn-secondary shrink-0 !px-2.5"
-            onClick={controller.newConversation}
-            disabled={controller.streaming}
-            aria-label="Nieuw gesprek"
-          >
-            <Plus size={16} />
-          </button>
-          {activeInIndex && conversation && (
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          {/* Mobiel: gesprekswissel + nieuw/verwijderen boven de berichtenlijst. */}
+          <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3 lg:hidden dark:border-slate-700">
+            <select
+              className="opl-input flex-1"
+              value={conversation?.id ?? ''}
+              disabled={controller.streaming}
+              onChange={(e) => controller.selectConversation(e.target.value)}
+              aria-label="Kies een gesprek"
+            >
+              {conversation && !activeInIndex && (
+                <option value={conversation.id}>Nieuw gesprek</option>
+              )}
+              {controller.index.map((entry) => (
+                <option key={entry.id} value={entry.id}>
+                  {entry.title}
+                </option>
+              ))}
+            </select>
             <button
               type="button"
-              className="opl-btn-secondary shrink-0 !px-2.5 text-rijksrood dark:text-red-400"
-              onClick={() => setConfirmDeleteId(conversation.id)}
+              className="opl-btn-secondary shrink-0 !px-2.5"
+              onClick={controller.newConversation}
               disabled={controller.streaming}
-              aria-label="Verwijder dit gesprek"
+              aria-label="Nieuw gesprek"
             >
-              <Trash2 size={16} />
+              <Plus size={16} />
             </button>
-          )}
-        </div>
-
-        {/* Het plafond komt uit useFitHeight; de CSS-waarde is het vangnet voor
-            de eerste render. Tot dat plafond bepaalt de inhoud de hoogte —
-            daarboven scrollt alleen de berichtenlijst. */}
-        <div
-          ref={cardRef}
-          style={cardMaxHeight ? { maxHeight: cardMaxHeight } : undefined}
-          className="opl-card flex max-h-[calc(100dvh-13rem)] flex-col overflow-hidden lg:max-h-[calc(100dvh-10.5rem)]"
-        >
-          <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3 dark:border-slate-700 sm:px-6">
-            <MessageSquare size={18} className="text-rijksblauw-500" />
-            <h1 className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
-              {conversation && messages.length > 0 ? conversation.title : 'Chat'}
-            </h1>
-            {/* Uitvoergesprek: hier draait een gegenereerde prompt (neutrale
-                systeemprompt, geen B1-huisregels) — maak dat zichtbaar. */}
-            {conversation?.kind === 'execution' && (
-              <span
-                className="opl-badge inline-flex shrink-0 items-center gap-1 bg-rijksoranje/10 text-rijksoranje"
-                title="In dit gesprek wordt een gegenereerde prompt uitgevoerd; de prompt bepaalt zelf taal, toon en opmaak."
+            {activeInIndex && conversation && (
+              <button
+                type="button"
+                className="opl-btn-secondary shrink-0 !px-2.5 text-rijksrood dark:text-red-400"
+                onClick={() => setConfirmDeleteId(conversation.id)}
+                disabled={controller.streaming}
+                aria-label="Verwijder dit gesprek"
               >
-                <Play size={11} /> Uitvoering
-              </span>
+                <Trash2 size={16} />
+              </button>
             )}
           </div>
 
-          {messages.length === 0 ? (
-            <div className="min-h-0 flex-auto overflow-y-auto">
-              <ChatEmptyState onPick={(text) => void controller.send(text)} />
+            <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3 dark:border-slate-700 sm:px-6">
+              <MessageSquare size={18} className="text-rijksblauw-500" />
+              <h1 className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                {conversation && messages.length > 0 ? conversation.title : 'Chat'}
+              </h1>
+              {/* Uitvoergesprek: hier draait een gegenereerde prompt (neutrale
+                  systeemprompt, geen B1-huisregels) — maak dat zichtbaar. */}
+              {conversation?.kind === 'execution' && (
+                <span
+                  className="opl-badge inline-flex shrink-0 items-center gap-1 bg-rijksoranje/10 text-rijksoranje"
+                  title="In dit gesprek wordt een gegenereerde prompt uitgevoerd; de prompt bepaalt zelf taal, toon en opmaak."
+                >
+                  <Play size={11} /> Uitvoering
+                </span>
+              )}
             </div>
-          ) : (
-            <ChatMessageList
-              messages={messages}
-              streaming={controller.streaming}
-              expectedProvider={settings?.provider ?? 'mistral'}
-              onRetry={controller.retry}
-              onImprove={handleImprove}
-              onSaveAsPrompt={handleSaveAsPrompt}
-              nudgeMessageId={nudgeMessageId}
-              onNudgeDismiss={dismissNudge}
-            />
-          )}
 
-          <ChatComposer
-            disabled={composerDisabled}
-            streaming={controller.streaming}
-            extracting={controller.extracting}
-            attachments={conversation?.attachments ?? []}
-            onSend={(text) => void controller.send(text)}
-            onStop={controller.stop}
-            onAddFile={(file) => void controller.addAttachment(file)}
-            onRemoveAttachment={controller.removeAttachment}
-            // Sterretje alleen tonen als de beheerder de functie aan heeft staan.
-            onOptimize={settings?.optimizeEnabled ? handleOptimizeInput : undefined}
-            badge={
-              settings ? (
-                <ChatModelBadge
-                  provider={settings.provider}
-                  model={settings.model}
-                  actualProvider={lastAssistant?.provider}
-                />
-              ) : undefined
-            }
-          />
+            {messages.length === 0 ? (
+              <div className="min-h-0 flex-auto overflow-y-auto">
+                <ChatEmptyState onPick={(text) => void controller.send(text)} />
+              </div>
+            ) : (
+              <ChatMessageList
+                messages={messages}
+                streaming={controller.streaming}
+                expectedProvider={settings?.provider ?? 'mistral'}
+                onRetry={controller.retry}
+                onImprove={handleImprove}
+                onSaveAsPrompt={handleSaveAsPrompt}
+                nudgeMessageId={nudgeMessageId}
+                onNudgeDismiss={dismissNudge}
+              />
+            )}
+
+            <ChatComposer
+              disabled={composerDisabled}
+              streaming={controller.streaming}
+              extracting={controller.extracting}
+              attachments={conversation?.attachments ?? []}
+              onSend={(text) => void controller.send(text)}
+              onStop={controller.stop}
+              onAddFile={(file) => void controller.addAttachment(file)}
+              onRemoveAttachment={controller.removeAttachment}
+              // Sterretje alleen tonen als de beheerder de functie aan heeft staan.
+              onOptimize={settings?.optimizeEnabled ? handleOptimizeInput : undefined}
+              badge={
+                settings ? (
+                  <ChatModelBadge
+                    provider={settings.provider}
+                    model={settings.model}
+                    actualProvider={lastAssistant?.provider}
+                  />
+                ) : undefined
+              }
+            />
         </div>
       </div>
 

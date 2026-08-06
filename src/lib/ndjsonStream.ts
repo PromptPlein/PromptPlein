@@ -13,17 +13,17 @@
 export type StreamHandler = (textSoFar: string) => void;
 
 /**
- * Voortgang van een streamende schrijfmodus, los van de tekst zelf. De server
- * laat twee modellen tegelijk aan een antwoord beginnen; hiermee kan de UI tonen
- * wie er meedoen, wie er won en waar we in het proces zijn — zodat een wachttijd
- * zichtbaar iets doet in plaats van stil te staan.
+ * Voortgang van een streamende schrijfmodus, los van de tekst zelf. Hiermee kan
+ * de UI tonen welk model eraan werkt, of er na een storing is teruggevallen op
+ * een ander, en waar we in het proces zijn — zodat een wachttijd zichtbaar iets
+ * doet in plaats van stil te staan.
  */
 export interface StreamStatus {
-  /** Provider-ids die tegelijk aan het antwoord begonnen zijn. */
+  /** Providers die zijn geprobeerd, in volgorde; de laatste is aan het werk. */
   models?: string[];
-  /** 'drafting' = beide modellen zijn begonnen, 'writing' = de winnaar schrijft. */
+  /** 'drafting' = het model leest mee, 'writing' = de tekst loopt. */
   phase?: string;
-  /** De provider die de race won en de tekst levert. */
+  /** De provider die de tekst daadwerkelijk levert. */
   provider?: string;
 }
 
@@ -237,7 +237,7 @@ export async function streamNdjson(args: {
       provider?: string;
       reason?: string;
       error?: string;
-      /** Alleen bij 'models': de providers die tegelijk aan het antwoord beginnen. */
+      /** Alleen bij 'models': de providers die tot nu toe zijn geprobeerd. */
       providers?: unknown;
       /** Alleen bij 'phase': waar de generatie is. */
       phase?: string;

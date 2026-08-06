@@ -126,8 +126,8 @@ export async function optimizePrompt(args: {
    */
   onChunk?: StreamHandler;
   /**
-   * Voortgang naast de tekst: welke modellen tegelijk aan de prompt begonnen,
-   * welke de race won en in welke fase we zitten. Alleen gevuld bij streamen
+   * Voortgang naast de tekst: welk model aan de prompt werkt, of er na een
+   * storing is teruggevallen, en in welke fase we zitten. Alleen gevuld bij streamen
    * (`onChunk`); zonder deze callback verandert er niets aan het gedrag.
    */
   onStatus?: StatusHandler;
@@ -1830,9 +1830,9 @@ export async function prefillFields(args: {
    */
   fromFormatBrief?: boolean;
   /**
-   * Voortgang naast de velden: welke modellen tegelijk aan het invullen begonnen
+   * Voortgang naast de velden: welk model aan het invullen werkt
    * ({@link StreamStatus.models}), welke fase loopt ({@link PrefillPhase}) en
-   * welke provider de race won.
+   * welke provider de velden levert.
    */
   onStatus?: StatusHandler;
   /** De samenvatting is afgerond binnen (nog vóór alle velden). */
@@ -1913,7 +1913,7 @@ export async function prefillFields(args: {
           case 'phase':
             if (typeof ev.phase === 'string') onStatus?.({ phase: ev.phase });
             break;
-          // De provider die de race won en de velden levert.
+          // De provider die de velden daadwerkelijk levert.
           case 'meta':
             if (typeof ev.provider === 'string') onStatus?.({ provider: ev.provider });
             break;

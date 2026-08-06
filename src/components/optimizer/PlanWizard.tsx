@@ -210,8 +210,8 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
   const [phase, setPhase] = useState<Phase>('goal');
   // De eindprompt zoals de AI hem op dit moment schrijft (live meelezen).
   const [composeStream, setComposeStream] = useState('');
-  // Welke modellen aan de eindprompt werken en wie de race wint (voedt het
-  // laadscherm, zodat zichtbaar is dat er meer dan één model meeschrijft).
+  // Welk model aan de eindprompt werkt (voedt het laadscherm, zodat zichtbaar
+  // is dat er iets gebeurt en welk model het doet).
   const [composeProgress, setComposeProgress] = useState<StreamStatus>({});
   const [plan, setPlan] = useState<PromptPlan | null>(null);
   const [showExamples, setShowExamples] = useState(false);
@@ -233,7 +233,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
   // een VORIGE stap de velden van de huidige stap overschrijft.
   const [stepFieldMeta, setStepFieldMeta] = useState<FieldMeta>({});
   const [stepPrefilling, setStepPrefilling] = useState(false);
-  // Live voortgang van dat voor-invullen: racende modellen, fase en de velden
+  // Live voortgang van dat voor-invullen: welk model, welke fase en de velden
   // die al binnen zijn. Voedt het laadscherm van de stap.
   const [stepPrefillProgress, setStepPrefillProgress] = useState<PrefillProgress>({});
   const prefillRunRef = useRef(0);
@@ -1744,7 +1744,7 @@ function PlanExecutor({
   onStepAnswersChange: (a: Record<string, string>) => void;
   stepFieldMeta: FieldMeta;
   stepPrefilling: boolean;
-  /** Live voortgang van dat voor-invullen (racende modellen, binnengekomen velden). */
+  /** Live voortgang van dat voor-invullen (welk model, binnengekomen velden). */
   stepPrefillProgress: PrefillProgress;
   onStepFieldEdit: (id: string) => void;
   analyzing: boolean;

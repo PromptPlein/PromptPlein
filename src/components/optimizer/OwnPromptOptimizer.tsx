@@ -169,8 +169,8 @@ export default function OwnPromptOptimizer({
   // Herkomst per voor-ingevuld veld (origin-badges); vervalt zodra de gebruiker zelf typt.
   const [fieldMeta, setFieldMeta] = useState<FieldMeta>({});
   const [prefilling, setPrefilling] = useState(false);
-  // Live voortgang van het voor-invullen: welke modellen racen, wie wint, welke
-  // fase loopt en welke velden al binnen zijn. Voedt het laadscherm, zodat de
+  // Live voortgang van het voor-invullen: welk model werkt, welke fase loopt en
+  // welke velden al binnen zijn. Voedt het laadscherm, zodat de
   // gebruiker de velden ziet vollopen in plaats van naar skeletten te kijken.
   const [prefillProgress, setPrefillProgress] = useState<{
     models: string[];
@@ -453,7 +453,7 @@ export default function OwnPromptOptimizer({
         temperature: settings.temperature,
         // Meelezen terwijl de prompt wordt geschreven.
         onChunk: setStreamText,
-        // Welke modellen meeschrijven en wie de race wint.
+        // Welk model de prompt schrijft.
         onStatus: (status) => setGenProgress((p) => ({ ...p, ...status })),
       });
       // Clarity-gate: de AI vond de input onzin en maakte bewust geen prompt.

@@ -1,45 +1,16 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import {
-  GripHorizontal,
-  Loader2,
-  Paperclip,
-  Scissors,
-  Send,
-  Sparkles,
-  Square,
-  Undo2,
-  X,
-} from 'lucide-react';
+import { Loader2, Paperclip, Scissors, Send, Sparkles, Square, Undo2, X } from 'lucide-react';
 import clsx from 'clsx';
 import { ACCEPTED_DOC_ACCEPT } from '@/lib/extractDocument';
 import { MAX_CHAT_ATTACHMENTS } from './useChatController';
 import type { ChatAttachment } from '@/types';
 
-/** Starthoogte van het tekstvak: ruimte voor drie regels. */
-const DEFAULT_HEIGHT = 88;
-/** Ondergrens bij het slepen. */
-const MIN_HEIGHT = 56;
-/** Bovengrens: daarboven blijft er te weinig van het gesprek zichtbaar. */
-const MAX_HEIGHT = 320;
-/** Stapgrootte bij bedienen met de pijltjestoetsen. */
-const KEY_STEP = 24;
-/** Zelfgekozen hoogte onthouden we per apparaat (los van de chatinhoud). */
-const HEIGHT_KEY = 'opl.ui.chatComposerHeight';
-
-function clampHeight(px: number): number {
-  return Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, Math.round(px)));
-}
-
-function readStoredHeight(): number | null {
-  try {
-    const raw = localStorage.getItem(HEIGHT_KEY);
-    if (!raw) return null;
-    const value = Number(raw);
-    return Number.isFinite(value) ? clampHeight(value) : null;
-  } catch {
-    return null;
-  }
-}
+/**
+ * Bovengrens van het tekstvak. Daarboven groeit het niet verder mee en scrollt
+ * de inhoud van binnen: anders zou een lange tekst het gesprek erboven volledig
+ * wegdrukken.
+ */
+const MAX_HEIGHT = 240;
 
 /** Uitkomst van een verbeterslag op de getypte tekst. */
 export interface OptimizeResult {
@@ -52,9 +23,10 @@ export interface OptimizeResult {
  * Invoerbalk van de chat: tekstveld (Enter = verzenden, Shift+Enter = nieuwe
  * regel), bijlagen (paperclip + chips) en de stop-knop tijdens het streamen.
  *
- * Het tekstvak begint op drie regels en groeit mee met wat je typt. Wie meer
- * ruimte wil, sleept het met de greep rechtsonder groter; die keuze blijft
- * bewaard tot je hem met een dubbelklik weer loslaat.
+ * Het tekstvak begint op één regel en groeit mee met wat je typt, tot
+ * {@link MAX_HEIGHT}. Daarboven scrollt het van binnen, zodat het gesprek
+ * erboven zichtbaar blijft. Er is geen greep om zelf te slepen: het vak weet
+ * zelf hoeveel ruimte de tekst nodig heeft.
  *
  * Staat er tekst in het veld en is `onOptimize` meegegeven, dan verschijnt
  * rechtsboven het oranje sterretje: één klik en de AI herschrijft wat er staat
@@ -80,7 +52,11 @@ export default function ChatComposer({
   attachments: ChatAttachment[];
   onSend: (text: string) => void;
   onStop: () => void;
-  onAddFile: (file: File) => void;
+  /**
+   * Voegt één bestand toe. Geeft een promise terug wanneer de aanroeper hem
+   * heeft: meerdere gesleepte bestanden gaan dan netjes één voor één.
+   */
+  onAddFile: (file: File) => void | Promise<void>;
   onRemoveAttachment: (id: string) => void;
   /**
    * Verbetert de getypte tekst. Afwezig = geen sterretje (bijv. wanneer de
@@ -95,6 +71,9 @@ export default function ChatComposer({
 }) {
   const [text, setText] = useState('');
   const [optimizing, setOptimizing] = useState(false);
+  // Sleept de gebruiker op dit moment bestanden boven het veld?
+  const [dragging, setDragging] = useState(false);
+  const dragDepth = useRef(0);
   // De tekst van vóór de laatste verbetering, met wat eruit kwam. Zolang het
   // veld nog exact het resultaat bevat, kan de gebruiker terug.
   const [beforeOptimize, setBeforeOptimize] = useState<{ before: string; after: string } | null>(
@@ -102,74 +81,21 @@ export default function ChatComposer({
   );
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  // Zelf ingestelde hoogte; null = automatisch meegroeien met de tekst.
-  const [manualHeight, setManualHeight] = useState<number | null>(readStoredHeight);
-  const dragRef = useRef<{ startY: number; startHeight: number } | null>(null);
 
-  // Hoogte bijwerken: bij een eigen keuze precies die hoogte, anders meegroeien
-  // met de inhoud tussen de start- en maximumhoogte.
+  // Meegroeien met de inhoud: eerst terug naar 'auto' (anders houdt het vak zijn
+  // vorige, grotere hoogte vast en meet scrollHeight de oude stand), dan precies
+  // zo hoog als de tekst nodig heeft. Boven MAX_HEIGHT stopt het en neemt de
+  // eigen schuifbalk het over.
   useLayoutEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
-    if (manualHeight !== null) {
-      el.style.height = `${manualHeight}px`;
-      return;
-    }
     el.style.height = 'auto';
-    // Het vak rekent met border-box, dus de randen tellen mee in de hoogte.
-    // Alleen scrollHeight aanhouden laat de tekst er twee pixels overheen lopen
+    // Het vak rekent met border-box, dus een eventuele rand telt mee in de
+    // hoogte. Alleen scrollHeight aanhouden laat de tekst er net overheen lopen,
     // en dat is precies genoeg voor een schuifbalk bij tekst die eigenlijk past.
     const borders = el.offsetHeight - el.clientHeight;
-    el.style.height = `${Math.min(MAX_HEIGHT, Math.max(DEFAULT_HEIGHT, el.scrollHeight + borders))}px`;
-  }, [text, manualHeight]);
-
-  function storeHeight(next: number | null) {
-    setManualHeight(next);
-    try {
-      if (next === null) localStorage.removeItem(HEIGHT_KEY);
-      else localStorage.setItem(HEIGHT_KEY, String(next));
-    } catch {
-      /* opslag niet beschikbaar — de hoogte geldt dan alleen deze sessie */
-    }
-  }
-
-  function startDrag(e: React.PointerEvent<HTMLButtonElement>) {
-    const el = textareaRef.current;
-    if (!el) return;
-    e.preventDefault();
-    try {
-      e.currentTarget.setPointerCapture(e.pointerId);
-    } catch {
-      // Zonder pointer-capture werkt slepen nog steeds, alleen niet meer buiten
-      // de greep; geen reden om af te breken.
-    }
-    dragRef.current = { startY: e.clientY, startHeight: el.getBoundingClientRect().height };
-  }
-
-  function onDrag(e: React.PointerEvent<HTMLButtonElement>) {
-    const drag = dragRef.current;
-    if (!drag) return;
-    // Omlaag slepen maakt het vak groter.
-    setManualHeight(clampHeight(drag.startHeight + (e.clientY - drag.startY)));
-  }
-
-  function endDrag(e: React.PointerEvent<HTMLButtonElement>) {
-    if (!dragRef.current) return;
-    dragRef.current = null;
-    try {
-      e.currentTarget.releasePointerCapture(e.pointerId);
-    } catch {
-      /* nooit vastgelegd — niets vrij te geven */
-    }
-    if (manualHeight !== null) storeHeight(manualHeight);
-  }
-
-  function resizeByKey(e: React.KeyboardEvent<HTMLButtonElement>) {
-    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
-    e.preventDefault();
-    const current = manualHeight ?? textareaRef.current?.getBoundingClientRect().height ?? DEFAULT_HEIGHT;
-    storeHeight(clampHeight(current + (e.key === 'ArrowDown' ? KEY_STEP : -KEY_STEP)));
-  }
+    el.style.height = `${Math.min(MAX_HEIGHT, el.scrollHeight + borders)}px`;
+  }, [text]);
 
   const canSend = !disabled && !streaming && !optimizing && text.trim().length > 0;
   const canOptimize = Boolean(onOptimize) && !disabled && !streaming && text.trim().length > 0;
@@ -208,93 +134,135 @@ export default function ChatComposer({
     textareaRef.current?.focus();
   }
 
+  // --- Bestanden hierheen slepen ---
+  // Dezelfde route als de paperclip: elk bestand gaat door onAddFile, die de
+  // tekst eruit haalt en de grenzen (aantal, omvang) bewaakt en meldt.
+
+  const canDropFiles = allowAttachments && !disabled && !streaming;
+
+  /** Sleept de gebruiker bestanden (en geen tekstselectie of iets anders)? */
+  function isFileDrag(e: React.DragEvent): boolean {
+    return Array.from(e.dataTransfer.types ?? []).includes('Files');
+  }
+
+  function onDragEnter(e: React.DragEvent) {
+    if (!canDropFiles || !isFileDrag(e)) return;
+    e.preventDefault();
+    // Tellen in plaats van een simpele boolean: de browser vuurt bij elk
+    // onderliggend element opnieuw enter/leave, en zonder teller flikkert het
+    // vlak zodra je over de knoppen beweegt.
+    dragDepth.current += 1;
+    setDragging(true);
+  }
+
+  function onDragOver(e: React.DragEvent) {
+    if (!canDropFiles || !isFileDrag(e)) return;
+    // Zonder preventDefault weigert de browser de drop.
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  }
+
+  function onDragLeave(e: React.DragEvent) {
+    if (!canDropFiles || !isFileDrag(e)) return;
+    dragDepth.current = Math.max(0, dragDepth.current - 1);
+    if (dragDepth.current === 0) setDragging(false);
+  }
+
+  async function onDrop(e: React.DragEvent) {
+    if (!canDropFiles || !isFileDrag(e)) return;
+    e.preventDefault();
+    dragDepth.current = 0;
+    setDragging(false);
+    // Eén voor één en netjes op elkaar wachten: de extractie van een document
+    // loopt asynchroon, en tegelijk starten zou bestanden laten vallen.
+    for (const file of Array.from(e.dataTransfer.files)) {
+      await onAddFile(file);
+    }
+  }
+
   return (
     <div className="border-t border-slate-200 px-4 pb-3 pt-3 dark:border-slate-700 sm:px-6">
-      {allowAttachments && attachments.length > 0 && (
-        <div className="mb-2 flex flex-wrap gap-2">
-          {attachments.map((a, i) => (
-            <span
-              key={a.id}
-              className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700 dark:bg-slate-800 dark:text-slate-300"
-              title={`Bijlage ${i + 1}: ${a.name} — ${a.chars.toLocaleString('nl-NL')} tekens`}
-            >
-              <Paperclip size={12} className="shrink-0" />
-              <span className="truncate">{a.name}</span>
-              <span className="shrink-0 text-slate-400">
-                {a.chars.toLocaleString('nl-NL')} tekens
-              </span>
-              {a.truncated && (
-                <span
-                  className="inline-flex shrink-0 items-center gap-0.5 text-amber-600 dark:text-amber-400"
-                  title="De tekst is ingekort tot de bijlagelimiet"
-                >
-                  <Scissors size={11} /> ingekort
-                </span>
-              )}
-              <button
-                type="button"
-                className="shrink-0 rounded-full p-0.5 text-slate-400 hover:bg-slate-200 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300"
-                onClick={() => onRemoveAttachment(a.id)}
-                aria-label={`Verwijder bijlage ${a.name}`}
+      {/* Eén omhulsel dat er als hét invoerveld uitziet: bijlagen, tekstvak en
+          knoppen zitten er samen in en de rand licht op zodra je in het tekstvak
+          staat (focus-within). Zo hoort alles zichtbaar bij elkaar, terwijl de
+          knoppen buiten het tekstvak blijven staan — daar kan de tekst dus nooit
+          onderdoor lopen. */}
+      <div
+        className={clsx(
+          'relative rounded-xl border bg-white transition-colors dark:bg-slate-800',
+          'focus-within:border-rijksblauw-500 focus-within:ring-2 focus-within:ring-rijksblauw-500/20',
+          'border-slate-300 dark:border-slate-600',
+          disabled && 'opacity-60',
+        )}
+        // Klikken op de rand of de lege ruimte eromheen zet de cursor in de
+        // tekst, zoals je van één veld verwacht.
+        onMouseDown={(e) => {
+          if (e.target === e.currentTarget) {
+            e.preventDefault();
+            textareaRef.current?.focus();
+          }
+        }}
+        onDragEnter={onDragEnter}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={(e) => void onDrop(e)}
+      >
+        {allowAttachments && attachments.length > 0 && (
+          <div className="flex flex-wrap gap-2 px-3 pt-3">
+            {attachments.map((a, i) => (
+              <span
+                key={a.id}
+                className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700 dark:bg-slate-700 dark:text-slate-200"
+                title={`Bijlage ${i + 1}: ${a.name} — ${a.chars.toLocaleString('nl-NL')} tekens`}
               >
-                <X size={12} />
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-
-      {/* Tot lg staat het tekstvlak op de volle breedte met de knoppen eronder:
-          op telefoon en tablet is de ruimte om te typen belangrijker dan een
-          rij naast elkaar. Vanaf lg staat alles weer op één regel. */}
-      <div className="flex flex-wrap items-end gap-2">
-        {allowAttachments && (
-          <>
-            <button
-              type="button"
-              className="opl-btn-ghost order-2 shrink-0 !px-2.5 lg:order-none"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={
-                disabled || streaming || extracting || attachments.length >= MAX_CHAT_ATTACHMENTS
-              }
-              title={
-                attachments.length >= MAX_CHAT_ATTACHMENTS
-                  ? `Maximaal ${MAX_CHAT_ATTACHMENTS} bijlagen per gesprek`
-                  : 'Document toevoegen (PDF, Word, tekst — max. 10 MB)'
-              }
-              aria-label="Document toevoegen"
-            >
-              {extracting ? <Loader2 size={18} className="animate-spin" /> : <Paperclip size={18} />}
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept={ACCEPTED_DOC_ACCEPT}
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) onAddFile(file);
-                e.target.value = '';
-              }}
-            />
-          </>
+                <Paperclip size={12} className="shrink-0" />
+                <span className="truncate">{a.name}</span>
+                <span className="shrink-0 text-slate-400">
+                  {a.chars.toLocaleString('nl-NL')} tekens
+                </span>
+                {a.truncated && (
+                  <span
+                    className="inline-flex shrink-0 items-center gap-0.5 text-amber-600 dark:text-amber-400"
+                    title="De tekst is ingekort tot de bijlagelimiet"
+                  >
+                    <Scissors size={11} /> ingekort
+                  </span>
+                )}
+                <button
+                  type="button"
+                  className="shrink-0 rounded-full p-0.5 text-slate-400 hover:bg-slate-200 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300"
+                  onClick={() => onRemoveAttachment(a.id)}
+                  aria-label={`Verwijder bijlage ${a.name}`}
+                >
+                  <X size={12} />
+                </button>
+              </span>
+            ))}
+          </div>
         )}
 
-        <div className="relative order-1 w-full lg:order-none lg:w-auto lg:flex-1">
+        {/* Het tekstvak zelf: zonder eigen rand of focusring, want die zitten op
+            het omhulsel. Alleen het sterretje ligt eroverheen (rechtsboven); de
+            tekst houdt daar afstand van via de rechtermarge. */}
+        <div className="relative">
           <textarea
             ref={textareaRef}
             className={clsx(
               // opl-scroll-slim: een slanke schuifbalk met vaste goot, zodat een
-              // langere tekst geen brede systeembalk oplevert die tegen de
-              // knoppen in de hoeken aan botst — en de tekst niet verspringt op
-              // het moment dat de balk verschijnt.
-              'opl-input opl-scroll-slim w-full resize-none py-2.5 pb-6',
+              // langere tekst geen brede systeembalk oplevert die tegen het
+              // sterretje aan botst — en de tekst niet verspringt op het moment
+              // dat de balk verschijnt.
+              'opl-scroll-slim block w-full resize-none border-0 bg-transparent px-3.5 py-2.5',
+              'text-sm leading-6 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-0',
+              'dark:text-slate-100 dark:placeholder:text-slate-500',
               // Ruimte rechtsboven voor het sterretje, zodat de tekst er niet
               // onder doorloopt. Vast (niet afhankelijk van of de knop er staat),
               // anders zou de tekst verspringen zodra je begint te typen.
               onOptimize && 'pr-12',
             )}
-            rows={3}
+            // Eén regel als startpunt; de layout-effect hierboven laat het vak
+            // daarna meegroeien met de tekst.
+            rows={1}
             placeholder={disabled ? 'Chat wordt geladen…' : 'Stel je vraag…'}
             value={text}
             disabled={disabled || optimizing}
@@ -339,51 +307,81 @@ export default function ChatComposer({
               )}
             </button>
           )}
-
-          {/* Greep om het tekstvak zelf groter te slepen. Dubbelklikken zet hem
-              terug op automatisch meegroeien. */}
-          <button
-            type="button"
-            className="absolute bottom-1.5 right-2.5 flex h-5 w-6 cursor-ns-resize touch-none items-center justify-center rounded text-slate-300 transition-colors hover:bg-slate-100 hover:text-slate-500 focus:outline-none focus:ring-2 focus:ring-rijksblauw-500/40 dark:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300"
-            onPointerDown={startDrag}
-            onPointerMove={onDrag}
-            onPointerUp={endDrag}
-            onPointerCancel={endDrag}
-            onDoubleClick={() => storeHeight(null)}
-            onKeyDown={resizeByKey}
-            title={
-              manualHeight === null
-                ? 'Sleep omlaag om het invoerveld groter te maken'
-                : 'Sleep om de hoogte aan te passen, dubbelklik om automatisch mee te groeien'
-            }
-            aria-label="Hoogte van het invoerveld aanpassen"
-          >
-            <GripHorizontal size={14} />
-          </button>
         </div>
 
-        {streaming ? (
-          <button
-            type="button"
-            className="opl-btn-secondary order-3 ml-auto shrink-0 lg:order-none lg:ml-0"
-            onClick={onStop}
-            aria-label="Stop het antwoord"
-          >
-            <Square size={16} /> Stop
-          </button>
-        ) : (
-          <button
-            type="button"
-            className={clsx(
-              'opl-btn-primary order-3 ml-auto shrink-0 lg:order-none lg:ml-0',
-              !canSend && 'opacity-50',
-            )}
-            onClick={submit}
-            disabled={!canSend}
-            aria-label="Verstuur"
-          >
-            <Send size={16} /> Verstuur
-          </button>
+        {/* Werkbalk onderin hetzelfde veld: bijlage links, versturen rechts.
+            Staat onder het tekstvak in plaats van eroverheen, dus de tekst kan er
+            nooit achter verdwijnen. */}
+        <div className="flex items-center gap-1 px-2 pb-2">
+          {allowAttachments && (
+            <>
+              <button
+                type="button"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-rijksblauw-500/40 disabled:cursor-not-allowed disabled:opacity-40 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={
+                  disabled || streaming || extracting || attachments.length >= MAX_CHAT_ATTACHMENTS
+                }
+                title={
+                  attachments.length >= MAX_CHAT_ATTACHMENTS
+                    ? `Maximaal ${MAX_CHAT_ATTACHMENTS} bijlagen per gesprek`
+                    : 'Document toevoegen (PDF, Word, tekst — max. 10 MB)'
+                }
+                aria-label="Document toevoegen"
+              >
+                {extracting ? (
+                  <Loader2 size={18} className="animate-spin" />
+                ) : (
+                  <Paperclip size={18} />
+                )}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={ACCEPTED_DOC_ACCEPT}
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void onAddFile(file);
+                  e.target.value = '';
+                }}
+              />
+            </>
+          )}
+
+          {streaming ? (
+            <button
+              type="button"
+              className="opl-btn-secondary ml-auto shrink-0 !rounded-lg !px-3 !py-1.5"
+              onClick={onStop}
+              aria-label="Stop het antwoord"
+            >
+              <Square size={15} /> Stop
+            </button>
+          ) : (
+            <button
+              type="button"
+              className={clsx(
+                'opl-btn-primary ml-auto shrink-0 !rounded-lg !px-3 !py-1.5',
+                !canSend && 'opacity-50',
+              )}
+              onClick={submit}
+              disabled={!canSend}
+              aria-label="Verstuur"
+            >
+              <Send size={15} /> Verstuur
+            </button>
+          )}
+        </div>
+
+        {/* Sleep je bestanden over het veld, dan legt dit vlak eroverheen uit wat
+            er gebeurt als je loslaat. pointer-events-none, zodat het de drop
+            zelf niet in de weg zit. */}
+        {dragging && (
+          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-rijksblauw-400 bg-rijksblauw-50/95 text-sm font-medium text-rijksblauw-700 dark:border-rijksblauw-500/60 dark:bg-slate-800/95 dark:text-rijksblauw-200">
+            <Paperclip size={16} />
+            Laat los om als bijlage toe te voegen
+          </div>
         )}
       </div>
 
@@ -410,7 +408,7 @@ export default function ChatComposer({
             <>
               <span className="hidden sm:inline"> · </span>
               max. {MAX_CHAT_ATTACHMENTS} bijlagen, 10&nbsp;MB
-              <span className="hidden sm:inline"> per stuk</span>
+              <span className="hidden sm:inline"> per stuk · sleep ze hierheen of klik op de paperclip</span>
             </>
           )}
         </p>

@@ -190,7 +190,7 @@ export default function GoalDialog({ settings, onResult, header }: GoalDialogPro
   const [frameworkId, setFrameworkId] = useState<string | null>(null);
   const [prefill, setPrefill] = useState<PrefillResult | null>(null);
   const [prefilling, setPrefilling] = useState(false);
-  // Live voortgang van het voor-invullen (racende modellen, fase, binnengekomen
+  // Live voortgang van het voor-invullen (welk model, fase, binnengekomen
   // velden), zodat het laadscherm laat zien wát er gebeurt.
   const [prefillProgress, setPrefillProgress] = useState<{
     models: string[];
@@ -562,7 +562,7 @@ export default function GoalDialog({ settings, onResult, header }: GoalDialogPro
         temperature: settings.temperature,
         // Meelezen terwijl de prompt wordt geschreven.
         onChunk: setStreamText,
-        // Welke modellen meeschrijven en wie de race wint.
+        // Welk model de prompt schrijft.
         onStatus: (status) => setComposeProgress((p) => ({ ...p, ...status })),
       });
       if (res.unclear || !res.optimized_content?.trim()) {

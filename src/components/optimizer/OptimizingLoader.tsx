@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Loader2, PenLine, Sparkles, Timer } from 'lucide-react';
 import clsx from 'clsx';
-import ModelRace from './ModelRace';
+import ModelStatus from './ModelStatus';
 import PhaseSteps from './PhaseSteps';
 
 interface OptimizingLoaderProps {
@@ -13,11 +13,11 @@ interface OptimizingLoaderProps {
    * ontstaan in plaats van te wachten op het complete antwoord.
    */
   streamText?: string;
-  /** Provider-ids die tegelijk aan de prompt begonnen zijn (de race). */
+  /** Providers die zijn geprobeerd, in volgorde; de laatste is aan het werk. */
   models?: string[];
-  /** De provider die de race won en de prompt schrijft. */
+  /** De provider die de prompt daadwerkelijk schrijft. */
   winner?: string | null;
-  /** 'drafting' = beide modellen zijn begonnen, 'writing' = de winnaar schrijft. */
+  /** 'drafting' = het model leest mee, 'writing' = de tekst loopt. */
   phase?: string;
 }
 
@@ -33,7 +33,7 @@ function countWords(text: string): number {
  * het model nadenkt en er nog niets te lezen valt — en de derde loopt zolang de
  * prompt wordt uitgeschreven.
  */
-const BUILD_STEPS = ['Antwoorden verstuurd', 'Modellen denken na', 'Prompt schrijven'];
+const BUILD_STEPS = ['Antwoorden verstuurd', 'Model denkt na', 'Prompt schrijven'];
 
 /**
  * Mooi laadscherm tijdens het genereren/optimaliseren van de uiteindelijke
@@ -41,10 +41,10 @@ const BUILD_STEPS = ['Antwoorden verstuurd', 'Modellen denken na', 'Prompt schri
  * accentbalk + pulserend icoon), met de meegelezen tekst zodra die begint te
  * lopen. Gedeeld door de techniek-flow en de eigen-prompt-flow.
  *
- * Twee modellen beginnen tegelijk aan de prompt; {@link ModelRace} maakt dat
- * zichtbaar, inclusief wie er wint. Daarnaast telt de voortgangsregel de
- * geschreven woorden mee, zodat ook bij een lange prompt duidelijk blijft dat
- * er beweging in zit.
+ * {@link ModelStatus} laat zien welk model eraan werkt (en of er is teruggevallen
+ * op een ander na een storing). Daarnaast telt de voortgangsregel de geschreven
+ * woorden mee, zodat ook bij een lange prompt duidelijk blijft dat er beweging
+ * in zit.
  */
 export default function OptimizingLoader({
   techniqueName,
@@ -93,12 +93,8 @@ export default function OptimizingLoader({
             <p className="text-sm text-slate-500 dark:text-slate-400">
               {streaming ? (
                 <>Je prompt wordt nu geschreven — je leest live mee</>
-              ) : models.length > 1 ? (
-                <>
-                  {phase === 'writing'
-                    ? 'Het snelste model begint te schrijven…'
-                    : 'Twee modellen lezen je antwoorden; de snelste schrijft je prompt uit…'}
-                </>
+              ) : phase === 'writing' ? (
+                <>Het model begint te schrijven…</>
               ) : (
                 <>
                   We verwerken je antwoorden tot een rijke, direct bruikbare prompt
@@ -122,7 +118,7 @@ export default function OptimizingLoader({
         <PhaseSteps steps={BUILD_STEPS} activeIndex={streaming ? 2 : 1} className="mt-4" />
 
         {models.length > 0 && (
-          <ModelRace models={models} winner={winner} verb="schrijft je prompt" className="mt-4" />
+          <ModelStatus models={models} winner={winner} verb="schrijft je prompt" className="mt-4" />
         )}
 
         {/* Voortgangsregel: tijdens het schrijven telt hij de woorden mee, tijdens
