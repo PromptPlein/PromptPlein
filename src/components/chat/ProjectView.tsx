@@ -84,35 +84,50 @@ export default function ProjectView({
   return (
     <div className="min-h-0 flex-auto overflow-y-auto px-4 py-6 sm:px-6">
       <div className="mx-auto max-w-2xl space-y-6">
-        {/* Naam links, de drie acties rechts — op één rij zodra er ruimte voor is.
-            De Nederlandse labels zijn breder dan de Engelse van de bronrepo, dus
-            zonder `lg:flex-nowrap` duwt de titel de knoppen naar een eigen regel.
-            Daaronder (tablet/telefoon, waar de zijbalk weg is) mág het wél
-            afbreken: dan is stapelen leesbaarder dan knijpen. */}
-        <div className="flex flex-wrap items-start justify-between gap-3 lg:flex-nowrap">
+        {/* Naam links, de drie acties rechts.
+
+            NIET afdwingen met flex-nowrap: dan houden de knoppen hun breedte en
+            wordt de titel afgekapt tot "Email schrij…". Alles moet leesbaar
+            blijven, dus de knoppen zijn compact gemaakt en de tellerregel is
+            ingekort tot het geheel binnen de smalste kolom past (656 px bij een
+            1024-venster: 454 px knoppen + 184 px tekst + 12 px tussenruimte).
+            Past het bij een lange projectnaam tóch niet, dan zakt de knoppenrij
+            een regel — stapelen is leesbaarder dan knijpen. */}
+        <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <h2 className="truncate text-xl font-bold text-slate-900 dark:text-slate-100">
               {project.name}
             </h2>
-            {/* truncate: op één rij houden de knoppen hun breedte, dus een lange
-                projectnaam of tellerregel moet hier kunnen inkorten. */}
-            <p className="truncate text-xs text-slate-400 mt-0.5 dark:text-slate-500">
-              Bronbestanden: {fileCount} · Gesprekken: {chatCount}
+            <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
+              {fileCount} bronbestanden · {chatCount} gesprekken
             </p>
           </div>
           {/* De drie dingen die je met een project kunt doen, op één rij:
-              instellen, praten, of er een prompt mee bouwen. */}
+              instellen, praten, of er een prompt mee bouwen. Compacter dan de
+              standaardknop (13px, krappere padding): dat is wat de rij naast de
+              titel laat passen, en als werkbalk boven een pagina leest het
+              rustiger dan drie knoppen op volle sterkte. */}
           <div className="flex shrink-0 flex-wrap gap-2">
             <button
               type="button"
-              className="opl-btn-secondary"
+              className="opl-btn-secondary !px-3 !py-1.5 !text-[13px]"
               onClick={onOpenSettings}
               disabled={disabled}
+              // "Instellingen" volstaat: je staat al op de projectpagina, dus
+              // waarvan het de instellingen zijn is uit de context duidelijk.
+              // "Projectinstellingen" kostte 48 px extra en dat is precies de
+              // ruimte die de titel nodig heeft.
+              title="Projectinstellingen"
             >
-              <Settings2 size={15} /> Projectinstellingen
+              <Settings2 size={14} /> Instellingen
             </button>
-            <button type="button" className="opl-btn-primary" onClick={onNewChat} disabled={disabled}>
-              <Plus size={15} /> Nieuw gesprek
+            <button
+              type="button"
+              className="opl-btn-primary !px-3 !py-1.5 !text-[13px]"
+              onClick={onNewChat}
+              disabled={disabled}
+            >
+              <Plus size={14} /> Nieuw gesprek
             </button>
             {/* Wand2 is het icoon dat de promptbouwer voor zichzelf gebruikt (de
                 instap-tab op /genereren). Dáár zit de herkenning: je ziet vooraf
@@ -125,7 +140,7 @@ export default function ProjectView({
                 andere soort actie. */}
             <button
               type="button"
-              className="opl-btn bg-gradient-to-br from-rijksoranje to-rijksoranje-dark text-white shadow-sm hover:brightness-110 focus:ring-rijksoranje"
+              className="opl-btn !px-3 !py-1.5 !text-[13px] bg-gradient-to-br from-rijksoranje to-rijksoranje-dark text-white shadow-sm hover:brightness-110 focus:ring-rijksoranje"
               // Altijd zonder bronbestanden beginnen: de projectinstructie is
               // meestal genoeg, en wie ze tóch wil zet ze aan in de balk bóven
               // de bouwer — daar ziet hij meteen wat het doet.
@@ -133,7 +148,7 @@ export default function ProjectView({
               disabled={disabled}
               title="De promptbouwer krijgt de projectinstructie mee, zodat de prompt over jouw onderwerp gaat en er niet naar gevraagd wordt."
             >
-              <Wand2 size={15} /> Genereer prompt
+              <Wand2 size={14} /> Genereer prompt
             </button>
           </div>
         </div>

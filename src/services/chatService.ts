@@ -14,8 +14,10 @@ import {
   composeChatOptimizePrompt,
   composeChatSystemPrompt,
   composeExecutionSystemPrompt,
+  composeProjectOptimizePrompt,
   composeProjectSystemPrompt,
   MAX_CHAT_OPTIMIZE_CHARS,
+  MAX_PROJECT_OPTIMIZE_CHARS,
   type ChatSettings,
 } from '@/services/settingsService';
 import type { ChatProjectContext } from '@/types';
@@ -193,6 +195,93 @@ export async function optimizeChatInput(args: {
     const optimized = typeof result.optimized === 'string' ? result.optimized.trim() : '';
     if (result.success && optimized) {
       return { text: optimized, changed: optimized !== args.text.trim(), provider: result.provider };
+    }
+    throw new Error(result.error ?? 'De verbetering gaf geen bruikbaar resultaat.');
+  } catch (err) {
+    // Afgebroken door de gebruiker: geen foutmelding, gewoon niets doen.
+    if (err instanceof DOMException && err.name === 'AbortError') return noop;
+    const message = err instanceof Error ? err.message : 'Onbekende fout';
+    return { ...noop, error: `Verbeteren mislukt (${message}).` };
+  }
+}
+
+/**
+ * Maakt van de ruwe projectinstructie een volwaardige systeemprompt (het oranje
+ * sterretje in de projectinstellingen). Anders dan `optimizeChatInput` hierboven
+ * is dit géén lichte herschrijving: het resultaat stuurt élk gesprek in het
+ * project, dus rol, eindproduct, werkwijze, vorm en grenzen worden echt
+ * uitgewerkt (zie PROJECTINSTRUCTIE_Framework.md).
+ *
+ * De projectnaam en de bestandsnamen gaan mee als context — ze verraden het
+ * onderwerp waar een ruwe instructie vaak over zwijgt. De ínhoud van de
+ * bestanden niet: die hoort in het gesprek thuis, niet in een instructie die
+ * over alle gesprekken gaat.
+ *
+ * Gooit nooit; bij een fout komt de oorspronkelijke tekst terug met een melding,
+ * zodat de UI de instructie van de gebruiker ongemoeid kan laten.
+ */
+export async function optimizeProjectInstructions(args: {
+  instructions: string;
+  projectName?: string;
+  fileNames?: string[];
+  settings: ChatSettings;
+  signal?: AbortSignal;
+}): Promise<{ text: string; changed: boolean; provider?: string; error?: string }> {
+  const { settings, signal } = args;
+  const instructions = args.instructions.trim();
+  const noop = { text: args.instructions, changed: false };
+
+  const functionUrl = getFunctionUrl('optimize-prompt');
+  if (!isSupabaseConfigured || !supabase || !functionUrl) {
+    return { ...noop, error: 'Geen AI-service geconfigureerd. Neem contact op met de beheerder.' };
+  }
+  if (!instructions) return noop;
+  // Bewust niet stil afkappen: bij een instructie van deze omvang zou de
+  // gebruiker een herschrijving terugkrijgen die op de helft van zijn tekst is
+  // gebaseerd, zonder dat hij dat ziet.
+  if (instructions.length > MAX_PROJECT_OPTIMIZE_CHARS) {
+    return {
+      ...noop,
+      error: `Deze instructie is te lang om te verbeteren (maximaal ${MAX_PROJECT_OPTIMIZE_CHARS.toLocaleString('nl-NL')} tekens). Kort hem eerst in.`,
+    };
+  }
+
+  const { data } = await supabase.auth.getSession();
+  const accessToken = data.session?.access_token;
+  if (!accessToken) return { ...noop, error: 'Log in om je projectinstructie te verbeteren.' };
+
+  const anonKey = getAnonKey();
+  try {
+    const response = await fetch(functionUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+        ...(anonKey ? { apikey: anonKey } : {}),
+      },
+      body: JSON.stringify({
+        mode: 'project-optimize',
+        projectInstructions: instructions,
+        projectName: args.projectName ?? '',
+        projectFileNames: args.fileNames ?? [],
+        preferredProvider: settings.provider,
+        preferredModel: settings.model,
+        systemPrompt: composeProjectOptimizePrompt(settings),
+      }),
+      signal,
+    });
+
+    if (!response.ok) throw new Error(`Edge function gaf status ${response.status}`);
+
+    const result = (await response.json()) as {
+      success?: boolean;
+      optimized?: string;
+      provider?: string;
+      error?: string;
+    };
+    const optimized = typeof result.optimized === 'string' ? result.optimized.trim() : '';
+    if (result.success && optimized) {
+      return { text: optimized, changed: optimized !== instructions, provider: result.provider };
     }
     throw new Error(result.error ?? 'De verbetering gaf geen bruikbaar resultaat.');
   } catch (err) {

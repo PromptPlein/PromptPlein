@@ -480,6 +480,7 @@ export default function ChatPage() {
           settingsProject ? projects.update(settingsProject.id, patch) : Promise.resolve(false)
         }
         onFilesChanged={projects.refresh}
+        chatSettings={settings}
       />
       <ConfirmDialog
         open={confirmDeleteProject !== null}

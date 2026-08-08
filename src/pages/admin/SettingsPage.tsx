@@ -38,6 +38,7 @@ import {
   DEFAULT_CHAT_OPTIMIZE_PROMPT,
   DEFAULT_CHAT_SYSTEM_PROMPT,
   DEFAULT_EXECUTION_SYSTEM_PROMPT,
+  DEFAULT_PROJECT_OPTIMIZE_PROMPT,
   DEFAULT_SYSTEM_PROMPT,
   MAX_CHAT_BASE_INFO_CHARS,
   type AiSettings,
@@ -145,6 +146,7 @@ export default function SettingsPage() {
             temperature: chat.temperature,
             base_info_chars: chat.baseInfo.length,
             optimize_enabled: chat.optimizeEnabled,
+            project_optimize_enabled: chat.projectOptimizeEnabled,
           },
         }).catch(() => {
           /* audit is best-effort */
@@ -503,6 +505,75 @@ export default function SettingsPage() {
                     type="button"
                     className="shrink-0 font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
                     onClick={() => patchChat({ optimizeSystemPrompt: DEFAULT_CHAT_OPTIMIZE_PROMPT })}
+                  >
+                    Herstel standaard
+                  </button>
+                )}
+              </p>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+            <div className="mb-3 flex items-center gap-2">
+              <Sparkles size={16} className="text-rijksoranje" />
+              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                Projectinstructie omschrijven tot systeemprompt
+              </h3>
+            </div>
+            <p className="mb-4 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
+              Hetzelfde oranje sterretje, maar dan in het veld
+              &ldquo;Projectinstructie&rdquo; van de projectinstellingen. Eén klik schrijft de ruwe
+              instructie om tot een volwaardige systeemprompt. Dit is een <strong>zwaardere</strong>{' '}
+              slag dan het sterretje in de chat: de uitkomst stuurt <em>elk</em> gesprek in dat
+              project, dus er wordt een vaste rol, een vast eindproduct en een uitweg bij twijfel in
+              uitgewerkt. Het resultaat vervangt het veld maar wordt niet opgeslagen — de gebruiker
+              leest het na en slaat zelf op, of haalt zijn eigen tekst terug.
+            </p>
+
+            <label className="flex cursor-pointer items-center gap-3">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded accent-rijksblauw-500"
+                checked={chat.projectOptimizeEnabled}
+                onChange={(e) => patchChat({ projectOptimizeEnabled: e.target.checked })}
+              />
+              <span className="text-sm text-slate-700 dark:text-slate-200">
+                Sterretje tonen bij de projectinstructie
+              </span>
+            </label>
+
+            <div
+              className={clsx('mt-4', !chat.projectOptimizeEnabled && 'pointer-events-none opacity-50')}
+            >
+              <label className="opl-label" htmlFor="projectOptimizePrompt">
+                Instructie voor het omschrijven
+              </label>
+              <textarea
+                id="projectOptimizePrompt"
+                className="opl-input min-h-[200px] resize-y font-mono text-[13px]"
+                value={chat.projectOptimizeSystemPrompt}
+                onChange={(e) => patchChat({ projectOptimizeSystemPrompt: e.target.value })}
+                placeholder="Bijv. Herschrijf de ruwe projectinstructie tot een volwaardige systeemprompt…"
+              />
+              <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400 dark:text-slate-500">
+                <span>
+                  De standaardtekst stuurt op zes onderwerpen: wie de assistent is, wat er elk
+                  gesprek uit moet komen (en wat niet), waaraan je ziet dat het goed is, de regels
+                  mét hun reden, de termen die letterlijk moeten blijven, en wat er gebeurt als
+                  informatie ontbreekt. De zwaarste regel erin is wat er <em>niet</em> bij mag
+                  komen. Dat heeft twee redenen: een verzonnen regel werkt door in elk volgend
+                  gesprek zonder dat de gebruiker ziet waar hij vandaan komt, én elke extra regel
+                  verkleint de kans dat de echte regels nog worden opgevolgd. Het model krijgt de
+                  ruwe instructie te zien plus de projectnaam en de namen van de bronbestanden —
+                  niet de inhoud daarvan. Laat leeg om de ingebouwde standaard te gebruiken.
+                </span>
+                {chat.projectOptimizeSystemPrompt.trim() !== DEFAULT_PROJECT_OPTIMIZE_PROMPT && (
+                  <button
+                    type="button"
+                    className="shrink-0 font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
+                    onClick={() =>
+                      patchChat({ projectOptimizeSystemPrompt: DEFAULT_PROJECT_OPTIMIZE_PROMPT })
+                    }
                   >
                     Herstel standaard
                   </button>

@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { FileText, Loader2, Scissors, Trash2, Upload } from 'lucide-react';
+import { FileText, Loader2, RotateCcw, Scissors, Sparkles, Trash2, Upload } from 'lucide-react';
+import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import Modal from '@/components/common/Modal';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { ACCEPTED_DOC_ACCEPT } from '@/lib/extractDocument';
+import { optimizeProjectInstructions } from '@/services/chatService';
+import type { ChatSettings } from '@/services/settingsService';
 import {
   addProjectFile,
   deleteProjectFile,
@@ -33,6 +36,7 @@ export default function ProjectSettingsModal({
   onClose,
   onSave,
   onFilesChanged,
+  chatSettings,
 }: {
   open: boolean;
   project: ChatProject | null;
@@ -41,10 +45,22 @@ export default function ProjectSettingsModal({
   onSave: (patch: { name: string; instructions: string }) => Promise<boolean>;
   /** Er is een bestand bij gekomen of verwijderd (voor de telling in de zijbalk). */
   onFilesChanged: () => void;
+  /**
+   * De AI-instellingen van de beheerder. Ontbreken ze (nog niet geladen), of
+   * staat de verbeterslag uit, dan blijft het sterretje bij de instructie weg —
+   * de rest van het scherm werkt gewoon.
+   */
+  chatSettings?: ChatSettings | null;
 }) {
   const [name, setName] = useState('');
   const [instructions, setInstructions] = useState('');
   const [saving, setSaving] = useState(false);
+  const [optimizing, setOptimizing] = useState(false);
+  // De instructie van vóór de laatste verbetering, met wat eruit kwam. Zolang
+  // het veld nog exact het resultaat bevat, kan de gebruiker terug.
+  const [beforeOptimize, setBeforeOptimize] = useState<{ before: string; after: string } | null>(
+    null,
+  );
   const [files, setFiles] = useState<ChatProjectFile[]>([]);
   const [loadingFiles, setLoadingFiles] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -61,6 +77,9 @@ export default function ProjectSettingsModal({
     if (!open || !project) return;
     setName(project.name);
     setInstructions(project.instructions);
+    // Terugdraaien hoort bij de instructie die je vóór je hebt: een ander
+    // project (of opnieuw openen) begint met een schone lei.
+    setBeforeOptimize(null);
   }, [open, project?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadFiles = useCallback(() => {
@@ -87,8 +106,51 @@ export default function ProjectSettingsModal({
     return loadFiles();
   }, [open, projectId, loadFiles]);
 
+  // --- Het oranje sterretje: van ruwe instructie naar systeemprompt ---
+  // Bewust een zwaardere slag dan het sterretje in de chat: daar wordt één
+  // bericht scherper, hier wordt een instructie herschreven die élk gesprek in
+  // dit project stuurt. Het resultaat vervangt het veld maar wordt níét
+  // opgeslagen — de gebruiker leest het eerst na en drukt zelf op "Opslaan".
+  const canOptimize =
+    Boolean(chatSettings?.projectOptimizeEnabled) && !saving && instructions.trim().length > 0;
+  const canUndoOptimize =
+    beforeOptimize !== null && instructions === beforeOptimize.after && !optimizing;
+
+  async function optimize() {
+    if (!canOptimize || optimizing || !chatSettings) return;
+    const before = instructions;
+    setOptimizing(true);
+    try {
+      const result = await optimizeProjectInstructions({
+        instructions: before,
+        projectName: name.trim(),
+        fileNames: files.map((f) => f.name),
+        settings: chatSettings,
+      });
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+      if (!result.changed || !result.text.trim()) {
+        toast('Je instructie was al compleet genoeg.', { icon: '✨' });
+        return;
+      }
+      setInstructions(result.text);
+      setBeforeOptimize({ before, after: result.text });
+      toast.success('Instructie herschreven. Lees hem na en sla op als hij klopt.');
+    } finally {
+      setOptimizing(false);
+    }
+  }
+
+  function undoOptimize() {
+    if (!canUndoOptimize || !beforeOptimize) return;
+    setInstructions(beforeOptimize.before);
+    setBeforeOptimize(null);
+  }
+
   async function save() {
-    if (!project || saving) return;
+    if (!project || saving || optimizing) return;
     const trimmed = name.trim();
     if (!trimmed) {
       toast.error('Geef het project een naam.');
@@ -184,17 +246,76 @@ export default function ProjectSettingsModal({
               Deze instructie geldt voor elk gesprek in dit project. Beschrijf wie de assistent is,
               hoe hij moet antwoorden en welk eindproduct eruit moet komen.
             </p>
-            <textarea
-              id="project-instructions"
-              className="opl-input min-h-[10rem] w-full resize-y font-normal"
-              value={instructions}
-              maxLength={MAX_PROJECT_INSTRUCTIONS_CHARS}
-              onChange={(e) => setInstructions(e.target.value)}
-              placeholder="Je bent de tekstschrijver van ons merk. Schrijf altijd in de wij-vorm, kort en concreet. Lever elke tekst als: titel, drie alinea's, afsluitende oproep."
-            />
-            <p className="mt-1 text-right text-[11px] text-slate-400 dark:text-slate-500">
-              {num(instructions.length)} van {num(MAX_PROJECT_INSTRUCTIONS_CHARS)} tekens
-            </p>
+            <div className="relative">
+              <textarea
+                id="project-instructions"
+                // pb-12: houdt de onderste regel vrij van het sterretje. Zonder
+                // die ruimte schuift de laatste zin er precies achter zodra de
+                // gebruiker naar beneden typt — juist waar zijn cursor staat.
+                className="opl-input min-h-[10rem] w-full resize-y pb-12 font-normal"
+                value={instructions}
+                maxLength={MAX_PROJECT_INSTRUCTIONS_CHARS}
+                onChange={(e) => setInstructions(e.target.value)}
+                placeholder="Je bent de tekstschrijver van ons merk. Schrijf altijd in de wij-vorm, kort en concreet. Lever elke tekst als: titel, drie alinea's, afsluitende oproep."
+              />
+              {/* Sterretje rechtsonder: schrijft de instructie om tot een volwaardige
+                  systeemprompt. Verschijnt pas zodra er tekst staat, zodat een leeg
+                  veld rustig blijft — hetzelfde gebaar als in de chat, maar met een
+                  veel zwaardere slag erachter (zie PROJECTINSTRUCTIE_Framework.md). */}
+              {chatSettings?.projectOptimizeEnabled &&
+                (instructions.trim().length > 0 || optimizing) && (
+                  <button
+                    type="button"
+                    className={clsx(
+                      // Rechtsonder, maar niet in de hoek: daar zitten de rand, de
+                      // schuifbalk (± 16px) en het sleepgreepje van resize-y al.
+                      // 22px legt de knop er net naast met een paar pixels lucht,
+                      // zodat het greepje bruikbaar blijft en de knop niet tegen
+                      // de grijze baan van de schuifbalk aan plakt.
+                      'absolute bottom-2.5 right-[22px] flex h-8 w-8 items-center justify-center rounded-lg',
+                      'bg-gradient-to-br from-rijksoranje to-rijksoranje-dark text-white',
+                      // Een ringetje in de veldkleur licht de knop van de tekst
+                      // eronder: zonder die scheiding loopt hij vast aan de regel
+                      // waar hij toevallig overheen valt.
+                      'shadow-sm ring-2 ring-white dark:ring-slate-800',
+                      'transition-all duration-200 focus:outline-none focus:ring-rijksoranje/40',
+                      canOptimize && !optimizing
+                        ? 'hover:shadow-md motion-safe:hover:-translate-y-px'
+                        : 'cursor-default opacity-60',
+                    )}
+                    onClick={() => void optimize()}
+                    disabled={!canOptimize || optimizing}
+                    title={
+                      optimizing
+                        ? 'Bezig met omschrijven…'
+                        : 'Schrijf mijn instructie om tot een volledige systeemprompt — je oorspronkelijke tekst kun je daarna terughalen'
+                    }
+                    aria-label="Schrijf mijn projectinstructie om met AI"
+                  >
+                    {optimizing ? (
+                      <Loader2 size={15} className="animate-spin" />
+                    ) : (
+                      <Sparkles size={15} strokeWidth={2.25} />
+                    )}
+                  </button>
+                )}
+            </div>
+            <div className="mt-1 flex items-center justify-between gap-3">
+              {canUndoOptimize ? (
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-500 hover:text-rijksblauw-600 hover:underline dark:text-slate-400 dark:hover:text-rijksblauw-300"
+                  onClick={undoOptimize}
+                >
+                  <RotateCcw size={12} /> Herstel mijn eigen tekst
+                </button>
+              ) : (
+                <span />
+              )}
+              <p className="text-[11px] text-slate-400 dark:text-slate-500">
+                {num(instructions.length)} van {num(MAX_PROJECT_INSTRUCTIONS_CHARS)} tekens
+              </p>
+            </div>
           </div>
 
           <div>
@@ -287,7 +408,9 @@ export default function ProjectSettingsModal({
               type="button"
               className="opl-btn-primary"
               onClick={() => void save()}
-              disabled={saving}
+              // Ook tijdens het omschrijven dicht: anders bewaart een klik de
+              // oude instructie terwijl de nieuwe onderweg is.
+              disabled={saving || optimizing}
             >
               {saving && <Loader2 size={15} className="animate-spin" />}
               Opslaan
