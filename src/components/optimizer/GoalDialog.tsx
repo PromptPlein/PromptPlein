@@ -105,6 +105,13 @@ interface GoalDialogProps {
   onResult: (result: OptimizeResult, technique: Technique) => void;
   /** De instap-tabs; vallen bovenin het omrande generator-blok. */
   header?: ReactNode;
+  /**
+   * Context van het aangehaakte chatproject (de projectinstructie van de
+   * gebruiker, eventueel met zijn bronbestanden). Gaat mee in élke AI-stap van
+   * deze dialoog. Vooral de vragenronde profiteert: zonder deze context vraagt
+   * de AI naar achtergrond die in het project allang beschreven staat.
+   */
+  projectContext?: string;
 }
 
 /**
@@ -135,7 +142,12 @@ type Phase = 'goal' | 'dialogue' | 'framework' | 'fields' | 'composing' | 'done'
  * (tekst, code, beeld, …) bepaalt de AI welk framework past. De gebruiker kiest
  * daaruit — of pakt zelf een ander framework — en dán pas wordt de prompt gebouwd.
  */
-export default function GoalDialog({ settings, onResult, header }: GoalDialogProps) {
+export default function GoalDialog({
+  settings,
+  onResult,
+  header,
+  projectContext,
+}: GoalDialogProps) {
   const { techniques, techniqueById } = useReferenceData();
   const { profile, user } = useAuth();
 
@@ -340,6 +352,7 @@ export default function GoalDialog({ settings, onResult, header }: GoalDialogPro
         forceFinish,
         preferredProvider: settings.provider,
         preferredModel: settings.model,
+        projectContext,
       });
       if (res.unclear) {
         // De beschrijving is onbruikbaar: terug naar het doelveld met uitleg.
@@ -435,6 +448,7 @@ export default function GoalDialog({ settings, onResult, header }: GoalDialogPro
         fromDialogue: true,
         preferredProvider: settings.provider,
         preferredModel: settings.model,
+        projectContext,
       });
       setFrameworkFits(fit.recommendations);
     } catch {
@@ -479,6 +493,7 @@ export default function GoalDialog({ settings, onResult, header }: GoalDialogPro
         technique: framework,
         preferredProvider: settings.provider,
         preferredModel: settings.model,
+        projectContext,
         onStatus: (status) =>
           setPrefillProgress((p) => ({
             ...p,
@@ -557,6 +572,7 @@ export default function GoalDialog({ settings, onResult, header }: GoalDialogPro
         interviewResolved: true,
         preferredProvider: settings.provider,
         preferredModel: settings.model,
+        projectContext,
         systemPrompt: settings.systemPrompt.trim() || undefined,
         toneInstruction: settings.toneInstruction.trim() || undefined,
         temperature: settings.temperature,
@@ -802,6 +818,7 @@ export default function GoalDialog({ settings, onResult, header }: GoalDialogPro
 
                     <div className="rounded-xl border border-rijksblauw-200 bg-rijksblauw-50/40 p-4 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10">
                       <FollowUpQuestions
+                        projectContext={projectContext}
                         technique={chosenFramework}
                         answers={answers}
                         onChange={setAnswers}

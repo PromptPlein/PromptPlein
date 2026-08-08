@@ -17,6 +17,7 @@ import {
   titleFromFirstMessage,
 } from '@/lib/chatStorage';
 import { sendChatMessage } from '@/services/chatService';
+import { loadProjectContext } from '@/services/chatProjectService';
 import type { ChatSettings } from '@/services/settingsService';
 import type {
   AiProviderResult,
@@ -24,6 +25,7 @@ import type {
   ChatConversation,
   ChatIndexEntry,
   ChatMessage,
+  ChatProjectContext,
 } from '@/types';
 
 /** Maximum aantal bijlagen per gesprek (zelfde grens als server-side). */
@@ -54,6 +56,18 @@ export interface ChatController {
   /** Probeer het laatste, mislukte antwoord opnieuw. */
   retry: () => void;
   newConversation: () => void;
+  /**
+   * Start een vers gesprek dat bij `projectId` hoort. Het gesprek draait dan het
+   * hele leven onder de projectinstructie en bronbestanden van dat project.
+   */
+  newConversationInProject: (projectId: string) => void;
+  /**
+   * Koppel het HUIDIGE gesprek alsnog aan een project (het @-menu in het
+   * invoerveld). Alleen zinvol zolang er nog niets is gezegd: de instructie
+   * halverwege wisselen zou eerdere beurten onverklaarbaar maken, dus dat
+   * weigert deze functie.
+   */
+  attachProject: (projectId: string | null) => void;
   selectConversation: (id: string) => void;
   removeConversation: (id: string) => void;
   removeAllConversations: () => void;
@@ -188,6 +202,29 @@ export default function useChatController(
         .filter((m) => m.id !== assistantMsg.id && !m.error && m.content.trim())
         .map((m) => ({ role: m.role, content: m.content }));
 
+      // Hoort dit gesprek bij een project, dan halen we de projectinstructie en de
+      // bronbestanden erbij (gecachet, dus normaal gratis). Lukt dat niet — het
+      // project is verwijderd of de backend antwoordt niet — dan gaat de beurt
+      // gewoon door als gewone chat. Een mislukte projectophaling mag een
+      // gebruiker nooit zijn bericht kosten.
+      let project: ChatProjectContext | null = null;
+      if (updated.projectId) {
+        try {
+          const result = await loadProjectContext(updated.projectId);
+          project = result?.context ?? null;
+          if (result?.skipped.length) {
+            // Stil afkappen zou de gebruiker laten denken dat het model alles
+            // gelezen heeft; daarom benoemen we wat er buiten het budget viel.
+            toast(
+              `Te veel bronmateriaal: ${result.skipped.join(', ')} gaat niet mee in dit antwoord.`,
+              { icon: '✂️' },
+            );
+          }
+        } catch {
+          /* project onbereikbaar — de beurt draait verder als gewone chat */
+        }
+      }
+
       const controller = new AbortController();
       abortRef.current = controller;
 
@@ -219,6 +256,7 @@ export default function useChatController(
         // Het gesprek zelf bepaalt de modus: een uitvoergesprek blijft dat ook
         // voor vervolgbeurten, óók na een refresh (kind overleeft de opslag).
         kind: updated.kind,
+        project,
         onChunk: (textSoFar) => {
           pendingText = textSoFar;
           if (!rafId) rafId = requestAnimationFrame(flushPending);
@@ -282,6 +320,29 @@ export default function useChatController(
     if (streamingRef.current) return;
     update(createConversation());
   }, [update]);
+
+  const newConversationInProject = useCallback(
+    (projectId: string) => {
+      if (streamingRef.current) return;
+      update(createConversation(undefined, projectId));
+    },
+    [update],
+  );
+
+  const attachProject = useCallback(
+    (projectId: string | null) => {
+      const cur = conversationRef.current;
+      // Alleen in een nog leeg gesprek: de projectinstructie geldt voor het HELE
+      // gesprek, dus hem na een paar beurten omzetten zou betekenen dat de
+      // eerdere antwoorden onder andere regels tot stand kwamen.
+      if (!cur || streamingRef.current || cur.messages.length > 0) return;
+      const next: ChatConversation = { ...cur };
+      if (projectId) next.projectId = projectId;
+      else delete next.projectId;
+      update(next);
+    },
+    [update],
+  );
 
   const selectConversation = useCallback(
     (id: string) => {
@@ -388,6 +449,8 @@ export default function useChatController(
     stop,
     retry,
     newConversation,
+    newConversationInProject,
+    attachProject,
     selectConversation,
     removeConversation,
     removeAllConversations,

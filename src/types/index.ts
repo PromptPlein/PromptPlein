@@ -647,6 +647,16 @@ export interface ChatConversation {
    * uitvoer-systeemprompt i.p.v. de B1-huisregels, zonder opmaak-afvlakking.
    */
   kind?: 'execution';
+  /**
+   * Het chatproject waar dit gesprek onder valt (id uit `chat_projects`). Wordt
+   * bij het aanmaken vastgelegd en verandert daarna niet meer: de
+   * projectinstructie geldt voor het HELE gesprek, dus hem halverwege wisselen
+   * zou eerdere beurten onverklaarbaar maken.
+   *
+   * Bestaat het project niet meer (verwijderd, of op een ander apparaat
+   * aangemaakt), dan draait het gesprek verder als gewone chat.
+   */
+  projectId?: string;
 }
 
 /** Regel in de gesprekkenlijst (aparte kleine index-key in localStorage). */
@@ -656,6 +666,54 @@ export interface ChatIndexEntry {
   createdAt: string;
   updatedAt: string;
   messageCount: number;
+  /** Zie ChatConversation.projectId — staat hier zodat de zijbalk kan groeperen. */
+  projectId?: string;
+}
+
+/**
+ * Een chatproject: een map met een eigen projectinstructie en bronbestanden.
+ * Anders dan de gesprekken staat dit WÉL in de database (`chat_projects`) — een
+ * project is langlopend werk dat een gebruiker op elk apparaat terugverwacht.
+ */
+export interface ChatProject {
+  id: string;
+  name: string;
+  /** De projectinstructie: leidend voor elk gesprek in dit project. */
+  instructions: string;
+  createdAt: string;
+  updatedAt: string;
+  /** Aantal bronbestanden; alleen gevuld in lijstweergaven. */
+  fileCount?: number;
+}
+
+/**
+ * Een bronbestand van een project. Zoals bij een chatbijlage bewaren we de
+ * geëxtraheerde platte tekst, niet het originele bestand.
+ */
+export interface ChatProjectFile {
+  id: string;
+  projectId: string;
+  name: string;
+  chars: number;
+  truncated: boolean;
+  createdAt: string;
+  /**
+   * De volledige tekst. Bewust optioneel: de bestandslijst in de UI haalt hem
+   * niet op (dat zou honderdduizenden tekens door de browser trekken voor een
+   * regel met een naam). Alleen {@link ChatProjectContext} heeft hem echt nodig.
+   */
+  text?: string;
+}
+
+/**
+ * Alles wat een project aan een gesprek meegeeft: de projectinstructie plus de
+ * tekst van de bronbestanden. Dit is wat er per beurt naar het model gaat.
+ */
+export interface ChatProjectContext {
+  id: string;
+  name: string;
+  instructions: string;
+  files: { name: string; text: string }[];
 }
 
 /**

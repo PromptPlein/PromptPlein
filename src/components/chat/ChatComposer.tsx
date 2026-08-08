@@ -1,9 +1,20 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { Loader2, Paperclip, Scissors, Send, Sparkles, Square, Undo2, X } from 'lucide-react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  AtSign,
+  FolderOpen,
+  Loader2,
+  Paperclip,
+  Scissors,
+  Send,
+  Sparkles,
+  Square,
+  Undo2,
+  X,
+} from 'lucide-react';
 import clsx from 'clsx';
 import { ACCEPTED_DOC_ACCEPT } from '@/lib/extractDocument';
 import { MAX_CHAT_ATTACHMENTS } from './useChatController';
-import type { ChatAttachment } from '@/types';
+import type { ChatAttachment, ChatProject } from '@/types';
 
 /**
  * Bovengrens van het tekstvak. Daarboven groeit het niet verder mee en scrollt
@@ -44,6 +55,10 @@ export default function ChatComposer({
   onOptimize,
   badge,
   allowAttachments = true,
+  projects,
+  activeProjectId = null,
+  onPickProject,
+  canPickProject = false,
 }: {
   /** Volledig uitgeschakeld (bijv. chat uitgezet of geen AI-service). */
   disabled: boolean;
@@ -68,8 +83,27 @@ export default function ChatComposer({
   badge?: ReactNode;
   /** Bijlagen toestaan? De Testkamer zet dit uit: daar test je de prompt zelf. */
   allowAttachments?: boolean;
+  /**
+   * De projecten van de gebruiker, voor het @-menu. Afwezig = geen @-knop (de
+   * Testkamer bijvoorbeeld: daar test je één prompt, geen project).
+   */
+  projects?: ChatProject[];
+  /** Het project waar dit gesprek nu onder valt. */
+  activeProjectId?: string | null;
+  /** Koppel het gesprek aan een project (of ontkoppel met null). */
+  onPickProject?: (projectId: string | null) => void;
+  /**
+   * Mag er nog gekozen worden? Zodra er een bericht staat niet meer: de
+   * projectinstructie geldt voor het hele gesprek, dus halverwege wisselen zou
+   * betekenen dat eerdere antwoorden onder andere regels tot stand kwamen. Het
+   * @-menu blijft dan wel zichtbaar (met uitleg), zodat het niet lijkt of de
+   * knop verdwenen is.
+   */
+  canPickProject?: boolean;
 }) {
   const [text, setText] = useState('');
+  const [projectMenuOpen, setProjectMenuOpen] = useState(false);
+  const projectMenuRef = useRef<HTMLDivElement>(null);
   const [optimizing, setOptimizing] = useState(false);
   // Sleept de gebruiker op dit moment bestanden boven het veld?
   const [dragging, setDragging] = useState(false);
@@ -96,6 +130,36 @@ export default function ChatComposer({
     const borders = el.offsetHeight - el.clientHeight;
     el.style.height = `${Math.min(MAX_HEIGHT, el.scrollHeight + borders)}px`;
   }, [text]);
+
+  // --- Het @-menu: koppel dit gesprek aan een project ---
+  const projectPickerAvailable = Boolean(onPickProject && projects && projects.length > 0);
+  const activeProject = projects?.find((p) => p.id === activeProjectId) ?? null;
+
+  // Buiten het menu klikken of Escape sluit het weer.
+  useEffect(() => {
+    if (!projectMenuOpen) return;
+    function onPointerDown(e: MouseEvent) {
+      if (!projectMenuRef.current?.contains(e.target as Node)) setProjectMenuOpen(false);
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setProjectMenuOpen(false);
+    }
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [projectMenuOpen]);
+
+  function pickProject(projectId: string | null) {
+    setProjectMenuOpen(false);
+    onPickProject?.(projectId);
+    // Heeft de gebruiker het menu met een getypte @ geopend, haal die dan weer
+    // weg: het is een commando geweest, geen tekst die hij wil versturen.
+    setText((cur) => (cur === '@' ? '' : cur));
+    textareaRef.current?.focus();
+  }
 
   const canSend = !disabled && !streaming && !optimizing && text.trim().length > 0;
   const canOptimize = Boolean(onOptimize) && !disabled && !streaming && text.trim().length > 0;
@@ -266,7 +330,18 @@ export default function ChatComposer({
             placeholder={disabled ? 'Chat wordt geladen…' : 'Stel je vraag…'}
             value={text}
             disabled={disabled || optimizing}
-            onChange={(e) => setText(e.target.value)}
+            onChange={(e) => {
+              const value = e.target.value;
+              setText(value);
+              // Een @ als allereerste teken is een commando, geen tekst: open
+              // meteen het projectmenu. Verderop in een zin (een e-mailadres,
+              // een naam) doen we niets — dat zou het menu bij elk adres openen.
+              if (value === '@' && projectPickerAvailable && canPickProject) {
+                setProjectMenuOpen(true);
+              } else if (!value.startsWith('@')) {
+                setProjectMenuOpen(false);
+              }
+            }}
             onKeyDown={(e) => {
               // Enter verzendt; Shift+Enter maakt een nieuwe regel.
               if (e.key === 'Enter' && !e.shiftKey) {
@@ -313,6 +388,73 @@ export default function ChatComposer({
             Staat onder het tekstvak in plaats van eroverheen, dus de tekst kan er
             nooit achter verdwijnen. */}
         <div className="flex items-center gap-1 px-2 pb-2">
+          {/* @-menu: hetzelfde project kiezen als vanuit de zijbalk, maar dan
+              zonder het gesprek te verlaten. Bewust naast de paperclip: het is
+              dezelfde soort handeling — bronmateriaal aan dit gesprek hangen. */}
+          {projectPickerAvailable && (
+            <div className="relative shrink-0" ref={projectMenuRef}>
+              <button
+                type="button"
+                className={clsx(
+                  'flex h-8 items-center gap-1.5 rounded-lg px-2 transition-colors focus:outline-none focus:ring-2 focus:ring-rijksblauw-500/40 disabled:cursor-not-allowed disabled:opacity-40',
+                  activeProject
+                    ? 'bg-rijksblauw-50 text-rijksblauw-700 hover:bg-rijksblauw-100 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200'
+                    : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200',
+                )}
+                onClick={() => setProjectMenuOpen((open) => !open)}
+                disabled={disabled || streaming || !canPickProject}
+                title={
+                  canPickProject
+                    ? 'Koppel dit gesprek aan een project'
+                    : 'Het project ligt vast zodra het gesprek is begonnen. Start een nieuw gesprek om te wisselen.'
+                }
+                aria-label="Kies een project voor dit gesprek"
+                aria-expanded={projectMenuOpen}
+              >
+                <AtSign size={16} className="shrink-0" />
+                {activeProject && (
+                  <span className="max-w-[8rem] truncate text-xs font-medium">
+                    {activeProject.name}
+                  </span>
+                )}
+              </button>
+
+              {projectMenuOpen && (
+                <div className="absolute bottom-full left-0 z-20 mb-1 max-h-64 w-60 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-700 dark:bg-slate-800">
+                  <p className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                    Projecten
+                  </p>
+                  {projects?.map((project) => (
+                    <button
+                      key={project.id}
+                      type="button"
+                      className={clsx(
+                        'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors',
+                        project.id === activeProjectId
+                          ? 'bg-rijksblauw-50 font-medium text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200'
+                          : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700',
+                      )}
+                      onClick={() => pickProject(project.id)}
+                    >
+                      <FolderOpen size={14} className="shrink-0 text-slate-400" />
+                      <span className="truncate">{project.name}</span>
+                    </button>
+                  ))}
+                  {activeProjectId && (
+                    <button
+                      type="button"
+                      className="mt-1 flex w-full items-center gap-2 rounded-lg border-t border-slate-100 px-2 py-1.5 text-left text-sm text-slate-500 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-700"
+                      onClick={() => pickProject(null)}
+                    >
+                      <X size={14} className="shrink-0" />
+                      Losmaken van het project
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {allowAttachments && (
             <>
               <button

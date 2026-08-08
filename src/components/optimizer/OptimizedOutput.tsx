@@ -31,6 +31,8 @@ interface OptimizedOutputProps {
   onRefined?: (res: OptimizeResult) => void;
   /** Generator-AI-instellingen; de refine in de Testkamer draait hierop. */
   aiSettings?: AiSettings;
+  /** Context van het aangehaakte chatproject; zie ProjectContextBar. */
+  projectContext?: string;
 }
 
 export default function OptimizedOutput({
@@ -43,6 +45,7 @@ export default function OptimizedOutput({
   onSelectVersion,
   onRefined,
   aiSettings,
+  projectContext,
 }: OptimizedOutputProps) {
   const { configured } = useAuth();
   const [copied, setCopied] = useState(false);
@@ -143,6 +146,7 @@ export default function OptimizedOutput({
         technique={technique}
         chatSettings={chatSettings}
         aiSettings={aiSettings}
+        projectContext={projectContext}
         onRefined={onRefined}
       />
 

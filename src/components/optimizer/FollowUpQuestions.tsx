@@ -53,6 +53,8 @@ interface FollowUpQuestionsProps {
   preferredProvider?: AiProvider;
   /** Concreet AI-model voor "Vul verder aan". Optioneel; zie preferredProvider. */
   preferredModel?: string;
+  /** Context van het aangehaakte chatproject; zie ProjectContextBar. */
+  projectContext?: string;
   /**
    * Optioneel: wanneer meegegeven, sluit de laatste stap direct af met een
    * genereer-actie ("Genereren en optimaliseren prompt") in plaats van het
@@ -83,6 +85,7 @@ export default function FollowUpQuestions({
   prefillProgress,
   preferredProvider,
   preferredModel,
+  projectContext,
   onFinish,
   finishLabel = 'Genereren en optimaliseren prompt',
 }: FollowUpQuestionsProps) {
@@ -179,6 +182,7 @@ export default function FollowUpQuestions({
         structureFormat: structureFormat(technique),
         preferredProvider: preferredProvider ?? settings.provider,
         preferredModel: preferredModel ?? settings.model,
+        projectContext,
       });
       if (res.success && res.value && res.value.trim() && res.value.trim() !== currentValue) {
         // Niet direct toepassen: toon een voorstel dat de gebruiker beoordeelt.

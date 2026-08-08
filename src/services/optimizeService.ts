@@ -100,6 +100,12 @@ export async function optimizePrompt(args: {
   systemPrompt?: string;
   /** Admin-toon/schrijfstijl die aan de prompt wordt meegegeven. */
   toneInstruction?: string;
+  /**
+   * Context van het aangehaakte chatproject: de projectinstructie van de
+   * GEBRUIKER, eventueel gevolgd door zijn bronbestanden. Zie
+   * {@link buildGeneratorContext} en `withProject` server-side.
+   */
+  projectContext?: string;
   /** Admin-creativiteit (0–1). */
   temperature?: number;
   /**
@@ -140,6 +146,7 @@ export async function optimizePrompt(args: {
     preferredModel,
     systemPrompt,
     toneInstruction,
+    projectContext,
     temperature,
     extraAnsweredFields,
     interviewResolved,
@@ -184,6 +191,7 @@ export async function optimizePrompt(args: {
         preferredModel,
         systemPrompt,
         toneInstruction,
+        projectContext,
         temperature,
       };
 
@@ -293,11 +301,21 @@ export async function refinePrompt(args: {
   preferredProvider?: AiProvider;
   preferredModel?: string;
   temperature?: number;
+  /** Context van het aangehaakte chatproject; zie {@link buildGeneratorContext}. */
+  projectContext?: string;
   /** Meelezen terwijl de AI de herschreven template schrijft. */
   onChunk?: StreamHandler;
 }): Promise<OptimizeResult> {
-  const { previousPrompt, testAnswer, feedback, preferredProvider, preferredModel, temperature, onChunk } =
-    args;
+  const {
+    previousPrompt,
+    testAnswer,
+    feedback,
+    preferredProvider,
+    preferredModel,
+    temperature,
+    projectContext,
+    onChunk,
+  } = args;
   const functionUrl = getFunctionUrl('optimize-prompt');
 
   if (!isSupabaseConfigured || !functionUrl) {
@@ -316,6 +334,7 @@ export async function refinePrompt(args: {
     refineFeedback: feedback,
     preferredProvider: preferredProvider ?? 'auto',
     preferredModel,
+    projectContext,
     temperature,
   };
 
@@ -1008,6 +1027,13 @@ export async function runPlanStep(args: {
   noContext?: boolean;
   preferredProvider?: AiProvider;
   preferredModel?: string;
+  /**
+   * Context van het aangehaakte chatproject; zie {@link buildGeneratorContext}.
+   * Staat hier voor de volledigheid van de servicelaag: deze modus wordt op dit
+   * moment door geen enkele gerenderde component aangeroepen (PlanWizard en
+   * InterviewFlow zijn niet gemonteerd), dus er is nog niets dat hem meegeeft.
+   */
+  projectContext?: string;
 }): Promise<PlanStepResult> {
   const {
     goal,
@@ -1020,6 +1046,7 @@ export async function runPlanStep(args: {
     noContext,
     preferredProvider,
     preferredModel,
+    projectContext,
   } = args;
   const functionUrl = getFunctionUrl('optimize-prompt');
 
@@ -1056,6 +1083,7 @@ export async function runPlanStep(args: {
         noContext: interactive ? Boolean(noContext) : undefined,
         preferredProvider: preferredProvider ?? 'auto',
         preferredModel,
+        projectContext,
       }),
     });
 
@@ -1254,6 +1282,11 @@ export async function runClarifyTurn(args: {
   forceFinish?: boolean;
   preferredProvider?: AiProvider;
   preferredModel?: string;
+  /**
+   * Context van het aangehaakte chatproject; zie {@link buildGeneratorContext}.
+   * Zonder deze context stelt de dialoog vragen die het project al beantwoordt.
+   */
+  projectContext?: string;
 }): Promise<ClarifyResult> {
   try {
     const data = await postOptimize<{
@@ -1275,6 +1308,7 @@ export async function runClarifyTurn(args: {
       forceFinish: Boolean(args.forceFinish),
       preferredProvider: args.preferredProvider ?? 'auto',
       preferredModel: args.preferredModel,
+      projectContext: args.projectContext,
     });
     if (!data) {
       return {
@@ -1416,6 +1450,13 @@ export async function recommendFramework(args: {
    */
   fromDialogue?: boolean;
   /**
+   * Context van het aangehaakte chatproject; zie {@link buildGeneratorContext}.
+   * Juist hier belangrijk: zonder de context kiest de AI een raamwerk op de kale
+   * zin van de gebruiker ("voeg een exportknop toe") en mist hij dat het om code
+   * voor een bestaande applicatie gaat.
+   */
+  projectContext?: string;
+  /**
    * Voortgangsmelding terwijl de AI werkt. De aanroeper kan hiermee tonen wát er
    * gebeurt in plaats van een stilstaande spinner.
    */
@@ -1432,6 +1473,7 @@ export async function recommendFramework(args: {
     preferredModel,
     clarification,
     fromDialogue,
+    projectContext,
     onPhase,
     onSummary,
     onRecommendation,
@@ -1474,6 +1516,7 @@ export async function recommendFramework(args: {
           })),
           preferredProvider: preferredProvider ?? 'auto',
           preferredModel,
+          projectContext,
         },
         onEvent: (ev) => {
           switch (ev.type) {
@@ -1830,6 +1873,12 @@ export async function prefillFields(args: {
    */
   fromFormatBrief?: boolean;
   /**
+   * Context van het aangehaakte chatproject; zie {@link buildGeneratorContext}.
+   * Hiermee vult de AI de velden van het raamwerk vast met wat het project al
+   * weet, in plaats van de gebruiker ernaar te vragen.
+   */
+  projectContext?: string;
+  /**
    * Voortgang naast de velden: welk model aan het invullen werkt
    * ({@link StreamStatus.models}), welke fase loopt ({@link PrefillPhase}) en
    * welke provider de velden levert.
@@ -1848,6 +1897,7 @@ export async function prefillFields(args: {
     clarification,
     fromDocument,
     fromFormatBrief,
+    projectContext,
     onStatus,
     onSummary,
     onField,
@@ -1900,6 +1950,7 @@ export async function prefillFields(args: {
         analyzeFields,
         preferredProvider: preferredProvider ?? 'auto',
         preferredModel,
+        projectContext,
       },
       onEvent: (ev) => {
         switch (ev.type) {
@@ -2031,6 +2082,8 @@ export async function expandField(args: {
   structureFormat?: string;
   preferredProvider?: AiProvider;
   preferredModel?: string;
+  /** Context van het aangehaakte chatproject; zie {@link buildGeneratorContext}. */
+  projectContext?: string;
 }): Promise<{
   value: string;
   changed: boolean;
@@ -2039,8 +2092,16 @@ export async function expandField(args: {
   success: boolean;
   error?: string;
 }> {
-  const { field, currentValue, siblings, techniqueName, structureFormat, preferredProvider, preferredModel } =
-    args;
+  const {
+    field,
+    currentValue,
+    siblings,
+    techniqueName,
+    structureFormat,
+    preferredProvider,
+    preferredModel,
+    projectContext,
+  } = args;
   const noop = {
     value: currentValue,
     changed: false,
@@ -2071,6 +2132,7 @@ export async function expandField(args: {
         structureFormat,
         preferredProvider: preferredProvider ?? 'auto',
         preferredModel,
+        projectContext,
       }),
     });
 

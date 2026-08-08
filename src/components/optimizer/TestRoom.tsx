@@ -49,6 +49,8 @@ interface TestRoomProps {
   chatSettings: ChatSettings | null;
   /** Generator-instellingen: de refine draait op de optimizer-provider. */
   aiSettings?: AiSettings;
+  /** Context van het aangehaakte chatproject; zie ProjectContextBar. */
+  projectContext?: string;
   /**
    * Een verbeterde versie is klaar: de aanroeper voegt hem toe aan de
    * versiegeschiedenis en maakt hem actief. Ontbreekt dit, dan is er alleen
@@ -70,6 +72,7 @@ export default function TestRoom({
   technique,
   chatSettings,
   aiSettings,
+  projectContext,
   onRefined,
 }: TestRoomProps) {
   const { isAuthenticated, configured } = useAuth();
@@ -188,6 +191,7 @@ export default function TestRoom({
       feedback,
       preferredProvider: aiSettings?.provider,
       preferredModel: aiSettings?.model,
+      projectContext,
       temperature: aiSettings?.temperature,
       onChunk: setRefineStream,
     });

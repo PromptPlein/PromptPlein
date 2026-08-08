@@ -36,6 +36,52 @@ export function consumeGeneratorHandoff(): string | null {
   }
 }
 
+// --- Project → generator ("Genereer prompt" op de projectpagina) ---
+// De gebruiker heeft in de chat een project met een projectinstructie (bijv. de
+// beschrijving van zijn WordPress-plugin) en wil daar een prompt over bouwen. Het
+// project reist mee als id — niet als tekst: de context kan tienduizenden tekens
+// zijn en die horen niet in sessionStorage. De bouwer laadt hem zelf op met
+// buildGeneratorContext.
+
+const PROJECT_HANDOFF_KEY = `${CHAT_PREFIX}project-handoff`;
+
+export interface ProjectHandoff {
+  projectId: string;
+  /** Gaan de bronbestanden ook mee, of alleen de projectinstructie? */
+  includeFiles: boolean;
+}
+
+/** Zet een project klaar om in de promptbouwer als context te gebruiken. */
+export function writeProjectHandoff(projectId: string, includeFiles = false): void {
+  try {
+    sessionStorage.setItem(
+      PROJECT_HANDOFF_KEY,
+      JSON.stringify({ projectId, includeFiles, createdAt: Date.now() }),
+    );
+  } catch {
+    /* sessieopslag niet beschikbaar — de bouwer opent dan zonder project */
+  }
+}
+
+/** Lees en verwijder het klaargezette project; verlopen of ongeldig -> null. */
+export function consumeProjectHandoff(): ProjectHandoff | null {
+  try {
+    const raw = sessionStorage.getItem(PROJECT_HANDOFF_KEY);
+    if (!raw) return null;
+    sessionStorage.removeItem(PROJECT_HANDOFF_KEY);
+    const parsed = JSON.parse(raw) as {
+      projectId?: unknown;
+      includeFiles?: unknown;
+      createdAt?: unknown;
+    };
+    if (typeof parsed.projectId !== 'string' || !parsed.projectId) return null;
+    if (typeof parsed.createdAt !== 'number' || Date.now() - parsed.createdAt > TTL_MS) return null;
+    return { projectId: parsed.projectId, includeFiles: parsed.includeFiles === true };
+  } catch {
+    return null;
+  }
+}
+
 // --- Resultaat-snapshot: gegenereerd resultaat over de login-roundtrip heen ---
 // De Testkamer vereist een ingelogde gebruiker terwijl de generator publiek is.
 // Wie vanuit de Testkamer-CTA gaat inloggen, krijgt via dit snapshot zijn

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, MessageSquare, Play, Plus, Trash2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AlertTriangle, FolderOpen, MessageSquare, Play, Plus, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/context/AuthContext';
@@ -9,12 +9,15 @@ import ChatEmptyState from '@/components/chat/ChatEmptyState';
 import ChatMessageList from '@/components/chat/ChatMessageList';
 import ChatModelBadge from '@/components/chat/ChatModelBadge';
 import ChatSidebar from '@/components/chat/ChatSidebar';
+import ProjectSettingsModal from '@/components/chat/ProjectSettingsModal';
+import ProjectView from '@/components/chat/ProjectView';
 import useChatController from '@/components/chat/useChatController';
+import useChatProjects from '@/components/chat/useChatProjects';
 import useFitHeight from '@/components/chat/useFitHeight';
 import SavePromptModal from '@/components/prompts/SavePromptModal';
 import { looksLikeMessyPrompt } from '@/lib/promptHeuristics';
 import { consumeHandoff, optimizeChatInput } from '@/services/chatService';
-import { writeGeneratorHandoff } from '@/services/handoffService';
+import { writeGeneratorHandoff, writeProjectHandoff } from '@/services/handoffService';
 import { getChatSettingsCached, type ChatSettings } from '@/services/settingsService';
 
 /** Permanente afmelding voor de bouw-een-prompt-tip (per apparaat). */
@@ -29,6 +32,7 @@ export default function ChatPage() {
   const { configured, user } = useAuth();
   const [settings, setSettings] = useState<ChatSettings | null>(null);
   const controller = useChatController(settings);
+  const projects = useChatProjects();
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
   const handoffDone = useRef(false);
@@ -62,6 +66,89 @@ export default function ChatPage() {
   const conversation = controller.conversation;
   const messages = conversation?.messages ?? [];
 
+  // --- Projecten ---
+  // `projectPage` is de projectPAGINA: klik je links op een project, dan kom je
+  // daar en niet in een gesprek. Zodra je in dat project een chat opent of start,
+  // gaat hij weer op null en neemt het gesprek het scherm over.
+  const [projectPage, setProjectPage] = useState<string | null>(null);
+  const [settingsProjectId, setSettingsProjectId] = useState<string | null>(null);
+  const [confirmDeleteProject, setConfirmDeleteProject] = useState<string | null>(null);
+
+  const projectList = projects.projects;
+  const openProject = projectList.find((p) => p.id === projectPage) ?? null;
+  const settingsProject = projectList.find((p) => p.id === settingsProjectId) ?? null;
+
+  const knownProjectIds = useMemo(() => new Set(projectList.map((p) => p.id)), [projectList]);
+
+  // Losse gesprekken = alles wat NIET onder een bestaand project valt. Ook een
+  // gesprek dat naar een verwijderd project verwijst hoort hier: anders zou het
+  // nergens meer te zien zijn en zou de gebruiker het stilletjes kwijt zijn.
+  // Zolang de projecten nog laden filteren we alleen op de vlag zelf, anders
+  // knipperen projectgesprekken heel even in deze lijst.
+  const looseEntries = useMemo(
+    () =>
+      controller.index.filter((entry) =>
+        projects.loading
+          ? !entry.projectId
+          : !entry.projectId || !knownProjectIds.has(entry.projectId),
+      ),
+    [controller.index, knownProjectIds, projects.loading],
+  );
+
+  const projectConversations = useMemo(
+    () => (projectPage ? controller.index.filter((entry) => entry.projectId === projectPage) : []),
+    [controller.index, projectPage],
+  );
+
+  const handleOpenProject = useCallback((id: string) => {
+    setProjectPage(id);
+  }, []);
+
+  const handleNewProject = useCallback(async () => {
+    const created = await projects.create('Nieuw project');
+    if (!created) return;
+    // Meteen door naar de instellingen: een leeg project zonder instructie is
+    // nog niets — de gebruiker wil hier zijn projectinstructie kwijt.
+    setProjectPage(created.id);
+    setSettingsProjectId(created.id);
+  }, [projects]);
+
+  const handleNewChatInProject = useCallback(
+    (projectId: string) => {
+      setProjectPage(null);
+      controller.newConversationInProject(projectId);
+    },
+    [controller],
+  );
+
+  const handleSelectConversation = useCallback(
+    (id: string) => {
+      setProjectPage(null);
+      controller.selectConversation(id);
+    },
+    [controller],
+  );
+
+  const handleNewConversation = useCallback(() => {
+    setProjectPage(null);
+    controller.newConversation();
+  }, [controller]);
+
+  const handleDeleteProject = useCallback(async () => {
+    if (!confirmDeleteProject) return;
+    const ok = await projects.remove(confirmDeleteProject);
+    if (!ok) return;
+    // De lokale gesprekken van dit project blijven bestaan; ze verhuizen vanzelf
+    // naar de losse lijst omdat hun projectId nergens meer op slaat.
+    if (projectPage === confirmDeleteProject) setProjectPage(null);
+    if (settingsProjectId === confirmDeleteProject) setSettingsProjectId(null);
+    toast.success('Project verwijderd.');
+  }, [confirmDeleteProject, projects, projectPage, settingsProjectId]);
+
+  const activeProject = conversation?.projectId
+    ? (projectList.find((p) => p.id === conversation.projectId) ?? null)
+    : null;
+
   // --- Chat → generator: omgekeerde handoff en opslaan als prompt ---
   const navigate = useNavigate();
   const handleImprove = useCallback(
@@ -70,6 +157,18 @@ export default function ChatPage() {
       navigate('/genereren');
     },
     [navigate],
+  );
+
+  // "Genereer prompt" op de projectpagina: het project reist als ID mee naar de
+  // bouwer, die de context zelf ophaalt. De context kan tienduizenden tekens
+  // zijn en die horen niet in sessionStorage.
+  const handleNewPrompt = useCallback(
+    (includeFiles: boolean) => {
+      if (!projectPage) return;
+      writeProjectHandoff(projectPage, includeFiles);
+      navigate('/genereren');
+    },
+    [projectPage, navigate],
   );
   // --- Snel verbeteren van de getypte tekst (het oranje sterretje) ---
   // Lichte herschrijving in het invoerveld zelf; de volledige generator zit
@@ -172,27 +271,53 @@ export default function ChatPage() {
         className="opl-card flex max-h-[calc(100dvh-13rem)] overflow-hidden lg:max-h-[calc(100dvh-10.5rem)]"
       >
         <ChatSidebar
-          entries={controller.index}
-          activeId={conversation?.id ?? null}
+          entries={looseEntries}
+          totalConversations={controller.index.length}
+          projects={projectList}
+          activeId={projectPage ? null : (conversation?.id ?? null)}
+          openProjectId={projectPage}
           disabled={controller.streaming}
-          onSelect={controller.selectConversation}
-          onNew={controller.newConversation}
+          onSelect={handleSelectConversation}
+          onNew={handleNewConversation}
+          onNewProject={() => void handleNewProject()}
+          onOpenProject={handleOpenProject}
           onRequestDelete={setConfirmDeleteId}
           onRequestDeleteAll={() => setConfirmDeleteAll(true)}
         />
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          {/* Mobiel: gesprekswissel + nieuw/verwijderen boven de berichtenlijst. */}
+          {/* Mobiel: projectkeuze + gesprekswissel + nieuw/verwijderen boven de
+              berichtenlijst. Zonder projecten blijft dit precies zoals het was. */}
           <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3 lg:hidden dark:border-slate-700">
+            {projectList.length > 0 && (
+              <select
+                className="opl-input w-32 shrink-0"
+                value={projectPage ?? (conversation?.projectId ?? '')}
+                disabled={controller.streaming}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value) handleOpenProject(value);
+                  else setProjectPage(null);
+                }}
+                aria-label="Kies een project"
+              >
+                <option value="">Geen project</option>
+                {projectList.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+            )}
             <select
-              className="opl-input flex-1"
-              value={conversation?.id ?? ''}
+              className="opl-input min-w-0 flex-1"
+              value={projectPage ? '' : (conversation?.id ?? '')}
               disabled={controller.streaming}
-              onChange={(e) => controller.selectConversation(e.target.value)}
+              onChange={(e) => handleSelectConversation(e.target.value)}
               aria-label="Kies een gesprek"
             >
-              {conversation && !activeInIndex && (
-                <option value={conversation.id}>Nieuw gesprek</option>
+              {(projectPage || (conversation && !activeInIndex)) && (
+                <option value={conversation?.id ?? ''}>Nieuw gesprek</option>
               )}
               {controller.index.map((entry) => (
                 <option key={entry.id} value={entry.id}>
@@ -203,13 +328,13 @@ export default function ChatPage() {
             <button
               type="button"
               className="opl-btn-secondary shrink-0 !px-2.5"
-              onClick={controller.newConversation}
+              onClick={handleNewConversation}
               disabled={controller.streaming}
               aria-label="Nieuw gesprek"
             >
               <Plus size={16} />
             </button>
-            {activeInIndex && conversation && (
+            {!projectPage && activeInIndex && conversation && (
               <button
                 type="button"
                 className="opl-btn-secondary shrink-0 !px-2.5 text-rijksrood dark:text-red-400"
@@ -223,13 +348,21 @@ export default function ChatPage() {
           </div>
 
             <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3 dark:border-slate-700 sm:px-6">
-              <MessageSquare size={18} className="text-rijksblauw-500" />
+              {openProject ? (
+                <FolderOpen size={18} className="text-rijksblauw-500" />
+              ) : (
+                <MessageSquare size={18} className="text-rijksblauw-500" />
+              )}
               <h1 className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
-                {conversation && messages.length > 0 ? conversation.title : 'Chat'}
+                {openProject
+                  ? openProject.name
+                  : conversation && messages.length > 0
+                    ? conversation.title
+                    : 'Chat'}
               </h1>
               {/* Uitvoergesprek: hier draait een gegenereerde prompt (neutrale
                   systeemprompt, geen B1-huisregels) — maak dat zichtbaar. */}
-              {conversation?.kind === 'execution' && (
+              {!openProject && conversation?.kind === 'execution' && (
                 <span
                   className="opl-badge inline-flex shrink-0 items-center gap-1 bg-rijksoranje/10 text-rijksoranje"
                   title="In dit gesprek wordt een gegenereerde prompt uitgevoerd; de prompt bepaalt zelf taal, toon en opmaak."
@@ -237,46 +370,80 @@ export default function ChatPage() {
                   <Play size={11} /> Uitvoering
                 </span>
               )}
+              {/* Projectgesprek: de instructie van dit project stuurt het
+                  antwoord. Klikbaar, want vanuit een gesprek wil je regelmatig
+                  even terug naar de instructie of de bronnen. */}
+              {!openProject && activeProject && (
+                <button
+                  type="button"
+                  className="opl-badge inline-flex shrink-0 items-center gap-1 bg-rijksblauw-50 text-rijksblauw-700 hover:bg-rijksblauw-100 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200"
+                  onClick={() => handleOpenProject(activeProject.id)}
+                  title={`Dit gesprek draait onder de instructie van project "${activeProject.name}". Klik om het project te openen.`}
+                >
+                  <FolderOpen size={11} /> {activeProject.name}
+                </button>
+              )}
             </div>
 
-            {messages.length === 0 ? (
-              <div className="min-h-0 flex-auto overflow-y-auto">
-                <ChatEmptyState onPick={(text) => void controller.send(text)} />
-              </div>
-            ) : (
-              <ChatMessageList
-                messages={messages}
-                streaming={controller.streaming}
-                expectedProvider={settings?.provider ?? 'mistral'}
-                onRetry={controller.retry}
-                onImprove={handleImprove}
-                onSaveAsPrompt={handleSaveAsPrompt}
-                nudgeMessageId={nudgeMessageId}
-                onNudgeDismiss={dismissNudge}
+            {openProject ? (
+              <ProjectView
+                project={openProject}
+                conversations={projectConversations}
+                disabled={controller.streaming}
+                onNewChat={() => handleNewChatInProject(openProject.id)}
+                onNewPrompt={handleNewPrompt}
+                onOpenSettings={() => setSettingsProjectId(openProject.id)}
+                onSelectConversation={handleSelectConversation}
+                onRequestDeleteConversation={setConfirmDeleteId}
+                onRequestDeleteProject={() => setConfirmDeleteProject(openProject.id)}
               />
-            )}
-
-            <ChatComposer
-              disabled={composerDisabled}
-              streaming={controller.streaming}
-              extracting={controller.extracting}
-              attachments={conversation?.attachments ?? []}
-              onSend={(text) => void controller.send(text)}
-              onStop={controller.stop}
-              onAddFile={(file) => void controller.addAttachment(file)}
-              onRemoveAttachment={controller.removeAttachment}
-              // Sterretje alleen tonen als de beheerder de functie aan heeft staan.
-              onOptimize={settings?.optimizeEnabled ? handleOptimizeInput : undefined}
-              badge={
-                settings ? (
-                  <ChatModelBadge
-                    provider={settings.provider}
-                    model={settings.model}
-                    actualProvider={lastAssistant?.provider}
+            ) : (
+              <>
+                {messages.length === 0 ? (
+                  <div className="min-h-0 flex-auto overflow-y-auto">
+                    <ChatEmptyState onPick={(text) => void controller.send(text)} />
+                  </div>
+                ) : (
+                  <ChatMessageList
+                    messages={messages}
+                    streaming={controller.streaming}
+                    expectedProvider={settings?.provider ?? 'mistral'}
+                    onRetry={controller.retry}
+                    onImprove={handleImprove}
+                    onSaveAsPrompt={handleSaveAsPrompt}
+                    nudgeMessageId={nudgeMessageId}
+                    onNudgeDismiss={dismissNudge}
                   />
-                ) : undefined
-              }
-            />
+                )}
+
+                <ChatComposer
+                  disabled={composerDisabled}
+                  streaming={controller.streaming}
+                  extracting={controller.extracting}
+                  attachments={conversation?.attachments ?? []}
+                  onSend={(text) => void controller.send(text)}
+                  onStop={controller.stop}
+                  onAddFile={(file) => void controller.addAttachment(file)}
+                  onRemoveAttachment={controller.removeAttachment}
+                  // Sterretje alleen tonen als de beheerder de functie aan heeft staan.
+                  onOptimize={settings?.optimizeEnabled ? handleOptimizeInput : undefined}
+                  projects={projectList}
+                  activeProjectId={conversation?.projectId ?? null}
+                  onPickProject={controller.attachProject}
+                  // Alleen in een nog leeg gesprek: zie ChatController.attachProject.
+                  canPickProject={messages.length === 0 && conversation?.kind !== 'execution'}
+                  badge={
+                    settings ? (
+                      <ChatModelBadge
+                        provider={settings.provider}
+                        model={settings.model}
+                        actualProvider={lastAssistant?.provider}
+                      />
+                    ) : undefined
+                  }
+                />
+              </>
+            )}
         </div>
       </div>
 
@@ -304,6 +471,24 @@ export default function ChatPage() {
         destructive
         onConfirm={controller.removeAllConversations}
         onClose={() => setConfirmDeleteAll(false)}
+      />
+      <ProjectSettingsModal
+        open={settingsProject !== null}
+        project={settingsProject}
+        onClose={() => setSettingsProjectId(null)}
+        onSave={(patch) =>
+          settingsProject ? projects.update(settingsProject.id, patch) : Promise.resolve(false)
+        }
+        onFilesChanged={projects.refresh}
+      />
+      <ConfirmDialog
+        open={confirmDeleteProject !== null}
+        title="Project verwijderen?"
+        message="De instructie en de bronbestanden van dit project worden definitief verwijderd. De gesprekken blijven op dit apparaat staan en gaan verder als gewone gesprekken."
+        confirmLabel="Verwijderen"
+        destructive
+        onConfirm={() => void handleDeleteProject()}
+        onClose={() => setConfirmDeleteProject(null)}
       />
     </div>
   );

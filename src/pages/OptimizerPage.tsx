@@ -1,15 +1,22 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Sparkles, Compass, Wand2 } from 'lucide-react';
 import GoalDialog from '@/components/optimizer/GoalDialog';
 import EntryTab from '@/components/optimizer/EntryTab';
 import OwnPromptOptimizer from '@/components/optimizer/OwnPromptOptimizer';
 import OptimizedOutput from '@/components/optimizer/OptimizedOutput';
+import ProjectContextBar from '@/components/optimizer/ProjectContextBar';
+import useChatProjects from '@/components/chat/useChatProjects';
 import { useAuth } from '@/context/AuthContext';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { getPrompt, saveOptimization } from '@/services/repository';
 import { trackEvent } from '@/services/analyticsService';
-import { consumeGeneratorHandoff, consumeResultSnapshot } from '@/services/handoffService';
+import { buildGeneratorContext, type GeneratorContext } from '@/services/chatProjectService';
+import {
+  consumeGeneratorHandoff,
+  consumeProjectHandoff,
+  consumeResultSnapshot,
+} from '@/services/handoffService';
 import { getAiSettings, DEFAULT_AI_SETTINGS, type AiSettings } from '@/services/settingsService';
 import { activityIdentifier } from '@/lib/utils';
 import { usePersistentDraft } from '@/lib/usePersistentDraft';
@@ -53,6 +60,60 @@ export default function OptimizerPage() {
   const [phase, setPhase] = useState<'input' | 'transition' | 'output'>('input');
   // Voor het herstellen van een resultaat-snapshot (login vanuit de Testkamer).
   const { techniqueById } = useReferenceData();
+
+  // ── Projectcontext ────────────────────────────────────────────────────────
+  // Welk chatproject levert de achtergrond voor deze prompt? Zonder die
+  // achtergrond schrijft de bouwer een algemene prompt: hij kent het onderwerp
+  // van de gebruiker (zijn plugin, zijn merk, zijn applicatie) niet.
+  //
+  // De context wordt HIER geladen en als platte tekst doorgegeven aan alle
+  // AI-stappen in de boom. Twee ingangen: de handoff vanaf de projectpagina
+  // ("Genereer prompt") en de kiezer in de balk zelf.
+  const chatProjects = useChatProjects();
+  const [projectContext, setProjectContext] = useState<GeneratorContext | null>(null);
+  const [projectContextLoading, setProjectContextLoading] = useState(false);
+  // Het gekozen project onthouden we los van de context: de schakelaar
+  // "bronbestanden mee" moet hem opnieuw kunnen opbouwen.
+  const [projectContextId, setProjectContextId] = useState<string | null>(null);
+
+  const loadProjectContext = useCallback(async (projectId: string, includeFiles: boolean) => {
+    setProjectContextLoading(true);
+    setProjectContextId(projectId);
+    try {
+      const ctx = await buildGeneratorContext(projectId, includeFiles);
+      setProjectContext(ctx);
+      // Een project zonder instructie én zonder bestanden levert niets op; dan
+      // hangt er niets aan en zegt de balk dat door leeg te blijven.
+      if (!ctx) setProjectContextId(null);
+    } catch {
+      setProjectContext(null);
+      setProjectContextId(null);
+    } finally {
+      setProjectContextLoading(false);
+    }
+  }, []);
+
+  // Handoff vanaf de projectpagina: één keer per bezoek consumeren.
+  const projectHandoffDone = useRef(false);
+  useEffect(() => {
+    if (projectHandoffDone.current) return;
+    const handoff = consumeProjectHandoff();
+    if (!handoff) return;
+    projectHandoffDone.current = true;
+    void loadProjectContext(handoff.projectId, handoff.includeFiles);
+  }, [loadProjectContext]);
+
+  const clearProjectContext = useCallback(() => {
+    setProjectContext(null);
+    setProjectContextId(null);
+  }, []);
+
+  const toggleProjectFiles = useCallback(
+    (includeFiles: boolean) => {
+      if (projectContextId) void loadProjectContext(projectContextId, includeFiles);
+    },
+    [projectContextId, loadProjectContext],
+  );
 
   // Laad de bronprompt als er via de URL een prompt is meegegeven.
   useEffect(() => {
@@ -218,6 +279,7 @@ export default function OptimizerPage() {
             onSelectVersion={setActiveVersion}
             onRefined={handleRefined}
             aiSettings={settingsRef.current}
+            projectContext={projectContext?.text}
           />
         </div>
       ) : (
@@ -232,27 +294,43 @@ export default function OptimizerPage() {
               De tabs (header) gaan in beide flows mee in datzelfde element. */}
           {(() => {
             const tabs = (
-              <div
-                role="tablist"
-                aria-label="Kies hoe je wilt starten"
-                className="grid grid-cols-1 divide-y divide-slate-200 border-b border-slate-200 sm:grid-cols-2 sm:divide-x sm:divide-y-0 dark:divide-slate-700 dark:border-slate-700"
-              >
-                <EntryTab
-                  active={ownActive}
-                  onClick={() => setEntryMode('own-prompt')}
-                  icon={<Wand2 size={20} />}
-                  title="Optimaliseer jouw eigen prompt"
-                  description="Heb je al een prompt? Wij zoeken het best passende prompt framework, analyseren je prompt en vullen aan wat nog ontbreekt."
+              // De projectbalk is de bovenste rij ván de bouwerkaart, niet een
+              // los blok erboven: beide flows renderen `header` binnen hun
+              // omrande, afgeronde blok, dus de rand loopt om de balk heen en
+              // zijn bovenhoeken worden op de kaartronding afgeknipt. Als
+              // zwevende strook erboven las hij als een melding náást de bouwer
+              // en werd hij overgeslagen.
+              <>
+                <ProjectContextBar
+                  projects={chatProjects.projects}
+                  context={projectContext}
+                  loading={projectContextLoading}
+                  onPick={(id) => void loadProjectContext(id, false)}
+                  onClear={clearProjectContext}
+                  onToggleFiles={toggleProjectFiles}
                 />
-                <EntryTab
-                  active={!ownActive}
-                  accent="blauw"
-                  onClick={() => setEntryMode('goal')}
-                  icon={<Compass size={20} />}
-                  title="Help mij met het bereiken van mijn doel"
-                  description="Beschrijf wat je wilt bereiken, dan vinden we de techniek waarmee je je prompt opbouwt."
-                />
-              </div>
+                <div
+                  role="tablist"
+                  aria-label="Kies hoe je wilt starten"
+                  className="grid grid-cols-1 divide-y divide-slate-200 border-b border-slate-200 sm:grid-cols-2 sm:divide-x sm:divide-y-0 dark:divide-slate-700 dark:border-slate-700"
+                >
+                  <EntryTab
+                    active={ownActive}
+                    onClick={() => setEntryMode('own-prompt')}
+                    icon={<Wand2 size={20} />}
+                    title="Optimaliseer jouw eigen prompt"
+                    description="Heb je al een prompt? Wij zoeken het best passende prompt framework, analyseren je prompt en vullen aan wat nog ontbreekt."
+                  />
+                  <EntryTab
+                    active={!ownActive}
+                    accent="blauw"
+                    onClick={() => setEntryMode('goal')}
+                    icon={<Compass size={20} />}
+                    title="Help mij met het bereiken van mijn doel"
+                    description="Beschrijf wat je wilt bereiken, dan vinden we de techniek waarmee je je prompt opbouwt."
+                  />
+                </div>
+              </>
             );
 
             // Beide instappen renderen de tabs zelf als header (oranje rand om de
@@ -266,12 +344,14 @@ export default function OptimizerPage() {
                 onResult={handleResult}
                 header={tabs}
                 initialPrompt={initialPrompt}
+                projectContext={projectContext?.text}
               />
             ) : (
               <GoalDialog
                 settings={settingsRef.current}
                 onResult={handleResult}
                 header={tabs}
+                projectContext={projectContext?.text}
               />
             );
           })()}

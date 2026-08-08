@@ -79,6 +79,11 @@ export function loadConversation(userId: string, conversationId: string): ChatCo
       // velden stilletjes vallen. Zonder deze regel zou een herladen
       // uitvoergesprek terugvallen op de B1-huisregels.
       ...(parsed.kind === 'execution' ? { kind: parsed.kind } : {}),
+      // Idem voor het project: zonder deze regel raakt een gesprek na een
+      // refresh zijn projectinstructie en bronbestanden kwijt.
+      ...(typeof parsed.projectId === 'string' && parsed.projectId
+        ? { projectId: parsed.projectId }
+        : {}),
     };
   } catch {
     return null;
@@ -92,6 +97,9 @@ function toIndexEntry(conv: ChatConversation): ChatIndexEntry {
     createdAt: conv.createdAt,
     updatedAt: conv.updatedAt,
     messageCount: conv.messages.length,
+    // Zonder dit staat een projectgesprek na een refresh weer in de losse
+    // gesprekkenlijst in plaats van onder zijn project.
+    ...(conv.projectId ? { projectId: conv.projectId } : {}),
   };
 }
 
@@ -184,14 +192,24 @@ export function wipeAllChatStorage(): void {
     // Ook de omgekeerde handoff (chat → generator) en het resultaat-snapshot
     // van de Testkamer-login: op een gedeelde werkplek blijft niets achter.
     sessionStorage.removeItem(`${CHAT_PREFIX}generator-handoff`);
+    // En de project→bouwer-handoff: die draagt een project-id van de vorige
+    // gebruiker, en de bouwer zou daar na het inloggen context mee ophalen.
+    sessionStorage.removeItem(`${CHAT_PREFIX}project-handoff`);
     sessionStorage.removeItem('opl.gen.result');
   } catch {
     /* negeren */
   }
 }
 
-/** Start een nieuw, leeg gesprek (nog niet opgeslagen tot het eerste bericht). */
-export function createConversation(kind?: ChatConversation['kind']): ChatConversation {
+/**
+ * Start een nieuw, leeg gesprek (nog niet opgeslagen tot het eerste bericht).
+ * Met `projectId` hoort het gesprek bij dat project en draait het onder de
+ * projectinstructie en bronbestanden daarvan — voor het hele gesprek.
+ */
+export function createConversation(
+  kind?: ChatConversation['kind'],
+  projectId?: string,
+): ChatConversation {
   const now = new Date().toISOString();
   return {
     id: uuid(),
@@ -201,6 +219,7 @@ export function createConversation(kind?: ChatConversation['kind']): ChatConvers
     messages: [],
     attachments: [],
     ...(kind ? { kind } : {}),
+    ...(projectId ? { projectId } : {}),
   };
 }
 

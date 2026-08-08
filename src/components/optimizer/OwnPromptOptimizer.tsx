@@ -64,6 +64,13 @@ interface OwnPromptOptimizerProps {
    * worden overschreven.
    */
   initialPrompt?: string | null;
+  /**
+   * Context van het aangehaakte chatproject (de projectinstructie van de
+   * gebruiker, eventueel met zijn bronbestanden). Gaat mee in de raamwerkkeuze,
+   * de voor-invulling en het uiteindelijke schrijven, zodat de prompt over het
+   * échte onderwerp gaat in plaats van over een algemeen geval.
+   */
+  projectContext?: string;
 }
 
 /** Voorbeeldprompts per raamwerk; uitklapbaar als hulp/inspiratie en om te testen. */
@@ -122,6 +129,7 @@ export default function OwnPromptOptimizer({
   onResult,
   header,
   initialPrompt,
+  projectContext,
 }: OwnPromptOptimizerProps) {
   const { techniques, techniqueById } = useReferenceData();
   const frameworks = techniques.filter(isContextPrompt);
@@ -289,6 +297,7 @@ export default function OwnPromptOptimizer({
         frameworks,
         preferredProvider: settings.provider,
         preferredModel: settings.model,
+        projectContext,
         onPhase: setSearchPhase,
         onSummary: setRecommendSummary,
         onRecommendation: (rec) => {
@@ -395,6 +404,7 @@ export default function OwnPromptOptimizer({
         clarification: clarify?.trim() || undefined,
         preferredProvider: settings.provider,
         preferredModel: settings.model,
+        projectContext,
         onStatus: (status) =>
           setPrefillProgress((p) => ({
             ...p,
@@ -448,6 +458,7 @@ export default function OwnPromptOptimizer({
         followUpAnswers: answers,
         preferredProvider: settings.provider,
         preferredModel: settings.model,
+        projectContext,
         systemPrompt: settings.systemPrompt.trim() || undefined,
         toneInstruction: settings.toneInstruction.trim() || undefined,
         temperature: settings.temperature,
@@ -944,6 +955,7 @@ export default function OwnPromptOptimizer({
               plaatshouder in de uiteindelijke prompt.
             </p>
             <FollowUpQuestions
+              projectContext={projectContext}
               technique={technique}
               answers={answers}
               onChange={setAnswers}

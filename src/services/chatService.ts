@@ -14,9 +14,11 @@ import {
   composeChatOptimizePrompt,
   composeChatSystemPrompt,
   composeExecutionSystemPrompt,
+  composeProjectSystemPrompt,
   MAX_CHAT_OPTIMIZE_CHARS,
   type ChatSettings,
 } from '@/services/settingsService';
+import type { ChatProjectContext } from '@/types';
 
 /**
  * Schuivend venster: alleen de recentste berichten gaan mee. Houdt de payload
@@ -48,9 +50,18 @@ export async function sendChatMessage(args: {
    * B1-huisregels worden NIET op het antwoord afgedwongen (geen tidyChatReply).
    */
   kind?: 'execution';
+  /**
+   * Het project waar dit gesprek onder valt. De projectinstructie wordt dan de
+   * leidende systeemprompt en de bronbestanden gaan als bronblokken mee, vóór
+   * de eventuele losse bijlagen van het gesprek zelf.
+   */
+  project?: ChatProjectContext | null;
 }): Promise<ChatSendResult> {
-  const { messages, attachments, settings, onChunk, signal, kind } = args;
+  const { messages, attachments, settings, onChunk, signal, kind, project } = args;
+  // Een uitvoergesprek en een projectgesprek sluiten elkaar uit; staat er toch
+  // allebei iets klaar, dan wint de uitvoering (dat is een expliciete handoff).
   const isExecution = kind === 'execution';
+  const isProject = !isExecution && Boolean(project);
 
   const functionUrl = getFunctionUrl('optimize-prompt');
   if (!isSupabaseConfigured || !supabase || !functionUrl) {
@@ -67,7 +78,12 @@ export async function sendChatMessage(args: {
   // Uitvoergesprek: de prompt-template bepaalt zelf de huisregels, dus geen
   // B1-opschoning van het antwoord — anders zou de test misleiden over wat de
   // prompt echt doet (vet en opmaak zouden eruit worden gestript).
-  const tidy = isExecution ? (text: string) => text : tidyChatReply;
+  //
+  // Een PROJECTgesprek om dezelfde reden niet: daar bepaalt de projectinstructie
+  // van de gebruiker de vorm. Zou tidyChatReply hier toch draaien, dan zouden de
+  // B1-huisregels via de achterdeur alsnog zijn opmaak overrulen — precies wat
+  // composeProjectSystemPrompt bewust weglaat.
+  const tidy = isExecution || isProject ? (text: string) => text : tidyChatReply;
   try {
     const outcome = await streamNdjson({
       url: functionUrl,
@@ -78,16 +94,23 @@ export async function sendChatMessage(args: {
       body: {
         mode: 'chat',
         ...(isExecution ? { chatKind: 'execute' } : {}),
+        ...(isProject ? { chatKind: 'project' } : {}),
         messages: messages.slice(-CHAT_WINDOW_MESSAGES),
-        attachments,
+        // Projectbronnen eerst, dan de losse bijlagen van dit ene gesprek. Ze
+        // reizen door hetzelfde kanaal omdat het model ze op dezelfde manier
+        // gebruikt; de volgorde zegt welke bron het meest gezaghebbend is.
+        attachments: project ? [...project.files, ...attachments] : attachments,
         preferredProvider: settings.provider,
         preferredModel: settings.model,
         temperature: settings.temperature,
         // Huisregels van de beheerder + zijn basisinformatie, in één instructie;
-        // bij een uitvoergesprek juist de neutrale uitvoerinstructie.
+        // bij een uitvoergesprek juist de neutrale uitvoerinstructie, en in een
+        // project de projectinstructie van de gebruiker zelf.
         systemPrompt: isExecution
           ? composeExecutionSystemPrompt(settings)
-          : composeChatSystemPrompt(settings),
+          : isProject && project
+            ? composeProjectSystemPrompt(project.instructions)
+            : composeChatSystemPrompt(settings),
       },
       onChunk,
       // Huisregels ook afdwingen op wat het model teruggeeft (zie tidyChatReply);
