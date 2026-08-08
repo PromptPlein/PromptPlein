@@ -190,6 +190,33 @@ export function defaultModelFor(provider: AiProvider): string {
   return PROVIDER_MODELS[provider][0]?.id ?? '';
 }
 
+/**
+ * Het STERKSTE model per provider, voor aanroepen waar kwaliteit zwaarder weegt
+ * dan de prijs per aanroep. Houd in sync met `STRONGEST_MODEL` in de
+ * `optimize-prompt` edge function — die maakt de keuze echt; dit exemplaar is
+ * er alleen om de admin te laten zien wat er gaat draaien.
+ *
+ * Let op: dit is NIET altijd het eerste model uit PROVIDER_MODELS. Die lijst
+ * begint met de standaard (goedkoop en snel genoeg voor de chat); hier gaat het
+ * juist om de bovenkant. Bij DeepSeek is Flash de standaard en Pro de sterkere;
+ * bij Mistral staat Small 3 boven de Ministrals.
+ */
+export const STRONGEST_MODELS: Record<Exclude<AiProvider, 'auto'>, string> = {
+  claude: 'claude-opus-4-8',
+  openai: 'gpt-5.5',
+  deepseek: 'deepseek-v4-pro',
+  mistral: 'mistral-small-latest',
+};
+
+/**
+ * Leesbare naam van het sterkste model van deze provider. Bij 'auto' leeg: de
+ * fallback-keten bepaalt dan zelf welke provider antwoordt.
+ */
+export function strongestModelLabelFor(provider: AiProvider): string {
+  if (provider === 'auto') return '';
+  return modelLabel(provider, STRONGEST_MODELS[provider]);
+}
+
 /** Hoort `model` bij `provider`? Zo niet, dan val terug op de default. */
 export function isValidModelFor(provider: AiProvider, model: string | undefined): boolean {
   if (provider === 'auto') return true;

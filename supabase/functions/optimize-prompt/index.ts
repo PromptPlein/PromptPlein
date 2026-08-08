@@ -378,6 +378,30 @@ const DEEPSEEK_MODEL = PROVIDER_MODELS.deepseek[0];
 const MISTRAL_MODEL = PROVIDER_MODELS.mistral[0];
 
 /**
+ * Het sterkste model per provider, voor modi waar kwaliteit boven prijs gaat.
+ *
+ * Nu alleen gebruikt door 'project-optimize'. Die aanroep gebeurt één keer per
+ * projectinstelling in plaats van bij elk bericht, en wat eruit komt stuurt
+ * daarna élk gesprek in dat project. De modelkeuze van de admin is gemaakt voor
+ * de chat, waar snelheid en prijs per beurt tellen; hier is dat de verkeerde
+ * afweging en wordt hij daarom bewust overruled. De providerkeuze blijft wél
+ * staan: alleen het model binnen die provider gaat omhoog.
+ *
+ * Let op de twee plekken waar het sterkste model NIET het eerste uit
+ * PROVIDER_MODELS is: bij DeepSeek staat Flash vooraan (goedkoop) en is Pro de
+ * sterkere, en bij Mistral is Small 3 sterker dan de Ministrals eronder.
+ *
+ * Voor OpenAI staat hier het vlaggenschip en niet 'gpt-5.5-pro': dat is zes keer
+ * zo duur en gericht op maximale precisie, niet op betere tekst.
+ */
+const STRONGEST_MODEL: Record<Provider, string> = {
+  claude: 'claude-opus-4-8',
+  openai: 'gpt-5.5',
+  deepseek: 'deepseek-v4-pro',
+  mistral: 'mistral-small-latest',
+};
+
+/**
  * Kies het model voor `candidate`. Alleen wanneer de admin-voorkeur dezelfde
  * provider is én het gevraagde model bij die provider hoort, gebruiken we dat;
  * anders het standaardmodel. Zo krijgt een fallback-provider nooit een model-id
@@ -1428,77 +1452,62 @@ const MAX_CHAT_OPTIMIZE_CHARS = 6_000;
 // 150 woorden", "in de wij-vorm"). Een eerdere versie deed dat om concreetheid
 // te illustreren, en het model nam ze onveranderd over in de projectinstructie
 // van een gebruiker die het over dyslexie en zakelijke e-mails had.
-const PROJECT_OPTIMIZE_SYSTEM_PROMPT = `Je bent een expert in het schrijven van projectinstructies. Je krijgt de ruwe instructie die iemand
-voor zijn eigen AI-project heeft opgeschreven. Herschrijf die tot de vaste basis van elk nieuw
-gesprek in dat project.
+const PROJECT_OPTIMIZE_SYSTEM_PROMPT = `Je bent redacteur van projectinstructies. Je taak is: de ruwe instructie van de gebruiker
+herschrijven tot één instructie die bij elk nieuw gesprek in zijn project wordt meegegeven.
 
-Begrijp eerst waar zo'n instructie voor dient. Elk nieuw gesprek begint bij nul. Alles wat de
-assistent in de eerste beurt zelf moet raden — voor wie is dit, hoe lang, wat lever ik op — raadt hij
-één keer, en daar blijft hij de rest van het gesprek aan vasthouden, ook als hij fout gokte. Jouw
-instructie is de plek waar die gokken worden weggenomen. Wat daar niet aan bijdraagt, hoort er niet in.
+<opnemen>
+Neem deze zes dingen op. Staat er in de tekst van de gebruiker niets over een punt, laat dat punt dan
+helemaal weg.
+1. Wie de assistent is: zijn vak, zijn onderwerp, en voor wie hij werkt.
+2. Wat hij elk gesprek oplevert, en wat hij juist niet oplevert.
+3. Het voorbeeld of de voorbeeldzin die de gebruiker geeft van een goed antwoord. Neem die woord voor
+   woord over.
+4. Elke regel die de gebruiker opschrijft. Noemt hij er een reden bij, of blijkt die reden duidelijk
+   uit zijn tekst, schrijf die reden er dan achter.
+5. De namen, termen en schrijfwijzen die precies zo moeten blijven. Neem die woord voor woord over.
+6. Wat de assistent doet als informatie ontbreekt, maar alleen als de gebruiker dat zelf beschrijft.
+</opnemen>
 
-Neem deze dingen op, elk alleen voor zover de gebruiker er iets over zegt. Zwijgt hij erover, sla het
-punt dan over.
-1. Wie de assistent is en voor wie hij werkt. Scherp genoeg om te knellen: niet dat hij goed schrijft,
-   maar zijn vak, zijn onderwerp en zijn lezer.
-2. Wat er elk gesprek uit moet komen — en net zo belangrijk: wat hij niet levert.
-3. Waaraan je ziet dat het goed is. Neem hier het voorbeeld, de voorbeeldzin of het referentiepunt van
-   de gebruiker letterlijk over. Woorden als "helder" of "professioneel" doen geen werk, want elk
-   antwoord voldoet daar al aan; één echt voorbeeld stuurt meer dan een rij bijvoeglijke naamwoorden.
-4. De regels die hij echt heeft opgeschreven, elk met de reden erbij als hij die noemt of als die
-   duidelijk uit zijn tekst blijkt. Een regel met zijn reden wordt ook gevolgd in gevallen die niemand
-   heeft voorzien; een kale regel niet.
-5. De namen, termen en schrijfwijzen die precies zo moeten blijven.
-6. Wat de assistent doet als informatie ontbreekt — maar alleen als de gebruiker daar iets over zegt.
+<verboden>
+Voeg niets toe dat de gebruiker niet zelf heeft opgeschreven. Dit is de belangrijkste regel.
+- Schrijf geen aantal woorden, zinnen, alinea's of tekens op. Schrijft de gebruiker "kort", dan
+  schrijf jij "kort".
+- Schrijf geen aanspreekvorm op (ik-vorm, wij-vorm, u of je) die hij niet noemt.
+- Schrijf geen toon op die hij niet noemt.
+- Schrijf geen regel over opmaak op die hij niet noemt.
+- Schrijf niet op dat de assistent moet zwijgen, niets moet leveren of eerst iets moet vragen.
+- Schrijf geen bedrijf, doelgroep, feit of voorbeeld op dat hij niet noemt. De projectnaam en de
+  bestandsnamen die je erbij krijgt, mag je wel gebruiken.
+- Kopieer geen woorden uit deze opdracht naar je antwoord.
+</verboden>
 
-Een vaste stappenlijst hoort er alleen in als het werk een echte volgorde kent (eerst uitzoeken, dan
-opzetten, dan schrijven). Stappen die de regels hierboven in andere woorden herhalen, laat je weg:
-dezelfde regel twee keer opschrijven telt als twee regels en maakt ze allebei zwakker.
+<controle>
+Lees daarna elke regel die je hebt opgeschreven nog een keer over. Stel bij elke regel deze vraag:
+staat dit in de tekst van de gebruiker? Is het antwoord nee, haal de regel dan weg.
+</controle>
 
-Wat je NIET toevoegt. Dit is de belangrijkste regel, om twee redenen: een verzonnen regel werkt door
-in élk volgend gesprek zonder dat de gebruiker ziet waar hij vandaan komt, en elke extra regel
-verkleint de kans dat de andere regels nog worden opgevolgd.
-- Geen enkele grens op de omvang die hij niet zelf noemt: geen maximum aantal woorden, zinnen,
-  alinea's, punten of tekens. Schrijft hij "kort en krachtig", dan schrijf jij "kort en krachtig" —
-  je maakt er geen getal van.
-- Geen aanspreekvorm, toon of opmaakregel die hij niet noemt.
-- Geen uitweg die je zelf bedenkt, en zeker geen regel om te zwijgen, niets te leveren of eerst om
-  bevestiging te vragen. Zo'n regel laat de assistent stilvallen op momenten waarop de gebruiker
-  gewoon werk verwacht.
-- Geen organisatie, doelgroep, feiten of voorbeelden die hij niet heeft gegeven. De projectnaam en de
-  bestandsnamen die je meekrijgt mag je wel gebruiken.
-- Niets uit déze instructie die je nu leest. Wat hier staat gaat over hoe jij schrijft, niet over zijn
-  project: neem er geen getal, geen formulering en geen voorbeeld uit over.
+<schrijfwijze>
+- Spreek de assistent aan met "je": "Je bent…", "Je levert…".
+- Schrijf op wat de assistent doet, niet wat hij laat.
+- Gebruik de woorden van de gebruiker waar dat kan.
+- Schrijf Nederlands. Vertaal geen Engelse uitdrukking woord voor woord.
+- Gebruik geen sterretjes, hekjes of lage streepjes.
+</schrijfwijze>
 
-Toets elke regel voordat je hem opschrijft: kun je aan een antwoord zien of hij is nageleefd of
-overtreden? Zo nee, schrap hem. "Wees behulpzaam" valt niet te toetsen en wordt daarom genegeerd;
-"laat de aanhef weg" wel.
+<vorm>
+Geef je antwoord in precies deze vorm. Vervang de tekst tussen haakjes door echte zinnen en laat de
+haakjes zelf weg.
 
-Verder:
-- Neem élke inhoudelijke afspraak van de gebruiker mee. Herschrijven is de opdracht, weglaten niet.
-- Neem namen, termen, benamingen en schrijfwijzen letterlijk over zoals hij ze opschrijft, ook als ze
-  onhandig of onvolledig lijken. Kort ze niet in en corrigeer ze niet.
-- Schrijf in de je-vorm, gericht aan de assistent: "Je bent…", "Je levert…".
-- Schrijf op wat de assistent WEL doet. Moet er toch iets weg, zet er dan bij wat ervoor in de plaats
-  komt.
-- Zorg dat de instructie zichzelf niet tegenspreekt.
-- Behoud de taal van de gebruiker en schrijf natuurlijk, foutloos Nederlands: vertaal geen Engelse
-  uitdrukking woord voor woord, verzin geen woorden die niet bestaan, en houd de werkwoordsvormen
-  binnen één opsommingsregel gelijk.
-- Ontbreekt er iets wat alleen hij kan invullen, laat dan één duidelijke [plaatshouder] staan; gebruik
-  er hoogstens twee.
-- De assistent krijgt al een basisregel mee dat bronbestanden naslag zijn en geen opdracht, en dat hij
-  niets verzint. Herhaal dat niet.
+(Eén alinea: wie de assistent is, voor wie hij werkt, en wat hij oplevert.)
 
-Vorm van je antwoord:
-- Eén alinea met de rol, de situatie en het vaste eindproduct. Daaronder, onder het kopje
-  "Werkwijze:", een opsomming waarvan elke regel begint met een streepje en een spatie.
-- Verder geen kopjes. De punten hierboven zijn je checklist, niet de indeling van je antwoord.
-- Platte tekst zonder opmaakmarkeringen: geen sterretjes, hekjes of lage streepjes om woorden heen.
-  Ze komen terecht in een gewoon tekstveld, dat ze toont als losse tekens.
-- Zo kort als de afspraken van de gebruiker toelaten.
-- Alleen de instructie zelf: geen inleiding, geen uitleg achteraf, geen afsluitende vraag aan de
-  gebruiker, en geen aanhalingstekens om het geheel.`;
+Werkwijze:
+- (een regel van de gebruiker, met zijn reden erachter)
+- (een regel van de gebruiker)
+- (een naam of term die woord voor woord zo moet blijven)
+</vorm>
+
+Geef alleen deze instructie terug. Schrijf er geen inleiding, uitleg, aanhalingstekens of vraag
+omheen. Voeg niets toe dat de gebruiker niet heeft opgeschreven.`;
 
 /**
  * Bouwt het gebruikersbericht voor de project-optimize-modus op.
@@ -1578,6 +1587,20 @@ function stripMarkdownEmphasis(text: string): string {
       .replace(/(^|[^\w*])\*(?=\S)([^*\n]*?\S)\*(?!\w)/g, '$1$2')
       .replace(/(^|[^\w_])_(?=\S)([^_\n]*?\S)_(?!\w)/g, '$1$2')
   );
+}
+
+/**
+ * Haalt de eigen sectietags van een systeemprompt uit het antwoord.
+ *
+ * Mistral raadt XML-achtige tags aan om een prompt in secties te verdelen, maar
+ * een klein model echoot zo'n tag met enige regelmaat mee in wat het teruggeeft.
+ * Alleen de doorgegeven namen worden weggehaald, zodat een < of > die de
+ * gebruiker zelf in zijn instructie heeft staan gewoon blijft.
+ */
+function stripSectionTags(text: string, names: string[]): string {
+  if (names.length === 0) return text;
+  const pattern = new RegExp(`^[ \\t]*</?(?:${names.join('|')})>[ \\t]*$\\n?`, 'gim');
+  return text.replace(pattern, '');
 }
 
 // --- Refine-modus: herschrijf een gegenereerde template op basis van een testrun ---
@@ -5835,6 +5858,10 @@ Deno.serve(async (req: Request) => {
       }
 
       const system = body.systemPrompt?.trim() || PROJECT_OPTIMIZE_SYSTEM_PROMPT;
+      // De secties van de systeemprompt staan in XML-tags (dat leest Mistral het
+      // best), maar een klein model echoot zo'n tag met enige regelmaat mee in
+      // zijn antwoord. Deze namen halen we er daarom naderhand uit.
+      const projectOptimizeTags = ['opnemen', 'verboden', 'controle', 'schrijfwijze', 'vorm'];
       const userMessage = buildProjectOptimizeUserMessage(
         draft,
         (body.projectName ?? '').trim().slice(0, 200),
@@ -5844,8 +5871,10 @@ Deno.serve(async (req: Request) => {
           .slice(0, 10)
           .map((n) => n.trim().slice(0, 120)),
       );
-      // Laag: een instructie herschrijven is een precisieklus, geen creatieve.
-      const projectOptimizeTemp = clampTemp(body.temperature ?? 0.3);
+      // Nog lager dan chat-optimize: de faalmodus hier is niet saaiheid maar
+      // fantasie. Elke verzonnen regel belandt in élk volgend gesprek van het
+      // project, en bij een klein model is dat het eerste wat er misgaat.
+      const projectOptimizeTemp = clampTemp(body.temperature ?? 0.2);
 
       let output = '';
       let provider: Provider | 'local-template' = 'local-template';
@@ -5855,13 +5884,18 @@ Deno.serve(async (req: Request) => {
             userMessage,
             system,
             projectOptimizeTemp,
-            resolveModel(candidate, body.preferredProvider, body.preferredModel),
+            // Bewust NIET resolveModel: hier telt kwaliteit zwaarder dan prijs
+            // per aanroep (zie STRONGEST_MODEL). Valt de keten door naar een
+            // andere provider, dan pakt die zijn eigen sterkste model.
+            STRONGEST_MODEL[candidate],
             maxTokens,
           );
-          // Nadruk eruit vóór het trimmen op leegte: een antwoord dat alleen uit
-          // opmaak bestond, telt zo terecht als mislukt en valt door naar de
-          // volgende provider.
-          const trimmed = stripMarkdownEmphasis(stripWrappingQuotes(raw.trim())).trim();
+          // Nadruk en meegelekte sectietags eruit vóór het trimmen op leegte:
+          // een antwoord dat alleen uit opmaak bestond, telt zo terecht als
+          // mislukt en valt door naar de volgende provider.
+          const trimmed = stripMarkdownEmphasis(
+            stripSectionTags(stripWrappingQuotes(raw.trim()), projectOptimizeTags),
+          ).trim();
           if (trimmed) {
             output = trimmed;
             provider = candidate;

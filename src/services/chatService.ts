@@ -217,6 +217,9 @@ export async function optimizeChatInput(args: {
  * bestanden niet: die hoort in het gesprek thuis, niet in een instructie die
  * over alle gesprekken gaat.
  *
+ * Draait op het STERKSTE model van de ingestelde provider in plaats van op het
+ * chatmodel; de server regelt dat (zie STRONGEST_MODEL in de edge function).
+ *
  * Gooit nooit; bij een fout komt de oorspronkelijke tekst terug met een melding,
  * zodat de UI de instructie van de gebruiker ongemoeid kan laten.
  */
@@ -265,7 +268,10 @@ export async function optimizeProjectInstructions(args: {
         projectName: args.projectName ?? '',
         projectFileNames: args.fileNames ?? [],
         preferredProvider: settings.provider,
-        preferredModel: settings.model,
+        // Bewust GEEN preferredModel: de server kiest hier het sterkste model van
+        // de gekozen provider (STRONGEST_MODEL). Het chatmodel is gekozen voor
+        // snelheid en prijs per beurt; deze aanroep gebeurt één keer per project
+        // en het resultaat stuurt daarna élk gesprek erin.
         systemPrompt: composeProjectOptimizePrompt(settings),
       }),
       signal,

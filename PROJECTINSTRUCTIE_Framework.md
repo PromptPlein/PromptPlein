@@ -210,6 +210,72 @@ de gebruiker.
 
 ---
 
+## Geschreven voor een klein model
+
+Dit is geen detail maar een ontwerpbeperking. In productie draait hier **Ministral 8B**, geen groot
+model. Kleine modellen vergeven geen vaagheid: *"Large models forgive imprecision; small models
+require carefully constructed prompts for reliable results."* Tegelijk is de winst groot — Llama 3.1
+8B en Mistral 7B wonnen in onderzoek ongeveer **10 tot 12 procentpunt nauwkeurigheid** puur door
+expliciete in plaats van impliciete formulering.
+
+[Mistral's eigen richtlijnen](https://docs.mistral.ai/models/best-practices/prompt-engineering)
+bepalen daarom de opzet van de herschrijfprompt:
+
+| Mistral schrijft voor | Hoe het hier is toegepast |
+| --- | --- |
+| Open met *"You are a [role], your task is to [task]"* | Eerste zin: rol plus taak, verder niets |
+| Deel hiërarchisch in met XML-achtige tags | `<opnemen>`, `<verboden>`, `<controle>`, `<schrijfwijze>`, `<vorm>` |
+| Toon minstens één keer het exacte uitvoerformaat | `<vorm>` bevat het sjabloon met haakjes-plaatshouders |
+| Vermijd subjectieve taal ("te lang", "beter") | "scherp genoeg om te knellen" en "zo kort als mogelijk" zijn geschrapt |
+| Vraag het model niet om woorden te tellen | Er staat nergens een aantal |
+| Geen tegenstrijdige instructies | De controlestap stelt één vraag, geen afweging |
+
+Wat er daarnaast is veranderd omdat een 8B-model het niet aankon:
+
+- **De lengte is gehalveerd** (837 → 459 woorden). De uitleg *waaróm* een projectinstructie werkt —
+  het verhaal over beurt 1 en het gokwerk — is eruit. Dat is precies het soort abstractie waar een
+  groot model op generaliseert en een klein model in verdwaalt. Het staat nog wel hierboven in dit
+  document, want de mens die de prompt onderhoudt heeft het wél nodig.
+- **De toetsbaarheidstest is een concrete vraag geworden.** "Kun je aan een antwoord zien of de regel
+  is nageleefd?" vraagt om een oordeel. Er staat nu: *"staat dit in de tekst van de gebruiker? Is het
+  antwoord nee, haal de regel dan weg."* Dat is opzoekbaar in plaats van te beoordelen.
+- **Temperatuur van 0,3 naar 0,2.** De faalmodus hier is niet saaiheid maar fantasie.
+- **XML-tags worden er naderhand uitgehaald** (`stripSectionTags`), want een klein model echoot een
+  sectietag met enige regelmaat mee.
+
+## Deze modus draait op het sterkste model van de provider
+
+`project-optimize` negeert bewust het chatmodel uit Beheer en gebruikt `STRONGEST_MODEL` uit de edge
+function. De afweging: deze aanroep gebeurt **één keer per projectinstelling** in plaats van bij elk
+bericht, en wat eruit komt stuurt daarna élk gesprek in dat project. Prijs per aanroep is hier dus
+bijna irrelevant, kwaliteit niet. De providerkeuze van de admin blijft wél staan — alleen het model
+binnen die provider gaat omhoog, en valt de fallback-keten door naar een andere provider, dan pakt
+die zijn eigen sterkste model.
+
+| Provider | Standaard (chat) | Voor `project-optimize` |
+| --- | --- | --- |
+| Mistral | Ministral 8B of 3B | **Mistral Small 3** |
+| DeepSeek | V4 Flash | **V4 Pro** |
+| Claude | — | **Opus 4.8** |
+| OpenAI | — | **GPT-5.5** |
+
+Twee valkuilen bij het onderhouden hiervan:
+
+- Het sterkste model is **niet** het eerste uit `PROVIDER_MODELS`. Die lijst begint met de standaard
+  (goedkoop en snel genoeg voor de chat). Bij DeepSeek staat Flash vooraan en is Pro de sterkere; bij
+  Mistral staat Small 3 juist bóven de Ministrals.
+- Voor OpenAI staat er bewust `gpt-5.5` en niet `gpt-5.5-pro`. Die laatste is zes keer zo duur en
+  gericht op maximale precisie, niet op betere tekst.
+
+De kaart staat op twee plekken: `STRONGEST_MODEL` in de edge function maakt de keuze echt,
+`STRONGEST_MODELS` in [src/config/aiModels.ts](src/config/aiModels.ts) bestaat alleen om de admin te
+laten zien wat er gaat draaien. Houd ze gelijk.
+
+De chatverbetering (`chat-optimize`) doet dit **niet**: die draait bij elk bericht, dus daar is de
+prijs per aanroep wél een factor.
+
+---
+
 ## Waar het in de applicatie zit
 
 - **De knop**: het oranje sterretje rechtsonder in het veld "Projectinstructie" in
@@ -260,3 +326,10 @@ of markdown in the output"*, en *"tell Claude what to do instead of what not to 
 
 **Natuurlijk Nederlands in plaats van leenvertalingen**
 [Genootschap Onze Taal — anglicismen](https://onzetaal.nl/taalloket/anglicismen)
+
+**Prompten van kleine modellen (Ministral 8B)**
+[Mistral — Prompt engineering best practices](https://docs.mistral.ai/models/best-practices/prompt-engineering)
+— rol + taak vooraan, hiërarchische indeling met XML-tags, minstens één voorbeeld van het
+uitvoerformaat, geen subjectieve taal, niet laten tellen.
+[How to Write Good Prompts for Small Language Models](https://adamnotes.com/note/small_llm_prompting)
+— *"Large models forgive imprecision; small models require carefully constructed prompts."*

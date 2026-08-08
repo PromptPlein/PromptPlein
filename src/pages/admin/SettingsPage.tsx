@@ -26,6 +26,7 @@ import {
   defaultModelFor,
   modelLabel,
   pricingSummary,
+  strongestModelLabelFor,
 } from '@/config/aiModels';
 import type { AiProvider } from '@/config/aiModels';
 import {
@@ -528,6 +529,22 @@ export default function SettingsPage() {
               project, dus er wordt een vaste rol, een vast eindproduct en een uitweg bij twijfel in
               uitgewerkt. Het resultaat vervangt het veld maar wordt niet opgeslagen — de gebruiker
               leest het na en slaat zelf op, of haalt zijn eigen tekst terug.
+            </p>
+
+            <p className="mb-4 max-w-2xl rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
+              Deze slag draait op het <strong>sterkste model</strong> van de gekozen provider
+              {strongestModelLabelFor(chat.provider) ? (
+                <>
+                  {' '}
+                  — nu <strong>{strongestModelLabelFor(chat.provider)}</strong>
+                </>
+              ) : (
+                ' (bij Automatisch: van de provider die als eerste antwoordt)'
+              )}
+              , en dus niet op het chatmodel hierboven. Reden: dit gebeurt één keer per project in
+              plaats van bij elk bericht, en wat eruit komt stuurt daarna elk gesprek in dat
+              project. Een kleiner model verzint daar sneller regels bij die de gebruiker nooit
+              heeft opgeschreven.
             </p>
 
             <label className="flex cursor-pointer items-center gap-3">
