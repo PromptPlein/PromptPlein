@@ -314,10 +314,10 @@ export default function ChatPage() {
               value={projectPage ? '' : (conversation?.id ?? '')}
               disabled={controller.streaming}
               onChange={(e) => handleSelectConversation(e.target.value)}
-              aria-label="Kies een gesprek"
+              aria-label="Kies een chat"
             >
               {(projectPage || (conversation && !activeInIndex)) && (
-                <option value={conversation?.id ?? ''}>Nieuw gesprek</option>
+                <option value={conversation?.id ?? ''}>Nieuwe chat</option>
               )}
               {controller.index.map((entry) => (
                 <option key={entry.id} value={entry.id}>
@@ -330,7 +330,7 @@ export default function ChatPage() {
               className="opl-btn-secondary shrink-0 !px-2.5"
               onClick={handleNewConversation}
               disabled={controller.streaming}
-              aria-label="Nieuw gesprek"
+              aria-label="Nieuwe chat"
             >
               <Plus size={16} />
             </button>
@@ -340,7 +340,7 @@ export default function ChatPage() {
                 className="opl-btn-secondary shrink-0 !px-2.5 text-rijksrood dark:text-red-400"
                 onClick={() => setConfirmDeleteId(conversation.id)}
                 disabled={controller.streaming}
-                aria-label="Verwijder dit gesprek"
+                aria-label="Verwijder deze chat"
               >
                 <Trash2 size={16} />
               </button>
@@ -365,7 +365,7 @@ export default function ChatPage() {
               {!openProject && conversation?.kind === 'execution' && (
                 <span
                   className="opl-badge inline-flex shrink-0 items-center gap-1 bg-rijksoranje/10 text-rijksoranje"
-                  title="In dit gesprek wordt een gegenereerde prompt uitgevoerd; de prompt bepaalt zelf taal, toon en opmaak."
+                  title="In deze chat wordt een gegenereerde prompt uitgevoerd; de prompt bepaalt zelf taal, toon en opmaak."
                 >
                   <Play size={11} /> Uitvoering
                 </span>
@@ -378,7 +378,7 @@ export default function ChatPage() {
                   type="button"
                   className="opl-badge inline-flex shrink-0 items-center gap-1 bg-rijksblauw-50 text-rijksblauw-700 hover:bg-rijksblauw-100 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200"
                   onClick={() => handleOpenProject(activeProject.id)}
-                  title={`Dit gesprek draait onder de instructie van project "${activeProject.name}". Klik om het project te openen.`}
+                  title={`Deze chat draait onder de instructie van project "${activeProject.name}". Klik om het project te openen.`}
                 >
                   <FolderOpen size={11} /> {activeProject.name}
                 </button>
@@ -449,8 +449,8 @@ export default function ChatPage() {
 
       <ConfirmDialog
         open={confirmDeleteId !== null}
-        title="Gesprek verwijderen?"
-        message="Dit verwijdert het gesprek definitief van dit apparaat, inclusief bijlagen. Dit kan niet ongedaan worden gemaakt."
+        title="Chat verwijderen?"
+        message="Dit verwijdert de chat definitief van dit apparaat, inclusief bijlagen. Dit kan niet ongedaan worden gemaakt."
         confirmLabel="Verwijderen"
         destructive
         onConfirm={() => {
@@ -465,8 +465,8 @@ export default function ChatPage() {
       />
       <ConfirmDialog
         open={confirmDeleteAll}
-        title="Alle gesprekken verwijderen?"
-        message="Dit verwijdert al je chatgesprekken definitief van dit apparaat, inclusief bijlagen. Dit kan niet ongedaan worden gemaakt."
+        title="Alle chats verwijderen?"
+        message="Dit verwijdert al je chats definitief van dit apparaat, inclusief bijlagen. Dit kan niet ongedaan worden gemaakt."
         confirmLabel="Alles verwijderen"
         destructive
         onConfirm={controller.removeAllConversations}
@@ -485,7 +485,7 @@ export default function ChatPage() {
       <ConfirmDialog
         open={confirmDeleteProject !== null}
         title="Project verwijderen?"
-        message="De instructie en de bronbestanden van dit project worden definitief verwijderd. De gesprekken blijven op dit apparaat staan en gaan verder als gewone gesprekken."
+        message="De instructie en de bronbestanden van dit project worden definitief verwijderd. De chats blijven op dit apparaat staan en gaan verder als gewone chats."
         confirmLabel="Verwijderen"
         destructive
         onConfirm={() => void handleDeleteProject()}

@@ -99,7 +99,7 @@ export default function ChatSidebar({
               }}
             >
               <MessageSquare size={15} className="shrink-0 text-slate-400" />
-              Nieuw gesprek
+              Nieuwe chat
             </button>
             <button
               type="button"
@@ -145,14 +145,14 @@ export default function ChatSidebar({
               </button>
             ))}
             <p className="px-2 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
-              Gesprekken
+              Chats
             </p>
           </>
         )}
 
         {entries.length === 0 && (
           <p className="px-2 py-4 text-xs text-slate-400 dark:text-slate-500">
-            Nog geen eerdere gesprekken op dit apparaat.
+            Nog geen eerdere chats op dit apparaat.
           </p>
         )}
         {entries.map((entry) => (
@@ -191,7 +191,7 @@ export default function ChatSidebar({
               className="shrink-0 rounded-md p-1.5 text-slate-400 opacity-0 transition-opacity hover:bg-slate-200 hover:text-rijksrood group-hover:opacity-100 dark:hover:bg-slate-700"
               onClick={() => onRequestDelete(entry.id)}
               disabled={disabled}
-              aria-label={`Verwijder gesprek "${entry.title}"`}
+              aria-label={`Verwijder chat "${entry.title}"`}
             >
               <Trash2 size={14} />
             </button>

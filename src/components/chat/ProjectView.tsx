@@ -99,7 +99,7 @@ export default function ProjectView({
               {project.name}
             </h2>
             <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
-              {fileCount} bronbestanden · {chatCount} gesprekken
+              {fileCount} bronbestanden · {chatCount} chats
             </p>
           </div>
           {/* De drie dingen die je met een project kunt doen, op één rij:
@@ -127,7 +127,7 @@ export default function ProjectView({
               onClick={onNewChat}
               disabled={disabled}
             >
-              <Plus size={14} /> Nieuw gesprek
+              <Plus size={14} /> Nieuwe chat
             </button>
             {/* Wand2 is het icoon dat de promptbouwer voor zichzelf gebruikt (de
                 instap-tab op /genereren). Dáár zit de herkenning: je ziet vooraf
@@ -246,11 +246,11 @@ export default function ProjectView({
 
         <section>
           <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            <MessageSquare size={13} /> Gesprekken in dit project
+            <MessageSquare size={13} /> Chats in dit project
           </h3>
           {conversations.length === 0 ? (
             <p className="rounded-lg border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-400 dark:border-slate-600 dark:text-slate-500">
-              Nog geen gesprekken. Begin er een — het draait meteen op de instructie en de bronnen
+              Nog geen chats. Begin er een — die draait meteen op de instructie en de bronnen
               van dit project.
             </p>
           ) : (
@@ -279,7 +279,7 @@ export default function ProjectView({
                     className="mr-1 shrink-0 rounded-md p-1.5 text-slate-400 opacity-0 transition-opacity hover:bg-slate-200 hover:text-rijksrood group-hover:opacity-100 dark:hover:bg-slate-700"
                     onClick={() => onRequestDeleteConversation(entry.id)}
                     disabled={disabled}
-                    aria-label={`Verwijder gesprek "${entry.title}"`}
+                    aria-label={`Verwijder chat "${entry.title}"`}
                   >
                     <Trash2 size={14} />
                   </button>

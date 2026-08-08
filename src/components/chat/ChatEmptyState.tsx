@@ -53,11 +53,11 @@ export default function ChatEmptyState({ onPick }: { onPick: (text: string) => v
       <div className="flex flex-col items-center gap-1 text-[11px] text-slate-400 dark:text-slate-500">
         <span className="inline-flex items-center gap-1.5">
           <ShieldCheck size={12} className="shrink-0" />
-          Gesprekken worden alleen op dit apparaat bewaard en verdwijnen bij uitloggen.
+          Chats worden alleen op dit apparaat bewaard en verdwijnen bij uitloggen.
         </span>
         <span className="hidden items-center gap-1.5 sm:inline-flex">
           <FileText size={12} className="shrink-0" />
-          Bijlagen blijven het hele gesprek beschikbaar als bronmateriaal.
+          Bijlagen blijven de hele chat beschikbaar als bronmateriaal.
         </span>
       </div>
     </div>

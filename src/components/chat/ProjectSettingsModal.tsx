@@ -243,7 +243,7 @@ export default function ProjectSettingsModal({
               Projectinstructie
             </label>
             <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
-              Deze instructie geldt voor elk gesprek in dit project. Beschrijf wie de assistent is,
+              Deze instructie geldt voor elke chat in dit project. Beschrijf wie de assistent is,
               hoe hij moet antwoorden en welk eindproduct eruit moet komen.
             </p>
             <div className="relative">
@@ -326,7 +326,7 @@ export default function ProjectSettingsModal({
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
                   Maximaal {MAX_PROJECT_FILES} bestanden (.txt, .md, .pdf, .docx). De assistent leest
-                  ze in elk gesprek van dit project mee.
+                  ze in elke chat van dit project mee.
                 </p>
               </div>
               <button
@@ -355,7 +355,7 @@ export default function ProjectSettingsModal({
               <p className="py-4 text-center text-xs text-slate-400">Bestanden laden…</p>
             ) : files.length === 0 ? (
               <p className="rounded-lg border border-dashed border-slate-300 px-4 py-6 text-center text-xs text-slate-400 dark:border-slate-600 dark:text-slate-500">
-                Nog geen bronbestanden. Upload er een om de assistent er in elk gesprek uit te laten
+                Nog geen bronbestanden. Upload er een om de assistent er in elke chat uit te laten
                 putten.
               </p>
             ) : (
@@ -422,7 +422,7 @@ export default function ProjectSettingsModal({
       <ConfirmDialog
         open={confirmDeleteFile !== null}
         title="Bestand verwijderen?"
-        message={`"${confirmDeleteFile?.name ?? ''}" wordt uit dit project verwijderd. Nieuwe gesprekken kunnen er dan niet meer uit putten.`}
+        message={`"${confirmDeleteFile?.name ?? ''}" wordt uit dit project verwijderd. Nieuwe chats kunnen er dan niet meer uit putten.`}
         confirmLabel="Verwijderen"
         destructive
         onConfirm={() => {

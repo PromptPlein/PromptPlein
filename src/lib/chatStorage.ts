@@ -70,7 +70,7 @@ export function loadConversation(userId: string, conversationId: string): ChatCo
     if (typeof parsed.id !== 'string' || !Array.isArray(parsed.messages)) return null;
     return {
       id: parsed.id,
-      title: typeof parsed.title === 'string' ? parsed.title : 'Gesprek',
+      title: typeof parsed.title === 'string' ? parsed.title : 'Chat',
       createdAt: typeof parsed.createdAt === 'string' ? parsed.createdAt : new Date().toISOString(),
       updatedAt: typeof parsed.updatedAt === 'string' ? parsed.updatedAt : new Date().toISOString(),
       messages: parsed.messages,
@@ -213,7 +213,7 @@ export function createConversation(
   const now = new Date().toISOString();
   return {
     id: uuid(),
-    title: 'Nieuw gesprek',
+    title: 'Nieuwe chat',
     createdAt: now,
     updatedAt: now,
     messages: [],
@@ -226,6 +226,6 @@ export function createConversation(
 /** Leid de gesprekstitel af uit het eerste bericht (max ~48 tekens). */
 export function titleFromFirstMessage(text: string): string {
   const clean = text.replace(/\s+/g, ' ').trim();
-  if (!clean) return 'Nieuw gesprek';
+  if (!clean) return 'Nieuwe chat';
   return clean.length > 48 ? `${clean.slice(0, 47).trimEnd()}…` : clean;
 }

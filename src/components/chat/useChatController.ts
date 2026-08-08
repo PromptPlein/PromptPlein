@@ -116,7 +116,7 @@ export default function useChatController(
       if (!ok && !quotaWarnedRef.current) {
         quotaWarnedRef.current = true;
         toast.error(
-          'Opslaan op dit apparaat lukt niet — dit gesprek gaat verloren zodra je de pagina verlaat.',
+          'Opslaan op dit apparaat lukt niet — deze chat gaat verloren zodra je de pagina verlaat.',
         );
       }
       refreshIndex();
@@ -350,7 +350,7 @@ export default function useChatController(
       if (conversationRef.current?.id === id) return;
       const loaded = loadConversation(userId, id);
       if (!loaded) {
-        toast.error('Dit gesprek kon niet worden geladen.');
+        toast.error('Deze chat kon niet worden geladen.');
         refreshIndex();
         return;
       }
@@ -365,7 +365,7 @@ export default function useChatController(
       deleteConversation(userId, id);
       refreshIndex();
       if (conversationRef.current?.id === id) update(createConversation());
-      toast.success('Gesprek verwijderd van dit apparaat.');
+      toast.success('Chat verwijderd van dit apparaat.');
     },
     [userId, update, refreshIndex],
   );
@@ -375,7 +375,7 @@ export default function useChatController(
     deleteAllConversations(userId);
     refreshIndex();
     update(createConversation());
-    toast.success('Alle gesprekken verwijderd van dit apparaat.');
+    toast.success('Alle chats verwijderd van dit apparaat.');
   }, [userId, update, refreshIndex]);
 
   const addAttachment = useCallback(
@@ -383,7 +383,7 @@ export default function useChatController(
       const cur = conversationRef.current;
       if (!cur || extracting) return;
       if (cur.attachments.length >= MAX_CHAT_ATTACHMENTS) {
-        toast.error(`Maximaal ${MAX_CHAT_ATTACHMENTS} bijlagen per gesprek.`);
+        toast.error(`Maximaal ${MAX_CHAT_ATTACHMENTS} bijlagen per chat.`);
         return;
       }
       setExtracting(true);

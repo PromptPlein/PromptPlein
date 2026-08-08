@@ -405,10 +405,10 @@ export default function ChatComposer({
                 disabled={disabled || streaming || !canPickProject}
                 title={
                   canPickProject
-                    ? 'Koppel dit gesprek aan een project'
-                    : 'Het project ligt vast zodra het gesprek is begonnen. Start een nieuw gesprek om te wisselen.'
+                    ? 'Koppel deze chat aan een project'
+                    : 'Het project ligt vast zodra de chat is begonnen. Start een nieuwe chat om te wisselen.'
                 }
-                aria-label="Kies een project voor dit gesprek"
+                aria-label="Kies een project voor deze chat"
                 aria-expanded={projectMenuOpen}
               >
                 <AtSign size={16} className="shrink-0" />
@@ -466,7 +466,7 @@ export default function ChatComposer({
                 }
                 title={
                   attachments.length >= MAX_CHAT_ATTACHMENTS
-                    ? `Maximaal ${MAX_CHAT_ATTACHMENTS} bijlagen per gesprek`
+                    ? `Maximaal ${MAX_CHAT_ATTACHMENTS} bijlagen per chat`
                     : 'Document toevoegen (PDF, Word, tekst — max. 10 MB)'
                 }
                 aria-label="Document toevoegen"
