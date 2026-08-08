@@ -82,6 +82,38 @@ export function consumeProjectHandoff(): ProjectHandoff | null {
   }
 }
 
+// --- Generator → chat ("Project maken") ---
+// Projecten wonen op de chatpagina, dus wie er in de bouwer een wil maken, moet
+// daarheen. Zonder signaal komt hij daar op een pagina aan waar hij de knop
+// opnieuw moet zoeken — precies de handeling die hij net al deed. Deze vlag
+// zegt de chatpagina: maak meteen een project en zet de instellingen open. Geen
+// id, want het project bestaat nog niet; alleen "de gebruiker kwam hiervoor".
+
+const NEW_PROJECT_HANDOFF_KEY = `${CHAT_PREFIX}new-project-handoff`;
+
+/** Vraag de chatpagina om bij aankomst een nieuw project te openen. */
+export function writeNewProjectHandoff(): void {
+  try {
+    sessionStorage.setItem(NEW_PROJECT_HANDOFF_KEY, JSON.stringify({ createdAt: Date.now() }));
+  } catch {
+    /* sessieopslag niet beschikbaar — de chatpagina opent dan gewoon normaal */
+  }
+}
+
+/** Lees en verwijder de vlag; verlopen of ongeldig -> false. */
+export function consumeNewProjectHandoff(): boolean {
+  try {
+    const raw = sessionStorage.getItem(NEW_PROJECT_HANDOFF_KEY);
+    if (!raw) return false;
+    sessionStorage.removeItem(NEW_PROJECT_HANDOFF_KEY);
+    const parsed = JSON.parse(raw) as { createdAt?: unknown };
+    if (typeof parsed.createdAt !== 'number' || Date.now() - parsed.createdAt > TTL_MS) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // --- Resultaat-snapshot: gegenereerd resultaat over de login-roundtrip heen ---
 // De Testkamer vereist een ingelogde gebruiker terwijl de generator publiek is.
 // Wie vanuit de Testkamer-CTA gaat inloggen, krijgt via dit snapshot zijn

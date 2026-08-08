@@ -13,6 +13,7 @@ import {
 import { Link } from 'react-router-dom';
 import clsx from 'clsx';
 import { useAuth } from '@/context/AuthContext';
+import { writeNewProjectHandoff } from '@/services/handoffService';
 import type { ChatProject } from '@/types';
 import type { GeneratorContext } from '@/services/chatProjectService';
 
@@ -92,6 +93,15 @@ export default function ProjectContextBar({
   // geen bestemming om heen te sturen.
   if (!configured) return null;
 
+  /**
+   * "Project maken" is één handeling, geen reis: de gebruiker gaat naar de chat
+   * én wil daar meteen zijn projectinstructie kwijt. Zonder dit signaal komt hij
+   * aan op een pagina waar hij de knop opnieuw moet zoeken. De vlag staat in
+   * sessionStorage en niet in router-state, zodat hij ook een tussenstop bij het
+   * inlogscherm overleeft (zie handoffService).
+   */
+  const startNewProject = () => writeNewProjectHandoff();
+
   /** De projectenlijst; ook de losmaak-regel zit erin (alleen als er iets aanhangt). */
   const menu = (
     // max-h bewust laag: de strook zit ín een blok met overflow-hidden, dus een
@@ -129,11 +139,15 @@ export default function ProjectContextBar({
       {/* Nog geen project voor dít onderwerp? Dan is "een nieuwe maken" de
           volgende stap, en die hoort in de lijst te staan — niet ergens anders
           in de app waar je hem moet gaan zoeken. Projecten wonen op de
-          chatpagina, dus daar komt de gebruiker uit. */}
+          chatpagina, dus daar komt de gebruiker uit — met de instellingen
+          meteen open (zie startNewProject). */}
       <Link
         to="/chat"
         className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm font-medium text-rijksblauw-700 transition-colors hover:bg-rijksblauw-50 dark:text-rijksblauw-200 dark:hover:bg-slate-700"
-        onClick={() => setMenuOpen(false)}
+        onClick={() => {
+          setMenuOpen(false);
+          startNewProject();
+        }}
       >
         <Plus size={14} className="shrink-0" />
         <span className="truncate">Project maken</span>
@@ -247,7 +261,7 @@ export default function ProjectContextBar({
         ) : isAuthenticated ? (
           // Ingelogd, maar nog geen project: de knop brengt je naar de plek waar
           // je er een maakt, in plaats van een leeg keuzemenu te openen.
-          <Link to="/chat" className={clsx(CTA, 'shrink-0')}>
+          <Link to="/chat" className={clsx(CTA, 'shrink-0')} onClick={startNewProject}>
             <FolderOpen size={14} /> Project maken
           </Link>
         ) : (

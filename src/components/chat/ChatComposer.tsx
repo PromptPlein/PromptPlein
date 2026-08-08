@@ -1,4 +1,12 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import {
   AtSign,
   FolderOpen,
@@ -31,35 +39,16 @@ export interface OptimizeResult {
 }
 
 /**
- * Invoerbalk van de chat: tekstveld (Enter = verzenden, Shift+Enter = nieuwe
- * regel), bijlagen (paperclip + chips) en de stop-knop tijdens het streamen.
- *
- * Het tekstvak begint op één regel en groeit mee met wat je typt, tot
- * {@link MAX_HEIGHT}. Daarboven scrollt het van binnen, zodat het gesprek
- * erboven zichtbaar blijft. Er is geen greep om zelf te slepen: het vak weet
- * zelf hoeveel ruimte de tekst nodig heeft.
- *
- * Staat er tekst in het veld en is `onOptimize` meegegeven, dan verschijnt
- * rechtsboven het oranje sterretje: één klik en de AI herschrijft wat er staat
- * tot een scherpere vraag. De oorspronkelijke tekst blijft daarna één klik weg.
+ * Greep op het invoerveld van buitenaf. Nodig voor de startsjablonen in een leeg
+ * gesprek: die zetten hun tekst kláár in het veld — versturen doet de gebruiker
+ * zelf, nadat hij de invulplekken heeft ingevuld.
  */
-export default function ChatComposer({
-  disabled,
-  streaming,
-  extracting,
-  attachments,
-  onSend,
-  onStop,
-  onAddFile,
-  onRemoveAttachment,
-  onOptimize,
-  badge,
-  allowAttachments = true,
-  projects,
-  activeProjectId = null,
-  onPickProject,
-  canPickProject = false,
-}: {
+export interface ChatComposerHandle {
+  /** Zet `text` in het veld, geeft focus en zet de cursor achter de tekst. */
+  fill: (text: string) => void;
+}
+
+interface ChatComposerProps {
   /** Volledig uitgeschakeld (bijv. chat uitgezet of geen AI-service). */
   disabled: boolean;
   streaming: boolean;
@@ -100,7 +89,41 @@ export default function ChatComposer({
    * knop verdwenen is.
    */
   canPickProject?: boolean;
-}) {
+}
+
+/**
+ * Invoerbalk van de chat: tekstveld (Enter = verzenden, Shift+Enter = nieuwe
+ * regel), bijlagen (paperclip + chips) en de stop-knop tijdens het streamen.
+ *
+ * Het tekstvak begint op één regel en groeit mee met wat je typt, tot
+ * {@link MAX_HEIGHT}. Daarboven scrollt het van binnen, zodat het gesprek
+ * erboven zichtbaar blijft. Er is geen greep om zelf te slepen: het vak weet
+ * zelf hoeveel ruimte de tekst nodig heeft.
+ *
+ * Staat er tekst in het veld en is `onOptimize` meegegeven, dan verschijnt
+ * rechtsboven het oranje sterretje: één klik en de AI herschrijft wat er staat
+ * tot een scherpere vraag. De oorspronkelijke tekst blijft daarna één klik weg.
+ */
+const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function ChatComposer(
+  {
+    disabled,
+    streaming,
+    extracting,
+    attachments,
+    onSend,
+    onStop,
+    onAddFile,
+    onRemoveAttachment,
+    onOptimize,
+    badge,
+    allowAttachments = true,
+    projects,
+    activeProjectId = null,
+    onPickProject,
+    canPickProject = false,
+  },
+  ref,
+) {
   const [text, setText] = useState('');
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const projectMenuRef = useRef<HTMLDivElement>(null);
@@ -129,6 +152,34 @@ export default function ChatComposer({
     // en dat is precies genoeg voor een schuifbalk bij tekst die eigenlijk past.
     const borders = el.offsetHeight - el.clientHeight;
     el.style.height = `${Math.min(MAX_HEIGHT, el.scrollHeight + borders)}px`;
+  }, [text]);
+
+  // Van buitenaf tekst klaarzetten (startsjablonen). Focussen doen we pas nadat
+  // React de nieuwe waarde in het veld heeft gezet — anders zou de cursor nog op
+  // de oude, lege tekst worden gezet.
+  const focusAfterFill = useRef(false);
+  useImperativeHandle(
+    ref,
+    () => ({
+      fill(value: string) {
+        setText(value);
+        setBeforeOptimize(null);
+        focusAfterFill.current = true;
+      },
+    }),
+    [],
+  );
+  useLayoutEffect(() => {
+    if (!focusAfterFill.current) return;
+    focusAfterFill.current = false;
+    const el = textareaRef.current;
+    if (!el) return;
+    el.focus();
+    // Staat er een invulplek tussen [haken], selecteer dan de eerste: je typt er
+    // meteen overheen. Zo niet, dan de cursor achter de tekst.
+    const slot = /\[[^\]\n]+\]/.exec(el.value);
+    if (slot) el.setSelectionRange(slot.index, slot.index + slot[0].length);
+    else el.setSelectionRange(el.value.length, el.value.length);
   }, [text]);
 
   // --- Het @-menu: koppel dit gesprek aan een project ---
@@ -558,4 +609,6 @@ export default function ChatComposer({
       </div>
     </div>
   );
-}
+});
+
+export default ChatComposer;

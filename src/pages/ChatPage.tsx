@@ -1,10 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, FolderOpen, MessageSquare, Play, Plus, Trash2 } from 'lucide-react';
+import {
+  AlertTriangle,
+  Database,
+  FolderOpen,
+  MessageSquare,
+  Play,
+  Plus,
+  Trash2,
+} from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/context/AuthContext';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
-import ChatComposer from '@/components/chat/ChatComposer';
+import ChatComposer, { type ChatComposerHandle } from '@/components/chat/ChatComposer';
 import ChatEmptyState from '@/components/chat/ChatEmptyState';
 import ChatMessageList from '@/components/chat/ChatMessageList';
 import ChatModelBadge from '@/components/chat/ChatModelBadge';
@@ -17,7 +25,11 @@ import useFitHeight from '@/components/chat/useFitHeight';
 import SavePromptModal from '@/components/prompts/SavePromptModal';
 import { looksLikeMessyPrompt } from '@/lib/promptHeuristics';
 import { consumeHandoff, optimizeChatInput } from '@/services/chatService';
-import { writeGeneratorHandoff, writeProjectHandoff } from '@/services/handoffService';
+import {
+  consumeNewProjectHandoff,
+  writeGeneratorHandoff,
+  writeProjectHandoff,
+} from '@/services/handoffService';
 import { getChatSettingsCached, type ChatSettings } from '@/services/settingsService';
 
 /** Permanente afmelding voor de bouw-een-prompt-tip (per apparaat). */
@@ -38,6 +50,9 @@ export default function ChatPage() {
   const handoffDone = useRef(false);
   // Hoogteplafond van de chatkaart: precies wat het venster overlaat.
   const [cardRef, cardMaxHeight] = useFitHeight<HTMLDivElement>();
+  // Greep op de invoerbalk, zodat een startsjabloon zijn tekst in het veld kan
+  // zetten in plaats van hem meteen te versturen.
+  const composerRef = useRef<ChatComposerHandle>(null);
 
   useEffect(() => {
     let active = true;
@@ -104,14 +119,56 @@ export default function ChatPage() {
     setProjectPage(id);
   }, []);
 
+  // Een zojuist aangemaakt project dat nog nooit is opgeslagen: bestaat al in de
+  // database (de instellingen hebben een id nodig voor bestanden), maar is voor
+  // de gebruiker nog een leeg formulier. Annuleert hij, dan hoort het weer weg —
+  // anders vult de zijbalk zich met regels "Nieuw project" die niets bevatten.
+  // Een ref en geen state: opslaan en sluiten gebeuren in dezelfde tick, en dan
+  // is een state-waarde in de sluitfunctie nog de oude.
+  const draftProjectRef = useRef<string | null>(null);
+
   const handleNewProject = useCallback(async () => {
     const created = await projects.create('Nieuw project');
     if (!created) return;
     // Meteen door naar de instellingen: een leeg project zonder instructie is
     // nog niets — de gebruiker wil hier zijn projectinstructie kwijt.
+    draftProjectRef.current = created.id;
     setProjectPage(created.id);
     setSettingsProjectId(created.id);
   }, [projects]);
+
+  // Handoff vanuit de bouwer ("Project maken" in de projectbalk): daar staat de
+  // knop, hier woont de handeling. De gebruiker landt dus niet op een chatpagina
+  // waar hij opnieuw moet zoeken, maar in het formulier waar hij voor kwam.
+  const newProjectDone = useRef(false);
+  useEffect(() => {
+    if (!user || newProjectDone.current) return;
+    newProjectDone.current = true;
+    if (!consumeNewProjectHandoff()) return;
+    void handleNewProject();
+  }, [user, handleNewProject]);
+
+  /** Opslaan gelukt = het is een echt project geworden; niet meer opruimen. */
+  const handleSaveProject = useCallback(
+    async (patch: { name: string; instructions: string }) => {
+      if (!settingsProjectId) return false;
+      const ok = await projects.update(settingsProjectId, patch);
+      if (ok) draftProjectRef.current = null;
+      return ok;
+    },
+    [settingsProjectId, projects],
+  );
+
+  const handleCloseSettings = useCallback(() => {
+    const id = settingsProjectId;
+    setSettingsProjectId(null);
+    // Alleen een nooit-opgeslagen, nog helemaal leeg project wordt opgeruimd;
+    // alles wat de gebruiker erin heeft gezet, haalt de ref al weg.
+    if (!id || draftProjectRef.current !== id) return;
+    draftProjectRef.current = null;
+    setProjectPage((cur) => (cur === id ? null : cur));
+    void projects.remove(id);
+  }, [settingsProjectId, projects]);
 
   const handleNewChatInProject = useCallback(
     (projectId: string) => {
@@ -142,6 +199,7 @@ export default function ChatPage() {
     // naar de losse lijst omdat hun projectId nergens meer op slaat.
     if (projectPage === confirmDeleteProject) setProjectPage(null);
     if (settingsProjectId === confirmDeleteProject) setSettingsProjectId(null);
+    if (draftProjectRef.current === confirmDeleteProject) draftProjectRef.current = null;
     toast.success('Project verwijderd.');
   }, [confirmDeleteProject, projects, projectPage, settingsProjectId]);
 
@@ -401,7 +459,10 @@ export default function ChatPage() {
               <>
                 {messages.length === 0 ? (
                   <div className="min-h-0 flex-auto overflow-y-auto">
-                    <ChatEmptyState onPick={(text) => void controller.send(text)} />
+                    {/* Een startsjabloon verstuurt niets: het komt in het
+                        invoerveld te staan, zodat de gebruiker het eerst met
+                        zijn eigen situatie aanvult. */}
+                    <ChatEmptyState onPick={(text) => composerRef.current?.fill(text)} />
                   </div>
                 ) : (
                   <ChatMessageList
@@ -417,6 +478,7 @@ export default function ChatPage() {
                 )}
 
                 <ChatComposer
+                  ref={composerRef}
                   disabled={composerDisabled}
                   streaming={controller.streaming}
                   extracting={controller.extracting}
@@ -447,6 +509,18 @@ export default function ChatPage() {
         </div>
       </div>
 
+      {/* Onder de kaart, en dus ook tijdens een lopend gesprek zichtbaar: wat
+          wordt waar bewaard? De scheiding tussen projecten (database) en chats
+          (dit apparaat) is de belangrijkste privacy-afspraak van deze pagina en
+          hoort niet alleen in de lege staat te staan. */}
+      <p className="mx-auto mt-3 flex max-w-3xl items-center justify-center gap-1.5 px-2 text-center text-[11px] text-slate-400 dark:text-slate-500">
+        <Database size={12} className="shrink-0" />
+        <span>
+          Alleen je projecten en projectbestanden worden in de database bewaard. Chatberichten en
+          bijlagen blijven op dit apparaat en worden gewist zodra je uitlogt.
+        </span>
+      </p>
+
       <ConfirmDialog
         open={confirmDeleteId !== null}
         title="Chat verwijderen?"
@@ -475,11 +549,14 @@ export default function ChatPage() {
       <ProjectSettingsModal
         open={settingsProject !== null}
         project={settingsProject}
-        onClose={() => setSettingsProjectId(null)}
-        onSave={(patch) =>
-          settingsProject ? projects.update(settingsProject.id, patch) : Promise.resolve(false)
-        }
-        onFilesChanged={projects.refresh}
+        onClose={handleCloseSettings}
+        onSave={handleSaveProject}
+        onFilesChanged={() => {
+          // Er staat nu een bronbestand in: dit is geen leeg formulier meer, ook
+          // niet als de gebruiker daarna op annuleren drukt.
+          draftProjectRef.current = null;
+          projects.refresh();
+        }}
         chatSettings={settings}
       />
       <ConfirmDialog

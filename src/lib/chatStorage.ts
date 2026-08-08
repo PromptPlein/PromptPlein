@@ -195,6 +195,9 @@ export function wipeAllChatStorage(): void {
     // En de project→bouwer-handoff: die draagt een project-id van de vorige
     // gebruiker, en de bouwer zou daar na het inloggen context mee ophalen.
     sessionStorage.removeItem(`${CHAT_PREFIX}project-handoff`);
+    // En het verzoek "maak meteen een project": anders maakt de volgende
+    // gebruiker op dit apparaat er ongevraagd een aan zodra hij de chat opent.
+    sessionStorage.removeItem(`${CHAT_PREFIX}new-project-handoff`);
     sessionStorage.removeItem('opl.gen.result');
   } catch {
     /* negeren */

@@ -16,6 +16,47 @@ import type { ChatIndexEntry, ChatProject } from '@/types';
  * Puur presentationeel: verwijderacties vragen de pagina om bevestiging via
  * onRequestDelete/onRequestDeleteAll.
  */
+/**
+ * Kopregel van een lijst met het plusje rechts op dezelfde hoogte.
+ *
+ * Het kopje en de knop delen één regel zodat "Projecten" en "Chats" precies
+ * dezelfde vorm hebben: label links, plus helemaal rechts. Het plusje is
+ * bewust ingetogen (klein, grijs) — de grote knop bovenaan blijft de hoofdweg,
+ * dit is de snelkoppeling voor wie al weet waar hij heen wil.
+ */
+function SectionHeading({
+  label,
+  addLabel,
+  onAdd,
+  disabled,
+  className,
+}: {
+  label: string;
+  /** Wat de knop doet, in gewone taal — wordt het toegankelijkheidslabel. */
+  addLabel: string;
+  onAdd: () => void;
+  disabled: boolean;
+  className?: string;
+}) {
+  return (
+    <div className={clsx('flex items-center gap-2 px-2 pb-1 pt-1', className)}>
+      <p className="min-w-0 flex-1 truncate text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+        {label}
+      </p>
+      <button
+        type="button"
+        className="-mr-1 shrink-0 rounded-md p-1 text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-700 disabled:pointer-events-none disabled:opacity-40 dark:text-slate-500 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+        onClick={onAdd}
+        disabled={disabled}
+        aria-label={addLabel}
+        title={addLabel}
+      >
+        <Plus size={14} />
+      </button>
+    </div>
+  );
+}
+
 export default function ChatSidebar({
   entries,
   totalConversations,
@@ -117,11 +158,13 @@ export default function ChatSidebar({
       </div>
 
       <div className="mt-3 min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
+        {/* De kopregels zijn tegelijk de snelste weg naar "nog een erbij": het
+            plusje staat rechts op dezelfde regel als het kopje. Daarom staan ze
+            er ook als de lijst nog leeg is — anders is de knop pas te vinden
+            nadat je al een project hebt. */}
+        <SectionHeading label="Projecten" addLabel="Nieuw project" onAdd={onNewProject} disabled={disabled} />
         {projects.length > 0 && (
           <>
-            <p className="px-2 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
-              Projecten
-            </p>
             {projects.map((project) => (
               <button
                 key={project.id}
@@ -144,11 +187,10 @@ export default function ChatSidebar({
                 )}
               </button>
             ))}
-            <p className="px-2 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
-              Chats
-            </p>
           </>
         )}
+
+        <SectionHeading label="Chats" addLabel="Nieuwe chat" onAdd={onNew} disabled={disabled} className="pt-3" />
 
         {entries.length === 0 && (
           <p className="px-2 py-4 text-xs text-slate-400 dark:text-slate-500">
