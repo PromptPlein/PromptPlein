@@ -6,6 +6,7 @@ import {
   MessageSquare,
   Play,
   Plus,
+  ShieldCheck,
   Trash2,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -512,14 +513,24 @@ export default function ChatPage() {
       {/* Onder de kaart, en dus ook tijdens een lopend gesprek zichtbaar: wat
           wordt waar bewaard? De scheiding tussen projecten (database) en chats
           (dit apparaat) is de belangrijkste privacy-afspraak van deze pagina en
-          hoort niet alleen in de lege staat te staan. */}
-      <p className="mx-auto mt-3 flex max-w-3xl items-center justify-center gap-1.5 px-2 text-center text-[11px] text-slate-400 dark:text-slate-500">
-        <Database size={12} className="shrink-0" />
-        <span>
-          Alleen je projecten en projectbestanden worden in de database bewaard. Chatberichten en
-          bijlagen blijven op dit apparaat en worden gewist zodra je uitlogt.
-        </span>
-      </p>
+          hoort niet alleen in de lege staat te staan. Eén compacte pil met twee
+          korte feiten: losse zinnen zouden over de volle breedte uitwaaieren en
+          eerder als een storingsmelding lezen dan als een geruststelling. */}
+      <div className="mt-3 flex justify-center">
+        <p className="inline-flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 rounded-full border border-slate-200 bg-white/70 px-3.5 py-1.5 text-center text-[11px] text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400">
+          <span className="inline-flex items-center gap-1.5">
+            <Database size={12} className="shrink-0 text-slate-400 dark:text-slate-500" />
+            Projecten staan in de database
+          </span>
+          <span aria-hidden="true" className="hidden text-slate-300 dark:text-slate-600 sm:inline">
+            ·
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <ShieldCheck size={12} className="shrink-0 text-slate-400 dark:text-slate-500" />
+            chats blijven op dit apparaat en verdwijnen bij uitloggen
+          </span>
+        </p>
+      </div>
 
       <ConfirmDialog
         open={confirmDeleteId !== null}

@@ -563,6 +563,15 @@ export interface ClarifyResult {
   needs_input?: boolean;
   /** De ene volgende vraag aan de gebruiker. */
   question?: string;
+  /**
+   * De prompttechniek die de AI bij dit doel heeft gekozen en die bepaalt welke
+   * vragen er komen (bijv. "Persona Prompting"). Wordt boven de vraag getoond,
+   * zodat zichtbaar is wát er wordt opgebouwd. Kan per beurt wisselen als een
+   * antwoord de AI van gedachten doet veranderen.
+   */
+  technique?: string;
+  /** Eén zin: wat de AI uit het doel opmaakt en waarom die techniek past. */
+  analysis?: string;
   /** Het hoeveelste vraag dit is, en het absolute maximum (server-bepaald). */
   asked?: number;
   max?: number;

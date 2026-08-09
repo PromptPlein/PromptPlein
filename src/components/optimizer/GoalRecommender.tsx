@@ -3,46 +3,15 @@ import { AlertTriangle, Check, ClipboardCopy, Eraser, Info, Loader2, Sparkles, W
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import { useReferenceData } from '@/context/ReferenceDataContext';
+import HoverPreview from '@/components/common/HoverPreview';
+import { GOAL_EXAMPLES } from '@/data/goalExamples';
 import { recommendTechniques } from '@/services/optimizeService';
 import { isContextPrompt } from '@/lib/techniques';
 import { stripMarkdown } from '@/lib/utils';
 import type { TechniqueRecommendation } from '@/types';
 
-/**
- * Voorbeeldantwoorden op "Wat wil je graag bereiken?", elk gekoppeld aan de
- * prompttechniek waar die omschrijving doorgaans op uitkomt. Dient als hulp/
- * inspiratie zodat de gebruiker zijn doel concreet leert formuleren.
- */
-const GOAL_EXAMPLES: { technique: string; goal: string }[] = [
-  {
-    technique: 'Persona Prompting',
-    goal: 'Ik zoek een antwoord vanuit de rol van een ervaren beleidsadviseur die bekend is met veilig en verantwoord AI-gebruik binnen de overheid.',
-  },
-  {
-    technique: 'Multi-Persona Prompting',
-    goal: 'Ik wil mijn vraag vanuit meerdere perspectieven laten bekijken, bijvoorbeeld vanuit beleid, privacy, uitvoering en management.',
-  },
-  {
-    technique: 'Few-Shot Voorbeelden',
-    goal: 'Ik heb een paar voorbeeldteksten die goed passen bij de stijl die ik zoek en wil op basis daarvan een nieuwe tekst laten maken.',
-  },
-  {
-    technique: 'Template-based Output',
-    goal: 'Ik wil het antwoord graag ontvangen in een vaste structuur met duidelijke onderdelen zoals aanleiding, analyse, advies en vervolgstappen.',
-  },
-  {
-    technique: 'Chain-of-Thought',
-    goal: 'Ik wil begrijpen welke stappen en afwegingen nodig zijn voordat een gemeente een AI-tool verantwoord kan invoeren.',
-  },
-  {
-    technique: 'Meta Prompting',
-    goal: 'Mijn vraag is nog te vaag en ik wil er een duidelijke prompt van maken die betere antwoorden oplevert.',
-  },
-  {
-    technique: 'Socratic Prompting',
-    goal: 'Ik wil door verdiepende vragen scherper krijgen wat het echte probleem is en welke keuze het meest logisch is.',
-  },
-];
+// De voorbeelddoelen staan in data/goalExamples.ts, gedeeld met de doel-instap
+// van de generator: dezelfde voorbeelden, waar je ze ook tegenkomt.
 
 interface GoalRecommenderProps {
   /** Huidig geselecteerde techniek (zodat de gekozen kaart actief blijft). */
@@ -223,12 +192,21 @@ export default function GoalRecommender({
               vullen, of kopieer het.
             </p>
             {GOAL_EXAMPLES.map((ex) => (
-              <div
-                key={ex.technique}
-                className="group rounded-lg border border-slate-200 bg-white p-2.5 dark:border-slate-700 dark:bg-slate-800"
-              >
+              // De doelomschrijving zelf staat niet op het kaartje; hover of
+              // "Gebruik" laat hem zien.
+              <HoverPreview key={ex.title} label="Doelomschrijving" text={ex.goal}>
+              <div className="group rounded-lg border border-slate-200 bg-white p-2.5 transition-colors hover:border-rijksblauw-300 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-rijksblauw-500/40">
                 <div className="flex items-start justify-between gap-2">
-                  <span className="opl-badge bg-rijksoranje/15 text-rijksoranje">{ex.technique}</span>
+                  <div className="min-w-0">
+                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-rijksblauw-600 dark:text-rijksblauw-300">
+                      <ex.icon size={12} className="shrink-0" />
+                      {ex.technique}
+                    </span>
+                    <p className="mt-0.5 text-sm font-semibold text-slate-800 dark:text-slate-100">
+                      {ex.title}
+                    </p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{ex.subtitle}</p>
+                  </div>
                   <div className="flex shrink-0 gap-1">
                     <button
                       type="button"
@@ -248,10 +226,8 @@ export default function GoalRecommender({
                     </button>
                   </div>
                 </div>
-                <p className="mt-1.5 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
-                  {ex.goal}
-                </p>
               </div>
+              </HoverPreview>
             ))}
           </div>
         )}

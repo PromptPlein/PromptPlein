@@ -1,14 +1,6 @@
-import {
-  FileText,
-  Landmark,
-  Languages,
-  ListChecks,
-  Lock,
-  Mail,
-  ShieldCheck,
-  type LucideIcon,
-} from 'lucide-react';
+import { FileText, ShieldCheck } from 'lucide-react';
 import clsx from 'clsx';
+import { PROMPT_CATEGORIES, type PromptCategoryId } from '@/data/promptCategories';
 
 /**
  * Startsjablonen in overheidscontext. Klikken verstuurt niets: de tekst komt in
@@ -20,10 +12,19 @@ import clsx from 'clsx';
  * Kamervragen), overleg (verslag) en privacy (DPIA). Elk sjabloon eindigt met
  * een concrete opdracht over vorm en lengte — een klein model levert daar
  * merkbaar bruikbaarder werk op dan bij een losse vraag.
+ *
+ * De categorie (en daarmee het icoon) komt uit dezelfde lijst als de
+ * voorbeeldprompts in de optimizer: hetzelfde soort werk ziet er in de hele app
+ * hetzelfde uit.
  */
-const STARTERS: { icon: LucideIcon; title: string; hint: string; template: string }[] = [
+const STARTERS: {
+  category: PromptCategoryId;
+  title: string;
+  hint: string;
+  template: string;
+}[] = [
   {
-    icon: FileText,
+    category: 'samenvatten',
     title: 'Vat een document samen',
     hint: 'Rapport, nota of raadsstuk terug naar de kern',
     template: `Vat het bijgevoegde document voor mij samen.
@@ -35,7 +36,7 @@ Waar ik vooral op let: [bijvoorbeeld besluiten, risico's, kosten, planning]
 Geef eerst vijf bullets met de kern en daarna één korte alinea over wat dit voor ons betekent. Gebruik alleen wat er in het document staat.`,
   },
   {
-    icon: Languages,
+    category: 'begrijpelijk',
     title: 'Herschrijf naar begrijpelijke taal',
     hint: 'Een brief of webtekst op taalniveau B1',
     template: `Herschrijf de tekst hieronder naar begrijpelijk Nederlands op taalniveau B1.
@@ -48,7 +49,7 @@ Voor wie is de tekst: [bijvoorbeeld inwoners die een besluit over hun aanvraag k
 Gebruik korte zinnen en actieve taal, vermijd jargon en leg vaktermen uit als ze echt nodig zijn. De juridische strekking moet gelijk blijven. Zet onder de tekst welke woorden je hebt vervangen.`,
   },
   {
-    icon: Mail,
+    category: 'burgercontact',
     title: 'Reageer op een burgerbericht',
     hint: 'Concept-antwoord op een mail, klacht of melding',
     template: `Help me een reactie te schrijven op het bericht hieronder.
@@ -62,7 +63,7 @@ Wat ik met de reactie wil bereiken: [bijvoorbeeld uitleggen waarom het besluit z
 Schrijf één versie van maximaal 200 woorden: rustig, begripvol en zakelijk. Beloof niets wat ik niet heb toegezegd en noem geen termijnen die ik niet heb genoemd.`,
   },
   {
-    icon: Landmark,
+    category: 'bestuurlijk',
     title: 'Beantwoord vragen van raad of Kamer',
     hint: 'Feitelijk concept, met de open punten gemarkeerd',
     template: `Maak een concept-antwoord op de vragen hieronder.
@@ -77,7 +78,7 @@ Wat ik nog moet uitzoeken: [open punten]
 Beantwoord elke vraag apart, kort en feitelijk. Verzin geen cijfers, data of bronnen: zet bij alles wat ontbreekt "nog uitzoeken".`,
   },
   {
-    icon: ListChecks,
+    category: 'overleg',
     title: 'Maak een verslag met actiepunten',
     hint: 'Van losse aantekeningen naar besluiten en acties',
     template: `Maak van mijn aantekeningen een kort verslag.
@@ -90,7 +91,7 @@ Aantekeningen:
 Geef drie kopjes: besluiten, actiepunten (met wie en wanneer) en open punten. Houd het feitelijk en zet twijfelgevallen onder "nog navragen".`,
   },
   {
-    icon: Lock,
+    category: 'privacy',
     title: 'Denk mee over privacy en AVG',
     hint: 'Voorbereiding op een DPIA of het delen van gegevens',
     template: `Help me de privacykant van dit plan scherp te krijgen.
@@ -109,35 +110,32 @@ export default function ChatEmptyState({ onPick }: { onPick: (text: string) => v
   return (
     <div className="flex flex-col items-center gap-4 px-6 py-6 text-center">
       {/* Het merkteken van PromptPlein in plaats van een generiek chat-icoon: dit
-          is het eerste wat je ziet in een leeg gesprek. In donkere modus krijgt
-          het een zacht vlak, anders vallen de donkerblauwe tegels weg tegen de
-          achtergrond. */}
+          is het eerste wat je ziet in een leeg gesprek. Het teken is getekend
+          voor een lichte ondergrond: in donkere modus zetten we het daarom op
+          een licht tegeltje (zoals een app-icoon) in plaats van op een doorzichtig
+          vlak — anders zakken de donkerblauwe tegels weg in de achtergrond. */}
       <img
         src="/promptplein-mark.png"
         alt=""
         aria-hidden="true"
-        className="h-14 w-14 rounded-2xl object-contain dark:bg-white/10 dark:p-1.5 dark:ring-1 dark:ring-white/15"
+        className="h-14 w-14 rounded-2xl object-contain dark:bg-slate-100 dark:p-1.5 dark:ring-1 dark:ring-white/20"
       />
       <div>
         <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
           Waarmee kan ik je helpen?
         </h2>
         <p className="mx-auto mt-1 max-w-md text-sm text-slate-500 dark:text-slate-400">
-          Stel een vraag of upload een document (PDF, Word of tekst) om het te laten analyseren.
+          Stel een vraag of kies een voorbeeld
         </p>
       </div>
 
       <div className="w-full max-w-2xl">
-        {/* Zonder deze regel lijkt een voorbeeld een knop die meteen iets doet.
-            Hij zegt dus expliciet wat er gebeurt: invullen, dan zelf versturen. */}
-        <p className="mb-2 text-xs text-slate-400 dark:text-slate-500">
-          Of kies een voorbeeld — je vult het aan in het tekstvak en verstuurt het zelf.
-        </p>
-
         {/* Op kleine schermen tonen we drie sjablonen, zodat de chat klein begint
             en pas met het gesprek meegroeit. */}
         <div className="grid gap-2 sm:grid-cols-2">
-          {STARTERS.map((starter, i) => (
+          {STARTERS.map((starter, i) => {
+            const category = PROMPT_CATEGORIES[starter.category];
+            return (
             <button
               key={starter.title}
               type="button"
@@ -146,9 +144,9 @@ export default function ChatEmptyState({ onPick }: { onPick: (text: string) => v
                 i >= 3 && 'hidden sm:flex',
               )}
               onClick={() => onPick(starter.template)}
-              title="Zet dit sjabloon in het tekstvak"
+              title={`${category.label} — zet dit sjabloon in het tekstvak`}
             >
-              <starter.icon size={15} className="mt-0.5 shrink-0 text-rijksblauw-500" />
+              <category.icon size={15} className="mt-0.5 shrink-0 text-rijksblauw-500" />
               <span className="min-w-0">
                 <span className="block text-xs font-medium text-slate-700 dark:text-slate-200">
                   {starter.title}
@@ -158,7 +156,8 @@ export default function ChatEmptyState({ onPick }: { onPick: (text: string) => v
                 </span>
               </span>
             </button>
-          ))}
+            );
+          })}
         </div>
       </div>
 

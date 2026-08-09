@@ -4,6 +4,7 @@ import {
   ArrowRight,
   Check,
   ChevronDown,
+  ClipboardCopy,
   Eraser,
   Info,
   Loader2,
@@ -11,12 +12,14 @@ import {
   Package,
   RotateCw,
   Sparkles,
+  Wand2,
 } from 'lucide-react';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import {
   generatePrompt,
+  inventTestAnswer,
   prefillFields,
   recommendFramework,
   runClarifyTurn,
@@ -28,6 +31,8 @@ import { usePersistentDraft } from '@/lib/usePersistentDraft';
 import { detectPii, detectBlockedTopics, type GuardrailFinding } from '@/services/guardrails';
 import { logBehavior, newBehaviorSession, type BehaviorSession } from '@/services/behaviorService';
 import { useAuth } from '@/context/AuthContext';
+import HoverPreview from '@/components/common/HoverPreview';
+import { GOAL_EXAMPLES } from '@/data/goalExamples';
 import type { AiSettings } from '@/services/settingsService';
 import OptimizingLoader from './OptimizingLoader';
 import PrefillLoader from './PrefillLoader';
@@ -48,13 +53,8 @@ import type {
 /** localStorage-sleutel voor een lopend gesprek (hervatten na herladen). */
 const RUN_STORAGE_KEY = 'opl.goalDialog';
 
-/** Voorbeelddoelen; klikken vult het doelveld. Bewust overheidscontext. */
-const GOAL_EXAMPLES = [
-  'Er moet een projectplan geschreven worden voor de invoering van een nieuwe interne tool.',
-  'Ik wil een formele brief opstellen die aansluit bij verschillende doelgroepen.',
-  'Ik wil een adviesnota maken met een vaste structuur en een heldere onderbouwing.',
-  'Help me een communicatieplan op te zetten voor een nieuwe dienstverlening.',
-];
+// De voorbeelddoelen staan in data/goalExamples.ts: dezelfde lijst voedt de
+// losse techniek-aanbeveling, zodat je overal dezelfde voorbeelden ziet.
 
 /** De naar localStorage geschreven snapshot van een lopend gesprek. */
 interface PersistedRun {
@@ -149,7 +149,7 @@ export default function GoalDialog({
   projectContext,
 }: GoalDialogProps) {
   const { techniques, techniqueById } = useReferenceData();
-  const { profile, user } = useAuth();
+  const { profile, user, isAdmin } = useAuth();
 
   // Gedragslog-sessie voor deze run + een korte log-helper (fire-and-forget).
   const sessionRef = useRef<BehaviorSession>(newBehaviorSession());
@@ -184,6 +184,15 @@ export default function GoalDialog({
 
   // Het gesprek: gestelde vraag, het transcript en het antwoordveld.
   const [question, setQuestion] = useState<string | null>(null);
+  // Beheerder laat een testantwoord verzinnen (zie handleInventAnswer).
+  const [inventing, setInventing] = useState(false);
+  // De techniek die de AI nu volgt + waarom, zoals getoond boven de vraag. Blijft
+  // staan als een beurt die meta-regels niet meestuurt; hij wordt alleen
+  // overschreven door een nieuwe analyse.
+  const [analysis, setAnalysis] = useState<{ technique?: string; text?: string } | null>(null);
+  // Als ref erbij: `turn()` draait door in dezelfde tick waarin de analyse wordt
+  // gezet, en leest de state-waarde dan nog niet.
+  const analysisRef = useRef<{ technique?: string; text?: string } | null>(null);
   const [transcript, setTranscript] = useState<TranscriptTurn[]>([]);
   const [answer, setAnswer] = useState('');
   const [busy, setBusy] = useState(false);
@@ -251,6 +260,16 @@ export default function GoalDialog({
     }
   }, [phase, goal, transcript]);
 
+  /** Kopieer een voorbeelddoel naar het klembord. */
+  async function copyExample(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success('Voorbeeld gekopieerd.');
+    } catch {
+      toast.error('Kopiëren mislukt.');
+    }
+  }
+
   /** Wis doel + gesprek en begin schoon. */
   function handleClear() {
     if (transcript.length > 0 && phase !== 'goal') {
@@ -261,6 +280,8 @@ export default function GoalDialog({
     setResumable(null);
     setPhase('goal');
     setQuestion(null);
+    setAnalysis(null);
+    analysisRef.current = null;
     setTranscript([]);
     setAnswer('');
     setBrief(null);
@@ -327,6 +348,8 @@ export default function GoalDialog({
     setError(null);
     setTranscript([]);
     setQuestion(null);
+    setAnalysis(null);
+    analysisRef.current = null;
     setAnswer('');
     setBrief(null);
     clearRunDraft();
@@ -353,6 +376,12 @@ export default function GoalDialog({
         preferredProvider: settings.provider,
         preferredModel: settings.model,
         projectContext,
+        // Alleen de losse technieken: hieruit kiest het gesprek de techniek
+        // waarvan het de bouwstenen uitvraagt. Frameworks komen pas ná de
+        // opdrachtbeschrijving aan bod.
+        techniques: techniques.filter((t) => !isContextPrompt(t)),
+        // Eenmaal gekozen blijft de techniek staan; zie runClarifyTurn.
+        lockedTechnique: analysisRef.current?.technique,
       });
       if (res.unclear) {
         // De beschrijving is onbruikbaar: terug naar het doelveld met uitleg.
@@ -363,6 +392,11 @@ export default function GoalDialog({
       }
       if (res.needs_input && res.question) {
         setQuestion(res.question);
+        if (res.technique || res.analysis) {
+          const next = { technique: res.technique, text: res.analysis };
+          analysisRef.current = next;
+          setAnalysis(next);
+        }
         setAnswer('');
         log('interview_question', { metadata: { turn: turns.length + 1 } });
         return;
@@ -383,6 +417,34 @@ export default function GoalDialog({
     } finally {
       setBusy(false);
       setFinishing(false);
+    }
+  }
+
+  /**
+   * Beheerdershulp: laat de AI een geloofwaardig antwoord op de openstaande vraag
+   * verzinnen en zet dat in het antwoordveld. Bedoeld om de vragenronde te kunnen
+   * testen zonder elke vraag zelf te beantwoorden; de beheerder ziet het antwoord
+   * staan en verstuurt het zelf, net als een getypt antwoord.
+   */
+  async function handleInventAnswer() {
+    if (!question || inventing) return;
+    setInventing(true);
+    try {
+      const invented = await inventTestAnswer({
+        goal: goalRef.current.trim(),
+        question,
+        transcript,
+        preferredProvider: settings.provider,
+        preferredModel: settings.model,
+        projectContext,
+      });
+      if (!invented) {
+        toast.error('Er kon geen testantwoord worden verzonnen.');
+        return;
+      }
+      setAnswer(stripMarkdown(invented));
+    } finally {
+      setInventing(false);
     }
   }
 
@@ -684,21 +746,58 @@ export default function GoalDialog({
                   className="animate-fade-in mb-3 space-y-2 rounded-xl border border-rijksblauw-200 bg-rijksblauw-50/40 p-3 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10"
                 >
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Voorbeelden van samengestelde doelen. Klik om er één in te vullen.
+                    Zo omschrijf je een doel. Achter elk voorbeeld zit de prompttechniek waar zo’n
+                    omschrijving op uitkomt. Klik om er één in te vullen.
                   </p>
-                  {GOAL_EXAMPLES.map((ex) => (
-                    <button
-                      key={ex}
-                      type="button"
-                      onClick={() => {
-                        setGoal(ex);
-                        setShowExamples(false);
-                      }}
-                      className="block w-full rounded-lg border border-slate-200 bg-white p-2.5 text-left text-sm leading-relaxed text-slate-600 transition-colors hover:border-rijksblauw-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700/60"
-                    >
-                      {ex}
-                    </button>
-                  ))}
+                  {/* Zelfde kaartsjabloon als de voorbeeldprompts bij "Jouw eigen
+                      prompt": techniek, titel, één regel toelichting, en rechts
+                      kopiëren of gebruiken. De doelomschrijving zelf staat er niet
+                      onder — die zou de lijst onleesbaar lang maken; hij komt in
+                      het veld zodra je op "Gebruik" klikt. */}
+                  <div className="opl-scroll-slim max-h-[22rem] space-y-2 overflow-y-auto pr-1">
+                    {GOAL_EXAMPLES.map((ex) => (
+                      <HoverPreview key={ex.title} label="Doelomschrijving" text={ex.goal}>
+                      <div className="group rounded-lg border border-slate-200 bg-white p-2.5 transition-colors hover:border-rijksblauw-300 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-rijksblauw-500/40">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-rijksblauw-600 dark:text-rijksblauw-300">
+                              <ex.icon size={12} className="shrink-0" />
+                              {ex.technique}
+                            </span>
+                            <p className="mt-0.5 text-sm font-semibold text-slate-800 dark:text-slate-100">
+                              {ex.title}
+                            </p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                              {ex.subtitle}
+                            </p>
+                          </div>
+                          <div className="flex shrink-0 gap-1">
+                            <button
+                              type="button"
+                              onClick={() => void copyExample(ex.goal)}
+                              title="Kopieer voorbeeld"
+                              className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs text-slate-500 transition-colors hover:bg-slate-100 hover:text-rijksblauw-600 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-rijksblauw-300"
+                            >
+                              <ClipboardCopy size={13} /> Kopieer
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setGoal(ex.goal);
+                                setShowExamples(false);
+                                toast.success('Voorbeeld ingevuld.');
+                              }}
+                              title="Gebruik dit voorbeeld in het invoerveld"
+                              className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-rijksblauw-600 transition-colors hover:bg-rijksblauw-50 dark:text-rijksblauw-300 dark:hover:bg-rijksblauw-500/15"
+                            >
+                              <Wand2 size={13} /> Gebruik
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      </HoverPreview>
+                    ))}
+                  </div>
                 </div>
               )}
 
@@ -711,9 +810,9 @@ export default function GoalDialog({
                 onChange={(e) => setGoal(e.target.value)}
               />
               <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                We denken stap voor stap met je mee en stellen vraag voor vraag alles wat we moeten
-                weten. Zodra het beeld compleet is, bepalen we welk framework past en bouwen we je
-                prompt.
+                We kijken eerst welke prompttechniek bij jouw doel past en halen daar vraag voor
+                vraag de bouwstenen bij op. Zodra het beeld compleet is, bepalen we welk framework
+                past en bouwen we je prompt.
               </p>
 
               {/* Hervat-melding: er staat nog een niet-afgemaakt gesprek klaar. */}
@@ -871,7 +970,10 @@ export default function GoalDialog({
             ) : (
               <InterviewPanel
                 socratic={false}
-                intro="We stellen één vraag per keer, tot je vraagstuk compleet in beeld is. De laatste vragen gaan over hoe en waar je de prompt straks gebruikt. Klaar met antwoorden? Rond dan af — we werken verder met wat er ligt."
+                analysis={analysis}
+                onInventAnswer={isAdmin ? handleInventAnswer : undefined}
+                inventing={inventing}
+                intro="We stellen één vraag per keer: eerst wat je wilt bereiken, daarna de bouwstenen van de techniek die daarbij past."
                 question={question}
                 transcript={transcript}
                 answer={answer}

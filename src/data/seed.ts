@@ -280,6 +280,144 @@ Geef een meta-analyse van je aanpak, gevolgd door een verbeterde versie van de o
 Oorspronkelijke opdracht:
 {{PROMPT}}`,
   },
+  // --- Extra technieken: zie migratie 0031_extra_techniques.sql ---
+  {
+    id: 'tech-chain-of-verification',
+    name: 'Chain-of-Verification',
+    description:
+      'Laat de AI het eigen concept natrekken met verificatievragen voordat het definitief wordt.',
+    strength:
+      'Sterk tegen fouten die er geloofwaardig uitzien. Het model stelt eerst controlevragen bij zijn eigen tekst, beantwoordt die apart, en levert daarna een gecorrigeerde versie plus een lijst van wat nog door een mens geverifieerd moet worden.',
+    use_cases: [
+      'Een Kamerbrief, nota of besluit controleren voordat hij de deur uitgaat',
+      'Cijfers, data en verwijzingen naar wetgeving natrekken',
+      'Onderbouwde beweringen scheiden van wat nog uitgezocht moet worden',
+    ],
+    follow_up_questions: [
+      { id: 'gewenst_doel', label: 'Gewenst doel — wat wil je bereiken?', placeholder: 'Bijv. een concept-Kamerbrief die feitelijk klopt voordat hij naar de bewindspersoon gaat' },
+      { id: 'te_controleren', label: 'Welke tekst moet gecontroleerd worden?', placeholder: 'Bijv. de conceptbrief hieronder' },
+      { id: 'risico', label: 'Welke fouten zijn hier het duurst?', placeholder: 'Bijv. verkeerde cijfers, onjuiste wetsartikelen, toezeggingen die niet zijn gedaan' },
+      { id: 'bronnen', label: 'Wat mag als bron gelden?', placeholder: 'Bijv. alleen de meegestuurde stukken en eerdere Kamerbrieven over dit dossier' },
+    ],
+    template: `Gewenst doel: {{gewenst_doel}}
+
+Controleer de onderstaande tekst voordat hij wordt opgeleverd: {{te_controleren}}
+
+Werk in vier stappen en toon elke stap:
+1. Haal alle controleerbare beweringen uit de tekst (feiten, cijfers, data, verwijzingen, toezeggingen).
+2. Formuleer per bewering één verificatievraag waarmee die te controleren is.
+3. Beantwoord elke verificatievraag afzonderlijk, uitsluitend op basis van: {{bronnen}}. Kun je een vraag daarmee niet beantwoorden, schrijf dan "niet te verifiëren met de aangeleverde bronnen".
+4. Lever een gecorrigeerde versie van de tekst, gevolgd door een lijst "nog te verifiëren door een mens".
+
+Let extra op: {{risico}}. Corrigeer niets op basis van eigen aannames en verwijder liever een bewering dan dat je hem aanvult met iets wat je niet kunt onderbouwen.
+
+Oorspronkelijke opdracht:
+{{PROMPT}}`,
+  },
+  {
+    id: 'tech-step-back',
+    name: 'Step-Back Prompting',
+    description:
+      'Zoom eerst uit naar het onderliggende vraagstuk voordat je de concrete vraag beantwoordt.',
+    strength:
+      'Sterk wanneer de gestelde vraag misschien niet de juiste vraag is. Het model benoemt eerst het bredere vraagstuk en de uitgangspunten die daar gelden, en past die pas daarna toe op jouw geval — waardoor een verkeerd gestelde opdracht zichtbaar wordt.',
+    use_cases: [
+      'Een probleemanalyse maken voordat je een oplossingsrichting kiest',
+      'Toetsen of een voorgestelde maatregel het echte probleem raakt',
+      'Een smal geformuleerde opdracht van boven terugbrengen tot het vraagstuk',
+    ],
+    follow_up_questions: [
+      { id: 'gewenst_doel', label: 'Gewenst doel — wat wil je bereiken?', placeholder: 'Bijv. weten of de voorgestelde maatregel het echte probleem oplost' },
+      { id: 'concrete_vraag', label: 'Wat is de concrete vraag of opdracht die nu voorligt?', placeholder: 'Bijv. werk een meldplicht uit voor deze sector' },
+      { id: 'aanname', label: 'Welke oplossing of richting ligt er al op tafel?', placeholder: 'Bijv. er is al besloten dat het een meldplicht wordt' },
+      { id: 'kader', label: 'Welke kaders of uitgangspunten gelden hier?', placeholder: 'Bijv. uitvoerbaarheid, regeldruk, bestaande wetgeving' },
+    ],
+    template: `Gewenst doel: {{gewenst_doel}}
+
+Beantwoord de vraag hieronder NIET meteen. Werk eerst terug naar het vraagstuk erachter.
+
+Concrete vraag: {{concrete_vraag}}
+Wat er al op tafel ligt: {{aanname}}
+Geldende kaders: {{kader}}
+
+Werkwijze:
+1. Formuleer de algemenere vraag achter deze vraag: welk probleem wordt hier eigenlijk opgelost, en voor wie?
+2. Benoem de uitgangspunten, kaders en werkende mechanismen die op dat niveau gelden.
+3. Pas die pas daarna toe op de concrete vraag.
+4. Geef expliciet aan waar de concrete vraag afwijkt van het onderliggende vraagstuk, en welke vraag beter gesteld kan worden.
+
+Oorspronkelijke opdracht:
+{{PROMPT}}`,
+  },
+  {
+    id: 'tech-bronbinding',
+    name: 'Bronbinding',
+    description:
+      'Laat de AI uitsluitend antwoorden op basis van de meegeleverde stukken, met een verwijzing per bewering.',
+    strength:
+      'Sterk wanneer het antwoord controleerbaar moet zijn. Het model mag niets uit eigen kennis toevoegen: elke bewering krijgt een vindplaats, en wat niet in de stukken staat wordt als ontbrekend benoemd in plaats van ingevuld.',
+    use_cases: [
+      'Vragen beantwoorden uit een dossier, inventarisatie of set Kamerstukken',
+      'Een samenvatting maken die herleidbaar is naar de bron',
+      'Een concept feitelijk checken tegen de onderliggende stukken',
+    ],
+    follow_up_questions: [
+      { id: 'gewenst_doel', label: 'Gewenst doel — wat wil je bereiken?', placeholder: 'Bijv. een antwoord op feitelijke vragen dat volledig uit het dossier komt' },
+      { id: 'bronnen', label: 'Welke stukken zijn de bron?', placeholder: 'Bijv. de vier meegestuurde documenten en verder niets' },
+      { id: 'verwijzing', label: 'Hoe moet er verwezen worden?', placeholder: 'Bijv. tussen haakjes de documentnaam en het paginanummer' },
+      { id: 'ontbreekt', label: 'Wat als het antwoord niet in de stukken staat?', placeholder: 'Bijv. schrijf "staat niet in de stukken" en zet het onder open punten' },
+    ],
+    template: `Gewenst doel: {{gewenst_doel}}
+
+Gebruik UITSLUITEND de volgende bronnen: {{bronnen}}. Voeg geen kennis van buiten deze stukken toe, ook niet als je het antwoord meent te weten.
+
+Regels:
+- Zet achter elke bewering een verwijzing naar de vindplaats: {{verwijzing}}.
+- Kun je iets niet uit de bronnen halen? Dan geldt: {{ontbreekt}}. Vul het nooit zelf aan en leid het niet af.
+- Geef bij tegenstrijdigheden tussen bronnen beide lezingen weer, met de vindplaats erbij.
+- Scheid aan het eind wat vaststaat op basis van de stukken van wat nog moet worden opgevraagd.
+
+Oorspronkelijke opdracht:
+{{PROMPT}}`,
+  },
+  {
+    id: 'tech-rubric',
+    name: 'Rubric-toetsing',
+    description:
+      'Beoordeel een stuk tegen een vooraf vastgelegd toetsingskader, met een score en onderbouwing per criterium.',
+    strength:
+      'Sterk wanneer het oordeel navolgbaar moet zijn. Het model scoort elk criterium apart en onderbouwt die score met een passage uit het stuk, zodat een eindoordeel niet op een onderbuikgevoel rust maar op het kader.',
+    use_cases: [
+      'Een uitvoeringstoets, regeldruktoets of kwaliteitstoets op een concept',
+      'Subsidieaanvragen of offertes beoordelen tegen vaste criteria',
+      'Meerdere beoordelaars tot vergelijkbare uitkomsten laten komen',
+    ],
+    follow_up_questions: [
+      { id: 'gewenst_doel', label: 'Gewenst doel — wat wil je bereiken?', placeholder: 'Bijv. een navolgbaar oordeel over vier subsidieaanvragen' },
+      { id: 'te_beoordelen', label: 'Wat wordt er beoordeeld?', placeholder: 'Bijv. de aanvraag die ik meestuur' },
+      { id: 'criteria', label: 'Welke criteria staan in het toetsingskader?', placeholder: 'Bijv. doelbereik, uitvoerbaarheid, regeldruk, kosten, risico' },
+      { id: 'schaal', label: 'Welke schaal of scores gebruik je?', placeholder: 'Bijv. voldoet / voldoet deels / voldoet niet' },
+      { id: 'weging', label: 'Wegen de criteria even zwaar?', placeholder: 'Bijv. uitvoerbaarheid telt dubbel, de rest gelijk' },
+      { id: 'drempel', label: 'Wanneer is het geheel voldoende?', placeholder: 'Bijv. geen enkel criterium op "voldoet niet"' },
+    ],
+    template: `Gewenst doel: {{gewenst_doel}}
+
+Beoordeel het volgende tegen het toetsingskader: {{te_beoordelen}}
+
+Toetsingskader:
+- Criteria: {{criteria}}
+- Schaal: {{schaal}}
+- Weging: {{weging}}
+- Drempel voor een voldoende geheel: {{drempel}}
+
+Lever een tabel met per criterium: het criterium, de score, de onderbouwing met een letterlijke passage uit het beoordeelde stuk, en het belangrijkste verbeterpunt. Geef daarna het eindoordeel met de weging erin verwerkt, en noem apart de zwaarste tekortkoming.
+
+Beoordeel alleen op de genoemde criteria. Ontbreekt informatie om een criterium te scoren, geef dan "niet te beoordelen" met wat er nog nodig is; vul niets aan.
+
+Oorspronkelijke opdracht:
+{{PROMPT}}`,
+  },
+
   {
     id: 'tech-crisp',
     name: 'CRISP',

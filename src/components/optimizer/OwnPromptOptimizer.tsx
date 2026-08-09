@@ -19,6 +19,8 @@ import {
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import { useReferenceData } from '@/context/ReferenceDataContext';
+import HoverPreview from '@/components/common/HoverPreview';
+import { PROMPT_CATEGORIES, type PromptCategoryId } from '@/data/promptCategories';
 import { isContextPrompt, localFrameworkGuess } from '@/lib/techniques';
 import { usePersistentDraft } from '@/lib/usePersistentDraft';
 import { stripMarkdown } from '@/lib/utils';
@@ -73,37 +75,125 @@ interface OwnPromptOptimizerProps {
   projectContext?: string;
 }
 
-/** Voorbeeldprompts per raamwerk; uitklapbaar als hulp/inspiratie en om te testen. */
-const PROMPT_EXAMPLES: { framework: string; prompt: string }[] = [
+/**
+ * Voorbeeldprompts als hulp, inspiratie en om mee te testen.
+ *
+ * Bewust géén raamwerknaam op het kaartje: welk raamwerk past, zoekt de AI in de
+ * volgende stap uit — dat is precies wat deze pagina doet. De gebruiker herkent
+ * zijn werk aan het soort taak, niet aan CRISPE of CO-STAR. Vandaar een titel,
+ * een subtitel en een categorie uit dezelfde lijst als de startsjablonen in de
+ * chat.
+ *
+ * De voorbeelden gaan over rijkswerk en noemen de producten waar dat werk uit
+ * bestaat: Kamerbrieven en beslisnota's, de stappen van het Beleidskompas,
+ * BNC-fiches bij Commissievoorstellen, Woo-besluiten met uitzonderingsgronden,
+ * inspectierapporten, publieksteksten. Elk voorbeeld is een prompt die iemand
+ * echt zo zou kunnen indienen: concreet genoeg om te optimaliseren, algemeen
+ * genoeg om je eigen dossier ervoor in de plaats te zetten.
+ */
+const PROMPT_EXAMPLES: {
+  category: PromptCategoryId;
+  title: string;
+  subtitle: string;
+  prompt: string;
+}[] = [
   {
-    framework: 'CRISPE',
+    category: 'beleid',
+    title: 'Beleidsvoorstel onderbouwen',
+    subtitle: 'Probleem, doel, opties en gevolgen langs het Beleidskompas',
     prompt:
-      'Maak een advies voor een gemeente die AI wil inzetten om interne werkprocessen te verbeteren. Neem de huidige situatie, rollen, risico’s, stappen, randvoorwaarden en het gewenste eindresultaat mee.',
+      'Help me een beleidsvoorstel onderbouwen langs de stappen van het Beleidskompas: wat is het probleem en waaruit blijkt dat, wat is het beoogde doel, welke beleidsopties zijn er (inclusief niets doen), wat zijn de gevolgen van elke optie en welke optie heeft de voorkeur. Benoem per stap welke belanghebbenden ik moet betrekken en welke onderbouwing ik nog mis.',
   },
   {
-    framework: 'RAISE',
+    category: 'bestuurlijk',
+    title: 'Beslisnota bij een Kamerbrief',
+    subtitle: 'Kernboodschap, opties en risico’s voor de bewindspersoon',
     prompt:
-      'Herschrijf deze interne instructietekst voor ambtenaren naar duidelijke en praktische taal. Gebruik de aangeleverde tekst als basis en zorg dat medewerkers direct weten wat ze moeten doen.',
+      'Schrijf een beslisnota bij een Kamerbrief voor de bewindspersoon. Geef de kernboodschap in drie zinnen, het gevraagde besluit, de belangrijkste overwegingen, de politieke gevoeligheden, de uitvoerbaarheid volgens de uitvoeringsorganisatie en de risico’s als we niets doen. Sluit af met een helder dictum. Maximaal twee pagina’s, zakelijk en zonder bijvoeglijke naamwoorden die niets toevoegen.',
   },
   {
-    framework: 'CO-STAR',
+    category: 'bestuurlijk',
+    title: 'Schriftelijke Kamervragen beantwoorden',
+    subtitle: 'Feitelijk per vraag, consistent met eerdere standpunten',
     prompt:
-      'Schrijf een korte intranettekst voor rijksambtenaren over een nieuwe training veilig werken met AI. De tekst moet duidelijk maken waarom deelname belangrijk is, voor wie de training bedoeld is en wat deelnemers eraan hebben.',
+      'Maak een concept-antwoord op een set schriftelijke Kamervragen over de uitvoering van een regeling. Beantwoord elke vraag apart en feitelijk, blijf consistent met eerdere kabinetsstandpunten, geef geen informatie prijs die nog niet openbaar is, en markeer duidelijk welke cijfers ik bij de uitvoeringsorganisatie moet ophalen. Verzin geen cijfers of bronnen.',
   },
   {
-    framework: 'CRAFT',
+    category: 'europa',
+    title: 'BNC-fiche bij een Commissievoorstel',
+    subtitle: 'Nederlandse beoordeling van een nieuw EU-voorstel',
     prompt:
-      'Maak een zakelijke memo voor het managementteam over de invoering van een nieuwe AI-tool binnen de organisatie. Gebruik een professionele toon en lever de output op als korte managementsamenvatting met vervolgstappen.',
+      'Help me een BNC-fiche opstellen over een nieuw voorstel van de Europese Commissie. Vat eerst inhoud en doel van het voorstel samen. Werk daarna de Nederlandse beoordeling uit: bevoegdheid, subsidiariteit en proportionaliteit met motivering, financiële gevolgen voor rijksbegroting en EU-begroting, gevolgen voor regeldruk, uitvoering en handhaving, en een inschatting van het krachtenveld in de Raad en het Europees Parlement.',
   },
   {
-    framework: 'CREATE',
+    category: 'openbaarheid',
+    title: 'Woo-verzoek behandelen',
+    subtitle: 'Inventarisatie, uitzonderingsgronden en besluitbrief',
     prompt:
-      'Bedenk drie creatieve campagne-ideeën om ambtenaren enthousiast te maken voor een programma over digitale vaardigheden. Geef elk idee een titel, een korte slogan en een praktische uitwerking.',
+      'Help me een Woo-verzoek behandelen. Stel eerst voor hoe ik het verzoek afbaken en met de verzoeker preciseer. Geef daarna een werkwijze om de documenten te inventariseren, per document te wegen welke uitzonderingsgronden uit de Woo kunnen spelen en hoe ik het algemeen belang van openbaarheid tegen die belangen afweeg. Sluit af met een opzet voor de besluitbrief met een motivering die een burger kan volgen. Ik laat het eindresultaat door een jurist toetsen.',
   },
   {
-    framework: 'REACT',
+    category: 'begrijpelijk',
+    title: 'Standaardbrief naar begrijpelijke taal',
+    subtitle: 'Formele beschikking omzetten naar taalniveau B1',
     prompt:
-      'Controleer een conceptbeleidstekst stap voor stap op duidelijkheid, AVG-risico’s en toepasbaarheid voor ambtenaren. Beoordeel de belangrijkste aandachtspunten, voer verbeteringen door, controleer het resultaat en geef een korte terugkoppeling.',
+      'Herschrijf een standaardbrief van onze uitvoeringsorganisatie naar begrijpelijk Nederlands op taalniveau B1. Houd de juridische strekking, de wettelijke grondslag en de rechtsmiddelenverwijzing volledig intact. Gebruik korte zinnen, actieve taal en aanspreekvorm "u", zet vooraan wat de ontvanger moet doen, en leg vaktermen uit in gewone woorden. Geef er een lijstje bij van de vaktermen die je hebt vervangen.',
+  },
+  {
+    category: 'burgercontact',
+    title: 'Reactie op een klacht van een burger',
+    subtitle: 'Erkennen wat misging zonder toezeggingen te doen',
+    prompt:
+      'Schrijf een reactie op een boze brief van iemand over de afhandeling van zijn aanvraag. Erken wat er is misgegaan, leg feitelijk uit welke stappen zijn gezet en wat er nu gebeurt, en noem alleen termijnen die vaststaan. Wijs op de mogelijkheid om een klacht in te dienen of naar de Nationale ombudsman te gaan. Rustig en respectvol van toon, geen jargon, maximaal 300 woorden.',
+  },
+  {
+    category: 'samenvatten',
+    title: 'Rapport samenvatten voor de leiding',
+    subtitle: 'Bevindingen, aannames en wat het voor ons betekent',
+    prompt:
+      'Vat een lang onderzoeksrapport samen voor de directie. Geef de belangrijkste bevindingen, de aanbevelingen die ons departement raken, de aannames waarop de conclusies rusten en de beperkingen van het onderzoek. Zet er een korte passage onder over wat dit betekent voor ons lopende beleid. Houd strikt gescheiden wat in het rapport staat en wat een eigen conclusie zou zijn.',
+  },
+  {
+    category: 'onderzoek',
+    title: 'Uitvraag voor een extern onderzoek',
+    subtitle: 'Onderzoeksvragen, afbakening en beoordelingscriteria',
+    prompt:
+      'Help me een uitvraag opstellen voor een extern evaluatieonderzoek naar een subsidieregeling. Formuleer een scherpe hoofdvraag en deelvragen die te beantwoorden zijn, de afbakening in tijd en doelgroep, de gewenste methode, de op te leveren producten en de criteria waarop ik de offertes ga beoordelen. Benoem ook welke gegevens wij zelf moeten aanleveren.',
+  },
+  {
+    category: 'toezicht',
+    title: 'Inspectiebevindingen opschrijven',
+    subtitle: 'Waarneming, norm en oordeel navolgbaar scheiden',
+    prompt:
+      'Help me de bevindingen van een inspectiebezoek opschrijven in een rapportbrief aan de onder toezicht staande organisatie. Scheid per bevinding de waarneming, de norm met wetsartikel, het oordeel en de gevraagde maatregel met termijn. Schrijf zo dat het oordeel navolgbaar blijft in een eventuele bezwaarprocedure, en vermijd woorden die een oordeel suggereren zonder onderbouwing.',
+  },
+  {
+    category: 'communicatie',
+    title: 'Publieksuitleg bij nieuw beleid',
+    subtitle: 'Webtekst met Q&A over wat er verandert',
+    prompt:
+      'Schrijf een publiekstekst over een maatregel die binnenkort ingaat, met daaronder een Q&A van vijf vragen die mensen echt gaan stellen. Maak duidelijk wat er verandert, vanaf wanneer, voor wie het geldt, wat iemand zelf moet doen en waar hij terechtkan met vragen. Informerend en neutraal van toon, niet wervend, en zonder beleidstaal.',
+  },
+  {
+    category: 'overleg',
+    title: 'Besluitenlijst van een interdepartementaal overleg',
+    subtitle: 'Besluiten, acties met eigenaar en de openstaande punten',
+    prompt:
+      'Maak van mijn aantekeningen van een interdepartementaal overleg een besluitenlijst. Geef de genomen besluiten, de actiepunten met eigenaar en termijn, de standpunten waarop departementen van elkaar verschillen en de punten die doorschuiven naar het volgende overleg. Houd het feitelijk en zet onduidelijke punten apart onder "na te vragen".',
+  },
+  {
+    category: 'privacy',
+    title: 'DPIA voorbereiden bij gegevensuitwisseling',
+    subtitle: 'Gegevensstromen, grondslag, risico’s en maatregelen',
+    prompt:
+      'Help me een DPIA voorbereiden voor een nieuwe gegevensuitwisseling met een uitvoeringsorganisatie. Breng de gegevensstromen, de doelen, de betrokkenen en de grondslagen in kaart, toets aan doelbinding en dataminimalisatie, benoem de risico’s voor betrokkenen met mogelijke maatregelen, en geef de vragen die ik aan de functionaris gegevensbescherming moet voorleggen. Dit vervangt geen juridisch advies.',
+  },
+  {
+    category: 'inkoop',
+    title: 'Programma van eisen voor een aanbesteding',
+    subtitle: 'Functionele eisen, wensen en gunningscriteria',
+    prompt:
+      'Help me een programma van eisen opstellen voor de aanbesteding van een dienst. Splits harde eisen en wensen, formuleer ze functioneel en meetbaar in plaats van productgericht, en stel gunningscriteria voor met een weging en de manier waarop ik ze beoordeel. Neem eisen op voor digitale toegankelijkheid, informatiebeveiliging, gegevensbescherming en het voorkomen van leveranciersafhankelijkheid.',
   },
 ];
 
@@ -556,40 +646,57 @@ export default function OwnPromptOptimizer({
             className="animate-fade-in mb-3 space-y-2 rounded-xl border border-rijksblauw-200 bg-rijksblauw-50/40 p-3 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10"
           >
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Voorbeeldprompts om te testen. Klik op het voorbeeld om het in te vullen, of kopieer
-              het.
+              Voorbeeldprompts uit het rijkswerk. Klik op "Gebruik" om er een in het invoerveld te
+              zetten, en pas hem aan naar je eigen dossier.
             </p>
-            {PROMPT_EXAMPLES.map((ex) => (
-              <div
-                key={ex.framework}
-                className="group rounded-lg border border-slate-200 bg-white p-2.5 dark:border-slate-700 dark:bg-slate-800"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <span className="opl-badge bg-rijksoranje/15 text-rijksoranje">{ex.framework}</span>
-                  <div className="flex shrink-0 gap-1">
-                    <button
-                      type="button"
-                      onClick={() => void copyExample(ex.prompt)}
-                      title="Kopieer voorbeeld"
-                      className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs text-slate-500 transition-colors hover:bg-slate-100 hover:text-rijksblauw-600 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-rijksblauw-300"
-                    >
-                      <ClipboardCopy size={13} /> Kopieer
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => useExample(ex.prompt)}
-                      title="Gebruik dit voorbeeld in het invoerveld"
-                      className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-rijksblauw-600 transition-colors hover:bg-rijksblauw-50 dark:text-rijksblauw-300 dark:hover:bg-rijksblauw-500/15"
-                    >
-                      <Wand2 size={13} /> Gebruik
-                    </button>
+            {/* Vaste hoogte met eigen schuifbalk: de lijst is bewust lang (er is
+                veel verschillend werk), maar mag de pagina niet wegdrukken. */}
+            <div className="opl-scroll-slim max-h-[24rem] space-y-2 overflow-y-auto pr-1">
+              {PROMPT_EXAMPLES.map((ex) => {
+                const category = PROMPT_CATEGORIES[ex.category];
+                return (
+                  // De prompt zelf staat niet op het kaartje (dan wordt de lijst
+                  // onleesbaar lang); wie hem vooraf wil lezen, houdt de muis
+                  // erboven of zet hem met "Gebruik" in het veld.
+                  <HoverPreview key={ex.title} label="Voorbeeldprompt" text={ex.prompt}>
+                  <div
+                    className="group rounded-lg border border-slate-200 bg-white p-2.5 transition-colors hover:border-rijksblauw-300 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-rijksblauw-500/40"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-rijksblauw-600 dark:text-rijksblauw-300">
+                          <category.icon size={12} className="shrink-0" />
+                          {category.label}
+                        </span>
+                        <p className="mt-0.5 text-sm font-semibold text-slate-800 dark:text-slate-100">
+                          {ex.title}
+                        </p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">{ex.subtitle}</p>
+                      </div>
+                      <div className="flex shrink-0 gap-1">
+                        <button
+                          type="button"
+                          onClick={() => void copyExample(ex.prompt)}
+                          title="Kopieer voorbeeld"
+                          className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs text-slate-500 transition-colors hover:bg-slate-100 hover:text-rijksblauw-600 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-rijksblauw-300"
+                        >
+                          <ClipboardCopy size={13} /> Kopieer
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => useExample(ex.prompt)}
+                          title="Gebruik dit voorbeeld in het invoerveld"
+                          className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-rijksblauw-600 transition-colors hover:bg-rijksblauw-50 dark:text-rijksblauw-300 dark:hover:bg-rijksblauw-500/15"
+                        >
+                          <Wand2 size={13} /> Gebruik
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                </div>
-                <p className="mt-1.5 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
-                  {ex.prompt}
-                </p>
-              </div>
-            ))}
+                  </HoverPreview>
+                );
+              })}
+            </div>
           </div>
         )}
 

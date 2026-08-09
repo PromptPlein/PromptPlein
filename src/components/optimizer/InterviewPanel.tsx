@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowRight, Check, Loader2, MessageCircleQuestion } from 'lucide-react';
+import { ArrowRight, Check, Dices, Loader2, MessageCircleQuestion, Sparkles } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { runPlanStep } from '@/services/optimizeService';
 import { structureFormat } from '@/lib/techniques';
@@ -16,6 +16,7 @@ import type { PlanStep, Technique, TranscriptTurn } from '@/types';
 export function InterviewPanel({
   socratic,
   intro,
+  analysis,
   question,
   transcript,
   answer,
@@ -24,6 +25,8 @@ export function InterviewPanel({
   onAnswerChange,
   onSubmit,
   onFinish,
+  onInventAnswer,
+  inventing = false,
 }: {
   /** Socratisch: de AI stelt alleen vragen zodat JIJ tot inzicht komt (geen conclusie). */
   socratic: boolean;
@@ -33,6 +36,13 @@ export function InterviewPanel({
    * tekst neer: die dialoog kent een ander vragenmaximum.
    */
   intro?: string;
+  /**
+   * Wat de AI van het vraagstuk heeft gemaakt: de prompttechniek die ze nu volgt
+   * en waarom. Staat boven de vraag, zodat zichtbaar is waar de vragen vandaan
+   * komen in plaats van dat ze uit de lucht lijken te vallen. Afwezig = niets
+   * tonen (bijvoorbeeld in het plan-interview, waar de techniek al vaststaat).
+   */
+  analysis?: { technique?: string; text?: string } | null;
   question: string | null;
   transcript: TranscriptTurn[];
   answer: string;
@@ -45,6 +55,13 @@ export function InterviewPanel({
   onAnswerChange: (v: string) => void;
   onSubmit: () => void;
   onFinish: () => void;
+  /**
+   * Beheerdershulp: laat de AI een testantwoord op de huidige vraag verzinnen.
+   * Alleen meegeven als de gebruiker admin is — de knop verschijnt precies dan.
+   */
+  onInventAnswer?: () => void | Promise<void>;
+  /** Staat er nu een testantwoord te wachten? */
+  inventing?: boolean;
 }) {
   return (
     <div className="space-y-3">
@@ -73,6 +90,22 @@ export function InterviewPanel({
             </li>
           ))}
         </ul>
+      )}
+
+      {/* De techniek die de AI heeft gekozen, vlak boven de vraag: zo is zichtbaar
+          waar de vragen vandaan komen. Bewust één regel zonder toelichting — de
+          motivatie die het model meestuurt houdt de keuze scherp, maar hoort niet
+          op het scherm. stripMarkdown haalt de sterretjes eraf die het model er
+          soms omheen zet; het vet komt hier van de opmaak, niet van de tekst.
+          Kan tussen twee vragen wisselen als een antwoord de AI van gedachten
+          doet veranderen. */}
+      {analysis?.technique && (
+        <div className="flex items-center gap-2 rounded-xl border border-rijksblauw-200 bg-rijksblauw-50/70 px-3 py-2 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10">
+          <Sparkles size={15} className="shrink-0 text-rijksblauw-500" />
+          <p className="min-w-0 text-xs text-rijksblauw-700 dark:text-rijksblauw-200">
+            Techniek: <strong className="font-bold">{stripMarkdown(analysis.technique)}</strong>
+          </p>
+        </div>
       )}
 
       {/* De huidige vraag + antwoordveld, of een laadstaat terwijl de AI nadenkt. */}
@@ -107,6 +140,32 @@ export function InterviewPanel({
               }
             }}
           />
+          {/* Testknop, alleen voor beheerders: de aanroeper geeft deze handler
+              uitsluitend mee als de gebruiker admin is. Laat de AI een passend
+              antwoord verzinnen, zodat een beheerder de hele vragenronde kan
+              doorlopen zonder elke vraag zelf te beantwoorden. Het verzonnen
+              antwoord komt gewoon in het veld te staan en is dus zichtbaar en
+              aanpasbaar voordat het meetelt. */}
+          {onInventAnswer && (
+            <button
+              type="button"
+              className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-dashed border-rijksoranje/50 px-2 py-1 text-xs font-medium text-rijksoranje transition-colors hover:bg-rijksoranje/10 disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={() => void onInventAnswer()}
+              disabled={busy || inventing}
+              title="Alleen voor beheerders: laat de AI een testantwoord op deze vraag verzinnen"
+            >
+              {inventing ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : (
+                <Dices size={13} />
+              )}
+              {inventing ? 'Antwoord verzinnen…' : 'Verzin een testantwoord'}
+              <span className="rounded bg-rijksoranje/15 px-1 py-px text-[10px] uppercase tracking-wide">
+                admin
+              </span>
+            </button>
+          )}
+
           <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
             <button
               type="button"

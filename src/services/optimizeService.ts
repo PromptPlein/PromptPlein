@@ -1287,12 +1287,27 @@ export async function runClarifyTurn(args: {
    * Zonder deze context stelt de dialoog vragen die het project al beantwoordt.
    */
   projectContext?: string;
+  /**
+   * De losse technieken zoals ze nú in de database staan. De dialoog kiest
+   * daaruit de techniek waarvan hij de bouwstenen uitvraagt; zonder lijst valt
+   * de AI terug op wat ze zelf kent, en blijft een nieuw toegevoegde techniek
+   * onbereikbaar.
+   */
+  techniques?: Technique[];
+  /**
+   * De techniek die in de eerste beurt is gekozen. Elke volgende beurt sturen we
+   * hem terug, zodat het gesprek niet halverwege van techniek wisselt: de server
+   * kent geen sessie, dus zonder dit leidt het model de keuze telkens opnieuw af.
+   */
+  lockedTechnique?: string;
 }): Promise<ClarifyResult> {
   try {
     const data = await postOptimize<{
       success?: boolean;
       needs_input?: boolean;
       question?: string;
+      technique?: string;
+      analysis?: string;
       asked?: number;
       max?: number;
       done?: boolean;
@@ -1305,6 +1320,15 @@ export async function runClarifyTurn(args: {
       mode: 'clarify',
       goal: args.goal,
       transcript: args.transcript ?? [],
+      lockedTechnique: args.lockedTechnique,
+      techniques: (args.techniques ?? []).map((t) => ({
+        id: t.id,
+        name: t.name,
+        description: t.description,
+        strength: t.strength,
+        use_cases: t.use_cases,
+        family: t.family,
+      })),
       forceFinish: Boolean(args.forceFinish),
       preferredProvider: args.preferredProvider ?? 'auto',
       preferredModel: args.preferredModel,
@@ -1330,6 +1354,8 @@ export async function runClarifyTurn(args: {
         success: true,
         needs_input: true,
         question: data.question.trim(),
+        technique: data.technique?.trim() || undefined,
+        analysis: data.analysis?.trim() || undefined,
         asked: data.asked,
         max: data.max,
         provider: data.provider ?? 'claude',
@@ -1351,6 +1377,39 @@ export async function runClarifyTurn(args: {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Onbekende fout';
     return { success: false, provider: 'local-template', error: `Gesprek mislukt (${message}).` };
+  }
+}
+
+/**
+ * Testhulp voor beheerders: laat de AI een geloofwaardig antwoord verzinnen op
+ * de interviewvraag die nu openstaat. Bedoeld om de vragenronde te kunnen
+ * doorlopen zonder alles zelf te typen; het antwoord landt in het antwoordveld
+ * en is daar gewoon te lezen en te wijzigen.
+ *
+ * Levert null als er niets bruikbaars terugkwam — de UI meldt dat dan, en er
+ * wordt nooit stilzwijgend iets ingevuld.
+ */
+export async function inventTestAnswer(args: {
+  goal: string;
+  question: string;
+  transcript?: TranscriptTurn[];
+  preferredProvider?: AiProvider;
+  preferredModel?: string;
+  projectContext?: string;
+}): Promise<string | null> {
+  try {
+    const data = await postOptimize<{ success?: boolean; answer?: string }>({
+      mode: 'mock-answer',
+      goal: args.goal,
+      question: args.question,
+      transcript: args.transcript ?? [],
+      preferredProvider: args.preferredProvider ?? 'auto',
+      preferredModel: args.preferredModel,
+      projectContext: args.projectContext,
+    });
+    return data?.success && data.answer?.trim() ? data.answer.trim() : null;
+  } catch {
+    return null;
   }
 }
 

@@ -318,7 +318,7 @@ export default function OptimizerPage() {
                     active={ownActive}
                     onClick={() => setEntryMode('own-prompt')}
                     icon={<Wand2 size={20} />}
-                    title="Optimaliseer jouw eigen prompt"
+                    title="Optimaliseer je opdracht"
                     description="Heb je al een prompt? Wij zoeken het best passende prompt framework, analyseren je prompt en vullen aan wat nog ontbreekt."
                   />
                   <EntryTab
@@ -326,8 +326,8 @@ export default function OptimizerPage() {
                     accent="blauw"
                     onClick={() => setEntryMode('goal')}
                     icon={<Compass size={20} />}
-                    title="Help mij met het bereiken van mijn doel"
-                    description="Beschrijf wat je wilt bereiken, dan vinden we de techniek waarmee je je prompt opbouwt."
+                    title="Start een brainstormsessie"
+                    description="Beschrijf wat je wilt bereiken, dan denken we stap voor stap mee naar je doel."
                   />
                 </div>
               </>

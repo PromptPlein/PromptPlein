@@ -52,6 +52,7 @@ type Mode =
   | 'chat'
   | 'chat-optimize'
   | 'project-optimize'
+  | 'mock-answer'
   | 'refine';
 
 /**
@@ -220,6 +221,13 @@ interface RequestBody {
   stepFormat?: string;
   /** Het vraag-na-vraag-transcript tot nu toe (interactieve stap). */
   transcript?: { question: string; answer: string }[];
+  /** 'mock-answer'-veld: de vraag waarop een testantwoord verzonnen moet worden. */
+  question?: string;
+  /**
+   * 'clarify'-veld: de techniek die in de eerste beurt is gekozen. Zolang die
+   * meekomt, wisselt het gesprek niet meer van techniek.
+   */
+  lockedTechnique?: string;
   /** De gebruiker wil geen input meer geven: rond het interview af met een conclusie. */
   forceFinish?: boolean;
   /** Er is nog geen doel/context: de AI vraagt eerst wat de gebruiker wil bereiken. */
@@ -1079,6 +1087,20 @@ const PLAN_STEP_INTERVIEW_USER_PROMPT = (args: {
  * Onparseerbaar (geen sentinel) → behandel als afgerond materiaal i.p.v.
  * vastlopen: degradeert veilig naar een brief.
  */
+/**
+ * Haalt de meta-regels uit een clarify-beurt: welke techniek het model nu volgt
+ * en waarom. Staan ze er niet (oudere modellen, of een afrondende beurt), dan
+ * blijft het leeg — de UI toont die kop dan gewoon niet.
+ */
+function parseClarifyMeta(raw: string): { technique?: string; analysis?: string } {
+  const technique = raw.match(/(?:^|\n)\s*TECHNIEK:\s*(.+)/i)?.[1]?.trim();
+  const analysis = raw.match(/(?:^|\n)\s*ANALYSE:\s*(.+)/i)?.[1]?.trim();
+  return {
+    technique: technique && technique.length <= 80 ? technique : undefined,
+    analysis: analysis || undefined,
+  };
+}
+
 function parseInterviewTurn(raw: string): { question?: string; material?: string } {
   const text = raw.trim();
   const vraag = text.match(/(?:^|\n)\s*VRAAG:\s*([\s\S]+?)\s*$/i);
@@ -1179,7 +1201,7 @@ function parsePlanStepAnalyze(
   const match = raw.match(/\{[\s\S]*\}/);
   if (!match) return null;
   try {
-    const parsed = JSON.parse(match[0]) as {
+    const parsed = JSON.parse(escapeRawControlChars(match[0])) as {
       summary?: unknown;
       material?: unknown;
       gaps?: unknown;
@@ -1253,7 +1275,7 @@ function parseAssumptions(raw: string): { label: string; question: string }[] | 
   const match = raw.match(/\{[\s\S]*\}/);
   if (!match) return null;
   try {
-    const parsed = JSON.parse(match[0]) as { assumptions?: unknown };
+    const parsed = JSON.parse(escapeRawControlChars(match[0])) as { assumptions?: unknown };
     const rawList = Array.isArray(parsed.assumptions) ? parsed.assumptions : [];
     return rawList
       .filter(
@@ -1853,7 +1875,7 @@ function parsePersonaFill(raw: string, validIds: Set<string>): { id: string; val
   const match = raw.match(/\{[\s\S]*\}/);
   if (!match) return null;
   try {
-    const parsed = JSON.parse(match[0]) as { fields?: unknown };
+    const parsed = JSON.parse(escapeRawControlChars(match[0])) as { fields?: unknown };
     const rawFields = Array.isArray(parsed.fields) ? parsed.fields : [];
     const fields = rawFields
       .filter(
@@ -1906,7 +1928,7 @@ function parseFewShotExample(raw: string): { input: string; output: string } | n
   const match = raw.match(/\{[\s\S]*\}/);
   if (!match) return null;
   try {
-    const p = JSON.parse(match[0]) as { input?: unknown; output?: unknown };
+    const p = JSON.parse(escapeRawControlChars(match[0])) as { input?: unknown; output?: unknown };
     const input = typeof p.input === 'string' ? p.input.trim() : '';
     const output = typeof p.output === 'string' ? p.output.trim() : '';
     if (!input && !output) return null;
@@ -1982,7 +2004,7 @@ function parseFewShotExtract(raw: string): {
       .slice(0, 8)
       .map((x) => ({ label: x.label as string, detail: typeof x.detail === 'string' ? x.detail : '' }));
   try {
-    const p = JSON.parse(match[0]) as Record<string, unknown>;
+    const p = JSON.parse(escapeRawControlChars(match[0])) as Record<string, unknown>;
     const kenmerken = toList(p.kenmerken);
     const casus = toList(p.casus_specifiek);
     if (kenmerken.length === 0 && casus.length === 0) return null;
@@ -2048,7 +2070,7 @@ function parseMetaBuild(
   const match = raw.match(/\{[\s\S]*\}/);
   if (!match) return null;
   try {
-    const p = JSON.parse(match[0]) as { prompt?: unknown; toelichting?: unknown; cot_gebruikt?: unknown };
+    const p = JSON.parse(escapeRawControlChars(match[0])) as { prompt?: unknown; toelichting?: unknown; cot_gebruikt?: unknown };
     const prompt = typeof p.prompt === 'string' ? p.prompt.trim() : '';
     if (!prompt) return null;
     return {
@@ -2162,31 +2184,71 @@ const RECOMMEND_FRAMEWORK_USER_PROMPT = (
 //
 // Namen van technieken/frameworks komen in de vragen NOOIT voor: de gebruiker
 // beschrijft zijn vraagstuk, niet zijn prompt-methode.
-const CLARIFY_MAX_QUESTIONS = 10;
+const CLARIFY_MAX_QUESTIONS = 8;
 
 const CLARIFY_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse rijksoverheid.
-Een interne overheidsmedewerker beschrijft in eigen woorden wat die wil bereiken. Jouw taak: dat
-vraagstuk VOLLEDIG helder krijgen door STAP VOOR STAP vragen te stellen — één vraag per beurt — zodat
-er daarna één sterke, herbruikbare prompt van gemaakt kan worden. Je schrijft in deze fase NOG GEEN prompt.
+Een interne overheidsmedewerker beschrijft in eigen woorden wat die wil bereiken. Jouw taak: bepalen
+WELKE PROMPTTECHNIEK bij dat doel het beste werkt, en vervolgens STAP VOOR STAP — één vraag per beurt —
+alles ophalen wat die techniek nodig heeft. Je vragen volgen dus de techniek, niet een vast lijstje.
+Je schrijft in deze fase NOG GEEN prompt en kiest ook nog GEEN framework: dat gebeurt pas nadat het
+beeld compleet is, op basis van de opdrachtbeschrijving die jij oplevert.
 
 Werkwijze — houd je STRIKT aan dit protocol:
-- REDENEER EERST voor jezelf (niet zichtbaar voor de gebruiker): wat wil deze persoon werkelijk
-  bereiken, welke aannames zitten er in de beschrijving, en wat weet je nog niet? Bepaal daaruit de
-  ENE vraag die nu het meeste toevoegt.
+- REDENEER EERST voor jezelf (niet zichtbaar voor de gebruiker), in deze volgorde:
+  (1) wat wil deze persoon werkelijk bereiken en wat voor soort taak is dat;
+  (2) WELKE PROMPTTECHNIEK levert daar het beste resultaat bij (zie de lijst hieronder);
+  (3) welke bouwstenen van die techniek zijn nog onbekend?
+  Stel dan de ENE vraag die de belangrijkste ontbrekende bouwsteen ophaalt.
+- Je kiest de techniek ÉÉN KEER: in de eerste beurt. Daarna ligt hij vast voor het hele gesprek.
+  Krijg je hieronder een VASTGEZETTE TECHNIEK mee, dan is dat je techniek — ook als een antwoord je
+  in een andere richting trekt. Wissel dus niet halverwege en meng er geen bouwstenen van een andere
+  techniek doorheen: gaat het om een rol, dan vraag je naar die rol en niet naar toetsingscriteria,
+  scores of voorbeelddocumenten. Past de techniek echt niet, benoem dat dan in de
+  opdrachtbeschrijving in plaats van tijdens het gesprek van koers te veranderen.
 - Stel nooit meerdere vragen tegelijk, herhaal geen eerder gestelde vraag en vraag nooit naar iets
   wat de gebruiker al heeft verteld.
 - Stel open vragen in gewone, begrijpelijke taal. Noem NOOIT namen van prompttechnieken of
-  frameworks en gebruik geen vakjargon uit prompt-engineering.
+  frameworks en gebruik geen vakjargon uit prompt-engineering: vraag naar de INHOUD van een
+  bouwsteen ("welk belang bewaakt die persoon?"), nooit naar de techniek zelf.
 - Beoordeel na ELK antwoord opnieuw of het beeld compleet genoeg is. Is het compleet, rond dan
   meteen af — ook als je nog vragen over had.
 - Houd rekening met de overheidscontext (zorgvuldigheid, doelgroep, formele kaders), maar vul niets
   in over de organisatie, sector of het beleid van de gebruiker als die dat niet zelf aangeeft.
 
+PROMPTTECHNIEKEN EN HUN BOUWSTENEN — je vragen halen precies deze bouwstenen op:
+- Vanuit één deskundige rol laten kijken: welke functie of rol precies, hoeveel ervaring en welke
+  expertise, welk belang die rol bewaakt, waar die als eerste naar kijkt, wat die juist NIET doet of
+  zegt, hoe die communiceert (toon, jargon), en waar die twijfelt of iets niet weet.
+- Meerdere rollen tegelijk bedienen: welke rollen of belanghebbenden meedoen, het belang en de
+  prioriteit van elk van hen, en waar hun belangen met elkaar botsen.
+- Voorbeelden laten navolgen: welke bestaande stukken goed genoeg zijn om als voorbeeld te dienen,
+  wát die stukken goed maakt (opbouw, toon, zinslengte, indeling), en wat juist niet mag worden
+  overgenomen.
+- Een vaste vorm afdwingen: welke onderdelen of kopjes erin moeten, welk formaat (tabel, lijst,
+  vaste secties), welke lengte, welk taalniveau, en wat er beslist niet omheen mag staan.
+- Stap voor stap laten redeneren: welke tussenstappen zichtbaar moeten zijn, op welke criteria wordt
+  afgewogen, in welke volgorde, en welke stap absoluut niet mag worden overgeslagen.
+- Aannames laten onderzoeken: welke tekst of welk plan onderzocht wordt, welke aannames de gebruiker
+  zelf al vermoedt, wat hij met de uitkomst gaat doen, en hoe kritisch het mag zijn.
+- De eigen aanpak laten aanscherpen: waar de gebruiker nu op vastloopt, wat eerdere pogingen
+  opleverden, en waaraan een betere formulering moet voldoen.
+- Het eigen werk laten natrekken: welke tekst gecontroleerd wordt, welk soort fout hier het duurst
+  is (cijfers, wetsartikelen, toezeggingen), en wat als bron mag gelden bij die controle.
+- Eerst uitzoomen naar het vraagstuk erachter: welke concrete opdracht er ligt, welke oplossing al
+  op tafel ligt, en welke kaders of uitgangspunten gelden.
+- Alleen uit de aangeleverde stukken antwoorden: welke stukken de bron zijn, hoe er verwezen moet
+  worden, en wat er moet gebeuren als het antwoord er niet in staat.
+- Toetsen aan een vast kader: welke criteria het kader kent, welke schaal of scores, hoe zwaar de
+  criteria onderling wegen, en wanneer het geheel voldoende is.
+
 Je stelt drie soorten vragen, in deze volgorde:
-1. HET VRAAGSTUK (maximaal 7 vragen): wat wil de gebruiker bereiken, voor wie, in welke situatie,
-   wat is de gewenste uitkomst, wat zijn de randvoorwaarden en wat mag juist niet.
-2. VERDIEPING (maximaal 3 extra vragen, alleen als het beeld daarna nog niet scherp is): vraag door
-   op wat nog vaag, tegenstrijdig of onbenoemd is.
+1. HET VRAAGSTUK (maximaal 2 vragen): wat wil de gebruiker bereiken en voor wie — genoeg om te
+   bepalen welke techniek past. Stop met deze soort zodra dat duidelijk is.
+2. DE BOUWSTENEN VAN DE PASSENDE TECHNIEK (maximaal 4 vragen): loop de bouwstenen hierboven één keer
+   langs voor de techniek die je hebt gekozen, in volgorde van belang. Eén vraag per bouwsteen, en
+   nooit twee keer dezelfde bouwsteen. Sla een bouwsteen over als het antwoord al uit het gesprek
+   blijkt. Zijn de bouwstenen gedekt, ga dan meteen door naar soort 3 — ook al mocht je nog vragen
+   stellen. Een techniek met drie bouwstenen levert drie vragen op, geen zes.
 3. GEBRUIK EN VORM (stel deze vragen vóór je afrondt, tenzij het antwoord al ondubbelzinnig uit het
    gesprek blijkt): de vragen die nodig zijn om te bepalen in welke vorm de prompt moet landen, zoals
    - Wie voert de prompt straks uit: de gebruiker zelf in een chatgesprek met een AI, een
@@ -2195,17 +2257,46 @@ Je stelt drie soorten vragen, in deze volgorde:
    - Wordt de prompt één keer gebruikt, of steeds opnieuw met wisselende invoer?
    Sla een vraag over als het antwoord al vaststaat.
 
-ABSOLUUT MAXIMUM: ${CLARIFY_MAX_QUESTIONS} vragen in totaal. Daarna rond je altijd af.
+ABSOLUUT MAXIMUM: ${CLARIFY_MAX_QUESTIONS} vragen in totaal. Daarna rond je altijd af. Kortere
+gesprekken zijn beter: een compleet beeld in vier vragen is een beter resultaat dan hetzelfde beeld
+in acht. Vraag jezelf vóór elke vraag af of het antwoord de prompt écht anders maakt; is dat niet zo,
+rond dan af.
+
+NOOIT VRAGEN (dit maakt het gesprek slechter):
+- Een vraag die al beantwoord is, in andere woorden. Een herformulering telt als herhaling: vraag je
+  naar dezelfde bouwsteen als eerder ("welke stappen moet de AI doorlopen", "welke fouten moet de AI
+  signaleren", "welke criteria gelden"), dan stel je hem niet opnieuw, hoe anders je hem ook giet.
+  Loop het gesprek hierboven na vóórdat je iets vraagt.
+- Werk dat de prompt straks zélf doet. De gebruiker levert de bouwstenen, niet de uitvoering: vraag
+  hem niet om de controlevragen te formuleren die de prompt moet stellen, niet om de scores in te
+  vullen van het toetsingskader, niet om de persona zelf uit te schrijven en niet om de lijst fouten
+  op te stellen die de AI moet vinden. Vraag naar de kaders, niet naar de uitkomst.
+- Détails die de prompt niet veranderen: exacte bedragen, zaaknummers, percentages of interne
+  procedurenamen. Die vult de gebruiker straks per keer zelf in.
+
+Krijg je hieronder een lijst BESCHIKBARE PROMPTTECHNIEKEN mee? Kies dan uitsluitend uit die lijst en
+gebruik de naam exact zoals hij daar staat. Staat er een techniek bij die niet in het overzicht
+hierboven voorkomt, leid dan uit de omschrijving en de gebruikssituaties af welke bouwstenen die
+techniek nodig heeft, en vraag daarnaar.
 
 PROTOCOL (strikt):
-- Stel je een vraag? Antwoord dan met exact één regel die begint met "VRAAG:" gevolgd door je vraag.
-  Geen inleiding, geen extra tekst.
+- Stel je een vraag? Antwoord dan met exact deze drie regels, in deze volgorde en zonder verdere tekst:
+  TECHNIEK: <de naam van de techniek die je nu volgt>
+  ANALYSE: <één zin van maximaal 25 woorden: wat je uit het doel opmaakt en waarom deze techniek past>
+  VRAAG: <je vraag>
+  De naam achter TECHNIEK komt boven de vraag te staan: schrijf hem kaal, precies zoals hij in de
+  lijst staat, zonder opmaak, sterretjes of aanhalingstekens. ANALYSE dient om je keuze scherp te
+  houden en wordt niet getoond. In de VRAAG zelf noem je de techniek nooit.
 - Rond je af? Antwoord dan met "KLAAR:" gevolgd door de uitgewerkte opdrachtbeschrijving, met deze
   kopjes elk op een eigen regel (laat een kopje weg als er echt niets over te zeggen valt):
   DOEL:
   CONTEXT:
   DOELGROEP:
   GEWENSTE UITKOMST:
+  AANPAK: (de werkwijze die uit het gesprek volgt, met de opgehaalde bouwstenen — bijvoorbeeld de rol
+    met haar belang en blinde vlek, de rollen en hun botsende belangen, de voorbeelden en wat daaraan
+    goed is, de vaste onderdelen en het formaat, de zichtbare tussenstappen, of de te onderzoeken
+    aannames. Hier mag je de techniek wél bij naam noemen.)
   GEBRUIK: (chatgesprek, zelfstandige AI-assistent of programma; eenmalig of herbruikbaar)
   VORM: (tekst, plan/analyse, code, beeld, video of gesprek)
   RANDVOORWAARDEN:
@@ -2217,18 +2308,74 @@ PROTOCOL (strikt):
 
 ${CLARITY_GATE_JSON_INSTRUCTION}`;
 
+/**
+ * Testhulp voor beheerders: verzin een geloofwaardig antwoord op de vraag die de
+ * dialoog zojuist stelde, zodat de flow te doorlopen is zonder alles zelf te
+ * typen. Het antwoord is fictie en komt in het antwoordveld te staan, waar de
+ * beheerder het ziet en kan aanpassen voordat het meetelt.
+ */
+const MOCK_ANSWER_SYSTEM_PROMPT = `Je helpt een beheerder van PromptPlein de vragenronde te testen.
+Je verzint het antwoord dat een rijksambtenaar op de gestelde vraag zou geven.
+
+Regels:
+- KORT: één of twee zinnen, samen hoogstens 40 woorden. Een echte gebruiker typt hier geen betoog.
+- Schrijf in de ik-vorm, precies zoals iemand het in een antwoordveld zou typen. Geen aanhef, geen
+  inleiding, geen uitleg over wat je doet, geen aanhalingstekens eromheen.
+- Sluit aan op het doel en op de eerder gegeven antwoorden; spreek die nooit tegen en herhaal ze niet.
+- Wees concreet, maar noem hooguit één of twee details. Verzin gerust een fictieve regeling of een
+  termijn; dit is testmateriaal. Ga niet opsommen wat er allemaal nog meer zou kunnen.
+- Gebruik geen namen van echte personen en geen echte persoonsgegevens; fictieve functies en
+  organisatieonderdelen mogen wel.
+- PLATTE TEKST: geen sterretjes, geen vetgedrukte of cursieve tekst, geen opsommingstekens, geen
+  kopjes, geen aanhalingstekens om termen heen. Gewone werktaal, lopende zinnen.
+
+Antwoord met uitsluitend dat antwoord.`;
+
 /** Bouwt de gebruikersprompt voor één beurt van de clarify-dialoog. */
 const CLARIFY_USER_PROMPT = (args: {
   goal: string;
   transcript?: { question: string; answer: string }[];
   forceFinish?: boolean;
+  /** De losse technieken zoals ze nú in de database staan. */
+  techniques?: TechniqueSummary[];
+  /** De techniek die in beurt 1 is gekozen; ligt daarna vast. */
+  lockedTechnique?: string;
 }) => {
   const turns = args.transcript ?? [];
   const parts: string[] = [`WAT DE GEBRUIKER WIL BEREIKEN (eigen woorden):\n${args.goal.trim()}`];
+  // De echte techniekenlijst meesturen in plaats van vertrouwen op wat het model
+  // toevallig kent: voegt de beheerder een techniek toe, dan kan het gesprek daar
+  // meteen op uitkomen en de bijbehorende bouwstenen uitvragen.
+  if (args.techniques && args.techniques.length > 0) {
+    parts.push(
+      `BESCHIKBARE PROMPTTECHNIEKEN (kies hieruit, gebruik de naam exact):\n${args.techniques
+        .map((t) => {
+          const bits = [`- ${t.name}`];
+          if (t.description) bits.push(`uitleg: ${t.description}`);
+          if (t.strength) bits.push(`kracht: ${t.strength}`);
+          if (t.use_cases && t.use_cases.length > 0)
+            bits.push(`gebruik voor: ${t.use_cases.join('; ')}`);
+          return bits.join(' | ');
+        })
+        .join('\n')}`,
+    );
+  }
+  // De keuze uit beurt 1 komt elke beurt weer mee. Zonder dit is elke beurt
+  // stateloos: het model leidt de techniek dan telkens opnieuw af uit de laatste
+  // antwoorden, waardoor een persona-gesprek halverwege in een toetsingskader kan
+  // veranderen.
+  if (args.lockedTechnique) {
+    parts.push(
+      `VASTGEZETTE TECHNIEK: ${args.lockedTechnique}\nDeze is in de eerste beurt gekozen en staat ` +
+        'vast. Stel uitsluitend vragen die bouwstenen van DEZE techniek ophalen, en geef hem ' +
+        'letterlijk zo terug op de TECHNIEK-regel. Kies geen andere techniek.',
+    );
+  }
   if (turns.length === 0) {
     parts.push(
-      'GESPREK TOT NU TOE:\n(nog geen vragen gesteld). Bepaal op basis van de beschrijving hierboven ' +
-        'welke vraag het meeste toevoegt en stel die als eerste. Vraag niet naar wat er al staat.',
+      'GESPREK TOT NU TOE:\n(nog geen vragen gesteld). Bepaal eerst welke prompttechniek bij deze ' +
+        'beschrijving past, en stel dan de vraag die de belangrijkste ontbrekende bouwsteen van die ' +
+        'techniek ophaalt. Vraag niet naar wat er al staat.',
     );
   } else {
     parts.push(
@@ -2248,8 +2395,10 @@ const CLARIFY_USER_PROMPT = (args: {
     );
   } else {
     parts.push(
-      'Bepaal de meest zinvolle vervolgvraag en stel die ("VRAAG: …"), of rond af met de ' +
-        'opdrachtbeschrijving ("KLAAR: …") als het beeld compleet is en ook gebruik en vorm bekend zijn.',
+      'Controleer eerst welke bouwstenen hierboven al beantwoord zijn — ook als dat in andere ' +
+        'woorden gebeurde. Is er nog een ONBEANTWOORDE bouwsteen van de passende techniek, stel dan ' +
+        'die ene vraag ("VRAAG: …"). Zijn de bouwstenen gedekt en zijn ook gebruik en vorm bekend, ' +
+        'rond dan af met de opdrachtbeschrijving ("KLAAR: …"). Bij twijfel: afronden.',
     );
   }
   return parts.join('\n\n');
@@ -2623,7 +2772,7 @@ function parseMetadata(raw: string, validCategoryIds: Set<string>): MetadataSugg
   const match = raw.match(/\{[\s\S]*\}/);
   if (!match) return { title: '', description: '', category_id: null };
   try {
-    const parsed = JSON.parse(match[0]) as {
+    const parsed = JSON.parse(escapeRawControlChars(match[0])) as {
       title?: string;
       description?: string;
       category_id?: string | null;
@@ -3060,6 +3209,8 @@ const MODE_MAX_TOKENS: Record<Mode, number> = {
   'fewshot-example': 1536,
   'assumption-check': 1536,
   clarify: 1536,
+  // Een verzonnen testantwoord is één of twee zinnen; ruim genoeg zo.
+  'mock-answer': 256,
   metadata: 512,
   title: 128,
 };
@@ -3978,7 +4129,7 @@ function streamPrefillResponse(args: {
     fields,
   } = args;
 
-  const validIds = new Set(fields.map((f) => f.id));
+  const validIds = new Map(fields.map((f) => [normalizeFieldId(f.id), f.id]));
   const encoder = new TextEncoder();
   let closed = false;
 
@@ -4101,7 +4252,12 @@ function streamPrefillResponse(args: {
           won = result;
           break;
         }
-        if (sentFields.length > 0) break;
+        // Alleen stoppen als deze provider ALLE velden al leverde. Stuurde hij er
+        // een paar en brak hij toen af, dan proberen we de volgende: één ingevuld
+        // veld van vijf is slechter dan een complete tweede poging.
+        if (sentFields.length >= fields.length) break;
+        // De volgende provider mag dan ook weer streamen.
+        answering = null;
       }
 
       if (won) {
@@ -4184,7 +4340,7 @@ function detectUnclearJson(raw: string): string | null {
   const match = raw.match(/\{[\s\S]*\}/);
   if (!match) return null;
   try {
-    const parsed = JSON.parse(match[0]) as { unclear?: boolean; reason?: unknown };
+    const parsed = JSON.parse(escapeRawControlChars(match[0])) as { unclear?: boolean; reason?: unknown };
     if (parsed.unclear === true) {
       const reason = typeof parsed.reason === 'string' ? parsed.reason.trim() : '';
       return (
@@ -4222,7 +4378,7 @@ function detectRoutingJson(raw: string): PlanRouting | null {
   const match = raw.match(/\{[\s\S]*\}/);
   if (!match) return null;
   try {
-    const parsed = JSON.parse(match[0]) as {
+    const parsed = JSON.parse(escapeRawControlChars(match[0])) as {
       needs_routing?: boolean;
       question?: unknown;
       options?: unknown;
@@ -4261,7 +4417,7 @@ function parseRecommendations(raw: string, valid: Set<string>): Recommendation[]
   const match = raw.match(/\{[\s\S]*\}/);
   if (!match) return [];
   try {
-    const parsed = JSON.parse(match[0]) as { recommendations?: Recommendation[] };
+    const parsed = JSON.parse(escapeRawControlChars(match[0])) as { recommendations?: Recommendation[] };
     const recs = Array.isArray(parsed.recommendations) ? parsed.recommendations : [];
     return recs
       .filter((r) => r && typeof r.id === 'string' && valid.has(r.id))
@@ -4291,7 +4447,7 @@ function parseFrameworkFits(raw: string, valid: Set<string>): FrameworkFit[] {
   const match = raw.match(/\{[\s\S]*\}/);
   if (!match) return [];
   try {
-    const parsed = JSON.parse(match[0]) as { fits?: FrameworkFit[] };
+    const parsed = JSON.parse(escapeRawControlChars(match[0])) as { fits?: FrameworkFit[] };
     const fits = Array.isArray(parsed.fits) ? parsed.fits : [];
     return fits
       .filter((f) => f && typeof f.id === 'string' && valid.has(f.id))
@@ -4317,7 +4473,7 @@ function parseFrameworkRecommendations(
   const match = raw.match(/\{[\s\S]*\}/);
   if (!match) return { summary: '', recommendations: [], missingContext: [] };
   try {
-    const parsed = JSON.parse(match[0]) as {
+    const parsed = JSON.parse(escapeRawControlChars(match[0])) as {
       summary?: string;
       missingContext?: unknown;
       recommendations?: Recommendation[];
@@ -4426,7 +4582,7 @@ function readJsonObjects(buf: string, key: string): string[] {
 /** Eén afgeronde aanbeveling uit de stream, of null als hij onbruikbaar is. */
 function parseOneRecommendation(chunk: string, valid: Set<string>): Recommendation | null {
   try {
-    const r = JSON.parse(chunk) as Recommendation;
+    const r = JSON.parse(escapeRawControlChars(chunk)) as Recommendation;
     if (!r || typeof r.id !== 'string' || !valid.has(r.id)) return null;
     return {
       id: r.id,
@@ -4454,7 +4610,7 @@ function parseAnalysis(
   const match = raw.match(/\{[\s\S]*\}/);
   if (!match) return { summary: '', missing: [] };
   try {
-    const parsed = JSON.parse(match[0]) as {
+    const parsed = JSON.parse(escapeRawControlChars(match[0])) as {
       summary?: string;
       missing?: Array<{ id?: string; label?: string; question?: string }>;
     };
@@ -4480,27 +4636,119 @@ interface PrefilledField {
   note: string;
 }
 
+/**
+ * Escapet losse regeleindes en tabs BINNEN JSON-strings van een model.
+ *
+ * Modellen zetten bullets in een veldwaarde met een ECHTE newline erin. Dat is
+ * ongeldige JSON: JSON.parse gooit dan "Bad control character in string literal"
+ * en het veld — of het hele antwoord — valt weg. Precies dat gebeurde bij het
+ * voor-invullen van een framework: alleen velden waarvan de waarde toevallig op
+ * één regel paste kwamen door, de rest verdween geruisloos.
+ *
+ * Alleen tekens binnen een string worden aangepakt; de structuur van het JSON
+ * blijft ongemoeid, en geldige JSON verandert er niet door.
+ */
+function escapeRawControlChars(json: string): string {
+  let out = '';
+  let inString = false;
+  for (let i = 0; i < json.length; i++) {
+    const ch = json[i];
+    if (inString && ch === '\\') {
+      // Al ontsnapt teken: laat het paar ongemoeid.
+      out += ch + (json[i + 1] ?? '');
+      i++;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      out += ch;
+      continue;
+    }
+    if (inString) {
+      if (ch === '\n') {
+        out += '\\n';
+        continue;
+      }
+      if (ch === '\r') {
+        out += '\\r';
+        continue;
+      }
+      if (ch === '\t') {
+        out += '\\t';
+        continue;
+      }
+    }
+    out += ch;
+  }
+  return out;
+}
+
+/**
+ * Normaliseert een veld-id, zodat een kleine afwijking van het model geen veld
+ * kost: "END_GOAL", "end goal" en "endgoal" wijzen allemaal naar "end_goal".
+ */
+function normalizeFieldId(id: string): string {
+  return id.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+/**
+ * Zet een veldwaarde die geen string is om naar tekst.
+ *
+ * Het ene model levert bullets als één string met regeleindes, het andere als
+ * een JSON-ARRAY (of als object met subvelden). Dat laatste sneuvelde op de
+ * controle `typeof value === 'string'`: zo'n veld verdween dan geruisloos,
+ * terwijl velden die toevallig uit één zin bestonden wél doorkwamen. Daardoor
+ * bleef er bij het voor-invullen soms maar één gevuld veld over.
+ */
+function coerceFieldValue(v: unknown): string | null {
+  if (typeof v === 'string') return v;
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  if (Array.isArray(v)) {
+    const lines = v
+      .map((item) => coerceFieldValue(item))
+      .filter((l): l is string => Boolean(l && l.trim()))
+      .map((l) => (l.trimStart().startsWith('-') ? l.trim() : `- ${l.trim()}`));
+    return lines.length > 0 ? lines.join('\n') : null;
+  }
+  if (v && typeof v === 'object') {
+    const lines = Object.entries(v as Record<string, unknown>)
+      .map(([k, val]) => {
+        const text = coerceFieldValue(val);
+        return text && text.trim() ? `${k}: ${text.trim()}` : null;
+      })
+      .filter((l): l is string => Boolean(l));
+    return lines.length > 0 ? lines.join('\n') : null;
+  }
+  return null;
+}
+
 /** Parseert het JSON-antwoord van de prefill-modus robuust. */
 function parsePrefill(
   raw: string,
   fields: AnalyzeField[],
 ): { summary: string; fields: PrefilledField[] } {
-  const byId = new Map(fields.map((f) => [f.id, f]));
+  const byId = new Map(fields.map((f) => [normalizeFieldId(f.id), f.id]));
   const match = raw.match(/\{[\s\S]*\}/);
   if (!match) return { summary: '', fields: [] };
   try {
-    const parsed = JSON.parse(match[0]) as {
+    const parsed = JSON.parse(escapeRawControlChars(match[0])) as {
       summary?: string;
-      fields?: Array<{ id?: string; value?: string; source?: string; note?: string }>;
+      fields?: Array<{ id?: string; value?: unknown; source?: string; note?: string }>;
     };
     const prefilled = (Array.isArray(parsed.fields) ? parsed.fields : [])
-      .filter((f) => f && typeof f.id === 'string' && byId.has(f.id) && typeof f.value === 'string')
-      .map((f) => ({
-        id: f.id as string,
-        value: (f.value as string).trim(),
-        source: f.source === 'ai' ? ('ai' as const) : ('prompt' as const),
-        note: typeof f.note === 'string' ? f.note.trim() : '',
-      }))
+      .map((f) => {
+        const id = typeof f?.id === 'string' ? byId.get(normalizeFieldId(f.id)) : undefined;
+        const value = id ? coerceFieldValue(f.value) : null;
+        return id && value
+          ? {
+              id,
+              value: value.trim(),
+              source: f.source === 'ai' ? ('ai' as const) : ('prompt' as const),
+              note: typeof f.note === 'string' ? f.note.trim() : '',
+            }
+          : null;
+      })
+      .filter((f): f is PrefilledField => f !== null)
       // Lege voorstellen zijn nutteloos; die laten we als leeg veld over.
       .filter((f) => f.value);
     return {
@@ -4517,16 +4765,18 @@ function parsePrefill(
  * De streamende tegenhanger van {@link parsePrefill}: die leest het volledige
  * antwoord, deze één object uit een nog groeiende buffer.
  */
-function parseOnePrefilledField(chunk: string, valid: Set<string>): PrefilledField | null {
+function parseOnePrefilledField(chunk: string, valid: Map<string, string>): PrefilledField | null {
   try {
-    const f = JSON.parse(chunk) as { id?: unknown; value?: unknown; source?: unknown; note?: unknown };
-    if (typeof f.id !== 'string' || !valid.has(f.id)) return null;
-    if (typeof f.value !== 'string') return null;
-    const value = f.value.trim();
+    const f = JSON.parse(escapeRawControlChars(chunk)) as { id?: unknown; value?: unknown; source?: unknown; note?: unknown };
+    const id = typeof f.id === 'string' ? valid.get(normalizeFieldId(f.id)) : undefined;
+    if (!id) return null;
+    const coerced = coerceFieldValue(f.value);
+    if (coerced === null) return null;
+    const value = coerced.trim();
     // Een leeg voorstel is nutteloos; dat veld blijft gewoon leeg.
     if (!value) return null;
     return {
-      id: f.id,
+      id,
       value,
       source: f.source === 'ai' ? 'ai' : 'prompt',
       note: typeof f.note === 'string' ? f.note.trim() : '',
@@ -4550,7 +4800,7 @@ function parseExpandField(
   const match = raw.match(/\{[\s\S]*\}/);
   if (!match) return null;
   try {
-    const parsed = JSON.parse(match[0]) as {
+    const parsed = JSON.parse(escapeRawControlChars(match[0])) as {
       value?: unknown;
       changed?: unknown;
       improvements?: unknown;
@@ -4657,7 +4907,7 @@ function parsePlan(raw: string, valid: Set<string>): PlanOut | null {
   const match = raw.match(/\{[\s\S]*\}/);
   if (!match) return null;
   try {
-    const parsed = JSON.parse(match[0]) as { summary?: unknown; steps?: unknown };
+    const parsed = JSON.parse(escapeRawControlChars(match[0])) as { summary?: unknown; steps?: unknown };
     const rawSteps = Array.isArray(parsed.steps) ? parsed.steps : [];
     const steps: PlanStepOut[] = rawSteps
       .filter(
@@ -4815,9 +5065,11 @@ Deno.serve(async (req: Request) => {
                                       ? 'expand-field'
                                       : body.mode === 'assumption-check'
                                         ? 'assumption-check'
-                                        : body.mode === 'refine'
-                                          ? 'refine'
-                                          : 'generate';
+                                        : body.mode === 'mock-answer'
+                                          ? 'mock-answer'
+                                          : body.mode === 'refine'
+                                            ? 'refine'
+                                            : 'generate';
     const order = buildOrder(body.preferredProvider);
     const temperature = clampTemp(body.temperature);
     // Uitvoerbudget van deze modus: bepaalt het max_tokens-plafond van elke
@@ -5497,6 +5749,68 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // --- Mock-answer: verzin een testantwoord op de gestelde interviewvraag ---
+    // Alleen bedoeld om als beheerder de flow te kunnen doorlopen zonder elke
+    // vraag zelf te beantwoorden. Levert nooit iets wat in een echte prompt
+    // terechtkomt zonder dat de gebruiker het ziet: het antwoord landt gewoon in
+    // het antwoordveld, waar het te lezen en te wijzigen is.
+    if (mode === 'mock-answer') {
+      const goal = body.goal?.trim() ?? '';
+      const question = body.question?.trim() ?? '';
+      if (!question) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'question is verplicht' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+      const turns = Array.isArray(body.transcript) ? body.transcript : [];
+      const mockMessage = [
+        goal ? `WAT DE GEBRUIKER WIL BEREIKEN:\n${goal}` : '',
+        turns.length > 0
+          ? `EERDER GEGEVEN ANTWOORDEN:\n${turns
+              .map((t, i) => `V${i + 1}: ${t.question}\nA${i + 1}: ${t.answer}`)
+              .join('\n')}`
+          : '',
+        `DE VRAAG DIE NU BEANTWOORD MOET WORDEN:\n${question}`,
+        'Schrijf het antwoord dat deze gebruiker hier zou geven.',
+      ]
+        .filter(Boolean)
+        .join('\n\n');
+
+      for (const candidate of order) {
+        try {
+          const raw = await PROVIDERS[candidate](
+            mockMessage,
+            withProject(MOCK_ANSWER_SYSTEM_PROMPT, body.projectContext),
+            // Hoger dan elders: dit antwoord mág verzonnen zijn en juist een
+            // beetje eigenzinnig, anders test je steeds hetzelfde brave geval.
+            0.9,
+            resolveModel(candidate, body.preferredProvider, body.preferredModel),
+            maxTokens,
+          );
+          // Vangnet naast de instructie hierboven: modellen zetten er graag
+          // sterretjes omheen. Dit veld is een antwoordveld, geen markdown.
+          const answer = raw
+            .trim()
+            .replace(/\*\*|__|`/g, '')
+            .replace(/^["'`]+|["'`]+$/g, '')
+            .trim();
+          if (answer) {
+            return new Response(
+              JSON.stringify({ success: true, answer, provider: candidate }),
+              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            );
+          }
+        } catch (providerErr) {
+          console.error(`${candidate} (mock-answer) mislukt, probeer volgende:`, providerErr);
+        }
+      }
+      return new Response(
+        JSON.stringify({ success: false, error: 'Er kon geen testantwoord worden verzonnen' }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
     // --- Clarify: één beurt van de doel-dialoog (vraag-na-vraag → opdrachtbeschrijving) ---
     if (mode === 'clarify') {
       const goal = body.goal?.trim() ?? '';
@@ -5507,10 +5821,21 @@ Deno.serve(async (req: Request) => {
         );
       }
       const transcript = Array.isArray(body.transcript) ? body.transcript : [];
+      // Alleen de LOSSE technieken: het gesprek kiest een techniek, geen framework.
+      // Dat laatste gebeurt pas na de opdrachtbeschrijving.
+      const clarifyTechniques = (Array.isArray(body.techniques) ? body.techniques : []).filter(
+        (t) => t.family !== 'context',
+      );
+      // Het plafond hard afdwingen. Als instructie in de prompt werd het genegeerd
+      // — er kwamen vragen 11 en 12 uit terwijl het maximum 10 was. Vanaf het
+      // plafond krijgt het model geen keuze meer: afronden.
+      const capReached = transcript.length >= CLARIFY_MAX_QUESTIONS;
       const clarifyMessage = CLARIFY_USER_PROMPT({
         goal,
         transcript,
-        forceFinish: body.forceFinish,
+        forceFinish: body.forceFinish || capReached,
+        techniques: clarifyTechniques,
+        lockedTechnique: body.lockedTechnique?.trim() || undefined,
       });
 
       for (const candidate of order) {
@@ -5532,14 +5857,21 @@ Deno.serve(async (req: Request) => {
               { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
             );
           }
-          // Zelfde VRAAG:/KLAAR:-protocol als het plan-step-interview.
-          const turn = parseInterviewTurn(raw);
-          if (turn.question) {
+          // Zelfde VRAAG:/KLAAR:-protocol als het plan-step-interview, met de
+          // meta-regels TECHNIEK/ANALYSE ervoor. Die halen we er eerst af, zodat
+          // ze niet in een afrondende brief terechtkomen.
+          const meta = parseClarifyMeta(raw);
+          const turn = parseInterviewTurn(
+            raw.replace(/(?:^|\n)\s*(?:TECHNIEK|ANALYSE):.*(?=\n|$)/gi, '\n').trim(),
+          );
+          if (turn.question && !capReached) {
             return new Response(
               JSON.stringify({
                 success: true,
                 needs_input: true,
                 question: turn.question,
+                technique: body.lockedTechnique?.trim() || meta.technique,
+                analysis: meta.analysis,
                 asked: transcript.length + 1,
                 max: CLARIFY_MAX_QUESTIONS,
                 provider: candidate,
