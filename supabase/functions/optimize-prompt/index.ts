@@ -223,11 +223,6 @@ interface RequestBody {
   transcript?: { question: string; answer: string }[];
   /** 'mock-answer'-veld: de vraag waarop een testantwoord verzonnen moet worden. */
   question?: string;
-  /**
-   * 'clarify'-veld: de techniek die in de eerste beurt is gekozen. Zolang die
-   * meekomt, wisselt het gesprek niet meer van techniek.
-   */
-  lockedTechnique?: string;
   /** De gebruiker wil geen input meer geven: rond het interview af met een conclusie. */
   forceFinish?: boolean;
   /** Er is nog geen doel/context: de AI vraagt eerst wat de gebruiker wil bereiken. */
@@ -377,6 +372,9 @@ const PROVIDER_MODELS: Record<Provider, string[]> = {
   openai: ['gpt-5.5', 'gpt-5.5-pro', 'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.4-nano'],
   // deepseek-chat/-reasoner zijn aliassen die op 2026-07-24 vervallen; gebruik de V4-ids.
   deepseek: ['deepseek-v4-flash', 'deepseek-v4-pro'],
+  // Mistral: bewust de `-latest`-aliassen, die schuiven mee met een nieuwe
+  // generatie. Per augustus 2026 achtereenvolgens mistral-small-2603 (Small 4),
+  // ministral-8b-2512 en ministral-3b-2512 (Ministral 3).
   mistral: ['mistral-small-latest', 'ministral-8b-latest', 'ministral-3b-latest'],
 };
 
@@ -397,7 +395,7 @@ const MISTRAL_MODEL = PROVIDER_MODELS.mistral[0];
  *
  * Let op de twee plekken waar het sterkste model NIET het eerste uit
  * PROVIDER_MODELS is: bij DeepSeek staat Flash vooraan (goedkoop) en is Pro de
- * sterkere, en bij Mistral is Small 3 sterker dan de Ministrals eronder.
+ * sterkere, en bij Mistral is Small 4 sterker dan de Ministrals eronder.
  *
  * Voor OpenAI staat hier het vlaggenschip en niet 'gpt-5.5-pro': dat is zes keer
  * zo duur en gericht op maximale precisie, niet op betere tekst.
@@ -1088,13 +1086,19 @@ const PLAN_STEP_INTERVIEW_USER_PROMPT = (args: {
  * vastlopen: degradeert veilig naar een brief.
  */
 /**
- * Haalt de meta-regels uit een clarify-beurt: welke techniek het model nu volgt
- * en waarom. Staan ze er niet (oudere modellen, of een afrondende beurt), dan
- * blijft het leeg — de UI toont die kop dan gewoon niet.
+ * Haalt uit de afrondende opdrachtbeschrijving welke techniek eruit volgt en
+ * waarom. Staat het kopje er niet, dan blijft het leeg — de samenvatting toont
+ * die regel dan gewoon niet.
  */
+/** De stap uit de vraaglijn waar de gestelde vraag bij hoort (voor de voortgangsbalk). */
+function parseClarifyStep(raw: string): string | undefined {
+  const step = raw.match(/(?:^|\n)\s*STAP:\s*(.+)/i)?.[1]?.trim();
+  return step && step.length <= 40 ? step : undefined;
+}
+
 function parseClarifyMeta(raw: string): { technique?: string; analysis?: string } {
   const technique = raw.match(/(?:^|\n)\s*TECHNIEK:\s*(.+)/i)?.[1]?.trim();
-  const analysis = raw.match(/(?:^|\n)\s*ANALYSE:\s*(.+)/i)?.[1]?.trim();
+  const analysis = raw.match(/(?:^|\n)\s*WAAROM DEZE TECHNIEK:\s*(.+)/i)?.[1]?.trim();
   return {
     technique: technique && technique.length <= 80 ? technique : undefined,
     analysis: analysis || undefined,
@@ -2187,116 +2191,92 @@ const RECOMMEND_FRAMEWORK_USER_PROMPT = (
 const CLARIFY_MAX_QUESTIONS = 8;
 
 const CLARIFY_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse rijksoverheid.
-Een interne overheidsmedewerker beschrijft in eigen woorden wat die wil bereiken. Jouw taak: bepalen
-WELKE PROMPTTECHNIEK bij dat doel het beste werkt, en vervolgens STAP VOOR STAP — één vraag per beurt —
-alles ophalen wat die techniek nodig heeft. Je vragen volgen dus de techniek, niet een vast lijstje.
-Je schrijft in deze fase NOG GEEN prompt en kiest ook nog GEEN framework: dat gebeurt pas nadat het
-beeld compleet is, op basis van de opdrachtbeschrijving die jij oplevert.
+Een interne overheidsmedewerker beschrijft in eigen woorden wat die wil bereiken. Jouw taak: het
+VRAAGSTUK stap voor stap uitpluizen — één vraag per beurt — tot je precies weet welk probleem er
+opgelost moet worden, voor wie, en waar het resultaat aan moet voldoen.
+
+Je denkt hier hardop mee met de gebruiker over zijn probleem. Je schrijft in deze fase NOG GEEN
+prompt en kiest ook nog GEEN framework. Welke prompttechniek passend is, bepaal je pas AAN HET EIND,
+op basis van het complete beeld — niet vooraf, want dan zou je de gebruiker vragen stellen over een
+oplossing die je nog niet kunt onderbouwen.
 
 Werkwijze — houd je STRIKT aan dit protocol:
-- REDENEER EERST voor jezelf (niet zichtbaar voor de gebruiker), in deze volgorde:
-  (1) wat wil deze persoon werkelijk bereiken en wat voor soort taak is dat;
-  (2) WELKE PROMPTTECHNIEK levert daar het beste resultaat bij (zie de lijst hieronder);
-  (3) welke bouwstenen van die techniek zijn nog onbekend?
-  Stel dan de ENE vraag die de belangrijkste ontbrekende bouwsteen ophaalt.
-- Je kiest de techniek ÉÉN KEER: in de eerste beurt. Daarna ligt hij vast voor het hele gesprek.
-  Krijg je hieronder een VASTGEZETTE TECHNIEK mee, dan is dat je techniek — ook als een antwoord je
-  in een andere richting trekt. Wissel dus niet halverwege en meng er geen bouwstenen van een andere
-  techniek doorheen: gaat het om een rol, dan vraag je naar die rol en niet naar toetsingscriteria,
-  scores of voorbeelddocumenten. Past de techniek echt niet, benoem dat dan in de
-  opdrachtbeschrijving in plaats van tijdens het gesprek van koers te veranderen.
+- REDENEER EERST voor jezelf (niet zichtbaar voor de gebruiker): wat weet je al, wat is de volgende
+  logische stap in het uitpluizen, en welke ENE vraag brengt je daar het verst mee? Elke vraag bouwt
+  voort op het vorige antwoord; je loopt geen afvinklijstje af.
 - Stel nooit meerdere vragen tegelijk, herhaal geen eerder gestelde vraag en vraag nooit naar iets
-  wat de gebruiker al heeft verteld.
+  wat de gebruiker al heeft verteld. Een herformulering telt als herhaling.
 - Stel open vragen in gewone, begrijpelijke taal. Noem NOOIT namen van prompttechnieken of
-  frameworks en gebruik geen vakjargon uit prompt-engineering: vraag naar de INHOUD van een
-  bouwsteen ("welk belang bewaakt die persoon?"), nooit naar de techniek zelf.
-- Beoordeel na ELK antwoord opnieuw of het beeld compleet genoeg is. Is het compleet, rond dan
-  meteen af — ook als je nog vragen over had.
+  frameworks en gebruik geen vakjargon uit prompt-engineering.
+- Beoordeel na ELK antwoord of het beeld compleet genoeg is. Is het compleet, rond dan meteen af —
+  ook als je nog vragen over had. Kortere gesprekken zijn beter: een compleet beeld in vier vragen is
+  beter dan hetzelfde beeld in acht.
 - Houd rekening met de overheidscontext (zorgvuldigheid, doelgroep, formele kaders), maar vul niets
   in over de organisatie, sector of het beleid van de gebruiker als die dat niet zelf aangeeft.
 
-PROMPTTECHNIEKEN EN HUN BOUWSTENEN — je vragen halen precies deze bouwstenen op:
-- Vanuit één deskundige rol laten kijken: welke functie of rol precies, hoeveel ervaring en welke
-  expertise, welk belang die rol bewaakt, waar die als eerste naar kijkt, wat die juist NIET doet of
-  zegt, hoe die communiceert (toon, jargon), en waar die twijfelt of iets niet weet.
-- Meerdere rollen tegelijk bedienen: welke rollen of belanghebbenden meedoen, het belang en de
-  prioriteit van elk van hen, en waar hun belangen met elkaar botsen.
-- Voorbeelden laten navolgen: welke bestaande stukken goed genoeg zijn om als voorbeeld te dienen,
-  wát die stukken goed maakt (opbouw, toon, zinslengte, indeling), en wat juist niet mag worden
-  overgenomen.
-- Een vaste vorm afdwingen: welke onderdelen of kopjes erin moeten, welk formaat (tabel, lijst,
-  vaste secties), welke lengte, welk taalniveau, en wat er beslist niet omheen mag staan.
-- Stap voor stap laten redeneren: welke tussenstappen zichtbaar moeten zijn, op welke criteria wordt
-  afgewogen, in welke volgorde, en welke stap absoluut niet mag worden overgeslagen.
-- Aannames laten onderzoeken: welke tekst of welk plan onderzocht wordt, welke aannames de gebruiker
-  zelf al vermoedt, wat hij met de uitkomst gaat doen, en hoe kritisch het mag zijn.
-- De eigen aanpak laten aanscherpen: waar de gebruiker nu op vastloopt, wat eerdere pogingen
-  opleverden, en waaraan een betere formulering moet voldoen.
-- Het eigen werk laten natrekken: welke tekst gecontroleerd wordt, welk soort fout hier het duurst
-  is (cijfers, wetsartikelen, toezeggingen), en wat als bron mag gelden bij die controle.
-- Eerst uitzoomen naar het vraagstuk erachter: welke concrete opdracht er ligt, welke oplossing al
-  op tafel ligt, en welke kaders of uitgangspunten gelden.
-- Alleen uit de aangeleverde stukken antwoorden: welke stukken de bron zijn, hoe er verwezen moet
-  worden, en wat er moet gebeuren als het antwoord er niet in staat.
-- Toetsen aan een vast kader: welke criteria het kader kent, welke schaal of scores, hoe zwaar de
-  criteria onderling wegen, en wanneer het geheel voldoende is.
+DE VRAAGLIJN — deze volgorde, en sla over wat de gebruiker al heeft verteld:
+1. HET PROBLEEM: wat gaat er nu niet goed, en waaruit blijkt dat? (Ligt er al een oplossing op tafel,
+   vraag dan door naar het probleem dáárachter.)
+2. HET DOEL: wat is er anders als het gelukt is? Waaraan merkt de gebruiker dat het goed is?
+3. VOOR WIE: wie leest of gebruikt het resultaat, en wie beslist erover?
+4. WAT ER AL LIGT: welk materiaal is er — eerdere versies, een geslaagd voorbeeld, een dossier of
+   bronstukken, cijfers, een bestaand toetsingskader of sjabloon? Vraag dit ALTIJD; het antwoord
+   bepaalt straks de techniek.
+5. DE GRENZEN: wat mag absoluut niet, welke kaders gelden, en waarop wordt het resultaat afgerekend?
+6. WAAR HET LANDT: gebruikt de gebruiker dit één keer in een chatgesprek, of steeds opnieuw met
+   wisselende invoer? Voert hij het zelf uit, of een AI-assistent of programma? En wat moet eruit
+   komen: tekst, een analyse, code, beeld?
 
-Je stelt drie soorten vragen, in deze volgorde:
-1. HET VRAAGSTUK (maximaal 2 vragen): wat wil de gebruiker bereiken en voor wie — genoeg om te
-   bepalen welke techniek past. Stop met deze soort zodra dat duidelijk is.
-2. DE BOUWSTENEN VAN DE PASSENDE TECHNIEK (maximaal 4 vragen): loop de bouwstenen hierboven één keer
-   langs voor de techniek die je hebt gekozen, in volgorde van belang. Eén vraag per bouwsteen, en
-   nooit twee keer dezelfde bouwsteen. Sla een bouwsteen over als het antwoord al uit het gesprek
-   blijkt. Zijn de bouwstenen gedekt, ga dan meteen door naar soort 3 — ook al mocht je nog vragen
-   stellen. Een techniek met drie bouwstenen levert drie vragen op, geen zes.
-3. GEBRUIK EN VORM (stel deze vragen vóór je afrondt, tenzij het antwoord al ondubbelzinnig uit het
-   gesprek blijkt): de vragen die nodig zijn om te bepalen in welke vorm de prompt moet landen, zoals
-   - Wie voert de prompt straks uit: de gebruiker zelf in een chatgesprek met een AI, een
-     AI-assistent die zelfstandig taken uitvoert, of een programma dat de prompt automatisch aanroept?
-   - Wat moet eruit komen: tekst, een plan of analyse, code of software, beeld, video, of een gesprek?
-   - Wordt de prompt één keer gebruikt, of steeds opnieuw met wisselende invoer?
-   Sla een vraag over als het antwoord al vaststaat.
+GERICHTE NAVRAAG (maximaal 2 vragen, pas ná de vraaglijn hierboven): bepaal nu voor jezelf welke
+prompttechniek(en) uit het beeld volgen — zie het schema hieronder. Mist er dan nog één ding dat je
+voor díé techniek echt nodig hebt, vraag daar dan naar. Bijvoorbeeld: volgt er een toetsing en weet
+je de criteria wel maar de weging niet, vraag dan naar de weging. Is alles bekend, sla deze vragen
+dan over. Noem de techniek ook hier niet bij naam.
 
-ABSOLUUT MAXIMUM: ${CLARIFY_MAX_QUESTIONS} vragen in totaal. Daarna rond je altijd af. Kortere
-gesprekken zijn beter: een compleet beeld in vier vragen is een beter resultaat dan hetzelfde beeld
-in acht. Vraag jezelf vóór elke vraag af of het antwoord de prompt écht anders maakt; is dat niet zo,
-rond dan af.
+WELKE TECHNIEK VOLGT WAARUIT — pas dit toe bij het afronden, niet tijdens de vragen:
+- De gebruiker heeft geslaagde eerdere stukken die als voorbeeld kunnen dienen -> voorbeelden laten
+  navolgen (few-shot).
+- Het antwoord moet volledig uit meegeleverde stukken komen -> bronbinding.
+- De vorm ligt vast (kopjes, tabel, vaste secties, lengte) -> gestructureerde output.
+- Er wordt beoordeeld tegen criteria, en het oordeel moet navolgbaar zijn -> toetsen aan een kader.
+- Een fout is duur; feiten, cijfers of wetsverwijzingen moeten kloppen -> het werk laten natrekken.
+- Het perspectief van één specifieke rol is nodig -> vanuit een rol laten kijken.
+- Meerdere belangen of afdelingen moeten zich erin herkennen -> meerdere rollen tegelijk.
+- Opties moeten navolgbaar tegen elkaar worden afgewogen -> stap voor stap laten redeneren.
+- Er ligt een oplossing vast terwijl het probleem onduidelijk is -> eerst uitzoomen naar het
+  onderliggende vraagstuk.
+- De gebruiker weet zelf niet goed wat hij moet vragen -> de aanpak laten aanscherpen.
+Past er meer dan één, noem er dan hoogstens twee: de leidende eerst.
+
+ABSOLUUT MAXIMUM: ${CLARIFY_MAX_QUESTIONS} vragen in totaal. Daarna rond je altijd af.
 
 NOOIT VRAGEN (dit maakt het gesprek slechter):
-- Een vraag die al beantwoord is, in andere woorden. Een herformulering telt als herhaling: vraag je
-  naar dezelfde bouwsteen als eerder ("welke stappen moet de AI doorlopen", "welke fouten moet de AI
-  signaleren", "welke criteria gelden"), dan stel je hem niet opnieuw, hoe anders je hem ook giet.
-  Loop het gesprek hierboven na vóórdat je iets vraagt.
-- Werk dat de prompt straks zélf doet. De gebruiker levert de bouwstenen, niet de uitvoering: vraag
-  hem niet om de controlevragen te formuleren die de prompt moet stellen, niet om de scores in te
-  vullen van het toetsingskader, niet om de persona zelf uit te schrijven en niet om de lijst fouten
-  op te stellen die de AI moet vinden. Vraag naar de kaders, niet naar de uitkomst.
-- Détails die de prompt niet veranderen: exacte bedragen, zaaknummers, percentages of interne
+- Iets wat al beantwoord is, in andere woorden.
+- Werk dat de prompt straks zélf doet: vraag de gebruiker niet om de controlevragen te formuleren die
+  de prompt moet stellen, niet om scores in te vullen, niet om de rol zelf uit te schrijven en niet om
+  de lijst fouten op te stellen die de AI moet vinden. Vraag naar de kaders, niet naar de uitkomst.
+- Details die de prompt niet veranderen: exacte bedragen, zaaknummers, percentages of interne
   procedurenamen. Die vult de gebruiker straks per keer zelf in.
 
-Krijg je hieronder een lijst BESCHIKBARE PROMPTTECHNIEKEN mee? Kies dan uitsluitend uit die lijst en
-gebruik de naam exact zoals hij daar staat. Staat er een techniek bij die niet in het overzicht
-hierboven voorkomt, leid dan uit de omschrijving en de gebruikssituaties af welke bouwstenen die
-techniek nodig heeft, en vraag daarnaar.
+Krijg je hieronder een lijst BESCHIKBARE PROMPTTECHNIEKEN mee? Kies bij het afronden uitsluitend uit
+die lijst en gebruik de naam exact zoals hij daar staat.
 
 PROTOCOL (strikt):
-- Stel je een vraag? Antwoord dan met exact deze drie regels, in deze volgorde en zonder verdere tekst:
-  TECHNIEK: <de naam van de techniek die je nu volgt>
-  ANALYSE: <één zin van maximaal 25 woorden: wat je uit het doel opmaakt en waarom deze techniek past>
+- Stel je een vraag? Antwoord dan met exact deze twee regels, zonder verdere tekst:
+  STAP: <de stap uit de vraaglijn waar deze vraag bij hoort — kies er letterlijk één uit:
+    Het probleem | Het doel | Voor wie | Wat er al ligt | De grenzen | Waar het landt | Navraag>
   VRAAG: <je vraag>
-  De naam achter TECHNIEK komt boven de vraag te staan: schrijf hem kaal, precies zoals hij in de
-  lijst staat, zonder opmaak, sterretjes of aanhalingstekens. ANALYSE dient om je keuze scherp te
-  houden en wordt niet getoond. In de VRAAG zelf noem je de techniek nooit.
+  De stap is voor de voortgangsbalk op het scherm; in de VRAAG zelf noem je hem niet, net zomin als
+  een techniek-naam.
 - Rond je af? Antwoord dan met "KLAAR:" gevolgd door de uitgewerkte opdrachtbeschrijving, met deze
   kopjes elk op een eigen regel (laat een kopje weg als er echt niets over te zeggen valt):
   DOEL:
   CONTEXT:
   DOELGROEP:
   GEWENSTE UITKOMST:
-  AANPAK: (de werkwijze die uit het gesprek volgt, met de opgehaalde bouwstenen — bijvoorbeeld de rol
-    met haar belang en blinde vlek, de rollen en hun botsende belangen, de voorbeelden en wat daaraan
-    goed is, de vaste onderdelen en het formaat, de zichtbare tussenstappen, of de te onderzoeken
-    aannames. Hier mag je de techniek wél bij naam noemen.)
+  TECHNIEK: (de naam van de passende techniek uit de lijst — hoogstens twee, gescheiden door " + ")
+  WAAROM DEZE TECHNIEK: (één zin, gekoppeld aan wat de gebruiker heeft verteld)
+  AANPAK: (de werkwijze die daaruit volgt, met de concrete bouwstenen uit het gesprek)
   GEBRUIK: (chatgesprek, zelfstandige AI-assistent of programma; eenmalig of herbruikbaar)
   VORM: (tekst, plan/analyse, code, beeld, video of gesprek)
   RANDVOORWAARDEN:
@@ -2338,8 +2318,6 @@ const CLARIFY_USER_PROMPT = (args: {
   forceFinish?: boolean;
   /** De losse technieken zoals ze nú in de database staan. */
   techniques?: TechniqueSummary[];
-  /** De techniek die in beurt 1 is gekozen; ligt daarna vast. */
-  lockedTechnique?: string;
 }) => {
   const turns = args.transcript ?? [];
   const parts: string[] = [`WAT DE GEBRUIKER WIL BEREIKEN (eigen woorden):\n${args.goal.trim()}`];
@@ -2360,22 +2338,11 @@ const CLARIFY_USER_PROMPT = (args: {
         .join('\n')}`,
     );
   }
-  // De keuze uit beurt 1 komt elke beurt weer mee. Zonder dit is elke beurt
-  // stateloos: het model leidt de techniek dan telkens opnieuw af uit de laatste
-  // antwoorden, waardoor een persona-gesprek halverwege in een toetsingskader kan
-  // veranderen.
-  if (args.lockedTechnique) {
-    parts.push(
-      `VASTGEZETTE TECHNIEK: ${args.lockedTechnique}\nDeze is in de eerste beurt gekozen en staat ` +
-        'vast. Stel uitsluitend vragen die bouwstenen van DEZE techniek ophalen, en geef hem ' +
-        'letterlijk zo terug op de TECHNIEK-regel. Kies geen andere techniek.',
-    );
-  }
   if (turns.length === 0) {
     parts.push(
-      'GESPREK TOT NU TOE:\n(nog geen vragen gesteld). Bepaal eerst welke prompttechniek bij deze ' +
-        'beschrijving past, en stel dan de vraag die de belangrijkste ontbrekende bouwsteen van die ' +
-        'techniek ophaalt. Vraag niet naar wat er al staat.',
+      'GESPREK TOT NU TOE:\n(nog geen vragen gesteld). Begin bij het probleem: wat gaat er nu niet ' +
+        'goed, en waaruit blijkt dat? Staat dat al in de beschrijving, stel dan de volgende vraag uit ' +
+        'de vraaglijn. Vraag niet naar wat er al staat.',
     );
   } else {
     parts.push(
@@ -2395,10 +2362,10 @@ const CLARIFY_USER_PROMPT = (args: {
     );
   } else {
     parts.push(
-      'Controleer eerst welke bouwstenen hierboven al beantwoord zijn — ook als dat in andere ' +
-        'woorden gebeurde. Is er nog een ONBEANTWOORDE bouwsteen van de passende techniek, stel dan ' +
-        'die ene vraag ("VRAAG: …"). Zijn de bouwstenen gedekt en zijn ook gebruik en vorm bekend, ' +
-        'rond dan af met de opdrachtbeschrijving ("KLAAR: …"). Bij twijfel: afronden.',
+      'Bepaal waar je in de vraaglijn staat: welke stappen zijn beantwoord (ook als dat in andere ' +
+        'woorden gebeurde) en welke is de volgende? Stel die ene vraag ("VRAAG: …"). Is de vraaglijn ' +
+        'rond en heb je hooguit nog één gerichte navraag nodig, stel die dan; anders rond je af met de ' +
+        'opdrachtbeschrijving ("KLAAR: …"). Bij twijfel: afronden.',
     );
   }
   return parts.join('\n\n');
@@ -4107,6 +4074,49 @@ function streamFrameworkResponse(args: {
  * teruggevallen. Het afsluitende `done`-event bevat altijd het volledige,
  * gezaghebbende resultaat.
  */
+/**
+ * Vult de velden aan die het model heeft overgeslagen.
+ *
+ * Bij een lang gesprek schrijft een model royale veldwaarden en loopt het tegen
+ * zijn uitvoerlimiet aan: de JSON breekt dan halverwege af en de laatste velden
+ * ontbreken. Eén gerichte tweede vraag om alléén die velden is goedkoper en
+ * betrouwbaarder dan alles opnieuw laten schrijven — en de gebruiker ziet geen
+ * half ingevuld formulier meer.
+ */
+async function fillMissingPrefillFields(args: {
+  candidate: Provider;
+  system: string;
+  ownPrompt: string;
+  techniqueName?: string;
+  clarification?: string;
+  allFields: AnalyzeField[];
+  have: PrefilledField[];
+  maxTokens: number;
+  preferredProvider?: PreferredProvider;
+  preferredModel?: string;
+}): Promise<PrefilledField[]> {
+  const missing = args.allFields.filter((f) => !args.have.some((h) => h.id === f.id));
+  if (missing.length === 0) return args.have;
+  try {
+    const raw = await PROVIDERS[args.candidate](
+      `${PREFILL_USER_PROMPT(args.ownPrompt, args.techniqueName, missing, args.clarification)}\n\n` +
+        'LET OP: deze velden zijn in een eerdere ronde overgeslagen. Vul ze nu ALLEMAAL met een ' +
+        'concreet voorstel. "Niet van toepassing" of een lege waarde is geen geldig antwoord: leid ' +
+        'iets bruikbaars af uit de rest van de tekst en zet "source":"ai".',
+      args.system,
+      0.3,
+      resolveModel(args.candidate, args.preferredProvider, args.preferredModel),
+      args.maxTokens,
+    );
+    const extra = parsePrefill(raw, missing).fields;
+    console.log(`prefill-herstel: ${extra.length} van ${missing.length} ontbrekende velden alsnog gevuld`);
+    return [...args.have, ...extra.filter((e) => !args.have.some((h) => h.id === e.id))];
+  } catch (err) {
+    console.error('prefill-herstel mislukt:', err);
+    return args.have;
+  }
+}
+
 function streamPrefillResponse(args: {
   /** Voorkeursvolgorde: de eerste doet het werk, de rest is vangnet. */
   providers: Provider[];
@@ -4117,6 +4127,10 @@ function streamPrefillResponse(args: {
   preferredProvider?: PreferredProvider;
   preferredModel?: string;
   fields: AnalyzeField[];
+  /** De tekst van de gebruiker + de techniek, voor een gerichte herstelvraag. */
+  userOwnPrompt: string;
+  techniqueName?: string;
+  clarification?: string;
 }): Response {
   const {
     providers,
@@ -4127,6 +4141,9 @@ function streamPrefillResponse(args: {
     preferredProvider,
     preferredModel,
     fields,
+    userOwnPrompt,
+    techniqueName,
+    clarification,
   } = args;
 
   const validIds = new Map(fields.map((f) => [normalizeFieldId(f.id), f.id]));
@@ -4262,10 +4279,29 @@ function streamPrefillResponse(args: {
 
       if (won) {
         const parsed = parsePrefill(won.raw, fields);
+        // Ontbreekt er nog een veld (afgekapte uitvoer bij een lang gesprek),
+        // dan halen we precies die velden alsnog op voordat we afsluiten.
+        const complete = await fillMissingPrefillFields({
+          candidate: won.provider,
+          system,
+          ownPrompt: userOwnPrompt,
+          techniqueName,
+          clarification,
+          allFields: fields,
+          have: parsed.fields,
+          maxTokens,
+          preferredProvider,
+          preferredModel,
+        });
+        for (const field of complete) {
+          if (sentIds.has(field.id)) continue;
+          sentIds.add(field.id);
+          send({ type: 'field', field });
+        }
         send({
           type: 'done',
           summary: parsed.summary,
-          fields: parsed.fields,
+          fields: complete,
           provider: won.provider,
         });
         close();
@@ -4276,10 +4312,32 @@ function streamPrefillResponse(args: {
       // provider afbrak: die zijn geldig, dus die houden we.
       const claimed = answering as Provider | null;
       if (sentFields.length > 0) {
+        // Ook hier eerst aanvullen: de provider brak halverwege af, dus juist in
+        // dit geval ontbreken er velden. Zonder deze ronde zou de gebruiker een
+        // half ingevuld formulier krijgen zonder dat iets dat meldt.
+        const repaired = claimed
+          ? await fillMissingPrefillFields({
+              candidate: claimed,
+              system,
+              ownPrompt: userOwnPrompt,
+              techniqueName,
+              clarification,
+              allFields: fields,
+              have: sentFields,
+              maxTokens,
+              preferredProvider,
+              preferredModel,
+            })
+          : sentFields;
+        for (const field of repaired) {
+          if (sentIds.has(field.id)) continue;
+          sentIds.add(field.id);
+          send({ type: 'field', field });
+        }
         send({
           type: 'done',
           summary: '',
-          fields: sentFields,
+          fields: repaired,
           provider: claimed ?? 'local-template',
         });
         close();
@@ -4684,6 +4742,26 @@ function escapeRawControlChars(json: string): string {
 }
 
 /**
+ * Haalt markdown-nadruk uit tekst die in een gewoon tekstvak of in de
+ * samenvatting terechtkomt.
+ *
+ * De instructie "geen markdown" helpt, maar modellen vallen erin terug zodra ze
+ * een opsomming maken. En omdat de gebruiker deze tekst kopieert en plakt, leest
+ * hij de sterretjes letterlijk terug. Dit is dus het vangnet ná de instructie:
+ * nadruk, kophekjes en codetekens gaan eruit, terwijl streepjes-opsommingen en
+ * regelindeling blijven staan — die dragen betekenis.
+ */
+function stripEmphasis(text: string): string {
+  return text
+    .replace(/(\*\*|__)(.*?)\1/g, '$2')
+    .replace(/(?<![\w*])\*([^*\n]+)\*(?![\w*])/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/^[ \t]*#{1,6}[ \t]+/gm, '')
+    .replace(/^[ \t]*>[ \t]?/gm, '')
+    .replace(/\*\*/g, '');
+}
+
+/**
  * Normaliseert een veld-id, zodat een kleine afwijking van het model geen veld
  * kost: "END_GOAL", "end goal" en "endgoal" wijzen allemaal naar "end_goal".
  */
@@ -4742,7 +4820,7 @@ function parsePrefill(
         return id && value
           ? {
               id,
-              value: value.trim(),
+              value: stripEmphasis(value).trim(),
               source: f.source === 'ai' ? ('ai' as const) : ('prompt' as const),
               note: typeof f.note === 'string' ? f.note.trim() : '',
             }
@@ -4772,7 +4850,7 @@ function parseOnePrefilledField(chunk: string, valid: Map<string, string>): Pref
     if (!id) return null;
     const coerced = coerceFieldValue(f.value);
     if (coerced === null) return null;
-    const value = coerced.trim();
+    const value = stripEmphasis(coerced).trim();
     // Een leeg voorstel is nutteloos; dat veld blijft gewoon leeg.
     if (!value) return null;
     return {
@@ -5147,12 +5225,15 @@ Deno.serve(async (req: Request) => {
       // instructie die zélf een passende structuur voorstelt.
       // De projectcontext hier al erbij, dus zowel de streamende als de
       // niet-streamende route eronder werkt met dezelfde instructie.
+      const prefillBase = body.fromDocument
+        ? PREFILL_DOCUMENT_INSTRUCTION + PREFILL_SYSTEM_PROMPT
+        : body.fromFormatBrief
+          ? PREFILL_FORMAT_BRIEF_INSTRUCTION + PREFILL_SYSTEM_PROMPT
+          : PREFILL_SYSTEM_PROMPT;
+      // De veldwaarden komen in gewone tekstvakken terecht: markdown leest de
+      // gebruiker daar letterlijk als sterretjes terug.
       const prefillSystem = withProject(
-        body.fromDocument
-          ? PREFILL_DOCUMENT_INSTRUCTION + PREFILL_SYSTEM_PROMPT
-          : body.fromFormatBrief
-            ? PREFILL_FORMAT_BRIEF_INSTRUCTION + PREFILL_SYSTEM_PROMPT
-            : PREFILL_SYSTEM_PROMPT,
+        `${prefillBase}\n\n${NO_MARKDOWN_INSTRUCTION}`,
         body.projectContext,
       );
 
@@ -5169,6 +5250,9 @@ Deno.serve(async (req: Request) => {
           preferredProvider: body.preferredProvider,
           preferredModel: body.preferredModel,
           fields,
+          userOwnPrompt: ownPrompt,
+          techniqueName: body.techniqueName,
+          clarification: body.clarification,
         });
       }
 
@@ -5194,7 +5278,21 @@ Deno.serve(async (req: Request) => {
           }
           const parsed = parsePrefill(raw, fields);
           if (parsed.fields.length > 0) {
-            result = parsed;
+            result = {
+              summary: parsed.summary,
+              fields: await fillMissingPrefillFields({
+                candidate,
+                system: prefillSystem,
+                ownPrompt,
+                techniqueName: body.techniqueName,
+                clarification: body.clarification,
+                allFields: fields,
+                have: parsed.fields,
+                maxTokens,
+                preferredProvider: body.preferredProvider,
+                preferredModel: body.preferredModel,
+              }),
+            };
             provider = candidate;
             break;
           }
@@ -5835,7 +5933,6 @@ Deno.serve(async (req: Request) => {
         transcript,
         forceFinish: body.forceFinish || capReached,
         techniques: clarifyTechniques,
-        lockedTechnique: body.lockedTechnique?.trim() || undefined,
       });
 
       for (const candidate of order) {
@@ -5845,7 +5942,7 @@ Deno.serve(async (req: Request) => {
             // Mét de projectcontext: dit is de plek waar het verschil het grootst
             // is. Zonder die context hoort de vragenronde de gebruiker uit over
             // precies wat er in zijn projectinstructie al staat.
-            withProject(CLARIFY_SYSTEM_PROMPT, body.projectContext),
+            withProject(`${CLARIFY_SYSTEM_PROMPT}\n\n${NO_MARKDOWN_INSTRUCTION}`, body.projectContext),
             0.3,
             resolveModel(candidate, body.preferredProvider, body.preferredModel),
             maxTokens,
@@ -5857,12 +5954,12 @@ Deno.serve(async (req: Request) => {
               { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
             );
           }
-          // Zelfde VRAAG:/KLAAR:-protocol als het plan-step-interview, met de
-          // meta-regels TECHNIEK/ANALYSE ervoor. Die halen we er eerst af, zodat
-          // ze niet in een afrondende brief terechtkomen.
-          const meta = parseClarifyMeta(raw);
+          // Zelfde VRAAG:/KLAAR:-protocol als het plan-step-interview. Tijdens de
+          // vragen komt er geen techniek mee: die wordt pas bij het afronden
+          // bepaald, uit het complete beeld.
+          const step = parseClarifyStep(raw);
           const turn = parseInterviewTurn(
-            raw.replace(/(?:^|\n)\s*(?:TECHNIEK|ANALYSE):.*(?=\n|$)/gi, '\n').trim(),
+            raw.replace(/(?:^|\n)\s*STAP:.*(?=\n|$)/gi, '\n').trim(),
           );
           if (turn.question && !capReached) {
             return new Response(
@@ -5870,8 +5967,7 @@ Deno.serve(async (req: Request) => {
                 success: true,
                 needs_input: true,
                 question: turn.question,
-                technique: body.lockedTechnique?.trim() || meta.technique,
-                analysis: meta.analysis,
+                step,
                 asked: transcript.length + 1,
                 max: CLARIFY_MAX_QUESTIONS,
                 provider: candidate,
@@ -5880,8 +5976,22 @@ Deno.serve(async (req: Request) => {
             );
           }
           if (turn.material) {
+            // Nadruk eruit: de samenvatting wordt gekopieerd en als tekstbestand
+            // bewaard, en daar leest een sterretje als een sterretje.
+            turn.material = stripEmphasis(turn.material);
+            // De techniek staat in de opdrachtbeschrijving zelf (kopje TECHNIEK:).
+            // Die halen we eruit zodat de samenvatting hem als losse regel kan
+            // tonen — en zodat de framework-keuze erop kan voortbouwen.
+            const meta = parseClarifyMeta(turn.material);
             return new Response(
-              JSON.stringify({ success: true, done: true, brief: turn.material, provider: candidate }),
+              JSON.stringify({
+                success: true,
+                done: true,
+                brief: turn.material,
+                technique: meta.technique,
+                analysis: meta.analysis,
+                provider: candidate,
+              }),
               { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
             );
           }

@@ -4,7 +4,7 @@ import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import HoverPreview from '@/components/common/HoverPreview';
-import { GOAL_EXAMPLES } from '@/data/goalExamples';
+import { GOAL_EXAMPLES, categoryOf } from '@/data/goalExamples';
 import { recommendTechniques } from '@/services/optimizeService';
 import { isContextPrompt } from '@/lib/techniques';
 import { stripMarkdown } from '@/lib/utils';
@@ -191,7 +191,9 @@ export default function GoalRecommender({
               Voorbeelden van hoe je je doel kunt omschrijven. Klik op een voorbeeld om het in te
               vullen, of kopieer het.
             </p>
-            {GOAL_EXAMPLES.map((ex) => (
+            {GOAL_EXAMPLES.map((ex) => {
+              const CategoryIcon = categoryOf(ex).icon;
+              return (
               // De doelomschrijving zelf staat niet op het kaartje; hover of
               // "Gebruik" laat hem zien.
               <HoverPreview key={ex.title} label="Doelomschrijving" text={ex.goal}>
@@ -199,8 +201,8 @@ export default function GoalRecommender({
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <span className="inline-flex items-center gap-1 text-[11px] font-medium text-rijksblauw-600 dark:text-rijksblauw-300">
-                      <ex.icon size={12} className="shrink-0" />
-                      {ex.technique}
+                      <CategoryIcon size={12} className="shrink-0" />
+                      {categoryOf(ex).label}
                     </span>
                     <p className="mt-0.5 text-sm font-semibold text-slate-800 dark:text-slate-100">
                       {ex.title}
@@ -228,7 +230,8 @@ export default function GoalRecommender({
                 </div>
               </div>
               </HoverPreview>
-            ))}
+              );
+            })}
           </div>
         )}
 

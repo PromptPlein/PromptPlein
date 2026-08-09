@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { ArrowRight, Check, Dices, Loader2, MessageCircleQuestion, Sparkles } from 'lucide-react';
+import { ArrowRight, Check, Dices, Loader2, MessageCircleQuestion } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { runPlanStep } from '@/services/optimizeService';
 import { structureFormat } from '@/lib/techniques';
 import { stripMarkdown } from '@/lib/utils';
 import { detectPii, detectBlockedTopics, type GuardrailFinding } from '@/services/guardrails';
 import type { AiSettings } from '@/services/settingsService';
+import InterviewSteps from './InterviewSteps';
 import type { PlanStep, Technique, TranscriptTurn } from '@/types';
 
 /**
@@ -16,7 +17,7 @@ import type { PlanStep, Technique, TranscriptTurn } from '@/types';
 export function InterviewPanel({
   socratic,
   intro,
-  analysis,
+  step,
   question,
   transcript,
   answer,
@@ -37,12 +38,11 @@ export function InterviewPanel({
    */
   intro?: string;
   /**
-   * Wat de AI van het vraagstuk heeft gemaakt: de prompttechniek die ze nu volgt
-   * en waarom. Staat boven de vraag, zodat zichtbaar is waar de vragen vandaan
-   * komen in plaats van dat ze uit de lucht lijken te vallen. Afwezig = niets
-   * tonen (bijvoorbeeld in het plan-interview, waar de techniek al vaststaat).
+   * De stap uit de vaste vraaglijn waar de openstaande vraag bij hoort. Alleen
+   * de brainstormsessie levert die; ontbreekt hij, dan blijft de voortgangsbalk
+   * weg (het plan-interview kent geen vaste lijn).
    */
-  analysis?: { technique?: string; text?: string } | null;
+  step?: string | null;
   question: string | null;
   transcript: TranscriptTurn[];
   answer: string;
@@ -75,13 +75,18 @@ export function InterviewPanel({
         </p>
       </div>
 
+      {/* Waar we in het gesprek zijn. Alleen als de aanroeper stappen levert. */}
+      {step !== undefined && (
+        <InterviewSteps current={step} answered={transcript.length} busy={busy && !question} />
+      )}
+
       {/* Het gesprek tot nu toe. */}
       {transcript.length > 0 && (
         <ul className="space-y-2">
           {transcript.map((t, i) => (
             <li
               key={i}
-              className="rounded-lg border border-slate-200 bg-white p-2.5 text-xs dark:border-slate-700 dark:bg-slate-800"
+              className="animate-fade-in rounded-lg border border-slate-200 bg-white p-2.5 text-xs transition-colors dark:border-slate-700 dark:bg-slate-800"
             >
               <p className="font-medium text-slate-600 dark:text-slate-300">
                 {i + 1}. {stripMarkdown(t.question)}
@@ -92,34 +97,25 @@ export function InterviewPanel({
         </ul>
       )}
 
-      {/* De techniek die de AI heeft gekozen, vlak boven de vraag: zo is zichtbaar
-          waar de vragen vandaan komen. Bewust één regel zonder toelichting — de
-          motivatie die het model meestuurt houdt de keuze scherp, maar hoort niet
-          op het scherm. stripMarkdown haalt de sterretjes eraf die het model er
-          soms omheen zet; het vet komt hier van de opmaak, niet van de tekst.
-          Kan tussen twee vragen wisselen als een antwoord de AI van gedachten
-          doet veranderen. */}
-      {analysis?.technique && (
-        <div className="flex items-center gap-2 rounded-xl border border-rijksblauw-200 bg-rijksblauw-50/70 px-3 py-2 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10">
-          <Sparkles size={15} className="shrink-0 text-rijksblauw-500" />
-          <p className="min-w-0 text-xs text-rijksblauw-700 dark:text-rijksblauw-200">
-            Techniek: <strong className="font-bold">{stripMarkdown(analysis.technique)}</strong>
-          </p>
-        </div>
-      )}
-
       {/* De huidige vraag + antwoordveld, of een laadstaat terwijl de AI nadenkt. */}
       {busy && !question ? (
-        <div className="flex items-center gap-2 rounded-xl border border-rijksblauw-200 bg-white p-3 text-sm text-rijksblauw-600 dark:border-rijksblauw-500/30 dark:bg-slate-800 dark:text-rijksblauw-300">
-          <Loader2 size={16} className="animate-spin" />
-          {finishing
-            ? 'We zetten het totaalplaatje op een rij en kijken wat er nog mist…'
-            : transcript.length === 0
-              ? 'De eerste vraag wordt opgesteld…'
-              : 'De AI denkt na over de volgende vraag…'}
+        <div className="animate-fade-in overflow-hidden rounded-xl border border-rijksblauw-200 bg-white dark:border-rijksblauw-500/30 dark:bg-slate-800">
+          <div className="flex items-center gap-2 p-3 text-sm text-rijksblauw-600 dark:text-rijksblauw-300">
+            <Loader2 size={16} className="animate-spin" />
+            {finishing
+              ? 'We zetten het totaalplaatje op een rij en kijken wat er nog mist…'
+              : transcript.length === 0
+                ? 'De eerste vraag wordt opgesteld…'
+                : 'De AI denkt na over de volgende vraag…'}
+          </div>
+          {/* Onbepaalde voortgang: laat zien dat er iets gebeurt zonder een
+              wachttijd te beloven die we niet kennen. */}
+          <div className="relative h-1 overflow-hidden bg-rijksblauw-100 dark:bg-rijksblauw-500/20">
+            <div className="animate-loading-bar absolute inset-y-0 w-1/3 rounded-full bg-rijksblauw-500" />
+          </div>
         </div>
       ) : question ? (
-        <div className="rounded-xl border border-rijksblauw-200 bg-white p-3 dark:border-rijksblauw-500/30 dark:bg-slate-800">
+        <div className="animate-fade-in rounded-xl border border-rijksblauw-200 bg-white p-3 shadow-sm dark:border-rijksblauw-500/30 dark:bg-slate-800">
           <p className="flex items-start gap-2 text-sm font-medium text-rijksblauw-700 dark:text-rijksblauw-200">
             <MessageCircleQuestion size={16} className="mt-0.5 shrink-0" />
             <span>

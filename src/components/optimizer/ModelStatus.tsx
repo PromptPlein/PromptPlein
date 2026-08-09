@@ -18,10 +18,11 @@ interface ModelStatusProps {
 /**
  * Laat zien welk model op dit moment aan je antwoord werkt.
  *
- * Er werkt bewust één model tegelijk: het model dat de beheerder heeft ingesteld.
- * Valt dat uit, dan neemt de volgende in de keten het over — en dan hoort de
- * gebruiker te zien dat er is overgestapt, in plaats van dat het stilletjes een
- * ander model wordt. De eerdere poging blijft daarom als "niet gelukt" staan.
+ * Alleen het ACTIEVE model, niet de keten erachter. Er werkt altijd één model
+ * tegelijk — dat van de beheerder — en valt dat uit, dan neemt de volgende het
+ * over. Die overstap melden we in één regel, maar de mislukte poging krijgt geen
+ * eigen vak meer: een lijst met modellen die niet meedoen leidt af en roept
+ * vragen op over namen die de gebruiker niet kent.
  */
 export default function ModelStatus({ models, winner, verb, className }: ModelStatusProps) {
   // Levert een provider het antwoord die niet in de lijst staat (oudere server
@@ -32,6 +33,9 @@ export default function ModelStatus({ models, winner, verb, className }: ModelSt
   // Wie er nu werkt: de leverende provider, anders de laatst geprobeerde.
   const current = winner ?? lanes[lanes.length - 1];
   const switched = lanes.length > 1;
+  // Alleen het model dat nu werkt krijgt een vak; de eerdere pogingen zitten in
+  // de regel "overgestapt na een storing".
+  const shown = [current];
 
   return (
     <div className={clsx('space-y-2', className)}>
@@ -40,8 +44,8 @@ export default function ModelStatus({ models, winner, verb, className }: ModelSt
         {switched && ' — overgestapt na een storing'}
       </p>
 
-      <div className={clsx('grid gap-2', switched && 'sm:grid-cols-2')}>
-        {lanes.map((model) => {
+      <div className="grid gap-2">
+        {shown.map((model) => {
           const active = model === current;
           const failed = !active;
           const delivering = active && Boolean(winner);

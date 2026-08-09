@@ -92,7 +92,7 @@ export default function OptimizingLoader({
             </p>
             <p className="text-sm text-slate-500 dark:text-slate-400">
               {streaming ? (
-                <>Je prompt wordt nu geschreven — je leest live mee</>
+                <>Je prompt wordt nu geschreven</>
               ) : phase === 'writing' ? (
                 <>Het model begint te schrijven…</>
               ) : (

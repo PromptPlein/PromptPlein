@@ -564,13 +564,18 @@ export interface ClarifyResult {
   /** De ene volgende vraag aan de gebruiker. */
   question?: string;
   /**
-   * De prompttechniek die de AI bij dit doel heeft gekozen en die bepaalt welke
-   * vragen er komen (bijv. "Persona Prompting"). Wordt boven de vraag getoond,
-   * zodat zichtbaar is wát er wordt opgebouwd. Kan per beurt wisselen als een
-   * antwoord de AI van gedachten doet veranderen.
+   * De stap uit de vaste vraaglijn waar deze vraag bij hoort ("Het probleem",
+   * "Het doel", …). Voedt de voortgangsbalk boven het gesprek.
+   */
+  step?: string;
+  /**
+   * De prompttechniek die uit het AFGERONDE gesprek volgt (bijv. "Bronbinding").
+   * Komt alleen mee bij `done`: tijdens de vragen is het vraagstuk nog in kaart
+   * aan het komen, en een techniek kiezen op basis van één zin zou de vragen de
+   * verkeerde kant op sturen. Wordt in de samenvatting getoond.
    */
   technique?: string;
-  /** Eén zin: wat de AI uit het doel opmaakt en waarom die techniek past. */
+  /** Eén zin: waarom die techniek past, gekoppeld aan wat de gebruiker vertelde. */
   analysis?: string;
   /** Het hoeveelste vraag dit is, en het absolute maximum (server-bepaald). */
   asked?: number;

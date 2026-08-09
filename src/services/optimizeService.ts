@@ -1294,18 +1294,13 @@ export async function runClarifyTurn(args: {
    * onbereikbaar.
    */
   techniques?: Technique[];
-  /**
-   * De techniek die in de eerste beurt is gekozen. Elke volgende beurt sturen we
-   * hem terug, zodat het gesprek niet halverwege van techniek wisselt: de server
-   * kent geen sessie, dus zonder dit leidt het model de keuze telkens opnieuw af.
-   */
-  lockedTechnique?: string;
 }): Promise<ClarifyResult> {
   try {
     const data = await postOptimize<{
       success?: boolean;
       needs_input?: boolean;
       question?: string;
+      step?: string;
       technique?: string;
       analysis?: string;
       asked?: number;
@@ -1320,7 +1315,6 @@ export async function runClarifyTurn(args: {
       mode: 'clarify',
       goal: args.goal,
       transcript: args.transcript ?? [],
-      lockedTechnique: args.lockedTechnique,
       techniques: (args.techniques ?? []).map((t) => ({
         id: t.id,
         name: t.name,
@@ -1354,8 +1348,7 @@ export async function runClarifyTurn(args: {
         success: true,
         needs_input: true,
         question: data.question.trim(),
-        technique: data.technique?.trim() || undefined,
-        analysis: data.analysis?.trim() || undefined,
+        step: data.step?.trim() || undefined,
         asked: data.asked,
         max: data.max,
         provider: data.provider ?? 'claude',
@@ -1366,6 +1359,9 @@ export async function runClarifyTurn(args: {
         success: true,
         done: true,
         brief: data.brief.trim(),
+        // De techniek die uit het complete beeld volgt; pas hier bekend.
+        technique: data.technique?.trim() || undefined,
+        analysis: data.analysis?.trim() || undefined,
         provider: data.provider ?? 'claude',
       };
     }

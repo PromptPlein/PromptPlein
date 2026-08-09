@@ -32,11 +32,12 @@ import { detectPii, detectBlockedTopics, type GuardrailFinding } from '@/service
 import { logBehavior, newBehaviorSession, type BehaviorSession } from '@/services/behaviorService';
 import { useAuth } from '@/context/AuthContext';
 import HoverPreview from '@/components/common/HoverPreview';
-import { GOAL_EXAMPLES } from '@/data/goalExamples';
+import { GOAL_EXAMPLES, categoryOf } from '@/data/goalExamples';
 import type { AiSettings } from '@/services/settingsService';
 import OptimizingLoader from './OptimizingLoader';
 import PrefillLoader from './PrefillLoader';
 import GuardrailDialog from './GuardrailDialog';
+import BriefSummary from './BriefSummary';
 import { InterviewPanel } from './InterviewPanel';
 import FollowUpQuestions, { type FieldMeta } from './FollowUpQuestions';
 import type { StreamStatus } from '@/lib/ndjsonStream';
@@ -184,6 +185,9 @@ export default function GoalDialog({
 
   // Het gesprek: gestelde vraag, het transcript en het antwoordveld.
   const [question, setQuestion] = useState<string | null>(null);
+  // De stap uit de vraaglijn waar de openstaande vraag bij hoort; voedt de
+  // voortgangsbalk boven het gesprek.
+  const [step, setStep] = useState<string | null>(null);
   // Beheerder laat een testantwoord verzinnen (zie handleInventAnswer).
   const [inventing, setInventing] = useState(false);
   // De techniek die de AI nu volgt + waarom, zoals getoond boven de vraag. Blijft
@@ -281,6 +285,7 @@ export default function GoalDialog({
     setPhase('goal');
     setQuestion(null);
     setAnalysis(null);
+    setStep(null);
     analysisRef.current = null;
     setTranscript([]);
     setAnswer('');
@@ -349,6 +354,7 @@ export default function GoalDialog({
     setTranscript([]);
     setQuestion(null);
     setAnalysis(null);
+    setStep(null);
     analysisRef.current = null;
     setAnswer('');
     setBrief(null);
@@ -380,8 +386,6 @@ export default function GoalDialog({
         // waarvan het de bouwstenen uitvraagt. Frameworks komen pas ná de
         // opdrachtbeschrijving aan bod.
         techniques: techniques.filter((t) => !isContextPrompt(t)),
-        // Eenmaal gekozen blijft de techniek staan; zie runClarifyTurn.
-        lockedTechnique: analysisRef.current?.technique,
       });
       if (res.unclear) {
         // De beschrijving is onbruikbaar: terug naar het doelveld met uitleg.
@@ -392,11 +396,7 @@ export default function GoalDialog({
       }
       if (res.needs_input && res.question) {
         setQuestion(res.question);
-        if (res.technique || res.analysis) {
-          const next = { technique: res.technique, text: res.analysis };
-          analysisRef.current = next;
-          setAnalysis(next);
-        }
+        if (res.step) setStep(res.step);
         setAnswer('');
         log('interview_question', { metadata: { turn: turns.length + 1 } });
         return;
@@ -404,6 +404,13 @@ export default function GoalDialog({
       if (res.done && res.brief) {
         setQuestion(null);
         setBrief(res.brief);
+        // Pas hier is de techniek bekend: hij volgt uit het complete beeld, niet
+        // uit de eerste zin. Hij verschijnt in de samenvatting, niet bij de vragen.
+        if (res.technique || res.analysis) {
+          const next = { technique: res.technique, text: res.analysis };
+          analysisRef.current = next;
+          setAnalysis(next);
+        }
         clearRunDraft();
         log('interview_finished', { metadata: { turns: turns.length, forced: forceFinish } });
         void offerFramework(res.brief, turns);
@@ -548,10 +555,10 @@ export default function GoalDialog({
     });
     try {
       const res = await prefillFields({
-        ownPrompt:
-          transcript.length > 0
-            ? `${brief}\n\nGESPREK:\n${serializeTranscript(transcript)}`
-            : brief,
+        // Alleen de opdrachtbeschrijving: die vat het gesprek al samen. Het ruwe
+        // transcript er nog eens bij duwde het model over zijn uitvoerlimiet,
+        // waardoor de laatste velden leeg bleven.
+        ownPrompt: brief,
         technique: framework,
         preferredProvider: settings.provider,
         preferredModel: settings.model,
@@ -755,14 +762,16 @@ export default function GoalDialog({
                       onder — die zou de lijst onleesbaar lang maken; hij komt in
                       het veld zodra je op "Gebruik" klikt. */}
                   <div className="opl-scroll-slim max-h-[22rem] space-y-2 overflow-y-auto pr-1">
-                    {GOAL_EXAMPLES.map((ex) => (
+                    {GOAL_EXAMPLES.map((ex) => {
+              const CategoryIcon = categoryOf(ex).icon;
+              return (
                       <HoverPreview key={ex.title} label="Doelomschrijving" text={ex.goal}>
                       <div className="group rounded-lg border border-slate-200 bg-white p-2.5 transition-colors hover:border-rijksblauw-300 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-rijksblauw-500/40">
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
                             <span className="inline-flex items-center gap-1 text-[11px] font-medium text-rijksblauw-600 dark:text-rijksblauw-300">
-                              <ex.icon size={12} className="shrink-0" />
-                              {ex.technique}
+                              <CategoryIcon size={12} className="shrink-0" />
+                              {categoryOf(ex).label}
                             </span>
                             <p className="mt-0.5 text-sm font-semibold text-slate-800 dark:text-slate-100">
                               {ex.title}
@@ -796,7 +805,8 @@ export default function GoalDialog({
                         </div>
                       </div>
                       </HoverPreview>
-                    ))}
+                    );
+                    })}
                   </div>
                 </div>
               )}
@@ -853,6 +863,19 @@ export default function GoalDialog({
         {/* Het gesprek, de frameworkkeuze of het bouwen. */}
         {showConversation && (
           <div className="space-y-5 bg-white p-5 dark:bg-slate-800 sm:p-6">
+            {/* Zodra de vragenronde klaar is: eerst laten zien wat we hebben
+                opgehaald. De gebruiker heeft er een reeks vragen voor beantwoord
+                en moet kunnen nalezen (en bewaren) wat daaruit kwam, vóórdat het
+                framework en de prompt eroverheen komen. */}
+            {brief && phase !== 'dialogue' && (
+              <BriefSummary
+                brief={brief}
+                goal={goal}
+                technique={analysis?.technique}
+                why={analysis?.text}
+              />
+            )}
+
             {phase === 'error' ? (
               <div className="flex flex-col gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 sm:flex-row sm:items-center sm:justify-between dark:border-rose-500/30 dark:bg-rose-500/15 dark:text-rose-200">
                 <span>{stripMarkdown(error ?? 'Het gesprek is mislukt.')}</span>
@@ -970,7 +993,7 @@ export default function GoalDialog({
             ) : (
               <InterviewPanel
                 socratic={false}
-                analysis={analysis}
+                step={step}
                 onInventAnswer={isAdmin ? handleInventAnswer : undefined}
                 inventing={inventing}
                 intro="We stellen één vraag per keer: eerst wat je wilt bereiken, daarna de bouwstenen van de techniek die daarbij past."
