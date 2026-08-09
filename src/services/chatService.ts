@@ -9,7 +9,6 @@
 import { getAnonKey, getFunctionUrl, isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { streamNdjson, type StreamHandler } from '@/lib/ndjsonStream';
 import { CHAT_PREFIX } from '@/lib/chatStorage';
-import { tidyChatReply } from '@/lib/utils';
 import {
   composeChatOptimizePrompt,
   composeChatSystemPrompt,
@@ -48,8 +47,7 @@ export async function sendChatMessage(args: {
   /**
    * 'execution': dit gesprek voert een gegenereerde prompt uit. Het draait dan
    * onder de neutrale uitvoer-systeemprompt (de prompt-template bepaalt zelf
-   * taal, toon en opmaak), met het ruimere token-plafond server-side, en de
-   * B1-huisregels worden NIET op het antwoord afgedwongen (geen tidyChatReply).
+   * taal, toon en opmaak) en met het ruimere token-plafond server-side.
    */
   kind?: 'execution';
   /**
@@ -77,15 +75,11 @@ export async function sendChatMessage(args: {
   }
 
   const anonKey = getAnonKey();
-  // Uitvoergesprek: de prompt-template bepaalt zelf de huisregels, dus geen
-  // B1-opschoning van het antwoord — anders zou de test misleiden over wat de
-  // prompt echt doet (vet en opmaak zouden eruit worden gestript).
-  //
-  // Een PROJECTgesprek om dezelfde reden niet: daar bepaalt de projectinstructie
-  // van de gebruiker de vorm. Zou tidyChatReply hier toch draaien, dan zouden de
-  // B1-huisregels via de achterdeur alsnog zijn opmaak overrulen — precies wat
-  // composeProjectSystemPrompt bewust weglaat.
-  const tidy = isExecution || isProject ? (text: string) => text : tidyChatReply;
+  // Het antwoord gaat ongewijzigd naar het scherm — geen opschoning achteraf.
+  // De opmaakregels staan in de systeemprompt en dat is de enige plek waar het
+  // gedrag van de chat vandaan komt; een nabewerking hier zou een tweede,
+  // onzichtbare regelset zijn en het antwoord anders laten lezen dan het model
+  // het schreef.
   try {
     const outcome = await streamNdjson({
       url: functionUrl,
@@ -105,9 +99,9 @@ export async function sendChatMessage(args: {
         preferredProvider: settings.provider,
         preferredModel: settings.model,
         temperature: settings.temperature,
-        // Huisregels van de beheerder + zijn basisinformatie, in één instructie;
-        // bij een uitvoergesprek juist de neutrale uitvoerinstructie, en in een
-        // project de projectinstructie van de gebruiker zelf.
+        // De systeemprompt van de beheerder, ongewijzigd; bij een uitvoergesprek
+        // de neutrale uitvoerinstructie en in een project de projectinstructie
+        // van de gebruiker zelf. De server voegt er niets aan toe.
         systemPrompt: isExecution
           ? composeExecutionSystemPrompt(settings)
           : isProject && project
@@ -115,19 +109,16 @@ export async function sendChatMessage(args: {
             : composeChatSystemPrompt(settings),
       },
       onChunk,
-      // Huisregels ook afdwingen op wat het model teruggeeft (zie tidyChatReply);
-      // tijdens het streamen én op de eindtekst, zodat beide gelijk zijn.
-      tidy,
       signal,
     });
 
     if (outcome.aborted) {
-      return { text: tidy(outcome.text), provider: outcome.provider, aborted: true };
+      return { text: outcome.text, provider: outcome.provider, aborted: true };
     }
     if (outcome.error) {
-      return { text: tidy(outcome.text), provider: outcome.provider, error: outcome.error };
+      return { text: outcome.text, provider: outcome.provider, error: outcome.error };
     }
-    const text = tidy(outcome.text).trim();
+    const text = outcome.text.trim();
     if (!text) {
       return { text: '', provider: outcome.provider, error: 'De AI-service gaf een leeg antwoord.' };
     }

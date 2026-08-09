@@ -41,7 +41,6 @@ import {
   DEFAULT_EXECUTION_SYSTEM_PROMPT,
   DEFAULT_PROJECT_OPTIMIZE_PROMPT,
   DEFAULT_SYSTEM_PROMPT,
-  MAX_CHAT_BASE_INFO_CHARS,
   type AiSettings,
   type ChatSettings,
 } from '@/services/settingsService';
@@ -145,7 +144,6 @@ export default function SettingsPage() {
             provider: chat.provider,
             model: chat.model,
             temperature: chat.temperature,
-            base_info_chars: chat.baseInfo.length,
             optimize_enabled: chat.optimizeEnabled,
             project_optimize_enabled: chat.projectOptimizeEnabled,
           },
@@ -410,9 +408,10 @@ export default function SettingsPage() {
             <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400 dark:text-slate-500">
               <span>
                 Gaat mee bij <strong>elk</strong> bericht van <strong>iedere</strong> gebruiker en
-                bepaalt taal, toon en opmaak van de antwoorden. Laat leeg om de ingebouwde
-                standaard te gebruiken. De opmaakregels (opsomming met •, vet alleen in koppen,
-                geen streepje als leesteken) worden daarnaast automatisch nagelopen op elk antwoord.
+                bepaalt taal, toon en opmaak van de antwoorden. Laat leeg om de ingebouwde standaard
+                te gebruiken. Dit is de <strong>enige</strong> instructie die de chat krijgt: er komt
+                verderop geen regel meer bij en het antwoord wordt daarna niet meer bijgeschaafd.
+                Wat hier staat, is wat de assistent doet.
               </span>
               {chat.systemPrompt.trim() !== DEFAULT_CHAT_SYSTEM_PROMPT && (
                 <button
@@ -597,35 +596,6 @@ export default function SettingsPage() {
                 )}
               </p>
             </div>
-          </div>
-
-          <div>
-            <label className="opl-label" htmlFor="chatBaseInfo">
-              Basisinformatie voor alle gebruikers
-            </label>
-            <textarea
-              id="chatBaseInfo"
-              className="opl-input min-h-[140px] resize-y text-[13px]"
-              value={chat.baseInfo}
-              maxLength={MAX_CHAT_BASE_INFO_CHARS}
-              onChange={(e) => patchChat({ baseInfo: e.target.value })}
-              placeholder={
-                'Bijv. Deze chat is van [naam organisatie].\n' +
-                'De gebruikers zijn [doelgroep, bijv. beleidsmedewerkers, juristen en IT].\n' +
-                'Verwijs voor personeelszaken naar het serviceportaal.\n' +
-                'Wij werken volgens [interne werkwijze of afspraak].'
-              }
-            />
-            <p className="mt-1 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400 dark:text-slate-500">
-              <span className="max-w-xl">
-                Vaste context die de assistent bij elk gesprek meekrijgt: om welke organisatie het
-                gaat, wie de gebruikers zijn, vaste afspraken en waar de chat wel en niet over gaat.
-                Komt onder de huisregels te staan, zodat die blijven gelden.
-              </span>
-              <span className="shrink-0 tabular-nums">
-                {chat.baseInfo.length}/{MAX_CHAT_BASE_INFO_CHARS}
-              </span>
-            </p>
           </div>
 
           <div>
