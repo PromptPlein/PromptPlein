@@ -374,8 +374,18 @@ const PROVIDER_MODELS: Record<Provider, string[]> = {
   deepseek: ['deepseek-v4-flash', 'deepseek-v4-pro'],
   // Mistral: bewust de `-latest`-aliassen, die schuiven mee met een nieuwe
   // generatie. Per augustus 2026 achtereenvolgens mistral-small-2603 (Small 4),
-  // ministral-8b-2512 en ministral-3b-2512 (Ministral 3).
-  mistral: ['mistral-small-latest', 'ministral-8b-latest', 'ministral-3b-latest'],
+  // mistral-medium-2604 (Medium 3.5), mistral-large-2512 (Large 3), en
+  // ministral-8b-2512 / ministral-3b-2512 (Ministral 3). Ministral 3 14B staat
+  // er met een gedateerde id: die maat is nieuw, dus een -latest-alias is er
+  // mogelijk nog niet.
+  mistral: [
+    'mistral-small-latest',
+    'mistral-medium-latest',
+    'mistral-large-latest',
+    'ministral-14b-2512',
+    'ministral-8b-latest',
+    'ministral-3b-latest',
+  ],
 };
 
 const CLAUDE_MODEL = PROVIDER_MODELS.claude[0];
@@ -395,7 +405,9 @@ const MISTRAL_MODEL = PROVIDER_MODELS.mistral[0];
  *
  * Let op de twee plekken waar het sterkste model NIET het eerste uit
  * PROVIDER_MODELS is: bij DeepSeek staat Flash vooraan (goedkoop) en is Pro de
- * sterkere, en bij Mistral is Small 4 sterker dan de Ministrals eronder.
+ * sterkere. Bij Mistral staat hier Small 4 en niet Medium 3.5, hoewel Medium 3.5
+ * sterker is: dat model kost tien tot twaalf keer zo veel per token, en dit is
+ * de bovengrens die de prijs per projectinstelling nog verantwoordt.
  *
  * Voor OpenAI staat hier het vlaggenschip en niet 'gpt-5.5-pro': dat is zes keer
  * zo duur en gericht op maximale precisie, niet op betere tekst.
