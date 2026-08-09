@@ -8,7 +8,6 @@ import {
   MessageSquare,
   ShieldCheck,
   ClipboardCheck,
-  Users,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '@/context/AuthContext';
@@ -56,7 +55,6 @@ const navItems: NavItem[] = [
     prefetch: prefetchChatPage,
   },
   { to: '/bibliotheek', label: 'Mijn prompts', icon: Library, end: false },
-  { to: '/community', label: 'Community', icon: Users, end: false },
 ];
 
 /** Verloop + gekleurde gloed per accent. */
