@@ -12,6 +12,7 @@ import {
   Search,
   Folder,
   Sparkles,
+  MessageSquare,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -75,26 +76,18 @@ export default function HomePage() {
               Upload, deel, zoek en optimaliseer AI-prompts op basis van bewezen
               prompting-technieken. Voor ambtenaren, door ambtenaren.
             </p>
-            <div className="mx-auto mt-8 flex w-full max-w-md flex-col gap-3">
-              <div className="flex flex-col gap-3 sm:flex-row">
-                <button
-                  onClick={() => setUploadOpen(true)}
-                  className="opl-btn flex-1 justify-center border border-white/70 text-white hover:bg-white/10"
-                >
-                  <Plus size={18} /> Nieuwe prompt
-                </button>
-                <Link
-                  to="/zoeken"
-                  className="opl-btn flex-1 justify-center border border-white/70 text-white hover:bg-white/10"
-                >
-                  Verken bibliotheek <ArrowRight size={18} />
-                </Link>
-              </div>
+            <div className="mx-auto mt-8 flex w-full max-w-md flex-col gap-3 sm:flex-row">
               <Link
                 to="/genereren"
-                className="opl-btn w-full justify-center border border-white/70 text-white hover:bg-white/10"
+                className="opl-btn flex-1 justify-center border border-white/70 text-white hover:bg-white/10"
               >
-                <Sparkles size={18} className="text-rijksoranje" /> Genereer je prompt
+                <Sparkles size={18} className="text-rijksoranje" /> Genereer een prompt
+              </Link>
+              <Link
+                to="/chat"
+                className="opl-btn flex-1 justify-center border border-white/70 text-white hover:bg-white/10"
+              >
+                <MessageSquare size={18} /> Start een chat
               </Link>
             </div>
           </div>
