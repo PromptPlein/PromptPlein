@@ -2,14 +2,12 @@ import { useEffect, useState } from 'react';
 import { NavLink, Link } from 'react-router-dom';
 import {
   LayoutDashboard,
-  Search,
   Sparkles,
   Library,
   Activity,
   MessageSquare,
   ShieldCheck,
   ClipboardCheck,
-  Network,
   Users,
 } from 'lucide-react';
 import clsx from 'clsx';
@@ -25,7 +23,7 @@ function prefetchChatPage() {
 }
 
 /**
- * De nav bevat twee soorten items: plekken (Dashboard, Zoeken, …) en gereedschap.
+ * De nav bevat twee soorten items: plekken (Dashboard, Mijn prompts, …) en gereedschap.
  * Gereedschap — Genereren maakt een prompt, Chat gebruikt hem — krijgt een gevuld
  * icoonblokje in zijn eigen kleur, zodat de twee AI-acties uit de balk springen.
  */
@@ -46,7 +44,6 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { to: '/zoeken', label: 'Zoeken', icon: Search, end: false },
   { to: '/genereren', label: 'Genereren', icon: Sparkles, end: false, accent: 'oranje' },
   // Chat is alleen zichtbaar voor ingelogde gebruikers (en als de admin hem aan heeft).
   {
@@ -60,7 +57,6 @@ const navItems: NavItem[] = [
   },
   { to: '/bibliotheek', label: 'Mijn prompts', icon: Library, end: false },
   { to: '/community', label: 'Community', icon: Users, end: false },
-  { to: '/netwerk', label: 'Netwerk', icon: Network, end: false },
 ];
 
 /** Verloop + gekleurde gloed per accent. */
