@@ -4,7 +4,6 @@ import {
   LayoutDashboard,
   Sparkles,
   Library,
-  Activity,
   MessageSquare,
   ShieldCheck,
   ClipboardCheck,
@@ -156,19 +155,6 @@ export default function Header() {
         </nav>
 
         <div className="flex items-center gap-1">
-          <NavLink
-            to="/activiteit"
-            className={({ isActive }) =>
-              clsx(
-                'rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-800',
-                isActive ? 'text-rijksblauw-700 dark:text-rijksblauw-200' : 'text-slate-500 dark:text-slate-400',
-              )
-            }
-            title="Mijn activiteit"
-            aria-label="Mijn activiteit"
-          >
-            <Activity size={18} />
-          </NavLink>
           {(isModerator || isAdmin) && (
             <NavLink
               to="/goedkeuringen"
