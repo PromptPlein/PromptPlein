@@ -67,7 +67,7 @@ export default function HomePage() {
           <DashboardBackground />
         </Suspense>
         <div className="relative mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
-          <div className="mx-auto max-w-2xl">
+          <div className="mx-auto max-w-2xl text-center">
             <h1 className="text-4xl font-extrabold leading-tight text-white sm:text-5xl">
               Prompt Library voor de Nederlandse overheid
             </h1>
@@ -75,7 +75,7 @@ export default function HomePage() {
               Upload, deel, zoek en optimaliseer AI-prompts op basis van bewezen
               prompting-technieken. Voor ambtenaren, door ambtenaren.
             </p>
-            <div className="mt-8 flex w-full max-w-md flex-col gap-3">
+            <div className="mx-auto mt-8 flex w-full max-w-md flex-col gap-3">
               <div className="flex flex-col gap-3 sm:flex-row">
                 <button
                   onClick={() => setUploadOpen(true)}
