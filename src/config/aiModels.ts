@@ -94,8 +94,19 @@ export interface ProviderModelOption {
  * Bij Mistral staan bewust de `-latest`-aliassen in de id's en niet de gedateerde
  * snapshots: de alias schuift mee met een nieuwe generatie, de snapshot verloopt.
  * Per augustus 2026 wijzen ze naar `mistral-small-2603` (Small 4, maart 2026),
- * `ministral-8b-2512` en `ministral-3b-2512` (beide Ministral 3, december 2025).
+ * `mistral-medium-2604` (Medium 3.5, april 2026), `mistral-large-2512` (Large 3),
+ * `ministral-8b-2512` en `ministral-3b-2512` (Ministral 3, december 2025).
  * Alleen label, hint en prijs hoeven dan bij te blijven — de id's niet.
+ *
+ * UITZONDERING: Ministral 3 14B staat er met de gedateerde `ministral-14b-2512`.
+ * Die maat is nieuw in de Ministral 3-generatie, dus er is geen oudere
+ * `ministral-14b-latest` waarvan vaststaat dat hij bestaat; de gedateerde id
+ * staat wél letterlijk in Mistrals changelog. Blijkt de alias er te zijn, dan
+ * mag deze id daarop over.
+ *
+ * Mistrals gespecialiseerde modellen staan er niet in: Codestral (code-aanvulling),
+ * Voxtral (spraak), OCR, Shieldstral (moderatie), Leanstral (Lean 4-bewijzen) en
+ * de embedding-modellen doen geen prompt-optimalisatie.
  */
 export const PROVIDER_MODELS: Record<Exclude<AiProvider, 'auto'>, ProviderModelOption[]> = {
   claude: [
@@ -172,6 +183,24 @@ export const PROVIDER_MODELS: Record<Exclude<AiProvider, 'auto'>, ProviderModelO
       pricing: { input: 0.15, output: 0.6 },
     },
     {
+      id: 'mistral-medium-latest',
+      label: 'Mistral Medium 3.5',
+      hint: 'Krachtigst: multimodaal, gemaakt voor agentisch werk en code',
+      pricing: { input: 1.5, output: 7.5 },
+    },
+    {
+      id: 'mistral-large-latest',
+      label: 'Mistral Large 3',
+      hint: 'Zwaar model tegen een schappelijke prijs, 675B met 41B actief',
+      pricing: { input: 0.5, output: 1.5 },
+    },
+    {
+      id: 'ministral-14b-2512',
+      label: 'Ministral 3 14B',
+      hint: 'Grootste Ministral, vlakke prijs in en uit',
+      pricing: { input: 0.2, output: 0.2 },
+    },
+    {
       id: 'ministral-8b-latest',
       label: 'Ministral 3 8B',
       hint: 'Snel en goedkoop, vlakke prijs in en uit',
@@ -205,8 +234,13 @@ export function defaultModelFor(provider: AiProvider): string {
  *
  * Let op: dit is NIET altijd het eerste model uit PROVIDER_MODELS. Die lijst
  * begint met de standaard (goedkoop en snel genoeg voor de chat); hier gaat het
- * juist om de bovenkant. Bij DeepSeek is Flash de standaard en Pro de sterkere;
- * bij Mistral staat Small 4 boven de Ministrals.
+ * juist om de bovenkant. Bij DeepSeek is Flash de standaard en Pro de sterkere.
+ *
+ * Bij Mistral staat hier bewust Small 4 en niet Medium 3.5, hoewel Medium 3.5
+ * sterker is: die kost $1,50/$7,50 tegen $0,15/$0,60 per 1M tokens, dus tien tot
+ * twaalf keer zo veel. Small 4 is hier het sterkste model dat de prijs per
+ * projectinstelling nog verantwoordt. Wil je die bovengrens verleggen, zet dan
+ * 'mistral-medium-latest' neer én dezelfde regel in de edge function.
  */
 export const STRONGEST_MODELS: Record<Exclude<AiProvider, 'auto'>, string> = {
   claude: 'claude-opus-4-8',
