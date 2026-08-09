@@ -114,17 +114,21 @@ export default function Header() {
   const items = navItems.filter((item) => !item.authOnly || (isAuthenticated && chatEnabled));
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200 dark:border-slate-700 bg-white/90 dark:bg-slate-900/90 backdrop-blur">
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center gap-4">
-          <Link to="/" className="flex items-center">
-            <img
-              src="/promptplein-logo.png"
-              alt="PromptPlein"
-              className="h-11 w-auto shrink-0 object-contain"
-            />
-          </Link>
+      <div className="relative mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+        <Link to="/" className="flex items-center">
+          <img
+            src="/promptplein-logo.png"
+            alt="PromptPlein"
+            className="h-11 w-auto shrink-0 object-contain"
+          />
+        </Link>
 
-          <nav className="hidden items-center gap-1 lg:flex" aria-label="Hoofdnavigatie">
+        {/* Absoluut gecentreerd, zodat het logo links en de knoppen rechts de
+            nav niet uit het midden duwen. */}
+        <nav
+          className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-1 lg:flex"
+          aria-label="Hoofdnavigatie"
+        >
           {items.map(({ to, label, icon: Icon, end, accent, prefetch }) => (
             <NavLink
               key={to}
@@ -149,8 +153,7 @@ export default function Header() {
               )}
             </NavLink>
           ))}
-          </nav>
-        </div>
+        </nav>
 
         <div className="flex items-center gap-1">
           <NavLink
