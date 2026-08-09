@@ -87,8 +87,15 @@ export interface ProviderModelOption {
  * Claude en OpenAI staan er nog in — ze zijn niet te kiezen (zie AI_MODELS),
  * maar oude opgeslagen model-ids moeten wel te valideren blijven.
  *
- * Prijzen zijn USD per 1M tokens, geverifieerd in juni 2026 tegen de officiële
- * prijslijsten. Houd dit in sync met `PROVIDER_MODELS` in de edge function.
+ * Prijzen zijn USD per 1M tokens, geverifieerd tegen de officiële prijslijsten:
+ * Mistral in augustus 2026, de rest in juni 2026. Houd dit in sync met
+ * `PROVIDER_MODELS` in de edge function.
+ *
+ * Bij Mistral staan bewust de `-latest`-aliassen in de id's en niet de gedateerde
+ * snapshots: de alias schuift mee met een nieuwe generatie, de snapshot verloopt.
+ * Per augustus 2026 wijzen ze naar `mistral-small-2603` (Small 4, maart 2026),
+ * `ministral-8b-2512` en `ministral-3b-2512` (beide Ministral 3, december 2025).
+ * Alleen label, hint en prijs hoeven dan bij te blijven — de id's niet.
  */
 export const PROVIDER_MODELS: Record<Exclude<AiProvider, 'auto'>, ProviderModelOption[]> = {
   claude: [
@@ -160,21 +167,21 @@ export const PROVIDER_MODELS: Record<Exclude<AiProvider, 'auto'>, ProviderModelO
   mistral: [
     {
       id: 'mistral-small-latest',
-      label: 'Mistral Small 3',
-      hint: 'Beste balans: sterk en zeer goedkoop',
-      pricing: { input: 0.1, output: 0.3 },
+      label: 'Mistral Small 4',
+      hint: 'Beste balans: instrueren, redeneren en code in één model',
+      pricing: { input: 0.15, output: 0.6 },
     },
     {
       id: 'ministral-8b-latest',
-      label: 'Ministral 8B',
-      hint: 'Snel en ultra-goedkoop, vlakke prijs',
-      pricing: { input: 0.1, output: 0.1 },
+      label: 'Ministral 3 8B',
+      hint: 'Snel en goedkoop, vlakke prijs in en uit',
+      pricing: { input: 0.15, output: 0.15 },
     },
     {
       id: 'ministral-3b-latest',
-      label: 'Ministral 3B',
+      label: 'Ministral 3 3B',
       hint: 'Goedkoopst en laagste latency',
-      pricing: { input: 0.04, output: 0.04 },
+      pricing: { input: 0.1, output: 0.1 },
     },
   ],
 };
@@ -199,7 +206,7 @@ export function defaultModelFor(provider: AiProvider): string {
  * Let op: dit is NIET altijd het eerste model uit PROVIDER_MODELS. Die lijst
  * begint met de standaard (goedkoop en snel genoeg voor de chat); hier gaat het
  * juist om de bovenkant. Bij DeepSeek is Flash de standaard en Pro de sterkere;
- * bij Mistral staat Small 3 boven de Ministrals.
+ * bij Mistral staat Small 4 boven de Ministrals.
  */
 export const STRONGEST_MODELS: Record<Exclude<AiProvider, 'auto'>, string> = {
   claude: 'claude-opus-4-8',

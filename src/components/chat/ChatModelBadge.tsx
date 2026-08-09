@@ -4,7 +4,7 @@ import { modelLabel, PROVIDER_LABELS, type AiProvider } from '@/config/aiModels'
 
 /**
  * Badge rechtsonder in de chat: welk model er antwoordt (bijv. "Mistral ·
- * Mistral Small 3"). Antwoordde de fallback-keten met een andere provider,
+ * Mistral Small 4"). Antwoordde de fallback-keten met een andere provider,
  * dan toont de badge die tijdelijke provider in amber.
  */
 export default function ChatModelBadge({

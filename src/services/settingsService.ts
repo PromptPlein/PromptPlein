@@ -442,13 +442,14 @@ export const MAX_CHAT_OPTIMIZE_CHARS = 6000;
  * bij een regel", omdat het model daaruit generaliseert naar gevallen die de
  * gebruiker niet heeft voorzien.
  *
- * GESCHREVEN VOOR EEN KLEIN MODEL. In de praktijk draait hier Ministral 8B, en
- * die vergeeft geen vaagheid zoals een groot model dat doet. Vandaar de opzet
- * die Mistral zelf voorschrijft: openen met rol + taak, secties in XML-tags,
- * korte imperatieven, meetbare formuleringen in plaats van "kort" of "scherp",
- * en een expliciet uitvoersjabloon. Een eerdere versie was ruim twee keer zo
- * lang en redeneerde uit waaróm een projectinstructie werkt; dat is precies het
- * soort abstractie waar een 8B-model niets mee kan.
+ * GESCHREVEN VOOR EEN KLEIN MODEL. In de praktijk draait hier Mistral Small 4
+ * (het sterkste Mistral-model dat we inzetten, en met 6,5B actieve parameters
+ * nog steeds klein), en die vergeeft geen vaagheid zoals een groot model dat
+ * doet. Vandaar de opzet die Mistral zelf voorschrijft: openen met rol + taak,
+ * secties in XML-tags, korte imperatieven, meetbare formuleringen in plaats van
+ * "kort" of "scherp", en een expliciet uitvoersjabloon. Een eerdere versie was
+ * ruim twee keer zo lang en redeneerde uit waaróm een projectinstructie werkt;
+ * dat is precies het soort abstractie waar zo'n model niets mee kan.
  *
  * LET OP bij het aanpassen van deze tekst:
  * - Geef GEEN concrete voorbeelden van regels ("hooguit 150 woorden", "in de
