@@ -80,7 +80,12 @@ export default function OptimizerPage() {
     setProjectContextLoading(true);
     setProjectContextId(projectId);
     try {
-      const ctx = await buildGeneratorContext(projectId, includeFiles);
+      // De AI-instellingen gaan mee omdat het aanhaken van een project nu ook
+      // een AI-stap ÍS: het project wordt eerst geanalyseerd (één keer per
+      // versie, daarna uit de cache) en pas daarna bouwt de gebruiker.
+      const ctx = await buildGeneratorContext(projectId, includeFiles, {
+        provider: settingsRef.current.provider,
+      });
       setProjectContext(ctx);
       // Een project zonder instructie én zonder bestanden levert niets op; dan
       // hangt er niets aan en zegt de balk dat door leeg te blijven.

@@ -14,6 +14,8 @@
 // alleen bedoeld om minder data op te halen.
 
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
+import { analyzeProjectContext } from '@/services/optimizeService';
+import type { AiProvider } from '@/config/aiModels';
 import type { ChatProject, ChatProjectContext, ChatProjectFile } from '@/types';
 
 /** Maximum aantal bronbestanden per project. */
@@ -315,8 +317,18 @@ export async function loadProjectContext(projectId: string): Promise<ProjectCont
 export const MAX_GENERATOR_CONTEXT_CHARS = 60_000;
 
 export interface GeneratorContext {
-  /** De tekst die als `projectContext` naar de AI-stappen gaat. */
+  /**
+   * De tekst die als `projectContext` naar de AI-stappen gaat. Normaal is dit de
+   * PROJECTANALYSE (zie {@link ensureProjectBrief}); alleen wanneer die niet
+   * gemaakt kon worden staat hier het ruwe bronmateriaal.
+   */
   text: string;
+  /**
+   * Is `text` de analyse (true) of het ruwe materiaal (false)? De balk zegt het
+   * verschil hardop: "geanalyseerd" is een belofte die je niet mag doen als de
+   * analyse zojuist is mislukt.
+   */
+  analyzed: boolean;
   /** Id van het project; de projectbalk vinkt hiermee het actieve project af. */
   id: string;
   /** Naam van het project, voor het label in de bouwer. */
@@ -332,8 +344,153 @@ export interface GeneratorContext {
   skipped: string[];
 }
 
+// --- De projectanalyse en zijn cache ---
+//
+// De bouwer krijgt niet het ruwe project maar de ANALYSE ervan: één vaste
+// samenvatting van wat het project is, voor wie, welke toon, welke vaste termen
+// en welke grenzen. Waarom dat beter werkt dan de ruwe tekst staat bij
+// PROJECT_BRIEF_SYSTEM_PROMPT in de edge function; hier staat alleen hoe hij
+// bewaard wordt.
+//
+// DRIE LAGEN, VAN GOEDKOOP NAAR DUUR
+// 1. Geheugen — dezelfde sessie: nul verkeer.
+// 2. De projectrij in de database (`generator_briefs`, migratie 0032) — morgen,
+//    op een ander apparaat, of na een herlaad: één kleine query.
+// 3. De edge function — alleen als er nog geen analyse is voor precies dit
+//    bronmateriaal.
+//
+// De sleutel is een hash van het materiaal dat erin ging. Verandert de
+// projectinstructie of gaat de schakelaar "bronbestanden mee" om, dan is dat
+// andere invoer en dus een andere sleutel: een verouderde analyse kan niet
+// stilzwijgend blijven hangen, en heen-en-weer schakelen kost niets extra's.
+
+/** Analyses van deze sessie: `${projectId}:${hash}` → de analysetekst. */
+const briefCache = new Map<string, string>();
+
+/** Hoeveel analyses er per project bewaard blijven; de oudste vallen af. */
+const MAX_CACHED_BRIEFS = 4;
+
+interface BriefEntry {
+  brief: string;
+  /** ISO-tijdstip; alleen gebruikt om bij het snoeien de oudste te herkennen. */
+  at: string;
+}
+
 /**
- * Stelt de projectcontext samen zoals de PROMPTBOUWER hem nodig heeft.
+ * Korte, stabiele vingerafdruk van het bronmateriaal.
+ *
+ * SHA-256 waar het kan; op een pagina zonder secure context (`crypto.subtle`
+ * ontbreekt dan) een eenvoudige som. Dit is geen beveiliging maar een
+ * cachesleutel: het enige dat telt is dat andere invoer een andere sleutel
+ * oplevert.
+ */
+async function hashMaterial(text: string): Promise<string> {
+  try {
+    const bytes = new TextEncoder().encode(text);
+    const digest = await crypto.subtle.digest('SHA-256', bytes);
+    return Array.from(new Uint8Array(digest).slice(0, 12))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+  } catch {
+    // FNV-1a over de tekst, plus de lengte: goed genoeg om twee versies van
+    // dezelfde instructie uit elkaar te houden.
+    let hash = 0x811c9dc5;
+    for (let i = 0; i < text.length; i++) {
+      hash ^= text.charCodeAt(i);
+      hash = Math.imul(hash, 0x01000193) >>> 0;
+    }
+    return `f${hash.toString(16)}-${text.length}`;
+  }
+}
+
+/** De bewaarde analyses van één project; onleesbare inhoud telt als leeg. */
+async function readBriefs(projectId: string): Promise<Record<string, BriefEntry>> {
+  if (!isSupabaseConfigured || !supabase) return {};
+  const { data, error } = await supabase
+    .from('chat_projects')
+    .select('generator_briefs')
+    .eq('id', projectId)
+    .maybeSingle();
+  if (error || !data) return {};
+  const raw = (data as { generator_briefs?: unknown }).generator_briefs;
+  return raw && typeof raw === 'object' ? (raw as Record<string, BriefEntry>) : {};
+}
+
+/**
+ * Bewaar een analyse op de projectrij. Mislukt dat, dan gebeurt er niets ergers
+ * dan dat de volgende sessie hem opnieuw laat maken — daarom geen fout naar
+ * boven: het resultaat is er al en de gebruiker wacht erop.
+ */
+async function writeBrief(
+  projectId: string,
+  hash: string,
+  brief: string,
+  existing: Record<string, BriefEntry>,
+): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) return;
+  const next: Record<string, BriefEntry> = {
+    ...existing,
+    [hash]: { brief, at: new Date().toISOString() },
+  };
+  // Snoeien vóór het schrijven: de CHECK-constraint in 0032 weigert een map die
+  // ongelimiteerd doorgroeit, en een geweigerde update zou de analyse verliezen.
+  const entries = Object.entries(next)
+    .sort((a, b) => (a[1]?.at ?? '').localeCompare(b[1]?.at ?? ''))
+    .slice(-MAX_CACHED_BRIEFS);
+  try {
+    await supabase
+      .from('chat_projects')
+      .update({ generator_briefs: Object.fromEntries(entries) })
+      .eq('id', projectId);
+  } catch {
+    /* de analyse is al gemaakt; bewaren is een bonus */
+  }
+}
+
+/**
+ * Levert de analyse van dit bronmateriaal: uit het geheugen, uit de database,
+ * of anders vers gemaakt en meteen bewaard.
+ *
+ * Geeft een lege string terug wanneer er geen analyse te maken viel (geen
+ * backend, niet ingelogd, provider onbereikbaar). De aanroeper valt dan terug op
+ * het ruwe materiaal: ongefilterde context is minder goed dan de analyse, maar
+ * veel beter dan een prompt die het project helemaal niet kent.
+ */
+async function ensureProjectBrief(args: {
+  projectId: string;
+  projectName: string;
+  material: string;
+  ai?: { provider?: AiProvider };
+}): Promise<string> {
+  const { projectId, projectName, material, ai } = args;
+  const hash = await hashMaterial(material);
+  const memoryKey = `${projectId}:${hash}`;
+
+  const remembered = briefCache.get(memoryKey);
+  if (remembered) return remembered;
+
+  const stored = await readBriefs(projectId);
+  const hit = stored[hash]?.brief;
+  if (typeof hit === 'string' && hit.trim()) {
+    briefCache.set(memoryKey, hit);
+    return hit;
+  }
+
+  const result = await analyzeProjectContext({
+    material,
+    projectName,
+    preferredProvider: ai?.provider,
+  });
+  if (!result.success || !result.brief) return '';
+
+  briefCache.set(memoryKey, result.brief);
+  void writeBrief(projectId, hash, result.brief, stored);
+  return result.brief;
+}
+
+/**
+ * Stelt de projectcontext samen zoals de PROMPTBOUWER hem nodig heeft: eerst het
+ * project lezen, dán pas bouwen.
  *
  * Anders dan {@link loadProjectContext} (die de chat bedient) levert dit één
  * platte tekst in plaats van losse bronblokken: de generator-modi kennen geen
@@ -345,10 +502,17 @@ export interface GeneratorContext {
  * prompt over mijn plugin" is de instructie meestal genoeg, en tienduizenden
  * tekens spec door meerdere achtereenvolgende AI-stappen duwen is traag en duur
  * voor wat het toevoegt.
+ *
+ * Wat er daarna uitgaat is niet dat materiaal zelf maar de analyse ervan (zie
+ * {@link ensureProjectBrief}). Een projectinstructie is geschreven voor een mens
+ * of voor een chat — stack, mappen, tabellen — en wie daar een prompt over wil,
+ * heeft daar een handvol regels van nodig. Het model kreeg voorheen alles en
+ * gebruikte er niets van.
  */
 export async function buildGeneratorContext(
   projectId: string,
   includeFiles: boolean,
+  ai?: { provider?: AiProvider },
 ): Promise<GeneratorContext | null> {
   const loaded = await loadProjectContext(projectId);
   if (!loaded) return null;
@@ -375,13 +539,21 @@ export async function buildGeneratorContext(
     }
   }
 
-  const text = parts.join('\n\n').trim();
+  const material = parts.join('\n\n').trim();
   // Een project zonder instructie én zonder (passende) bestanden levert geen
   // context op; dan is aanhaken zinloos en zeggen we dat eerlijk met null.
-  if (!text) return null;
+  if (!material) return null;
+
+  const brief = await ensureProjectBrief({
+    projectId,
+    projectName: context.name,
+    material,
+    ai,
+  });
 
   return {
-    text,
+    text: brief || material,
+    analyzed: Boolean(brief),
     id: context.id,
     name: context.name,
     withFiles: includeFiles,

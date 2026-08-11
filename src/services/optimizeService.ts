@@ -1,4 +1,4 @@
-import { getAnonKey, getFunctionUrl, isSupabaseConfigured } from '@/lib/supabase';
+import { getAnonKey, getFunctionUrl, isSupabaseConfigured, supabase } from '@/lib/supabase';
 import {
   readNdjsonEvents,
   streamNdjson,
@@ -2382,4 +2382,78 @@ export async function generateMetadata(args: {
   }
 
   return { title: localTitle(content), description: '', category_id: null };
+}
+
+/**
+ * Laat het project één keer analyseren: één vaste samenvatting van wat het
+ * project is, voor wie, welke toon, welke vaste termen en welke grenzen.
+ *
+ * Wat hieruit komt gaat daarna als `projectContext` in élke bouwstap mee, in
+ * plaats van het ruwe projectmateriaal — zie PROJECT_BRIEF_SYSTEM_PROMPT in de
+ * edge function voor waarom dat beter werkt, en `ensureProjectBrief` in
+ * chatProjectService voor waar het antwoord blijft.
+ *
+ * Bewust met het toegangstoken van de gebruiker en niet met de anon key: deze
+ * modus draait het sterkste model over duizenden tekens, dus de server eist een
+ * ingelogde gebruiker. Projecten bestaan sowieso alleen achter de login.
+ *
+ * Mislukt de analyse, dan komt er geen fout naar boven maar `success: false`:
+ * de aanroeper valt terug op het ruwe materiaal.
+ */
+export async function analyzeProjectContext(args: {
+  /** Het volledige bronmateriaal: projectinstructie + eventueel de bestanden. */
+  material: string;
+  /** De projectnaam — verraadt vaak het onderwerp waar de instructie over zwijgt. */
+  projectName?: string;
+  preferredProvider?: AiProvider;
+}): Promise<{ brief: string; provider: string; success: boolean; error?: string }> {
+  const { material, projectName, preferredProvider } = args;
+  const functionUrl = getFunctionUrl('optimize-prompt');
+  const failed = { brief: '', provider: 'local-template', success: false };
+  if (!isSupabaseConfigured || !supabase || !functionUrl || !material.trim()) {
+    return failed;
+  }
+
+  try {
+    const { data } = await supabase.auth.getSession();
+    const accessToken = data.session?.access_token;
+    if (!accessToken) return { ...failed, error: 'Niet ingelogd' };
+
+    const anonKey = getAnonKey();
+    const response = await fetch(functionUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+        ...(anonKey ? { apikey: anonKey } : {}),
+      },
+      body: JSON.stringify({
+        mode: 'project-brief',
+        projectContext: material,
+        projectName,
+        preferredProvider: preferredProvider ?? 'auto',
+        // Bewust GEEN preferredModel: de server kiest hier het sterkste model
+        // van de gekozen provider (STRONGEST_MODEL). Het ingestelde model is
+        // gekozen voor de bouwstappen, die per prompt meermaals draaien; deze
+        // aanroep gebeurt één keer per projectversie en stuurt daarna alles.
+      }),
+    });
+
+    if (!response.ok) throw new Error(`Edge function gaf status ${response.status}`);
+
+    const result = (await response.json()) as {
+      success?: boolean;
+      brief?: string;
+      provider?: string;
+      error?: string;
+    };
+    const brief = typeof result.brief === 'string' ? result.brief.trim() : '';
+    if (result.success && brief) {
+      return { brief, provider: result.provider ?? 'local-template', success: true };
+    }
+    throw new Error(result.error ?? 'De projectanalyse gaf geen bruikbaar resultaat');
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Onbekende fout';
+    return { ...failed, error: message };
+  }
 }

@@ -190,7 +190,11 @@ export default function ProjectContextBar({
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-slate-400 shadow-sm sm:h-10 sm:w-10 dark:bg-slate-700 dark:text-slate-400">
           <Loader2 size={18} className="animate-spin" />
         </span>
-        <span className="text-slate-500 dark:text-slate-400">Projectcontext laden…</span>
+        {/* "Laden" duurt een seconde, "analyseren" tientallen: de eerste keer
+            dat een project wordt aangehaakt, leest de AI het hele project door.
+            Zonder die zin leest de wachttijd als een vastloper. Bij de volgende
+            prompt komt de analyse uit de cache en is dit weer een flits. */}
+        <span className="text-slate-500 dark:text-slate-400">Je project wordt geanalyseerd…</span>
       </div>
     );
   }
@@ -303,8 +307,14 @@ export default function ProjectContextBar({
             </button>
             {menuOpen && menu}
           </div>
+          {/* Wel of niet geanalyseerd is een echt verschil in wat de bouwer
+              meekrijgt, dus staat het er ook echt. Bij een mislukte analyse gaat
+              het ruwe projectmateriaal mee — dat is minder dan we hier zouden
+              beloven, en dan hoort er niet "geanalyseerd" te staan. */}
           <p className="mt-0.5 text-[13px] leading-snug text-slate-600 dark:text-slate-300">
-            levert de context voor deze prompt
+            {context.analyzed
+              ? 'geanalyseerd — levert de context voor deze prompt'
+              : 'levert de context voor deze prompt'}
           </p>
         </div>
 
