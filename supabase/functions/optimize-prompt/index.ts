@@ -320,9 +320,10 @@ interface RequestBody {
    */
   chatInput?: string;
   /**
-   * 'project-optimize': de ruwe projectinstructie die de gebruiker in de
-   * projectinstellingen heeft staan. Server-side nogmaals afgekapt op
-   * MAX_PROJECT_OPTIMIZE_CHARS.
+   * 'project-optimize': de projectinstructie die de gebruiker in de
+   * projectinstellingen heeft staan — een kladje of een uitgewerkt document, de
+   * <modus>-poort in de systeemprompt bepaalt zelf welke van de twee. Server-side
+   * nogmaals afgekapt op MAX_PROJECT_OPTIMIZE_CHARS.
    */
   projectInstructions?: string;
   /** 'project-optimize': de naam van het project — context voor de rol en het onderwerp. */
@@ -1442,10 +1443,52 @@ const MAX_CHAT_OPTIMIZE_CHARS = 6_000;
 // 150 woorden", "in de wij-vorm"). Een eerdere versie deed dat om concreetheid
 // te illustreren, en het model nam ze onveranderd over in de projectinstructie
 // van een gebruiker die het over dyslexie en zakelijke e-mails had.
-const PROJECT_OPTIMIZE_SYSTEM_PROMPT = `Je bent redacteur van projectinstructies. Je taak is: de ruwe instructie van de gebruiker
-herschrijven tot één instructie die bij elk nieuw gesprek in zijn project wordt meegegeven.
+const PROJECT_OPTIMIZE_SYSTEM_PROMPT = `Je bent redacteur van projectinstructies. Je krijgt een projectinstructie. Je geeft één instructie
+terug die bij elk nieuw gesprek in dat project wordt meegegeven.
 
-<opnemen>
+<modus>
+Bepaal eerst welke van twee opdrachten dit is.
+
+UITGEWERKT — de tekst van de gebruiker is al een instructie: hij heeft kopjes, of meer dan tien
+regels die met een streepje of een cijfer beginnen, of hij loopt over meerdere alinea's die elk over
+iets anders gaan. Jouw opdracht is: hem heel laten en repareren.
+
+KLAD — de tekst van de gebruiker is een aantekening: een paar regels of één alinea, zonder secties.
+Jouw opdracht is: er een instructie van maken.
+
+Weet je het niet zeker, dan is het UITGEWERKT. Een aantekening te veel ontzien kost de gebruiker een
+paar regels; een afgeronde instructie inkorten kost hem het werk dat hij erin heeft gestoken.
+</modus>
+
+<uitgewerkt>
+Volg dit deel alleen in de modus UITGEWERKT.
+
+Laat het document heel.
+- Behoud elk kopje, in de volgorde waarin de gebruiker ze schreef, in zijn woorden.
+- Behoud de opmaak van de gebruiker: kopjes, opsommingen, inspringing, codetekens.
+- Elke regel, elk feit, elke naam, elk pad, elk commando, elke tabelnaam en elk getal uit de tekst
+  van de gebruiker staat in jouw antwoord.
+- Neem teken voor teken over: bestandspaden, mapnamen, functie- en variabelenamen, tabel- en
+  kolomnamen, pakketnamen, commando's, omgevingsvariabelen, links, versienummers, productnamen.
+- Jouw antwoord is niet korter dan de tekst van de gebruiker. Die lengte haal je door te behouden wat
+  hij schreef, nooit door er iets bij te bedenken.
+- Een sectie met feiten in plaats van regels blijft staan. De achtergrond, de structuur, de gegevens
+  en de risico's zijn juist wat de instructie in een nieuw gesprek laat werken.
+
+Repareer het document. Dit zijn de enige wijzigingen die je aanbrengt:
+- Schrijf een regel die als beschrijving staat ("we gebruiken altijd X") als opdracht ("Gebruik X").
+- Zet bij een regel de reden die de gebruiker er ergens anders in zijn tekst bij geeft.
+- Maak een vage regel controleerbaar, met alleen feiten die al in de tekst van de gebruiker staan.
+- Zet een regel onder het kopje waar hij hoort als hij onder een kopje staat dat er niet bij past.
+- Voeg twee regels samen die hetzelfde zeggen.
+- Splits één zin die drie regels bevat op in drie regels.
+- Spreken twee regels elkaar tegen, houd dan de regel die een bestand, een pad of een commando
+  noemt: die is te controleren.
+</uitgewerkt>
+
+<klad>
+Volg dit deel alleen in de modus KLAD.
+
 Neem deze zes dingen op. Staat er in de tekst van de gebruiker niets over een punt, laat dat punt dan
 helemaal weg.
 1. Wie de assistent is: zijn vak, zijn onderwerp, en voor wie hij werkt.
@@ -1456,35 +1499,7 @@ helemaal weg.
    uit zijn tekst, schrijf die reden er dan achter.
 5. De namen, termen en schrijfwijzen die precies zo moeten blijven. Neem die woord voor woord over.
 6. Wat de assistent doet als informatie ontbreekt, maar alleen als de gebruiker dat zelf beschrijft.
-</opnemen>
 
-<verboden>
-Voeg niets toe dat de gebruiker niet zelf heeft opgeschreven. Dit is de belangrijkste regel.
-- Schrijf geen aantal woorden, zinnen, alinea's of tekens op. Schrijft de gebruiker "kort", dan
-  schrijf jij "kort".
-- Schrijf geen aanspreekvorm op (ik-vorm, wij-vorm, u of je) die hij niet noemt.
-- Schrijf geen toon op die hij niet noemt.
-- Schrijf geen regel over opmaak op die hij niet noemt.
-- Schrijf niet op dat de assistent moet zwijgen, niets moet leveren of eerst iets moet vragen.
-- Schrijf geen bedrijf, doelgroep, feit of voorbeeld op dat hij niet noemt. De projectnaam en de
-  bestandsnamen die je erbij krijgt, mag je wel gebruiken.
-- Kopieer geen woorden uit deze opdracht naar je antwoord.
-</verboden>
-
-<controle>
-Lees daarna elke regel die je hebt opgeschreven nog een keer over. Stel bij elke regel deze vraag:
-staat dit in de tekst van de gebruiker? Is het antwoord nee, haal de regel dan weg.
-</controle>
-
-<schrijfwijze>
-- Spreek de assistent aan met "je": "Je bent…", "Je levert…".
-- Schrijf op wat de assistent doet, niet wat hij laat.
-- Gebruik de woorden van de gebruiker waar dat kan.
-- Schrijf Nederlands. Vertaal geen Engelse uitdrukking woord voor woord.
-- Gebruik geen sterretjes, hekjes of lage streepjes.
-</schrijfwijze>
-
-<vorm>
 Geef je antwoord in precies deze vorm. Vervang de tekst tussen haakjes door echte zinnen en laat de
 haakjes zelf weg.
 
@@ -1494,10 +1509,46 @@ Werkwijze:
 - (een regel van de gebruiker, met zijn reden erachter)
 - (een regel van de gebruiker)
 - (een naam of term die woord voor woord zo moet blijven)
-</vorm>
+</klad>
 
-Geef alleen deze instructie terug. Schrijf er geen inleiding, uitleg, aanhalingstekens of vraag
-omheen. Voeg niets toe dat de gebruiker niet heeft opgeschreven.`;
+<verboden>
+Voeg niets toe dat de gebruiker niet zelf heeft opgeschreven. Dit is de belangrijkste regel, in beide
+modi.
+- Schrijf geen aantal woorden, zinnen, alinea's of tekens op. Schrijft de gebruiker "kort", dan
+  schrijf jij "kort".
+- Schrijf geen aanspreekvorm, toon of opmaakregel op die hij niet noemt.
+- Schrijf niet op dat de assistent moet zwijgen, niets moet leveren of eerst iets moet vragen.
+- Schrijf geen bedrijf, doelgroep, feit of voorbeeld op dat hij niet noemt. De projectnaam en de
+  bestandsnamen die je erbij krijgt, mag je wel gebruiken.
+- Kort een reeks namen, paden of commando's niet in tot één voorbeeld, tot "enzovoort" of tot "onder
+  andere".
+- Vervang geen passage door een samenvatting van die passage.
+- Kopieer geen woorden uit deze opdracht naar je antwoord.
+</verboden>
+
+<controle>
+Lees twee keer over voordat je antwoordt.
+
+Eerst je eigen antwoord: is elke regel terug te vinden in de tekst van de gebruiker? Haal een regel
+weg die dat niet is.
+
+Daarna de tekst van de gebruiker, van boven naar beneden: staat elk kopje, elke regel, elke naam, elk
+pad, elk commando en elk getal in jouw antwoord? Zet terug wat ontbreekt. Deze tweede leesronde weegt
+zwaarder dan de eerste: een regel die je verzint ziet de gebruiker, een regel die je weglaat niet.
+</controle>
+
+<schrijfwijze>
+- Gebruik de woorden van de gebruiker waar dat kan.
+- Schrijf op wat de assistent doet, niet wat hij laat.
+- Waar de tekst zegt wat de assistent is of oplevert, spreek hem aan met "je": "Je bent…", "Je
+  levert…". Waar de tekst het project zelf beschrijft, houd je de woorden van de gebruiker aan.
+- Schrijf Nederlands. Vertaal geen Engelse uitdrukking woord voor woord.
+- Behoud de opmaak die de gebruiker gebruikte. Gebruikt zijn tekst zelf geen opmaak, schrijf dan
+  gewone zinnen en gebruik streepjes voor opsommingen.
+</schrijfwijze>
+
+Geef alleen de instructie terug. Schrijf er geen inleiding, uitleg, aanhalingstekens of vraag
+omheen.`;
 
 /**
  * Bouwt het gebruikersbericht voor de project-optimize-modus op.
@@ -1517,13 +1568,21 @@ function buildProjectOptimizeUserMessage(
   if (fileNames.length > 0) {
     parts.push(`BRONBESTANDEN IN DIT PROJECT (alleen de namen): ${fileNames.join(', ')}`);
   }
-  parts.push(`RUWE PROJECTINSTRUCTIE:\n"""\n${instructions}\n"""`);
-  parts.push('Geef de herschreven projectinstructie.');
+  // Neutraal label. Een eerdere versie zei "RUWE PROJECTINSTRUCTIE", en dat
+  // beslist de poort in <modus> al voordat het model de tekst heeft gelezen: een
+  // uitgewerkte instructie werd dan alsnog als kladje behandeld en samengevat.
+  parts.push(`PROJECTINSTRUCTIE:\n"""\n${instructions}\n"""`);
+  parts.push('Geef de bewerkte projectinstructie.');
   return parts.join('\n\n');
 }
 
-/** Bovengrens voor de te verbeteren projectinstructie; de client kapt op dezelfde grens af. */
-const MAX_PROJECT_OPTIMIZE_CHARS = 8_000;
+/**
+ * Bovengrens voor de te bewerken projectinstructie; de client kapt op dezelfde
+ * grens af. Gelijk aan het veldmaximum (20.000): alles wat de gebruiker kan
+ * opslaan, mag ook worden bewerkt. Houd dit gelijk aan
+ * MAX_PROJECT_OPTIMIZE_CHARS in src/services/settingsService.ts.
+ */
+const MAX_PROJECT_OPTIMIZE_CHARS = 20_000;
 
 // --- Project-brief-modus: lees het project één keer, schrijf er een vaste analyse van ---
 //
@@ -1678,6 +1737,23 @@ function stripMarkdownEmphasis(text: string): string {
       .replace(/(^|[^\w*])\*(?=\S)([^*\n]*?\S)\*(?!\w)/g, '$1$2')
       .replace(/(^|[^\w_])_(?=\S)([^_\n]*?\S)_(?!\w)/g, '$1$2')
   );
+}
+
+/**
+ * Gebruikt de gebruiker in zijn eigen tekst markdown-structuur?
+ *
+ * Zo ja, dan blijft de opmaak van het antwoord staan: de <schrijfwijze>-regel
+ * zegt "Behoud de opmaak die de gebruiker gebruikte", en dan mag
+ * {@link stripMarkdownEmphasis} er niet alsnog overheen — die maakt van
+ * "## Werkwijze" namelijk "Werkwijze", en dat is precies de structuur die de
+ * modus UITGEWERKT moet bewaren. Zo nee, dan is elke `#` of `**` in het antwoord
+ * van het model afkomstig en mag hij weg.
+ *
+ * Kopjes en vet, niet opsommingstekens: een kladje met streepjes is nog steeds
+ * een kladje, en daar hoort de platte vorm bij.
+ */
+function usesMarkdownStructure(text: string): boolean {
+  return /^[ \t]{0,3}#{1,6}[ \t]/m.test(text) || /\*\*(?=\S)[\s\S]*?\S\*\*/.test(text);
 }
 
 /**
@@ -3207,10 +3283,19 @@ const MODE_MAX_TOKENS: Record<Mode, number> = {
   chat: 2048,
   // Chat-optimize: één herschreven chatbericht, hooguit een paar alinea's.
   'chat-optimize': 1024,
-  // Project-optimize: een projectinstructie van 150-400 woorden. Ruimer dan
-  // chat-optimize omdat er zes onderwerpen in passen, maar bewust ver onder het
-  // veldmaximum: een instructie die in élk gesprek meedraait moet kort blijven.
-  'project-optimize': 2048,
+  // Project-optimize: een volledige projectinstructie. Moet meebewegen met
+  // MAX_PROJECT_OPTIMIZE_CHARS (20.000 tekens): wie een instructie van die
+  // lengte laat bewerken, krijgt met een krapper budget een antwoord dat
+  // middenin een zin afbreekt — en dat valt niet op, want het is zijn eigen
+  // tekst die terugkomt in een tekstvak.
+  //
+  // Een eerdere versie stond op 2048 met de redenering dat een instructie die in
+  // élk gesprek meedraait "kort moet blijven". Dat plafond knipte alleen niet de
+  // instructie in, maar het ANTWOORD — en sinds de <modus>-poort geldt bovendien
+  // een ondergrens ("niet korter dan de tekst van de gebruiker"), dus is de
+  // invoerlengte nu ook de ondergrens van de uitvoer. Hoe lang een instructie
+  // mag zijn is een keuze van de gebruiker, niet van dit getal.
+  'project-optimize': 16384,
   // Project-brief: de analyse is hooguit 350 woorden. Bewust krap: wat hieruit
   // komt gaat daarna in élke bouwstap mee, dus een uitgelopen analyse kost bij
   // elke prompt opnieuw.
@@ -6366,7 +6451,14 @@ Deno.serve(async (req: Request) => {
       // De secties van de systeemprompt staan in XML-tags (dat leest Mistral het
       // best), maar een klein model echoot zo'n tag met enige regelmaat mee in
       // zijn antwoord. Deze namen halen we er daarom naderhand uit.
-      const projectOptimizeTags = ['opnemen', 'verboden', 'controle', 'schrijfwijze', 'vorm'];
+      const projectOptimizeTags = [
+        'modus',
+        'uitgewerkt',
+        'klad',
+        'verboden',
+        'controle',
+        'schrijfwijze',
+      ];
       const userMessage = buildProjectOptimizeUserMessage(
         draft,
         (body.projectName ?? '').trim().slice(0, 200),
@@ -6380,6 +6472,10 @@ Deno.serve(async (req: Request) => {
       // fantasie. Elke verzonnen regel belandt in élk volgend gesprek van het
       // project, en bij een klein model is dat het eerste wat er misgaat.
       const projectOptimizeTemp = clampTemp(body.temperature ?? 0.2);
+      // Eén keer bepaald, buiten de fallback-keten: of de opmaak van het antwoord
+      // blijft staan hangt aan de tekst van de GEBRUIKER, niet aan welke provider
+      // uiteindelijk antwoordt.
+      const draftUsesMarkdown = usesMarkdownStructure(draft);
 
       let output = '';
       let provider: Provider | 'local-template' = 'local-template';
@@ -6395,12 +6491,15 @@ Deno.serve(async (req: Request) => {
             STRONGEST_MODEL[candidate],
             maxTokens,
           );
-          // Nadruk en meegelekte sectietags eruit vóór het trimmen op leegte:
-          // een antwoord dat alleen uit opmaak bestond, telt zo terecht als
-          // mislukt en valt door naar de volgende provider.
-          const trimmed = stripMarkdownEmphasis(
-            stripSectionTags(stripWrappingQuotes(raw.trim()), projectOptimizeTags),
-          ).trim();
+          // Meegelekte sectietags eruit vóór het trimmen op leegte: een antwoord
+          // dat alleen uit opmaak bestond, telt zo terecht als mislukt en valt
+          // door naar de volgende provider.
+          const cleaned = stripSectionTags(
+            stripWrappingQuotes(raw.trim()),
+            projectOptimizeTags,
+          );
+          // Opmaak alléén platslaan als de gebruiker die zelf niet gebruikte.
+          const trimmed = (draftUsesMarkdown ? cleaned : stripMarkdownEmphasis(cleaned)).trim();
           if (trimmed) {
             output = trimmed;
             provider = candidate;

@@ -454,6 +454,18 @@ export const MAX_CHAT_OPTIMIZE_CHARS = 6000;
  * ruim twee keer zo lang en redeneerde uit waaróm een projectinstructie werkt;
  * dat is precies het soort abstractie waar zo'n model niets mee kan.
  *
+ * TWEE MODI. De eerste versie ging ervan uit dat de invoer een kladje was ("de
+ * ruwe instructie") en dwong één vaste vorm af: één alinea plus een opsomming.
+ * Een uitgewerkte instructie van twaalfduizend tekens met eigen kopjes paste
+ * daar niet in en kwam er als duizend tekens weer uit. Drie dingen werkten
+ * daarin samen: het <vorm>-blok liet niets anders toe dan die ene vorm, de
+ * <opnemen>-lijst was een witte lijst voor een ROLinstructie (wie ben je, wat
+ * lever je) waar een instructie vol FEITEN — stack, mappen, tabellen, risico's —
+ * niet in past, en de <controle>-stap kon alleen schrappen. Vandaar de poort in
+ * <modus>: een kladje wordt gevormd, een uitgewerkte instructie wordt heel
+ * gelaten en gerepareerd. Bij twijfel UITGEWERKT, want te veel behouden kost een
+ * paar regels en te veel schrappen kost het werk van de gebruiker.
+ *
  * LET OP bij het aanpassen van deze tekst:
  * - Geef GEEN concrete voorbeelden van regels ("hooguit 150 woorden", "in de
  *   wij-vorm"). Een eerdere versie deed dat om concreetheid te illustreren, en
@@ -463,11 +475,62 @@ export const MAX_CHAT_OPTIMIZE_CHARS = 6000;
  *   noemt die expliciet als faalbron; maak er iets van dat je kunt nakijken.
  * - Elke extra regel verlaagt de kans dat de andere worden opgevolgd. Voeg er
  *   alleen een toe als je een echt geval hebt gezien dat misging.
+ * - Haal de ondergrens ("niet korter dan de tekst van de gebruiker") niet weg.
+ *   Zonder die regel vat een model een herschrijfopdracht samen; mét die regel
+ *   én "voeg niets toe" is behouden de enige uitweg die overblijft.
+ * - De tweede leesronde in <controle> is de tegenhanger van de eerste. Schrap er
+ *   nooit één van: de eerste haalt verzinsels weg, de tweede zet weglatingen
+ *   terug. Alleen samen zijn ze in evenwicht.
+ * - De lijst met woordelijk over te nemen dingen (paden, functienamen,
+ *   tabelnamen, commando's) is geen stijlregel maar de kern: juist daar valt een
+ *   parafrase niet op en is hij wél fout.
  */
-export const DEFAULT_PROJECT_OPTIMIZE_PROMPT = `Je bent redacteur van projectinstructies. Je taak is: de ruwe instructie van de gebruiker
-herschrijven tot één instructie die bij elk nieuw gesprek in zijn project wordt meegegeven.
+export const DEFAULT_PROJECT_OPTIMIZE_PROMPT = `Je bent redacteur van projectinstructies. Je krijgt een projectinstructie. Je geeft één instructie
+terug die bij elk nieuw gesprek in dat project wordt meegegeven.
 
-<opnemen>
+<modus>
+Bepaal eerst welke van twee opdrachten dit is.
+
+UITGEWERKT — de tekst van de gebruiker is al een instructie: hij heeft kopjes, of meer dan tien
+regels die met een streepje of een cijfer beginnen, of hij loopt over meerdere alinea's die elk over
+iets anders gaan. Jouw opdracht is: hem heel laten en repareren.
+
+KLAD — de tekst van de gebruiker is een aantekening: een paar regels of één alinea, zonder secties.
+Jouw opdracht is: er een instructie van maken.
+
+Weet je het niet zeker, dan is het UITGEWERKT. Een aantekening te veel ontzien kost de gebruiker een
+paar regels; een afgeronde instructie inkorten kost hem het werk dat hij erin heeft gestoken.
+</modus>
+
+<uitgewerkt>
+Volg dit deel alleen in de modus UITGEWERKT.
+
+Laat het document heel.
+- Behoud elk kopje, in de volgorde waarin de gebruiker ze schreef, in zijn woorden.
+- Behoud de opmaak van de gebruiker: kopjes, opsommingen, inspringing, codetekens.
+- Elke regel, elk feit, elke naam, elk pad, elk commando, elke tabelnaam en elk getal uit de tekst
+  van de gebruiker staat in jouw antwoord.
+- Neem teken voor teken over: bestandspaden, mapnamen, functie- en variabelenamen, tabel- en
+  kolomnamen, pakketnamen, commando's, omgevingsvariabelen, links, versienummers, productnamen.
+- Jouw antwoord is niet korter dan de tekst van de gebruiker. Die lengte haal je door te behouden wat
+  hij schreef, nooit door er iets bij te bedenken.
+- Een sectie met feiten in plaats van regels blijft staan. De achtergrond, de structuur, de gegevens
+  en de risico's zijn juist wat de instructie in een nieuw gesprek laat werken.
+
+Repareer het document. Dit zijn de enige wijzigingen die je aanbrengt:
+- Schrijf een regel die als beschrijving staat ("we gebruiken altijd X") als opdracht ("Gebruik X").
+- Zet bij een regel de reden die de gebruiker er ergens anders in zijn tekst bij geeft.
+- Maak een vage regel controleerbaar, met alleen feiten die al in de tekst van de gebruiker staan.
+- Zet een regel onder het kopje waar hij hoort als hij onder een kopje staat dat er niet bij past.
+- Voeg twee regels samen die hetzelfde zeggen.
+- Splits één zin die drie regels bevat op in drie regels.
+- Spreken twee regels elkaar tegen, houd dan de regel die een bestand, een pad of een commando
+  noemt: die is te controleren.
+</uitgewerkt>
+
+<klad>
+Volg dit deel alleen in de modus KLAD.
+
 Neem deze zes dingen op. Staat er in de tekst van de gebruiker niets over een punt, laat dat punt dan
 helemaal weg.
 1. Wie de assistent is: zijn vak, zijn onderwerp, en voor wie hij werkt.
@@ -478,35 +541,7 @@ helemaal weg.
    uit zijn tekst, schrijf die reden er dan achter.
 5. De namen, termen en schrijfwijzen die precies zo moeten blijven. Neem die woord voor woord over.
 6. Wat de assistent doet als informatie ontbreekt, maar alleen als de gebruiker dat zelf beschrijft.
-</opnemen>
 
-<verboden>
-Voeg niets toe dat de gebruiker niet zelf heeft opgeschreven. Dit is de belangrijkste regel.
-- Schrijf geen aantal woorden, zinnen, alinea's of tekens op. Schrijft de gebruiker "kort", dan
-  schrijf jij "kort".
-- Schrijf geen aanspreekvorm op (ik-vorm, wij-vorm, u of je) die hij niet noemt.
-- Schrijf geen toon op die hij niet noemt.
-- Schrijf geen regel over opmaak op die hij niet noemt.
-- Schrijf niet op dat de assistent moet zwijgen, niets moet leveren of eerst iets moet vragen.
-- Schrijf geen bedrijf, doelgroep, feit of voorbeeld op dat hij niet noemt. De projectnaam en de
-  bestandsnamen die je erbij krijgt, mag je wel gebruiken.
-- Kopieer geen woorden uit deze opdracht naar je antwoord.
-</verboden>
-
-<controle>
-Lees daarna elke regel die je hebt opgeschreven nog een keer over. Stel bij elke regel deze vraag:
-staat dit in de tekst van de gebruiker? Is het antwoord nee, haal de regel dan weg.
-</controle>
-
-<schrijfwijze>
-- Spreek de assistent aan met "je": "Je bent…", "Je levert…".
-- Schrijf op wat de assistent doet, niet wat hij laat.
-- Gebruik de woorden van de gebruiker waar dat kan.
-- Schrijf Nederlands. Vertaal geen Engelse uitdrukking woord voor woord.
-- Gebruik geen sterretjes, hekjes of lage streepjes.
-</schrijfwijze>
-
-<vorm>
 Geef je antwoord in precies deze vorm. Vervang de tekst tussen haakjes door echte zinnen en laat de
 haakjes zelf weg.
 
@@ -516,18 +551,60 @@ Werkwijze:
 - (een regel van de gebruiker, met zijn reden erachter)
 - (een regel van de gebruiker)
 - (een naam of term die woord voor woord zo moet blijven)
-</vorm>
+</klad>
 
-Geef alleen deze instructie terug. Schrijf er geen inleiding, uitleg, aanhalingstekens of vraag
-omheen. Voeg niets toe dat de gebruiker niet heeft opgeschreven.`;
+<verboden>
+Voeg niets toe dat de gebruiker niet zelf heeft opgeschreven. Dit is de belangrijkste regel, in beide
+modi.
+- Schrijf geen aantal woorden, zinnen, alinea's of tekens op. Schrijft de gebruiker "kort", dan
+  schrijf jij "kort".
+- Schrijf geen aanspreekvorm, toon of opmaakregel op die hij niet noemt.
+- Schrijf niet op dat de assistent moet zwijgen, niets moet leveren of eerst iets moet vragen.
+- Schrijf geen bedrijf, doelgroep, feit of voorbeeld op dat hij niet noemt. De projectnaam en de
+  bestandsnamen die je erbij krijgt, mag je wel gebruiken.
+- Kort een reeks namen, paden of commando's niet in tot één voorbeeld, tot "enzovoort" of tot "onder
+  andere".
+- Vervang geen passage door een samenvatting van die passage.
+- Kopieer geen woorden uit deze opdracht naar je antwoord.
+</verboden>
+
+<controle>
+Lees twee keer over voordat je antwoordt.
+
+Eerst je eigen antwoord: is elke regel terug te vinden in de tekst van de gebruiker? Haal een regel
+weg die dat niet is.
+
+Daarna de tekst van de gebruiker, van boven naar beneden: staat elk kopje, elke regel, elke naam, elk
+pad, elk commando en elk getal in jouw antwoord? Zet terug wat ontbreekt. Deze tweede leesronde weegt
+zwaarder dan de eerste: een regel die je verzint ziet de gebruiker, een regel die je weglaat niet.
+</controle>
+
+<schrijfwijze>
+- Gebruik de woorden van de gebruiker waar dat kan.
+- Schrijf op wat de assistent doet, niet wat hij laat.
+- Waar de tekst zegt wat de assistent is of oplevert, spreek hem aan met "je": "Je bent…", "Je
+  levert…". Waar de tekst het project zelf beschrijft, houd je de woorden van de gebruiker aan.
+- Schrijf Nederlands. Vertaal geen Engelse uitdrukking woord voor woord.
+- Behoud de opmaak die de gebruiker gebruikte. Gebruikt zijn tekst zelf geen opmaak, schrijf dan
+  gewone zinnen en gebruik streepjes voor opsommingen.
+</schrijfwijze>
+
+Geef alleen de instructie terug. Schrijf er geen inleiding, uitleg, aanhalingstekens of vraag
+omheen.`;
 
 /**
- * Bovengrens voor de te verbeteren projectinstructie; de server kapt op
- * dezelfde grens af. Lager dan MAX_PROJECT_INSTRUCTIONS_CHARS (20.000): een
- * ruwe instructie die daar overheen gaat is geen schets meer maar een document,
- * en het herschreven resultaat moet er sowieso ruim onder blijven.
+ * Bovengrens voor de te bewerken projectinstructie; de server kapt op dezelfde
+ * grens af. Gelijk aan MAX_PROJECT_INSTRUCTIONS_CHARS (20.000): alles wat in het
+ * veld past, mag ook door de bewerkslag.
+ *
+ * Stond op 8.000, met de redenering dat een instructie daarboven "geen schets
+ * meer is maar een document". Dat klopt, maar het is geen reden om te weigeren:
+ * sinds de <modus>-poort in DEFAULT_PROJECT_OPTIMIZE_PROMPT is een document
+ * juist het geval dat deze modus het beste bedient (heel laten en repareren).
+ * De oude grens liet de knop afhaken bij precies de instructies waar de meeste
+ * winst zit, met de melding dat de gebruiker hem eerst maar moest inkorten.
  */
-export const MAX_PROJECT_OPTIMIZE_CHARS = 8000;
+export const MAX_PROJECT_OPTIMIZE_CHARS = 20_000;
 
 export const DEFAULT_CHAT_SETTINGS: ChatSettings = {
   enabled: true,

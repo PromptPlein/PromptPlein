@@ -44,6 +44,9 @@ Dat verklaart ook waarom een projectinstructie andere eisen stelt dan een prompt
 
 ## De zes dingen die erin horen
 
+Deze zes zijn de checklist voor de modus KLAD. Bij een uitgewerkt document is de indeling van de
+gebruiker leidend en zijn ze hooguit een leeswijzer — zie "Twee soorten invoer" hieronder.
+
 Elk punt geldt **alleen voor zover de gebruiker er iets over zegt**. Een punt waar hij over zwijgt,
 blijft weg — zie "De belangrijkste regel" hieronder.
 
@@ -169,18 +172,49 @@ de plaats komen van dat van de gebruiker.
 
 ---
 
+## Twee soorten invoer: een kladje en een uitgewerkt document
+
+Alles hieronder is geschreven voor het geval waar deze modus mee begon: iemand typt een paar regels
+en wil er een instructie van maken. Dat blijft de modus **KLAD**.
+
+Er is een tweede geval, en dat werd er lange tijd stuk door gemaakt. Wie zijn projectinstructie al
+had uitgewerkt — met eigen kopjes, een mappenstructuur, tabelnamen, commando's, een risicoparagraaf
+— kreeg van twaalfduizend tekens ongeveer duizend terug. Drie dingen werkten daaraan mee. De vaste
+vorm hieronder liet niets anders toe dan één alinea plus een opsomming. De zes punten waren een
+witte lijst voor een ROLinstructie, waar een instructie vol FEITEN niet in past. En de controlestap
+kon alleen schrappen: hij vroeg per regel "staat dit in de tekst van de gebruiker?" en nooit
+andersom.
+
+Vandaar de modus **UITGEWERKT**: het document wordt heel gelaten en gerepareerd, niet herschreven.
+Elk kopje blijft staan, in de volgorde van de gebruiker. Paden, functienamen, tabelnamen en
+commando's worden teken voor teken overgenomen. Het antwoord is niet korter dan de invoer — en
+omdat "voeg niets toe" óók geldt, is behouden de enige manier om aan die ondergrens te komen. De
+controle leest sindsdien twee keer: één keer over het eigen antwoord (verzinsels eruit) en één keer
+over de tekst van de gebruiker (weglatingen terug).
+
+Bij twijfel geldt UITGEWERKT. Een kladje te veel ontzien kost een paar regels; een afgerond document
+inkorten kost de gebruiker het werk dat hij erin heeft gestoken.
+
+---
+
 ## Wat het resultaat moet zijn
 
-**Platte tekst, zonder opmaakmarkeringen.** Hier komen twee redenen samen. De praktische: het
-resultaat komt in een gewoon tekstveld terecht, niet in een markdown-weergave, dus sterretjes rond
-woorden worden getoond als sterretjes. De tweede is subtieler en staat in Anthropic's eigen
-documentatie: *"removing markdown from your prompt can reduce the volume of markdown in the
-output."* De opmaak van de instructie stuurt dus de opmaak van de antwoorden — markdown in de
-projectinstructie maakt het waarschijnlijker dat de assistent zélf overal vet gaat gebruiken.
+**Platte tekst — maar alleen als de gebruiker zelf geen opmaak gebruikte.** Hier komen twee redenen
+samen. De praktische: het resultaat komt in een gewoon tekstveld terecht, niet in een
+markdown-weergave, dus sterretjes rond woorden worden getoond als sterretjes. De tweede is subtieler
+en staat in Anthropic's eigen documentatie: *"removing markdown from your prompt can reduce the
+volume of markdown in the output."* De opmaak van de instructie stuurt dus de opmaak van de
+antwoorden — markdown in de projectinstructie maakt het waarschijnlijker dat de assistent zélf
+overal vet gaat gebruiken.
 
-De herschrijver mag daarom geen `**vet**`, geen `#`-koppen en geen `_cursief_` gebruiken. De edge
-function haalt ze er bovendien alsnog uit (`stripMarkdownEmphasis`), want een model dat gevraagd
-wordt níét vet te schrijven, doet het toch met enige regelmaat.
+Bij een kladje mag de herschrijver daarom geen `**vet**`, geen `#`-koppen en geen `_cursief_`
+gebruiken, en de edge function haalt ze er alsnog uit (`stripMarkdownEmphasis`), want een model dat
+gevraagd wordt níét vet te schrijven doet het toch met enige regelmaat.
+
+Bij een uitgewerkt document draait die afweging om. Daar zijn de kopjes van de gebruiker zélf de
+structuur, en `stripMarkdownEmphasis` maakte van `## Werkwijze` gewoon `Werkwijze` — precies de
+structuur die bewaard moet blijven. `usesMarkdownStructure` kijkt daarom eerst naar de tekst van de
+gebruiker: gebruikte hij kopjes of vet, dan blijft de opmaak van het antwoord staan.
 
 **Natuurlijk, foutloos Nederlands.** Het model calqueert Engelse uitdrukkingen terug: "ik zit lekker
 in mijn vel" werd "ik zit lekker in mijn huid". Zie
@@ -191,7 +225,7 @@ in mijn vel" werd "ik zit lekker in mijn huid". Zie
 schrijver, niet de indeling van het resultaat. Kopjes als "Afspraken over vorm en toon" of
 "Signalen" horen niet in de uitvoer.
 
-**Eén vaste vorm:**
+**Eén vaste vorm — in de modus KLAD:**
 
 ```
 [Eén alinea: rol, situatie en het vaste eindproduct.]
@@ -204,6 +238,10 @@ Werkwijze:
 
 Dat is dezelfde vorm als de ingebouwde basisinstructie waar een projectinstructie onder komt te
 staan, zodat de twee als één tekst lezen in plaats van als twee stemmen.
+
+In de modus UITGEWERKT geldt deze vorm níét. Daar is de indeling van de gebruiker de vorm: dezelfde
+kopjes, dezelfde volgorde, dezelfde opmaak. Een uitgewerkt document in dit sjabloon persen is precies
+het verlies waar de modus voor bestaat.
 
 **Alleen de instructie zelf.** Geen inleiding, geen uitleg achteraf, en geen afsluitende vraag aan
 de gebruiker.
@@ -224,8 +262,8 @@ bepalen daarom de opzet van de herschrijfprompt:
 | Mistral schrijft voor | Hoe het hier is toegepast |
 | --- | --- |
 | Open met *"You are a [role], your task is to [task]"* | Eerste zin: rol plus taak, verder niets |
-| Deel hiërarchisch in met XML-achtige tags | `<opnemen>`, `<verboden>`, `<controle>`, `<schrijfwijze>`, `<vorm>` |
-| Toon minstens één keer het exacte uitvoerformaat | `<vorm>` bevat het sjabloon met haakjes-plaatshouders |
+| Deel hiërarchisch in met XML-achtige tags | `<modus>`, `<uitgewerkt>`, `<klad>`, `<verboden>`, `<controle>`, `<schrijfwijze>` |
+| Toon minstens één keer het exacte uitvoerformaat | `<klad>` bevat het sjabloon met haakjes-plaatshouders |
 | Vermijd subjectieve taal ("te lang", "beter") | "scherp genoeg om te knellen" en "zo kort als mogelijk" zijn geschrapt |
 | Vraag het model niet om woorden te tellen | Er staat nergens een aantal |
 | Geen tegenstrijdige instructies | De controlestap stelt één vraag, geen afweging |
