@@ -450,17 +450,26 @@ export default function TechniquesPage() {
                 {/* Waar het over gaat, compact. Het losse startpunt-veld is door
                     dit blok vervangen, maar de tekst voedt nog steeds het
                     voor-invullen en het bouwen — dus blijft hij hier zichtbaar
-                    en aanpasbaar. */}
+                    en aanpasbaar.
+
+                    Niet bij Few-Shot, Persona en Meta: die bouwers vragen zelf
+                    om de taak, de voorbeelden of het ruwe verzoek, dus een
+                    contextveld ervóór levert daar niets op en verdubbelt alleen
+                    de vraag. */}
                 {(() => {
                   const fmt = structureFormat(technique);
+                  if (
+                    fmt === 'few-shot' ||
+                    fmt === 'persona' ||
+                    fmt === 'multi-persona' ||
+                    fmt === 'meta'
+                  ) {
+                    return null;
+                  }
                   // Alleen de vragenlijst-technieken laten zich voor-invullen;
-                  // de eigen bouwers (persona, few-shot, meta, interview) niet.
+                  // de interviews (chain-of-thought/socratic) niet.
                   const usesQuestionnaire =
                     technique.follow_up_questions.length > 0 &&
-                    fmt !== 'persona' &&
-                    fmt !== 'multi-persona' &&
-                    fmt !== 'few-shot' &&
-                    fmt !== 'meta' &&
                     fmt !== 'chain-of-thought' &&
                     fmt !== 'socratic';
                   // Bij een interview wacht het gesprek op deze context: het

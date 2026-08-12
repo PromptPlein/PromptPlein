@@ -54,17 +54,21 @@ export interface FewShotData {
   tegenvoorbeeld: string;
 }
 
-/** De routing-vraag (Q0). */
+/**
+ * De routing-vraag (Q0). Eerst het enkele voorbeeld (one-shot), daarna het
+ * herhaalbare geval (few-shot): zo loopt de lijst van één voorbeeld naar
+ * meerdere, in dezelfde volgorde als de techniek zelf opbouwt.
+ */
 export const FEWSHOT_INTENT_OPTIONS: { value: FewShotIntent; label: string; hint: string }[] = [
-  {
-    value: 'herhaalbaar',
-    label: 'Steeds hetzelfde soort output',
-    hint: 'Bijv. elke keer een burgervraag op dezelfde manier beantwoorden. → meerdere voorbeelden.',
-  },
   {
     value: 'eenmalig',
     label: 'Eén tekst, in de juiste vorm',
     hint: 'Bijv. één specifieke brief of nota in een bepaalde stijl. → één voorbeeld volstaat.',
+  },
+  {
+    value: 'herhaalbaar',
+    label: 'Steeds hetzelfde soort output',
+    hint: 'Bijv. elke keer een burgervraag op dezelfde manier beantwoorden. → meerdere voorbeelden.',
   },
   {
     value: 'weet_niet',
