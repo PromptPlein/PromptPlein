@@ -189,3 +189,55 @@ export function hasOwnInputStep(t: TechniqueIdentity): boolean {
   const fmt = structureFormat(t);
   return Boolean(fmt && OWN_INPUT_FORMATS.includes(fmt));
 }
+
+/**
+ * Voorbeeldopdracht per techniek, voor de placeholder van het contextveld op de
+ * techniekenpagina. Eén algemeen voorbeeld werkt daar niet: bij Multi-Persona
+ * hoort een vraagstuk met meerdere gezichtspunten, bij Bronbinding een vraag
+ * over een aangeleverd document. Het voorbeeld laat dus meteen zien wát de
+ * techniek van je wil.
+ *
+ * Op naam gematcht (de lijst is beheerbaar in de admin, dus namen kunnen
+ * wijzigen); valt terug op de vorm van de techniek en daarna op een algemeen
+ * voorbeeld. Volgorde telt: specifiekere namen eerst.
+ */
+const NAME_EXAMPLES: [needle: string, example: string][] = [
+  ['chain-of-verification', 'controleer deze Kamerbrief op cijfers, data en verwijzingen'],
+  ['verification', 'controleer deze Kamerbrief op cijfers, data en verwijzingen'],
+  ['step-back', 'moeten we een meldplicht invoeren voor verhuurders?'],
+  ['bronbinding', 'beantwoord vragen over de nieuwe subsidieregeling, alleen op basis van de regeling zelf'],
+  ['grounding', 'beantwoord vragen over de nieuwe subsidieregeling, alleen op basis van de regeling zelf'],
+  ['rubric', 'beoordeel dit projectplan op volledigheid, onderbouwing en haalbaarheid'],
+  ['crispe', 'schrijf een advies over de invoering van de Omgevingswet in onze gemeente'],
+  ['crisp', 'schrijf een advies over de invoering van de Omgevingswet in onze gemeente'],
+  ['co-star', 'schrijf een bericht voor onze socialemediakanalen over het nieuwe subsidieloket'],
+  ['raise', 'vat de reacties uit de internetconsultatie samen tot de rode draad'],
+  ['craft', 'maak een factsheet over de nieuwe legesverordening voor baliemedewerkers'],
+  ['create', 'schrijf een vacaturetekst voor een beleidsadviseur, in de toon van onze eerdere vacatures'],
+  ['react', 'beoordeel of deze klacht binnen de wettelijke termijn is afgehandeld'],
+  ['care', 'schrijf een brief aan bewoners over werkzaamheden in hun straat'],
+];
+
+const FORMAT_EXAMPLES: Record<StructureFormat, string> = {
+  care: 'schrijf een brief aan bewoners over werkzaamheden in hun straat',
+  'few-shot': 'beantwoord binnengekomen burgerbrieven in dezelfde stijl als onze eerdere antwoorden',
+  'chain-of-thought': 'beoordeel of dit subsidieverzoek binnen de regeling past',
+  persona: 'leg de nieuwe parkeerregels uit aan bewoners die geen ambtenaar zijn',
+  'multi-persona':
+    'beoordeel het voorstel voor betaald parkeren vanuit bewoners, ondernemers en de wethouder',
+  'template-based': 'maak een beslisnota volgens het vaste sjabloon van ons ministerie',
+  meta: 'ik wil een prompt waarmee ik verslagen van vergaderingen laat samenvatten',
+  socratic: 'ik wil scherp krijgen waarom onze aanpak van woonoverlast niet werkt',
+};
+
+const DEFAULT_EXAMPLE = 'schrijf een brief aan bewoners over werkzaamheden in hun straat';
+
+/** Voorbeeldzin ("Bijvoorbeeld: …") die bij deze techniek past. */
+export function contextExample(t: TechniqueIdentity): string {
+  const name = t.name.trim().toLowerCase();
+  for (const [needle, example] of NAME_EXAMPLES) {
+    if (name.includes(needle)) return `Bijvoorbeeld: ${example}.`;
+  }
+  const fmt = structureFormat(t);
+  return `Bijvoorbeeld: ${fmt ? FORMAT_EXAMPLES[fmt] : DEFAULT_EXAMPLE}.`;
+}

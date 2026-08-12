@@ -17,7 +17,7 @@ import { generatePrompt, prefillFields } from '@/services/optimizeService';
 import { trackEvent } from '@/services/analyticsService';
 import { getAiSettings, DEFAULT_AI_SETTINGS, type AiSettings } from '@/services/settingsService';
 import { detectPii, detectBlockedTopics, type GuardrailFinding } from '@/services/guardrails';
-import { structureFormat } from '@/lib/techniques';
+import { contextExample, structureFormat } from '@/lib/techniques';
 import { activityIdentifier, stripMarkdown } from '@/lib/utils';
 import type { OptimizeResult, Technique } from '@/types';
 
@@ -486,7 +486,7 @@ export default function TechniquesPage() {
                             rows={3}
                             value={context}
                             onChange={(e) => setContext(e.target.value)}
-                            placeholder="Bijvoorbeeld: schrijf een brief aan bewoners over werkzaamheden in hun straat."
+                            placeholder={contextExample(technique)}
                             className="opl-input resize-y"
                           />
                           <div className="mt-2 flex flex-wrap justify-end gap-2">
