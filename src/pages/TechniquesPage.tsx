@@ -507,13 +507,13 @@ export default function TechniquesPage() {
                       {editingContext ? (
                         <>
                           <label htmlFor="techniek-context" className="opl-label">
-                            Geef optioneel wat context mee.
+                            Geef wat context mee (optioneel)
                           </label>
                           <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
                             {usesQuestionnaire
-                              ? 'Vul je hier iets in, dan kan de AI de velden van deze techniek alvast voor je invullen — je past ze daarna zelf aan. Leeg laten mag.'
+                              ? 'Vul je hier iets in, dan kan de AI de velden van deze techniek alvast voor je invullen; je past ze daarna zelf aan. Leeg laten mag.'
                               : isInterview
-                                ? 'Vul je hier iets in, dan begint het gesprek bij jouw onderwerp in plaats van bij nul. Leeg laten mag — de AI vraagt er dan zelf naar.'
+                                ? 'Vul je hier iets in, dan begint het gesprek bij jouw onderwerp in plaats van bij nul. Leeg laten mag; de AI vraagt er dan zelf naar.'
                                 : 'Vul je hier iets in, dan begint deze techniek met jouw onderwerp in plaats van bij nul. Leeg laten mag.'}
                           </p>
                           <textarea
@@ -561,7 +561,7 @@ export default function TechniquesPage() {
                                 {context.trim()}
                               </>
                             ) : (
-                              'Geef optioneel wat context mee.'
+                              'Geef wat context mee (optioneel)'
                             )}
                           </p>
                           <button
