@@ -34,6 +34,7 @@ type Mode =
   | 'recommend'
   | 'recommend-framework'
   | 'framework-fit'
+  | 'technique-advisor'
   | 'analyze'
   | 'prefill'
   | 'title'
@@ -175,7 +176,10 @@ interface RequestBody {
     | 'multi-persona'
     | 'template-based'
     | 'meta'
-    | 'socratic';
+    | 'socratic'
+    | 'chain-of-verification'
+    | 'step-back'
+    | 'rubric';
   /** De ingevulde velden mét hun labels, voor analyse. */
   answeredFields?: AnsweredField[];
   /**
@@ -195,6 +199,13 @@ interface RequestBody {
    * gegeven aan en stelt hij de vraag niet opnieuw (dat zou een lus opleveren).
    */
   recurrence?: Recurrence;
+  // 'technique-advisor'-velden: welke techniek past bij dit vraagstuk?
+  /** Wat de gebruiker al had ingevuld voordat hij de adviseur opende (optioneel). */
+  advisorStart?: string;
+  /** De al gestelde vragen met de antwoorden van de gebruiker. */
+  advisorTurns?: { question: string; answer: string }[];
+  /** De gebruiker wil geen vragen meer: adviseer nu op basis van wat er ligt. */
+  advisorFinish?: boolean;
   // 'plan-step'-velden: verzamel het materiaal voor één stap uit het plan.
   /** De titel van de huidige stap (bijv. "Bepaal voor wie het plan is"). */
   stepTitle?: string;
@@ -251,6 +262,27 @@ interface RequestBody {
   metaRequest?: string;
   /** Optionele feedback van de gebruiker om de gebouwde prompt bij te stellen. */
   metaFeedback?: string;
+  // 'cove-scan'-velden: welke soorten controleerbare beweringen staan in het concept?
+  /** De concepttekst die gescand wordt. */
+  coveTekst?: string;
+  /** De soorten die het model mag melden; het model verzint er geen bij. */
+  coveSoorten?: { id: string; label: string }[];
+  // 'stepback-ladder'-velden: drie algemenere vragen + de splitsing vast/aanname.
+  /** De concrete opdracht zoals die binnenkwam. */
+  sbVraag?: string;
+  /** De oplossing die al op tafel ligt (maakt de stap terug scherper). */
+  sbOpTafel?: string;
+  // 'rubric-propose'-velden: criteria voorstellen of niveaubeschrijvingen schrijven.
+  /** 'criteria' = criteria voorstellen, 'niveaus' = beschrijving per schaalpunt. */
+  rubricDoel?: 'criteria' | 'niveaus';
+  /** Wat er beoordeeld wordt. */
+  rubricTeBeoordelen?: string;
+  /** Waar het oordeel voor dient (bepaalt strengheid en toon). */
+  rubricGebruiksdoel?: string;
+  /** De schaalpunten waarvoor een beschrijving moet komen, hoogste eerst. */
+  rubricNiveaus?: string[];
+  /** Bij 'niveaus': de bestaande criteria die behandeld moeten worden. */
+  rubricCriteria?: { naam: string; betekenis: string }[];
   // 'expand-field'-velden: verrijk ÉÉN framework-veld op zijn plek.
   /** De id van het framework-veld dat wordt uitgebreid (FollowUpQuestion.id). */
   fieldId?: string;
@@ -484,7 +516,10 @@ const GENERATE_USER_PROMPT = (args: {
     | 'multi-persona'
     | 'template-based'
     | 'meta'
-    | 'socratic';
+    | 'socratic'
+    | 'chain-of-verification'
+    | 'step-back'
+    | 'rubric';
   /** Interview al in de tool gevoerd → uitgewerkte prompt, geen dialoog-instructies. */
   interviewResolved?: boolean;
 }) => {
@@ -595,10 +630,37 @@ const GENERATE_USER_PROMPT = (args: {
         `die geen antwoorden/oordelen geeft), een doel (verborgen aannames blootleggen), gedragsregels ` +
         `(telkens MAAR ÉÉN vraag tegelijk, wachten op antwoord, voortbouwen op het vorige antwoord, neutraal ` +
         `blijven, geen ja/nee- of sturende vragen, de probleemstelling zelf ook toetsen, en bij "weet ik niet" ` +
-        `de vraag concreter maken), een eerste vraag over zekerheid ("waar ben ik hierin het meest zeker van ` +
-        `— en waar merk ik dat aan?"), de 6 soorten Socratische vragen, een stopconditie (ong. 5-7 vragen), ` +
+        `de vraag concreter maken), een eerste vraag over zekerheid ("waar ben ik hierin het meest zeker van, ` +
+        `en waar merk ik dat aan?"), de 6 soorten Socratische vragen, een stopconditie (ong. 5-7 vragen), ` +
         `en een afsluitende neutrale samenvatting van de blootgelegde aannames met per aanname hoe zeker die ` +
         `is en welk bewijs hem zou bevestigen of weerleggen.`,
+    );
+  } else if (args.structureFormat === 'chain-of-verification') {
+    parts.push(
+      `Houd je strikt aan de verplichte Chain-of-Verification-structuur: een rol-zin, een blok met de ` +
+        `te controleren tekst, een bronafbakening, de aangevinkte soorten beweringen, en de vier ` +
+        `genummerde stappen (beweringen eruit halen, per bewering één verificatievraag, die vragen ` +
+        `afzonderlijk beantwoorden ZONDER naar de formulering in het concept te kijken, en pas daarna ` +
+        `de gecorrigeerde tekst). Sluit af met het sjabloon van vier koppen, waaronder "Nog te ` +
+        `verifiëren door een mens:". Zorg dat de verificatievragen zo zijn geformuleerd dat het ` +
+        `antwoord er niet al in staat.`,
+    );
+  } else if (args.structureFormat === 'step-back') {
+    parts.push(
+      `Houd je strikt aan de verplichte Step-Back-structuur: eerst de instructie om de concrete vraag ` +
+        `NIET meteen te beantwoorden, dan de door de gebruiker gekozen stap-terug-vraag letterlijk ` +
+        `overgenomen, dan de blokken "Staat vast:" (daar niet aan tornen) en "Aanname:" (mag ter ` +
+        `discussie), de kaders, de vier genummerde stappen, en tot slot het sjabloon met de vier ` +
+        `koppen. Bedenk zelf GEEN andere stap-terug-vraag en zoom niet verder uit dan de gekozen vraag.`,
+    );
+  } else if (args.structureFormat === 'rubric') {
+    parts.push(
+      `Houd je strikt aan de verplichte Rubric-structuur. Cruciaal: neem de niveaubeschrijvingen per ` +
+        `criterium LETTERLIJK over uit de antwoorden, elk op een eigen regel in de vorm ` +
+        `"<schaalpunt> = <beschrijving>". Vat ze niet samen en laat er geen weg. Voeg daarna de ` +
+        `scoreregels toe (eerst scoren dan onderbouwen, elke score met een letterlijke passage, ` +
+        `"niet te beoordelen" bij ontbrekende informatie), het eindoordeel met de drempel, en het ` +
+        `uitvoersjabloon dat per criterium vier regels herhaalt.`,
     );
   }
 
@@ -739,11 +801,14 @@ als er echt geen bruikbare bedoeling uit de input te halen valt.`;
  * terug. Wordt onvoorwaardelijk aangehangen in `buildSystemPrompt`, zodat de
  * regel ook geldt bij een aangepaste admin-systeemprompt.
  */
-const NO_MARKDOWN_INSTRUCTION = `OPMAAK — de prompt wordt als platte tekst getoond, niet als Markdown:
+const NO_MARKDOWN_INSTRUCTION = `OPMAAK (de prompt wordt als platte tekst getoond, niet als Markdown):
 Gebruik GEEN Markdown-opmaak in je antwoord. Dus geen sterretjes voor vet of cursief
 (\`**tekst**\`, \`*tekst*\`), geen onderstrepingstekens (\`__tekst__\`) en geen codeblokken.
-Zet een kop of rubriek gewoon op een eigen regel met een dubbele punt erachter —
-bijvoorbeeld "1. Aanleiding en doel:" en niet "**1. Aanleiding en doel**".`;
+Zet een kop of rubriek gewoon op een eigen regel met een dubbele punt erachter,
+bijvoorbeeld "1. Aanleiding en doel:" en niet "**1. Aanleiding en doel**".
+Gebruik ook NOOIT een gedachtestreepje (— of –) of een los streepje tussen zinsdelen;
+schrijf een komma, een puntkomma of een punt. Streepjes in samenstellingen
+("kant-en-klaar", "e-mail") mogen wel.`;
 
 /**
  * Lengtebudget dat aan de schrijvende modi wordt meegegeven.
@@ -1036,6 +1101,8 @@ Werkwijze — houd je STRIKT aan dit protocol:
   GEEN prompt-template, GEEN meta-instructies.
 - Dit is voor INTERN overheidsgebruik; gebruik interne persona's, geen burger-persona's.
 - Schrijf in duidelijke, professionele taal (waar passend B1-niveau).
+- SCHRIJFWIJZE: gebruik NOOIT een gedachtestreepje (— of –) of een los streepje tussen zinsdelen. Zet er
+  een komma, een puntkomma of een punt neer.
 - LENGTE: een "VRAAG:" is exact één regel. Een "KLAAR:"-conclusie is maximaal ~250 woorden: alleen de
   uitkomst, zonder inleiding en zonder de gestelde vragen te herhalen.
 
@@ -1044,38 +1111,38 @@ ${CLARITY_GATE_JSON_INSTRUCTION}`;
 // --- Socratische interview-prompt: alleen vragen, GEEN antwoord/advies/oordeel ---
 // Fundamenteel anders dan chain-of-thought: het inzicht ontstaat bij de GEBRUIKER.
 // Zelfde VRAAG:/KLAAR:-protocol als de wizard verwacht, maar "KLAAR:" is hier een
-// samenvatting van wat de GEBRUIKER zelf heeft aangescherpt — geen AI-conclusie.
+// samenvatting van wat de GEBRUIKER zelf heeft aangescherpt, geen AI-conclusie.
 const PLAN_STEP_SOCRATIC_SYSTEM_PROMPT = `# ROL
 Je bent een socratisch gesprekspartner. Je geeft GEEN antwoorden, GEEN adviezen en GEEN oordelen. Je
 stelt vragen waarmee de gebruiker zijn eigen denken aanscherpt.
 
-# AFBAKENING — LEES DIT EERST
+# AFBAKENING: LEES DIT EERST
 Jouw output is een VRAAG, geen antwoord. Het resultaat ontstaat bij de GEBRUIKER, niet bij jou.
 Je bent hier expliciet NIET behulpzaam op de gebruikelijke manier. Vraagt de gebruiker "wat vind jij
 ervan?" of "geef gewoon het antwoord"? Dan kaats je terug met een vraag. Eén keer toegeven en de
 techniek is stuk.
 
-# FASE 1 — BEGIN BIJ DE ZEKERHEID
+# FASE 1: BEGIN BIJ DE ZEKERHEID
 Is er nog geen scherpe STELLING (een uitspraak, voorgenomen besluit of aanname) om over door te vragen?
-Vraag dan NIET om een nette formulering — dat is huiswerk, geen socratische vraag. Vraag naar zijn
-zekerheid, in deze geest: "Waar ben je in deze kwestie het meest zeker van — en waar merk je dat aan?"
+Vraag dan NIET om een nette formulering; dat is huiswerk, geen socratische vraag. Vraag naar zijn
+zekerheid, in deze geest: "Waar ben je in deze kwestie het meest zeker van, en waar merk je dat aan?"
 - Uit dat antwoord destilleer JIJ de kernstelling in één zin, leg die kort terug ("Ik lees dat je ervan
   uitgaat dat …") en vraag of dat klopt. Verzin zelf geen onderwerp.
 - Een ONDERWERP ("AI in ons ministerie") is nog geen stelling ("wij moeten AI-gebruik centraal
   reguleren"). Maak er zelf een stelling van en laat die bevestigen; vraag dat niet aan de gebruiker.
 
-# FASE 2 — HET GESPREK
+# FASE 2: HET GESPREK
 - Stel telkens ÉÉN vraag per beurt en wacht op antwoord. Nooit meerdere vragen tegelijk.
 - Bouw elke vraag op het LAATSTE antwoord: parafraseer kort wat de gebruiker zei, en graaf dan door naar
   de aanname eronder.
 - Wissel deze zes soorten vragen af; stel nooit twee keer achter elkaar dezelfde soort:
-  1. VERHELDERING — wat bedoel je precies met …? Wat zou "gelukt" hier betekenen?
-  2. AANNAME — wat neem je hier als vanzelfsprekend aan? Wat moet waar zijn wil dit kloppen?
-  3. BEWIJS — waaruit blijkt dat? Heb je dat waargenomen of is het een verwachting?
-  4. ANDER PERSPECTIEF — welke verklaring zou iemand anders hiervoor geven? Wat zou een eenvoudiger
+  1. VERHELDERING: wat bedoel je precies met …? Wat zou "gelukt" hier betekenen?
+  2. AANNAME: wat neem je hier als vanzelfsprekend aan? Wat moet waar zijn wil dit kloppen?
+  3. BEWIJS: waaruit blijkt dat? Heb je dat waargenomen of is het een verwachting?
+  4. ANDER PERSPECTIEF: welke verklaring zou iemand anders hiervoor geven? Wat zou een eenvoudiger
      verklaring zijn?
-  5. GEVOLG — wat gebeurt er verderop als dit klopt? En wat als het niet klopt?
-  6. DE VRAAG ZELF — is dit het echte probleem, of een symptoom van iets eronder? Lost dit op wat je
+  5. GEVOLG: wat gebeurt er verderop als dit klopt? En wat als het niet klopt?
+  6. DE VRAAG ZELF: is dit het echte probleem, of een symptoom van iets eronder? Lost dit op wat je
      eigenlijk wilt bereiken?
 - Raak vóór je afrondt in elk geval soort 2 (aanname), 3 (bewijs) en 6 (de vraag zelf) aan.
 - Verzin GEEN antwoorden namens de gebruiker en geef zelf geen standpunt.
@@ -1092,6 +1159,8 @@ waar hij op rust? Rond dan af, ook als je het maximum nog niet hebt gehaald.
 # PROTOCOL (strikt)
 - Zolang je een vraag stelt: antwoord met exact één regel die begint met "VRAAG:" gevolgd door je vraag.
   Geen inleiding, geen extra tekst. Geen ja/nee-vraag, geen sturende vraag, geen twee vragen in één zin.
+- SCHRIJFWIJZE: gebruik NOOIT een gedachtestreepje (— of –) of een los streepje tussen zinsdelen. Zet er
+  een komma, een puntkomma of een punt neer. Dit geldt voor je vragen én voor je samenvatting.
 - MAXIMUM 7 vragen. Vraagt de gebruiker af te ronden, of bij de 7e beurt: antwoord met "KLAAR:" gevolgd
   door een neutrale SAMENVATTING met deze drie onderdelen:
   1. De stelling zoals die er nu staat, in de woorden van de gebruiker.
@@ -1131,7 +1200,7 @@ const PLAN_STEP_INTERVIEW_USER_PROMPT = (args: {
   if (turns.length === 0 && args.noContext) {
     parts.push(
       args.socratic
-        ? 'GESPREK TOT NU TOE:\n(nog geen context bekend). Er is nog geen stelling om over door te vragen. Je ALLEREERSTE vraag MOET vragen waar de gebruiker in zijn kwestie het meest zeker van is en waar hij dat aan merkt — dus naar wat hij nu voor waar aanneemt, niet naar een nette formulering. Nodig hem uit om de situatie zo UITGEBREID te beschrijven als hij wil; hij hoeft het niet in één zin te vatten. Uit dat antwoord destilleer JIJ de kernstelling in één heldere zin, leg die kort terug ("Ik lees dat je ervan uitgaat dat … — klopt dat?"), en ga dan pas socratisch doorvragen op de aannames erin. Verzin zelf geen onderwerp.'
+        ? 'GESPREK TOT NU TOE:\n(nog geen context bekend). Er is nog geen stelling om over door te vragen. Je ALLEREERSTE vraag MOET vragen waar de gebruiker in zijn kwestie het meest zeker van is en waar hij dat aan merkt, dus naar wat hij nu voor waar aanneemt en niet naar een nette formulering. Nodig hem uit om de situatie zo UITGEBREID te beschrijven als hij wil; hij hoeft het niet in één zin te vatten. Uit dat antwoord destilleer JIJ de kernstelling in één heldere zin, leg die kort terug ("Ik lees dat je ervan uitgaat dat …; klopt dat?"), en ga dan pas socratisch doorvragen op de aannames erin. Verzin zelf geen onderwerp.'
         : 'GESPREK TOT NU TOE:\n(nog geen context bekend). Je ALLEREERSTE vraag MOET zijn wat de gebruiker precies wil bereiken (het doel/vraagstuk). Nodig hem uit dit zo uitgebreid te beschrijven als hij wil. Verzin zelf geen onderwerp. Pas daarna ga je op basis van dat antwoord verder doorvragen.',
     );
   } else if (turns.length === 0) {
@@ -2189,7 +2258,7 @@ function parseFewShotExtract(raw: string): {
 // Chain-of-Thought-instructie in de prompt hoort, en motiveert dat.
 const META_BUILD_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse rijksoverheid (Meta-prompting).
 
-# AFBAKENING — LEES DIT EERST
+# AFBAKENING: LEES DIT EERST
 Jouw output is een PROMPT, geen antwoord.
 Als de gebruiker vraagt "schrijf een memo over dossier X", dan schrijf je NIET die memo. Je schrijft de
 PROMPT waarmee een andere AI die memo optimaal zou schrijven.
@@ -2241,6 +2310,203 @@ function parseMetaBuild(
       toelichting: typeof p.toelichting === 'string' ? p.toelichting.trim() : '',
       cot_gebruikt: p.cot_gebruikt === true,
     };
+  } catch {
+    return null;
+  }
+}
+
+// --- Chain-of-Verification, stap 1: scan het concept op controleerbare beweringen ---
+// Het model kiest hier NIET wat er gecontroleerd moet worden; het meldt alleen
+// wat het ziet, met een letterlijk fragment als bewijs. De gebruiker vinkt aan.
+// Zonder dat fragment is een melding niet te controleren en dus waardeloos.
+const COVE_SCAN_SYSTEM_PROMPT = `Je bent een redacteur bij de Nederlandse rijksoverheid.
+Je taak is: bepalen welke soorten controleerbare beweringen in een concepttekst voorkomen.
+
+Regels:
+- Je beoordeelt NIET of een bewering klopt. Je meldt alleen dat hij er staat.
+- Meld een soort alleen als je er een letterlijk fragment uit de tekst bij kunt zetten.
+- Kopieer dat fragment exact uit de tekst; kort het in tot maximaal 12 woorden.
+- Gebruik uitsluitend de soort-ids die je krijgt aangeleverd. Verzin geen nieuwe ids.
+- Meld elke soort hoogstens één keer.
+- Noem in "duurste_fout" in één zin welke fout in deze tekst de meeste schade zou geven.
+
+${CLARITY_GATE_JSON_INSTRUCTION}
+
+Anders geef je UITSLUITEND geldige JSON terug, zonder codeblok of extra tekst, in dit formaat:
+{"gevonden":[{"id":"<id uit de lijst>","voorbeeld":"<letterlijk fragment>"}],"duurste_fout":"<één zin>"}`;
+
+const COVE_SCAN_USER_PROMPT = (tekst: string, soorten: { id: string; label: string }[]) =>
+  `SOORTEN DIE JE MAG MELDEN (gebruik precies deze ids):\n` +
+  soorten.map((s) => `- ${s.id}: ${s.label}`).join('\n') +
+  `\n\nTE SCANNEN TEKST:\n"""\n${tekst}\n"""`;
+
+/** Parseert de scan robuust; onbekende ids vallen af bij de aanroeper. */
+function parseCoveScan(raw: string): { gevonden: { id: string; voorbeeld: string }[]; duurste_fout: string } | null {
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  try {
+    const p = JSON.parse(escapeRawControlChars(match[0])) as Record<string, unknown>;
+    const gevonden = (Array.isArray(p.gevonden) ? p.gevonden : [])
+      .filter((x): x is Record<string, unknown> => !!x && typeof (x as Record<string, unknown>).id === 'string')
+      .slice(0, 12)
+      .map((x) => ({
+        id: x.id as string,
+        voorbeeld: typeof x.voorbeeld === 'string' ? x.voorbeeld.trim() : '',
+      }));
+    return {
+      gevonden,
+      duurste_fout: typeof p.duurste_fout === 'string' ? p.duurste_fout.trim() : '',
+    };
+  } catch {
+    return null;
+  }
+}
+
+// --- Step-Back, stap 1: de ladder + de splitsing vast/aanname ---
+// Drie treden op oplopend abstractieniveau; de gebruiker kiest de hoogte. Het
+// model kiest bewust niet, want alleen de gebruiker weet welk niveau nog over
+// zijn dossier gaat. De splitsing vast/aanname is een voorstel: ook daar heeft
+// de gebruiker het laatste woord, want of iets besloten is staat niet in de tekst.
+const STEP_BACK_SYSTEM_PROMPT = `Je bent beleidsadviseur bij de Nederlandse rijksoverheid.
+Je taak is: bij een concrete opdracht drie algemenere vragen formuleren, op oplopend abstractieniveau.
+
+De drie niveaus liggen vast:
+- Niveau 1, de vraag achter de vraag: hetzelfde onderwerp, maar zonder de gekozen oplossing erin.
+- Niveau 2, het werkende mechanisme: waardoor verandert gedrag of uitkomst in dit dossier?
+- Niveau 3, het beleidsdoel: welk maatschappelijk doel dient dit uiteindelijk?
+
+Regels:
+- Elke vraag gaat over DIT dossier. Een vraag die op elk dossier past, is te algemeen.
+- Formuleer elke vraag als één open vraag, zonder de voorgestelde oplossing erin.
+- Zet in "winst" in één zin wat dit niveau oplevert, en wat je er verliest.
+- Splits daarna wat de gebruiker aanlevert in twee lijsten:
+  "vast" = wat ergens is besloten (wet, regeerakkoord, formeel besluit, harde termijn).
+  "aanname" = wat nergens is besloten maar wel als gegeven wordt behandeld.
+- Twijfel je of iets besloten is? Zet het bij "aanname". De gebruiker corrigeert dat.
+- Maximaal 4 punten per lijst, elk maximaal 15 woorden.
+
+${CLARITY_GATE_JSON_INSTRUCTION}
+
+Anders geef je UITSLUITEND geldige JSON terug, zonder codeblok of extra tekst, in dit formaat:
+{"ladder":[{"niveau":1,"vraag":"<open vraag>","winst":"<één zin>"},{"niveau":2,"vraag":"…","winst":"…"},{"niveau":3,"vraag":"…","winst":"…"}],"vast":["<punt>"],"aanname":["<punt>"]}`;
+
+const STEP_BACK_USER_PROMPT = (vraag: string, opTafel?: string) =>
+  `CONCRETE OPDRACHT:\n"""\n${vraag}\n"""` +
+  (opTafel?.trim() ? `\n\nOPLOSSING DIE AL OP TAFEL LIGT:\n"""\n${opTafel.trim()}\n"""` : '');
+
+/** Parseert de ladder robuust. */
+function parseStepBack(
+  raw: string,
+): { ladder: { niveau: number; vraag: string; winst: string }[]; vast: string[]; aanname: string[] } | null {
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  const toStrings = (v: unknown) =>
+    (Array.isArray(v) ? v : [])
+      .filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
+      .slice(0, 4)
+      .map((x) => x.trim());
+  try {
+    const p = JSON.parse(escapeRawControlChars(match[0])) as Record<string, unknown>;
+    const ladder = (Array.isArray(p.ladder) ? p.ladder : [])
+      .filter((x): x is Record<string, unknown> => !!x && typeof (x as Record<string, unknown>).vraag === 'string')
+      .slice(0, 3)
+      .map((x, i) => ({
+        niveau: typeof x.niveau === 'number' ? x.niveau : i + 1,
+        vraag: (x.vraag as string).trim(),
+        winst: typeof x.winst === 'string' ? x.winst.trim() : '',
+      }));
+    if (ladder.length === 0) return null;
+    return { ladder, vast: toStrings(p.vast), aanname: toStrings(p.aanname) };
+  } catch {
+    return null;
+  }
+}
+
+// --- Rubric: criteria voorstellen, of niveaubeschrijvingen schrijven ---
+// Twee doelen in één modus, want ze delen bijna alle context. Het tweede doel
+// ('niveaus') is het belangrijkste: dáár valt of staat een rubric mee, en dat is
+// precies het werk dat in de praktijk wordt overgeslagen.
+const RUBRIC_SYSTEM_PROMPT = (doel: 'criteria' | 'niveaus', niveaus: string[]) =>
+  doel === 'criteria'
+    ? `Je bent toetser bij de Nederlandse rijksoverheid.
+Je taak is: criteria voorstellen voor een toetsingskader.
+
+Regels:
+- Stel 4 tot 6 criteria voor, elk met een korte naam van maximaal 4 woorden.
+- Zet in "betekenis" in één zin wat het criterium meet, in toetsbare termen.
+- Criteria mogen elkaar niet overlappen.
+- Gebruik geen criteria die alleen over vorm gaan (spelling, opmaak), tenzij daar expliciet om wordt gevraagd.
+- Schrijf per criterium ook een beschrijving per schaalpunt in "niveaus", met precies deze sleutels: ${niveaus.map((n) => `"${n}"`).join(', ')}.
+- Een beschrijving is één zin en zegt WAT ER IN HET STUK MOET STAAN voor die score, niet hoe goed het is.
+  Fout: "goed onderbouwd". Goed: "elke maatregel heeft een genoemde bron en een cijfer".
+
+${CLARITY_GATE_JSON_INSTRUCTION}
+
+Anders geef je UITSLUITEND geldige JSON terug, zonder codeblok of extra tekst, in dit formaat:
+{"criteria":[{"naam":"<kort>","betekenis":"<één zin>","niveaus":{${niveaus.map((n) => `"${n}":"<één zin>"`).join(',')}}}]}`
+    : `Je bent toetser bij de Nederlandse rijksoverheid.
+Je taak is: per aangeleverd criterium beschrijven wanneer welke score geldt.
+
+Regels:
+- Behandel ELK aangeleverd criterium, met exact dezelfde naam als je krijgt.
+- Gebruik per criterium precies deze sleutels in "niveaus": ${niveaus.map((n) => `"${n}"`).join(', ')}.
+- Een beschrijving is één zin en zegt WAT ER IN HET BEOORDEELDE STUK MOET STAAN voor die score.
+  Fout: "onvoldoende onderbouwd". Goed: "de gevolgen worden genoemd, maar zonder cijfer of bron".
+- Gebruik geen waarderende woorden zoals goed, sterk, zwak of voldoende in de beschrijving zelf;
+  beschrijf de waarneembare situatie.
+- De beschrijvingen van twee opeenvolgende schaalpunten moeten elkaar uitsluiten: bij één stuk
+  kan maar één beschrijving passen.
+
+${CLARITY_GATE_JSON_INSTRUCTION}
+
+Anders geef je UITSLUITEND geldige JSON terug, zonder codeblok of extra tekst, in dit formaat:
+{"criteria":[{"naam":"<naam zoals aangeleverd>","betekenis":"<één zin>","niveaus":{${niveaus.map((n) => `"${n}":"<één zin>"`).join(',')}}}]}`;
+
+const RUBRIC_USER_PROMPT = (args: {
+  teBeoordelen: string;
+  gebruiksdoel?: string;
+  criteria?: { naam: string; betekenis: string }[];
+}) => {
+  const parts = [`TE BEOORDELEN:\n${args.teBeoordelen}`];
+  if (args.gebruiksdoel?.trim()) parts.push(`WAAR HET OORDEEL VOOR DIENT:\n${args.gebruiksdoel.trim()}`);
+  if (args.criteria?.length) {
+    parts.push(
+      `CRITERIA (behandel deze allemaal, met exact deze namen):\n` +
+        args.criteria
+          .map((c) => `- ${c.naam}${c.betekenis.trim() ? `: ${c.betekenis.trim()}` : ''}`)
+          .join('\n'),
+    );
+  }
+  return parts.join('\n\n');
+};
+
+/** Parseert het rubric-voorstel robuust; de niveau-sleutels worden client-side gefilterd. */
+function parseRubricProposal(
+  raw: string,
+): { criteria: { naam: string; betekenis: string; niveaus: Record<string, string> }[] } | null {
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  try {
+    const p = JSON.parse(escapeRawControlChars(match[0])) as Record<string, unknown>;
+    const criteria = (Array.isArray(p.criteria) ? p.criteria : [])
+      .filter((x): x is Record<string, unknown> => !!x && typeof (x as Record<string, unknown>).naam === 'string')
+      .slice(0, 10)
+      .map((x) => {
+        const niveaus: Record<string, string> = {};
+        const raw = x.niveaus;
+        if (raw && typeof raw === 'object') {
+          for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+            if (typeof v === 'string' && v.trim()) niveaus[k] = v.trim();
+          }
+        }
+        return {
+          naam: (x.naam as string).trim(),
+          betekenis: typeof x.betekenis === 'string' ? x.betekenis.trim() : '',
+          niveaus,
+        };
+      });
+    if (criteria.length === 0) return null;
+    return { criteria };
   } catch {
     return null;
   }
@@ -3128,10 +3394,10 @@ Laat alleen écht per keer in te vullen plekken staan als [plaatshouder]. Plaats
 /**
  * Verplichte uitvoerstructuur voor Socratic Prompting: de AI treedt op als
  * Socratische interviewer die via één vraag per keer de aannames van de
- * gebruiker blootlegt en uitdaagt — zonder zelf antwoorden of conclusies te geven.
+ * gebruiker blootlegt en uitdaagt, zonder zelf antwoorden of conclusies te geven.
  * Gebaseerd op de klassieke 6 categorieën Socratische vragen (Paul/Elder).
  */
-const SOCRATIC_STRUCTURE_INSTRUCTION = `VERPLICHTE UITVOERSTRUCTUUR (Socratic Prompting — interviewstijl, aannames blootleggen):
+const SOCRATIC_STRUCTURE_INSTRUCTION = `VERPLICHTE UITVOERSTRUCTUUR (Socratic Prompting, interviewstijl, aannames blootleggen):
 Belangrijk: het eindresultaat is een PROMPT/TEMPLATE die de gebruiker in een Gen AI-chat plakt. Het is dus
 de Gen AI (niet de gebruiker) die straks de aannames eruit haalt door de gebruiker in interviewstijl door te
 vragen over de geschetste situatie. Stel zelf GEEN vragen aan de gebruiker; schrijf de instructie voor de AI.
@@ -3149,7 +3415,7 @@ Bouw de prompt ALTIJD op in deze volgorde, en stem de vragen af op de concrete s
      sturende vragen; stel open wat/hoe/waarom-vragen."
    - "Neem mijn probleemstelling niet als vaststaand aan: toets ook of ik wel het juiste probleem te
      pakken heb."
-   - "Weet ik iets niet? Herhaal je vraag dan niet, maar maak hem kleiner en concreter — vraag naar een
+   - "Weet ik iets niet? Herhaal je vraag dan niet, maar maak hem kleiner en concreter: vraag naar een
      recent voorbeeld of naar wat waar zou moeten zijn om mijn stelling te laten kloppen."
 4. Concreet toegesneden startvragen: schrijf 3 à 5 EERSTE voorbeeldvragen die echt over deze situatie gaan
    (niet generiek), en geef aan dat de AI deze als vertrekpunt gebruikt en daarna zelf scherpere vervolgvragen bedenkt.
@@ -3167,15 +3433,125 @@ Laat alleen écht per keer in te vullen plekken staan als [plaatshouder]. Plaats
 /**
  * Vervangt de CoT/Socratic-structuurinstructie wanneer het vraag-na-vraag-
  * interview al ÍN de tool is gevoerd (`interviewResolved`). De conclusie van
- * dat gesprek is dan al uitgewerkt en zit bij de antwoorden — de prompt hoeft
+ * dat gesprek is dan al uitgewerkt en zit bij de antwoorden; de prompt hoeft
  * de dialoog niet meer "aan te zetten", maar moet direct uitvoerbaar zijn.
  */
+/**
+ * Verplichte uitvoerstructuur voor Chain-of-Verification.
+ *
+ * Het hele punt van deze techniek is dat de controle wordt losgekoppeld van het
+ * concept. Een prompt die alleen "controleer deze tekst" zegt, levert een AI op
+ * die zijn eigen formulering herleest en goedkeurt. De structuur dwingt daarom
+ * vier gescheiden stappen af, waarvan stap 3 expliciet zónder de conceptzin
+ * wordt beantwoord, plus een bronafbakening die "klopt" iets laat betekenen.
+ */
+const COVE_STRUCTURE_INSTRUCTION = `VERPLICHTE UITVOERSTRUCTUUR (Chain-of-Verification):
+Bouw de prompt ALTIJD op in deze volgorde. Schrijf alles volledig uit op basis van de antwoorden.
+
+1. Een rol-zin: "Jij controleert een concepttekst voordat die wordt opgeleverd. Je keurt niets goed
+   op gevoel; je trekt elke bewering apart na."
+2. Een blok "Te controleren tekst:" met daaronder een [plaatshouder] waar de gebruiker het concept
+   inplakt (of de tekst zelf, als die in de antwoorden staat).
+3. Een blok "Bronafbakening:" met precies welke bronnen als bewijs gelden, en de regel dat het model
+   niets als geverifieerd mag opvoeren op grond van eigen kennis.
+4. Een blok "Controleer in elk geval deze soorten beweringen:" met de aangevinkte soorten als bullets.
+5. Een genummerde werkwijze met precies deze vier stappen, in deze woorden uitgewerkt:
+   1) Haal elke controleerbare bewering uit de tekst en zet ze in een lijst.
+   2) Maak per bewering één verificatievraag. Formuleer die vraag zo dat het antwoord er niet al in
+      staat: vraag "welk bedrag noemt artikel 4.2?" en niet "klopt het dat artikel 4.2 vier miljoen noemt?".
+   3) Beantwoord elke verificatievraag afzonderlijk, alleen op basis van de bronafbakening, en KIJK
+      DAARBIJ NIET naar de formulering in het concept. Kan de vraag niet worden beantwoord, dan is het
+      antwoord "niet te verifiëren met de aangeleverde bronnen".
+   4) Lever daarna pas de gecorrigeerde tekst.
+6. Een blok "Regels:" met wat er met niet-verifieerbare beweringen gebeurt (de keuze van de gebruiker),
+   en de regel dat een bewering nooit wordt aangevuld met iets wat niet uit de bronnen komt.
+7. Een uitvoersjabloon met precies deze vier koppen op eigen regels:
+   Beweringen:
+   Verificatievragen en antwoorden:
+   Gecorrigeerde tekst:
+   Nog te verifiëren door een mens:
+
+Laat alleen écht per keer in te vullen plekken staan als [plaatshouder]. Plaats GEEN codeblok-tekens (\`\`\`).`;
+
+/**
+ * Verplichte uitvoerstructuur voor Step-Back Prompting.
+ *
+ * Twee dingen gaan hier standaard mis. Het model springt meteen naar het
+ * concrete antwoord (dan is er geen stap terug), of het zoomt zo ver uit dat het
+ * antwoord over niets meer gaat. De structuur zet daarom de gekozen stap-terug-
+ * vraag letterlijk in de prompt, en scheidt wat vaststaat van wat aangenomen is,
+ * zodat het uitzoomen niet over een genomen besluit heen loopt.
+ */
+const STEP_BACK_STRUCTURE_INSTRUCTION = `VERPLICHTE UITVOERSTRUCTUUR (Step-Back Prompting):
+Bouw de prompt ALTIJD op in deze volgorde. Schrijf alles volledig uit op basis van de antwoorden.
+
+1. Een rol-zin: "Beantwoord de concrete vraag onderaan NIET meteen. Werk eerst de algemenere vraag uit
+   die eronder ligt."
+2. Een blok "Stap-terug-vraag:" met de door de gebruiker gekozen algemenere vraag, letterlijk
+   overgenomen. Verzin hier geen andere vraag en zoom niet verder uit dan deze vraag.
+3. Een blok "Staat vast:" met de randvoorwaarden die besloten zijn, en de regel: "Hier tornt je
+   antwoord niet aan, ook niet als het uitzoomen daar aanleiding toe geeft."
+4. Een blok "Aanname:" met wat nooit is besloten maar wel is overgenomen, en de regel: "Dit mag je
+   wél ter discussie stellen."
+5. Een blok "Geldende kaders:" met de kaders die op het algemenere niveau meewegen.
+6. Een genummerde werkwijze met precies deze vier stappen:
+   1) Beantwoord de stap-terug-vraag: wat is hier het probleem, voor wie, en waardoor blijft het bestaan?
+   2) Benoem de uitgangspunten en werkende mechanismen die op dat niveau gelden.
+   3) Pas die pas nu toe op de concrete vraag.
+   4) Benoem waar de concrete vraag afwijkt van het onderliggende vraagstuk.
+7. Een blok "Concrete vraag:" met de opdracht van de gebruiker, met een [plaatshouder] waar hij per
+   keer iets moet aanvullen.
+8. Een uitvoersjabloon met precies deze vier koppen op eigen regels:
+   Antwoord op de stap-terug-vraag:
+   Uitgangspunten die hier gelden:
+   Wat dit betekent voor de gestelde vraag:
+   Wat er beter anders gevraagd kan worden:
+
+Laat alleen écht per keer in te vullen plekken staan als [plaatshouder]. Plaats GEEN codeblok-tekens (\`\`\`).`;
+
+/**
+ * Verplichte uitvoerstructuur voor Rubric-toetsing.
+ *
+ * Een score zonder niveaubeschrijving en zonder bewijs is een mening met een
+ * cijfer erbij. De structuur neemt daarom de niveaubeschrijvingen per criterium
+ * letterlijk over in de prompt, verplicht een citaat per score, en houdt de
+ * uitweg "niet te beoordelen" open zodat het model een gat niet invult.
+ */
+const RUBRIC_STRUCTURE_INSTRUCTION = `VERPLICHTE UITVOERSTRUCTUUR (Rubric-toetsing):
+Bouw de prompt ALTIJD op in deze volgorde. Schrijf alles volledig uit op basis van de antwoorden.
+
+1. Een rol-zin: "Jij beoordeelt het onderstaande tegen een vast toetsingskader. Je scoort per criterium
+   apart en pas daarna geef je een eindoordeel."
+2. Een blok "Te beoordelen:" met een [plaatshouder] waar de gebruiker het stuk inplakt.
+3. Een blok "Toetsingskader:" met per criterium een genummerd kopje, daaronder de regel "Meet:", zo
+   nodig de regel "Weging:", en daaronder ELKE niveaubeschrijving op een eigen regel in de vorm
+   "<schaalpunt> = <beschrijving>". Neem de niveaubeschrijvingen uit de antwoorden LETTERLIJK over;
+   verzin er geen bij en vat ze niet samen. Ontbreekt bij een criterium een niveaubeschrijving, schrijf
+   die dan zelf uit in dezelfde vorm.
+4. Een blok "Scoreregels:" met deze regels, uitgeschreven:
+   - Bepaal per criterium eerst de score, daarna pas de onderbouwing; niet andersom.
+   - Onderbouw elke score met een letterlijke passage uit het beoordeelde stuk (als de gebruiker dat vraagt).
+   - Staat er niets over in het stuk, geef dan "niet te beoordelen" met wat er aan informatie nodig is.
+     Vul niets aan en leid niets af.
+   - Beoordeel alleen op de genoemde criteria.
+5. Een blok "Eindoordeel:" met de drempel van de gebruiker en, als er een knock-outcriterium is, de
+   regel dat het geheel dan onvoldoende is.
+6. Een uitvoersjabloon dat per criterium precies deze vier regels herhaalt, en daarna het slot:
+   Criterium:
+   Score:
+   Onderbouwing (letterlijke passage):
+   Belangrijkste verbeterpunt:
+   Eindoordeel:
+   Zwaarste tekortkoming:
+
+Laat alleen écht per keer in te vullen plekken staan als [plaatshouder]. Plaats GEEN codeblok-tekens (\`\`\`).`;
+
 const INTERVIEW_RESOLVED_INSTRUCTION = `VERPLICHTE UITVOERSTRUCTUUR (uitgewerkt gesprek → direct uitvoerbare prompt):
 Het verdiepende vraag-na-vraag-gesprek (chain-of-thought/socratisch) is al in de tool gevoerd. De
 conclusie daarvan is al uitgewerkt en staat bij de antwoorden van de gebruiker. Daarom:
 
 1. Zet GEEN instructies in de prompt om een dialoog te voeren, één vraag tegelijk te stellen of eerst
-   door te vragen — dat is al gebeurd.
+   door te vragen; dat is al gebeurd.
 2. Verwerk de conclusie van het gesprek als vaststaande context: neem de kern (doel, situatie,
    keuzes, aandachtspunten) volledig en concreet op in de prompt.
 3. Bouw de prompt op als een direct uitvoerbare opdracht: een rol-zin, de uitgewerkte context, de
@@ -3193,7 +3569,10 @@ type StructureFormat =
   | 'multi-persona'
   | 'template-based'
   | 'meta'
-  | 'socratic';
+  | 'socratic'
+  | 'chain-of-verification'
+  | 'step-back'
+  | 'rubric';
 
 /**
  * Kies de juiste structuur-instructie (of geen) op basis van de techniek.
@@ -3218,6 +3597,9 @@ function structureInstruction(
   if (format === 'template-based') return TEMPLATE_BASED_STRUCTURE_INSTRUCTION;
   if (format === 'meta') return META_STRUCTURE_INSTRUCTION;
   if (format === 'socratic') return SOCRATIC_STRUCTURE_INSTRUCTION;
+  if (format === 'chain-of-verification') return COVE_STRUCTURE_INSTRUCTION;
+  if (format === 'step-back') return STEP_BACK_STRUCTURE_INSTRUCTION;
+  if (format === 'rubric') return RUBRIC_STRUCTURE_INSTRUCTION;
   return null;
 }
 

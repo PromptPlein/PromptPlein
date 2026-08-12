@@ -243,34 +243,18 @@ export function contextExample(t: TechniqueIdentity): string {
 }
 
 /**
- * Startuitleg boven het invulblok: waar de techniek over moet gáán, met welke
- * vraag hij begint en wanneer hij het meeste oplevert. Bedoeld voor technieken
- * die zich niet vanzelf laten raden omdat de AI iets anders doet dan gevraagd
- * antwoord geven — bij Socratic stelt hij juist alléén vragen, en zonder die
- * verwachting vooraf lijkt dat een fout in plaats van de bedoeling.
+ * Startuitleg boven het invulblok: waar de techniek over moet gáán. Bedoeld
+ * voor technieken die zich niet vanzelf laten raden omdat de AI iets anders
+ * doet dan antwoord geven. Bij Socratic stelt hij juist alléén vragen, en
+ * zonder die verwachting vooraf lijkt dat een fout in plaats van de bedoeling.
  */
-export interface TechniqueStarter {
-  /** Wat je meebrengt: het soort onderwerp waar de techniek op werkt. */
-  context: string;
-  /** Waar het gesprek mee begint, en wat je doet als je het antwoord niet weet. */
-  question: string;
-  /** Wanneer deze techniek het meeste oplevert — en wanneer juist niet. */
-  useCase: string;
-}
-
-const FORMAT_STARTERS: Partial<Record<StructureFormat, TechniqueStarter>> = {
-  socratic: {
-    context:
-      'Een voorgenomen besluit, een overtuiging of een aanpak waarvan je denkt dat hij klopt, maar die je nog niet hebt getoetst. Beschrijf de situatie in gewone woorden; je hoeft er zelf geen scherpe stelling van te maken.',
-    question:
-      '"Waar ben ik hierin het meest zeker van — en waar merk ik dat aan?" Weet je dat nog niet? Dan sta je precies op de goede plek: zeg dat gerust, de volgende vraag wordt dan kleiner en concreter.',
-    useCase:
-      'Vóór je een richting kiest, bij een aanpak die niet werkt terwijl niemand weet waarom, of als iedereen het verdacht snel eens is. Niet om een tekst te laten schrijven: hier krijg je alleen vragen terug, geen antwoorden.',
-  },
+const FORMAT_STARTERS: Partial<Record<StructureFormat, string>> = {
+  socratic:
+    'Een voorgenomen besluit, een overtuiging of een aanpak waarvan je denkt dat hij klopt, maar die je nog niet hebt getoetst. Beschrijf de situatie in gewone woorden; je hoeft er zelf geen scherpe stelling van te maken.',
 };
 
 /** De startuitleg die bij deze techniek hoort, of undefined als die er niet is. */
-export function techniqueStarter(t: TechniqueIdentity): TechniqueStarter | undefined {
+export function techniqueStarter(t: TechniqueIdentity): string | undefined {
   const fmt = structureFormat(t);
   return fmt ? FORMAT_STARTERS[fmt] : undefined;
 }

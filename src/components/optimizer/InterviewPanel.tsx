@@ -70,8 +70,8 @@ export function InterviewPanel({
         <p className="text-sm text-slate-600 dark:text-slate-300">
           {intro ??
             (socratic
-              ? 'De AI stelt alleen vragen (max. 7) zodat jij je eigen denken aanscherpt — geen antwoorden of adviezen. Weet je iets niet? Zeg dat gerust; de volgende vraag wordt dan concreter. Klaar? Rond af voor een neutrale samenvatting van je aannames, met per aanname hoe zeker die is.'
-              : 'De AI stelt op basis van je antwoorden telkens de volgende vraag (max. 7), tot het beeld compleet is. Klaar met input geven? Rond dan af — de AI trekt dan meteen een conclusie.')}
+              ? 'De AI stelt alleen vragen (max. 7) zodat jij je eigen denken aanscherpt, zonder antwoorden of adviezen. Weet je iets niet? Zeg dat gerust; de volgende vraag wordt dan concreter. Klaar? Rond af voor een neutrale samenvatting van je aannames, met per aanname hoe zeker die is.'
+              : 'De AI stelt op basis van je antwoorden telkens de volgende vraag (max. 7), tot het beeld compleet is. Klaar met input geven? Rond dan af; de AI trekt dan meteen een conclusie.')}
         </p>
       </div>
 

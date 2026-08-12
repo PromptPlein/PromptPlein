@@ -456,10 +456,10 @@ export default function TechniquesPage() {
                   </div>
                 </div>
 
-                {/* Zo begin je: waar de techniek over gaat, met welke vraag hij
-                    begint en wanneer hij het meeste oplevert. Alleen bij
-                    technieken die anders lopen dan verwacht (Socratic geeft
-                    vragen terug, geen antwoorden) — zie techniqueStarter. */}
+                {/* Zo begin je: waar de techniek over moet gaan. Alleen bij
+                    technieken die anders lopen dan verwacht, zoals Socratic:
+                    die geeft vragen terug in plaats van antwoorden. Zie
+                    techniqueStarter. */}
                 {(() => {
                   const starter = techniqueStarter(technique);
                   if (!starter) return null;
@@ -468,26 +468,7 @@ export default function TechniquesPage() {
                       <p className="flex items-center gap-1.5 text-sm font-semibold text-rijksblauw-700 dark:text-rijksblauw-200">
                         <Compass size={15} className="shrink-0" /> Zo begin je
                       </p>
-                      <dl className="mt-2 space-y-1.5 text-sm text-slate-600 dark:text-slate-300">
-                        <div>
-                          <dt className="inline font-medium text-slate-700 dark:text-slate-200">
-                            Waar het over gaat:{' '}
-                          </dt>
-                          <dd className="inline">{starter.context}</dd>
-                        </div>
-                        <div>
-                          <dt className="inline font-medium text-slate-700 dark:text-slate-200">
-                            De eerste vraag:{' '}
-                          </dt>
-                          <dd className="inline">{starter.question}</dd>
-                        </div>
-                        <div>
-                          <dt className="inline font-medium text-slate-700 dark:text-slate-200">
-                            Wanneer je dit gebruikt:{' '}
-                          </dt>
-                          <dd className="inline">{starter.useCase}</dd>
-                        </div>
-                      </dl>
+                      <p className="mt-1.5 text-sm text-slate-600 dark:text-slate-300">{starter}</p>
                     </div>
                   );
                 })()}
