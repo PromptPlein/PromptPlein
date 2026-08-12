@@ -96,7 +96,7 @@ export interface ProviderModelOption {
  * Per augustus 2026 wijzen ze naar `mistral-small-2603` (Small 4, maart 2026),
  * `mistral-medium-2604` (Medium 3.5, april 2026), `mistral-large-2512` (Large 3),
  * `ministral-8b-2512` en `ministral-3b-2512` (Ministral 3, december 2025).
- * Alleen label, hint en prijs hoeven dan bij te blijven — de id's niet.
+ * Alleen label, hint en prijs hoeven dan bij te blijven, de id's niet.
  *
  * UITZONDERING: Ministral 3 14B staat er met de gedateerde `ministral-14b-2512`.
  * Die maat is nieuw in de Ministral 3-generatie, dus er is geen oudere
