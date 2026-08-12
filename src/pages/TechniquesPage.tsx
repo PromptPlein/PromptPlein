@@ -435,18 +435,12 @@ export default function TechniquesPage() {
               <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                 De invulvelden verschijnen daarna hier, op deze plek.
               </p>
-              <ArrowDown
-                size={22}
-                className="mx-auto mt-4 animate-bounce text-rijksoranje"
-                aria-hidden
-              />
-
               {/* Twintig technieken zijn er twintig te veel als je er nog geen
                   één kent. Deze weg eromheen staat daarom in hetzelfde blok als
                   de opdracht om te kiezen: precies waar je vastloopt. */}
-              <div className="mx-auto mt-8 max-w-md border-t border-slate-200 pt-6 dark:border-slate-700">
+              <div className="mx-auto mt-6 max-w-md border-t border-slate-200 pt-6 dark:border-slate-700">
                 <p className="font-semibold text-slate-700 dark:text-slate-200">
-                  Weet je niet welke framework?
+                  Weet je niet welk framework?
                 </p>
                 <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                   Laten we je helpen om de beste techniek erbij te pakken.
@@ -456,9 +450,19 @@ export default function TechniquesPage() {
                   className="opl-btn-primary mt-4"
                   onClick={() => setAdvisorOpen(true)}
                 >
-                  <Compass size={17} /> Laat de AI meedenken
+                  <Compass size={17} /> Start het onderzoek
                 </button>
               </div>
+
+              {/* Het pijltje hoort onderaan, ná de adviseur: het wijst naar de
+                  lijst hieronder. Stond het boven de adviseurknop, dan leek het
+                  díé aan te wijzen — terwijl dat juist de omweg is voor wie het
+                  niet weet, en de lijst de gewone weg voor wie het wel weet. */}
+              <ArrowDown
+                size={22}
+                className="mx-auto mt-8 animate-bounce text-rijksoranje"
+                aria-hidden
+              />
             </section>
           )}
 
