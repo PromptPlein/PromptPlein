@@ -349,12 +349,35 @@ export default function TechniquesPage() {
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
-            <Layers className="text-rijksoranje" /> Werk met prompttechnieken
+            <Layers className="text-rijksoranje" /> Werken met Prompt Engineering
           </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Kies zelf een prompt framework of techniek, vul je eigen gegevens in en bouw daar een
-            herbruikbare prompt van. Zo zie je precies wat elke techniek van je vraagt.
-          </p>
+          <div className="mt-1 max-w-3xl space-y-2 text-sm text-slate-500 dark:text-slate-400">
+            <p>
+              Prompt engineering is je opdracht zo opschrijven dat de AI hem ook echt uitvoert
+              zoals jij bedoelt. Daarvoor bestaan twee soorten hulpmiddelen.
+            </p>
+            <p>
+              <span className="font-medium text-rijksblauw-700 dark:text-rijksblauw-200">
+                Prompt frameworks
+              </span>{' '}
+              zijn complete raamwerken — CARE, CRISPE, CO-STAR, RAISE, CRAFT — die je hele prompt
+              structureren: wie de AI is, welke context er speelt, wat de taak is en in welke vorm
+              het antwoord moet komen. Je gebruikt er één als basis voor de hele opdracht.
+            </p>
+            <p>
+              <span className="font-medium text-rijksblauw-700 dark:text-rijksblauw-200">
+                Losse technieken
+              </span>{' '}
+              lossen elk één probleem op: Few-Shot geeft voorbeelden mee, Chain-of-Thought laat de
+              AI stap voor stap redeneren, Persona schrijft vanuit een rol of naar een publiek,
+              Bronbinding houdt het antwoord bij jouw documenten, en Chain-of-Verification laat de
+              AI zijn eigen tekst natrekken.
+            </p>
+            <p>
+              Kies er hieronder één, vul je eigen gegevens in en bouw daar een herbruikbare prompt
+              van. Zo zie je precies wat elke aanpak van je vraagt.
+            </p>
+          </div>
         </div>
         {phase === 'input' && hasContent && (
           <button

@@ -102,7 +102,7 @@ export default function HomePage() {
                 to="/technieken"
                 className="opl-btn w-full justify-center border border-white bg-white text-rijksblauw-700 shadow-lg hover:bg-rijksblauw-50 focus:ring-white"
               >
-                <Layers size={18} className="text-rijksoranje" /> Werk met prompttechnieken
+                <Layers size={18} className="text-rijksoranje" /> Werken met Prompt Engineering
               </Link>
             </div>
           </div>
