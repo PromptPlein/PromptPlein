@@ -446,11 +446,10 @@ export default function TechniquesPage() {
                   de opdracht om te kiezen: precies waar je vastloopt. */}
               <div className="mx-auto mt-8 max-w-md border-t border-slate-200 pt-6 dark:border-slate-700">
                 <p className="font-semibold text-slate-700 dark:text-slate-200">
-                  Weet je niet welke techniek of framework?
+                  Weet je niet welke framework?
                 </p>
                 <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                  Beantwoord hooguit vier korte vragen over je taak. De AI redeneert stap voor stap
-                  mee en zoekt de techniek erbij.
+                  Laten we je helpen om de beste techniek erbij te pakken.
                 </p>
                 <button
                   type="button"
