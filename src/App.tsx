@@ -21,6 +21,8 @@ const NetworkPage = lazy(() => import('@/pages/NetworkPage'));
 const CommunityPage = lazy(() => import('@/pages/CommunityPage'));
 const PublicProfilePage = lazy(() => import('@/pages/PublicProfilePage'));
 const ChatPage = lazy(() => import('@/pages/ChatPage'));
+// De techniekenlijst met invulvelden (training): eigen instap naast /genereren.
+const TechniquesPage = lazy(() => import('@/pages/TechniquesPage'));
 
 // Chart-/admin-zware pagina's lazy laden (houdt recharts uit de hoofdbundle).
 const TrendingPage = lazy(() => import('@/pages/TrendingPage'));
@@ -68,6 +70,8 @@ export default function App() {
               <Route path="/zoeken" element={<SearchPage />} />
               <Route path="/genereren" element={<OptimizerPage />} />
               <Route path="/genereren/:promptId" element={<OptimizerPage />} />
+              {/* Zelf een techniek kiezen en de velden invullen (training). */}
+              <Route path="/technieken" element={<TechniquesPage />} />
               {/* Oude URL blijft werken via redirect */}
               <Route path="/optimaliseren" element={<Navigate to="/genereren" replace />} />
               <Route

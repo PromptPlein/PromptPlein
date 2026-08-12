@@ -13,6 +13,7 @@ import {
   Folder,
   Sparkles,
   MessageSquare,
+  Layers,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -88,6 +89,17 @@ export default function HomePage() {
                 className="opl-btn flex-1 justify-center border border-white/70 text-white hover:bg-white/10"
               >
                 <MessageSquare size={18} /> Start een chat
+              </Link>
+            </div>
+            {/* Derde, grote instap: de lijst met prompttechnieken zelf. Voor de
+                training — deelnemers kiezen een techniek en vullen hem met hun
+                eigen gegevens. Bewust groter dan de twee knoppen erboven. */}
+            <div className="mx-auto mt-4 w-full max-w-md">
+              <Link
+                to="/technieken"
+                className="opl-btn w-full justify-center gap-3 rounded-xl bg-white px-6 py-4 text-base text-rijksblauw-700 shadow-lg transition-transform hover:-translate-y-0.5 hover:bg-rijksblauw-50 focus:ring-white"
+              >
+                <Layers size={22} className="text-rijksoranje" /> Werk met prompttechnieken
               </Link>
             </div>
           </div>
