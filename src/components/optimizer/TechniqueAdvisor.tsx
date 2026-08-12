@@ -50,7 +50,11 @@ const OPENING_OPTIONS = [
 ];
 
 interface TechniqueAdvisorProps {
-  /** Alle frameworks én losse technieken waaruit geadviseerd mag worden. */
+  /**
+   * De volledige lijst; de adviseur filtert er zelf de losse technieken uit.
+   * Prompt frameworks (CARE, CRISPE, CO-STAR) doen bewust niet mee: dit scherm
+   * gaat alleen over de vraag welke TECHNIEK bij het vraagstuk past.
+   */
   techniques: Technique[];
   settings: AiSettings;
   /** Wat de gebruiker eventueel al had opgeschreven; scheelt een vraag. */
@@ -86,6 +90,11 @@ export default function TechniqueAdvisor({
   onChoose,
   onClose,
 }: TechniqueAdvisorProps) {
+  // Alleen losse technieken. Filteren bij de bron in plaats van het antwoord
+  // achteraf opschonen: wat de AI niet in zijn lijst ziet, kan hij ook niet
+  // adviseren, en hij verspilt er geen vraag aan.
+  const options = techniques.filter((t) => !isContextPrompt(t));
+
   const [turns, setTurns] = useState<{ question: string; answer: string }[]>([]);
   const [question, setQuestion] = useState<AdvisorQuestion | null>(null);
   const [candidates, setCandidates] = useState<AdvisorCandidate[]>([]);
@@ -111,7 +120,7 @@ export default function TechniqueAdvisor({
       const res = await adviseTechnique({
         start: start?.trim() || undefined,
         turns: next,
-        techniques,
+        techniques: options,
         finish,
         preferredProvider: settings.provider,
         preferredModel: settings.model,
@@ -168,7 +177,7 @@ export default function TechniqueAdvisor({
     void runTurn([]);
   }
 
-  const byId = (id: string) => techniques.find((t) => t.id === id) ?? null;
+  const byId = (id: string) => options.find((t) => t.id === id) ?? null;
   const geadviseerd = advies ? byId(advies.id) : null;
   // De alternatieven zijn de overige kandidaten uit de laatste weging: wie het
   // advies niet vertrouwt ziet meteen wat er als tweede uit kwam, in plaats van
@@ -335,7 +344,7 @@ export default function TechniqueAdvisor({
                   <Check size={12} />
                 </span>
                 <span className="text-xs font-semibold uppercase tracking-wide text-rijksoranje">
-                  {isContextPrompt(geadviseerd) ? 'Prompt framework' : 'Prompttechniek'}
+                  Prompttechniek
                 </span>
               </span>
               <span className="mt-1.5 block text-lg font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
