@@ -351,15 +351,10 @@ export default function TechniquesPage() {
           <h1 className="flex items-center gap-2 text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
             <Layers className="text-rijksoranje" /> Werken met Prompt Engineering
           </h1>
-          <div className="mt-1 max-w-3xl space-y-2 text-sm text-slate-500 dark:text-slate-400">
-            <p>
-              Prompt engineering is je opdracht zo opschrijven dat de AI hem ook echt uitvoert
-              zoals jij bedoelt. Daarvoor bestaan twee soorten hulpmiddelen.
-            </p>
-            <p className="font-medium text-rijksblauw-700 dark:text-rijksblauw-200">
-              Prompt frameworks en losse technieken.
-            </p>
-          </div>
+          <p className="mt-1 max-w-3xl text-sm text-slate-500 dark:text-slate-400">
+            Prompt engineering is je opdracht zo opschrijven dat de AI hem ook echt uitvoert zoals
+            jij bedoelt.
+          </p>
         </div>
         {phase === 'input' && hasContent && (
           <button
