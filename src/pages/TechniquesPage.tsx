@@ -356,26 +356,8 @@ export default function TechniquesPage() {
               Prompt engineering is je opdracht zo opschrijven dat de AI hem ook echt uitvoert
               zoals jij bedoelt. Daarvoor bestaan twee soorten hulpmiddelen.
             </p>
-            <p>
-              <span className="font-medium text-rijksblauw-700 dark:text-rijksblauw-200">
-                Prompt frameworks
-              </span>{' '}
-              zijn complete raamwerken — CARE, CRISPE, CO-STAR, RAISE, CRAFT — die je hele prompt
-              structureren: wie de AI is, welke context er speelt, wat de taak is en in welke vorm
-              het antwoord moet komen. Je gebruikt er één als basis voor de hele opdracht.
-            </p>
-            <p>
-              <span className="font-medium text-rijksblauw-700 dark:text-rijksblauw-200">
-                Losse technieken
-              </span>{' '}
-              lossen elk één probleem op: Few-Shot geeft voorbeelden mee, Chain-of-Thought laat de
-              AI stap voor stap redeneren, Persona schrijft vanuit een rol of naar een publiek,
-              Bronbinding houdt het antwoord bij jouw documenten, en Chain-of-Verification laat de
-              AI zijn eigen tekst natrekken.
-            </p>
-            <p>
-              Kies er hieronder één, vul je eigen gegevens in en bouw daar een herbruikbare prompt
-              van. Zo zie je precies wat elke aanpak van je vraagt.
+            <p className="font-medium text-rijksblauw-700 dark:text-rijksblauw-200">
+              Prompt frameworks en losse technieken.
             </p>
           </div>
         </div>
