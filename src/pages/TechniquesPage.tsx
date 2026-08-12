@@ -486,7 +486,7 @@ export default function TechniquesPage() {
                             rows={3}
                             value={context}
                             onChange={(e) => setContext(e.target.value)}
-                            placeholder="Bijvoorbeeld: ik schrijf een brief aan bewoners over werkzaamheden in hun straat."
+                            placeholder="Bijvoorbeeld: schrijf een brief aan bewoners over werkzaamheden in hun straat."
                             className="opl-input resize-y"
                           />
                           <div className="mt-2 flex flex-wrap justify-end gap-2">
