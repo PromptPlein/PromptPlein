@@ -162,7 +162,7 @@ export function serializeFewShot(d: FewShotData): string {
   const drop = d.nietOvernemen.filter((f) => f.checked).map((f) => f.label);
   if (drop.length > 0)
     parts.push(
-      `NIET OVERNEMEN (casus-specifiek — vervang door plaatshouder of laat weg):\n${drop
+      `NIET OVERNEMEN (casus-specifiek; vervang door plaatshouder of laat weg):\n${drop
         .map((k) => `- ${k}`)
         .join('\n')}`,
     );

@@ -161,7 +161,7 @@ export default function PersonaBuilder({
       <p className="text-sm text-slate-600 dark:text-slate-300">
         Beschrijf {multi ? 'de persona’s' : 'de persona'} vanuit wie of voor wie de AI schrijft. Hoe
         scherper, hoe beter het resultaat. Weet je iets niet? Geef een korte aanduiding en laat de AI
-        de velden invullen — je kunt alles daarna aanpassen.
+        de velden invullen; je kunt alles daarna aanpassen.
       </p>
 
       {personas.map((persona, idx) => (
@@ -228,7 +228,7 @@ function PersonaCard({
           {multi ? `Persona ${index + 1}` : 'Persona'}
           {persona.hint.trim() && (
             <span className="text-sm font-normal text-slate-500 dark:text-slate-400">
-              — {persona.hint.trim()}
+              · {persona.hint.trim()}
             </span>
           )}
         </span>

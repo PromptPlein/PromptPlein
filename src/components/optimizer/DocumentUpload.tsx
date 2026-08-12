@@ -120,7 +120,7 @@ export default function DocumentUpload({
             onClick={() => setBriefOpen(true)}
             disabled={busy || disabled}
           >
-            Ik heb geen voorbeelddocument — help me aan een structuur
+            Ik heb geen voorbeelddocument, help me aan een structuur
           </button>
         ) : (
           <div>
@@ -140,7 +140,7 @@ export default function DocumentUpload({
             />
             <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
               De AI stelt een structuur voor op basis van gangbare conventies binnen de overheid. Dat
-              is een voorstel uit eigen kennis, geen bestaand sjabloon — loop het dus even na.
+              is een voorstel uit eigen kennis, geen bestaand sjabloon; loop het dus even na.
             </p>
             <button
               type="button"

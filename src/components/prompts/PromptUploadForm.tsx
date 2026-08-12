@@ -135,7 +135,7 @@ export default function PromptUploadForm({ onCreated, onCancel }: PromptUploadFo
               ? async (term) => {
                   try {
                     await requestCategory({ name: term, requestedBy: user.id });
-                    toast.success(`Aanvraag voor “${term}” verstuurd — een beheerder beoordeelt hem.`);
+                    toast.success(`Aanvraag voor “${term}” verstuurd; een beheerder beoordeelt hem.`);
                   } catch (err) {
                     toast.error(err instanceof Error ? err.message : 'Aanvraag mislukt');
                   }
@@ -166,7 +166,7 @@ export default function PromptUploadForm({ onCreated, onCancel }: PromptUploadFo
               ? async (term) => {
                   try {
                     await requestFunction({ name: term, requestedBy: user.id });
-                    toast.success(`Aanvraag voor “${term}” verstuurd — een beheerder beoordeelt hem.`);
+                    toast.success(`Aanvraag voor “${term}” verstuurd; een beheerder beoordeelt hem.`);
                   } catch (err) {
                     toast.error(err instanceof Error ? err.message : 'Aanvraag mislukt');
                   }

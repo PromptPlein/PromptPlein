@@ -313,7 +313,7 @@ export default function ProjectContextBar({
               beloven, en dan hoort er niet "geanalyseerd" te staan. */}
           <p className="mt-0.5 text-[13px] leading-snug text-slate-600 dark:text-slate-300">
             {context.analyzed
-              ? 'geanalyseerd — levert de context voor deze prompt'
+              ? 'geanalyseerd; levert de context voor deze prompt'
               : 'levert de context voor deze prompt'}
           </p>
         </div>
@@ -379,7 +379,7 @@ export default function ProjectContextBar({
           title={`Buiten het contextbudget gevallen: ${context.skipped.join(', ')}`}
         >
           <Scissors size={12} className="mt-0.5 shrink-0" />
-          <span>Niet alles past — weggelaten: {context.skipped.join(', ')}</span>
+          <span>Niet alles past. Weggelaten: {context.skipped.join(', ')}</span>
         </p>
       )}
     </div>

@@ -140,7 +140,7 @@ export default function OptimizingLoader({
           ) : (
             <>
               <Timer size={12} className="text-rijksblauw-500" />
-              {elapsed}s bezig — het model leest je antwoorden en bepaalt de opbouw
+              {elapsed}s bezig · het model leest je antwoorden en bepaalt de opbouw
             </>
           )}
         </p>

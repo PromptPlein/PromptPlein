@@ -145,9 +145,9 @@ export function serializePersonas(
     .map((p, i) => {
       const header =
         filled.length > 1
-          ? `Persona ${i + 1}${p.hint.trim() ? ` — ${p.hint.trim()}` : ''}`
+          ? `Persona ${i + 1}${p.hint.trim() ? `: ${p.hint.trim()}` : ''}`
           : p.hint.trim()
-            ? `Persona — ${p.hint.trim()}`
+            ? `Persona: ${p.hint.trim()}`
             : 'Persona';
       const lines = questions.filter((q) => p.fields[q.id]?.trim()).map(
         (q) => `- ${q.label} ${p.fields[q.id]!.trim()}`,

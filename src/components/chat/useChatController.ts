@@ -116,7 +116,7 @@ export default function useChatController(
       if (!ok && !quotaWarnedRef.current) {
         quotaWarnedRef.current = true;
         toast.error(
-          'Opslaan op dit apparaat lukt niet — deze chat gaat verloren zodra je de pagina verlaat.',
+          'Opslaan op dit apparaat lukt niet; deze chat gaat verloren zodra je de pagina verlaat.',
         );
       }
       refreshIndex();

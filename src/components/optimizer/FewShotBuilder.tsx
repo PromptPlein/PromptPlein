@@ -273,7 +273,7 @@ export default function FewShotBuilder({ settings, onSerialized, initialIntent }
           </button>
         ) : (
           <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-            <Check size={14} /> Klaar — klik hieronder op &quot;Genereren&quot;.
+            <Check size={14} /> Klaar. Klik hieronder op &quot;Genereren&quot;.
           </span>
         )}
       </div>
@@ -385,7 +385,7 @@ function TaskPhase({ d, patch }: { d: FewShotData; patch: (p: Partial<FewShotDat
               onChange={(e) => patch({ labels: e.target.value })}
             />
             <p className="mt-1 text-xs text-rijksoranje">
-              Bij classificatie is few-shot bijna altijd nodig — geef liefst een voorbeeld per label.
+              Bij classificatie is few-shot bijna altijd nodig; geef liefst een voorbeeld per label.
             </p>
           </div>
         )}
@@ -509,14 +509,14 @@ function ExtractPhase({
   return (
     <div className="space-y-4">
       <FeatureChecklist
-        title="Deze kenmerken zag ik — welke moet ik overnemen?"
+        title="Deze kenmerken zag ik; welke moet ik overnemen?"
         accent="rijksblauw"
         features={d.overnemen}
         onToggle={(i) => onToggle('overnemen', i)}
       />
       {d.nietOvernemen.length > 0 && (
         <FeatureChecklist
-          title="Deze details lijken casus-specifiek — deze laat ik weg (of plaats een [plaatshouder])"
+          title="Deze details lijken casus-specifiek; deze laat ik weg (of plaats een [plaatshouder])"
           accent="oranje"
           features={d.nietOvernemen}
           onToggle={(i) => onToggle('nietOvernemen', i)}
@@ -614,7 +614,7 @@ function ChecksPhase({
           <p className="flex items-start gap-2 text-sm text-amber-800 dark:text-amber-200">
             <AlertTriangle size={15} className="mt-0.5 shrink-0" />
             <span>
-              <span className="font-medium">Let op — tegenstrijdigheid:</span> {consistentie} Welk voorbeeld
+              <span className="font-medium">Let op, tegenstrijdigheid:</span> {consistentie} Welk voorbeeld
               is leidend?
             </span>
           </p>
@@ -654,7 +654,7 @@ function ChecksPhase({
       {/* Tegenvoorbeeld (Q10, optioneel). */}
       <div>
         <label className="opl-label mb-0.5 block">
-          Tegenvoorbeeld — &quot;zo dus níét&quot; <span className="font-normal text-slate-400">(optioneel)</span>
+          Tegenvoorbeeld: &quot;zo dus níét&quot; <span className="font-normal text-slate-400">(optioneel)</span>
         </label>
         <textarea
           className="opl-input min-h-[56px] resize-y text-sm"

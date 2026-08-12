@@ -250,7 +250,7 @@ export default function ProjectView({
           </h3>
           {conversations.length === 0 ? (
             <p className="rounded-lg border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-400 dark:border-slate-600 dark:text-slate-500">
-              Nog geen chats. Begin er een — die draait meteen op de instructie en de bronnen
+              Nog geen chats. Begin er een; die draait meteen op de instructie en de bronnen
               van dit project.
             </p>
           ) : (

@@ -267,7 +267,7 @@ export default function SettingsPage() {
                 const chosen = PROVIDER_MODELS[settings.provider].find(
                   (m) => m.id === settings.model,
                 );
-                return chosen ? <span> — {pricingSummary(chosen.pricing)}</span> : null;
+                return chosen ? <span> · {pricingSummary(chosen.pricing)}</span> : null;
               })()}
             </p>
           </div>
@@ -526,7 +526,7 @@ export default function SettingsPage() {
               instructie om tot een volwaardige systeemprompt. Dit is een <strong>zwaardere</strong>{' '}
               slag dan het sterretje in de chat: de uitkomst stuurt <em>elk</em> gesprek in dat
               project, dus er wordt een vaste rol, een vast eindproduct en een uitweg bij twijfel in
-              uitgewerkt. Het resultaat vervangt het veld maar wordt niet opgeslagen — de gebruiker
+              uitgewerkt. Het resultaat vervangt het veld maar wordt niet opgeslagen; de gebruiker
               leest het na en slaat zelf op, of haalt zijn eigen tekst terug.
             </p>
 
@@ -535,7 +535,7 @@ export default function SettingsPage() {
               {strongestModelLabelFor(chat.provider) ? (
                 <>
                   {' '}
-                  — nu <strong>{strongestModelLabelFor(chat.provider)}</strong>
+                  · nu <strong>{strongestModelLabelFor(chat.provider)}</strong>
                 </>
               ) : (
                 ' (bij Automatisch: van de provider die als eerste antwoordt)'
@@ -580,7 +580,7 @@ export default function SettingsPage() {
                   komen. Dat heeft twee redenen: een verzonnen regel werkt door in elk volgend
                   gesprek zonder dat de gebruiker ziet waar hij vandaan komt, én elke extra regel
                   verkleint de kans dat de echte regels nog worden opgevolgd. Het model krijgt de
-                  ruwe instructie te zien plus de projectnaam en de namen van de bronbestanden —
+                  ruwe instructie te zien plus de projectnaam en de namen van de bronbestanden,
                   niet de inhoud daarvan. Laat leeg om de ingebouwde standaard te gebruiken.
                 </span>
                 {chat.projectOptimizeSystemPrompt.trim() !== DEFAULT_PROJECT_OPTIMIZE_PROMPT && (

@@ -58,7 +58,7 @@ export const GOAL_EXAMPLES: GoalExample[] = [
     category: 'overleg',
     title: 'Elke maand hetzelfde werk',
     subtitle: 'Een terugkerend stuk dat steeds anders uitvalt',
-    goal: 'Ik maak elke maand dezelfde rapportage, maar hij valt steeds anders uit — zeker als een collega hem maakt. Ik wil dat dit consistent en sneller gaat.',
+    goal: 'Ik maak elke maand dezelfde rapportage, maar hij valt steeds anders uit, zeker als een collega hem maakt. Ik wil dat dit consistent en sneller gaat.',
   },
   {
     category: 'communicatie',

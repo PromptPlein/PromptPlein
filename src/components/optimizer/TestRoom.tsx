@@ -180,7 +180,7 @@ export default function TestRoom({
       .filter(Boolean)
       .join('\n');
     if (!feedback) {
-      toast.error('Geef aan wat er beter moet — kies een punt of schrijf het kort op.');
+      toast.error('Geef aan wat er beter moet: kies een punt of schrijf het kort op.');
       return;
     }
     setRefining(true);
@@ -203,7 +203,7 @@ export default function TestRoom({
     }
     setChips([]);
     setFeedbackText('');
-    toast.success('Verbeterde versie klaar — hierboven te zien als nieuwe versie.');
+    toast.success('Verbeterde versie klaar; hierboven te zien als nieuwe versie.');
     onRefined(res);
   }
 
@@ -292,7 +292,7 @@ export default function TestRoom({
             <p className="px-4 py-4 text-sm text-amber-700 dark:text-amber-400">
               {!configured
                 ? 'Er is geen AI-service geconfigureerd in deze omgeving.'
-                : 'De beheerder heeft de chat uitgeschakeld — testen kan daardoor nu niet.'}
+                : 'De beheerder heeft de chat uitgeschakeld; testen kan daardoor nu niet.'}
             </p>
           ) : !isAuthenticated ? (
             <div className="space-y-3 px-4 py-4">

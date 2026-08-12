@@ -171,9 +171,9 @@ export function printReport(data: ReportData, catName: (id: string) => string): 
     td.num { text-align:right; font-weight:600; }
     footer { margin-top:32px; border-top:1px solid #e2e8f0; padding-top:8px; font-size:11px; color:#94a3b8; text-align:center; }
   </style></head><body>
-    <div class="classification">Intern — bestuurlijke rapportage</div>
+    <div class="classification">Intern: bestuurlijke rapportage</div>
     <div class="brand">Rijksoverheid</div>
-    <h1>Bestuurlijke rapportage — Overheid Prompt Library</h1>
+    <h1>Bestuurlijke rapportage: Overheid Prompt Library</h1>
     <p style="color:#64748b;font-size:13px;">Gegenereerd: ${generated}</p>
     <div class="kpis">
       <div class="kpi"><b>${kpis.totalPrompts}</b><span>Prompts</span></div>

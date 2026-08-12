@@ -357,7 +357,7 @@ Werkwijze:
 - Verzin geen bronnen, wetsartikelen of links die niet in de prompt of een bijlage staan.
 - Dit is uitsluitend voor intern overheidsgebruik.
 
-LENGTE — houd het compact; hier is korter beter:
+LENGTE: houd het compact; hier is korter beter:
 - Richt op de lengte die het gevraagde eindproduct echt nodig heeft. Vraagt de prompt geen
   omvang, houd dan 400–700 woorden aan. Ga daar alleen overheen wanneer de gebruiker zoveel
   concrete details heeft aangeleverd dat die er anders uit zouden vallen.
@@ -407,7 +407,7 @@ Werkwijze:
 - Schrijf natuurlijk Nederlands, geen vertaald Engels. Nederlandse uitdrukkingen luiden anders dan de
   letterlijke vertaling uit het Engels: het is "uiteindelijk" en niet "aan het eind van de dag", "een
   beslissing nemen" en niet "een beslissing maken", "aanpakken" en niet "adresseren". Staat er al een
-  goede Nederlandse uitdrukking, laat die dan precies zoals hij is — "ik zit lekker in mijn vel"
+  goede Nederlandse uitdrukking, laat die dan precies zoals hij is, bijvoorbeeld "ik zit lekker in mijn vel"
   blijft "in mijn vel" en wordt nooit "in mijn huid". Twijfel je over een uitdrukking, laat hem staan.
 - Maak impliciete wensen expliciet: benoem kort het doel, de gewenste vorm (bijv. lijst, memo, e-mail)
   en de lengte, maar alleen als dat redelijkerwijs uit de tekst volgt.
@@ -491,11 +491,11 @@ terug die bij elk nieuw gesprek in dat project wordt meegegeven.
 <modus>
 Bepaal eerst welke van twee opdrachten dit is.
 
-UITGEWERKT — de tekst van de gebruiker is al een instructie: hij heeft kopjes, of meer dan tien
+UITGEWERKT: de tekst van de gebruiker is al een instructie: hij heeft kopjes, of meer dan tien
 regels die met een streepje of een cijfer beginnen, of hij loopt over meerdere alinea's die elk over
 iets anders gaan. Jouw opdracht is: hem heel laten en repareren.
 
-KLAD — de tekst van de gebruiker is een aantekening: een paar regels of één alinea, zonder secties.
+KLAD: de tekst van de gebruiker is een aantekening: een paar regels of één alinea, zonder secties.
 Jouw opdracht is: er een instructie van maken.
 
 Weet je het niet zeker, dan is het UITGEWERKT. Een aantekening te veel ontzien kost de gebruiker een
@@ -654,7 +654,7 @@ export function composeExecutionSystemPrompt(settings: ChatSettings): string {
 export function composeProjectSystemPrompt(instructions: string): string {
   const own = instructions.trim();
   if (!own) return DEFAULT_PROJECT_SYSTEM_PROMPT;
-  return `${DEFAULT_PROJECT_SYSTEM_PROMPT}\n\nPROJECTINSTRUCTIE — dit is de eigen opdracht van de gebruiker en die is leidend:\n"""\n${own}\n"""`;
+  return `${DEFAULT_PROJECT_SYSTEM_PROMPT}\n\nPROJECTINSTRUCTIE: dit is de eigen opdracht van de gebruiker en die is leidend:\n"""\n${own}\n"""`;
 }
 
 /**

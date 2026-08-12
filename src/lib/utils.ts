@@ -33,7 +33,7 @@ export const VISIBILITY_LEVELS: {
     value: 'department',
     label: 'Afdeling',
     description: 'Zichtbaar voor collega’s binnen je eigen afdeling.',
-    approval: 'Wordt direct gedeeld — afdelingsniveau is automatisch goedgekeurd.',
+    approval: 'Wordt direct gedeeld; afdelingsniveau is automatisch goedgekeurd.',
     approvalShort: 'Direct beschikbaar',
     autoApproved: true,
   },

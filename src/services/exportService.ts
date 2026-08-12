@@ -20,9 +20,9 @@ export interface ExportMeta {
 
 /** Vertaal het deelniveau naar een rubriceringslabel voor de documentkop. */
 const CLASSIFICATION: Record<SharingLevel, string> = {
-  private: 'Vertrouwelijk — persoonlijk',
-  department: 'Intern — afdeling',
-  ministry: 'Intern — ministerie',
+  private: 'Vertrouwelijk: persoonlijk',
+  department: 'Intern: afdeling',
+  ministry: 'Intern: ministerie',
   public: 'Openbaar',
 };
 

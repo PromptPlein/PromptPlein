@@ -135,7 +135,7 @@ export default function AdminAnalyticsPage() {
               <Activity size={18} /> Gedragslog prompt-bouwer
             </h2>
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              Fijnmazige log van het verloop per sessie — bedoeld om te exporteren en door een AI te
+              Fijnmazige log van het verloop per sessie; bedoeld om te exporteren en door een AI te
               laten analyseren voor verbeteringen.
             </p>
           </div>

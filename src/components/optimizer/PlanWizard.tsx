@@ -1221,7 +1221,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
           // de nieuwe versie de aannames vervangt door wat de gebruiker écht wil.
           ...answered.map((a, i) => ({
             id: `aanname_${i + 1}`,
-            label: a.label ? `Socratische verduidelijking — ${a.label}` : 'Socratische verduidelijking',
+            label: a.label ? `Socratische verduidelijking: ${a.label}` : 'Socratische verduidelijking',
             answer: `${a.question}\nAntwoord van de gebruiker: ${a.answer}`,
           })),
         ],
@@ -2189,7 +2189,7 @@ function StepCollector({
               <p className="flex items-start gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
                 <Lightbulb size={16} className="mt-0.5 shrink-0 text-rijksblauw-500" />
                 {isInterviewStep
-                  ? 'Dit is nog niet helemaal duidelijk — vul het aan'
+                  ? 'Dit is nog niet helemaal duidelijk; vul het aan'
                   : 'Wat je nog kunt aanleveren voor een scherper geheel'}
               </p>
               <ul className="mt-2 space-y-1.5 pl-1">
@@ -2290,7 +2290,7 @@ function AssumptionReview({
     <div className="space-y-4">
       <div>
         <p className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
-          <Lightbulb size={16} className="text-rijksoranje" /> Socratische controle — aannames in
+          <Lightbulb size={16} className="text-rijksoranje" /> Socratische controle: aannames in
           het resultaat
         </p>
         <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">

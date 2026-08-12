@@ -187,7 +187,7 @@ export default function ModeratorManagerPage() {
                     <td className="px-4 py-3">
                       {mods.length === 0 ? (
                         <span className="text-xs text-slate-400 dark:text-slate-500">
-                          Geen — geen moderator
+                          Geen moderator
                         </span>
                       ) : (
                         <div className="flex flex-wrap gap-1.5">
@@ -231,7 +231,7 @@ export default function ModeratorManagerPage() {
       <Modal
         open={!!editor}
         onClose={() => setEditor(null)}
-        title={editor ? `Moderator van — ${editor.user.full_name || editor.user.email}` : ''}
+        title={editor ? `Moderator van ${editor.user.full_name || editor.user.email}` : ''}
         size="max-w-md"
       >
         {editor && (

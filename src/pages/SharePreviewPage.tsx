@@ -100,7 +100,7 @@ export default function SharePreviewPage() {
           </h1>
           <p className="mt-2 text-slate-600 dark:text-slate-300">
             Deze prompt is gedeeld binnen de overheid. Log in met je account; daarna open je de
-            prompt meteen — je hoeft de link niet opnieuw te openen.
+            prompt meteen; je hoeft de link niet opnieuw te openen.
           </p>
           <Link
             to="/auth/login"

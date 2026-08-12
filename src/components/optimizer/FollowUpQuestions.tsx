@@ -190,10 +190,10 @@ export default function FollowUpQuestions({
       } else if (res.success) {
         toast('Dit veld is al goed ingevuld.', { icon: '👍' });
       } else {
-        toast.error(res.error ?? 'Aanvullen lukte niet — probeer het opnieuw.');
+        toast.error(res.error ?? 'Aanvullen lukte niet; probeer het opnieuw.');
       }
     } catch {
-      toast.error('Aanvullen lukte niet — probeer het opnieuw.');
+      toast.error('Aanvullen lukte niet; probeer het opnieuw.');
     } finally {
       setExpandingId(null);
     }
@@ -314,13 +314,13 @@ export default function FollowUpQuestions({
       <div className="space-y-4">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 text-sm font-medium text-rijksblauw-700 dark:text-rijksblauw-200">
-            <Check size={16} /> Overzicht — controleer je antwoorden
+            <Check size={16} /> Overzicht: controleer je antwoorden
           </div>
           <FieldLayoutToggle layout={layout} onChange={setLayout} />
         </div>
         <p className="text-sm text-slate-500 dark:text-slate-400">
           {hasPrefill
-            ? 'We hebben deze velden alvast voor je ingevuld op basis van je prompt. Controleer en pas aan waar nodig — vooral de AI-suggesties met het oranje label "Controleren".'
+            ? 'We hebben deze velden alvast voor je ingevuld op basis van je prompt. Controleer en pas aan waar nodig, vooral de AI-suggesties met het oranje label "Controleren".'
             : 'Dit zijn de bouwstenen van je prompt. Klopt alles? Bouw dan de herbruikbare prompt.'}
         </p>
         <ul className="divide-y divide-slate-100 dark:divide-slate-700">
@@ -340,7 +340,7 @@ export default function FollowUpQuestions({
                       value ? 'text-slate-600 dark:text-slate-300' : 'italic text-slate-400 dark:text-slate-500',
                     )}
                   >
-                    {value || 'Nog niet ingevuld — blijft een plaatshouder in de prompt.'}
+                    {value || 'Nog niet ingevuld; blijft een plaatshouder in de prompt.'}
                   </p>
                 </div>
                 <button

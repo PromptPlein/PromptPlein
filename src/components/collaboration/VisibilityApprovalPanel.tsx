@@ -145,7 +145,7 @@ export default function VisibilityApprovalPanel({
         </div>
       ) : rows.length === 0 ? (
         <p className="text-sm text-slate-400 dark:text-slate-500">
-          Deze prompt is privé — er zijn geen deelniveaus.
+          Deze prompt is privé; er zijn geen deelniveaus.
           {canEdit && ' Klik op “Aanpassen” om hem met je afdeling of ministerie te delen.'}
         </p>
       ) : (

@@ -297,7 +297,7 @@ function DialogueSummary({ dialogue }: { dialogue: PromptDialogue }) {
               </p>
               <p className="mt-1 text-slate-700 dark:text-slate-200">
                 <span className="font-medium">{dialogue.frameworkName}</span>
-                {dialogue.frameworkReason ? ` — ${dialogue.frameworkReason}` : ''}
+                {dialogue.frameworkReason ? `: ${dialogue.frameworkReason}` : ''}
               </p>
             </div>
           )}

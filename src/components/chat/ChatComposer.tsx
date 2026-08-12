@@ -328,7 +328,7 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
               <span
                 key={a.id}
                 className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700 dark:bg-slate-700 dark:text-slate-200"
-                title={`Bijlage ${i + 1}: ${a.name} — ${a.chars.toLocaleString('nl-NL')} tekens`}
+                title={`Bijlage ${i + 1}: ${a.name}, ${a.chars.toLocaleString('nl-NL')} tekens`}
               >
                 <Paperclip size={12} className="shrink-0" />
                 <span className="truncate">{a.name}</span>
@@ -422,7 +422,7 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
               title={
                 optimizing
                   ? 'Bezig met verbeteren…'
-                  : 'Verbeter mijn tekst met AI — je oorspronkelijke tekst kun je daarna terughalen'
+                  : 'Verbeter mijn tekst met AI; je oorspronkelijke tekst kun je daarna terughalen'
               }
               aria-label="Verbeter mijn tekst met AI"
             >
@@ -518,7 +518,7 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
                 title={
                   attachments.length >= MAX_CHAT_ATTACHMENTS
                     ? `Maximaal ${MAX_CHAT_ATTACHMENTS} bijlagen per chat`
-                    : 'Document toevoegen (PDF, Word, tekst — max. 10 MB)'
+                    : 'Document toevoegen (PDF, Word, tekst, max. 10 MB)'
                 }
                 aria-label="Document toevoegen"
               >

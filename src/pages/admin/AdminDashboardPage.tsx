@@ -126,7 +126,7 @@ export default function AdminDashboardPage() {
               <li key={e.id} className="flex items-center justify-between py-2 text-sm">
                 <span className="text-slate-700 dark:text-slate-200">
                   <span className="font-medium">{e.user_identifier || 'Anoniem'}</span>{' '}
-                  — {EVENT_LABELS[e.event_type] ?? e.event_type}
+                  · {EVENT_LABELS[e.event_type] ?? e.event_type}
                 </span>
                 <span className="text-xs text-slate-400 dark:text-slate-500">{formatDate(e.created_at)}</span>
               </li>

@@ -925,14 +925,14 @@ export default function GoalDialog({
                     <div>
                       <p className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
                         <Package size={16} className="text-rijksblauw-500" />
-                        {chosenFramework.name} — controleer de velden
+                        {chosenFramework.name}: controleer de velden
                       </p>
                       <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
                         {stripMarkdown(prefill?.summary ?? '') ||
                           'We hebben de velden alvast ingevuld met wat je in het gesprek hebt verteld.'}
                       </p>
                       <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                        Pas aan waar nodig — vooral de AI-suggesties met het oranje label{' '}
+                        Pas aan waar nodig, vooral de AI-suggesties met het oranje label{' '}
                         <span className="font-medium">Controleren</span>. Wat je leeg laat, blijft een
                         plaatshouder in je prompt.
                       </p>
@@ -1097,7 +1097,7 @@ function FrameworkChoice({
         </p>
         <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
           {options.length > 0
-            ? 'Op basis van je antwoorden — wat je wilt bereiken, hoe je de prompt straks gebruikt en welke uitkomst je zoekt — past dit framework het beste. Je kunt ook zelf een ander kiezen.'
+            ? 'Op basis van je antwoorden (wat je wilt bereiken, hoe je de prompt straks gebruikt en welke uitkomst je zoekt) past dit framework het beste. Je kunt ook zelf een ander kiezen.'
             : 'Kies zelf het framework waarin je prompt wordt opgebouwd.'}
         </p>
       </div>

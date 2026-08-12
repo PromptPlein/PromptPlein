@@ -37,7 +37,7 @@ export default function VisibilityPicker({
     <fieldset className="space-y-2">
       <legend className="opl-label">Wie mag deze prompt zien?</legend>
       <p className="-mt-1 mb-2 text-xs text-slate-400 dark:text-slate-500">
-        Kies één of meerdere niveaus. Standaard blijft de prompt privé — alleen voor jezelf.
+        Kies één of meerdere niveaus. Standaard blijft de prompt privé, alleen voor jezelf.
       </p>
 
       <div className="space-y-2">
@@ -63,7 +63,7 @@ export default function VisibilityPicker({
             checked
             disabled
             readOnly
-            aria-label="Privé — altijd aangevinkt, kan niet worden uitgezet"
+            aria-label="Privé, altijd aangevinkt, kan niet worden uitgezet"
           />
           <span className="min-w-0">
             <span className="flex flex-wrap items-center gap-2">
@@ -74,12 +74,12 @@ export default function VisibilityPicker({
             </span>
             <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
               {isPrivate
-                ? 'Alleen zichtbaar voor jezelf — je deelt deze prompt met niemand.'
+                ? 'Alleen zichtbaar voor jezelf; je deelt deze prompt met niemand.'
                 : 'Je blijft de prompt altijd zelf zien. Hieronder deel je hem daarnaast met anderen.'}
             </span>
             <span className="mt-1 flex items-start gap-1 text-xs text-slate-400 dark:text-slate-500">
               <Lock size={12} className="mt-0.5 shrink-0" aria-hidden />
-              Deze staat altijd aan — anders zou je je eigen prompt niet meer kunnen zien.
+              Deze staat altijd aan; anders zou je je eigen prompt niet meer kunnen zien.
             </span>
           </span>
         </div>

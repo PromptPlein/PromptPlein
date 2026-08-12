@@ -41,7 +41,7 @@ export default function ModelStatus({ models, winner, verb, className }: ModelSt
     <div className={clsx('space-y-2', className)}>
       <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
         {providerShortLabel(current)} {winner ? (verb ?? 'levert het antwoord') : 'is aan het werk'}
-        {switched && ' — overgestapt na een storing'}
+        {switched && ', overgestapt na een storing'}
       </p>
 
       <div className="grid gap-2">

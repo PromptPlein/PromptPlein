@@ -10,7 +10,7 @@ const FORMATS: {
   hint: string;
   icon: typeof FileText;
 }[] = [
-  { id: 'pdf', label: 'PDF', hint: 'Opent printvenster — opslaan als PDF', icon: FileText },
+  { id: 'pdf', label: 'PDF', hint: 'Opent printvenster; opslaan als PDF', icon: FileText },
   { id: 'word', label: 'Word (.doc)', hint: 'Opent in Microsoft Word', icon: FileType2 },
   { id: 'html', label: 'HTML', hint: 'Opgemaakt webdocument', icon: FileCode2 },
   { id: 'markdown', label: 'Markdown', hint: 'Platte tekst met opmaak', icon: Hash },

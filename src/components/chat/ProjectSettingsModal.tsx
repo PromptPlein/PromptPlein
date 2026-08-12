@@ -288,7 +288,7 @@ export default function ProjectSettingsModal({
                     title={
                       optimizing
                         ? 'Bezig met omschrijven…'
-                        : 'Schrijf mijn instructie om tot een volledige systeemprompt — je oorspronkelijke tekst kun je daarna terughalen'
+                        : 'Schrijf mijn instructie om tot een volledige systeemprompt; je oorspronkelijke tekst kun je daarna terughalen'
                     }
                     aria-label="Schrijf mijn projectinstructie om met AI"
                   >

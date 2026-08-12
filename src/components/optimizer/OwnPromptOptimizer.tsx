@@ -765,7 +765,7 @@ export default function OwnPromptOptimizer({
               <Loader2 size={16} className="mt-0.5 shrink-0 animate-spin text-rijksblauw-500" />
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-                  Voorbeeld — {PHASE_LABEL[searchPhase]}
+                  Voorbeeld: {PHASE_LABEL[searchPhase]}
                 </p>
                 <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-300">
                   {provisional
@@ -1057,7 +1057,7 @@ export default function OwnPromptOptimizer({
                 'We hebben de velden alvast voor je ingevuld op basis van je prompt.'}
             </p>
             <p className="text-sm text-slate-600 dark:text-slate-300">
-              Controleer en pas aan waar nodig — vooral de AI-suggesties met het oranje label{' '}
+              Controleer en pas aan waar nodig, vooral de AI-suggesties met het oranje label{' '}
               <span className="font-medium">Controleren</span>. Wat je leeg laat, blijft een
               plaatshouder in de uiteindelijke prompt.
             </p>
@@ -1100,7 +1100,7 @@ export default function OwnPromptOptimizer({
                       </p>
                       <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-300">
                         {missingForFramework.length > 0
-                          ? `Voor ${technique.name} heeft je prompt deze onderdelen nog niet aangeleverd — de AI heeft ze nu ingeschat. Licht ze toe voor een scherpere prompt:`
+                          ? `Voor ${technique.name} heeft je prompt deze onderdelen nog niet aangeleverd; de AI heeft ze nu ingeschat. Licht ze toe voor een scherpere prompt:`
                           : 'Wil je nog iets verduidelijken? Vul het aan en we vullen de velden opnieuw voor.'}
                       </p>
                     </div>

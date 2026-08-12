@@ -142,7 +142,7 @@ export default function SavePromptPanel({
       setPendingCategory(name);
       setShowCatRequest(false);
       setCatRequestName('');
-      toast.success(`Aanvraag voor “${name}” verstuurd — een beheerder beoordeelt hem.`);
+      toast.success(`Aanvraag voor “${name}” verstuurd; een beheerder beoordeelt hem.`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Aanvraag mislukt');
     } finally {
@@ -170,7 +170,7 @@ export default function SavePromptPanel({
       setPendingRole(name);
       setShowRoleRequest(false);
       setRoleRequestName('');
-      toast.success(`Aanvraag voor “${name}” verstuurd — een beheerder beoordeelt hem.`);
+      toast.success(`Aanvraag voor “${name}” verstuurd; een beheerder beoordeelt hem.`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Aanvraag mislukt');
     } finally {
@@ -273,7 +273,7 @@ export default function SavePromptPanel({
           <Sparkles size={12} />
           {metaLoading
             ? 'AI bedenkt een titel, omschrijving en categorie op basis van de inhoud…'
-            : 'Voorgesteld op basis van de inhoud — pas alles gerust aan.'}
+            : 'Voorgesteld op basis van de inhoud; pas alles gerust aan.'}
         </p>
       </div>
       <div>
@@ -316,7 +316,7 @@ export default function SavePromptPanel({
         {pendingCategory && (
           <p className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-2.5 py-1.5 text-xs text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">
             <Loader2 size={12} className="animate-spin" />
-            Categorie “{pendingCategory}” aangevraagd — in afwachting van goedkeuring.
+            Categorie “{pendingCategory}” aangevraagd, in afwachting van goedkeuring.
           </p>
         )}
 
@@ -395,7 +395,7 @@ export default function SavePromptPanel({
         {pendingRole && (
           <p className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-2.5 py-1.5 text-xs text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">
             <Loader2 size={12} className="animate-spin" />
-            Functie “{pendingRole}” aangevraagd — in afwachting van goedkeuring.
+            Functie “{pendingRole}” aangevraagd, in afwachting van goedkeuring.
           </p>
         )}
 

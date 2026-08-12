@@ -144,7 +144,7 @@ export default function ChatEmptyState({ onPick }: { onPick: (text: string) => v
                 i >= 3 && 'hidden sm:flex',
               )}
               onClick={() => onPick(starter.template)}
-              title={`${category.label} — zet dit sjabloon in het tekstvak`}
+              title={`${category.label}: zet dit sjabloon in het tekstvak`}
             >
               <category.icon size={15} className="mt-0.5 shrink-0 text-rijksblauw-500" />
               <span className="min-w-0">

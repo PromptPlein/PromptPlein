@@ -23,7 +23,7 @@ export default function FieldLayoutToggle({ layout, onChange }: FieldLayoutToggl
         type="button"
         onClick={() => onChange('wizard')}
         aria-pressed={layout === 'wizard'}
-        title="Stap voor stap — één vraag tegelijk"
+        title="Stap voor stap: één vraag tegelijk"
         className={clsx(
           'inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors',
           layout === 'wizard'
@@ -38,7 +38,7 @@ export default function FieldLayoutToggle({ layout, onChange }: FieldLayoutToggl
         type="button"
         onClick={() => onChange('stacked')}
         aria-pressed={layout === 'stacked'}
-        title="Alles onder elkaar — alle velden tegelijk"
+        title="Alles onder elkaar: alle velden tegelijk"
         className={clsx(
           'inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors',
           layout === 'stacked'

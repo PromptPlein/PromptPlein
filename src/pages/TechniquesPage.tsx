@@ -512,7 +512,7 @@ export default function TechniquesPage() {
                           ? 'De AI denkt hier stap voor stap met je mee en vraagt door tot het beeld compleet is. Je antwoorden worden meteen uitgewerkt tot een kant-en-klare prompt.'
                           : fmt === 'socratic'
                             ? 'De AI vraagt hier socratisch door om je aannames bloot te leggen. Je inzichten worden meteen uitgewerkt tot een kant-en-klare prompt.'
-                            : 'Vul de velden met je eigen gegevens; zo ontstaat een herbruikbare prompt — kopieer hem, of laat hem direct uitvoeren.';
+                            : 'Vul de velden met je eigen gegevens; zo ontstaat een herbruikbare prompt. Kopieer hem, of laat hem direct uitvoeren.';
                       return (
                         <p className="text-sm text-slate-500 dark:text-slate-400">
                           Voor{' '}
@@ -792,7 +792,7 @@ export default function TechniquesPage() {
             <div className="mb-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
               <p className="text-sm text-slate-600 dark:text-slate-300">
                 {technique
-                  ? 'Een andere techniek proberen? Klik erop — je vult hem hierboven in.'
+                  ? 'Een andere techniek proberen? Klik erop; je vult hem hierboven in.'
                   : 'Kies een prompt framework of techniek. Klik erop en je vult hem hierboven in.'}
               </p>
               {/* Ook hier bereikbaar: wie de lijst doorleest en er niet uitkomt,

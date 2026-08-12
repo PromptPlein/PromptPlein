@@ -80,7 +80,7 @@ export default function MetaBuilder({ settings, goal, onSerialized }: MetaBuilde
       <div className="flex items-start gap-2 rounded-xl border border-rijksblauw-200 bg-rijksblauw-50/40 p-3 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10">
         <Brain size={18} className="mt-0.5 shrink-0 text-rijksblauw-500" />
         <p className="text-sm text-slate-600 dark:text-slate-300">
-          Bij meta-prompting bouwt de AI <span className="font-medium">een prompt</span> — geen antwoord.
+          Bij meta-prompting bouwt de AI <span className="font-medium">een prompt</span>, geen antwoord.
           Beschrijf wat je nodig hebt; de AI maakt er een uitvoerbare instructie van die je daarna in je
           eigen chat kunt gebruiken.
         </p>
@@ -100,7 +100,7 @@ export default function MetaBuilder({ settings, goal, onSerialized }: MetaBuilde
           onChange={(e) => setRequest(e.target.value)}
         />
         <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-          De AI beantwoordt dit niet zelf — hij bouwt de prompt waarmee dit optimaal gemaakt wordt.
+          De AI beantwoordt dit niet zelf; hij bouwt de prompt waarmee dit optimaal gemaakt wordt.
         </p>
       </div>
 
