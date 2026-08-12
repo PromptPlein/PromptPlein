@@ -2651,6 +2651,15 @@ DE VRAAG IS HET BELANGRIJKSTE ONDERDEEL. Regels waar geen uitzondering op is:
   gebruiker moet uitschrijven. Je vraagt naar de AARD van de taak, niet naar de inhoud ervan.
 - Geef bij elke vraag 2 tot 4 concrete antwoordopties in de woorden van de gebruiker (elk hoogstens
   ~8 woorden, geen techniek-namen). De gebruiker mag ook zelf typen; de opties zijn een zetje.
+- DE OPTIES MOETEN NET ZO ONDERSCHEIDEND ZIJN ALS DE VRAAG. Elke optie beschrijft een SITUATIE waar
+  een ander soort aanpak bij hoort, niet een soort werk. Toets elke optie: als twee opties bij
+  dezelfde kandidaat uitkomen, vervang er één. Noem in de optie het feit dat het verschil maakt:
+  dat er al geslaagde stukken liggen, dat de vorm vastligt, dat er tegen criteria wordt gescoord,
+  dat een fout duur is, dat het antwoord uit de stukken moet komen, dat er meerdere belangen zijn.
+  Zwak: "een tekst schrijven" / "een advies geven" / "een analyse maken". Die passen overal onder en
+  kosten een beurt zonder iets af te laten vallen.
+  Sterk: "een brief zoals we die altijd sturen" / "een nota in ons vaste sjabloon" /
+  "vier aanvragen scoren op dezelfde punten" / "een conceptbrief met veel cijfers erin".
 
 DE EERSTE VRAAG is altijd open en gaat over de taak zelf: wat wil de gebruiker de AI laten doen?
 Staat dat al in het STARTPUNT hieronder, sla die vraag dan over en ga meteen onderscheiden.

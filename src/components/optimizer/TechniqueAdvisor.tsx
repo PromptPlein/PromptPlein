@@ -18,6 +18,37 @@ import type { AdvisorAdvies, AdvisorCandidate, AdvisorQuestion, Technique } from
 /** Zelfde budget als in de edge function; alleen voor de voortgangsregel. */
 const MAX_QUESTIONS = 4;
 
+/**
+ * De antwoordopties bij de allereerste vraag, vast in de code.
+ *
+ * Bij vraag 1 zonder startpunt weet de AI nog niets, en dan verzint hij
+ * werkwoorden: "een tekst schrijven", "een advies geven", "een analyse maken".
+ * Die kosten een beurt en leveren niets op, want élke techniek kan daaronder
+ * vallen. De opties hieronder noemen daarom niet wat de gebruiker máákt maar de
+ * situatie waarin hij zit, en juist de situatie bepaalt de techniek: dat er al
+ * geslaagde voorbeelden liggen, dat de vorm vastligt, dat er tegen criteria
+ * beoordeeld wordt, dat een fout duur is.
+ *
+ * Bewust in gewone werktaal en zonder techniek-namen: wie wist welke techniek
+ * hij nodig had, had deze knop niet aangeklikt. Vanaf vraag 2 verzint de AI de
+ * opties weer zelf, want dan heeft hij context en kan hij scherper zijn dan
+ * welke vaste lijst ook.
+ */
+const OPENING_OPTIONS = [
+  // -> werken met voorbeelden (er ligt al geslaagd werk om na te volgen)
+  'een tekst zoals we die altijd sturen',
+  // -> gestructureerde uitvoer (de vorm ligt vast)
+  'een stuk in ons vaste sjabloon',
+  // -> toetsen aan een kader (er wordt gescoord tegen criteria)
+  'iets beoordelen tegen vaste criteria',
+  // -> het werk laten natrekken (een fout is duur)
+  'een concept nakijken op fouten',
+  // -> binden aan bronnen (het antwoord moet uit de stukken komen)
+  'vragen beantwoorden uit een dossier',
+  // -> eerst uitzoomen (de oplossing ligt vast, het probleem niet)
+  'uitzoeken of we het juiste probleem oplossen',
+];
+
 interface TechniqueAdvisorProps {
   /** Alle frameworks én losse technieken waaruit geadviseerd mag worden. */
   techniques: Technique[];
@@ -70,7 +101,7 @@ export default function TechniqueAdvisor({
   const answerRef = useRef<HTMLTextAreaElement>(null);
 
   /**
-   * Eén beurt: stuur het gesprek tot nu toe op en verwerk wat er terugkomt —
+   * Eén beurt: stuur het gesprek tot nu toe op en verwerk wat er terugkomt:
    * een volgende vraag of het advies.
    */
   async function runTurn(next: { question: string; answer: string }[], finish = false) {
@@ -95,7 +126,12 @@ export default function TechniqueAdvisor({
         setAdvies(res.advies);
         setQuestion(null);
       } else if (res.vraag) {
-        setQuestion(res.vraag);
+        // Bij de openingsvraag zonder startpunt vervangen we de opties van de
+        // AI door de vaste set (zie OPENING_OPTIONS): op dat moment weet het
+        // model nog niets en levert het alleen werkwoorden op. De vraagtekst
+        // zelf blijft van de AI. Vanaf vraag 2 verandert er niets.
+        const opening = next.length === 0 && !start?.trim();
+        setQuestion(opening ? { ...res.vraag, opties: OPENING_OPTIONS } : res.vraag);
         setAnswer('');
         requestAnimationFrame(() => answerRef.current?.focus());
       }
