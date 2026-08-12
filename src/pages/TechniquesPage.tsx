@@ -1,5 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, ArrowDown, Check, Eraser, Layers, Loader2, Sparkles } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowDown,
+  Check,
+  Compass,
+  Eraser,
+  Layers,
+  Loader2,
+  Sparkles,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import TechniqueSelector from '@/components/optimizer/TechniqueSelector';
 import FollowUpQuestions, { type FieldMeta } from '@/components/optimizer/FollowUpQuestions';
@@ -17,7 +26,7 @@ import { generatePrompt, prefillFields } from '@/services/optimizeService';
 import { trackEvent } from '@/services/analyticsService';
 import { getAiSettings, DEFAULT_AI_SETTINGS, type AiSettings } from '@/services/settingsService';
 import { detectPii, detectBlockedTopics, type GuardrailFinding } from '@/services/guardrails';
-import { contextExample, structureFormat } from '@/lib/techniques';
+import { contextExample, structureFormat, techniqueStarter } from '@/lib/techniques';
 import { activityIdentifier, stripMarkdown } from '@/lib/utils';
 import type { OptimizeResult, Technique } from '@/types';
 
@@ -446,6 +455,42 @@ export default function TechniquesPage() {
                     })()}
                   </div>
                 </div>
+
+                {/* Zo begin je: waar de techniek over gaat, met welke vraag hij
+                    begint en wanneer hij het meeste oplevert. Alleen bij
+                    technieken die anders lopen dan verwacht (Socratic geeft
+                    vragen terug, geen antwoorden) — zie techniqueStarter. */}
+                {(() => {
+                  const starter = techniqueStarter(technique);
+                  if (!starter) return null;
+                  return (
+                    <div className="mb-4 rounded-lg border border-rijksblauw-200 bg-rijksblauw-50/60 p-3 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10">
+                      <p className="flex items-center gap-1.5 text-sm font-semibold text-rijksblauw-700 dark:text-rijksblauw-200">
+                        <Compass size={15} className="shrink-0" /> Zo begin je
+                      </p>
+                      <dl className="mt-2 space-y-1.5 text-sm text-slate-600 dark:text-slate-300">
+                        <div>
+                          <dt className="inline font-medium text-slate-700 dark:text-slate-200">
+                            Waar het over gaat:{' '}
+                          </dt>
+                          <dd className="inline">{starter.context}</dd>
+                        </div>
+                        <div>
+                          <dt className="inline font-medium text-slate-700 dark:text-slate-200">
+                            De eerste vraag:{' '}
+                          </dt>
+                          <dd className="inline">{starter.question}</dd>
+                        </div>
+                        <div>
+                          <dt className="inline font-medium text-slate-700 dark:text-slate-200">
+                            Wanneer je dit gebruikt:{' '}
+                          </dt>
+                          <dd className="inline">{starter.useCase}</dd>
+                        </div>
+                      </dl>
+                    </div>
+                  );
+                })()}
 
                 {/* Waar het over gaat, compact. Het losse startpunt-veld is door
                     dit blok vervangen, maar de tekst voedt nog steeds het
