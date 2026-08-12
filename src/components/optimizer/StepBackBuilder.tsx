@@ -263,25 +263,23 @@ export default function StepBackBuilder({ settings, context, onSerialized }: Ste
                   {c.status === 'vast' ? <Lock size={11} /> : <Unlock size={11} />}
                   {c.status === 'vast' ? 'Staat vast' : 'Aanname'}
                 </button>
-                {/* Zelf toegevoegde regels beginnen leeg en zijn hier meteen te typen. */}
-                {c.text.trim() ? (
-                  <span className="min-w-0 flex-1 text-sm text-slate-700 dark:text-slate-200">
-                    {c.text}
-                  </span>
-                ) : (
-                  <input
-                    className="opl-input min-w-0 flex-1 text-sm"
-                    placeholder="Bijv. de invoering moet binnen deze kabinetsperiode"
-                    onChange={(e) =>
-                      setData((d) => ({
-                        ...d,
-                        randvoorwaarden: d.randvoorwaarden.map((x) =>
-                          x.id === c.id ? { ...x, text: e.target.value } : x,
-                        ),
-                      }))
-                    }
-                  />
-                )}
+                {/* Altijd een invoerveld, ook bij een door de AI voorgestelde
+                    regel: de formulering van "wat vaststaat" moet exact kloppen,
+                    en een leeg veld dat na één letter in tekst verandert zou de
+                    focus verliezen. */}
+                <input
+                  className="opl-input min-w-0 flex-1 text-sm"
+                  value={c.text}
+                  placeholder="Bijv. de invoering moet binnen deze kabinetsperiode"
+                  onChange={(e) =>
+                    setData((d) => ({
+                      ...d,
+                      randvoorwaarden: d.randvoorwaarden.map((x) =>
+                        x.id === c.id ? { ...x, text: e.target.value } : x,
+                      ),
+                    }))
+                  }
+                />
                 <button
                   type="button"
                   title="Verwijderen"

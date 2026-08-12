@@ -2335,10 +2335,9 @@ Regels:
 - Gebruik uitsluitend de soort-ids die je krijgt aangeleverd. Verzin geen nieuwe ids.
 - Meld elke soort hoogstens één keer.
 - Noem in "duurste_fout" in één zin welke fout in deze tekst de meeste schade zou geven.
+- Staat er niets controleerbaars in de tekst? Geef dan een lege lijst terug. Verzin niets.
 
-${CLARITY_GATE_JSON_INSTRUCTION}
-
-Anders geef je UITSLUITEND geldige JSON terug, zonder codeblok of extra tekst, in dit formaat:
+Geef UITSLUITEND geldige JSON terug, zonder codeblok of extra tekst, in dit formaat:
 {"gevonden":[{"id":"<id uit de lijst>","voorbeeld":"<letterlijk fragment>"}],"duurste_fout":"<één zin>"}`;
 
 const COVE_SCAN_USER_PROMPT = (tekst: string, soorten: { id: string; label: string }[]) =>
@@ -2632,8 +2631,10 @@ REDENEER EERST, KIES DAARNA. Werk elke beurt deze vier stappen af, in deze volgo
 3. WAT BLIJFT OVER: hooguit drie kandidaten, met per kandidaat een zekerheid van 0 tot 100. Zeg er
    expliciet bij WAT deze kandidaten van elkaar onderscheidt — welk feit over de taak zou de één
    laten winnen en de ander laten afvallen?
-4. DE VOLGENDE STAP: is de bovenste kandidaat minstens 80 zeker én duidelijk voor op de tweede, dan
-   adviseer je nu. Zo niet, dan stel je precies één vraag over het onderscheid uit stap 3.
+4. DE VOLGENDE STAP: is de bovenste kandidaat minstens 80 zeker én minstens 20 voor op de tweede, dan
+   adviseer je NU ("klaar":true). Dat is geen keuze maar een verplichting: een vraag die de uitkomst
+   toch niet meer verandert, is een vraag te veel. Zo niet, dan stel je precies één vraag over het
+   onderscheid uit stap 3.
 
 DE VRAAG IS HET BELANGRIJKSTE ONDERDEEL. Regels waar geen uitzondering op is:
 - ÉÉN vraag per beurt, één zin, hoogstens ongeveer 15 woorden. Geen twee vragen in één zin.
@@ -2641,7 +2642,9 @@ DE VRAAG IS HET BELANGRIJKSTE ONDERDEEL. Regels waar geen uitzondering op is:
   bovenaan blijft bij ELK denkbaar antwoord, is de vraag waardeloos. Bedenk dan een andere.
 - OVER ZIJN WERK, NIET OVER PROMPTEN: de gebruiker beschrijft zijn taak. Noem NOOIT de naam van een
   techniek of framework, gebruik geen vakjargon uit prompt-engineering, en vraag hem niet welke
-  techniek hij wil.
+  techniek hij wil. Dit geldt óók voor "waarom" en voor de antwoordopties: die staan op het scherm.
+  Schrijf daar wat de vraag over de TAAK beslist ("bepaalt of de vorm vastligt"), en niet welke
+  technieken je ermee uit elkaar houdt ("onderscheidt Few-Shot en Template-based").
 - Gewone werktaal, B1-niveau, geen ambtelijke of abstracte formulering.
 - Vraag nooit naar iets wat al is verteld, ook niet in andere woorden.
 - Vraag niets waar de prompt straks zelf voor is: geen criteria, geen controlevragen, geen rol die de
@@ -2684,10 +2687,13 @@ als je twijfelt. Zeg dan in "redenering" eerlijk waar de twijfel zit.
 Geef UITSLUITEND geldige JSON terug, zonder codeblok en zonder tekst eromheen, in dit formaat:
 {"redenering":"<1 à 2 zinnen in het Nederlands: wat je nu weet en wat nog onderscheid maakt>","kandidaten":[{"id":"<id uit de lijst>","zekerheid":<0-100>,"waarom":"<max 12 woorden>"}],"klaar":<true of false>,"vraag":{"tekst":"<je ene vraag>","waarom":"<max 12 woorden: wat deze vraag beslist>","opties":["<kort antwoord>","<kort antwoord>"]},"advies":{"id":"<id uit de lijst>","reden":"<1 zin>","context":"<1 à 2 zinnen voor het contextveld>"}}
 
-Bij "klaar":false laat je "advies" weg. Bij "klaar":true laat je "vraag" weg. Gebruik uitsluitend
-id's die exact in de lijst voorkomen.
+Vul "advies" ALTIJD in, ook bij "klaar":false — dat is je beste keuze op dít moment. Bij "klaar":true
+laat je "vraag" weg. Gebruik uitsluitend id's die exact in de lijst voorkomen.
 
-${CLARITY_GATE_JSON_INSTRUCTION}`;
+ONBRUIKBAAR ANTWOORD: geeft de gebruiker iets waar je niets mee kunt (onzin, of "weet ik niet"), meld
+dat dan niet als fout maar stel je vraag kleiner en concreter opnieuw. Vraag bijvoorbeeld naar een
+recent voorbeeld uit zijn werk. Je hebt hier bewust GEEN duidelijkheidsoordeel: de gebruiker weet nog
+niet wat hij nodig heeft — daarvoor stel je juist deze vragen.`;
 
 /** Bouwt de gebruikersprompt voor één beurt van de techniek-adviseur. */
 const TECHNIQUE_ADVISOR_USER_PROMPT = (args: {
@@ -2819,12 +2825,15 @@ function parseAdvisorTurn(raw: string, valid: Set<string>): AdvisorTurn | null {
     const klaar = parsed.klaar === true && Boolean(advies);
     if (!klaar && !vraag) return null;
 
+    // Vraag én advies gaan allebei mee: het advies is bij "klaar":false de
+    // tussenstand, waarmee de aanroeper het gesprek alsnog kan afkappen zodra de
+    // uitkomst toch vaststaat. De handler beslist wat de gebruiker ziet.
     return {
       redenering: typeof parsed.redenering === 'string' ? parsed.redenering.trim() : '',
       kandidaten,
       klaar,
-      ...(klaar ? { advies } : {}),
-      ...(!klaar && vraag ? { vraag } : {}),
+      ...(advies ? { advies } : {}),
+      ...(vraag ? { vraag } : {}),
     };
   } catch {
     return null;
@@ -7855,13 +7864,9 @@ Deno.serve(async (req: Request) => {
             resolveModel(candidate, body.preferredProvider, body.preferredModel),
             maxTokens,
           );
-          const unclear = detectUnclearJson(raw);
-          if (unclear) {
-            return new Response(
-              JSON.stringify({ success: false, unclear: true, reason: unclear, provider: candidate }),
-              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-            );
-          }
+          // Bewust géén duidelijkheidsgate hier: bij de eerste beurt is er nog
+          // niets om over te oordelen, en een vage taak is precies de reden dat
+          // de gebruiker deze adviseur opende. Het model vraagt door.
           const parsed = parseAdvisorTurn(raw, validIds);
           if (parsed) {
             turn = parsed;
@@ -7874,12 +7879,27 @@ Deno.serve(async (req: Request) => {
       }
 
       if (!turn) turn = localAdvisorTurn(start, turns, all);
-      // Het budget is op, maar het model stelde tóch een vraag: dan alsnog
-      // afdwingen dat er een advies uit komt in plaats van een vijfde vraag.
+
+      // Stopregel, hier afgedwongen en niet alleen in de prompt: modellen blijven
+      // uit beleefdheid doorvragen, ook als de bovenste kandidaat al ver voorligt.
+      // Ligt de uitkomst vast, dan is elke extra vraag er één te veel — en het
+      // model levert bij elke beurt zijn beste keuze mee, dus die staat er al.
+      const top: AdvisorCandidate | undefined = turn.kandidaten[0];
+      const tweede: AdvisorCandidate | undefined = turn.kandidaten[1];
+      const beslist =
+        !!top && top.zekerheid >= 80 && (!tweede || top.zekerheid - tweede.zekerheid >= 20);
+      if (!turn.klaar && turn.advies && (finish || beslist)) {
+        turn = { ...turn, klaar: true, vraag: undefined };
+      }
+      // Het budget is op (of de gebruiker wil geen vragen meer) en het model gaf
+      // geen bruikbaar advies: dan de lokale weging, in plaats van een vijfde vraag.
       if (finish && !turn.klaar) {
         const fallback = localAdvisorTurn(start, turns, all);
         turn = { ...fallback, redenering: turn.redenering || fallback.redenering };
       }
+      // Bij een openstaande vraag is het advies nog tussenstand; dat hoort niet
+      // als uitkomst op het scherm.
+      if (!turn.klaar) turn = { ...turn, advies: undefined };
 
       return new Response(JSON.stringify({ success: true, ...turn, provider }), {
         status: 200,

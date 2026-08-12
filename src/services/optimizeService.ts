@@ -1994,9 +1994,6 @@ export async function adviseTechnique(args: {
       projectContext: args.projectContext,
     });
     if (!data) return { ...empty, error: 'Geen AI-service beschikbaar.' };
-    if (data.unclear) {
-      return { ...empty, unclear: true, error: data.error ?? 'Je invoer is nog niet duidelijk genoeg.' };
-    }
     if (!data.success) {
       return { ...empty, error: data.error ?? 'Het advies kon niet worden opgehaald.' };
     }

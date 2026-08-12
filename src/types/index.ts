@@ -379,8 +379,6 @@ export interface AdvisorTurnResult {
   vraag?: AdvisorQuestion;
   advies?: AdvisorAdvies;
   provider: AiProviderResult;
-  /** De invoer was onbruikbaar; `error` bevat dan de uitleg voor de gebruiker. */
-  unclear?: boolean;
   error?: string;
 }
 

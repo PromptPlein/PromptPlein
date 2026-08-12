@@ -85,6 +85,7 @@ export default function TechniquesPage() {
   // Admin-bepaalde AI-instellingen; gebruikers kiezen niet zelf.
   const settingsRef = useRef<AiSettings>(DEFAULT_AI_SETTINGS);
   const builderRef = useRef<HTMLElement>(null);
+  const advisorRef = useRef<HTMLDivElement>(null);
   const optimizingRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -363,6 +364,7 @@ export default function TechniquesPage() {
   function handleClearAll() {
     setContext('');
     setTechniqueId('');
+    setAdvisorOpen(false);
     setAnswers({});
     setEditingContext(false);
     setFieldMeta({});
@@ -465,13 +467,15 @@ export default function TechniquesPage() {
               een techniek open, dan komt hij eróver: het advies kiezen mag geen
               half ingevuld formulier onaangekondigd weggooien. */}
           {advisorOpen && (
-            <TechniqueAdvisor
-              techniques={techniques}
-              settings={settingsRef.current}
-              start={context}
-              onChoose={applyAdvice}
-              onClose={() => setAdvisorOpen(false)}
-            />
+            <div ref={advisorRef} className="scroll-mt-24">
+              <TechniqueAdvisor
+                techniques={techniques}
+                settings={settingsRef.current}
+                start={context}
+                onChoose={applyAdvice}
+                onClose={() => setAdvisorOpen(false)}
+              />
+            </div>
           )}
 
           {/* Het invulblok van de gekozen techniek — op dezelfde plek als het
@@ -777,11 +781,29 @@ export default function TechniquesPage() {
               onder het invulblok staan, zodat je zonder omweg een andere techniek
               kunt pakken — die vult dan opnieuw het blok bovenaan. */}
           <section className="opl-card p-6">
-            <p className="mb-4 text-sm text-slate-600 dark:text-slate-300">
-              {technique
-                ? 'Een andere techniek proberen? Klik erop — je vult hem hierboven in.'
-                : 'Kies een prompt framework of techniek. Klik erop en je vult hem hierboven in.'}
-            </p>
+            <div className="mb-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+              <p className="text-sm text-slate-600 dark:text-slate-300">
+                {technique
+                  ? 'Een andere techniek proberen? Klik erop — je vult hem hierboven in.'
+                  : 'Kies een prompt framework of techniek. Klik erop en je vult hem hierboven in.'}
+              </p>
+              {/* Ook hier bereikbaar: wie de lijst doorleest en er niet uitkomt,
+                  zit op dit moment onderaan de pagina en niet bij het startblok. */}
+              {!advisorOpen && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAdvisorOpen(true);
+                    requestAnimationFrame(() => {
+                      advisorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    });
+                  }}
+                  className="inline-flex shrink-0 items-center gap-1.5 text-sm font-medium text-rijksblauw-600 transition-colors hover:text-rijksoranje hover:underline dark:text-rijksblauw-300"
+                >
+                  <Compass size={15} /> Weet je niet welke?
+                </button>
+              )}
+            </div>
             <TechniqueSelector selectedId={techniqueId} onSelect={handleSelectTechnique} />
           </section>
         </div>
