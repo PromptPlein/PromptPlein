@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Check, Eraser, Layers, Loader2, Sparkles } from 'lucide-react';
+import { AlertTriangle, ArrowDown, Check, Eraser, Layers, Loader2, Sparkles } from 'lucide-react';
 import toast from 'react-hot-toast';
 import TechniqueSelector from '@/components/optimizer/TechniqueSelector';
 import FollowUpQuestions, { type FieldMeta } from '@/components/optimizer/FollowUpQuestions';
@@ -19,7 +19,6 @@ import { getAiSettings, DEFAULT_AI_SETTINGS, type AiSettings } from '@/services/
 import { detectPii, detectBlockedTopics, type GuardrailFinding } from '@/services/guardrails';
 import { structureFormat } from '@/lib/techniques';
 import { activityIdentifier, stripMarkdown } from '@/lib/utils';
-import { usePersistentDraft, usePersistentObject } from '@/lib/usePersistentDraft';
 import type { OptimizeResult, Technique } from '@/types';
 
 /**
@@ -35,21 +34,26 @@ export default function TechniquesPage() {
   const { profile, user } = useAuth();
   const { techniques } = useReferenceData();
 
+  // Alle invoer op deze pagina is sessie-state, bewust niet bewaard: wie de
+  // pagina opent begint bij de keuze, met een schone lijst. In een training
+  // gaat dit scherm van hand tot hand — dan is achtergebleven werk van de
+  // vorige oefening storender dan een verloren concept.
+  //
   // Waar het over gaat: optioneel startpunt. Is dit gevuld, dan vult de AI de
   // velden van de gekozen techniek alvast voor en voedt het het interview.
-  const [context, setContext, clearContext] = usePersistentDraft('techniqueContext');
-  // Gekozen techniek + antwoorden overleven een herlaadactie: wie tijdens de
-  // training per ongeluk de tab sluit, komt terug op zijn ingevulde velden.
-  const [techniqueId, setTechniqueId, clearTechniqueId] = usePersistentDraft('lessonTechniqueId');
-  const [answers, setAnswers, clearAnswers] = usePersistentObject<Record<string, string>>(
-    'lessonAnswers',
-    {},
-  );
+  const [context, setContext] = useState('');
+  const [techniqueId, setTechniqueId] = useState('');
+  const [answers, setAnswers] = useState<Record<string, string>>({});
   // Geserialiseerde output van een gespecialiseerde bouwer (Persona/Few-Shot/
   // Meta) of de conclusie van het interview. Gaat als context mee bij het bouwen.
   const [builderText, setBuilderText] = useState('');
   const [fieldMeta, setFieldMeta] = useState<FieldMeta>({});
   const [prefilling, setPrefilling] = useState(false);
+  // Staat het contextveld open binnen het invulblok? Bij een nieuwe techniek
+  // staat het altijd open: dat je context mág meegeven moet je zien, niet
+  // hoeven ontdekken. Na "Klaar" klapt het samen tot één regel, die je weer
+  // kunt openen om aan te passen.
+  const [editingContext, setEditingContext] = useState(true);
 
   const [optimizing, setOptimizing] = useState(false);
   const [streamText, setStreamText] = useState('');
@@ -92,8 +96,12 @@ export default function TechniquesPage() {
     setFieldMeta({});
     setBuilderText('');
     setUnclearReason(null);
+    // Nieuwe techniek = het contextveld weer open (zie setEditingContext hierboven).
+    setEditingContext(true);
+    // Het invulblok staat bóven de lijst; scroll er naartoe zodat de gekozen
+    // techniek meteen in beeld staat in plaats van boven de vouw te verschijnen.
     requestAnimationFrame(() => {
-      builderRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      builderRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
     const chosen = techniques.find((t) => t.id === id);
     const draft = context.trim();
@@ -319,9 +327,10 @@ export default function TechniquesPage() {
 
   /** Alles leeg voor een frisse start (volgende oefening in de training). */
   function handleClearAll() {
-    clearContext();
-    clearTechniqueId();
-    clearAnswers();
+    setContext('');
+    setTechniqueId('');
+    setAnswers({});
+    setEditingContext(false);
     setFieldMeta({});
     setBuilderText('');
     setUnclearReason(null);
@@ -379,41 +388,28 @@ export default function TechniquesPage() {
             phase === 'transition' ? 'pointer-events-none opacity-0' : 'opacity-100'
           }`}
         >
-          {/* Optioneel startpunt: waar gaat het over? Gevuld → de velden van de
-              gekozen techniek worden voor-ingevuld en het interview begint met
-              context in plaats van bij nul. */}
-          <section className="opl-card p-6">
-            <label
-              htmlFor="techniek-context"
-              className="block font-semibold text-slate-800 dark:text-slate-100"
-            >
-              Waar gaat het over?{' '}
-              <span className="font-normal text-slate-400 dark:text-slate-500">(optioneel)</span>
-            </label>
-            <p className="mt-0.5 mb-2 text-sm text-slate-500 dark:text-slate-400">
-              Beschrijf je taak in een paar zinnen. Vullen we in, dan vult de AI de velden van de
-              techniek die je kiest alvast voor je in — je past ze daarna zelf aan.
-            </p>
-            <textarea
-              id="techniek-context"
-              rows={3}
-              value={context}
-              onChange={(e) => setContext(e.target.value)}
-              placeholder="Bijvoorbeeld: ik schrijf een brief aan bewoners over werkzaamheden in hun straat."
-              className="opl-input w-full resize-y"
-            />
-          </section>
+          {/* Startsituatie: er is nog niets gekozen. Deze plek is gereserveerd
+              voor het invulblok van de techniek — tot die keuze er is, staat
+              hier de opdracht die naar de lijst eronder wijst. */}
+          {!technique && (
+            <section className="rounded-2xl border-2 border-dashed border-rijksblauw-200 bg-white/60 px-6 py-10 text-center dark:border-rijksblauw-500/30 dark:bg-slate-800/40">
+              <p className="text-lg font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
+                Klik hieronder voor je prompttechniek of framework.
+              </p>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                De invulvelden verschijnen daarna hier, op deze plek.
+              </p>
+              <ArrowDown
+                size={22}
+                className="mx-auto mt-4 animate-bounce text-rijksoranje"
+                aria-hidden
+              />
+            </section>
+          )}
 
-          {/* De volledige lijst: frameworks links, losse technieken rechts. */}
-          <section className="opl-card p-6">
-            <p className="mb-4 text-sm text-slate-600 dark:text-slate-300">
-              Kies een prompt framework of techniek. Klik erop en de invulvelden verschijnen
-              eronder.
-            </p>
-            <TechniqueSelector selectedId={techniqueId} onSelect={handleSelectTechnique} />
-          </section>
-
-          {/* Het invulblok van de gekozen techniek. */}
+          {/* Het invulblok van de gekozen techniek — op dezelfde plek als het
+              startpunt-veld, dus bovenaan: kiezen in de lijst eronder vult dit
+              blok, in beeld, in plaats van iets onder de lijst te openen. */}
           {technique && (
             <section
               key={technique.id}
@@ -451,6 +447,101 @@ export default function TechniquesPage() {
                   </div>
                 </div>
 
+                {/* Waar het over gaat, compact. Het losse startpunt-veld is door
+                    dit blok vervangen, maar de tekst voedt nog steeds het
+                    voor-invullen en het bouwen — dus blijft hij hier zichtbaar
+                    en aanpasbaar. */}
+                {(() => {
+                  const fmt = structureFormat(technique);
+                  // Alleen de vragenlijst-technieken laten zich voor-invullen;
+                  // de eigen bouwers (persona, few-shot, meta, interview) niet.
+                  const usesQuestionnaire =
+                    technique.follow_up_questions.length > 0 &&
+                    fmt !== 'persona' &&
+                    fmt !== 'multi-persona' &&
+                    fmt !== 'few-shot' &&
+                    fmt !== 'meta' &&
+                    fmt !== 'chain-of-thought' &&
+                    fmt !== 'socratic';
+                  // Bij een interview wacht het gesprek op deze context: het
+                  // start pas als het veld dicht is, anders stelt de AI zijn
+                  // eerste vraag terwijl de gebruiker nog aan het typen is.
+                  const isInterview = fmt === 'chain-of-thought' || fmt === 'socratic';
+                  return (
+                    <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900/40">
+                      {editingContext ? (
+                        <>
+                          <label htmlFor="techniek-context" className="opl-label">
+                            Geef optioneel wat context toe of geef wat context mee.
+                          </label>
+                          <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
+                            {usesQuestionnaire
+                              ? 'Vul je hier iets in, dan kan de AI de velden van deze techniek alvast voor je invullen — je past ze daarna zelf aan. Leeg laten mag.'
+                              : isInterview
+                                ? 'Vul je hier iets in, dan begint het gesprek bij jouw onderwerp in plaats van bij nul. Leeg laten mag — de AI vraagt er dan zelf naar.'
+                                : 'Vul je hier iets in, dan begint deze techniek met jouw onderwerp in plaats van bij nul. Leeg laten mag.'}
+                          </p>
+                          <textarea
+                            id="techniek-context"
+                            rows={3}
+                            value={context}
+                            onChange={(e) => setContext(e.target.value)}
+                            placeholder="Bijvoorbeeld: ik schrijf een brief aan bewoners over werkzaamheden in hun straat."
+                            className="opl-input resize-y"
+                          />
+                          <div className="mt-2 flex flex-wrap justify-end gap-2">
+                            <button
+                              type="button"
+                              className={isInterview ? 'opl-btn-primary' : 'opl-btn-secondary'}
+                              onClick={() => setEditingContext(false)}
+                            >
+                              {isInterview ? 'Start het gesprek' : 'Klaar'}
+                            </button>
+                            {usesQuestionnaire && context.trim() && (
+                              <button
+                                type="button"
+                                className="opl-btn-primary"
+                                title="Vervangt de huidige antwoorden door een voorstel van de AI"
+                                onClick={() => {
+                                  setEditingContext(false);
+                                  void runPrefill(technique, context.trim());
+                                }}
+                              >
+                                <Sparkles size={16} />{' '}
+                                {Object.keys(answers).length > 0
+                                  ? 'Velden opnieuw voorinvullen'
+                                  : 'Velden voorinvullen'}
+                              </button>
+                            )}
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex items-start justify-between gap-3">
+                          <p className="text-sm text-slate-600 dark:text-slate-300">
+                            {context.trim() ? (
+                              <>
+                                <span className="font-medium text-slate-700 dark:text-slate-200">
+                                  Context:
+                                </span>{' '}
+                                {context.trim()}
+                              </>
+                            ) : (
+                              'Geef optioneel wat context toe of geef wat context mee.'
+                            )}
+                          </p>
+                          <button
+                            type="button"
+                            className="shrink-0 text-sm font-medium text-rijksblauw-600 transition-colors hover:text-rijksblauw-700 hover:underline dark:text-rijksblauw-300 dark:hover:text-rijksblauw-200"
+                            onClick={() => setEditingContext(true)}
+                          >
+                            {context.trim() ? 'Aanpassen' : 'Toevoegen'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 {/* Gespecialiseerde bouwers per techniek; anders de vragenlijst.
                     De bouwer levert geserialiseerde input die bij het bouwen
                     van de prompt wordt meegewogen. */}
@@ -475,8 +566,18 @@ export default function TechniquesPage() {
                     return <MetaBuilder settings={s} goal={context} onSerialized={setBuilderText} />;
                   }
                   // Chain-of-Thought / Socratic: het vraag-na-vraag-interview.
-                  // De conclusie voedt het bouwen van de prompt.
+                  // De conclusie voedt het bouwen van de prompt. Het gesprek
+                  // start pas als het contextveld dicht is — anders stelt de AI
+                  // zijn eerste vraag terwijl de gebruiker nog context typt.
                   if (fmt === 'chain-of-thought' || fmt === 'socratic') {
+                    if (editingContext) {
+                      return (
+                        <p className="rounded-lg border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-600 dark:text-slate-400">
+                          Het gesprek begint zodra je hierboven op &quot;Start het gesprek&quot;
+                          klikt.
+                        </p>
+                      );
+                    }
                     return (
                       <InterviewFlow
                         technique={technique}
@@ -550,6 +651,18 @@ export default function TechniquesPage() {
               </button>
             </div>
           )}
+
+          {/* De volledige lijst: frameworks links, losse technieken rechts. Blijft
+              onder het invulblok staan, zodat je zonder omweg een andere techniek
+              kunt pakken — die vult dan opnieuw het blok bovenaan. */}
+          <section className="opl-card p-6">
+            <p className="mb-4 text-sm text-slate-600 dark:text-slate-300">
+              {technique
+                ? 'Een andere techniek proberen? Klik erop — je vult hem hierboven in.'
+                : 'Kies een prompt framework of techniek. Klik erop en je vult hem hierboven in.'}
+            </p>
+            <TechniqueSelector selectedId={techniqueId} onSelect={handleSelectTechnique} />
+          </section>
         </div>
       )}
 
