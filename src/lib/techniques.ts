@@ -74,6 +74,9 @@ export function localFrameworkGuess(ownPrompt: string, frameworks: Technique[]):
  *  - 'template-based'   → taak + genummerde rubrieken + regels + Project/Context-plaatshouders.
  *  - 'meta'             → doel + ruwe prompt + verbeterinstructie (rol/context/taak/format) + max. 3 vragen.
  *  - 'socratic'         → Socratische interviewer: één vraag tegelijk om aannames bloot te leggen.
+ *  - 'chain-of-verification' → beweringen → verificatievragen → losse antwoorden → gecorrigeerde tekst.
+ *  - 'step-back'        → eerst de algemenere vraag beantwoorden, dan pas terug naar de gestelde vraag.
+ *  - 'rubric'           → toetsingskader met niveaubeschrijvingen, bewijsregel en eindoordeel.
  *  - undefined          → geen vaste structuur; de AI bepaalt zelf de vorm.
  */
 export type StructureFormat =
@@ -84,7 +87,10 @@ export type StructureFormat =
   | 'multi-persona'
   | 'template-based'
   | 'meta'
-  | 'socratic';
+  | 'socratic'
+  | 'chain-of-verification'
+  | 'step-back'
+  | 'rubric';
 
 const FEW_SHOT_IDS = new Set(['tech-few-shot']);
 const FEW_SHOT_NAMES = new Set(['few-shot voorbeelden', 'few-shot', 'few shot']);
@@ -105,12 +111,28 @@ const META_IDS = new Set(['tech-meta-prompting']);
 const META_NAMES = new Set(['meta prompting', 'meta-prompting', 'meta-prompten', 'meta prompten']);
 const SOCRATIC_IDS = new Set(['tech-socratic']);
 const SOCRATIC_NAMES = new Set(['socratic prompting', 'socratisch prompting', 'socratisch prompten']);
+// De drie rijksspecifieke technieken uit migratie 0031. Elk heeft een eigen
+// bouwer en een eigen verplichte uitvoerstructuur; zie de lib-bestanden
+// verification.ts, stepback.ts en rubric.ts voor wat elke techniek nodig heeft.
+const COVE_IDS = new Set(['tech-chain-of-verification']);
+const STEP_BACK_IDS = new Set(['tech-step-back']);
+const RUBRIC_IDS = new Set(['tech-rubric']);
 
 /** Welke vaste uitvoerstructuur hoort bij deze techniek (indien van toepassing)? */
 export function structureFormat(t: TechniqueIdentity): StructureFormat | undefined {
   if (isContextPrompt(t)) return 'care';
   const id = t.id;
   const name = t.name.trim().toLowerCase();
+  // Vóór de rest: "chain-of-verification" begint met dezelfde woorden als
+  // Chain-of-Thought, en een naamswijziging in de admin mag niet stilzwijgend
+  // de verkeerde bouwer opleveren.
+  if (COVE_IDS.has(id) || name.includes('verification') || name.includes('verificatie')) {
+    return 'chain-of-verification';
+  }
+  if (STEP_BACK_IDS.has(id) || name.includes('step-back') || name.includes('step back')) {
+    return 'step-back';
+  }
+  if (RUBRIC_IDS.has(id) || name.includes('rubric')) return 'rubric';
   if (FEW_SHOT_IDS.has(id) || FEW_SHOT_NAMES.has(name)) return 'few-shot';
   if (COT_IDS.has(id) || COT_NAMES.has(name)) return 'chain-of-thought';
   // Multi-persona vóór persona, want de naam bevat ook "persona".
@@ -151,6 +173,12 @@ const SELF_DIRECTED_BUILDERS: Partial<Record<StructureFormat, string>> = {
     'Deze techniek gebruikt een eigen bouwer in fasen: de gebruiker beschrijft de taak, geeft voorbeelden van input en output, en de AI haalt daar de over te nemen kenmerken uit. Welke stappen er komen hangt af van de keuzes van de gebruiker, dus er is geen vaste vragenlijst.',
   meta:
     'Bij deze techniek bouwt de AI zélf een prompt. De gebruiker beschrijft in één veld wat hij nodig heeft; daarna levert de AI een uitvoerbare prompt die met feedback bij te stellen is. Er zijn dus geen in te vullen velden om te beheren.',
+  'chain-of-verification':
+    'Deze techniek gebruikt een eigen bouwer: de gebruiker plakt het concept, laat de AI scannen welke soorten controleerbare beweringen erin staan, vinkt aan wat gecontroleerd moet worden en legt vast waartegen geverifieerd mag worden. Die keuzes komen uit de tekst zelf, dus er is geen vaste vragenlijst.',
+  'step-back':
+    'Deze techniek gebruikt een eigen bouwer: de AI stelt drie stap-terug-vragen voor op oplopend abstractieniveau, de gebruiker kiest de hoogte en splitst daarna wat vaststaat van wat alleen is aangenomen. Dat hangt volledig af van het vraagstuk, dus er is geen vaste vragenlijst.',
+  rubric:
+    'Deze techniek gebruikt een eigen bouwer: de gebruiker kiest een schaal, stelt criteria op en laat per criterium een niveaubeschrijving per schaalpunt schrijven. Het aantal velden verschilt dus per toetsingskader en is niet vooraf te beheren.',
 };
 
 /**
@@ -174,6 +202,9 @@ const OWN_INPUT_FORMATS: StructureFormat[] = [
   'few-shot',
   'meta',
   'template-based',
+  'chain-of-verification',
+  'step-back',
+  'rubric',
 ];
 
 /**
@@ -228,6 +259,9 @@ const FORMAT_EXAMPLES: Record<StructureFormat, string> = {
   'template-based': 'maak een beslisnota volgens het vaste sjabloon van ons ministerie',
   meta: 'ik wil een prompt waarmee ik verslagen van vergaderingen laat samenvatten',
   socratic: 'ik wil scherp krijgen waarom onze aanpak van woonoverlast niet werkt',
+  'chain-of-verification': 'controleer deze Kamerbrief op cijfers, data en verwijzingen',
+  'step-back': 'moeten we een meldplicht invoeren voor verhuurders?',
+  rubric: 'beoordeel dit projectplan op volledigheid, onderbouwing en haalbaarheid',
 };
 
 const DEFAULT_EXAMPLE = 'schrijf een brief aan bewoners over werkzaamheden in hun straat';

@@ -335,6 +335,55 @@ export interface FrameworkFit {
   missing?: string;
 }
 
+/**
+ * Eén techniek die in de adviseur nog in de race is. De zekerheid wordt na élk
+ * antwoord opnieuw bepaald, zodat de gebruiker ziet dat zijn antwoord de weging
+ * verschoof — en de AI zelf ziet waar het onderscheid nog zit.
+ */
+export interface AdvisorCandidate {
+  /** Verwijst naar een bestaande Technique.id. */
+  id: string;
+  /** Hoe zeker is deze keuze op dit moment (0-100)? */
+  zekerheid: number;
+  /** Enkele woorden: waarom deze techniek nog meedoet. */
+  waarom: string;
+}
+
+/** De volgende vraag van de adviseur, met kant-en-klare antwoordopties. */
+export interface AdvisorQuestion {
+  tekst: string;
+  /** Wat deze vraag beslist — getoond als hint onder de vraag. */
+  waarom: string;
+  /** 2 tot 4 korte antwoorden om aan te klikken; zelf typen mag ook. */
+  opties: string[];
+}
+
+/** Het eindadvies: de gekozen techniek plus de context om mee te starten. */
+export interface AdvisorAdvies {
+  /** Verwijst naar een bestaande Technique.id. */
+  id: string;
+  reden: string;
+  /** De taak van de gebruiker, klaar om in het contextveld te zetten. */
+  context: string;
+}
+
+/**
+ * Eén beurt van de techniek-adviseur: óf een volgende vraag, óf het advies.
+ * `kandidaten` komt in beide gevallen mee: dat is de tussenstand van de weging.
+ */
+export interface AdvisorTurnResult {
+  success: boolean;
+  redenering: string;
+  kandidaten: AdvisorCandidate[];
+  klaar: boolean;
+  vraag?: AdvisorQuestion;
+  advies?: AdvisorAdvies;
+  provider: AiProviderResult;
+  /** De invoer was onbruikbaar; `error` bevat dan de uitleg voor de gebruiker. */
+  unclear?: boolean;
+  error?: string;
+}
+
 /** Antwoord van de optimize-prompt service (framework-fit-modus). */
 export interface FrameworkFitResult {
   fits: FrameworkFit[];
@@ -407,7 +456,10 @@ export interface PlanStep {
     | 'multi-persona'
     | 'template-based'
     | 'meta'
-    | 'socratic';
+    | 'socratic'
+    | 'chain-of-verification'
+    | 'step-back'
+    | 'rubric';
   /** Afgeleid: true bij chain-of-thought/socratic (vraag-na-vraag stappen). */
   interactive?: boolean;
 }

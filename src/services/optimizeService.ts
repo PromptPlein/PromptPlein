@@ -9,6 +9,7 @@ import { isContextPrompt, structureFormat } from '@/lib/techniques';
 import { tidyPromptMarkup } from '@/lib/utils';
 import type { AiProvider } from '@/config/aiModels';
 import type {
+  AdvisorTurnResult,
   AnalyzeResult,
   ClarifyResult,
   FrameworkFit,
@@ -590,6 +591,173 @@ export async function buildMetaPrompt(args: {
       };
     }
     return { success: false, error: data.error ?? 'De prompt kon niet worden gebouwd.' };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Onbekende fout.' };
+  }
+}
+
+/**
+ * Chain-of-Verification, stap 1: scan het concept en meld welke SOORTEN
+ * controleerbare beweringen erin voorkomen, met een letterlijk fragment als
+ * bewijs. Dit is wat de bouwer bruikbaar maakt: de gebruiker vinkt niet uit het
+ * hoofd aan wat gecontroleerd moet worden, maar ziet wat er daadwerkelijk staat.
+ * De ids komen uit `CLAIM_TYPES` in `@/lib/verification`.
+ */
+export async function scanClaims(args: {
+  tekst: string;
+  soorten: { id: string; label: string }[];
+  preferredProvider?: AiProvider;
+  preferredModel?: string;
+}): Promise<{
+  success: boolean;
+  gevonden?: { id: string; voorbeeld: string }[];
+  duursteFout?: string;
+  error?: string;
+}> {
+  try {
+    const data = await postOptimize<{
+      success?: boolean;
+      gevonden?: { id?: string; voorbeeld?: string }[];
+      duurste_fout?: string;
+      error?: string;
+    }>({
+      mode: 'cove-scan',
+      coveTekst: args.tekst,
+      coveSoorten: args.soorten,
+      preferredProvider: args.preferredProvider ?? 'auto',
+      preferredModel: args.preferredModel,
+    });
+    if (!data) return { success: false, error: 'Geen AI-service beschikbaar.' };
+    if (data.success) {
+      return {
+        success: true,
+        gevonden: (data.gevonden ?? [])
+          .filter((g): g is { id: string; voorbeeld?: string } => typeof g?.id === 'string')
+          .map((g) => ({ id: g.id, voorbeeld: g.voorbeeld?.trim() ?? '' })),
+        duursteFout: data.duurste_fout?.trim() ?? '',
+      };
+    }
+    return { success: false, error: data.error ?? 'De scan is niet gelukt.' };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Onbekende fout.' };
+  }
+}
+
+/**
+ * Step-Back, stap 1: stel drie stap-terug-vragen voor op oplopend
+ * abstractieniveau, en splits wat de gebruiker aanlevert in "staat vast" en
+ * "is alleen aangenomen". De gebruiker kiest daarna de hoogte; die keuze is
+ * het hele mechanisme van deze techniek en hoort dus bij de gebruiker, niet
+ * bij het model.
+ */
+export async function proposeLadder(args: {
+  concreteVraag: string;
+  opTafel?: string;
+  preferredProvider?: AiProvider;
+  preferredModel?: string;
+}): Promise<{
+  success: boolean;
+  ladder?: { niveau: number; vraag: string; winst: string }[];
+  vast?: string[];
+  aanname?: string[];
+  error?: string;
+  unclear?: boolean;
+  reason?: string;
+}> {
+  try {
+    const data = await postOptimize<{
+      success?: boolean;
+      ladder?: { niveau?: number; vraag?: string; winst?: string }[];
+      vast?: string[];
+      aanname?: string[];
+      error?: string;
+      unclear?: boolean;
+      reason?: string;
+    }>({
+      mode: 'stepback-ladder',
+      sbVraag: args.concreteVraag,
+      sbOpTafel: args.opTafel,
+      preferredProvider: args.preferredProvider ?? 'auto',
+      preferredModel: args.preferredModel,
+    });
+    if (!data) return { success: false, error: 'Geen AI-service beschikbaar.' };
+    if (data.unclear) return { success: false, unclear: true, reason: data.reason };
+    if (data.success) {
+      return {
+        success: true,
+        ladder: (data.ladder ?? [])
+          .filter((r) => typeof r?.vraag === 'string' && r.vraag.trim())
+          .map((r, i) => ({
+            niveau: typeof r.niveau === 'number' ? r.niveau : i + 1,
+            vraag: r.vraag!.trim(),
+            winst: r.winst?.trim() ?? '',
+          })),
+        vast: (data.vast ?? []).filter((v) => typeof v === 'string' && v.trim()),
+        aanname: (data.aanname ?? []).filter((v) => typeof v === 'string' && v.trim()),
+      };
+    }
+    return { success: false, error: data.error ?? 'De stap-terug-vragen konden niet worden gemaakt.' };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Onbekende fout.' };
+  }
+}
+
+/**
+ * Rubric: stel criteria voor ('criteria'), of schrijf per bestaand criterium een
+ * niveaubeschrijving per schaalpunt ('niveaus'). Dat tweede is de kern van de
+ * techniek (zonder niveaubeschrijving is een score niet reproduceerbaar), en
+ * ook het werk dat gebruikers in de praktijk overslaan.
+ */
+export async function proposeRubric(args: {
+  doel: 'criteria' | 'niveaus';
+  teBeoordelen: string;
+  gebruiksdoel?: string;
+  niveaus: string[];
+  criteria?: { naam: string; betekenis: string }[];
+  preferredProvider?: AiProvider;
+  preferredModel?: string;
+}): Promise<{
+  success: boolean;
+  criteria?: { naam: string; betekenis: string; niveaus: Record<string, string> }[];
+  error?: string;
+  unclear?: boolean;
+  reason?: string;
+}> {
+  try {
+    const data = await postOptimize<{
+      success?: boolean;
+      criteria?: { naam?: string; betekenis?: string; niveaus?: Record<string, unknown> }[];
+      error?: string;
+      unclear?: boolean;
+      reason?: string;
+    }>({
+      mode: 'rubric-propose',
+      rubricDoel: args.doel,
+      rubricTeBeoordelen: args.teBeoordelen,
+      rubricGebruiksdoel: args.gebruiksdoel,
+      rubricNiveaus: args.niveaus,
+      rubricCriteria: args.criteria,
+      preferredProvider: args.preferredProvider ?? 'auto',
+      preferredModel: args.preferredModel,
+    });
+    if (!data) return { success: false, error: 'Geen AI-service beschikbaar.' };
+    if (data.unclear) return { success: false, unclear: true, reason: data.reason };
+    if (data.success) {
+      return {
+        success: true,
+        criteria: (data.criteria ?? [])
+          .filter((c) => typeof c?.naam === 'string' && c.naam.trim())
+          .map((c) => {
+            const niveaus: Record<string, string> = {};
+            for (const level of args.niveaus) {
+              const v = c.niveaus?.[level];
+              if (typeof v === 'string' && v.trim()) niveaus[level] = v.trim();
+            }
+            return { naam: c.naam!.trim(), betekenis: c.betekenis?.trim() ?? '', niveaus };
+          }),
+      };
+    }
+    return { success: false, error: data.error ?? 'Het voorstel kon niet worden gemaakt.' };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : 'Onbekende fout.' };
   }
@@ -1774,6 +1942,85 @@ export async function explainFrameworkFit(args: {
     success: true,
     provider: 'local-template',
   };
+}
+
+/**
+ * Eén beurt van de techniek-adviseur op /technieken: de gebruiker weet niet
+ * welke techniek hij moet hebben, en de AI redeneert dat in hoogstens vier
+ * vragen uit.
+ *
+ * Elke aanroep stuurt het hele gesprek tot nu toe mee en krijgt een verse
+ * weging terug — de AI kiest niet één keer aan het eind, maar herrangschikt na
+ * élk antwoord. De volgende vraag komt uit die weging: hij gaat over het punt
+ * waarop de overgebleven kandidaten uiteenlopen. Zonder dat zou een vaste
+ * vragenlijst volstaan, en die kan niet dieper graven als het antwoord de
+ * twijfel niet wegneemt.
+ *
+ * `finish` slaat de resterende vragen over: de gebruiker vraagt om een advies
+ * met wat er al ligt.
+ */
+export async function adviseTechnique(args: {
+  start?: string;
+  turns: { question: string; answer: string }[];
+  techniques: Technique[];
+  finish?: boolean;
+  preferredProvider?: AiProvider;
+  preferredModel?: string;
+  projectContext?: string;
+}): Promise<AdvisorTurnResult> {
+  const empty: AdvisorTurnResult = {
+    success: false,
+    redenering: '',
+    kandidaten: [],
+    klaar: false,
+    provider: 'local-template',
+  };
+  try {
+    const data = await postOptimize<Partial<AdvisorTurnResult>>({
+      mode: 'technique-advisor',
+      advisorStart: args.start,
+      advisorTurns: args.turns,
+      advisorFinish: args.finish ?? false,
+      techniques: args.techniques.map((t) => ({
+        id: t.id,
+        name: t.name,
+        description: t.description,
+        strength: t.strength,
+        use_cases: t.use_cases,
+        family: t.family,
+      })),
+      preferredProvider: args.preferredProvider ?? 'auto',
+      preferredModel: args.preferredModel,
+      projectContext: args.projectContext,
+    });
+    if (!data) return { ...empty, error: 'Geen AI-service beschikbaar.' };
+    if (data.unclear) {
+      return { ...empty, unclear: true, error: data.error ?? 'Je invoer is nog niet duidelijk genoeg.' };
+    }
+    if (!data.success) {
+      return { ...empty, error: data.error ?? 'Het advies kon niet worden opgehaald.' };
+    }
+    // Alleen id's die echt bestaan; een verzonnen id levert straks een knop op
+    // die niets doet.
+    const valid = new Set(args.techniques.map((t) => t.id));
+    const kandidaten = (data.kandidaten ?? []).filter((k) => valid.has(k.id));
+    const advies = data.advies && valid.has(data.advies.id) ? data.advies : undefined;
+    const klaar = Boolean(data.klaar && advies);
+    if (!klaar && !data.vraag?.tekst?.trim()) {
+      return { ...empty, error: 'Het advies kon niet worden opgehaald.' };
+    }
+    return {
+      success: true,
+      redenering: data.redenering ?? '',
+      kandidaten,
+      klaar,
+      ...(klaar ? { advies } : { vraag: data.vraag }),
+      provider: data.provider ?? 'local-template',
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Onbekende fout';
+    return { ...empty, error: `Advies ophalen mislukt (${message}).` };
+  }
 }
 
 /**

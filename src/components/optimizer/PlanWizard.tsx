@@ -46,6 +46,9 @@ import GuardrailDialog from './GuardrailDialog';
 import PersonaBuilder from './PersonaBuilder';
 import FewShotBuilder from './FewShotBuilder';
 import MetaBuilder from './MetaBuilder';
+import VerificationBuilder from './VerificationBuilder';
+import StepBackBuilder from './StepBackBuilder';
+import RubricBuilder from './RubricBuilder';
 import DocumentUpload from './DocumentUpload';
 import { InterviewPanel } from './InterviewPanel';
 import RichText from './RichText';
@@ -249,6 +252,10 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
   const [fewShotText, setFewShotText] = useState('');
   // Geserialiseerde meta-prompt (Meta Prompting-stap); idem.
   const [metaText, setMetaText] = useState('');
+  // Geserialiseerde opzet van de rijksspecifieke bouwers (Chain-of-Verification,
+  // Step-Back, Rubric). Eén kanaal in plaats van drie: de bouwers leveren alle
+  // drie gelabelde tekst en landen op dezelfde plek in de analyse.
+  const [builderText, setBuilderText] = useState('');
   // Chain-of-Thought / Socratic: het adaptieve vraag-na-vraag-interview.
   const [interviewActive, setInterviewActive] = useState(false);
   const [interviewQuestion, setInterviewQuestion] = useState<string | null>(null);
@@ -689,7 +696,14 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
     }
 
     // Guardrail-check op de ingevulde velden + persona/few-shot/meta + toelichting.
-    const toCheck = [...Object.values(stepAnswers), personaText, fewShotText, metaText, extraClarification ?? '']
+    const toCheck = [
+      ...Object.values(stepAnswers),
+      personaText,
+      fewShotText,
+      metaText,
+      builderText,
+      extraClarification ?? '',
+    ]
       .map((v) => v.trim())
       .filter(Boolean)
       .join('\n');
@@ -744,6 +758,9 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
             : []),
           ...(metaText.trim()
             ? [{ id: 'meta_prompt', label: 'Meta-prompt', answer: metaText.trim() }]
+            : []),
+          ...(builderText.trim()
+            ? [{ id: 'builder_input', label: 'Ingevulde bouwer', answer: builderText.trim() }]
             : []),
         ],
         outcomesSummary: serializeOutcomes(outcomes),
@@ -1019,6 +1036,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
     if (personaText.trim()) extraAnswers.persona_definitie = personaText.trim();
     if (fewShotText.trim()) extraAnswers.fewshot_definitie = fewShotText.trim();
     if (metaText.trim()) extraAnswers.meta_prompt = metaText.trim();
+    if (builderText.trim()) extraAnswers.builder_input = builderText.trim();
     const outcome: StepOutcome = {
       step_id: step.id,
       technique_id: step.technique_id,
@@ -1446,6 +1464,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
                 onPersonaChange={setPersonaText}
                 onFewShotChange={setFewShotText}
                 onMetaChange={setMetaText}
+                onBuilderChange={setBuilderText}
                 interviewActive={interviewActive}
                 interviewQuestion={interviewQuestion}
                 interviewTranscript={interviewTranscript}
@@ -1720,6 +1739,7 @@ function PlanExecutor({
   onPersonaChange,
   onFewShotChange,
   onMetaChange,
+  onBuilderChange,
   interviewActive,
   interviewQuestion,
   interviewTranscript,
@@ -1765,6 +1785,7 @@ function PlanExecutor({
   onPersonaChange: (text: string) => void;
   onFewShotChange: (text: string) => void;
   onMetaChange: (text: string) => void;
+  onBuilderChange: (text: string) => void;
   interviewActive: boolean;
   interviewQuestion: string | null;
   interviewTranscript: TranscriptTurn[];
@@ -1871,6 +1892,7 @@ function PlanExecutor({
                   onPersonaChange={onPersonaChange}
                   onFewShotChange={onFewShotChange}
                   onMetaChange={onMetaChange}
+                  onBuilderChange={onBuilderChange}
                   interviewActive={interviewActive}
                   interviewQuestion={interviewQuestion}
                   interviewTranscript={interviewTranscript}
@@ -1954,6 +1976,7 @@ function StepCollector({
   onPersonaChange,
   onFewShotChange,
   onMetaChange,
+  onBuilderChange,
   interviewActive,
   interviewQuestion,
   interviewTranscript,
@@ -1995,6 +2018,7 @@ function StepCollector({
   onPersonaChange: (text: string) => void;
   onFewShotChange: (text: string) => void;
   onMetaChange: (text: string) => void;
+  onBuilderChange: (text: string) => void;
   interviewActive: boolean;
   interviewQuestion: string | null;
   interviewTranscript: TranscriptTurn[];
@@ -2019,6 +2043,11 @@ function StepCollector({
   const isFewShot = format === 'few-shot';
   // Meta Prompting: de AI bouwt zelf de prompt (geen antwoord).
   const isMeta = format === 'meta';
+  // De drie rijksspecifieke technieken met een eigen bouwer. Ze delen één
+  // terugmeldkanaal (onBuilderChange), want ze leveren alle drie gelabelde tekst.
+  const isVerification = format === 'chain-of-verification';
+  const isStepBack = format === 'step-back';
+  const isRubric = format === 'rubric';
   // De vraag-na-vraag-stap (vast de eerste stap): het materiaal is hier het
   // totaalplaatje waarop alle volgende stappen voortbouwen.
   const isInterviewStep = format === 'chain-of-thought' || format === 'socratic';
@@ -2079,6 +2108,30 @@ function StepCollector({
         )
       ) : isMeta ? (
         material == null && <MetaBuilder settings={settings} goal={goal} onSerialized={onMetaChange} />
+      ) : isVerification ? (
+        material == null && (
+          <VerificationBuilder
+            settings={settings}
+            context={contextText || goal}
+            onSerialized={onBuilderChange}
+          />
+        )
+      ) : isStepBack ? (
+        material == null && (
+          <StepBackBuilder
+            settings={settings}
+            context={contextText || goal}
+            onSerialized={onBuilderChange}
+          />
+        )
+      ) : isRubric ? (
+        material == null && (
+          <RubricBuilder
+            settings={settings}
+            context={contextText || goal}
+            onSerialized={onBuilderChange}
+          />
+        )
       ) : hasFields ? (
         <FollowUpQuestions
           technique={technique}

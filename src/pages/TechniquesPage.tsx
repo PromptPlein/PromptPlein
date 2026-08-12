@@ -11,10 +11,14 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import TechniqueSelector from '@/components/optimizer/TechniqueSelector';
+import TechniqueAdvisor from '@/components/optimizer/TechniqueAdvisor';
 import FollowUpQuestions, { type FieldMeta } from '@/components/optimizer/FollowUpQuestions';
 import PersonaBuilder from '@/components/optimizer/PersonaBuilder';
 import FewShotBuilder from '@/components/optimizer/FewShotBuilder';
 import MetaBuilder from '@/components/optimizer/MetaBuilder';
+import VerificationBuilder from '@/components/optimizer/VerificationBuilder';
+import StepBackBuilder from '@/components/optimizer/StepBackBuilder';
+import RubricBuilder from '@/components/optimizer/RubricBuilder';
 import DocumentUpload from '@/components/optimizer/DocumentUpload';
 import InterviewFlow from '@/components/optimizer/InterviewFlow';
 import OptimizingLoader from '@/components/optimizer/OptimizingLoader';
@@ -63,6 +67,9 @@ export default function TechniquesPage() {
   // hoeven ontdekken. Na "Klaar" klapt het samen tot één regel, die je weer
   // kunt openen om aan te passen.
   const [editingContext, setEditingContext] = useState(true);
+  // Staat de techniek-adviseur open? Die kiest niet voor je, maar vraagt door
+  // tot duidelijk is welke techniek past — voor wie de lijst niet overziet.
+  const [advisorOpen, setAdvisorOpen] = useState(false);
 
   const [optimizing, setOptimizing] = useState(false);
   const [streamText, setStreamText] = useState('');
@@ -97,9 +104,11 @@ export default function TechniquesPage() {
    * invulblok scrollt in beeld. Staat er al iets in "waar gaat het over", dan
    * vult de AI de velden alvast voor — anders begin je met lege velden.
    */
-  function handleSelectTechnique(id: string) {
-    // Opnieuw op de actieve techniek klikken mag geen werk weggooien.
-    if (id === techniqueId) return;
+  function handleSelectTechnique(id: string, contextOverride?: string) {
+    // Opnieuw op de actieve techniek klikken mag geen werk weggooien. Komt de
+    // keuze van de adviseur, dan is er wél iets nieuws (de context uit het
+    // gesprek), dus die mag de techniek opnieuw zetten.
+    if (id === techniqueId && contextOverride === undefined) return;
     setTechniqueId(id);
     setAnswers({});
     setFieldMeta({});
@@ -113,10 +122,26 @@ export default function TechniquesPage() {
       builderRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
     const chosen = techniques.find((t) => t.id === id);
-    const draft = context.trim();
+    // `context` in de state is hier nog de oude waarde (setState is async), dus
+    // het voor-invullen gaat uit van de meegegeven tekst als die er is.
+    const draft = (contextOverride ?? context).trim();
     if (chosen && chosen.follow_up_questions.length > 0 && draft) {
       void runPrefill(chosen, draft);
     }
+  }
+
+  /**
+   * De gebruiker neemt het advies van de adviseur over. Vanaf hier loopt alles
+   * gelijk aan zelf klikken in de lijst — alleen staat de context uit het
+   * gesprek er alvast in. Niet elke techniek toont dat veld (Persona, Few-Shot
+   * en Meta vragen hun eigen invoer), maar de tekst voedt daar wél de bouwer,
+   * dus hij wordt altijd gezet.
+   */
+  function applyAdvice(chosen: Technique, adviceContext: string) {
+    const draft = adviceContext.trim();
+    if (draft) setContext(draft);
+    setAdvisorOpen(false);
+    handleSelectTechnique(chosen.id, draft || undefined);
   }
 
   /** Vul de velden van de gekozen techniek voor op basis van de context. */
@@ -400,7 +425,7 @@ export default function TechniquesPage() {
           {/* Startsituatie: er is nog niets gekozen. Deze plek is gereserveerd
               voor het invulblok van de techniek — tot die keuze er is, staat
               hier de opdracht die naar de lijst eronder wijst. */}
-          {!technique && (
+          {!technique && !advisorOpen && (
             <section className="rounded-2xl border-2 border-dashed border-rijksblauw-200 bg-white/60 px-6 py-10 text-center dark:border-rijksblauw-500/30 dark:bg-slate-800/40">
               <p className="text-lg font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
                 Klik hieronder voor je prompttechniek of framework.
@@ -413,7 +438,40 @@ export default function TechniquesPage() {
                 className="mx-auto mt-4 animate-bounce text-rijksoranje"
                 aria-hidden
               />
+
+              {/* Twintig technieken zijn er twintig te veel als je er nog geen
+                  één kent. Deze weg eromheen staat daarom in hetzelfde blok als
+                  de opdracht om te kiezen: precies waar je vastloopt. */}
+              <div className="mx-auto mt-8 max-w-md border-t border-slate-200 pt-6 dark:border-slate-700">
+                <p className="font-semibold text-slate-700 dark:text-slate-200">
+                  Weet je niet welke techniek of framework?
+                </p>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                  Beantwoord hooguit vier korte vragen over je taak. De AI redeneert stap voor stap
+                  mee en zoekt de techniek erbij.
+                </p>
+                <button
+                  type="button"
+                  className="opl-btn-primary mt-4"
+                  onClick={() => setAdvisorOpen(true)}
+                >
+                  <Compass size={17} /> Laat de AI meedenken
+                </button>
+              </div>
             </section>
+          )}
+
+          {/* De adviseur neemt dezelfde plek in als het invulblok. Staat er al
+              een techniek open, dan komt hij eróver: het advies kiezen mag geen
+              half ingevuld formulier onaangekondigd weggooien. */}
+          {advisorOpen && (
+            <TechniqueAdvisor
+              techniques={techniques}
+              settings={settingsRef.current}
+              start={context}
+              onChoose={applyAdvice}
+              onClose={() => setAdvisorOpen(false)}
+            />
           )}
 
           {/* Het invulblok van de gekozen techniek — op dezelfde plek als het
@@ -488,7 +546,13 @@ export default function TechniquesPage() {
                     fmt === 'few-shot' ||
                     fmt === 'persona' ||
                     fmt === 'multi-persona' ||
-                    fmt === 'meta'
+                    fmt === 'meta' ||
+                    // Deze drie beginnen zelf met de vraag waar het over gaat
+                    // (de te controleren tekst, de opdracht, het te beoordelen
+                    // stuk); een contextveld ervóór stelt dezelfde vraag nog eens.
+                    fmt === 'chain-of-verification' ||
+                    fmt === 'step-back' ||
+                    fmt === 'rubric'
                   ) {
                     return null;
                   }
@@ -599,6 +663,28 @@ export default function TechniquesPage() {
                   }
                   if (fmt === 'meta') {
                     return <MetaBuilder settings={s} goal={context} onSerialized={setBuilderText} />;
+                  }
+                  // De drie rijksspecifieke technieken: elk een eigen bouwer die
+                  // precies ophaalt waar die techniek op staat of valt (zie de
+                  // koptekst van elk bestand).
+                  if (fmt === 'chain-of-verification') {
+                    return (
+                      <VerificationBuilder
+                        settings={s}
+                        context={context}
+                        onSerialized={setBuilderText}
+                      />
+                    );
+                  }
+                  if (fmt === 'step-back') {
+                    return (
+                      <StepBackBuilder settings={s} context={context} onSerialized={setBuilderText} />
+                    );
+                  }
+                  if (fmt === 'rubric') {
+                    return (
+                      <RubricBuilder settings={s} context={context} onSerialized={setBuilderText} />
+                    );
                   }
                   // Chain-of-Thought / Socratic: het vraag-na-vraag-interview.
                   // De conclusie voedt het bouwen van de prompt. Het gesprek

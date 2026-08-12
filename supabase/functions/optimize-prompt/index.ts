@@ -55,7 +55,10 @@ type Mode =
   | 'project-optimize'
   | 'project-brief'
   | 'mock-answer'
-  | 'refine';
+  | 'refine'
+  | 'cove-scan'
+  | 'stepback-ladder'
+  | 'rubric-propose';
 
 /**
  * Eén beurt in een chatgesprek. De chat-modus stuurt de volledige (al
@@ -166,6 +169,9 @@ interface RequestBody {
    *  - 'template-based'   → taak + genummerde rubrieken + regels + Project/Context-plaatshouders.
    *  - 'meta'             → doel + ruwe prompt + verbeterinstructie (rol/context/taak/format) + max. 3 vragen.
    *  - 'socratic'         → Socratische interviewer: één vraag tegelijk om aannames bloot te leggen.
+   *  - 'chain-of-verification' → beweringen → verificatievragen → losse antwoorden → gecorrigeerde tekst.
+   *  - 'step-back'        → eerst de algemenere vraag, dan pas terug naar de gestelde vraag.
+   *  - 'rubric'           → toetsingskader met niveaubeschrijvingen, bewijsregel en eindoordeel.
    * Ontbreekt dit, dan valt 'care' terug op `isContextPrompt` (oude clients).
    */
   structureFormat?:
@@ -2601,6 +2607,277 @@ const RECOMMEND_FRAMEWORK_USER_PROMPT = (
     })
     .join('\n')}`;
 
+// --- Techniek-adviseur: welke techniek of framework past bij dit vraagstuk? ---
+// De gebruiker op /technieken staat voor een lijst van bijna twintig technieken
+// en frameworks en weet niet welke hij moet hebben. Deze modus lost dat op met
+// een kort gesprek: hoogstens vier vragen, en na ELKE beurt een nieuwe weging.
+//
+// De weging is het punt. Een vaste vragenlijst zou hier niet werken: welke vraag
+// nuttig is hangt af van wat de vorige antwoorden al hebben afgevallen. Daarom
+// redeneert het model eerst hardop (chain-of-thought) welke technieken nog in de
+// race zijn en wat ze onderscheidt, en leidt het de volgende vraag DAARUIT af.
+// Een vraag die de rangschikking niet kan veranderen is een verspilde vraag —
+// met een budget van vier kan er geen enkele tegen.
+const ADVISOR_MAX_QUESTIONS = 4;
+
+const TECHNIQUE_ADVISOR_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse rijksoverheid.
+Een interne medewerker wil een prompt bouwen maar weet niet welke prompttechniek of welk prompt
+framework daarbij past. Jouw taak: dat met HOOGSTENS ${ADVISOR_MAX_QUESTIONS} korte vragen achterhalen en daarna één
+techniek adviseren, met hooguit twee alternatieven.
+
+REDENEER EERST, KIES DAARNA. Werk elke beurt deze vier stappen af, in deze volgorde:
+1. WAT WEET IK NU: vat in één zin samen wat de gebruiker tot nu toe over zijn taak heeft verteld.
+   Alleen wat hij echt heeft gezegd; vul niets aan.
+2. WAT VALT AF: welke technieken uit de lijst passen hier duidelijk niet, en waarom niet?
+3. WAT BLIJFT OVER: hooguit drie kandidaten, met per kandidaat een zekerheid van 0 tot 100. Zeg er
+   expliciet bij WAT deze kandidaten van elkaar onderscheidt — welk feit over de taak zou de één
+   laten winnen en de ander laten afvallen?
+4. DE VOLGENDE STAP: is de bovenste kandidaat minstens 80 zeker én duidelijk voor op de tweede, dan
+   adviseer je nu. Zo niet, dan stel je precies één vraag over het onderscheid uit stap 3.
+
+DE VRAAG IS HET BELANGRIJKSTE ONDERDEEL. Regels waar geen uitzondering op is:
+- ÉÉN vraag per beurt, één zin, hoogstens ongeveer 15 woorden. Geen twee vragen in één zin.
+- ONDERSCHEIDEND: de vraag moet de rangschikking kunnen veranderen. Toets dat zelf: als kandidaat 1
+  bovenaan blijft bij ELK denkbaar antwoord, is de vraag waardeloos. Bedenk dan een andere.
+- OVER ZIJN WERK, NIET OVER PROMPTEN: de gebruiker beschrijft zijn taak. Noem NOOIT de naam van een
+  techniek of framework, gebruik geen vakjargon uit prompt-engineering, en vraag hem niet welke
+  techniek hij wil.
+- Gewone werktaal, B1-niveau, geen ambtelijke of abstracte formulering.
+- Vraag nooit naar iets wat al is verteld, ook niet in andere woorden.
+- Vraag niets waar de prompt straks zelf voor is: geen criteria, geen controlevragen, geen rol die de
+  gebruiker moet uitschrijven. Je vraagt naar de AARD van de taak, niet naar de inhoud ervan.
+- Geef bij elke vraag 2 tot 4 concrete antwoordopties in de woorden van de gebruiker (elk hoogstens
+  ~8 woorden, geen techniek-namen). De gebruiker mag ook zelf typen; de opties zijn een zetje.
+
+DE EERSTE VRAAG is altijd open en gaat over de taak zelf: wat wil de gebruiker de AI laten doen?
+Staat dat al in het STARTPUNT hieronder, sla die vraag dan over en ga meteen onderscheiden.
+
+BLIJF JE TWIJFELEN, GRAAF DAN DIEPER. Zijn er na een antwoord nog twee kandidaten dicht bij elkaar
+(minder dan 20 verschil), dan gaat je volgende vraag NIET over een nieuw onderwerp maar precies over
+het ene punt waarop die twee uiteenlopen. Breder vragen levert dan niets meer op; scherper vragen wel.
+
+HERKENNINGSPUNTEN — koppel deze signalen aan de technieken uit de lijst (de lijst is leidend, niet
+deze opsomming; kies wat er echt in staat):
+- Er liggen geslaagde eerdere stukken die de AI kan navolgen -> werken met voorbeelden.
+- Het antwoord moet volledig uit meegeleverde stukken komen -> binden aan bronnen.
+- De vorm ligt vast: kopjes, tabel, vaste secties -> gestructureerde uitvoer.
+- Er wordt beoordeeld tegen criteria en het oordeel moet navolgbaar zijn -> toetsen aan een kader.
+- Een fout is duur; cijfers, data of wetsverwijzingen moeten kloppen -> het werk laten natrekken.
+- Het perspectief van één specifieke rol of doelgroep is nodig -> vanuit een rol laten kijken.
+- Meerdere belangen of afdelingen moeten zich erin herkennen -> meerdere rollen tegelijk.
+- Een keuze of afweging moet navolgbaar worden opgebouwd -> stap voor stap laten redeneren.
+- De oplossing ligt al vast terwijl het probleem onduidelijk is -> eerst uitzoomen.
+- De gebruiker wil zijn eigen aannames getoetst hebben -> socratisch doorvragen.
+- De gebruiker weet niet hoe hij het moet vragen -> de AI de prompt laten opstellen.
+- Het gaat om een compleet stuk tekst (brief, advies, nota) dat helemaal moet kloppen qua rol,
+  context, taak en vorm -> een prompt framework in plaats van een losse techniek.
+
+ADVISEREN: kies één techniek uit de lijst, plus hoogstens twee alternatieven, gerangschikt. Schrijf
+per keuze één zin die de kracht van die techniek koppelt aan wat de gebruiker heeft verteld — geen
+algemeenheden, wel zijn eigen woorden. Lever daarnaast "context": één of twee zinnen waarin de taak
+van de gebruiker staat zoals hij hem straks in het contextveld zou zetten. Gebiedende wijs, zijn
+eigen woorden, geen techniek-namen, geen plaatshouders.
+
+Heb je ${ADVISOR_MAX_QUESTIONS} vragen gesteld, of wordt hieronder om een advies gevraagd? Dan adviseer je hoe dan ook, ook
+als je twijfelt. Zeg dan in "redenering" eerlijk waar de twijfel zit.
+
+Geef UITSLUITEND geldige JSON terug, zonder codeblok en zonder tekst eromheen, in dit formaat:
+{"redenering":"<1 à 2 zinnen in het Nederlands: wat je nu weet en wat nog onderscheid maakt>","kandidaten":[{"id":"<id uit de lijst>","zekerheid":<0-100>,"waarom":"<max 12 woorden>"}],"klaar":<true of false>,"vraag":{"tekst":"<je ene vraag>","waarom":"<max 12 woorden: wat deze vraag beslist>","opties":["<kort antwoord>","<kort antwoord>"]},"advies":{"id":"<id uit de lijst>","reden":"<1 zin>","context":"<1 à 2 zinnen voor het contextveld>"}}
+
+Bij "klaar":false laat je "advies" weg. Bij "klaar":true laat je "vraag" weg. Gebruik uitsluitend
+id's die exact in de lijst voorkomen.
+
+${CLARITY_GATE_JSON_INSTRUCTION}`;
+
+/** Bouwt de gebruikersprompt voor één beurt van de techniek-adviseur. */
+const TECHNIQUE_ADVISOR_USER_PROMPT = (args: {
+  start?: string;
+  turns: { question: string; answer: string }[];
+  techniques: TechniqueSummary[];
+  finish?: boolean;
+}) => {
+  const parts: string[] = [];
+  parts.push(
+    args.start?.trim()
+      ? `STARTPUNT (wat de gebruiker al had opgeschreven):\n"""\n${args.start.trim()}\n"""`
+      : 'STARTPUNT: de gebruiker heeft nog niets opgeschreven.',
+  );
+  parts.push(
+    `BESCHIKBARE TECHNIEKEN EN FRAMEWORKS (kies hieruit, gebruik het id exact):\n${args.techniques
+      .map((t) => {
+        const bits = [
+          `- id: ${t.id}`,
+          `naam: ${t.name}`,
+          `soort: ${t.family === 'context' ? 'prompt framework' : 'losse techniek'}`,
+        ];
+        if (t.description) bits.push(`uitleg: ${t.description}`);
+        if (t.strength) bits.push(`kracht: ${t.strength}`);
+        if (t.use_cases && t.use_cases.length > 0)
+          bits.push(`gebruik voor: ${t.use_cases.join('; ')}`);
+        return bits.join(' | ');
+      })
+      .join('\n')}`,
+  );
+  if (args.turns.length === 0) {
+    parts.push(
+      'GESPREK TOT NU TOE:\n(nog geen vragen gesteld). Stel je eerste vraag, of adviseer meteen als ' +
+        'het startpunt al genoeg zegt.',
+    );
+  } else {
+    parts.push(
+      `GESPREK TOT NU TOE (${args.turns.length} van maximaal ${ADVISOR_MAX_QUESTIONS} vragen beantwoord):\n${args.turns
+        .map((t, i) => `V${i + 1}: ${t.question}\nA${i + 1}: ${t.answer}`)
+        .join('\n')}`,
+    );
+  }
+  if (args.finish) {
+    parts.push(
+      'DE GEBRUIKER WIL GEEN VRAGEN MEER BEANTWOORDEN. Stel GEEN vraag meer; geef nu je advies op ' +
+        'basis van wat er ligt ("klaar":true).',
+    );
+  } else if (args.turns.length >= ADVISOR_MAX_QUESTIONS) {
+    parts.push(
+      `Je hebt het maximum van ${ADVISOR_MAX_QUESTIONS} vragen bereikt. Geef nu je advies ("klaar":true).`,
+    );
+  }
+  return parts.join('\n\n');
+};
+
+/** Eén techniek die op dit moment nog in de race is, met de zekerheid ervan. */
+interface AdvisorCandidate {
+  id: string;
+  zekerheid: number;
+  waarom: string;
+}
+
+/** Het antwoord van de adviseur: óf een volgende vraag, óf een advies. */
+interface AdvisorTurn {
+  redenering: string;
+  kandidaten: AdvisorCandidate[];
+  klaar: boolean;
+  vraag?: { tekst: string; waarom: string; opties: string[] };
+  advies?: { id: string; reden: string; context: string };
+}
+
+/**
+ * Parseert het JSON-antwoord van de adviseur robuust. Geeft null terug als er
+ * niets bruikbaars in staat: dan mag de aanroeper de volgende provider proberen.
+ *
+ * Onbekende id's worden weggefilterd (het model kan er één verzinnen), en een
+ * "klaar" zonder geldig advies gaat terug naar klaar=false — een adviesscherm
+ * zonder techniek is voor de gebruiker een doodlopende weg.
+ */
+function parseAdvisorTurn(raw: string, valid: Set<string>): AdvisorTurn | null {
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  try {
+    const parsed = JSON.parse(escapeRawControlChars(match[0])) as {
+      redenering?: unknown;
+      kandidaten?: unknown;
+      klaar?: unknown;
+      vraag?: { tekst?: unknown; waarom?: unknown; opties?: unknown };
+      advies?: { id?: unknown; reden?: unknown; context?: unknown };
+    };
+
+    const kandidaten = (Array.isArray(parsed.kandidaten) ? parsed.kandidaten : [])
+      .map((k) => k as { id?: unknown; zekerheid?: unknown; waarom?: unknown })
+      .filter((k) => typeof k.id === 'string' && valid.has(k.id))
+      .slice(0, 3)
+      .map((k) => ({
+        id: k.id as string,
+        zekerheid:
+          typeof k.zekerheid === 'number' ? Math.max(0, Math.min(100, Math.round(k.zekerheid))) : 0,
+        waarom: typeof k.waarom === 'string' ? k.waarom.trim() : '',
+      }));
+
+    const adviesId =
+      typeof parsed.advies?.id === 'string' && valid.has(parsed.advies.id)
+        ? parsed.advies.id
+        : null;
+    const advies = adviesId
+      ? {
+          id: adviesId,
+          reden: typeof parsed.advies?.reden === 'string' ? parsed.advies.reden.trim() : '',
+          context: typeof parsed.advies?.context === 'string' ? parsed.advies.context.trim() : '',
+        }
+      : undefined;
+
+    const vraagTekst = typeof parsed.vraag?.tekst === 'string' ? parsed.vraag.tekst.trim() : '';
+    const vraag = vraagTekst
+      ? {
+          tekst: vraagTekst,
+          waarom: typeof parsed.vraag?.waarom === 'string' ? parsed.vraag.waarom.trim() : '',
+          opties: (Array.isArray(parsed.vraag?.opties) ? parsed.vraag.opties : [])
+            .filter((o): o is string => typeof o === 'string' && o.trim().length > 0)
+            .slice(0, 4)
+            .map((o) => o.trim()),
+        }
+      : undefined;
+
+    // Klaar zonder advies is onbruikbaar; een vraag zonder tekst ook. Levert het
+    // model geen van beide, dan is dit antwoord mislukt.
+    const klaar = parsed.klaar === true && Boolean(advies);
+    if (!klaar && !vraag) return null;
+
+    return {
+      redenering: typeof parsed.redenering === 'string' ? parsed.redenering.trim() : '',
+      kandidaten,
+      klaar,
+      ...(klaar ? { advies } : {}),
+      ...(!klaar && vraag ? { vraag } : {}),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Terugval als geen enkele provider bruikbaar antwoordt: adviseer op ruwe
+ * trefwoord-overlap, en stel geen vragen meer. Beter een matig advies dat de
+ * gebruiker verder helpt dan een adviesknop die niets doet.
+ */
+function localAdvisorTurn(
+  start: string,
+  turns: { question: string; answer: string }[],
+  techniques: TechniqueSummary[],
+): AdvisorTurn {
+  const haystackWords = new Set(
+    [start, ...turns.map((t) => t.answer)]
+      .join(' ')
+      .toLowerCase()
+      .split(/[^a-zà-ÿ0-9]+/)
+      .filter((w) => w.length > 3),
+  );
+  const scored = techniques
+    .map((t) => {
+      const text =
+        `${t.name} ${t.description ?? ''} ${t.strength ?? ''} ${(t.use_cases ?? []).join(' ')}`.toLowerCase();
+      let score = 0;
+      for (const w of haystackWords) if (text.includes(w)) score += 1;
+      return { t, score };
+    })
+    .sort((a, b) => b.score - a.score);
+  const top = scored.slice(0, 3).filter((s, i) => i === 0 || s.score > 0);
+  const winner = top[0]?.t ?? techniques[0];
+  return {
+    redenering:
+      'De AI-analyse was even niet beschikbaar; dit advies rust op de overlap tussen je antwoorden en waar elke techniek sterk in is.',
+    kandidaten: top.map((s, i) => ({
+      id: s.t.id,
+      zekerheid: Math.max(20, 60 - i * 15),
+      waarom: s.t.strength ? s.t.strength.split(/(?<=[.!?])\s/)[0] : '',
+    })),
+    klaar: true,
+    advies: {
+      id: winner.id,
+      reden: winner.strength
+        ? winner.strength.split(/(?<=[.!?])\s/)[0]
+        : 'Sluit het dichtst aan bij wat je hebt beschreven.',
+      context: [start, ...turns.map((t) => t.answer)].map((s) => s.trim()).filter(Boolean).join(' '),
+    },
+  };
+}
+
 // --- Clarify-modus: de doel-flow. Eén vraag per beurt tot het vraagstuk staat ---
 // De medewerker beschrijft in eigen woorden wat die wil bereiken; daarna denkt de
 // AI stap voor stap mee en stelt vraag na vraag tot het beeld compleet is. Levert
@@ -3731,6 +4008,9 @@ const MODE_MAX_TOKENS: Record<Mode, number> = {
   // dat ruim onder de 400 tokens; 2560 was zwaar overbudget en verhoogde alleen
   // het afgeleide timeoutplafond.
   'recommend-framework': 1024,
+  // Adviseur: één redeneerregel, hooguit 3 kandidaten en één vraag met opties.
+  // Ruim genoeg voor de laatste beurt, waar ook het advies met contextzin meekomt.
+  'technique-advisor': 1024,
   recommend: 2048,
   'persona-fill': 2048,
   'fewshot-example': 1536,
@@ -5675,6 +5955,8 @@ Deno.serve(async (req: Request) => {
           ? 'recommend-framework'
           : body.mode === 'framework-fit'
             ? 'framework-fit'
+            : body.mode === 'technique-advisor'
+              ? 'technique-advisor'
             : body.mode === 'analyze'
               ? 'analyze'
               : body.mode === 'prefill'
@@ -5709,7 +5991,13 @@ Deno.serve(async (req: Request) => {
                                           ? 'mock-answer'
                                           : body.mode === 'refine'
                                             ? 'refine'
-                                            : 'generate';
+                                            : body.mode === 'cove-scan'
+                                              ? 'cove-scan'
+                                              : body.mode === 'stepback-ladder'
+                                                ? 'stepback-ladder'
+                                                : body.mode === 'rubric-propose'
+                                                  ? 'rubric-propose'
+                                                  : 'generate';
     const order = buildOrder(body.preferredProvider);
     const temperature = clampTemp(body.temperature);
     // Uitvoerbudget van deze modus: bepaalt het max_tokens-plafond van elke
@@ -7277,6 +7565,147 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // --- Chain-of-Verification: scan het concept op controleerbare beweringen ---
+    // Lage temperatuur: het model moet melden wat er staat, niet iets bedenken
+    // wat er zou kunnen staan. Een verzonnen fragment maakt de scan onbruikbaar.
+    if (mode === 'cove-scan') {
+      const tekst = body.coveTekst?.trim();
+      const soorten = Array.isArray(body.coveSoorten) ? body.coveSoorten : [];
+      if (!tekst || soorten.length === 0) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'coveTekst en coveSoorten zijn verplicht' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+      const userMessage = COVE_SCAN_USER_PROMPT(tekst, soorten);
+      const toegestaan = new Set(soorten.map((s) => s.id));
+      for (const candidate of order) {
+        try {
+          const raw = await PROVIDERS[candidate](
+            userMessage,
+            withProject(COVE_SCAN_SYSTEM_PROMPT, body.projectContext),
+            0.2,
+            resolveModel(candidate, body.preferredProvider, body.preferredModel),
+            maxTokens,
+          );
+          const parsed = parseCoveScan(raw);
+          if (parsed) {
+            return new Response(
+              JSON.stringify({
+                success: true,
+                // Onbekende ids vallen af: de checklist in de bouwer staat vast.
+                gevonden: parsed.gevonden.filter((g) => toegestaan.has(g.id)),
+                duurste_fout: parsed.duurste_fout,
+                provider: candidate,
+              }),
+              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            );
+          }
+        } catch (providerErr) {
+          console.error(`${candidate} (cove-scan) mislukt, probeer volgende:`, providerErr);
+        }
+      }
+      return new Response(
+        JSON.stringify({ success: false, error: 'De tekst kon niet worden gescand' }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    // --- Step-Back: drie algemenere vragen + de splitsing vast/aanname ---
+    if (mode === 'stepback-ladder') {
+      const vraag = body.sbVraag?.trim();
+      if (!vraag) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'sbVraag is verplicht' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+      const userMessage = STEP_BACK_USER_PROMPT(vraag, body.sbOpTafel);
+      for (const candidate of order) {
+        try {
+          const raw = await PROVIDERS[candidate](
+            userMessage,
+            withProject(STEP_BACK_SYSTEM_PROMPT, body.projectContext),
+            0.4,
+            resolveModel(candidate, body.preferredProvider, body.preferredModel),
+            maxTokens,
+          );
+          const unclear = detectUnclearJson(raw);
+          if (unclear) {
+            return new Response(
+              JSON.stringify({ success: false, unclear: true, reason: unclear, provider: candidate }),
+              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            );
+          }
+          const parsed = parseStepBack(raw);
+          if (parsed) {
+            return new Response(
+              JSON.stringify({ success: true, ...parsed, provider: candidate }),
+              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            );
+          }
+        } catch (providerErr) {
+          console.error(`${candidate} (stepback-ladder) mislukt, probeer volgende:`, providerErr);
+        }
+      }
+      return new Response(
+        JSON.stringify({ success: false, error: 'De stap-terug-vragen konden niet worden gemaakt' }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    // --- Rubric: criteria voorstellen of niveaubeschrijvingen schrijven ---
+    if (mode === 'rubric-propose') {
+      const teBeoordelen = body.rubricTeBeoordelen?.trim();
+      const niveaus = (Array.isArray(body.rubricNiveaus) ? body.rubricNiveaus : []).filter(
+        (n) => typeof n === 'string' && n.trim(),
+      );
+      if (!teBeoordelen || niveaus.length === 0) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'rubricTeBeoordelen en rubricNiveaus zijn verplicht' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+      const doel = body.rubricDoel === 'niveaus' ? 'niveaus' : 'criteria';
+      const systemPrompt = RUBRIC_SYSTEM_PROMPT(doel, niveaus);
+      const userMessage = RUBRIC_USER_PROMPT({
+        teBeoordelen,
+        gebruiksdoel: body.rubricGebruiksdoel,
+        criteria: body.rubricCriteria,
+      });
+      for (const candidate of order) {
+        try {
+          const raw = await PROVIDERS[candidate](
+            userMessage,
+            withProject(systemPrompt, body.projectContext),
+            0.3,
+            resolveModel(candidate, body.preferredProvider, body.preferredModel),
+            maxTokens,
+          );
+          const unclear = detectUnclearJson(raw);
+          if (unclear) {
+            return new Response(
+              JSON.stringify({ success: false, unclear: true, reason: unclear, provider: candidate }),
+              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            );
+          }
+          const parsed = parseRubricProposal(raw);
+          if (parsed) {
+            return new Response(
+              JSON.stringify({ success: true, ...parsed, provider: candidate }),
+              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            );
+          }
+        } catch (providerErr) {
+          console.error(`${candidate} (rubric-propose) mislukt, probeer volgende:`, providerErr);
+        }
+      }
+      return new Response(
+        JSON.stringify({ success: false, error: 'Het voorstel kon niet worden gemaakt' }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
     if (mode === 'recommend') {
       const goal = body.goal?.trim();
       const techniques = Array.isArray(body.techniques) ? body.techniques : [];
@@ -7382,6 +7811,80 @@ Deno.serve(async (req: Request) => {
         JSON.stringify({ success: true, fits, provider }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
+    }
+
+    // --- Adviseur: welke techniek past bij dit vraagstuk? ---
+    // Eén beurt per aanroep: het model weegt opnieuw met alle antwoorden tot nu
+    // toe erbij, en stelt óf een volgende vraag óf geeft zijn advies.
+    if (mode === 'technique-advisor') {
+      const all = Array.isArray(body.techniques) ? body.techniques : [];
+      if (all.length === 0) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'techniques is verplicht' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      const start = body.advisorStart?.trim() ?? '';
+      const turns = (Array.isArray(body.advisorTurns) ? body.advisorTurns : [])
+        .filter((t) => t && typeof t.question === 'string' && typeof t.answer === 'string')
+        .map((t) => ({ question: t.question.trim(), answer: t.answer.trim() }))
+        .filter((t) => t.question && t.answer);
+      // Het vragenbudget wordt hier bewaakt en niet alleen in de prompt: een
+      // model dat zich er niet aan houdt zou de gebruiker anders eindeloos
+      // kunnen blijven bevragen.
+      const finish = Boolean(body.advisorFinish) || turns.length >= ADVISOR_MAX_QUESTIONS;
+      const validIds = new Set(all.map((t) => t.id));
+      const system = withProject(TECHNIQUE_ADVISOR_SYSTEM_PROMPT, body.projectContext);
+      const userMessage = TECHNIQUE_ADVISOR_USER_PROMPT({
+        start,
+        turns,
+        techniques: all,
+        finish,
+      });
+
+      let turn: AdvisorTurn | null = null;
+      let provider: Provider | 'local-template' = 'local-template';
+
+      for (const candidate of order) {
+        try {
+          const raw = await PROVIDERS[candidate](
+            userMessage,
+            system,
+            0.2,
+            resolveModel(candidate, body.preferredProvider, body.preferredModel),
+            maxTokens,
+          );
+          const unclear = detectUnclearJson(raw);
+          if (unclear) {
+            return new Response(
+              JSON.stringify({ success: false, unclear: true, reason: unclear, provider: candidate }),
+              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            );
+          }
+          const parsed = parseAdvisorTurn(raw, validIds);
+          if (parsed) {
+            turn = parsed;
+            provider = candidate;
+            break;
+          }
+        } catch (providerErr) {
+          console.error(`${candidate} (technique-advisor) mislukt, probeer volgende:`, providerErr);
+        }
+      }
+
+      if (!turn) turn = localAdvisorTurn(start, turns, all);
+      // Het budget is op, maar het model stelde tóch een vraag: dan alsnog
+      // afdwingen dat er een advies uit komt in plaats van een vijfde vraag.
+      if (finish && !turn.klaar) {
+        const fallback = localAdvisorTurn(start, turns, all);
+        turn = { ...fallback, redenering: turn.redenering || fallback.redenering };
+      }
+
+      return new Response(JSON.stringify({ success: true, ...turn, provider }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     // --- Generatiemodus: maak een herbruikbare prompt-template ---
