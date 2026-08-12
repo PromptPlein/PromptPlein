@@ -4,6 +4,7 @@ import {
   ArrowRight,
   Check,
   Compass,
+  Eraser,
   Loader2,
   RotateCcw,
   Sparkles,
@@ -252,13 +253,27 @@ export default function TechniqueAdvisor({
               className="opl-input mt-3 resize-y text-sm"
             />
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-              <button
-                type="button"
-                className="text-sm font-medium text-slate-500 hover:text-rijksoranje hover:underline dark:text-slate-400"
-                onClick={() => void runTurn(turns, true)}
-              >
-                Sla de rest over en adviseer nu
-              </button>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                <button
+                  type="button"
+                  className="text-sm font-medium text-slate-500 hover:text-rijksoranje hover:underline dark:text-slate-400"
+                  onClick={() => void runTurn(turns, true)}
+                >
+                  Sla de rest over en adviseer nu
+                </button>
+                {/* Ook midden in het gesprek te wissen: wie merkt dat hij de
+                    eerste vraag verkeerd las, moet niet vier vragen hoeven
+                    uitzitten om er vanaf te komen. */}
+                {turns.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={restart}
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-rijksoranje hover:underline dark:text-slate-400"
+                  >
+                    <Eraser size={14} /> Opnieuw beginnen
+                  </button>
+                )}
+              </div>
               <button
                 type="button"
                 className="opl-btn-primary"
@@ -346,8 +361,13 @@ export default function TechniqueAdvisor({
 
         {/* De tussenstand van de weging. Staat er bewust bij tijdens het
             gesprek: zo zie je je antwoord de rangschikking verschuiven, en
-            waarom er nog een vraag komt. */}
-        {!advies && candidates.length > 0 && (
+            waarom er nog een vraag komt.
+
+            Pas ná het eerste antwoord: bij de openingsvraag heeft de gebruiker
+            nog niets verteld, dus is er niets gewogen. Het model vult die kolom
+            dan met een gok, en een percentage naast een techniek suggereert een
+            analyse die er nog niet is. */}
+        {!advies && turns.length > 0 && candidates.length > 0 && (
           <div className="mt-5 border-t border-slate-200 pt-4 dark:border-slate-700">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               Tussenstand

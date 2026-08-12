@@ -377,8 +377,13 @@ export default function TechniquesPage() {
     toast.success('Alles opgeschoond. Je begint met een schone lei.');
   }
 
+  // Ook een lopend adviesgesprek telt als invoer: anders staat de knop er juist
+  // niet op het moment dat je er middenin zit en eruit wilt.
   const hasContent =
-    Boolean(context.trim()) || Boolean(techniqueId) || Object.keys(answers).length > 0;
+    Boolean(context.trim()) ||
+    Boolean(techniqueId) ||
+    advisorOpen ||
+    Object.keys(answers).length > 0;
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
