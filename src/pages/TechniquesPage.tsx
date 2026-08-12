@@ -472,7 +472,7 @@ export default function TechniquesPage() {
                       {editingContext ? (
                         <>
                           <label htmlFor="techniek-context" className="opl-label">
-                            Geef optioneel wat context toe of geef wat context mee.
+                            Geef optioneel wat context mee.
                           </label>
                           <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
                             {usesQuestionnaire
@@ -526,7 +526,7 @@ export default function TechniquesPage() {
                                 {context.trim()}
                               </>
                             ) : (
-                              'Geef optioneel wat context toe of geef wat context mee.'
+                              'Geef optioneel wat context mee.'
                             )}
                           </p>
                           <button
