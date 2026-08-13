@@ -16,6 +16,7 @@ import FollowUpQuestions, { type FieldMeta } from '@/components/optimizer/Follow
 import PersonaBuilder from '@/components/optimizer/PersonaBuilder';
 import FewShotBuilder from '@/components/optimizer/FewShotBuilder';
 import MetaBuilder from '@/components/optimizer/MetaBuilder';
+import PromptExamplePicker from '@/components/optimizer/PromptExamplePicker';
 import VerificationBuilder from '@/components/optimizer/VerificationBuilder';
 import StepBackBuilder from '@/components/optimizer/StepBackBuilder';
 import RubricBuilder from '@/components/optimizer/RubricBuilder';
@@ -30,7 +31,12 @@ import { generatePrompt, prefillFields } from '@/services/optimizeService';
 import { trackEvent } from '@/services/analyticsService';
 import { getAiSettings, DEFAULT_AI_SETTINGS, type AiSettings } from '@/services/settingsService';
 import { detectPii, detectBlockedTopics, type GuardrailFinding } from '@/services/guardrails';
-import { contextExample, structureFormat, techniqueStarter } from '@/lib/techniques';
+import {
+  contextExample,
+  isContextPrompt,
+  structureFormat,
+  techniqueStarter,
+} from '@/lib/techniques';
 import { activityIdentifier, stripMarkdown } from '@/lib/utils';
 import type { OptimizeResult, Technique } from '@/types';
 
@@ -85,6 +91,9 @@ export default function TechniquesPage() {
   // Admin-bepaalde AI-instellingen; gebruikers kiezen niet zelf.
   const settingsRef = useRef<AiSettings>(DEFAULT_AI_SETTINGS);
   const builderRef = useRef<HTMLElement>(null);
+  // Het contextveld zelf, zodat een gekozen voorbeeldprompt meteen de cursor
+  // krijgt: de tekst staat er, en de gebruiker kan direct verder typen.
+  const contextRef = useRef<HTMLTextAreaElement>(null);
   const advisorRef = useRef<HTMLDivElement>(null);
   const optimizingRef = useRef<HTMLDivElement>(null);
 
@@ -592,8 +601,28 @@ export default function TechniquesPage() {
                                 ? 'Vul je hier iets in, dan begint het gesprek bij jouw onderwerp in plaats van bij nul. Leeg laten mag; de AI vraagt er dan zelf naar.'
                                 : 'Vul je hier iets in, dan begint deze techniek met jouw onderwerp in plaats van bij nul. Leeg laten mag.'}
                           </p>
+                          {/* Voorbeeldprompts als startpunt, alleen bij de
+                              frameworks: daar is de context een opdracht in
+                              gewone taal, precies wat deze voorbeelden zijn.
+                              De losse technieken vragen om iets anders (een
+                              te controleren tekst, een rol, een rubric), dus
+                              een voorbeeldprompt zou daar niet passen. */}
+                          {isContextPrompt(technique) && (
+                            <PromptExamplePicker
+                              onPick={(prompt) => {
+                                setContext(prompt);
+                                requestAnimationFrame(() => {
+                                  const el = contextRef.current;
+                                  if (!el) return;
+                                  el.focus();
+                                  el.setSelectionRange(prompt.length, prompt.length);
+                                });
+                              }}
+                            />
+                          )}
                           <textarea
                             id="techniek-context"
+                            ref={contextRef}
                             rows={3}
                             value={context}
                             onChange={(e) => setContext(e.target.value)}
