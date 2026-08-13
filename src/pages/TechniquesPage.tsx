@@ -641,14 +641,18 @@ export default function TechniquesPage() {
                               }}
                             />
                           )}
+                          {/* Ruim bemeten en op leestekstgrootte: hier komt een
+                              hele opdracht in te staan, geen zoekterm. Een veld
+                              van drie regels dwong tot scrollen in een tekst
+                              die je juist wilt nalezen voordat je hem gebruikt. */}
                           <textarea
                             id="techniek-context"
                             ref={contextRef}
-                            rows={3}
+                            rows={6}
                             value={context}
                             onChange={(e) => setContext(e.target.value)}
                             placeholder={contextExample(technique)}
-                            className="opl-input resize-y"
+                            className="opl-input min-h-[9rem] resize-y px-4 py-3 text-[15px] leading-relaxed"
                           />
                           <div className="mt-2 flex flex-wrap justify-end gap-2">
                             <button
