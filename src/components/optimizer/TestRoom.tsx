@@ -13,8 +13,39 @@ import { writeResultSnapshot } from '@/services/handoffService';
 import type { AiSettings, ChatSettings } from '@/services/settingsService';
 import type { OptimizeResult, Technique } from '@/types';
 
-/** Snelle feedbackpunten; aanvinken vult de feedback zonder typwerk. */
-const FEEDBACK_CHIPS = ['Te lang', 'Te kort', 'Verkeerde toon', 'Mist context', 'Te algemeen'];
+/**
+ * Snelle feedbackpunten. Een klik zet de bijbehorende instructie letterlijk in
+ * het feedbackveld, zodat de gebruiker ziet wat er straks naar de AI gaat en de
+ * zin nog kan bijschaven. "Verkeerde toon" alleen zegt de AI te weinig; de
+ * uitgeschreven instructie zegt wél wat er aan de prompt moet veranderen.
+ */
+const FEEDBACK_CHIPS: { label: string; instruction: string }[] = [
+  {
+    label: 'Te lang',
+    instruction:
+      'Het antwoord is te lang. Zet in de prompt een harde lengtegrens en vraag om alleen de kern, zonder inleiding, herhaling en samenvattende slotzin.',
+  },
+  {
+    label: 'Te kort',
+    instruction:
+      'Het antwoord is te kort. Vraag in de prompt om een uitgewerkt antwoord: per punt een korte toelichting en een concreet voorbeeld, met een minimale omvang.',
+  },
+  {
+    label: 'Verkeerde toon',
+    instruction:
+      'De toon klopt niet. Leg in de prompt vast welke toon en aanspreekvorm het antwoord moet hebben, voor welke lezer dat is, en welke toon juist niet past.',
+  },
+  {
+    label: 'Mist context',
+    instruction:
+      'Er ontbreekt context. Neem in de prompt op wie de lezer is, waar de tekst gebruikt wordt en welke feiten, kaders of voorwaarden verplicht meemoeten.',
+  },
+  {
+    label: 'Te algemeen',
+    instruction:
+      'Het antwoord blijft te algemeen. Vraag in de prompt om een uitwerking op mijn eigen situatie, met concrete namen, cijfers en voorbeelden, en verbied algemene open deuren.',
+  },
+];
 
 /** localStorage-sleutel voor de zelfgekozen hoogte van het antwoordvenster. */
 const HEIGHT_KEY = 'promptTesterHeight';
@@ -156,6 +187,10 @@ export default function TestRoom({
   const [feedbackText, setFeedbackText] = useState('');
   const [refining, setRefining] = useState(false);
   const [refineStream, setRefineStream] = useState('');
+  // Het blok "test de nieuwe versie" na een verbetering, plus de vlag die zegt
+  // dat we er net naartoe moeten scrollen.
+  const retestRef = useRef<HTMLDivElement>(null);
+  const [awaitingRetest, setAwaitingRetest] = useState(false);
 
   const messages = controller.conversation?.messages ?? [];
   const lastAssistant = [...messages]
@@ -164,21 +199,55 @@ export default function TestRoom({
   const untestedVersion = testedPromptRef.current !== null && testedPromptRef.current !== prompt;
   const canRefine = Boolean(onRefined && lastAssistant && !controller.streaming && !refining);
 
+  /**
+   * Na een verbetering staat de gebruiker onderaan bij het verbeter-paneel. Breng
+   * de test-actie voor de nieuwe versie dan zelf in beeld, zodat niemand hoeft te
+   * zoeken waar hij opnieuw kan testen.
+   */
+  useEffect(() => {
+    if (!awaitingRetest || !untestedVersion) return;
+    retestRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setAwaitingRetest(false);
+  }, [awaitingRetest, untestedVersion]);
+
   function runTest() {
     if (controller.streaming || refining) return;
+    setAwaitingRetest(false);
     testedPromptRef.current = prompt;
     controller.sendInNewConversation(prompt);
   }
 
-  function toggleChip(chip: string) {
-    setChips((cur) => (cur.includes(chip) ? cur.filter((c) => c !== chip) : [...cur, chip]));
+  /**
+   * Aan- of uitzetten van een feedbackpunt. De instructie komt als eigen regel
+   * in het tekstvak te staan (en gaat er bij uitzetten weer uit), zodat de
+   * gebruiker leest wat hij de AI opdraagt in plaats van alleen een pil te zien
+   * oplichten.
+   */
+  function toggleChip(chip: (typeof FEEDBACK_CHIPS)[number]) {
+    const active = chips.includes(chip.label);
+    setChips((cur) => (active ? cur.filter((c) => c !== chip.label) : [...cur, chip.label]));
+    setFeedbackText((cur) => {
+      if (active) {
+        const rest = cur
+          .split('\n')
+          .filter((line) => line.trim() !== chip.instruction)
+          .join('\n');
+        return rest.trim() ? rest : '';
+      }
+      if (cur.includes(chip.instruction)) return cur;
+      return cur.trim() ? `${cur.trimEnd()}\n${chip.instruction}` : chip.instruction;
+    });
   }
 
   async function submitRefine() {
     if (!canRefine || !onRefined) return;
-    const feedback = [chips.map((c) => `- ${c}`).join('\n'), feedbackText.trim()]
-      .filter(Boolean)
-      .join('\n');
+    const typed = feedbackText.trim();
+    // Normaal staan de aangevinkte instructies al in het tekstvak; alleen als de
+    // gebruiker ze eruit heeft gehaald vullen we ze hier alsnog aan.
+    const missing = FEEDBACK_CHIPS.filter(
+      (c) => chips.includes(c.label) && !typed.includes(c.instruction),
+    ).map((c) => c.instruction);
+    const feedback = [typed, ...missing].filter(Boolean).join('\n');
     if (!feedback) {
       toast.error('Geef aan wat er beter moet: kies een punt of schrijf het kort op.');
       return;
@@ -203,7 +272,8 @@ export default function TestRoom({
     }
     setChips([]);
     setFeedbackText('');
-    toast.success('Verbeterde versie klaar; hierboven te zien als nieuwe versie.');
+    toast.success('Verbeterde versie klaar. Test hem opnieuw om het verschil te zien.');
+    setAwaitingRetest(true);
     onRefined(res);
   }
 
@@ -384,27 +454,33 @@ export default function TestRoom({
                   <div className="flex flex-wrap gap-1.5">
                     {FEEDBACK_CHIPS.map((chip) => (
                       <button
-                        key={chip}
+                        key={chip.label}
                         type="button"
                         onClick={() => toggleChip(chip)}
+                        aria-pressed={chips.includes(chip.label)}
+                        title={chip.instruction}
                         className={clsx(
                           'rounded-full border px-2.5 py-1 text-xs transition-colors',
-                          chips.includes(chip)
+                          chips.includes(chip.label)
                             ? 'border-rijksblauw-500 bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/20 dark:text-rijksblauw-200'
                             : 'border-slate-300 text-slate-600 hover:border-slate-400 dark:border-slate-600 dark:text-slate-300',
                         )}
                       >
-                        {chip}
+                        {chip.label}
                       </button>
                     ))}
                   </div>
                   <textarea
-                    className="opl-input w-full resize-none text-sm"
-                    rows={2}
-                    placeholder="Wat moet er anders? Bijv. 'het antwoord mist de doelgroep ouderen'"
+                    className="opl-input w-full resize-y text-sm"
+                    rows={3}
+                    placeholder="Kies hierboven een punt, of schrijf zelf op wat er anders moet. Bijv. 'het antwoord mist de doelgroep ouderen'"
                     value={feedbackText}
                     onChange={(e) => setFeedbackText(e.target.value)}
                   />
+                  <p className="text-xs text-slate-400 dark:text-slate-500">
+                    Een punt aanklikken zet de instructie in het tekstvak. Pas hem gerust aan; dit is
+                    precies wat de AI meekrijgt.
+                  </p>
                   <div className="flex justify-end">
                     <button
                       type="button"
@@ -415,6 +491,29 @@ export default function TestRoom({
                       <Wand2 size={14} /> Verbeter prompt
                     </button>
                   </div>
+                </div>
+              )}
+
+              {/* Na "Verbeter prompt" staat de gebruiker hier onderaan. De
+                  vervolgstap hoort dus op dezelfde plek te staan, groot en
+                  oranje, en niet als klein regeltje bovenaan het paneel. */}
+              {untestedVersion && !controller.streaming && !refining && (
+                <div
+                  ref={retestRef}
+                  className="animate-fade-in flex flex-wrap items-center justify-between gap-3 border-t-2 border-rijksoranje/50 bg-rijksoranje/10 px-4 py-4 dark:bg-rijksoranje/15"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                      Je prompt is verbeterd. Test hem opnieuw.
+                    </p>
+                    <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-300">
+                      Het antwoord hierboven komt nog van de vorige versie. Draai de nieuwe versie om
+                      te zien of het nu wel klopt.
+                    </p>
+                  </div>
+                  <button type="button" className="opl-btn-accent shrink-0" onClick={runTest}>
+                    <Play size={16} /> Test de nieuwe versie
+                  </button>
                 </div>
               )}
 
