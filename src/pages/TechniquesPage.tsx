@@ -463,7 +463,7 @@ export default function TechniquesPage() {
               voor het invulblok van de techniek — tot die keuze er is, staat
               hier de opdracht die naar de lijst eronder wijst. */}
           {!technique && !advisorOpen && (
-            <section className="rounded-2xl border-2 border-dashed border-rijksblauw-200 bg-white/60 px-6 py-10 text-center dark:border-rijksblauw-500/30 dark:bg-slate-800/40">
+            <section className="rounded-2xl border-2 border-dashed border-rijksblauw-200 bg-white/60 px-6 py-6 text-center dark:border-rijksblauw-500/30 dark:bg-slate-800/40">
               <p className="text-lg font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
                 Klik hieronder voor je prompttechniek of framework.
               </p>
@@ -495,7 +495,7 @@ export default function TechniquesPage() {
                   niet weet, en de lijst de gewone weg voor wie het wel weet. */}
               <ArrowDown
                 size={22}
-                className="mx-auto mt-8 animate-bounce text-rijksoranje"
+                className="mx-auto mt-6 animate-bounce text-rijksoranje"
                 aria-hidden
               />
             </section>
