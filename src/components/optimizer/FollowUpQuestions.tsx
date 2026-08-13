@@ -65,10 +65,14 @@ function FieldBlock({
   return (
     <div
       className={clsx(
-        'rounded-xl border p-3 transition-colors',
+        // Een stevige rand met een zachte schaduw: het veld, de toelichting en
+        // "Vul verder aan" horen zichtbaar bij elkaar. De rand volgt waar je
+        // bent: rustig grijs, blauw zodra je in het veld typt, en vol blauw met
+        // een lichte gloed zodra de AI aan dit veld werkt.
+        'rounded-2xl border-2 p-4 shadow-sm transition-all duration-200',
         active
-          ? 'border-rijksblauw-400 bg-rijksblauw-50/60 ring-1 ring-rijksblauw-400/40 dark:border-rijksblauw-500/60 dark:bg-rijksblauw-500/10 dark:ring-rijksblauw-500/30'
-          : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800/40',
+          ? 'border-rijksblauw-400 bg-rijksblauw-50/50 shadow-md shadow-rijksblauw-500/10 ring-4 ring-rijksblauw-500/10 dark:border-rijksblauw-500/70 dark:bg-rijksblauw-500/10 dark:ring-rijksblauw-500/15'
+          : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md focus-within:border-rijksblauw-300 focus-within:shadow-md dark:border-slate-700 dark:bg-slate-800/40 dark:hover:border-slate-600 dark:focus-within:border-rijksblauw-500/50',
       )}
     >
       <div className="mb-1 flex flex-wrap items-center gap-2">
@@ -101,14 +105,23 @@ function FieldBlock({
           Optioneel. Wat je leeg laat, wordt een invulbare plaatshouder in de prompt.
         </p>
       )}
-      <div className="mt-1.5 flex">
+      {/* Voetregel van hetzelfde blok: een haarlijn scheidt de actie van het
+          veld, maar houdt hem er zichtbaar binnen. */}
+      <div
+        className={clsx(
+          'mt-3 flex border-t pt-3',
+          active
+            ? 'border-rijksblauw-200 dark:border-rijksblauw-500/30'
+            : 'border-slate-100 dark:border-slate-700/70',
+        )}
+      >
         <button
           type="button"
           onClick={onExpand}
           disabled={busy || !filled}
           title="Laat AI dit veld verder aanvullen"
           aria-label="Laat AI dit veld verder aanvullen"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-rijksblauw-300 bg-rijksblauw-50 px-3 py-1.5 text-xs font-semibold text-rijksblauw-700 shadow-sm transition-colors hover:border-rijksblauw-400 hover:bg-rijksblauw-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-rijksblauw-500/40 dark:bg-rijksblauw-500/10 dark:text-rijksblauw-100 dark:hover:bg-rijksblauw-500/20"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-rijksblauw-300 bg-rijksblauw-50 px-3 py-1.5 text-xs font-semibold text-rijksblauw-700 shadow-sm transition-colors hover:border-rijksblauw-400 hover:bg-rijksblauw-100 hover:shadow disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none dark:border-rijksblauw-500/40 dark:bg-rijksblauw-500/10 dark:text-rijksblauw-100 dark:hover:bg-rijksblauw-500/20"
         >
           {expanding ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
           {expanding ? 'Bezig met aanvullen…' : 'Vul verder aan'}
