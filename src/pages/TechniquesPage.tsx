@@ -41,6 +41,27 @@ import { activityIdentifier, stripMarkdown } from '@/lib/utils';
 import type { OptimizeResult, Technique } from '@/types';
 
 /**
+ * Vult deze techniek zich via de gewone vragenlijst (FollowUpQuestions)? Alle
+ * andere formats hebben een eigen bouwer of een interview. Bepaalt waar de
+ * bouw-knop staat: in de balk van de vragenlijst, of los onder het invulblok.
+ */
+function usesQuestionnaire(t: Technique): boolean {
+  const fmt = structureFormat(t);
+  return (
+    t.follow_up_questions.length > 0 &&
+    fmt !== 'persona' &&
+    fmt !== 'multi-persona' &&
+    fmt !== 'few-shot' &&
+    fmt !== 'meta' &&
+    fmt !== 'chain-of-verification' &&
+    fmt !== 'step-back' &&
+    fmt !== 'rubric' &&
+    fmt !== 'chain-of-thought' &&
+    fmt !== 'socratic'
+  );
+}
+
+/**
  * Werken mét de prompttechnieken zelf: de volledige lijst frameworks en losse
  * technieken, en per techniek de velden die je zelf invult. Bedoeld voor de
  * training — deelnemers zien welke technieken er zijn, kiezen er één, vullen
@@ -769,6 +790,7 @@ export default function TechniquesPage() {
                         prefilling={prefilling}
                         preferredProvider={settingsRef.current.provider}
                         preferredModel={settingsRef.current.model}
+                        onBuild={optimizing ? undefined : handleGenerate}
                       />
                     </div>
                   );
@@ -798,7 +820,10 @@ export default function TechniquesPage() {
             </div>
           )}
 
-          {!optimizing && technique && (
+          {/* De vragenlijst zet de bouw-knop zelf in zijn knoppenbalk, naast
+              "Volgende". Alleen de andere bouwers houden hem hier onder het
+              blok, want die hebben geen eigen balk. */}
+          {!optimizing && technique && !usesQuestionnaire(technique) && (
             <div className="flex flex-wrap items-center justify-end gap-3">
               <button className="opl-btn-primary px-6 py-2.5" onClick={handleGenerate}>
                 {optimizing ? (

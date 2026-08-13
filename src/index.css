@@ -72,6 +72,14 @@ html.dark body {
       dark:bg-rijksblauw-600 dark:hover:bg-rijksblauw-500;
   }
 
+  /*
+   * Oranje accentknop voor de afsluitende actie van een blok (bouwen,
+   * optimaliseren). Springt eruit naast de blauwe navigatieknoppen ernaast.
+   */
+  .opl-btn-accent {
+    @apply opl-btn bg-rijksoranje text-white hover:bg-rijksoranje-dark focus:ring-rijksoranje;
+  }
+
   .opl-btn-secondary {
     @apply opl-btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 focus:ring-rijksblauw-500
       dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700;

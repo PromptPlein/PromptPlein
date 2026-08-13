@@ -1,6 +1,8 @@
 import { Check, Sparkles, X } from 'lucide-react';
 
 interface ExpandProposalProps {
+  /** Naam van het veld waar dit voorstel bij hoort; staat in de koptekst. */
+  fieldLabel?: string;
   /** Het door de AI verbeterde voorstel voor dit veld. */
   proposed: string;
   /** Korte punten die benoemen wat de AI verbeterde (kan leeg zijn). */
@@ -16,13 +18,25 @@ interface ExpandProposalProps {
  * met eronder een kort lijstje "Wat is verbeterd". Zo ziet de gebruiker meteen het
  * nette resultaat plus waaróm het beter is, en neemt die het over of verwerpt het.
  */
-export default function ExpandProposal({ proposed, improvements, onAccept, onReject }: ExpandProposalProps) {
+export default function ExpandProposal({
+  fieldLabel,
+  proposed,
+  improvements,
+  onAccept,
+  onReject,
+}: ExpandProposalProps) {
+  // Veldnamen zijn vaak lang ("EXAMPLES: geef voorbeelden van ..."); voor de
+  // koptekst is het deel vóór de toelichting genoeg om het veld te herkennen.
+  const shortLabel = fieldLabel?.split(/\s+[—–:-]\s+/)[0]?.trim();
   return (
     <div className="animate-fade-in mt-2 overflow-hidden rounded-xl border border-rijksblauw-200 bg-white shadow-sm dark:border-rijksblauw-500/30 dark:bg-slate-800">
       <div className="flex items-center gap-2 border-b border-rijksblauw-100 bg-rijksblauw-50/60 px-3 py-2 dark:border-rijksblauw-500/20 dark:bg-rijksblauw-500/10">
-        <Sparkles size={14} className="text-rijksblauw-500" />
-        <span className="text-xs font-semibold text-rijksblauw-700 dark:text-rijksblauw-200">
-          AI-voorstel
+        <Sparkles size={14} className="shrink-0 text-rijksblauw-500" />
+        <span
+          className="truncate text-xs font-semibold text-rijksblauw-700 dark:text-rijksblauw-200"
+          title={fieldLabel}
+        >
+          {shortLabel ? `AI-voorstel voor ${shortLabel}` : 'AI-voorstel'}
         </span>
       </div>
 

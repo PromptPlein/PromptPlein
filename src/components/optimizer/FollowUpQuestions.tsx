@@ -16,6 +16,117 @@ import type { FollowUpQuestion, PrefilledField, PrefillSource, Technique } from 
 /** Herkomst + toelichting van een voor-ingevuld veld, per veld-id. */
 export type FieldMeta = Record<string, { source: PrefillSource; note?: string }>;
 
+interface FieldBlockProps {
+  question: FollowUpQuestion;
+  value: string;
+  meta?: { source: PrefillSource; note?: string };
+  /** Voorvoegsel voor het veld-id, zodat beide indelingen eigen ids houden. */
+  idPrefix: string;
+  autoFocus?: boolean;
+  /** Hoger tekstvak; de stapsgewijze indeling toont er maar één tegelijk. */
+  tall?: boolean;
+  onChange: (value: string) => void;
+  /** Start "Vul verder aan" voor dit veld. */
+  onExpand: () => void;
+  /** De AI werkt op dit moment aan dít veld. */
+  expanding: boolean;
+  /** De AI werkt aan een veld (dit of een ander); de actie is dan geblokkeerd. */
+  busy: boolean;
+  /** Het openstaande voorstel voor dit veld, of null als er geen is. */
+  proposal: { proposed: string; improvements: string[] } | null;
+  onAccept: () => void;
+  onReject: () => void;
+}
+
+/**
+ * Eén veld met alles wat erbij hoort: de vraag, het tekstvak, de toelichting, de
+ * AI-actie en het eventuele voorstel. Bewust één omkaderd blok: zodra de AI aan
+ * een veld werkt kleurt dat hele blok op, zodat zichtbaar blijft welk veld
+ * verbeterd wordt in plaats van een los voorstel onder een los tekstvak.
+ */
+function FieldBlock({
+  question,
+  value,
+  meta,
+  idPrefix,
+  autoFocus,
+  tall,
+  onChange,
+  onExpand,
+  expanding,
+  busy,
+  proposal,
+  onAccept,
+  onReject,
+}: FieldBlockProps) {
+  const fieldId = `${idPrefix}-${question.id}`;
+  const active = expanding || proposal !== null;
+  const filled = value.trim() !== '';
+  return (
+    <div
+      className={clsx(
+        'rounded-xl border p-3 transition-colors',
+        active
+          ? 'border-rijksblauw-400 bg-rijksblauw-50/60 ring-1 ring-rijksblauw-400/40 dark:border-rijksblauw-500/60 dark:bg-rijksblauw-500/10 dark:ring-rijksblauw-500/30'
+          : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800/40',
+      )}
+    >
+      <div className="mb-1 flex flex-wrap items-center gap-2">
+        <label className="opl-label mb-0" htmlFor={fieldId}>
+          {question.label}
+        </label>
+        {meta && filled && <PrefillBadge source={meta.source} note={meta.note} />}
+        {active && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-rijksblauw-500/10 px-2 py-0.5 text-[11px] font-semibold text-rijksblauw-700 dark:bg-rijksblauw-500/20 dark:text-rijksblauw-100">
+            <Wand2 size={11} /> {expanding ? 'AI vult dit veld aan' : 'Voorstel voor dit veld'}
+          </span>
+        )}
+      </div>
+      <textarea
+        id={fieldId}
+        autoFocus={autoFocus}
+        className={clsx('opl-input resize-y', tall ? 'min-h-[120px]' : 'min-h-[100px]')}
+        value={value}
+        placeholder={question.placeholder}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      {/* Toelichting uit de techniek-definitie: waarom deze vraag ertoe doet. */}
+      {question.why && <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">{question.why}</p>}
+      {meta?.note && filled ? (
+        <p className="mt-1 flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
+          <Sparkles size={12} /> {meta.note}
+        </p>
+      ) : (
+        <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+          Optioneel. Wat je leeg laat, wordt een invulbare plaatshouder in de prompt.
+        </p>
+      )}
+      <div className="mt-1.5 flex">
+        <button
+          type="button"
+          onClick={onExpand}
+          disabled={busy || !filled}
+          title="Laat AI dit veld verder aanvullen"
+          aria-label="Laat AI dit veld verder aanvullen"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-rijksblauw-300 bg-rijksblauw-50 px-3 py-1.5 text-xs font-semibold text-rijksblauw-700 shadow-sm transition-colors hover:border-rijksblauw-400 hover:bg-rijksblauw-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-rijksblauw-500/40 dark:bg-rijksblauw-500/10 dark:text-rijksblauw-100 dark:hover:bg-rijksblauw-500/20"
+        >
+          {expanding ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
+          {expanding ? 'Bezig met aanvullen…' : 'Vul verder aan'}
+        </button>
+      </div>
+      {proposal && (
+        <ExpandProposal
+          fieldLabel={question.label}
+          proposed={proposal.proposed}
+          improvements={proposal.improvements}
+          onAccept={onAccept}
+          onReject={onReject}
+        />
+      )}
+    </div>
+  );
+}
+
 /**
  * Live voortgang van het voor-invullen: welke modellen tegelijk aan het werk
  * zijn, wie de race won, welke fase loopt en welke velden al binnen zijn. De
@@ -67,6 +178,14 @@ interface FollowUpQuestionsProps {
    * gebruikt daar zijn eigen bewoording voor.
    */
   finishLabel?: string;
+  /**
+   * Optioneel: de bouw-actie. Meegegeven staat hij in de knoppenbalk van de
+   * vragenlijst zelf: naast "Volgende" bij stap voor stap, rechtsonder bij alle
+   * velden tegelijk. De ouder toont dan geen losse knop meer onder het blok.
+   */
+  onBuild?: () => void;
+  /** Opschrift van die bouw-knop. */
+  buildLabel?: string;
 }
 
 /**
@@ -88,6 +207,8 @@ export default function FollowUpQuestions({
   projectContext,
   onFinish,
   finishLabel = 'Genereren en optimaliseren prompt',
+  onBuild,
+  buildLabel = 'Bouw prompt',
 }: FollowUpQuestionsProps) {
   const questions = technique.follow_up_questions;
   const total = questions.length;
@@ -212,6 +333,15 @@ export default function FollowUpQuestions({
     setProposal(null);
   }
 
+  // De bouw-knop hoort bij de velden, dus staat hij in elke indeling in de
+  // knoppenbalk van de vragenlijst zelf. Oranje: het is de afsluitende actie,
+  // niet zomaar de volgende stap.
+  const buildButton = onBuild ? (
+    <button type="button" className="opl-btn-accent" onClick={onBuild}>
+      <Sparkles size={16} /> {buildLabel}
+    </button>
+  ) : null;
+
   // --- Indeling "alles tegelijk": alle velden onder elkaar ---
   if (layout === 'stacked') {
     return (
@@ -219,65 +349,25 @@ export default function FollowUpQuestions({
         <div className="flex items-center justify-end">
           <FieldLayoutToggle layout={layout} onChange={setLayout} />
         </div>
-        {questions.map((q) => {
-          const meta = fieldMeta?.[q.id];
-          const value = answers[q.id] ?? '';
-          return (
-            <div key={q.id}>
-              <div className="mb-1 flex flex-wrap items-center gap-2">
-                <label className="opl-label mb-0" htmlFor={`fu-stacked-${q.id}`}>
-                  {q.label}
-                </label>
-                {meta && value.trim() && <PrefillBadge source={meta.source} note={meta.note} />}
-              </div>
-              <textarea
-                id={`fu-stacked-${q.id}`}
-                className="opl-input min-h-[100px] resize-y"
-                value={value}
-                placeholder={q.placeholder}
-                onChange={(e) => editField(q.id, e.target.value)}
-              />
-              {/* Toelichting uit de techniek-definitie: waarom deze vraag ertoe doet. */}
-              {q.why && (
-                <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">{q.why}</p>
-              )}
-              {meta?.note && value.trim() ? (
-                <p className="mt-1 flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
-                  <Sparkles size={12} /> {meta.note}
-                </p>
-              ) : (
-                <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-                  Optioneel. Wat je leeg laat, wordt een invulbare plaatshouder in de prompt.
-                </p>
-              )}
-              <div className="mt-1.5 flex">
-                <button
-                  type="button"
-                  onClick={() => handleExpand(q)}
-                  disabled={expandingId !== null || value.trim() === ''}
-                  title="Laat AI dit veld verder aanvullen"
-                  aria-label="Laat AI dit veld verder aanvullen"
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-rijksblauw-300 bg-rijksblauw-50 px-3 py-1.5 text-xs font-semibold text-rijksblauw-700 shadow-sm transition-colors hover:border-rijksblauw-400 hover:bg-rijksblauw-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-rijksblauw-500/40 dark:bg-rijksblauw-500/10 dark:text-rijksblauw-100 dark:hover:bg-rijksblauw-500/20"
-                >
-                  {expandingId === q.id ? (
-                    <Loader2 size={14} className="animate-spin" />
-                  ) : (
-                    <Wand2 size={14} />
-                  )}
-                  Vul verder aan
-                </button>
-              </div>
-              {proposal?.fieldId === q.id && (
-                <ExpandProposal
-                  proposed={proposal.proposed}
-                  improvements={proposal.improvements}
-                  onAccept={acceptProposal}
-                  onReject={rejectProposal}
-                />
-              )}
-            </div>
-          );
-        })}
+        {questions.map((q) => (
+          <FieldBlock
+            key={q.id}
+            question={q}
+            value={answers[q.id] ?? ''}
+            meta={fieldMeta?.[q.id]}
+            idPrefix="fu-stacked"
+            onChange={(v) => editField(q.id, v)}
+            onExpand={() => handleExpand(q)}
+            expanding={expandingId === q.id}
+            busy={expandingId !== null}
+            proposal={proposal?.fieldId === q.id ? proposal : null}
+            onAccept={acceptProposal}
+            onReject={rejectProposal}
+          />
+        ))}
+        {/* Alles staat al in beeld, dus er valt hier niets meer te navigeren:
+            alleen de bouw-knop, rechts onderaan. */}
+        {buildButton && <div className="flex justify-end pt-1">{buildButton}</div>}
       </div>
     );
   }
@@ -359,13 +449,16 @@ export default function FollowUpQuestions({
             );
           })}
         </ul>
-        <button
-          type="button"
-          onClick={back}
-          className="inline-flex items-center gap-1 text-sm font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100"
-        >
-          <ArrowLeft size={15} /> Terug naar de vragen
-        </button>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={back}
+            className="inline-flex items-center gap-1 text-sm font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100"
+          >
+            <ArrowLeft size={15} /> Terug naar de vragen
+          </button>
+          {buildButton}
+        </div>
       </div>
     );
   }
@@ -406,60 +499,21 @@ export default function FollowUpQuestions({
 
       {/* Huidige vraag */}
       <div key={current.id} className="animate-fade-in">
-        <div className="mb-1 flex flex-wrap items-center gap-2">
-          <label className="opl-label mb-0" htmlFor={`fu-${current.id}`}>
-            {current.label}
-          </label>
-          {currentMeta && (answers[current.id] ?? '').trim() && (
-            <PrefillBadge source={currentMeta.source} note={currentMeta.note} />
-          )}
-        </div>
-        <textarea
-          id={`fu-${current.id}`}
-          autoFocus
-          className="opl-input min-h-[120px] resize-y"
+        <FieldBlock
+          question={current}
           value={answers[current.id] ?? ''}
-          placeholder={current.placeholder}
-          onChange={(e) => update(e.target.value)}
+          meta={currentMeta}
+          idPrefix="fu"
+          autoFocus
+          tall
+          onChange={update}
+          onExpand={() => handleExpand(current)}
+          expanding={expandingId === current.id}
+          busy={expandingId !== null}
+          proposal={proposal?.fieldId === current.id ? proposal : null}
+          onAccept={acceptProposal}
+          onReject={rejectProposal}
         />
-        {/* Toelichting uit de techniek-definitie: waarom deze vraag ertoe doet. */}
-        {current.why && (
-          <p className="mt-1.5 text-xs text-slate-400 dark:text-slate-500">{current.why}</p>
-        )}
-        {currentMeta && currentMeta.note && (answers[current.id] ?? '').trim() ? (
-          <p className="mt-1.5 flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
-            <Sparkles size={12} /> {currentMeta.note}
-          </p>
-        ) : (
-          <p className="mt-1.5 text-xs text-slate-400 dark:text-slate-500">
-            Optioneel. Wat je leeg laat, wordt een invulbare plaatshouder in de prompt.
-          </p>
-        )}
-        <div className="mt-1.5 flex">
-          <button
-            type="button"
-            onClick={() => handleExpand(current)}
-            disabled={expandingId !== null || (answers[current.id] ?? '').trim() === ''}
-            title="Laat AI dit veld verder aanvullen"
-            aria-label="Laat AI dit veld verder aanvullen"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-rijksblauw-300 bg-rijksblauw-50 px-3 py-1.5 text-xs font-semibold text-rijksblauw-700 shadow-sm transition-colors hover:border-rijksblauw-400 hover:bg-rijksblauw-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-rijksblauw-500/40 dark:bg-rijksblauw-500/10 dark:text-rijksblauw-100 dark:hover:bg-rijksblauw-500/20"
-          >
-            {expandingId === current.id ? (
-              <Loader2 size={14} className="animate-spin" />
-            ) : (
-              <Wand2 size={14} />
-            )}
-            Vul verder aan
-          </button>
-        </div>
-        {proposal?.fieldId === current.id && (
-          <ExpandProposal
-            proposed={proposal.proposed}
-            improvements={proposal.improvements}
-            onAccept={acceptProposal}
-            onReject={rejectProposal}
-          />
-        )}
       </div>
 
       {/* Navigatie */}
@@ -472,23 +526,28 @@ export default function FollowUpQuestions({
         >
           <ArrowLeft size={16} /> Vorige
         </button>
-        <button type="button" onClick={next} className="opl-btn-primary">
-          {isLast ? (
-            onFinish ? (
-              <>
-                <Sparkles size={16} /> {finishLabel}
-              </>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <button type="button" onClick={next} className="opl-btn-primary">
+            {isLast ? (
+              onFinish ? (
+                <>
+                  <Sparkles size={16} /> {finishLabel}
+                </>
+              ) : (
+                <>
+                  <Check size={16} /> Naar overzicht
+                </>
+              )
             ) : (
               <>
-                <Check size={16} /> Naar overzicht
+                Volgende <ArrowRight size={16} />
               </>
-            )
-          ) : (
-            <>
-              Volgende <ArrowRight size={16} />
-            </>
-          )}
-        </button>
+            )}
+          </button>
+          {/* Naast "Volgende": je hoeft de rest van de vragen niet af te lopen
+              om te kunnen bouwen. */}
+          {buildButton}
+        </div>
       </div>
     </div>
   );
