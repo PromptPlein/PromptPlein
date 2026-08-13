@@ -385,6 +385,58 @@ export async function refinePrompt(args: {
 }
 
 /**
+ * Voorstellen op maat bij het verbeter-paneel van de prompt tester: de AI leest
+ * de prompt én het testantwoord en benoemt 2 tot 4 gebreken die in dít antwoord
+ * zitten, elk met de instructie die de gebruiker kan overnemen. Aanvullend op de
+ * vaste feedbackpunten, die immers voor elk antwoord gelden.
+ *
+ * Mislukken is hier geen fout die de gebruiker moet zien: de vaste punten staan
+ * er nog, dus de aanroeper laat de rij bij een lege uitkomst simpelweg weg.
+ */
+export async function suggestRefinements(args: {
+  /** De prompt-template die getest is. */
+  prompt: string;
+  /** Het testantwoord dat die template opleverde; wordt hier afgekapt. */
+  testAnswer: string;
+  /** De labels van de vaste feedbackpunten, zodat de AI die niet herhaalt. */
+  knownLabels?: string[];
+  preferredProvider?: AiProvider;
+  preferredModel?: string;
+  projectContext?: string;
+}): Promise<{ success: boolean; suggestions: { label: string; instruction: string }[]; error?: string }> {
+  try {
+    const data = await postOptimize<{
+      success?: boolean;
+      suggestions?: { label?: string; instruction?: string }[];
+      error?: string;
+    }>({
+      mode: 'refine-suggest',
+      refinePrompt: args.prompt,
+      refineTestAnswer: args.testAnswer.slice(0, MAX_REFINE_TEST_ANSWER_CHARS),
+      refineKnownLabels: args.knownLabels,
+      preferredProvider: args.preferredProvider ?? 'auto',
+      preferredModel: args.preferredModel,
+      projectContext: args.projectContext,
+    });
+    if (!data) return { success: false, suggestions: [], error: 'Geen AI-service beschikbaar.' };
+    if (data.success && Array.isArray(data.suggestions)) {
+      const suggestions = data.suggestions
+        .map((s) => ({ label: s.label?.trim() ?? '', instruction: s.instruction?.trim() ?? '' }))
+        .filter((s) => s.label && s.instruction)
+        .slice(0, 4);
+      return { success: suggestions.length > 0, suggestions };
+    }
+    return { success: false, suggestions: [], error: data.error ?? 'Er konden geen voorstellen worden gemaakt.' };
+  } catch (err) {
+    return {
+      success: false,
+      suggestions: [],
+      error: err instanceof Error ? err.message : 'Onbekende fout.',
+    };
+  }
+}
+
+/**
  * Vult een persona-definitie in op basis van een korte aanduiding ("mijn
  * teammanager"): de AI leidt af hoe zo'n rol zich doorgaans gedraagt en vult de
  * meegegeven persona-velden concreet in. De gebruiker kan alles daarna aanpassen.

@@ -56,6 +56,7 @@ type Mode =
   | 'project-brief'
   | 'mock-answer'
   | 'refine'
+  | 'refine-suggest'
   | 'cove-scan'
   | 'stepback-ladder'
   | 'rubric-propose';
@@ -375,6 +376,12 @@ interface RequestBody {
   refineTestAnswer?: string;
   /** De feedback van de gebruiker op dat testantwoord. */
   refineFeedback?: string;
+  /**
+   * 'refine-suggest': de vaste feedbackpunten die de tester zelf al toont. Het
+   * model mag die niet nog eens voorstellen; het kijkt naar wat er in dít
+   * antwoord misgaat en daar geen knop voor bestaat.
+   */
+  refineKnownLabels?: string[];
   /**
    * Streamend antwoord gevraagd? Alleen ondersteund door de vrije-tekstmodi
    * ('generate' en 'execute'); de JSON-modi moeten hun antwoord in één keer
@@ -1900,6 +1907,73 @@ function buildRefineUserMessage(prompt: string, testAnswer: string, feedback: st
   }
   parts.push(`FEEDBACK VAN DE GEBRUIKER:\n${feedback}`);
   return parts.join('\n\n');
+}
+
+/**
+ * Voorstellen op maat naast de vaste feedbackpunten in de prompt tester. De
+ * vaste punten ("te lang", "verkeerde toon") gelden voor elk antwoord; deze
+ * modus kijkt naar dít antwoord bij déze template en benoemt wat er hier
+ * misgaat. De gebruiker ziet daardoor ook de gebreken waar hij zelf geen woord
+ * voor had, en hoeft niet te weten hoe je zoiets als prompt-instructie opschrijft.
+ */
+const REFINE_SUGGEST_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse overheid.
+Je krijgt een PROMPT-TEMPLATE en het TESTANTWOORD dat die template opleverde.
+Je taak is: vergelijken wat de template vraagt met wat het antwoord levert, en 2 tot 4 concrete
+verbeterpunten voorstellen die de gebruiker met één klik kan overnemen.
+
+Werkwijze:
+- Kijk naar DIT antwoord. Noem alleen gebreken die je er aanwijsbaar in ziet: een gevraagd onderdeel
+  dat ontbreekt, een aanname die het model zelf invulde, een opsomming waar lopende tekst hoorde,
+  een geheel dat blijft hangen in algemeenheden, een instructie uit de template die genegeerd is.
+- Elk voorstel bestaat uit een LABEL en een INSTRUCTIE.
+  Het label is de tekst op de knop: maximaal 4 woorden, benoemt het gebrek, niet de oplossing.
+  De instructie is wat er straks naar de AI gaat: 1 of 2 zinnen die zeggen wat er in de PROMPT moet
+  veranderen, in de ik-vorm van de gebruiker ("Vraag in de prompt om …", "Leg in de prompt vast dat …").
+- De instructie verandert de PROMPT, niet het antwoord. Schrijf dus geen correctie van de tekst.
+- Verwijs in de instructie naar het concrete onderwerp van deze prompt, niet naar "het onderwerp".
+- Geen voorstel dat neerkomt op een van de al getoonde punten; die staan er al.
+- Zie je maar één echt gebrek, geef er dan één. Verzin er niets bij.
+
+Schrijfregels:
+- Nederlands, geen gedachtestreepjes tussen zinsdelen; gebruik een komma of een punt.
+- Geen markdown, geen aanhalingstekens rond het label.
+
+Antwoord met UITSLUITEND deze JSON, zonder tekst eromheen:
+{"voorstellen":[{"label":"...","instructie":"..."}]}`;
+
+/** Bouwt het gebruikersbericht voor de voorstellen-modus op. */
+function buildRefineSuggestUserMessage(
+  prompt: string,
+  testAnswer: string,
+  knownLabels: string[],
+): string {
+  const parts = [`PROMPT-TEMPLATE:\n"""\n${prompt}\n"""`];
+  parts.push(`TESTANTWOORD VAN DIE TEMPLATE (kan ingekort zijn):\n"""\n${testAnswer}\n"""`);
+  if (knownLabels.length > 0) {
+    parts.push(`AL GETOONDE FEEDBACKPUNTEN (niet herhalen):\n${knownLabels.join(', ')}`);
+  }
+  return parts.join('\n\n');
+}
+
+/** Leest de voorstellen uit het JSON-antwoord; onbruikbare items vallen af. */
+function parseRefineSuggestions(raw: string): { label: string; instruction: string }[] | null {
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  try {
+    const parsed = JSON.parse(escapeRawControlChars(match[0])) as Record<string, unknown>;
+    const list = Array.isArray(parsed.voorstellen) ? parsed.voorstellen : [];
+    const suggestions = list
+      .filter((x): x is Record<string, unknown> => !!x && typeof x === 'object')
+      .map((x) => ({
+        label: typeof x.label === 'string' ? x.label.trim() : '',
+        instruction: typeof x.instructie === 'string' ? x.instructie.trim() : '',
+      }))
+      .filter((s) => s.label && s.instruction)
+      .slice(0, 4);
+    return suggestions.length > 0 ? suggestions : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Maximale omvang van het meegestuurde testantwoord (de client kapt eerder af). */
@@ -4014,6 +4088,9 @@ const MODE_MAX_TOKENS: Record<Mode, number> = {
   'project-brief': 1536,
   // Refine: een herschreven prompt-template, vergelijkbaar met generate.
   refine: 4096,
+  // Hoogstens 4 voorstellen van een label plus twee zinnen. Krap houden: dit
+  // draait automatisch na elke testrun.
+  'refine-suggest': 768,
   // Prefill vult álle velden van een raamwerk in één keer en mag detailrijk zijn.
   prefill: 8192,
   'meta-build': 4096,
@@ -6010,15 +6087,17 @@ Deno.serve(async (req: Request) => {
                                         ? 'assumption-check'
                                         : body.mode === 'mock-answer'
                                           ? 'mock-answer'
-                                          : body.mode === 'refine'
-                                            ? 'refine'
-                                            : body.mode === 'cove-scan'
-                                              ? 'cove-scan'
-                                              : body.mode === 'stepback-ladder'
-                                                ? 'stepback-ladder'
-                                                : body.mode === 'rubric-propose'
-                                                  ? 'rubric-propose'
-                                                  : 'generate';
+                                          : body.mode === 'refine-suggest'
+                                            ? 'refine-suggest'
+                                            : body.mode === 'refine'
+                                              ? 'refine'
+                                              : body.mode === 'cove-scan'
+                                                ? 'cove-scan'
+                                                : body.mode === 'stepback-ladder'
+                                                  ? 'stepback-ladder'
+                                                  : body.mode === 'rubric-propose'
+                                                    ? 'rubric-propose'
+                                                    : 'generate';
     const order = buildOrder(body.preferredProvider);
     const temperature = clampTemp(body.temperature);
     // Uitvoerbudget van deze modus: bepaalt het max_tokens-plafond van elke
@@ -7393,6 +7472,49 @@ Deno.serve(async (req: Request) => {
 
       return new Response(
         JSON.stringify({ success: true, optimized_content: output, provider }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    // --- Voorstellen-modus: welke feedbackpunten passen bij DIT testantwoord? ---
+    if (mode === 'refine-suggest') {
+      const suggestTarget = body.refinePrompt?.trim();
+      const suggestAnswer = (body.refineTestAnswer ?? '').trim().slice(0, MAX_REFINE_TEST_ANSWER_CHARS);
+      if (!suggestTarget || !suggestAnswer) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'refinePrompt en refineTestAnswer zijn verplicht' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+      const knownLabels = (Array.isArray(body.refineKnownLabels) ? body.refineKnownLabels : [])
+        .filter((l): l is string => typeof l === 'string' && l.trim().length > 0)
+        .map((l) => l.trim())
+        .slice(0, 20);
+      const suggestMessage = buildRefineSuggestUserMessage(suggestTarget, suggestAnswer, knownLabels);
+      for (const candidate of order) {
+        try {
+          const raw = await PROVIDERS[candidate](
+            suggestMessage,
+            withProject(REFINE_SUGGEST_SYSTEM_PROMPT, body.projectContext),
+            0.3,
+            resolveModel(candidate, body.preferredProvider, body.preferredModel),
+            maxTokens,
+          );
+          const parsed = parseRefineSuggestions(raw);
+          if (parsed) {
+            return new Response(
+              JSON.stringify({ success: true, suggestions: parsed, provider: candidate }),
+              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            );
+          }
+        } catch (providerErr) {
+          console.error(`${candidate} (refine-suggest) mislukt, probeer volgende:`, providerErr);
+        }
+      }
+      // Geen voorstellen is geen ramp: de vaste punten staan er nog. De client
+      // laat de rij dan gewoon weg in plaats van een foutmelding te tonen.
+      return new Response(
+        JSON.stringify({ success: false, error: 'Er konden geen voorstellen worden gemaakt' }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }

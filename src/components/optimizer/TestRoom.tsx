@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, FlaskConical, Loader2, Maximize2, Minimize2, Play, Wand2 } from 'lucide-react';
+import { ChevronDown, FlaskConical, Loader2, Maximize2, Minimize2, Play, Sparkles, Wand2 } from 'lucide-react';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
@@ -8,7 +8,7 @@ import ChatComposer from '@/components/chat/ChatComposer';
 import ChatMessageList from '@/components/chat/ChatMessageList';
 import ChatModelBadge from '@/components/chat/ChatModelBadge';
 import useChatController from '@/components/chat/useChatController';
-import { refinePrompt } from '@/services/optimizeService';
+import { refinePrompt, suggestRefinements } from '@/services/optimizeService';
 import { writeResultSnapshot } from '@/services/handoffService';
 import type { AiSettings, ChatSettings } from '@/services/settingsService';
 import type { OptimizeResult, Technique } from '@/types';
@@ -45,7 +45,39 @@ const FEEDBACK_CHIPS: { label: string; instruction: string }[] = [
     instruction:
       'Het antwoord blijft te algemeen. Vraag in de prompt om een uitwerking op mijn eigen situatie, met concrete namen, cijfers en voorbeelden, en verbied algemene open deuren.',
   },
+  {
+    label: 'Verkeerde vorm',
+    instruction:
+      'De vorm klopt niet. Schrijf in de prompt precies voor hoe het antwoord eruit moet zien: lopende tekst of opsomming, welke kopjes, welke volgorde en of er een tabel of samenvatting bij hoort.',
+  },
+  {
+    label: 'Te veel jargon',
+    instruction:
+      'Er staat te veel jargon in. Vraag in de prompt om gewone woorden op B1-niveau, korte zinnen, en leg vaktermen die echt nodig zijn bij het eerste gebruik in één zin uit.',
+  },
+  {
+    label: 'Mist voorbeelden',
+    instruction:
+      'Het antwoord blijft abstract. Vraag in de prompt om bij elk punt een concreet voorbeeld uit mijn praktijk, zodat duidelijk is hoe het er echt uitziet.',
+  },
+  {
+    label: 'Klopt niet',
+    instruction:
+      'Er staan dingen in die niet kloppen. Leg in de prompt vast dat het antwoord alleen mag steunen op wat ik aanlever, dat het niets mag verzinnen en dat het bij ontbrekende informatie moet zeggen wat het niet weet.',
+  },
+  {
+    label: 'Beantwoordt mijn vraag niet',
+    instruction:
+      'Het antwoord gaat langs mijn vraag heen. Zet de vraag in de prompt vooraan als de opdracht, benoem wat er beslist beantwoord moet worden, en verbied uitweidingen die daar niet aan bijdragen.',
+  },
 ];
+
+/**
+ * Een voorstel op maat: de AI leest de prompt én het testantwoord en benoemt een
+ * gebrek dat in dit specifieke antwoord zit. Zelfde vorm als een vast punt, dus
+ * aanklikken werkt hetzelfde.
+ */
+type FeedbackChip = { label: string; instruction: string };
 
 /** localStorage-sleutel voor de zelfgekozen hoogte van het antwoordvenster. */
 const HEIGHT_KEY = 'promptTesterHeight';
@@ -187,6 +219,11 @@ export default function TestRoom({
   const [feedbackText, setFeedbackText] = useState('');
   const [refining, setRefining] = useState(false);
   const [refineStream, setRefineStream] = useState('');
+  // Voorstellen op maat bij dit testantwoord, plus de sleutel (prompt+antwoord)
+  // waarvoor ze zijn opgehaald, zodat elke testrun er precies één ophaalt.
+  const [suggestions, setSuggestions] = useState<FeedbackChip[]>([]);
+  const [suggesting, setSuggesting] = useState(false);
+  const suggestedKeyRef = useRef<string | null>(null);
   // Het blok "test de nieuwe versie" na een verbetering, plus de vlag die zegt
   // dat we er net naartoe moeten scrollen.
   const retestRef = useRef<HTMLDivElement>(null);
@@ -198,6 +235,45 @@ export default function TestRoom({
     .find((m) => m.role === 'assistant' && m.content.trim() && !m.error);
   const untestedVersion = testedPromptRef.current !== null && testedPromptRef.current !== prompt;
   const canRefine = Boolean(onRefined && lastAssistant && !controller.streaming && !refining);
+  // De vaste punten en de voorstellen gedragen zich hetzelfde; alleen de rij
+  // waarin ze staan verschilt. Voor het aanvullen van ontbrekende instructies
+  // bij het versturen tellen ze dus samen.
+  const allChips: FeedbackChip[] = [...FEEDBACK_CHIPS, ...suggestions];
+
+  /**
+   * Voorstellen op maat ophalen zodra er een afgerond testantwoord ligt. De
+   * vaste punten dekken de gebreken die elk antwoord kan hebben; wat er in dít
+   * antwoord misgaat weet alleen een lezer die de prompt naast het resultaat
+   * legt. Eén ophaalactie per testrun (de sleutel bewaakt dat), en mislukken is
+   * stil: de vaste punten staan er nog.
+   */
+  const answerText = lastAssistant?.content ?? '';
+  useEffect(() => {
+    if (!onRefined || !answerText || streaming || untestedVersion) return;
+    const key = `${prompt} ${answerText}`;
+    if (suggestedKeyRef.current === key) return;
+    suggestedKeyRef.current = key;
+    let cancelled = false;
+    setSuggesting(true);
+    setSuggestions([]);
+    void suggestRefinements({
+      prompt,
+      testAnswer: answerText,
+      knownLabels: FEEDBACK_CHIPS.map((c) => c.label),
+      preferredProvider: aiSettings?.provider,
+      preferredModel: aiSettings?.model,
+      projectContext,
+    }).then((res) => {
+      setSuggesting(false);
+      if (cancelled) return;
+      // Dubbelingen met een vast punt vallen af; de AI hoort ze al over te slaan.
+      const fixed = new Set(FEEDBACK_CHIPS.map((c) => c.label.toLowerCase()));
+      setSuggestions(res.suggestions.filter((s) => !fixed.has(s.label.toLowerCase())));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [onRefined, prompt, answerText, streaming, untestedVersion, aiSettings, projectContext]);
 
   /**
    * Na een verbetering staat de gebruiker onderaan bij het verbeter-paneel. Breng
@@ -213,6 +289,8 @@ export default function TestRoom({
   function runTest() {
     if (controller.streaming || refining) return;
     setAwaitingRetest(false);
+    // De voorstellen horen bij het vorige antwoord; die gelden nu niet meer.
+    setSuggestions([]);
     testedPromptRef.current = prompt;
     controller.sendInNewConversation(prompt);
   }
@@ -223,7 +301,7 @@ export default function TestRoom({
    * gebruiker leest wat hij de AI opdraagt in plaats van alleen een pil te zien
    * oplichten.
    */
-  function toggleChip(chip: (typeof FEEDBACK_CHIPS)[number]) {
+  function toggleChip(chip: FeedbackChip) {
     const active = chips.includes(chip.label);
     setChips((cur) => (active ? cur.filter((c) => c !== chip.label) : [...cur, chip.label]));
     setFeedbackText((cur) => {
@@ -244,9 +322,9 @@ export default function TestRoom({
     const typed = feedbackText.trim();
     // Normaal staan de aangevinkte instructies al in het tekstvak; alleen als de
     // gebruiker ze eruit heeft gehaald vullen we ze hier alsnog aan.
-    const missing = FEEDBACK_CHIPS.filter(
-      (c) => chips.includes(c.label) && !typed.includes(c.instruction),
-    ).map((c) => c.instruction);
+    const missing = allChips
+      .filter((c) => chips.includes(c.label) && !typed.includes(c.instruction))
+      .map((c) => c.instruction);
     const feedback = [typed, ...missing].filter(Boolean).join('\n');
     if (!feedback) {
       toast.error('Geef aan wat er beter moet: kies een punt of schrijf het kort op.');
@@ -470,6 +548,44 @@ export default function TestRoom({
                       </button>
                     ))}
                   </div>
+
+                  {/* Voorstellen op maat: de vaste punten gelden voor elk
+                      antwoord, deze gaan over wat er in dít antwoord misgaat.
+                      Ze staan in een eigen rij en in de accentkleur, zodat
+                      zichtbaar is dat de AI ze bij dit resultaat heeft bedacht. */}
+                  {suggesting && (
+                    <p className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                      <Loader2 size={13} className="animate-spin" />
+                      De AI leest je prompt naast dit antwoord en zoekt verbeterpunten…
+                    </p>
+                  )}
+                  {suggestions.length > 0 && (
+                    <div className="space-y-1.5">
+                      <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-rijksoranje">
+                        <Sparkles size={13} /> Opgevallen in dit antwoord
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {suggestions.map((chip) => (
+                          <button
+                            key={chip.label}
+                            type="button"
+                            onClick={() => toggleChip(chip)}
+                            aria-pressed={chips.includes(chip.label)}
+                            title={chip.instruction}
+                            className={clsx(
+                              'rounded-full border px-2.5 py-1 text-left text-xs transition-colors',
+                              chips.includes(chip.label)
+                                ? 'border-rijksoranje bg-rijksoranje/15 text-rijksoranje-dark dark:text-rijksoranje'
+                                : 'border-rijksoranje/50 text-slate-600 hover:border-rijksoranje hover:bg-rijksoranje/5 dark:text-slate-300',
+                            )}
+                          >
+                            {chip.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <textarea
                     className="opl-input w-full resize-y text-sm"
                     rows={3}
