@@ -28,14 +28,13 @@ export default function ExpandProposal({
   // Veldnamen zijn vaak lang ("EXAMPLES: geef voorbeelden van ..."); voor de
   // koptekst is het deel vóór de toelichting genoeg om het veld te herkennen.
   const shortLabel = fieldLabel?.split(/\s+[—–:-]\s+/)[0]?.trim();
+  // Oranje omlijsting: het voorstel is een voorstel van de AI, niet je eigen
+  // tekst. Dat onderscheidt het van het blauw van het veld eromheen.
   return (
-    <div className="animate-fade-in mt-2 overflow-hidden rounded-xl border border-rijksblauw-200 bg-white shadow-sm dark:border-rijksblauw-500/30 dark:bg-slate-800">
-      <div className="flex items-center gap-2 border-b border-rijksblauw-100 bg-rijksblauw-50/60 px-3 py-2 dark:border-rijksblauw-500/20 dark:bg-rijksblauw-500/10">
-        <Sparkles size={14} className="shrink-0 text-rijksblauw-500" />
-        <span
-          className="truncate text-xs font-semibold text-rijksblauw-700 dark:text-rijksblauw-200"
-          title={fieldLabel}
-        >
+    <div className="animate-fade-in mt-2 overflow-hidden rounded-xl border border-rijksoranje bg-white shadow-sm dark:border-rijksoranje/60 dark:bg-slate-800">
+      <div className="flex items-center gap-2 border-b border-rijksoranje/25 bg-rijksoranje/10 px-3 py-2 dark:border-rijksoranje/25 dark:bg-rijksoranje/15">
+        <Sparkles size={14} className="shrink-0 text-rijksoranje" />
+        <span className="truncate text-xs font-semibold text-rijksoranje" title={fieldLabel}>
           {shortLabel ? `AI-voorstel voor ${shortLabel}` : 'AI-voorstel'}
         </span>
       </div>
@@ -72,7 +71,7 @@ export default function ExpandProposal({
         <button
           type="button"
           onClick={onAccept}
-          className="inline-flex items-center gap-1 rounded-md bg-rijksblauw-600 px-2.5 py-1 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-rijksblauw-700"
+          className="inline-flex items-center gap-1 rounded-md bg-rijksoranje px-2.5 py-1 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-rijksoranje-dark"
         >
           <Check size={13} /> Overnemen
         </button>
