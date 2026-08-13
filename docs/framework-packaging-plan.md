@@ -36,9 +36,9 @@ geen wijziging aan OptimizedOutput.**
 3. **Frameworks zijn DB `techniques`-rijen** met `family: 'context'`. `isContextPrompt(t)`
    herkent ze. De kandidatenpool = `techniques.filter(isContextPrompt)`.
 
-**Let op (bewuste beperking):** BLUEPRINT staat alleen in `BLUEPRINT_Framework.md`, niet in de DB.
-De picker biedt alleen frameworks die echt als `techniques`-rij bestaan (CARE, CRISP, CRISPE,
-RAISE, CO-STAR, CRAFT, CREATE, REACT). Dat is correct — geen spookopties.
+**Let op (bewuste beperking):** de picker biedt alleen frameworks die echt als `techniques`-rij
+bestaan (CARE, CRISP, CRISPE, RAISE, CO-STAR, CRAFT, CREATE, REACT). Dat is correct, want zo
+ontstaan er geen spookopties.
 
 ---
 
