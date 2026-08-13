@@ -467,7 +467,8 @@ export default function SettingsPage() {
               oranje sterretje. Eén klik herschrijft de getypte tekst tot een scherpere vraag, die de
               gebruiker daarna zelf kan nalezen, aanpassen of terugdraaien. Dit is een{' '}
               <strong>lichte</strong> verbetering; de volledige generator blijft achter
-              &ldquo;Genereren&rdquo;.
+              &ldquo;Genereren&rdquo;. Hetzelfde sterretje staat bij het contextveld van een techniek
+              op &ldquo;Technieken&rdquo;, met deze instelling en deze instructie.
             </p>
 
             <label className="flex cursor-pointer items-center gap-3">
@@ -478,7 +479,8 @@ export default function SettingsPage() {
                 onChange={(e) => patchChat({ optimizeEnabled: e.target.checked })}
               />
               <span className="text-sm text-slate-700 dark:text-slate-200">
-                Sterretje tonen in het invoerveld van de chat
+                Sterretje tonen in het invoerveld van de chat en bij het contextveld van een
+                techniek
               </span>
             </label>
 

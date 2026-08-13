@@ -22,6 +22,7 @@ import StepBackBuilder from '@/components/optimizer/StepBackBuilder';
 import RubricBuilder from '@/components/optimizer/RubricBuilder';
 import DocumentUpload from '@/components/optimizer/DocumentUpload';
 import InterviewFlow from '@/components/optimizer/InterviewFlow';
+import OptimizableTextarea from '@/components/common/OptimizableTextarea';
 import OptimizingLoader from '@/components/optimizer/OptimizingLoader';
 import OptimizedOutput from '@/components/optimizer/OptimizedOutput';
 import GuardrailDialog from '@/components/optimizer/GuardrailDialog';
@@ -644,15 +645,21 @@ export default function TechniquesPage() {
                           {/* Ruim bemeten en op leestekstgrootte: hier komt een
                               hele opdracht in te staan, geen zoekterm. Een veld
                               van drie regels dwong tot scrollen in een tekst
-                              die je juist wilt nalezen voordat je hem gebruikt. */}
-                          <textarea
+                              die je juist wilt nalezen voordat je hem gebruikt.
+
+                              Met het oranje sterretje uit de chat erbij: wat de
+                              gebruiker in steekwoorden neerzet, staat op deze
+                              plek vaak nog niet uitgeschreven, en juist hier
+                              bepaalt die tekst wat de AI van de techniek maakt. */}
+                          <OptimizableTextarea
                             id="techniek-context"
                             ref={contextRef}
                             rows={6}
                             value={context}
-                            onChange={(e) => setContext(e.target.value)}
+                            onValueChange={setContext}
                             placeholder={contextExample(technique)}
                             className="opl-input min-h-[9rem] resize-y px-4 py-3 text-[15px] leading-relaxed"
+                            optimizeTitle="Schrijf mijn context uit met AI; je oorspronkelijke tekst kun je daarna terughalen"
                           />
                           <div className="mt-2 flex flex-wrap justify-end gap-2">
                             <button
