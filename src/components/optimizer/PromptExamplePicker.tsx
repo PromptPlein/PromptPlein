@@ -45,7 +45,9 @@ export default function PromptExamplePicker({
         aria-controls="techniek-voorbeelden"
         className="flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-rijksblauw-100/60 dark:hover:bg-rijksblauw-500/15"
       >
-        <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-rijksblauw-100 text-rijksblauw-700 dark:bg-rijksblauw-500/20 dark:text-rijksblauw-200">
+        {/* Oranje vlak met wit lampje: het accent van de huisstijl, zodat deze
+            balk opvalt tussen het blauw van de rest van het invulblok. */}
+        <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-rijksoranje text-white">
           <Lightbulb size={18} />
         </span>
         <span className="min-w-0 flex-1">
