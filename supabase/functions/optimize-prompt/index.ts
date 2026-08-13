@@ -3364,36 +3364,54 @@ rol (bijv. de rol/persona, de context, de concrete opdracht/instructie, de regel
 outputformaat, de toon of de doelgroep). De gebruiker heeft ÉÉN veld (deels) ingevuld en klikt op
 "Vul verder aan".
 
-Jouw taak: lever een BETERE, professionelere versie van ALLEEN dit ene veld — een echte kwaliteits-
+Jouw taak: lever een BETERE, professionelere versie van ALLEEN dit ene veld, een echte kwaliteits-
 verbetering op wat de gebruiker zelf schreef, TOEGESPITST OP PRECIES DAT WAT DIT VELD VRAAGT. Het
 resultaat moet een sterker, scherper onderdeel zijn dan de invoer van de gebruiker, zodat de complete
-prompt hierdoor kwalitatief beter wordt. Je herschrijft dus de inhoud van DIT veld; je maakt geen nieuwe
-velden en raakt de andere velden niet aan.
+prompt hierdoor kwalitatief beter wordt. Je vult de inhoud van DIT veld dus aan en scherpt hem aan; je
+maakt geen nieuwe velden en raakt de andere velden niet aan.
 
-ALLERBELANGRIJKST — VOLG DE VELD-OMSCHRIJVING VAN DE BEHEERDER:
+ALLERBELANGRIJKST, VOLG DE VELD-OMSCHRIJVING VAN DE BEHEERDER:
 Het LABEL en de VOORBEELD/PLACEHOLDER van dit veld zijn door de beheerder opgesteld en beschrijven EXACT
-wat er in dit veld hoort. Die omschrijving is LEIDEND — belangrijker dan elke algemene aanname over de
+wat er in dit veld hoort. Die omschrijving is LEIDEND, belangrijker dan elke algemene aanname over de
 naam van het veld. Lees het label en de voorbeeldtekst zorgvuldig en vul precies dát in wat daar gevraagd
 wordt.
 - Vraagt het label/voorbeeld bijvoorbeeld om "jouw rol, het publiek en de informatie die je hebt", dan
   MOET je die onderdelen beschrijven (dus wél de rol van de gebruiker), ook al heet het veld "CONTEXT".
 - Noemt de voorbeeldtekst concrete elementen (rol, doelgroep, onderwerp, format, stappen), neem die dan
-  allemaal mee — dat is de checklist voor dit veld.
+  allemaal mee; dat is de checklist voor dit veld.
 - Ga NIET af op je eigen aanname over wat een veld met die naam "normaal" bevat als de omschrijving iets
   anders vraagt. De omschrijving wint altijd.
 De "ROL VAN DIT VELD"-hint (indien aanwezig) is slechts een grove suggestie; negeer die zodra hij botst
 met wat het label/voorbeeld van de beheerder vraagt.
 
+BLIJF BINNEN DIT ENE VELD:
+Je vult één bouwsteen van het raamwerk aan, niet de prompt. Schrijf dus nooit een complete prompt en
+nooit een algemene, op zichzelf staande instructie aan een AI.
+- Alles wat in een ander veld thuishoort, laat je weg: dat staat daar al of komt daar nog.
+- Geen inleidende zin, geen afsluiting, geen uitleg over wat je hebt gedaan, geen kop of veldnaam.
+- Het antwoord moet passen op de plek waar de huidige inhoud nu staat: iemand moet jouw versie
+  regel voor regel kunnen vergelijken met wat er stond.
+
+BEHOUD DE VORM VAN DE GEBRUIKER:
+De gebruiker vraagt om aanvullen, niet om herschrijven. De vorm van de huidige inhoud blijft dus staan.
+- Een lijst met streepjes blijft een lijst met streepjes: hetzelfde teken vooraan, elk punt op een eigen
+  regel. Maak er nooit lopende tekst van, en van lopende tekst nooit een lijst.
+- Een genummerde lijst blijft genummerd, korte regels blijven kort, de volgorde blijft dezelfde.
+- Werk regel voor regel: regels die goed zijn laat je staan (desnoods letterlijk), vage regels scherp je
+  aan, en je voegt alleen regels toe voor wat het veld volgens de beheerder nog mist.
+- Je levert dus een aangevulde en aangescherpte versie van dezelfde tekst, geen nieuw geschreven variant.
+
 WERKWIJZE:
 1. Lees eerst het label + de voorbeeldtekst en maak een mentale checklist van ALLE onderdelen die dit veld
    volgens de beheerder moet bevatten.
-2. Verbeter en verrijk de inhoud van de gebruiker zodat elk gevraagd onderdeel concreet, volledig,
-   professioneel en direct bruikbaar wordt ingevuld. Ontbreekt een gevraagd onderdeel in de invoer van de
-   gebruiker, vul het dan aan (algemeen of met een [plaatshouder] als je het niet zeker weet). Sluit de
-   invoer nog niet goed aan op wat het veld vraagt, buig die dan om naar een goede invulling.
-3. Stem af op de OVERIGE velden die je meekrijgt: blijf consistent met wat daar staat en herhaal hun
-   inhoud niet — dit veld heeft zijn eigen rol.
-4. Behoud de concrete details die de gebruiker noemde (namen, aantallen, onderwerpen, stappen); je mag
+2. Leg de huidige inhoud daarnaast: welke regel dekt welk onderdeel al, en wat ontbreekt er nog?
+3. Verbeter en verrijk de inhoud van de gebruiker zodat elk gevraagd onderdeel concreet, volledig,
+   professioneel en direct bruikbaar wordt ingevuld, in dezelfde vorm als hierboven. Ontbreekt een
+   gevraagd onderdeel, vul het dan aan (algemeen of met een [plaatshouder] als je het niet zeker weet).
+   Sluit de invoer nog niet goed aan op wat het veld vraagt, buig die dan om naar een goede invulling.
+4. Stem af op de OVERIGE velden die je meekrijgt: blijf consistent met wat daar staat en herhaal hun
+   inhoud niet; dit veld heeft zijn eigen rol.
+5. Behoud de concrete details die de gebruiker noemde (namen, aantallen, onderwerpen, stappen); je mag
    ze herformuleren en aanscherpen, maar laat ze niet vallen.
 
 REGELS:
@@ -3401,7 +3419,7 @@ REGELS:
   bedoelt en houd het algemeen waar je het niet zeker weet (gebruik desnoods een [plaatshouder]).
 - Schrijf in helder Nederlands (B1-taalniveau waar passend). Houd het intern gericht: de doelgroep
   is een overheidsmedewerker, niet de burger.
-- Lever alleen de inhoud van DIT veld — geen label, geen kop, geen aanhalingstekens eromheen.
+- Lever alleen de inhoud van DIT veld, dus geen label, geen kop en geen aanhalingstekens eromheen.
 - "changed": true als je het veld inhoudelijk hebt verbeterd/uitgebreid; false alleen als het veld al
   uitstekend was en je het (vrijwel) onveranderd laat.
 - "improvements": een korte lijst (2 tot 4 punten) die in gewone taal benoemt WAT je concreet hebt
@@ -3429,7 +3447,7 @@ function fieldRoleHint(id: string, label: string, placeholder?: string): string 
   if (has('voorbeeld', 'example', 'few-shot', 'fewshot', 'sample'))
     return 'Dit is een VOORBEELDEN-veld: geef of scherp concrete voorbeelden aan die de gewenste output/stijl illustreren.';
   if (has('rule', 'regel', 'randvoorwaard', 'constraint', 'eis', 'do', 'niet', 'vermijd'))
-    return 'Dit is een REGELS/RANDVOORWAARDEN-veld: benoem heldere eisen — toon, taalniveau, lengte, AVG, wat wel/niet mag.';
+    return 'Dit is een REGELS/RANDVOORWAARDEN-veld: benoem heldere eisen zoals toon, taalniveau, lengte, AVG en wat wel of niet mag.';
   if (has('format', 'formaat', 'structuur', 'structure', 'opbouw', 'indeling', 'pattern', 'template', 'layout', 'rubriek'))
     return 'Dit is een FORMAT/STRUCTUUR-veld: beschrijf de gewenste opbouw/indeling van de output (koppen, volgorde, onderdelen).';
   if (has('toon', 'tone', 'stijl', 'style', 'taalniveau'))
@@ -3439,10 +3457,45 @@ function fieldRoleHint(id: string, label: string, placeholder?: string): string 
   if (has('context', 'achtergrond', 'situatie', 'background'))
     return 'Dit is een CONTEXT/ACHTERGROND-veld: beschrijf de situatie, aanleiding, doelgroep en het beschikbare materiaal. Geen instructies of rol hier.';
   if (has('ask', 'taak', 'task', 'instruct', 'opdracht', 'vraag', 'actie', 'request', 'goal', 'doel'))
-    return 'Dit is een OPDRACHT/INSTRUCTIE-veld: maak de concrete vraag/actie scherp — wat moet de AI doen, in welke rol, in welk format, in welke stappen. Expliciet en actiegericht.';
+    return 'Dit is een OPDRACHT/INSTRUCTIE-veld: maak de concrete vraag of actie scherp, dus wat de AI moet doen, in welke rol, in welk format en in welke stappen. Expliciet en actiegericht.';
   if (has('stap', 'step', 'werkwijze', 'proces'))
     return 'Dit is een STAPPEN-veld: beschrijf de gewenste tussenstappen/werkwijze die de AI moet volgen.';
   return '';
+}
+
+/**
+ * Beschrijft de VORM van wat de gebruiker in het veld typte: een lijst met
+ * streepjes, een genummerde lijst, losse regels of lopende tekst. Die vorm gaat
+ * als harde instructie mee, want een model dat alleen "behoud de opmaak" leest,
+ * maakt van een lijstje toch geregeld een alinea. Het teken vooraan (- of *)
+ * wordt letterlijk teruggegeven, zodat de streepjes blijven staan.
+ */
+function valueShapeHint(currentValue: string): string {
+  const lines = currentValue
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
+  if (lines.length === 0) return '';
+  const bullets = lines.filter((l) => /^[-*•]\s+/.test(l));
+  const numbered = lines.filter((l) => /^\d+[.)]\s+/.test(l));
+  if (bullets.length >= 2 && bullets.length >= lines.length / 2) {
+    const marker = bullets[0].charAt(0);
+    return (
+      `Een lijst van ${bullets.length} punten die elk beginnen met "${marker} ". Lever je versie in ` +
+      `precies dezelfde vorm: elk punt op een eigen regel, met "${marker} " ervoor. Neem de bestaande ` +
+      `punten over (aangescherpt waar nodig) en voeg er hooguit een paar toe.`
+    );
+  }
+  if (numbered.length >= 2 && numbered.length >= lines.length / 2) {
+    return (
+      `Een genummerde lijst van ${numbered.length} punten. Lever je versie als dezelfde genummerde ` +
+      `lijst: elk punt op een eigen regel, doorlopend genummerd, met de bestaande punten als basis.`
+    );
+  }
+  if (lines.length > 1) {
+    return `${lines.length} losse regels. Houd die regelindeling aan; plak ze niet aan elkaar tot één alinea.`;
+  }
+  return 'Lopende tekst zonder lijst. Houd dat zo: geen lijst of opsomming ervan maken.';
 }
 
 /** Bouw de gebruikersprompt voor de expand-field-modus (verrijk één veld). */
@@ -3455,24 +3508,32 @@ const EXPAND_FIELD_USER_PROMPT = (
   techniqueName: string | undefined,
 ) => {
   const roleHint = fieldRoleHint(fieldId, fieldLabel, fieldPlaceholder);
+  const shape = valueShapeHint(currentValue);
+  // Veldnamen zijn vaak "ASK: vraag een specifieke actie (...)"; het deel vóór
+  // de toelichting is de naam waarmee de gebruiker het veld kent.
+  const shortLabel = fieldLabel.split(/\s+[—–:-]\s+/)[0].trim() || fieldLabel;
   return (
-    `Gekozen techniek/raamwerk: ${techniqueName ?? 'onbekend'}\n\n` +
-    `VELD-OMSCHRIJVING VAN DE BEHEERDER (LEIDEND — dit bepaalt exact wat er in dit veld hoort;\n` +
+    `Gekozen techniek/raamwerk: ${techniqueName ?? 'onbekend'}\n` +
+    `Je vult exact één veld daarvan aan: ${shortLabel}. Niets anders.\n\n` +
+    `VELD-OMSCHRIJVING VAN DE BEHEERDER (LEIDEND; dit bepaalt exact wat er in dit veld hoort,\n` +
     `lees zorgvuldig en vul precies dít in, ook als de veldnaam anders doet vermoeden):\n` +
     `- Titel van het veld: ${fieldLabel}\n` +
     (fieldPlaceholder
       ? `- Wat hier moet komen (voorbeeld/uitleg van de beheerder): ${fieldPlaceholder}\n`
       : '') +
     (roleHint
-      ? `- Grove hint (SECUNDAIR — negeer zodra dit botst met de omschrijving hierboven): ${roleHint}\n`
+      ? `- Grove hint (SECUNDAIR; negeer zodra dit botst met de omschrijving hierboven): ${roleHint}\n`
       : '') +
     `\nHUIDIGE INHOUD VAN DIT VELD (lever een betere versie die precies aan de omschrijving hierboven voldoet):\n"""\n${currentValue}\n"""\n\n` +
-    `DE OVERIGE VELDEN (alleen ter afstemming — NIET aanpassen, NIET herhalen):\n` +
+    (shape ? `VORM VAN DIE INHOUD (verplicht aanhouden): ${shape}\n\n` : '') +
+    `DE OVERIGE VELDEN (alleen ter afstemming, dus NIET aanpassen en NIET herhalen):\n` +
     (siblings.length
       ? siblings
           .map((s) => `- ${s.label}: ${s.value && s.value.trim() ? s.value.trim() : '(nog leeg)'}`)
           .join('\n')
-      : '(geen andere velden)')
+      : '(geen andere velden)') +
+    `\n\nLever alleen de nieuwe inhoud voor het veld ${shortLabel}, in dezelfde vorm als hierboven, ` +
+    `met de huidige inhoud als basis.`
   );
 };
 
