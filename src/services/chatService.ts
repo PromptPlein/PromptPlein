@@ -289,7 +289,7 @@ export async function optimizeProjectInstructions(args: {
   }
 }
 
-// --- Handoff vanuit de generator ("Uitvoeren in chat") ---
+// --- Handoff vanuit de generator ("Kopiëren in chat") ---
 // sessionStorage in plaats van router-state: die overleeft de login-roundtrip
 // van RequireAuth in dezelfde tab en lekt niet naar andere tabs. Bij uitloggen
 // wist wipeAllChatStorage deze key mee.
@@ -300,12 +300,16 @@ const HANDOFF_TTL_MS = 15 * 60 * 1000;
 /** De klaargezette prompt plus hoe de chat ermee om moet gaan. */
 export interface ChatHandoff {
   prompt: string;
-  /** 'execute' = draai als uitvoergesprek (neutrale systeemprompt, ruim plafond). */
-  kind: 'chat' | 'execute';
+  /**
+   * 'compose' = zet de prompt in het invoerveld en verstuur niets; de gebruiker
+   * bepaalt zelf wanneer hij hem draait. 'execute' = draai hem meteen als
+   * uitvoergesprek (neutrale systeemprompt, ruim plafond).
+   */
+  kind: 'chat' | 'execute' | 'compose';
 }
 
-/** Zet een gegenereerde prompt klaar om in de chat uit te voeren. */
-export function writeHandoff(prompt: string, kind: ChatHandoff['kind'] = 'execute'): void {
+/** Zet een gegenereerde prompt klaar voor de chat. */
+export function writeHandoff(prompt: string, kind: ChatHandoff['kind'] = 'compose'): void {
   try {
     sessionStorage.setItem(HANDOFF_KEY, JSON.stringify({ prompt, kind, createdAt: Date.now() }));
   } catch {
@@ -326,7 +330,9 @@ export function consumeHandoff(): ChatHandoff | null {
     }
     // Een payload zonder kind is door een oudere versie geschreven; de enige
     // schrijver was toen "Uitvoeren in chat", dus uitvoeren is dan correct.
-    return { prompt: parsed.prompt, kind: parsed.kind === 'chat' ? 'chat' : 'execute' };
+    const kind =
+      parsed.kind === 'chat' || parsed.kind === 'compose' ? parsed.kind : 'execute';
+    return { prompt: parsed.prompt, kind };
   } catch {
     return null;
   }

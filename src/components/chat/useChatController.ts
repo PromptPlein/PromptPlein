@@ -55,7 +55,12 @@ export interface ChatController {
   stop: () => void;
   /** Probeer het laatste, mislukte antwoord opnieuw. */
   retry: () => void;
-  newConversation: () => void;
+  /**
+   * Start een vers, leeg gesprek. Met `kind: 'execution'` draait dat gesprek
+   * onder de neutrale uitvoer-systeemprompt (de gekopieerde prompt uit de
+   * bouwer bepaalt dan zelf taal, toon en opmaak).
+   */
+  newConversation: (kind?: ChatConversation['kind']) => void;
   /**
    * Start een vers gesprek dat bij `projectId` hoort. Het gesprek draait dan het
    * hele leven onder de projectinstructie en bronbestanden van dat project.
@@ -316,10 +321,13 @@ export default function useChatController(
     void send(lastUser.content);
   }, [send, update]);
 
-  const newConversation = useCallback(() => {
-    if (streamingRef.current) return;
-    update(createConversation());
-  }, [update]);
+  const newConversation = useCallback(
+    (kind?: ChatConversation['kind']) => {
+      if (streamingRef.current) return;
+      update(createConversation(kind));
+    },
+    [update],
+  );
 
   const newConversationInProject = useCallback(
     (projectId: string) => {

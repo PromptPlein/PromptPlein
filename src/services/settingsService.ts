@@ -234,7 +234,7 @@ export interface ChatSettings {
   systemPrompt: string;
   /**
    * Systeemprompt voor UITVOERgesprekken: een gegenereerde prompt draait in de
-   * chat (Testkamer of "Uitvoeren in chat"). Bewust los van `systemPrompt`,
+   * chat (Testkamer of "Kopiëren in chat"). Bewust los van `systemPrompt`,
    * want hier gelden de B1-huisregels juist NIET — de prompt-template bepaalt
    * zelf taal, toon en opmaak. Leeg = ingebouwde default.
    */

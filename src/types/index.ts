@@ -707,7 +707,7 @@ export interface ChatConversation {
   attachments: ChatAttachment[];
   /**
    * 'execution': dit gesprek voert een gegenereerde prompt uit (Testkamer of
-   * "Uitvoeren in chat"). Alle beurten draaien dan onder de neutrale
+   * "Kopiëren in chat"). Alle beurten draaien dan onder de neutrale
    * uitvoer-systeemprompt i.p.v. de B1-huisregels, zonder opmaak-afvlakking.
    */
   kind?: 'execution';

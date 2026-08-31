@@ -65,19 +65,25 @@ export default function ChatPage() {
     };
   }, []);
 
-  // Handoff vanuit de generator ("Uitvoeren in chat"): prompt klaargezet in
-  // sessionStorage — overleeft ook de login-roundtrip van RequireAuth. Een
-  // execute-handoff start een UITVOERgesprek: de prompt draait dan onder de
-  // neutrale uitvoer-systeemprompt in plaats van de B1-huisregels.
-  const { sendInNewConversation } = controller;
+  // Handoff vanuit de generator ("Kopiëren in chat"): prompt klaargezet in
+  // sessionStorage, dat overleeft ook de login-roundtrip van RequireAuth. Een
+  // compose-handoff verstuurt niets: de prompt komt in het invoerveld te staan,
+  // zodat de gebruiker hem eerst kan aanvullen. Het gesprek is wel meteen een
+  // UITVOERgesprek, dus bij versturen draait hij onder de neutrale
+  // uitvoer-systeemprompt in plaats van de B1-huisregels.
+  const { sendInNewConversation, newConversation } = controller;
   useEffect(() => {
     if (!user || !settings?.enabled || handoffDone.current) return;
     const handoff = consumeHandoff();
-    if (handoff) {
-      handoffDone.current = true;
-      sendInNewConversation(handoff.prompt, handoff.kind === 'execute' ? 'execution' : undefined);
+    if (!handoff) return;
+    handoffDone.current = true;
+    if (handoff.kind === 'compose') {
+      newConversation('execution');
+      composerRef.current?.fill(handoff.prompt);
+      return;
     }
-  }, [user, settings, sendInNewConversation]);
+    sendInNewConversation(handoff.prompt, handoff.kind === 'execute' ? 'execution' : undefined);
+  }, [user, settings, sendInNewConversation, newConversation]);
 
   const conversation = controller.conversation;
   const messages = conversation?.messages ?? [];

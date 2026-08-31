@@ -1,5 +1,14 @@
 import { useEffect, useState } from 'react';
-import { Copy, Check, ChevronDown, RotateCcw, Save, Share2, FolderCheck, Play } from 'lucide-react';
+import {
+  Copy,
+  Check,
+  ChevronDown,
+  RotateCcw,
+  Save,
+  Share2,
+  FolderCheck,
+  MessageSquarePlus,
+} from 'lucide-react';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import { Link, useNavigate } from 'react-router-dom';
@@ -50,7 +59,7 @@ export default function OptimizedOutput({
   const { configured } = useAuth();
   const [copied, setCopied] = useState(false);
 
-  // Chat-instellingen: bepalen of "Uitvoeren in chat" en de Testkamer
+  // Chat-instellingen: bepalen of "Kopiëren in chat" en de Testkamer
   // beschikbaar zijn (kill-switch van de beheerder). Zolang ze laden gedragen
   // de knoppen zich als vanouds; de chatpagina zelf blijft het vangnet.
   const [chatSettings, setChatSettings] = useState<ChatSettings | null>(null);
@@ -70,7 +79,7 @@ export default function OptimizedOutput({
   const [showSave, setShowSave] = useState(false);
   const [saved, setSaved] = useState<Prompt | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
-  // Voor "Uitvoeren in chat": prompt klaarzetten en naar /chat navigeren.
+  // Voor "Kopiëren in chat": prompt klaarzetten en naar /chat navigeren.
   const navigate = useNavigate();
 
   async function handleCopy() {
@@ -81,12 +90,14 @@ export default function OptimizedOutput({
   }
 
   /**
-   * Voer de samengestelde prompt uit in de chat: de prompt gaat via een
+   * Zet de samengestelde prompt klaar in de chat: de prompt gaat via een
    * sessionStorage-handoff mee (overleeft óók de login-redirect van
-   * RequireAuth) en draait daar automatisch als eerste bericht.
+   * RequireAuth) en komt daar in het invoerveld te staan. Bewust niet
+   * verstuurd: de plekken tussen [haakjes] moet de gebruiker eerst zelf
+   * invullen.
    */
-  function handleExecute() {
-    writeHandoff(result.optimized_content);
+  function handleSendToChat() {
+    writeHandoff(result.optimized_content, 'compose');
     navigate('/chat');
   }
 
@@ -199,16 +210,21 @@ export default function OptimizedOutput({
             <Save size={16} /> Opslaan in bibliotheek
           </button>
         )}
-        {/* Uitvoeren in chat: de AI voert de prompt daar meteen uit, met vervolgvragen.
-            Uitgeschakeld wanneer de beheerder de chat uitzette — anders zou de
-            prompt stilletjes verdwijnen in een handoff die nooit vuurt. */}
+        {/* Kopiëren in chat: de prompt komt in het invoerveld van een nieuwe chat
+            te staan en wordt niet verstuurd. Uitgeschakeld wanneer de beheerder
+            de chat uitzette, anders zou de prompt stilletjes verdwijnen in een
+            handoff die nooit vuurt. */}
         <button
           className="opl-btn-secondary"
-          onClick={handleExecute}
+          onClick={handleSendToChat}
           disabled={!chatAvailable}
-          title={!chatAvailable ? 'De beheerder heeft de chat uitgeschakeld.' : undefined}
+          title={
+            !chatAvailable
+              ? 'De beheerder heeft de chat uitgeschakeld.'
+              : 'Zet de prompt klaar in de chat; je verstuurt hem daar zelf.'
+          }
         >
-          <Play size={16} /> Uitvoeren in chat
+          <MessageSquarePlus size={16} /> Kopiëren in chat
         </button>
         <button className="opl-btn-primary" onClick={handleCopy}>
           {copied ? <Check size={16} /> : <Copy size={16} />}
