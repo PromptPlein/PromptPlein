@@ -287,9 +287,6 @@ export default function ChatPage() {
     }
   }, []);
 
-  // De provider van het laatste AI-antwoord: wijkt die af van de instelling
-  // (fallback), dan laat de badge dat zien.
-  const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant' && m.provider);
   const composerDisabled = !configured || !settings || settings.enabled === false;
 
   // Chat uitgezet door de beheerder of geen backend: nette melding.
@@ -469,7 +466,6 @@ export default function ChatPage() {
                   <ChatMessageList
                     messages={messages}
                     streaming={controller.streaming}
-                    expectedProvider={settings?.provider ?? 'mistral'}
                     onRetry={controller.retry}
                     onImprove={handleImprove}
                     onSaveAsPrompt={handleSaveAsPrompt}
@@ -497,11 +493,7 @@ export default function ChatPage() {
                   canPickProject={messages.length === 0 && conversation?.kind !== 'execution'}
                   badge={
                     settings ? (
-                      <ChatModelBadge
-                        provider={settings.provider}
-                        model={settings.model}
-                        actualProvider={lastAssistant?.provider}
-                      />
+                      <ChatModelBadge provider={settings.provider} model={settings.model} />
                     ) : undefined
                   }
                 />

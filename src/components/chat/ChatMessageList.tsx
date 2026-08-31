@@ -3,8 +3,6 @@ import { AlertTriangle, Lightbulb, RotateCcw, Save, Wand2, X } from 'lucide-reac
 import clsx from 'clsx';
 import RichText from '@/components/optimizer/RichText';
 import CopyMessageButton from './CopyMessageButton';
-import { PROVIDER_LABELS } from '@/config/aiModels';
-import type { AiProvider } from '@/config/aiModels';
 import type { ChatMessage } from '@/types';
 
 /**
@@ -14,7 +12,6 @@ import type { ChatMessage } from '@/types';
 export default function ChatMessageList({
   messages,
   streaming,
-  expectedProvider,
   onRetry,
   onImprove,
   onSaveAsPrompt,
@@ -23,8 +20,6 @@ export default function ChatMessageList({
 }: {
   messages: ChatMessage[];
   streaming: boolean;
-  /** De provider die volgens de instellingen zou moeten antwoorden. */
-  expectedProvider: AiProvider;
   onRetry: () => void;
   /**
    * "Verbeter in generator" op eigen berichten (omgekeerde handoff). Niet
@@ -63,7 +58,6 @@ export default function ChatMessageList({
           key={message.id}
           message={message}
           isStreaming={streaming && i === messages.length - 1 && message.role === 'assistant'}
-          expectedProvider={expectedProvider}
           onRetry={onRetry}
           canRetry={!streaming && i === messages.length - 1}
           onImprove={onImprove}
@@ -79,7 +73,6 @@ export default function ChatMessageList({
 const ChatMessageRow = memo(function ChatMessageRow({
   message,
   isStreaming,
-  expectedProvider,
   onRetry,
   canRetry,
   onImprove,
@@ -89,7 +82,6 @@ const ChatMessageRow = memo(function ChatMessageRow({
 }: {
   message: ChatMessage;
   isStreaming: boolean;
-  expectedProvider: AiProvider;
   onRetry: () => void;
   canRetry: boolean;
   onImprove?: (text: string) => void;
@@ -172,9 +164,6 @@ const ChatMessageRow = memo(function ChatMessageRow({
     );
   }
 
-  const fallbackProvider =
-    message.provider && message.provider !== expectedProvider ? message.provider : null;
-
   return (
     <div className="flex flex-col items-start gap-1.5">
       <div
@@ -206,12 +195,6 @@ const ChatMessageRow = memo(function ChatMessageRow({
 
       {message.stopped && (
         <p className="text-[11px] text-slate-400 dark:text-slate-500">Gestopt door jou.</p>
-      )}
-
-      {fallbackProvider && !message.error && (
-        <p className="text-[11px] text-amber-600 dark:text-amber-400">
-          Tijdelijk beantwoord via {PROVIDER_LABELS[fallbackProvider] ?? fallbackProvider} (fallback).
-        </p>
       )}
 
       {message.error && (
