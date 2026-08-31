@@ -517,7 +517,6 @@ export default function TestRoom({
                 <ChatMessageList
                   messages={messages}
                   streaming={controller.streaming}
-                  expectedProvider={chatSettings.provider}
                   onRetry={controller.retry}
                 />
               </div>
@@ -660,11 +659,7 @@ export default function TestRoom({
                 onAddFile={() => undefined}
                 onRemoveAttachment={() => undefined}
                 badge={
-                  <ChatModelBadge
-                    provider={chatSettings.provider}
-                    model={chatSettings.model}
-                    actualProvider={lastAssistant?.provider}
-                  />
+                  <ChatModelBadge provider={chatSettings.provider} model={chatSettings.model} />
                 }
               />
             </div>
