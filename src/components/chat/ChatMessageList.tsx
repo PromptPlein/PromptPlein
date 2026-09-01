@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef } from 'react';
-import { AlertTriangle, Lightbulb, RotateCcw, Save, Wand2, X } from 'lucide-react';
+import { AlertTriangle, Globe, Lightbulb, RotateCcw, Save, Wand2, X } from 'lucide-react';
 import clsx from 'clsx';
 import RichText from '@/components/optimizer/RichText';
 import CopyMessageButton from './CopyMessageButton';
@@ -12,6 +12,7 @@ import type { ChatMessage } from '@/types';
 export default function ChatMessageList({
   messages,
   streaming,
+  phase,
   onRetry,
   onImprove,
   onSaveAsPrompt,
@@ -20,6 +21,12 @@ export default function ChatMessageList({
 }: {
   messages: ChatMessage[];
   streaming: boolean;
+  /**
+   * Waar de lopende beurt is ('searching', 'thinking', …). Verklaart de stilte
+   * vóór de eerste regel: zoeken op internet duurt een paar seconden en zonder
+   * uitleg lijkt het scherm stil te staan.
+   */
+  phase?: string | null;
   onRetry: () => void;
   /**
    * "Verbeter in generator" op eigen berichten (omgekeerde handoff). Niet
@@ -58,6 +65,9 @@ export default function ChatMessageList({
           key={message.id}
           message={message}
           isStreaming={streaming && i === messages.length - 1 && message.role === 'assistant'}
+          // Alleen de rij die nu schrijft heeft de fase nodig; de rest krijgt
+          // null, zodat een fasewissel niet elke rij opnieuw laat renderen.
+          phase={streaming && i === messages.length - 1 ? (phase ?? null) : null}
           onRetry={onRetry}
           canRetry={!streaming && i === messages.length - 1}
           onImprove={onImprove}
@@ -73,6 +83,7 @@ export default function ChatMessageList({
 const ChatMessageRow = memo(function ChatMessageRow({
   message,
   isStreaming,
+  phase,
   onRetry,
   canRetry,
   onImprove,
@@ -82,6 +93,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
 }: {
   message: ChatMessage;
   isStreaming: boolean;
+  phase?: string | null;
   onRetry: () => void;
   canRetry: boolean;
   onImprove?: (text: string) => void;
@@ -175,7 +187,9 @@ const ChatMessageRow = memo(function ChatMessageRow({
         {message.content ? (
           <RichText text={message.content} />
         ) : isStreaming ? (
-          <span className="text-slate-400 dark:text-slate-500">Aan het nadenken…</span>
+          <span className="text-slate-400 dark:text-slate-500">
+            {phase === 'searching' ? 'Aan het zoeken op internet…' : 'Aan het nadenken…'}
+          </span>
         ) : null}
         {isStreaming && (
           <span
@@ -189,6 +203,37 @@ const ChatMessageRow = memo(function ChatMessageRow({
           kwam, dus die moet in één klik mee naar een document of e-mail. Pas
           zichtbaar zodra het antwoord af is — halverwege kopiëren levert een
           afgekapte tekst op. */}
+      {/* De bronnen waarmee dit antwoord is geschreven. Staan er los onder, ook
+          al noemt het model ze meestal zelf in de tekst: hier zijn het echte
+          links die je kunt aanklikken om na te lezen of het klopt. De nummering
+          loopt gelijk met de [1]-verwijzingen in het antwoord. */}
+      {!isStreaming && message.sources && message.sources.length > 0 && (
+        <div className="mt-1 w-full">
+          <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+            <Globe size={12} className="shrink-0" />
+            Bronnen van internet
+          </p>
+          <ol className="space-y-0.5">
+            {message.sources.map((source, i) => (
+              <li key={source.url} className="flex gap-1.5 text-xs">
+                <span className="shrink-0 tabular-nums text-slate-400 dark:text-slate-500">
+                  [{i + 1}]
+                </span>
+                <a
+                  href={source.url}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="min-w-0 truncate text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
+                  title={source.url}
+                >
+                  {source.title}
+                </a>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+
       {!isStreaming && message.content.trim() && (
         <CopyMessageButton text={message.content} label="Kopieer antwoord" className="-ml-1.5" />
       )}

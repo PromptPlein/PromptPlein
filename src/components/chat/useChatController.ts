@@ -47,12 +47,24 @@ export interface ChatControllerOptions {
    * knop in de invoerbalk, dus de stand kan tussen twee beurten wisselen.
    */
   thinking?: boolean;
+  /**
+   * Zoeken op internet aan: de server zoekt eerst en levert de bronnen bij het
+   * antwoord. Net als de denkstand een knop in de invoerbalk, dus per beurt te
+   * wisselen.
+   */
+  webSearch?: boolean;
 }
 
 export interface ChatController {
   conversation: ChatConversation | null;
   index: ChatIndexEntry[];
   streaming: boolean;
+  /**
+   * Waar de lopende beurt is: 'searching' (op internet aan het zoeken),
+   * 'drafting', 'thinking' of 'writing'. Null zodra er niets loopt. Hiermee kan
+   * de berichtenlijst de stilte vóór de eerste regel verklaren.
+   */
+  phase: string | null;
   extracting: boolean;
   send: (text: string) => Promise<void>;
   /** Start een vers gesprek en verstuur `text` daarin (generator-handoff). */
@@ -97,10 +109,12 @@ export default function useChatController(
   const ephemeral = options?.ephemeral ?? false;
   const defaultKind = options?.kind;
   const thinking = options?.thinking ?? false;
+  const webSearch = options?.webSearch ?? false;
 
   const [conversation, setConversation] = useState<ChatConversation | null>(null);
   const [index, setIndex] = useState<ChatIndexEntry[]>([]);
   const [streaming, setStreaming] = useState(false);
+  const [phase, setPhase] = useState<string | null>(null);
   const [extracting, setExtracting] = useState(false);
 
   // Refs naast state: `send` en `retry` hebben de actuele waarden nodig zonder
@@ -203,6 +217,7 @@ export default function useChatController(
       update(updated);
       streamingRef.current = true;
       setStreaming(true);
+      setPhase(webSearch ? 'searching' : null);
 
       // De vraag meteen bewaren (zonder de nog lege assistant-placeholder),
       // zodat een refresh midden in de stream het gesprek niet kwijtraakt.
@@ -269,9 +284,16 @@ export default function useChatController(
         kind: updated.kind,
         project,
         thinking,
+        webSearch,
         onChunk: (textSoFar) => {
           pendingText = textSoFar;
           if (!rafId) rafId = requestAnimationFrame(flushPending);
+        },
+        // Alleen de fase: die verklaart de stilte vóór de eerste regel (zoeken
+        // duurt een paar seconden). De bronnen zelf komen via het resultaat
+        // hieronder mee, want daar horen ze bij het bericht.
+        onStatus: (status) => {
+          if (status.phase) setPhase(status.phase);
         },
         signal: controller.signal,
       });
@@ -286,9 +308,16 @@ export default function useChatController(
       if (cur && cur.id === updated.id) {
         const messages = cur.messages.map((m) => {
           if (m.id !== assistantMsg.id) return m;
-          if (res.aborted) return { ...m, content: res.text, provider, model, stopped: true };
-          if (res.error) return { ...m, content: res.text, provider, model, error: res.error };
-          return { ...m, content: res.text, provider, model };
+          // Lege bronnenlijst = er is gezocht maar niets gevonden; dan hoort er
+          // ook geen kopje "Bronnen" onder het antwoord te staan.
+          const sources = res.sources?.length ? { sources: res.sources } : {};
+          if (res.aborted) {
+            return { ...m, content: res.text, provider, model, ...sources, stopped: true };
+          }
+          if (res.error) {
+            return { ...m, content: res.text, provider, model, ...sources, error: res.error };
+          }
+          return { ...m, content: res.text, provider, model, ...sources };
         });
         const next = { ...cur, messages, updatedAt: new Date().toISOString() };
         update(next);
@@ -297,8 +326,9 @@ export default function useChatController(
 
       streamingRef.current = false;
       setStreaming(false);
+      setPhase(null);
     },
-    [settings, userId, defaultKind, thinking, update, persistNow, modelForProvider],
+    [settings, userId, defaultKind, thinking, webSearch, update, persistNow, modelForProvider],
   );
 
   const sendInNewConversation = useCallback(
@@ -458,6 +488,7 @@ export default function useChatController(
     conversation,
     index,
     streaming,
+    phase,
     extracting,
     send,
     sendInNewConversation,

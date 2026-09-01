@@ -15,6 +15,7 @@ import {
   Layers,
   Coins,
   ExternalLink,
+  Globe,
   KeyRound,
 } from 'lucide-react';
 import clsx from 'clsx';
@@ -41,6 +42,8 @@ import {
   DEFAULT_EXECUTION_SYSTEM_PROMPT,
   DEFAULT_PROJECT_OPTIMIZE_PROMPT,
   DEFAULT_SYSTEM_PROMPT,
+  DEFAULT_WEB_SEARCH_INSTRUCTION,
+  MAX_WEB_SEARCH_RESULTS,
   type AiSettings,
   type ChatSettings,
 } from '@/services/settingsService';
@@ -146,6 +149,8 @@ export default function SettingsPage() {
             temperature: chat.temperature,
             optimize_enabled: chat.optimizeEnabled,
             project_optimize_enabled: chat.projectOptimizeEnabled,
+            web_search_enabled: chat.webSearchEnabled,
+            web_search_results: chat.webSearchResults,
           },
         }).catch(() => {
           /* audit is best-effort */
@@ -592,6 +597,108 @@ export default function SettingsPage() {
                     className="shrink-0 font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
                     onClick={() =>
                       patchChat({ projectOptimizeSystemPrompt: DEFAULT_PROJECT_OPTIMIZE_PROMPT })
+                    }
+                  >
+                    Herstel standaard
+                  </button>
+                )}
+              </p>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+            <div className="mb-3 flex items-center gap-2">
+              <Globe size={16} className="text-rijksblauw-500" />
+              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                Zoeken op internet
+              </h3>
+            </div>
+            <p className="mb-4 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
+              Zet dit aan, dan staat er in de invoerbalk van de chat een knop
+              &ldquo;Zoeken&rdquo;. Heeft de gebruiker die aanstaan, dan gaat zijn vraag eerst naar
+              een zoekmachine en krijgt het model de gevonden pagina&rsquo;s mee als bronnen. Onder
+              het antwoord staan die bronnen als aanklikbare links, zodat de gebruiker kan nalezen
+              of het klopt. De knop staat standaard uit en de gebruiker kiest per bericht; zoeken
+              kost een paar seconden extra voordat het antwoord begint.
+            </p>
+
+            <p className="mb-4 max-w-2xl rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
+              Hier aanzetten is niet genoeg: er moet ook een zoekdienst achter zitten. Die staat in
+              de secrets van de edge function, niet in dit scherm, want een zoekadres dat de browser
+              mag kiezen is een adres dat iedereen mag kiezen. Zet er één van deze twee klaar met{' '}
+              <code className="rounded bg-slate-200 px-1 py-0.5 text-[12px] dark:bg-slate-700">
+                supabase secrets set
+              </code>
+              :{' '}
+              <strong>TAVILY_API_KEY</strong> (1000 zoekopdrachten per maand gratis, geen
+              creditcard) of <strong>SEARXNG_URL</strong> (een eigen SearXNG-server: open source en
+              geen prijs per zoekopdracht, maar je host hem zelf). Staat er geen van beide, dan doet
+              de knop niets en antwoordt het model gewoon uit eigen kennis.
+            </p>
+
+            <label className="flex cursor-pointer items-center gap-3">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded accent-rijksblauw-500"
+                checked={chat.webSearchEnabled}
+                onChange={(e) => patchChat({ webSearchEnabled: e.target.checked })}
+              />
+              <span className="text-sm text-slate-700 dark:text-slate-200">
+                Knop &ldquo;Zoeken&rdquo; tonen in het invoerveld van de chat
+              </span>
+            </label>
+
+            <div className={clsx('mt-4', !chat.webSearchEnabled && 'pointer-events-none opacity-50')}>
+              <div className="mb-1 flex items-center gap-2">
+                <Sliders size={15} className="text-slate-400" />
+                <label className="opl-label mb-0" htmlFor="webSearchResults">
+                  Aantal bronnen per vraag
+                </label>
+                <span className="ml-auto text-sm font-medium tabular-nums text-rijksblauw-700 dark:text-rijksblauw-200">
+                  {chat.webSearchResults}
+                </span>
+              </div>
+              <input
+                id="webSearchResults"
+                type="range"
+                min={1}
+                max={MAX_WEB_SEARCH_RESULTS}
+                step={1}
+                value={chat.webSearchResults}
+                onChange={(e) => patchChat({ webSearchResults: Number(e.target.value) })}
+                className="w-full accent-rijksblauw-500"
+              />
+              <p className="text-xs text-slate-400 dark:text-slate-500">
+                Meer bronnen geven een completer beeld, maar maken de vraag aan het model langer en
+                daarmee trager. Vijf is een goede middenweg.
+              </p>
+
+              <label className="opl-label mt-4" htmlFor="webSearchInstruction">
+                Instructie bij de gevonden bronnen
+              </label>
+              <textarea
+                id="webSearchInstruction"
+                className="opl-input min-h-[200px] resize-y font-mono text-[13px]"
+                value={chat.webSearchInstruction}
+                onChange={(e) => patchChat({ webSearchInstruction: e.target.value })}
+                placeholder="Bijv. Beantwoord de vraag met wat er in de bronnen staat en verwijs met [1]…"
+              />
+              <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400 dark:text-slate-500">
+                <span>
+                  Deze tekst komt onder de systeemprompt van de chat te staan, en alleen wanneer het
+                  zoeken ook echt iets heeft opgeleverd; de gevonden pagina&rsquo;s staan er als
+                  genummerde bronnen onder. De standaardtekst regelt drie dingen: de bronnen gaan
+                  vóór wat het model zelf dacht te weten, wat er in geen enkele bron staat mag er
+                  niet bij verzonnen worden, en achter elke bewering hoort een verwijzing als [1]
+                  met onderaan de bijbehorende lijst. Laat leeg om de ingebouwde standaard te
+                  gebruiken.
+                </span>
+                {chat.webSearchInstruction.trim() !== DEFAULT_WEB_SEARCH_INSTRUCTION && (
+                  <button
+                    type="button"
+                    className="shrink-0 font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
+                    onClick={() =>
+                      patchChat({ webSearchInstruction: DEFAULT_WEB_SEARCH_INSTRUCTION })
                     }
                   >
                     Herstel standaard

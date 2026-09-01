@@ -7,7 +7,7 @@
 // fallback — zonder AI-service is er geen chat (honest degrade).
 
 import { getAnonKey, getFunctionUrl, isSupabaseConfigured, supabase } from '@/lib/supabase';
-import { streamNdjson, type StreamHandler } from '@/lib/ndjsonStream';
+import { streamNdjson, type StatusHandler, type StreamHandler } from '@/lib/ndjsonStream';
 import { CHAT_PREFIX } from '@/lib/chatStorage';
 import {
   composeChatOptimizePrompt,
@@ -15,11 +15,12 @@ import {
   composeExecutionSystemPrompt,
   composeProjectOptimizePrompt,
   composeProjectSystemPrompt,
+  composeWebSearchInstruction,
   MAX_CHAT_OPTIMIZE_CHARS,
   MAX_PROJECT_OPTIMIZE_CHARS,
   type ChatSettings,
 } from '@/services/settingsService';
-import type { ChatProjectContext } from '@/types';
+import type { ChatProjectContext, ChatSource } from '@/types';
 
 /**
  * Schuivend venster: alleen de recentste berichten gaan mee. Houdt de payload
@@ -35,6 +36,12 @@ export interface ChatSendResult {
   /** Afgebroken met de stop-knop; `text` bevat de deeltekst. */
   aborted?: boolean;
   error?: string;
+  /**
+   * De internetbronnen die dit antwoord heeft meegekregen, in de volgorde
+   * waarin het model ze zag. Alleen gevuld wanneer er is gezocht én er iets
+   * gevonden is.
+   */
+  sources?: ChatSource[];
 }
 
 /** Verstuur het gesprek en stream het antwoord via `onChunk`. */
@@ -56,13 +63,22 @@ export async function sendChatMessage(args: {
    */
   thinking?: boolean;
   /**
+   * Zoeken op internet aan: de server zoekt eerst en zet de treffers als
+   * bronblok onder de systeemprompt. Zie {@link useWebSearch}; de knop staat
+   * naast "Denken" in de invoerbalk.
+   */
+  webSearch?: boolean;
+  /** Voortgang naast de tekst, zodat de chat "Zoekt op internet…" kan tonen. */
+  onStatus?: StatusHandler;
+  /**
    * Het project waar dit gesprek onder valt. De projectinstructie wordt dan de
    * leidende systeemprompt en de bronbestanden gaan als bronblokken mee, vóór
    * de eventuele losse bijlagen van het gesprek zelf.
    */
   project?: ChatProjectContext | null;
 }): Promise<ChatSendResult> {
-  const { messages, attachments, settings, onChunk, signal, kind, project, thinking } = args;
+  const { messages, attachments, settings, onChunk, signal, kind, project, thinking, webSearch } =
+    args;
   // Een uitvoergesprek en een projectgesprek sluiten elkaar uit; staat er toch
   // allebei iets klaar, dan wint de uitvoering (dat is een expliciete handoff).
   const isExecution = kind === 'execution';
@@ -85,6 +101,9 @@ export async function sendChatMessage(args: {
   // gedrag van de chat vandaan komt; een nabewerking hier zou een tweede,
   // onzichtbare regelset zijn en het antwoord anders laten lezen dan het model
   // het schreef.
+  // De bronnen komen één keer voorbij in de stream, vóór de eerste tekst; we
+  // houden ze vast zodat ze bij het afgeronde bericht terechtkomen.
+  let sources: ChatSource[] | undefined;
   try {
     const outcome = await streamNdjson({
       url: functionUrl,
@@ -105,6 +124,18 @@ export async function sendChatMessage(args: {
         preferredModel: settings.model,
         temperature: settings.temperature,
         thinking,
+        // Zoeken op internet: het zoekwerk gebeurt server-side, want daar staat
+        // de sleutel van de zoekdienst. De instelling en de instructie van de
+        // beheerder reizen alleen mee als de gebruiker de knop aan heeft staan,
+        // zodat een gewone beurt geen tekst meesleept die toch niet wordt
+        // gebruikt.
+        ...(webSearch
+          ? {
+              webSearch: true,
+              webSearchResults: settings.webSearchResults,
+              webSearchInstruction: composeWebSearchInstruction(settings),
+            }
+          : {}),
         // De systeemprompt van de beheerder, ongewijzigd; bij een uitvoergesprek
         // de neutrale uitvoerinstructie en in een project de projectinstructie
         // van de gebruiker zelf. De server voegt er niets aan toe.
@@ -116,19 +147,23 @@ export async function sendChatMessage(args: {
       },
       onChunk,
       signal,
+      onStatus: (status) => {
+        if (status.sources) sources = status.sources;
+        args.onStatus?.(status);
+      },
     });
 
     if (outcome.aborted) {
-      return { text: outcome.text, provider: outcome.provider, aborted: true };
+      return { text: outcome.text, provider: outcome.provider, sources, aborted: true };
     }
     if (outcome.error) {
-      return { text: outcome.text, provider: outcome.provider, error: outcome.error };
+      return { text: outcome.text, provider: outcome.provider, sources, error: outcome.error };
     }
     const text = outcome.text.trim();
     if (!text) {
       return { text: '', provider: outcome.provider, error: 'De AI-service gaf een leeg antwoord.' };
     }
-    return { text, provider: outcome.provider };
+    return { text, provider: outcome.provider, sources };
   } catch (err) {
     return { text: '', error: err instanceof Error ? err.message : 'De chat-aanroep is mislukt.' };
   }

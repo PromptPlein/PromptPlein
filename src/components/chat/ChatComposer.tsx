@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import clsx from 'clsx';
 import ThinkingToggle from '@/components/common/ThinkingToggle';
+import WebSearchToggle from '@/components/common/WebSearchToggle';
 import { ACCEPTED_DOC_ACCEPT } from '@/lib/extractDocument';
 import { MAX_CHAT_ATTACHMENTS } from './useChatController';
 import type { ChatAttachment, ChatProject } from '@/types';
@@ -97,6 +98,13 @@ interface ChatComposerProps {
   thinking?: boolean;
   /** Zet denken aan of uit voor de volgende beurt. */
   onToggleThinking?: (value: boolean) => void;
+  /**
+   * Staat "Zoeken op internet" aan? Afwezige {@link onToggleWebSearch} = geen
+   * knop; zo verdwijnt hij zodra de beheerder de functie uitzet.
+   */
+  webSearch?: boolean;
+  /** Zet zoeken op internet aan of uit voor de volgende beurt. */
+  onToggleWebSearch?: (value: boolean) => void;
 }
 
 /**
@@ -131,6 +139,8 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
     canPickProject = false,
     thinking = false,
     onToggleThinking,
+    webSearch = false,
+    onToggleWebSearch,
   },
   ref,
 ) {
@@ -523,6 +533,17 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
             <ThinkingToggle
               value={thinking}
               onChange={onToggleThinking}
+              disabled={disabled || streaming}
+            />
+          )}
+
+          {/* Zoeken op internet: de AI haalt er bronnen bij en verwijst ernaar.
+              Naast "Denken", want het is dezelfde afweging: je wacht langer voor
+              een beter onderbouwd antwoord. */}
+          {onToggleWebSearch && (
+            <WebSearchToggle
+              value={webSearch}
+              onChange={onToggleWebSearch}
               disabled={disabled || streaming}
             />
           )}

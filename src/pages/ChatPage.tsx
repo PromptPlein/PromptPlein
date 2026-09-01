@@ -22,6 +22,7 @@ import ProjectSettingsModal from '@/components/chat/ProjectSettingsModal';
 import ProjectView from '@/components/chat/ProjectView';
 import useChatController from '@/components/chat/useChatController';
 import useThinking from '@/lib/useThinking';
+import useWebSearch from '@/lib/useWebSearch';
 import useChatProjects from '@/components/chat/useChatProjects';
 import useFitHeight from '@/components/chat/useFitHeight';
 import SavePromptModal from '@/components/prompts/SavePromptModal';
@@ -47,7 +48,12 @@ export default function ChatPage() {
   const [settings, setSettings] = useState<ChatSettings | null>(null);
   // Denkstand: de knop in de invoerbalk zet hem, de controller stuurt hem mee.
   const [thinking, setThinking] = useThinking();
-  const controller = useChatController(settings, { thinking });
+  const [webSearch, setWebSearch] = useWebSearch();
+  // De stand van de knop telt alleen als de beheerder zoeken aan heeft staan.
+  // Zet hij het uit terwijl iemand de knop nog aan had, dan zoekt die beurt niet
+  // alsnog stiekem mee.
+  const webSearchOn = webSearch && settings?.webSearchEnabled === true;
+  const controller = useChatController(settings, { thinking, webSearch: webSearchOn });
   const projects = useChatProjects();
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
@@ -475,6 +481,7 @@ export default function ChatPage() {
                   <ChatMessageList
                     messages={messages}
                     streaming={controller.streaming}
+                    phase={controller.phase}
                     onRetry={controller.retry}
                     onImprove={handleImprove}
                     onSaveAsPrompt={handleSaveAsPrompt}
@@ -500,6 +507,9 @@ export default function ChatPage() {
                   onPickProject={controller.attachProject}
                   thinking={thinking}
                   onToggleThinking={setThinking}
+                  // Wereldbol alleen tonen als de beheerder zoeken aan heeft staan.
+                  webSearch={webSearch}
+                  onToggleWebSearch={settings?.webSearchEnabled ? setWebSearch : undefined}
                   // Alleen in een nog leeg gesprek: zie ChatController.attachProject.
                   canPickProject={messages.length === 0 && conversation?.kind !== 'execution'}
                   badge={

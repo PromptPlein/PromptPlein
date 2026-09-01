@@ -239,6 +239,20 @@ dit expres niet, want die draait bij elk bericht.
 `src/lib/ndjsonStream.ts` dat uit, inclusief `AbortSignal` voor de stopknop en
 statusupdates die tonen welk model eraan werkt en of er is teruggevallen.
 
+### Zoeken op internet
+
+De chat kan per beurt het web afzoeken (de knop "Zoeken" naast "Denken"). Het
+zoekwerk gebeurt in de edge function; de treffers gaan als bronblok onder de
+systeemprompt, net als een bijlage, en komen als `sources`-event ook naar de
+client voor de bronnenlijst onder het antwoord.
+
+Welke zoekdienst draait staat in de **secrets** van de function en bewust niet in
+`app_settings`: een zoekadres dat de client mag kiezen, mag iedereen kiezen.
+`TAVILY_API_KEY` (1000 zoekopdrachten per maand gratis) heeft voorrang op
+`SEARXNG_URL` (eigen server). Staat er geen van beide, dan doet de knop niets en
+antwoordt het model uit eigen kennis. Aan/uit en de instructie bij de bronnen
+staan wél in Beheer, AI-instellingen.
+
 ### Systeemprompts staan in de database, niet in de code
 
 Het gedrag van de chat, de uitvoering en de optimalisatie komt uit de tabel
