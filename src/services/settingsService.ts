@@ -265,6 +265,28 @@ export interface ChatSettings {
    * PROJECTINSTRUCTIE_Framework.md). Leeg = ingebouwde default.
    */
   projectOptimizeSystemPrompt: string;
+  /**
+   * Mag de gebruiker de chat het internet laten afzoeken (de wereldbol in de
+   * invoerbalk)? Uit = knop verdwijnt.
+   *
+   * Hier aanzetten is niet genoeg. De edge function moet ook een zoekdienst
+   * hebben: `TAVILY_API_KEY` of `SEARXNG_URL` in de secrets. Ontbreekt die, dan
+   * staat de knop er wel, maar levert zoeken niets op en antwoordt het model uit
+   * eigen kennis.
+   */
+  webSearchEnabled: boolean;
+  /**
+   * Hoeveel gevonden bronnen er in de context van het model mogen, van 1 tot
+   * {@link MAX_WEB_SEARCH_RESULTS}. Meer bronnen betekent een completer beeld en
+   * een langere prompt; de server knijpt dit nog een keer af.
+   */
+  webSearchResults: number;
+  /**
+   * Instructie over hoe het model met de gevonden bronnen omgaat: wat het
+   * overneemt, wat niet, en hoe het ernaar verwijst. Gaat alleen mee wanneer er
+   * ook echt treffers zijn. Leeg = ingebouwde default.
+   */
+  webSearchInstruction: string;
 }
 
 /**
@@ -606,6 +628,44 @@ omheen.`;
  */
 export const MAX_PROJECT_OPTIMIZE_CHARS = 20_000;
 
+/**
+ * Bovengrens aan het aantal internetbronnen per beurt. Gelijk aan
+ * `MAX_SEARCH_RESULTS` in de edge function: die knijpt de waarde nog een keer
+ * af, dus wat de beheerder hier kan kiezen moet daar ook door passen.
+ */
+export const MAX_WEB_SEARCH_RESULTS = 8;
+
+/**
+ * Wat het model met de gevonden internetbronnen doet, en de enige plek waar dat
+ * staat. De edge function zet deze tekst onder de systeemprompt van de chat,
+ * met de treffers eronder, en alleen wanneer er ook echt treffers zijn.
+ *
+ * Bewust dezelfde vorm als DEFAULT_CHAT_SYSTEM_PROMPT: koppen met bulletregels
+ * en geen XML-achtige secties. De chat bewerkt het antwoord van het model niet
+ * na, dus een sectietag die een klein model meeschrijft, komt zo op het scherm
+ * van de gebruiker terecht.
+ *
+ * Het bronnenlijstje staat er letterlijk in. Een klein model neemt de vorm van
+ * een voorbeeld over, en juist bij een bronvermelding is de vorm het punt.
+ */
+export const DEFAULT_WEB_SEARCH_INSTRUCTION = `Je hebt zoekresultaten van het internet gekregen. Ze staan hieronder als genummerde bronnen, elk met een titel, een URL en een stuk tekst van die pagina.
+
+Wat je met de bronnen doet
+• Beantwoord de vraag met wat er in de bronnen staat. Dat gaat vóór wat je zelf al wist.
+• Staat het antwoord niet in de bronnen, zeg dat dan in één zin en geef daarna wat je zelf weet.
+• Neem geen bewering over die in geen enkele bron staat.
+• Spreken bronnen elkaar tegen, benoem dat dan en zeg welke bron wat zegt.
+• Noemt een bron een datum, neem die dan mee in je antwoord, zodat de gebruiker ziet van wanneer de informatie is.
+• De zoekopdracht kan ook iets opleveren dat er niets mee te maken heeft. Gebruik alleen de bronnen die over de vraag gaan en laat de rest staan.
+
+Hoe je naar een bron verwijst
+Zet achter een zin met informatie uit een bron het nummer van die bron tussen blokhaken, zo: [1].
+Sluit je antwoord af met de bronnen die je hebt gebruikt, in precies deze vorm:
+
+Bronnen
+[1] Titel van de bron, https://voorbeeld.nl/pagina
+[2] Titel van de andere bron, https://voorbeeld.nl/andere-pagina`;
+
 export const DEFAULT_CHAT_SETTINGS: ChatSettings = {
   enabled: true,
   // Mistral is de afgesproken basis voor de chat (Europees, snel en goedkoop).
@@ -618,6 +678,12 @@ export const DEFAULT_CHAT_SETTINGS: ChatSettings = {
   optimizeSystemPrompt: DEFAULT_CHAT_OPTIMIZE_PROMPT,
   projectOptimizeEnabled: true,
   projectOptimizeSystemPrompt: DEFAULT_PROJECT_OPTIMIZE_PROMPT,
+  // Standaard uit: zoeken loopt langs een dienst buiten PromptPlein en er moet
+  // eerst een sleutel in de secrets van de edge function staan. De beheerder
+  // zet hem aan zodra dat geregeld is.
+  webSearchEnabled: false,
+  webSearchResults: 5,
+  webSearchInstruction: DEFAULT_WEB_SEARCH_INSTRUCTION,
 };
 
 /**
@@ -676,6 +742,15 @@ export function composeProjectOptimizePrompt(settings: ChatSettings): string {
   return settings.projectOptimizeSystemPrompt.trim() || DEFAULT_PROJECT_OPTIMIZE_PROMPT;
 }
 
+/**
+ * De instructie die bij de gevonden internetbronnen hoort. Reist mee in het
+ * verzoek, net als de systeemprompt zelf: de server verzint er niets bij en
+ * gebruikt hem alleen wanneer het zoeken ook echt iets heeft opgeleverd.
+ */
+export function composeWebSearchInstruction(settings: ChatSettings): string {
+  return settings.webSearchInstruction.trim() || DEFAULT_WEB_SEARCH_INSTRUCTION;
+}
+
 const CHAT_SETTINGS_KEY = 'chat_settings';
 const LOCAL_CHAT_SETTINGS_KEY = 'opl.settings.chat_settings';
 
@@ -710,6 +785,16 @@ function normalizeChat(raw: Partial<ChatSettings> | null | undefined): ChatSetti
       typeof raw.projectOptimizeSystemPrompt === 'string'
         ? raw.projectOptimizeSystemPrompt
         : d.projectOptimizeSystemPrompt,
+    webSearchEnabled:
+      typeof raw.webSearchEnabled === 'boolean' ? raw.webSearchEnabled : d.webSearchEnabled,
+    webSearchResults:
+      typeof raw.webSearchResults === 'number' && Number.isFinite(raw.webSearchResults)
+        ? Math.max(1, Math.min(MAX_WEB_SEARCH_RESULTS, Math.round(raw.webSearchResults)))
+        : d.webSearchResults,
+    webSearchInstruction:
+      typeof raw.webSearchInstruction === 'string'
+        ? raw.webSearchInstruction
+        : d.webSearchInstruction,
   };
 }
 

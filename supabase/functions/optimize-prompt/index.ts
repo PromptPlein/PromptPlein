@@ -398,6 +398,22 @@ interface RequestBody {
    * want een denkspoor past niet in een antwoord dat geparseerd moet worden.
    */
   thinking?: boolean;
+  /**
+   * "Zoeken op internet" aan voor deze beurt (de wereldbol in de invoerbalk van
+   * de chat). De server zoekt dan zelf en zet de treffers als bronblok onder de
+   * systeemprompt. Welke zoekdienst dat doet staat in de secrets van deze
+   * function, niet in dit verzoek: zie {@link searchBackend}.
+   */
+  webSearch?: boolean;
+  /** Hoeveel gevonden bronnen er mee mogen; de beheerder stelt dit in. */
+  webSearchResults?: number;
+  /**
+   * De instructie van de beheerder over hoe het model met de gevonden bronnen
+   * omgaat: wat het wel en niet mag overnemen en hoe het ernaar verwijst. Komt
+   * uit het beheerportaal, net als de systeemprompt zelf, en gaat alleen mee
+   * wanneer er ook echt treffers zijn.
+   */
+  webSearchInstruction?: string;
   preferredProvider?: PreferredProvider;
   /**
    * Het concrete API-model binnen de gekozen provider (bijv. 'claude-opus-4-8').
@@ -2170,6 +2186,213 @@ function buildChatSystem(
   const header =
     kind === 'project' ? 'BRONBESTANDEN VAN HET PROJECT:' : 'BIJLAGEN BIJ DIT GESPREK:';
   return `${base}\n\n${header}\n\n${blocks}`;
+}
+
+// --- Zoeken op internet ---------------------------------------------------
+//
+// De chat mag per beurt het web afzoeken. Dat gebeurt hier, server-side, en wat
+// eruit komt gaat als DATA onder de systeemprompt, precies zoals de bijlagen in
+// buildChatSystem hierboven. Er komt dus geen tweede, onzichtbare regelset bij:
+// de instructie over hoe het model met bronnen omgaat staat in het
+// beheerportaal en reist mee in het verzoek.
+//
+// Welke zoekdienst er draait staat NIET in het verzoek maar in de secrets van
+// deze function. Zou de client dat adres mogen kiezen, dan kan elke ingelogde
+// gebruiker de function een willekeurig adres laten ophalen.
+//
+//   supabase secrets set TAVILY_API_KEY=tvly-...   Tavily: 1000 zoekopdrachten
+//                                                  per maand gratis, zonder
+//                                                  creditcard.
+//   supabase secrets set SEARXNG_URL=https://...   Een eigen SearXNG-server:
+//                                                  open source, geen sleutel en
+//                                                  geen prijs per zoekopdracht,
+//                                                  maar je host hem zelf. Zet in
+//                                                  settings.yml het json-formaat
+//                                                  aan, anders weigert hij de
+//                                                  API.
+//
+// Staat er allebei iets, dan wint Tavily: die levert per treffer een
+// uitgeschreven fragment in plaats van een enkele regel, en daar heeft een klein
+// model als Mistral Small het meest aan.
+
+/** Eén treffer, in de vorm die beide zoekdiensten opleveren. */
+interface SearchHit {
+  title: string;
+  url: string;
+  /** De tekst van de vindplaats; dit is wat het model te lezen krijgt. */
+  snippet: string;
+}
+
+/** Bovengrens aan het aantal treffers dat de beheerder kan instellen. */
+const MAX_SEARCH_RESULTS = 8;
+/** Aantal treffers wanneer de beheerder niets heeft ingesteld. */
+const DEFAULT_SEARCH_RESULTS = 5;
+/** Tekens per treffer. Acht treffers van 1200 tekens is ruwweg 2500 tokens. */
+const MAX_SEARCH_SNIPPET_CHARS = 1200;
+/** Tavily weigert een zoekopdracht van meer dan 400 tekens. */
+const MAX_SEARCH_QUERY_CHARS = 380;
+/**
+ * Zoeken staat tussen de vraag en de eerste regel van het antwoord in. Duurt het
+ * langer dan dit, dan weegt het wachten zwaarder dan de bronnen: het model
+ * antwoordt dan zonder.
+ */
+const SEARCH_TIMEOUT_MS = 9000;
+
+/**
+ * Welke zoekdienst is er ingesteld? Geen sleutel betekent geen zoekfunctie: de
+ * knop in de chat levert dan niets op en de beurt loopt door zonder bronnen.
+ */
+function searchBackend(): 'tavily' | 'searxng' | null {
+  if (Deno.env.get('TAVILY_API_KEY')) return 'tavily';
+  if (Deno.env.get('SEARXNG_URL')) return 'searxng';
+  return null;
+}
+
+/**
+ * Maakt van de ruwe treffers van een zoekdienst de vorm die het model krijgt.
+ * Beide diensten leveren title/url/content, dus één functie volstaat. Een
+ * treffer zonder url of zonder tekst valt af: naar een bron zonder adres kan het
+ * model niet verwijzen, en een bron zonder tekst voegt niets toe.
+ */
+function toSearchHits(raw: unknown, count: number): SearchHit[] {
+  if (!Array.isArray(raw)) return [];
+  const hits: SearchHit[] = [];
+  for (const item of raw) {
+    if (hits.length >= count) break;
+    const row = item as { title?: unknown; url?: unknown; content?: unknown };
+    const url = typeof row?.url === 'string' ? row.url.trim() : '';
+    const snippet = typeof row?.content === 'string' ? row.content.trim() : '';
+    if (!url || !snippet) continue;
+    const title =
+      typeof row?.title === 'string' && row.title.trim() ? row.title.trim().slice(0, 200) : url;
+    hits.push({ title, url, snippet: snippet.slice(0, MAX_SEARCH_SNIPPET_CHARS) });
+  }
+  return hits;
+}
+
+async function searchTavily(
+  query: string,
+  count: number,
+  signal: AbortSignal,
+): Promise<SearchHit[]> {
+  const response = await fetch('https://api.tavily.com/search', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${Deno.env.get('TAVILY_API_KEY')}`,
+    },
+    body: JSON.stringify({
+      query,
+      max_results: count,
+      // 'basic' kost één credit per zoekopdracht, 'advanced' er twee voor iets
+      // langere fragmenten. Met 1000 gratis zoekopdrachten per maand is die
+      // verdubbeling het niet waard.
+      search_depth: 'basic',
+      // Zet Nederlandse bronnen bovenaan zonder Engelstalige uit te sluiten: bij
+      // een overheidsvraag is rijksoverheid.nl vaak het antwoord, maar lang niet
+      // altijd.
+      country: 'netherlands',
+    }),
+    signal,
+  });
+  if (!response.ok) throw new Error(`Tavily gaf status ${response.status}`);
+  const data = (await response.json()) as { results?: unknown };
+  return toSearchHits(data.results, count);
+}
+
+async function searchSearxng(
+  query: string,
+  count: number,
+  signal: AbortSignal,
+): Promise<SearchHit[]> {
+  const base = (Deno.env.get('SEARXNG_URL') ?? '').replace(/\/+$/, '');
+  const url = `${base}/search?q=${encodeURIComponent(query)}&format=json&language=nl&safesearch=1`;
+  const response = await fetch(url, { headers: { Accept: 'application/json' }, signal });
+  if (!response.ok) throw new Error(`SearXNG gaf status ${response.status}`);
+  const data = (await response.json()) as { results?: unknown };
+  return toSearchHits(data.results, count);
+}
+
+/** Knijpt de ingestelde hoeveelheid treffers af op wat er in de context past. */
+function clampSearchResults(value: unknown): number {
+  const n =
+    typeof value === 'number' && Number.isFinite(value)
+      ? Math.round(value)
+      : DEFAULT_SEARCH_RESULTS;
+  return Math.max(1, Math.min(MAX_SEARCH_RESULTS, n));
+}
+
+/**
+ * Zoekt en levert de treffers. Gooit nooit: is de zoekdienst stuk of te traag,
+ * dan komt er een lege lijst terug en antwoordt het model zonder bronnen. Een
+ * storing bij de zoekdienst mag een gebruiker nooit zijn beurt kosten.
+ */
+async function searchWeb(query: string, count: number): Promise<SearchHit[]> {
+  const backend = searchBackend();
+  const q = query.trim().slice(0, MAX_SEARCH_QUERY_CHARS);
+  if (!backend || !q) return [];
+
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), SEARCH_TIMEOUT_MS);
+  try {
+    const n = clampSearchResults(count);
+    return backend === 'tavily'
+      ? await searchTavily(q, n, abort.signal)
+      : await searchSearxng(q, n, abort.signal);
+  } catch (err) {
+    console.error(`Zoeken op internet (${backend}) mislukt:`, err);
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * De zoekopdracht van deze beurt: de laatste vraag van de gebruiker, letterlijk.
+ *
+ * Bewust geen extra AI-aanroep om er een nettere zoekterm van te destilleren.
+ * Dat kost een hele ronde vóórdat het antwoord ook maar begint, en beide
+ * zoekdiensten zijn juist gemaakt voor een vraag in gewone taal. Bij een korte
+ * vervolgvraag ("en in 2027?") staat het onderwerp in de vraag ervóór, dus die
+ * plakken we eraan vast.
+ */
+function searchQueryFrom(turns: ChatTurn[]): string {
+  const userTurns = turns.filter((t) => t.role === 'user');
+  const last = userTurns[userTurns.length - 1]?.content.trim() ?? '';
+  if (last.length >= 30 || userTurns.length < 2) return last.slice(0, MAX_SEARCH_QUERY_CHARS);
+  const previous = userTurns[userTurns.length - 2].content.trim();
+  return `${previous} ${last}`.slice(0, MAX_SEARCH_QUERY_CHARS);
+}
+
+/**
+ * Plakt de gevonden bronnen onder een systeemprompt: eerst de instructie van de
+ * beheerder, dan de treffers als genummerde blokken. Dezelfde vorm als de
+ * bijlagen, zodat het model beide op dezelfde manier leest.
+ *
+ * Een losse functie omdat de streamende en de niet-streamende chat hem op een
+ * ander moment nodig hebben: streamend wordt er pas gezocht als de stream al
+ * loopt, zodat het scherm ondertussen niet stilstaat.
+ *
+ * Geen treffers betekent dat de systeemprompt ongewijzigd blijft. Een instructie
+ * over bronnen die er niet zijn, laat een klein model vragen om materiaal dat de
+ * gebruiker nooit heeft meegestuurd.
+ */
+function withSearchBlock(
+  system: string,
+  search: { instruction: string; query: string },
+  hits: SearchHit[],
+): string {
+  if (hits.length === 0) return system;
+  const today = new Date().toISOString().slice(0, 10);
+  const blocks = hits
+    .map((h, i) => `Bron ${i + 1} — "${h.title}"\nURL: ${h.url}\n"""\n${h.snippet}\n"""`)
+    .join('\n\n');
+  const header =
+    `ZOEKRESULTATEN VAN HET INTERNET, opgehaald op ${today} met de zoekopdracht ` +
+    `"${search.query}":`;
+  return [system, search.instruction.trim(), `${header}\n\n${blocks}`]
+    .filter((part) => part.trim())
+    .join('\n\n');
 }
 
 /**
@@ -4873,8 +5096,13 @@ function clarityGateState(buffer: string): 'unclear' | 'clear' | 'pending' {
  *
  *   {"type":"models","providers":["claude"]}        wie er nu schrijft (en wie
  *                                                   het eerder probeerde)
- *   {"type":"phase","phase":"drafting"|"thinking"|"writing"}
- *                                                   wachten, redeneren of schrijven
+ *   {"type":"phase","phase":"searching"|"drafting"|"thinking"|"writing"}
+ *                                                   zoeken, wachten, redeneren of
+ *                                                   schrijven
+ *   {"type":"sources","sources":[{"title":"…","url":"…"}]}
+ *                                                   de internetbronnen die dit
+ *                                                   antwoord heeft gekregen; leeg
+ *                                                   als er niets gevonden is
  *
  * Er schrijft bewust maar ÉÉN model. Twee modellen tegelijk laten schrijven is
  * geprobeerd en weer verwijderd: LLM's kunnen hun werk niet samenvoegen, dus je
@@ -4903,11 +5131,16 @@ function streamTextResponse(args: {
    * het antwoord.
    */
   thinking?: boolean;
+  /**
+   * Zoek eerst op internet en zet de treffers onder de systeemprompt. Gebeurt
+   * binnen de stream en niet ervoor, zodat de gebruiker meteen ziet dát er
+   * gezocht wordt in plaats van een paar seconden naar een stil scherm te kijken.
+   */
+  search?: { query: string; count: number; instruction: string };
 }): Response {
   const {
     order,
     userMessage,
-    system,
     temperature,
     maxTokens,
     preferredProvider,
@@ -4915,7 +5148,11 @@ function streamTextResponse(args: {
     label,
     gate,
     thinking,
+    search,
   } = args;
+  // Bewust niet meegedestructureerd: staat zoeken aan, dan komen de gevonden
+  // bronnen hier straks onder te staan.
+  let system = args.system;
 
   const encoder = new TextEncoder();
 
@@ -4950,6 +5187,17 @@ function streamTextResponse(args: {
       // Alle providers die we hebben geprobeerd, in volgorde. De client toont
       // hiermee wie er werkt — en of er is teruggevallen op een andere.
       const attempted: Provider[] = [];
+
+      // Eerst zoeken, dan pas schrijven. De treffers gaan als bronblok onder de
+      // systeemprompt én als 'sources'-event naar de client, zodat de gebruiker
+      // onder het antwoord kan zien waar het vandaan komt. Levert het zoeken
+      // niets op, dan gaat de beurt gewoon door zonder bronnen.
+      if (search) {
+        send({ type: 'phase', phase: 'searching' });
+        const hits = await searchWeb(search.query, search.count);
+        system = withSearchBlock(system, search, hits);
+        send({ type: 'sources', sources: hits.map((h) => ({ title: h.title, url: h.url })) });
+      }
 
       send({ type: 'phase', phase: 'drafting' });
 
@@ -7477,6 +7725,20 @@ Deno.serve(async (req: Request) => {
       // Iets hogere temperatuur: dit is een gesprek, geen JSON.
       const chatTemp = clampTemp(body.temperature ?? 0.5);
 
+      // Zoeken op internet: alleen als de gebruiker de wereldbol aan heeft staan
+      // én er server-side een zoekdienst is ingesteld. Ontbreekt de sleutel, dan
+      // zoeken we niets en antwoordt het model gewoon uit eigen kennis; dat is
+      // beter dan een foutmelding over een instelling waar de gebruiker niet bij
+      // kan.
+      const searchArgs =
+        body.webSearch === true && searchBackend() !== null
+          ? {
+              query: searchQueryFrom(turns),
+              count: clampSearchResults(body.webSearchResults),
+              instruction: (body.webSearchInstruction ?? '').trim(),
+            }
+          : undefined;
+
       // Streamend (het normale pad): de gebruiker leest mee terwijl het model
       // schrijft. Geen clarity-gate — in een gesprek is doorvragen de gate.
       if (body.stream) {
@@ -7491,8 +7753,14 @@ Deno.serve(async (req: Request) => {
           label: isExecution ? 'chat-exec' : isProject ? 'chat-project' : 'chat',
           gate: false,
           thinking: body.thinking,
+          search: searchArgs,
         });
       }
+
+      // Niet-streamend: hier moet het zoeken vóór de aanroep gebeuren, want er
+      // is geen stream om ondertussen iets in te melden.
+      const searchHits = searchArgs ? await searchWeb(searchArgs.query, searchArgs.count) : [];
+      const chatSystem = searchArgs ? withSearchBlock(system, searchArgs, searchHits) : system;
 
       let output = '';
       let provider: Provider | 'local-template' = 'local-template';
@@ -7500,7 +7768,7 @@ Deno.serve(async (req: Request) => {
         try {
           const raw = await PROVIDERS[candidate](
             turns,
-            system,
+            chatSystem,
             chatTemp,
             resolveModel(candidate, body.preferredProvider, body.preferredModel),
             chatMaxTokens,
@@ -7525,7 +7793,12 @@ Deno.serve(async (req: Request) => {
       }
 
       return new Response(
-        JSON.stringify({ success: true, output, provider }),
+        JSON.stringify({
+          success: true,
+          output,
+          provider,
+          sources: searchHits.map((h) => ({ title: h.title, url: h.url })),
+        }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }

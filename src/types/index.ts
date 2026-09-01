@@ -684,6 +684,20 @@ export interface ChatMessage {
   error?: string;
   /** De gebruiker heeft het antwoord met de stop-knop afgebroken. */
   stopped?: boolean;
+  /**
+   * De internetbronnen die dit antwoord heeft meegekregen, in de volgorde waarin
+   * ze aan het model zijn voorgelegd: bron 1 in de tekst is hier het eerste
+   * item. Alleen gevuld wanneer de gebruiker "Zoeken op internet" aan had staan
+   * én er iets gevonden is. Gaat mee in de opslag, zodat de bronnenlijst er na
+   * een herlaadbeurt nog staat.
+   */
+  sources?: ChatSource[];
+}
+
+/** Eén internetbron die de AI voor een antwoord heeft geraadpleegd. */
+export interface ChatSource {
+  title: string;
+  url: string;
 }
 
 /** Een geüpload document dat het hele gesprek als bronmateriaal meegaat. */

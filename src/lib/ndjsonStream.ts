@@ -22,12 +22,19 @@ export interface StreamStatus {
   /** Providers die zijn geprobeerd, in volgorde; de laatste is aan het werk. */
   models?: string[];
   /**
-   * 'drafting' = het model leest mee, 'thinking' = het redeneert eerst (de
-   * denkstand staat aan), 'writing' = de tekst loopt.
+   * 'searching' = er wordt eerst op internet gezocht, 'drafting' = het model
+   * leest mee, 'thinking' = het redeneert eerst (de denkstand staat aan),
+   * 'writing' = de tekst loopt.
    */
   phase?: string;
   /** De provider die de tekst daadwerkelijk levert. */
   provider?: string;
+  /**
+   * De internetbronnen die het antwoord heeft gekregen. Komt één keer voorbij,
+   * direct na het zoeken en dus vóór de eerste tekst. Een lege lijst betekent
+   * dat er gezocht is maar niets bruikbaars gevonden.
+   */
+  sources?: { title: string; url: string }[];
 }
 
 /** Callback voor {@link StreamStatus}-updates; elke update bevat één veld. */
@@ -244,6 +251,8 @@ export async function streamNdjson(args: {
       providers?: unknown;
       /** Alleen bij 'phase': waar de generatie is. */
       phase?: string;
+      /** Alleen bij 'sources': de geraadpleegde internetbronnen. */
+      sources?: unknown;
     };
     try {
       event = JSON.parse(trimmed);
@@ -259,6 +268,18 @@ export async function streamNdjson(args: {
         break;
       case 'phase':
         if (event.phase) onStatus?.({ phase: event.phase });
+        break;
+      case 'sources':
+        if (Array.isArray(event.sources)) {
+          onStatus?.({
+            sources: event.sources.flatMap((s) => {
+              const row = s as { title?: unknown; url?: unknown };
+              return typeof row?.url === 'string' && row.url
+                ? [{ title: typeof row.title === 'string' ? row.title : row.url, url: row.url }]
+                : [];
+            }),
+          });
+        }
         break;
       case 'meta':
         outcome.provider = event.provider;
