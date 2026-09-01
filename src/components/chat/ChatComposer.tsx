@@ -20,6 +20,7 @@ import {
   X,
 } from 'lucide-react';
 import clsx from 'clsx';
+import ThinkingToggle from '@/components/common/ThinkingToggle';
 import { ACCEPTED_DOC_ACCEPT } from '@/lib/extractDocument';
 import { MAX_CHAT_ATTACHMENTS } from './useChatController';
 import type { ChatAttachment, ChatProject } from '@/types';
@@ -89,6 +90,13 @@ interface ChatComposerProps {
    * knop verdwenen is.
    */
   canPickProject?: boolean;
+  /**
+   * Staat de denkstand aan? Afwezige {@link onToggleThinking} = geen knop, net
+   * als bij het sterretje.
+   */
+  thinking?: boolean;
+  /** Zet denken aan of uit voor de volgende beurt. */
+  onToggleThinking?: (value: boolean) => void;
 }
 
 /**
@@ -121,6 +129,8 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
     activeProjectId = null,
     onPickProject,
     canPickProject = false,
+    thinking = false,
+    onToggleThinking,
   },
   ref,
 ) {
@@ -504,6 +514,17 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
                 </div>
               )}
             </div>
+          )}
+
+          {/* Denken: het model redeneert eerst en antwoordt daarna pas. Blijft
+              aan tussen beurten, want wie aan een zwaardere vraag werkt, werkt er
+              meestal een gesprek lang aan. */}
+          {onToggleThinking && (
+            <ThinkingToggle
+              value={thinking}
+              onChange={onToggleThinking}
+              disabled={disabled || streaming}
+            />
           )}
 
           {allowAttachments && (

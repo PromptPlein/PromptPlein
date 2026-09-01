@@ -242,6 +242,13 @@ export function defaultModelFor(provider: AiProvider): string {
  * projectinstelling nog verantwoordt. Wil je die bovengrens verleggen, zet dan
  * 'mistral-medium-latest' neer én dezelfde regel in de edge function.
  */
+/**
+ * Let op bij het wijzigen van de Mistral-ids hierboven: de edge function houdt
+ * een lijst `REASONING_EFFORT_MODELS` met de modellen die de knop "Denken"
+ * aankunnen (`reasoning_effort`), en dat zijn nu net Small 4 en Medium 3.5. Een
+ * hernoemde of vervangen id die daar niet in staat, laat de knop stilletjes
+ * terugvallen op het denkmodel van de provider.
+ */
 export const STRONGEST_MODELS: Record<Exclude<AiProvider, 'auto'>, string> = {
   claude: 'claude-opus-4-8',
   openai: 'gpt-5.5',

@@ -110,6 +110,12 @@ export async function optimizePrompt(args: {
   /** Admin-creativiteit (0–1). */
   temperature?: number;
   /**
+   * Denken aan: het model redeneert eerst en schrijft de prompt daarna pas. Kost
+   * meer uitvoertokens en een langere stilte voor de eerste regel, dus dit komt
+   * van een knop van de gebruiker en staat nooit vanzelf aan.
+   */
+  thinking?: boolean;
+  /**
    * Extra gelabelde antwoordvelden bovenop de vervolgvragen van de techniek.
    * Gebruikt door de plan-bouwer om het verzamelde materiaal van eerdere stappen
    * (persona, format, brief) als context aan de eind-compose mee te geven, in
@@ -149,6 +155,7 @@ export async function optimizePrompt(args: {
     toneInstruction,
     projectContext,
     temperature,
+    thinking,
     extraAnsweredFields,
     interviewResolved,
     onChunk,
@@ -194,6 +201,7 @@ export async function optimizePrompt(args: {
         toneInstruction,
         projectContext,
         temperature,
+        thinking,
       };
 
       // Meelezen gevraagd? Dan de streamende route: de eerste regels staan er na

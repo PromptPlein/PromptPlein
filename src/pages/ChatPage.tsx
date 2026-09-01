@@ -21,6 +21,7 @@ import ChatSidebar from '@/components/chat/ChatSidebar';
 import ProjectSettingsModal from '@/components/chat/ProjectSettingsModal';
 import ProjectView from '@/components/chat/ProjectView';
 import useChatController from '@/components/chat/useChatController';
+import useThinking from '@/lib/useThinking';
 import useChatProjects from '@/components/chat/useChatProjects';
 import useFitHeight from '@/components/chat/useFitHeight';
 import SavePromptModal from '@/components/prompts/SavePromptModal';
@@ -44,7 +45,9 @@ const NUDGE_DISMISSED_KEY = 'opl.ui.chatNudgeDismissed';
 export default function ChatPage() {
   const { configured, user } = useAuth();
   const [settings, setSettings] = useState<ChatSettings | null>(null);
-  const controller = useChatController(settings);
+  // Denkstand: de knop in de invoerbalk zet hem, de controller stuurt hem mee.
+  const [thinking, setThinking] = useThinking();
+  const controller = useChatController(settings, { thinking });
   const projects = useChatProjects();
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
@@ -495,6 +498,8 @@ export default function ChatPage() {
                   projects={projectList}
                   activeProjectId={conversation?.projectId ?? null}
                   onPickProject={controller.attachProject}
+                  thinking={thinking}
+                  onToggleThinking={setThinking}
                   // Alleen in een nog leeg gesprek: zie ChatController.attachProject.
                   canPickProject={messages.length === 0 && conversation?.kind !== 'execution'}
                   badge={

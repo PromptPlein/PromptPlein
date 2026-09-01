@@ -51,13 +51,18 @@ export async function sendChatMessage(args: {
    */
   kind?: 'execution';
   /**
+   * Denken aan: het model redeneert eerst en antwoordt daarna pas. Zie
+   * {@link useThinking}; de knop staat in de invoerbalk.
+   */
+  thinking?: boolean;
+  /**
    * Het project waar dit gesprek onder valt. De projectinstructie wordt dan de
    * leidende systeemprompt en de bronbestanden gaan als bronblokken mee, vóór
    * de eventuele losse bijlagen van het gesprek zelf.
    */
   project?: ChatProjectContext | null;
 }): Promise<ChatSendResult> {
-  const { messages, attachments, settings, onChunk, signal, kind, project } = args;
+  const { messages, attachments, settings, onChunk, signal, kind, project, thinking } = args;
   // Een uitvoergesprek en een projectgesprek sluiten elkaar uit; staat er toch
   // allebei iets klaar, dan wint de uitvoering (dat is een expliciete handoff).
   const isExecution = kind === 'execution';
@@ -99,6 +104,7 @@ export async function sendChatMessage(args: {
         preferredProvider: settings.provider,
         preferredModel: settings.model,
         temperature: settings.temperature,
+        thinking,
         // De systeemprompt van de beheerder, ongewijzigd; bij een uitvoergesprek
         // de neutrale uitvoerinstructie en in een project de projectinstructie
         // van de gebruiker zelf. De server voegt er niets aan toe.

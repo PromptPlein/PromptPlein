@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Sparkles, Compass, Wand2 } from 'lucide-react';
 import GoalDialog from '@/components/optimizer/GoalDialog';
+import ThinkingToggle from '@/components/common/ThinkingToggle';
+import useThinking from '@/lib/useThinking';
 import EntryTab from '@/components/optimizer/EntryTab';
 import OwnPromptOptimizer from '@/components/optimizer/OwnPromptOptimizer';
 import OptimizedOutput from '@/components/optimizer/OptimizedOutput';
@@ -46,6 +48,9 @@ export default function OptimizerPage() {
   const [goal] = usePersistentDraft('goal');
   // Standaard staat de eigen-prompt-flow open: dat is het meest gebruikte startpunt.
   const [entryMode, setEntryMode] = useState<EntryMode>('own-prompt');
+  // Denkstand voor het schrijven van de prompt. Eén knop voor beide instappen,
+  // en dezelfde stand als in de chat: zie useThinking.
+  const [thinking, setThinking] = useThinking();
   // Admin-bepaalde AI-instellingen; gebruikers kiezen niet meer zelf.
   const settingsRef = useRef<AiSettings>(DEFAULT_AI_SETTINGS);
   // Versiegeschiedenis van het resultaat: v1 is de gegenereerde prompt, elke
@@ -335,6 +340,16 @@ export default function OptimizerPage() {
                     description="Beschrijf wat je wilt bereiken, dan denken we stap voor stap mee naar je doel."
                   />
                 </div>
+                {/* Denken: geldt voor het schrijven van de prompt aan het eind
+                    van beide instappen. Staat hier en niet bij de knop zelf,
+                    omdat de doel-flow vanzelf doorloopt naar het schrijven; wie
+                    het pas daar mag kiezen, is te laat. */}
+                <div className="flex items-center justify-end gap-2 border-b border-slate-200 px-3 py-1.5 dark:border-slate-700">
+                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                    Lastige opdracht? Laat het model eerst nadenken.
+                  </span>
+                  <ThinkingToggle value={thinking} onChange={setThinking} />
+                </div>
               </>
             );
 
@@ -350,6 +365,7 @@ export default function OptimizerPage() {
                 header={tabs}
                 initialPrompt={initialPrompt}
                 projectContext={projectContext?.text}
+                thinking={thinking}
               />
             ) : (
               <GoalDialog
@@ -357,6 +373,7 @@ export default function OptimizerPage() {
                 onResult={handleResult}
                 header={tabs}
                 projectContext={projectContext?.text}
+                thinking={thinking}
               />
             );
           })()}

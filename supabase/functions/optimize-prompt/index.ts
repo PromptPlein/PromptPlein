@@ -390,6 +390,14 @@ interface RequestBody {
    * ongewijzigd de complete JSON terug.
    */
   stream?: boolean;
+  /**
+   * "Denken" aan: het model redeneert eerst en schrijft daarna pas. Bij Mistral
+   * is dat een schakelaar op hetzelfde model (`reasoning_effort`), bij DeepSeek
+   * een zwaarder model dat uit zichzelf redeneert. Zie {@link resolveThinking}.
+   * Alleen voor de streamende vrije-tekstmodi; de JSON-modi negeren dit veld,
+   * want een denkspoor past niet in een antwoord dat geparseerd moet worden.
+   */
+  thinking?: boolean;
   preferredProvider?: PreferredProvider;
   /**
    * Het concrete API-model binnen de gekozen provider (bijv. 'claude-opus-4-8').
@@ -465,6 +473,56 @@ const STRONGEST_MODEL: Record<Provider, string> = {
   deepseek: 'deepseek-v4-pro',
   mistral: 'mistral-small-latest',
 };
+
+/**
+ * De modellen die de `reasoning_effort`-parameter accepteren: ze redeneren dan
+ * eerst zichtbaar en schrijven daarna pas hun antwoord.
+ *
+ * Magistral, Mistrals losse denkmodel, bestaat niet meer: Magistral Small 1.2
+ * en Medium 1.2 zijn per 31 juli 2026 uitgezet en Mistral wijst zelf Small 4 en
+ * Medium 3.5 aan als vervanger. Het redeneren zit nu dus in het model dat hier
+ * toch al draait; alleen de Ministrals kennen de parameter niet.
+ */
+const REASONING_EFFORT_MODELS: string[] = ['mistral-small-latest', 'mistral-medium-latest'];
+
+/**
+ * Het model dat een provider inzet zodra de gebruiker "denken" aanzet, voor het
+ * geval het ingestelde model zelf niet kan redeneren.
+ *
+ * Bij Mistral blijft dat Small 4, hetzelfde model als anders: denken is daar een
+ * parameter en geen ander model, dus het kost alleen extra uitvoertokens. Bij
+ * DeepSeek bestaat die schakelaar niet en is V4 Pro de redenerende variant van
+ * Flash, dus daar gaat het model wél omhoog.
+ */
+const THINKING_MODEL: Record<Provider, string> = {
+  claude: 'claude-opus-4-8',
+  openai: 'gpt-5.5',
+  deepseek: 'deepseek-v4-pro',
+  mistral: 'mistral-small-latest',
+};
+
+/** Het model plus, waar de provider dat kent, de denkstand voor dat model. */
+interface ThinkingChoice {
+  model: string;
+  reasoningEffort?: 'high';
+}
+
+/**
+ * Vertaalt "denken aan/uit" naar een concreet model plus parameter.
+ *
+ * Staat denken uit, dan verandert er niets aan de keuze van de beheerder. Staat
+ * het aan en kan het ingestelde model redeneren, dan blijft dat model staan en
+ * gaat alleen `reasoning_effort` aan. Kan het dat niet (een Ministral, of
+ * DeepSeek Flash), dan stapt de aanroep over op het denkmodel van die provider.
+ */
+function resolveThinking(candidate: Provider, model: string, thinking?: boolean): ThinkingChoice {
+  if (!thinking) return { model };
+  if (REASONING_EFFORT_MODELS.includes(model)) return { model, reasoningEffort: 'high' };
+  const upgraded = THINKING_MODEL[candidate];
+  return REASONING_EFFORT_MODELS.includes(upgraded)
+    ? { model: upgraded, reasoningEffort: 'high' }
+    : { model: upgraded };
+}
 
 /**
  * Kies het model voor `candidate`. Alleen wanneer de admin-voorkeur dezelfde
@@ -4189,10 +4247,32 @@ function maxTokensFor(mode: Mode): number {
 }
 
 /**
+ * Extra uitvoerbudget zodra "denken" aan staat.
+ *
+ * Het denkspoor telt mee in hetzelfde `max_tokens` als het antwoord. Zonder deze
+ * ruimte zou denken het antwoord juist korter maken: bij een chatbeurt (2048)
+ * gaat de redenering er eerst vanaf en breekt de tekst af waar het interessant
+ * werd, precies bij de zware vraag waarvoor de gebruiker denken aanzette.
+ */
+const THINKING_TOKEN_BUDGET = 2048;
+
+/**
  * Callback die per tekstfragment wordt aangeroepen zodra het model het
  * produceert. Aanwezig = streamen; afwezig = wachten op het volledige antwoord.
  */
 type DeltaHandler = (chunk: string) => void;
+
+/**
+ * Wat een provider-aanroep met "denken" meekrijgt: de parameter die het
+ * redeneren aanzet, en een callback voor de denktekst. Die denktekst gaat
+ * bewust NIET in het antwoord: hij is voortgang, geen resultaat.
+ */
+interface ThinkingOptions {
+  /** Alleen voor modellen uit {@link REASONING_EFFORT_MODELS}. */
+  reasoningEffort?: 'high';
+  /** Elk fragment denktekst; gebruikt om te tonen dat het model nadenkt. */
+  onThinking?: DeltaHandler;
+}
 
 /**
  * Hoe lang een provider mag zwijgen voordat we hem opgeven. Alleen zinvol bij
@@ -4296,6 +4376,59 @@ function watchProvider(
 }
 
 /**
+ * Statussen die vanzelf overwaaien: de dienst is even druk (429) of even uit de
+ * lucht (5xx). In de productielogs is dit de meest voorkomende reden dat een
+ * modus met lege handen eindigt: Mistral gaf 429/503 en er werd meteen
+ * doorgeschakeld, zonder ook maar één herkansing.
+ */
+const RETRYABLE_STATUS = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
+
+/**
+ * Statussen die niet overwaaien: sleutel ongeldig, geen toegang, saldo op.
+ * Opnieuw proberen heeft geen zin; deze provider gaat tijdelijk achteraan.
+ */
+const HARD_STATUS = new Set([401, 402, 403]);
+
+/** Hoe vaak we een tijdelijke fout opnieuw proberen voor we doorschakelen. */
+const PROVIDER_RETRIES = 2;
+
+/** Hoe lang een provider met een sleutel- of saldofout achteraan blijft staan. */
+const PROVIDER_COOLDOWN_MS = 5 * 60_000;
+
+/**
+ * Providers die zojuist een sleutel-, toegangs- of saldofout gaven, met het
+ * moment waarop ze weer vooraan mogen. DeepSeek gaf in productie op élke aanroep
+ * 402 (saldo op): zonder dit staat die dode provider bij iedere prompt vooraan
+ * in de keten en kost hij elke keer opnieuw een mislukte poging.
+ */
+const providerCooldown = new Map<Provider, number>();
+
+function markProviderDown(provider: Provider | undefined, status: number): void {
+  if (!provider) return;
+  providerCooldown.set(provider, Date.now() + PROVIDER_COOLDOWN_MS);
+  console.error(
+    `${provider} gaf status ${status}; ${PROVIDER_COOLDOWN_MS / 60_000} minuten achteraan in de keten`,
+  );
+}
+
+function isCoolingDown(provider: Provider): boolean {
+  const until = providerCooldown.get(provider);
+  if (until === undefined) return false;
+  if (Date.now() >= until) {
+    providerCooldown.delete(provider);
+    return false;
+  }
+  return true;
+}
+
+/** Wachttijd voor de volgende poging; de `Retry-After` van de dienst gaat voor. */
+function retryDelayMs(response: Response, attempt: number): number {
+  const seconds = Number(response.headers.get('retry-after'));
+  if (Number.isFinite(seconds) && seconds > 0) return Math.min(seconds * 1000, 4_000);
+  return 600 * (attempt + 1);
+}
+
+/**
  * Vervangt de kale abort-fout door de reden waaróm er is afgebroken, zodat de
  * logregel bruikbaar is ("Claude stuurde 20 seconden lang niets" in plaats van
  * "The signal has been aborted").
@@ -4311,10 +4444,48 @@ function withAbortReason(dog: ProviderWatchdog, err: unknown): unknown {
  * Onbekende of half binnengekomen events worden overgeslagen; de buffer houdt
  * regels vast tot ze compleet zijn.
  */
+/**
+ * Tekst uit één chunk van een antwoord. Een chunk is een string, een
+ * {"type":"text","text":"…"} of een {"type":"thinking","thinking":[…]} met
+ * daarin weer tekstchunks.
+ */
+function chunkText(chunk: unknown): string {
+  if (typeof chunk === 'string') return chunk;
+  if (!chunk || typeof chunk !== 'object') return '';
+  const c = chunk as { text?: unknown; thinking?: unknown };
+  if (typeof c.text === 'string') return c.text;
+  if (Array.isArray(c.thinking)) return c.thinking.map(chunkText).join('');
+  return '';
+}
+
+/**
+ * Splitst de inhoud van een antwoord (of van één delta) in het antwoord zelf en
+ * de denktekst.
+ *
+ * Zonder redeneren is `content` gewoon een string. Met `reasoning_effort` stuurt
+ * Mistral tijdens het denken een LIJST met chunks, daarna één lijst met de
+ * afsluitende denk-chunk plus de eerste tekst, en pas dan weer gewone strings.
+ * Zonder deze splitsing zou `text += delta` er `[object Object]` van maken en
+ * belandde het denkspoor midden in het antwoord van de gebruiker.
+ */
+function splitContent(content: unknown): { text: string; thinking: string } {
+  if (typeof content === 'string') return { text: content, thinking: '' };
+  if (!Array.isArray(content)) return { text: '', thinking: '' };
+  let text = '';
+  let thinking = '';
+  for (const chunk of content) {
+    const type = chunk && typeof chunk === 'object' ? (chunk as { type?: string }).type : undefined;
+    if (type === 'thinking') thinking += chunkText(chunk);
+    else text += chunkText(chunk);
+  }
+  return { text, thinking };
+}
+
 async function readSseDeltas(
   response: Response,
   label: string,
   onDelta: DeltaHandler,
+  onThinking?: DeltaHandler,
 ): Promise<string> {
   const reader = response.body?.getReader();
   if (!reader) throw new Error(`${label} gaf geen stream-body`);
@@ -4336,7 +4507,12 @@ async function readSseDeltas(
       if (!payload || payload === '[DONE]') continue;
       try {
         const json = JSON.parse(payload);
-        const delta: string = json?.choices?.[0]?.delta?.content ?? '';
+        const raw = json?.choices?.[0]?.delta;
+        const { text: delta, thinking } = splitContent(raw?.content ?? '');
+        // DeepSeek zet zijn redenering in een eigen veld in plaats van in
+        // content; die hoort bij de denktekst, niet bij het antwoord.
+        const reasoning = typeof raw?.reasoning_content === 'string' ? raw.reasoning_content : '';
+        if (thinking || reasoning) onThinking?.(thinking + reasoning);
         if (delta) {
           text += delta;
           onDelta(delta);
@@ -4355,6 +4531,8 @@ async function runOpenAiCompatible(args: {
   url: string;
   apiKey: string;
   label: string;
+  /** Voor de cooldown-lijst bij een sleutel-, toegangs- of saldofout. */
+  provider?: Provider;
   model: string;
   system: string;
   userMessage: string | ChatTurn[];
@@ -4362,50 +4540,94 @@ async function runOpenAiCompatible(args: {
   maxTokens: number;
   onDelta?: DeltaHandler;
   timeoutMs?: number;
+  thinking?: ThinkingOptions;
 }): Promise<string> {
-  const { url, apiKey, label, model, system, userMessage, temperature, maxTokens, onDelta, timeoutMs } =
-    args;
+  const {
+    url,
+    apiKey,
+    label,
+    provider,
+    model,
+    system,
+    userMessage,
+    temperature,
+    maxTokens,
+    onDelta,
+    timeoutMs,
+    thinking,
+  } = args;
 
-  const dog = watchProvider(label, maxTokens, Boolean(onDelta), timeoutMs);
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: maxTokens,
-        temperature,
-        stream: Boolean(onDelta),
-        messages: [{ role: 'system', content: system }, ...toChatTurns(userMessage)],
-      }),
-      signal: dog.signal,
-    });
+  // Bij een tijdelijke fout (drukte, dienst even weg) proberen we het eerst nog
+  // een paar keer bij dezelfde provider. Dat kan veilig: bij een niet-ok respons
+  // is er nog geen enkel fragment doorgestuurd, dus dubbele tekst kan niet.
+  for (let attempt = 0; ; attempt++) {
+    const dog = watchProvider(label, maxTokens, Boolean(onDelta), timeoutMs);
+    let retryIn = 0;
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: maxTokens,
+          temperature,
+          stream: Boolean(onDelta),
+          // Alleen meesturen wanneer het model de parameter kent: een provider die
+          // hem niet herkent, weigert de hele aanroep.
+          ...(thinking?.reasoningEffort ? { reasoning_effort: thinking.reasoningEffort } : {}),
+          messages: [{ role: 'system', content: system }, ...toChatTurns(userMessage)],
+        }),
+        signal: dog.signal,
+      });
 
-    if (!response.ok) {
-      throw new Error(`${label} gaf status ${response.status}`);
+      if (!response.ok) {
+        // De body meelezen (en daarmee opruimen) zodat de logregel zegt wát er
+        // mis is: "insufficient balance" leest anders dan een drukmelding.
+        const detail = (await response.text().catch(() => '')).slice(0, 300);
+        console.error(`${label} gaf status ${response.status}${detail ? `: ${detail}` : ''}`);
+        if (HARD_STATUS.has(response.status)) markProviderDown(provider, response.status);
+        if (attempt < PROVIDER_RETRIES && RETRYABLE_STATUS.has(response.status)) {
+          retryIn = retryDelayMs(response, attempt);
+        } else {
+          throw new Error(`${label} gaf status ${response.status}`);
+        }
+      } else {
+        // De respons is begonnen; vanaf hier bewaakt de watchdog de stiltes ertussen.
+        dog.ping();
+
+        const text = onDelta
+          ? (
+              await readSseDeltas(
+                response,
+                label,
+                (chunk) => {
+                  dog.ping();
+                  onDelta(chunk);
+                },
+                (chunk) => {
+                  // Denken telt als voortgang: zonder deze ping ziet de waakhond de
+                  // stille eerste seconden aan voor een dode verbinding.
+                  dog.ping();
+                  thinking?.onThinking?.(chunk);
+                },
+              )
+            ).trim()
+          : splitContent((await response.json())?.choices?.[0]?.message?.content ?? '').text.trim();
+
+        if (!text) throw new Error(`${label} gaf een lege respons`);
+        return text;
+      }
+    } catch (err) {
+      throw withAbortReason(dog, err);
+    } finally {
+      dog.done();
     }
 
-    // De respons is begonnen; vanaf hier bewaakt de watchdog de stiltes ertussen.
-    dog.ping();
-
-    const text = onDelta
-      ? (
-          await readSseDeltas(response, label, (chunk) => {
-            dog.ping();
-            onDelta(chunk);
-          })
-        ).trim()
-      : ((await response.json())?.choices?.[0]?.message?.content?.trim() ?? '');
-
-    if (!text) throw new Error(`${label} gaf een lege respons`);
-    return text;
-  } catch (err) {
-    throw withAbortReason(dog, err);
-  } finally {
-    dog.done();
+    console.warn(`${label} was tijdelijk niet beschikbaar; poging ${attempt + 2} over ${retryIn} ms`);
+    await new Promise((resolve) => setTimeout(resolve, retryIn));
   }
 }
 
@@ -4417,6 +4639,10 @@ async function runClaude(
   maxTokens: number = DEFAULT_MAX_TOKENS,
   onDelta?: DeltaHandler,
   timeoutMs?: number,
+  // Denken loopt hier niet: Claude staat uit en zijn denkstand werkt anders
+  // (een eigen thinking-parameter, geen reasoning_effort). De parameter staat er
+  // alleen zodat alle providers dezelfde vorm houden.
+  _thinking?: ThinkingOptions,
 ): Promise<string> {
   const apiKey = Deno.env.get('CLAUDE_API_KEY');
   if (!apiKey) throw new Error('CLAUDE_API_KEY ontbreekt');
@@ -4477,6 +4703,7 @@ async function runDeepSeek(
   maxTokens: number = DEFAULT_MAX_TOKENS,
   onDelta?: DeltaHandler,
   timeoutMs?: number,
+  thinking?: ThinkingOptions,
 ): Promise<string> {
   const apiKey = Deno.env.get('DEEPSEEK_API_KEY');
   if (!apiKey) throw new Error('DEEPSEEK_API_KEY ontbreekt');
@@ -4486,6 +4713,7 @@ async function runDeepSeek(
     url: 'https://api.deepseek.com/chat/completions',
     apiKey,
     label: 'DeepSeek',
+    provider: 'deepseek',
     model,
     system,
     userMessage,
@@ -4493,6 +4721,9 @@ async function runDeepSeek(
     maxTokens,
     onDelta,
     timeoutMs,
+    // Geen reasoning_effort: bij DeepSeek zit het redeneren in het model zelf
+    // (V4 Pro). Wel de denktekst opvangen, die komt in reasoning_content binnen.
+    thinking: thinking ? { onThinking: thinking.onThinking } : undefined,
   });
 }
 
@@ -4504,6 +4735,7 @@ async function runOpenAI(
   maxTokens: number = DEFAULT_MAX_TOKENS,
   onDelta?: DeltaHandler,
   timeoutMs?: number,
+  _thinking?: ThinkingOptions,
 ): Promise<string> {
   const apiKey = Deno.env.get('OPENAI_API_KEY');
   if (!apiKey) throw new Error('OPENAI_API_KEY ontbreekt');
@@ -4512,6 +4744,7 @@ async function runOpenAI(
     url: 'https://api.openai.com/v1/chat/completions',
     apiKey,
     label: 'OpenAI',
+    provider: 'openai',
     model,
     system,
     userMessage,
@@ -4530,23 +4763,31 @@ async function runMistral(
   maxTokens: number = DEFAULT_MAX_TOKENS,
   onDelta?: DeltaHandler,
   timeoutMs?: number,
+  thinking?: ThinkingOptions,
 ): Promise<string> {
   const apiKey = Deno.env.get('MISTRAL_API_KEY');
   if (!apiKey) throw new Error('MISTRAL_API_KEY ontbreekt');
 
   // Mistral gebruikt een OpenAI-compatibele API. Mistral Small/Ministral hebben
   // een lager plafond dan de andere providers; begrens daarom op 4096.
+  //
+  // Met denken aan gaat dat plafond naar 8192, zodat het opgehoogde budget uit
+  // {@link THINKING_TOKEN_BUDGET} er ook echt doorheen past. Het contextvenster
+  // van Small 4 is ruim genoeg; alleen deze zelfgekozen bovengrens stond in de weg.
+  const budget = thinking?.reasoningEffort ? 8192 : 4096;
   return runOpenAiCompatible({
     url: 'https://api.mistral.ai/v1/chat/completions',
     apiKey,
     label: 'Mistral',
+    provider: 'mistral',
     model,
     system,
     userMessage,
     temperature,
-    maxTokens: Math.min(maxTokens, 4096),
+    maxTokens: Math.min(maxTokens, budget),
     onDelta,
     timeoutMs,
+    thinking,
   });
 }
 
@@ -4559,6 +4800,8 @@ type ProviderFn = (
   onDelta?: DeltaHandler,
   /** Vast totaalplafond i.p.v. de afleiding uit maxTokens (korte JSON-modi). */
   timeoutMs?: number,
+  /** Denkstand plus de opvang van de denktekst; afwezig = gewoon antwoorden. */
+  thinking?: ThinkingOptions,
 ) => Promise<string>;
 
 const PROVIDERS: Record<Provider, ProviderFn> = {
@@ -4630,7 +4873,8 @@ function clarityGateState(buffer: string): 'unclear' | 'clear' | 'pending' {
  *
  *   {"type":"models","providers":["claude"]}        wie er nu schrijft (en wie
  *                                                   het eerder probeerde)
- *   {"type":"phase","phase":"drafting"|"writing"}   nadenken of schrijven
+ *   {"type":"phase","phase":"drafting"|"thinking"|"writing"}
+ *                                                   wachten, redeneren of schrijven
  *
  * Er schrijft bewust maar ÉÉN model. Twee modellen tegelijk laten schrijven is
  * geprobeerd en weer verwijderd: LLM's kunnen hun werk niet samenvoegen, dus je
@@ -4652,6 +4896,13 @@ function streamTextResponse(args: {
   label: string;
   /** Clarity-gate toepassen? Aan voor 'generate', uit voor 'execute'. */
   gate: boolean;
+  /**
+   * Denken aan: het model redeneert eerst en schrijft daarna pas. Dat kost een
+   * langere stilte vóór de eerste regel, dus de fase 'thinking' vertelt de
+   * gebruiker wat er in die stilte gebeurt. De denktekst zelf gaat NIET mee in
+   * het antwoord.
+   */
+  thinking?: boolean;
 }): Response {
   const {
     order,
@@ -4663,6 +4914,7 @@ function streamTextResponse(args: {
     preferredModel,
     label,
     gate,
+    thinking,
   } = args;
 
   const encoder = new TextEncoder();
@@ -4706,17 +4958,26 @@ function streamTextResponse(args: {
         let held = '';
         let state: 'unclear' | 'clear' | 'pending' = gate ? 'pending' : 'clear';
         let announced = false;
+        // Eén keer melden dat het model aan het denken is; daarna zwijgen we
+        // erover tot de tekst begint te lopen.
+        let thoughtAnnounced = false;
 
         attempted.push(candidate);
         send({ type: 'models', providers: [...attempted] });
+
+        const choice = resolveThinking(
+          candidate,
+          resolveModel(candidate, preferredProvider, preferredModel),
+          thinking,
+        );
 
         try {
           const raw = await PROVIDERS[candidate](
             userMessage,
             system,
             temperature,
-            resolveModel(candidate, preferredProvider, preferredModel),
-            maxTokens,
+            choice.model,
+            thinking ? maxTokens + THINKING_TOKEN_BUDGET : maxTokens,
             (chunk) => {
               if (!announced) {
                 announced = true;
@@ -4737,6 +4998,22 @@ function streamTextResponse(args: {
               send({ type: 'delta', text: chunk });
               emitted = true;
             },
+            undefined,
+            thinking
+              ? {
+                  reasoningEffort: choice.reasoningEffort,
+                  // De denktekst zelf sturen we niet door: die hoort niet in het
+                  // antwoord en er is geen plek in de chat waar hij bewaard
+                  // wordt. Alleen het feit dát er gedacht wordt gaat naar de
+                  // gebruiker, zodat de stilte verklaard is.
+                  onThinking: () => {
+                    if (thoughtAnnounced) return;
+                    thoughtAnnounced = true;
+                    send({ type: 'meta', provider: candidate });
+                    send({ type: 'phase', phase: 'thinking' });
+                  },
+                }
+              : undefined,
           );
 
           // Definitieve toets op de volledige tekst — dezelfde als in de
@@ -5351,9 +5628,19 @@ function streamPrefillResponse(args: {
         return;
       }
 
-      // Niets bruikbaars van wie dan ook: lege voor-invulling. De UI toont dan
-      // gewoon lege velden — precies zoals de niet-streamende route doet.
-      send({ type: 'done', summary: '', fields: [], provider: 'local-template' });
+      // Niets bruikbaars van wie dan ook. Geen stil 'done' met nul velden: dan
+      // kijkt de gebruiker naar een leeg formulier onder de mededeling dat alles
+      // is ingevuld, zonder te weten waarom. Wel een fout, zodat de client het
+      // kan melden en de gebruiker het opnieuw kan proberen.
+      console.error(
+        `prefill leverde niets op; geprobeerd: ${attempted.join(', ') || 'geen enkele provider'}`,
+      );
+      send({
+        type: 'error',
+        error:
+          'De AI-dienst kon de velden nu niet invullen; hij is druk of tijdelijk niet bereikbaar. ' +
+          'Probeer het opnieuw of vul de velden zelf in.',
+      });
       close();
     },
     cancel() {
@@ -5375,10 +5662,16 @@ function streamPrefillResponse(args: {
 function buildOrder(preferred?: PreferredProvider): Provider[] {
   // Een uitgezette provider (of een oude instelling die er nog naar wijst)
   // negeren we: dan gewoon de standaardketen.
-  if (!preferred || preferred === 'auto' || !ENABLED_PROVIDERS.includes(preferred)) {
-    return DEFAULT_ORDER;
-  }
-  return [preferred, ...DEFAULT_ORDER.filter((p) => p !== preferred)];
+  const base =
+    !preferred || preferred === 'auto' || !ENABLED_PROVIDERS.includes(preferred)
+      ? DEFAULT_ORDER
+      : [preferred, ...DEFAULT_ORDER.filter((p) => p !== preferred)];
+  // Een provider die zojuist zijn sleutel of saldo afkeurde, gaat achteraan: hij
+  // mag het straks weer proberen, maar niet ten koste van de eerste poging.
+  // Liggen ze er allemaal uit, dan blijft de volgorde zoals hij was.
+  const down = base.filter(isCoolingDown);
+  if (down.length === 0 || down.length === base.length) return base;
+  return [...base.filter((p) => !isCoolingDown(p)), ...down];
 }
 
 interface Recommendation {
@@ -6312,8 +6605,20 @@ Deno.serve(async (req: Request) => {
         }
       }
 
-      // Geen AI-resultaat: lege voor-invulling (de UI toont dan gewoon lege velden).
-      if (!result) result = { summary: '', fields: [] };
+      // Geen AI-resultaat: dat melden we eerlijk in plaats van een geslaagde
+      // voor-invulling met nul velden terug te geven. Zie de streamende route.
+      if (!result) {
+        console.error('prefill leverde niets op; geen enkele provider gaf velden terug');
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error:
+              'De AI-dienst kon de velden nu niet invullen; hij is druk of tijdelijk niet ' +
+              'bereikbaar. Probeer het opnieuw of vul de velden zelf in.',
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
 
       return new Response(
         JSON.stringify({ success: true, ...result, provider }),
@@ -7094,6 +7399,7 @@ Deno.serve(async (req: Request) => {
           preferredModel: body.preferredModel,
           label: 'execute',
           gate: false,
+          thinking: body.thinking,
         });
       }
 
@@ -7184,6 +7490,7 @@ Deno.serve(async (req: Request) => {
           preferredModel: body.preferredModel,
           label: isExecution ? 'chat-exec' : isProject ? 'chat-project' : 'chat',
           gate: false,
+          thinking: body.thinking,
         });
       }
 
@@ -7498,6 +7805,7 @@ Deno.serve(async (req: Request) => {
           preferredModel: body.preferredModel,
           label: 'refine',
           gate: false,
+          thinking: body.thinking,
         });
       }
 
@@ -8153,6 +8461,7 @@ Deno.serve(async (req: Request) => {
         preferredModel: body.preferredModel,
         label: 'generate',
         gate: true,
+        thinking: body.thinking,
       });
     }
 

@@ -42,6 +42,11 @@ export interface ChatControllerOptions {
   ephemeral?: boolean;
   /** Alle gesprekken van deze controller draaien als prompt-uitvoering. */
   kind?: ChatConversation['kind'];
+  /**
+   * Denken aan: het model redeneert eerst en antwoordt daarna pas. Komt van de
+   * knop in de invoerbalk, dus de stand kan tussen twee beurten wisselen.
+   */
+  thinking?: boolean;
 }
 
 export interface ChatController {
@@ -91,6 +96,7 @@ export default function useChatController(
   // callbacks verversen.
   const ephemeral = options?.ephemeral ?? false;
   const defaultKind = options?.kind;
+  const thinking = options?.thinking ?? false;
 
   const [conversation, setConversation] = useState<ChatConversation | null>(null);
   const [index, setIndex] = useState<ChatIndexEntry[]>([]);
@@ -262,6 +268,7 @@ export default function useChatController(
         // voor vervolgbeurten, óók na een refresh (kind overleeft de opslag).
         kind: updated.kind,
         project,
+        thinking,
         onChunk: (textSoFar) => {
           pendingText = textSoFar;
           if (!rafId) rafId = requestAnimationFrame(flushPending);
@@ -291,7 +298,7 @@ export default function useChatController(
       streamingRef.current = false;
       setStreaming(false);
     },
-    [settings, userId, defaultKind, update, persistNow, modelForProvider],
+    [settings, userId, defaultKind, thinking, update, persistNow, modelForProvider],
   );
 
   const sendInNewConversation = useCallback(

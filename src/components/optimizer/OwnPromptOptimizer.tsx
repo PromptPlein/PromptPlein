@@ -74,6 +74,13 @@ interface OwnPromptOptimizerProps {
    * échte onderwerp gaat in plaats van over een algemeen geval.
    */
   projectContext?: string;
+  /**
+   * Denken aan: het model redeneert eerst en schrijft de prompt daarna pas.
+   * Komt van de knop boven de bouwer; geldt alleen voor de laatste stap, het
+   * schrijven zelf. De analyse- en voor-invulstappen leveren JSON en kunnen er
+   * dus niet mee overweg.
+   */
+  thinking?: boolean;
 }
 
 /**
@@ -99,6 +106,7 @@ export default function OwnPromptOptimizer({
   header,
   initialPrompt,
   projectContext,
+  thinking,
 }: OwnPromptOptimizerProps) {
   const { techniques, techniqueById } = useReferenceData();
   const frameworks = techniques.filter(isContextPrompt);
@@ -428,6 +436,7 @@ export default function OwnPromptOptimizer({
         preferredProvider: settings.provider,
         preferredModel: settings.model,
         projectContext,
+        thinking,
         systemPrompt: settings.systemPrompt.trim() || undefined,
         toneInstruction: settings.toneInstruction.trim() || undefined,
         temperature: settings.temperature,

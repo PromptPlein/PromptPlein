@@ -113,6 +113,13 @@ interface GoalDialogProps {
    * de AI naar achtergrond die in het project allang beschreven staat.
    */
   projectContext?: string;
+  /**
+   * Denken aan: het model redeneert eerst en schrijft de prompt daarna pas.
+   * Komt van de knop boven de bouwer; geldt alleen voor de laatste stap, het
+   * schrijven zelf. De analyse- en voor-invulstappen leveren JSON en kunnen er
+   * dus niet mee overweg.
+   */
+  thinking?: boolean;
 }
 
 /**
@@ -148,6 +155,7 @@ export default function GoalDialog({
   onResult,
   header,
   projectContext,
+  thinking,
 }: GoalDialogProps) {
   const { techniques, techniqueById } = useReferenceData();
   const { profile, user, isAdmin } = useAuth();
@@ -642,6 +650,7 @@ export default function GoalDialog({
         preferredProvider: settings.provider,
         preferredModel: settings.model,
         projectContext,
+        thinking,
         systemPrompt: settings.systemPrompt.trim() || undefined,
         toneInstruction: settings.toneInstruction.trim() || undefined,
         temperature: settings.temperature,

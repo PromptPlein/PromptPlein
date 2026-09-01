@@ -21,7 +21,10 @@ export type StreamHandler = (textSoFar: string) => void;
 export interface StreamStatus {
   /** Providers die zijn geprobeerd, in volgorde; de laatste is aan het werk. */
   models?: string[];
-  /** 'drafting' = het model leest mee, 'writing' = de tekst loopt. */
+  /**
+   * 'drafting' = het model leest mee, 'thinking' = het redeneert eerst (de
+   * denkstand staat aan), 'writing' = de tekst loopt.
+   */
   phase?: string;
   /** De provider die de tekst daadwerkelijk levert. */
   provider?: string;

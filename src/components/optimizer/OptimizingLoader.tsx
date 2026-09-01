@@ -17,7 +17,10 @@ interface OptimizingLoaderProps {
   models?: string[];
   /** De provider die de prompt daadwerkelijk schrijft. */
   winner?: string | null;
-  /** 'drafting' = het model leest mee, 'writing' = de tekst loopt. */
+  /**
+   * 'drafting' = het model leest mee, 'thinking' = het redeneert eerst (de
+   * denkstand staat aan), 'writing' = de tekst loopt.
+   */
   phase?: string;
 }
 
@@ -95,6 +98,8 @@ export default function OptimizingLoader({
                 <>Je prompt wordt nu geschreven</>
               ) : phase === 'writing' ? (
                 <>Het model begint te schrijven…</>
+              ) : phase === 'thinking' ? (
+                <>Het model denkt eerst na over je opdracht, dat duurt even…</>
               ) : (
                 <>
                   We verwerken je antwoorden tot een rijke, direct bruikbare prompt
