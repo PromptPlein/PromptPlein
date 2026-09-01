@@ -610,6 +610,9 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
       });
       // Inmiddels een andere stap actief? Dan dit (verouderde) resultaat negeren.
       if (prefillRunRef.current !== runId) return;
+      // Niets ingevuld door een storing bij de AI-dienst: dat zeggen we, anders
+      // ziet de gebruiker alleen lege velden en weet hij niet waarom.
+      if (res.error) toast(res.error, { icon: 'ℹ️' });
       if (res.unclear || res.fields.length === 0) return;
       setStepAnswers(Object.fromEntries(res.fields.map((f) => [f.id, f.value])));
       setStepFieldMeta(

@@ -2370,9 +2370,13 @@ export async function prefillFields(args: {
         };
       }
       if (data.success && Array.isArray(data.fields)) {
+        const fields = keep(data.fields);
+        // Ook hier geldt: nul velden is een mislukte voor-invulling, geen stille
+        // success. Zie de streamende tak hieronder.
+        if (fields.length === 0) throw new Error('de AI-dienst gaf geen velden terug');
         return {
           summary: data.summary ?? '',
-          fields: keep(data.fields),
+          fields,
           success: true,
           provider: (data.provider as PrefillResult['provider']) ?? 'claude',
         };
@@ -2397,9 +2401,22 @@ export async function prefillFields(args: {
     // control-flow meeneemt en `done` anders tot `never` versmalt.
     const settled = done as PrefillDoneEvent | null;
     if (settled) {
+      const settledFields = keep(settled.fields);
+      // Nul velden is geen geslaagde voor-invulling. Zonder deze tak kreeg de
+      // gebruiker een leeg formulier én de mededeling dat alles was ingevuld,
+      // zonder enige aanwijzing dat de AI-dienst niet thuis gaf.
+      if (settledFields.length === 0) {
+        return {
+          ...empty,
+          provider: (settled.provider as PrefillResult['provider']) ?? 'local-template',
+          error:
+            'Voor-invullen leverde geen velden op; de AI-dienst was even niet bereikbaar. ' +
+            'Probeer het opnieuw of vul de velden zelf in.',
+        };
+      }
       return {
         summary: settled.summary ?? streamedSummary,
-        fields: keep(settled.fields),
+        fields: settledFields,
         success: true,
         provider: (settled.provider as PrefillResult['provider']) ?? 'claude',
       };

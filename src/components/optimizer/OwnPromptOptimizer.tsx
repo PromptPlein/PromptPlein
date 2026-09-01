@@ -940,15 +940,44 @@ export default function OwnPromptOptimizer({
             stap of alles tegelijk) is een persoonlijke voorkeur in FollowUpQuestions. */}
         {prefill && !prefilling && !generating && technique && (
           <div className="animate-fade-in space-y-4 rounded-xl border border-rijksblauw-200 bg-rijksblauw-50/40 p-4 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10">
-            <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
-              {stripMarkdown(prefill.summary) ||
-                'We hebben de velden alvast voor je ingevuld op basis van je prompt.'}
-            </p>
-            <p className="text-sm text-slate-600 dark:text-slate-300">
-              Controleer en pas aan waar nodig, vooral de AI-suggesties met het oranje label{' '}
-              <span className="font-medium">Controleren</span>. Wat je leeg laat, blijft een
-              plaatshouder in de uiteindelijke prompt.
-            </p>
+            {/* Kwam er niets terug (AI-dienst druk of niet bereikbaar), dan zeggen
+                we dat, met een knop om het opnieuw te proberen. Een leeg formulier
+                onder de tekst "we hebben alles ingevuld" is misleidend. */}
+            {prefill.fields.length === 0 ? (
+              <div
+                role="alert"
+                className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-200"
+              >
+                <AlertTriangle size={18} className="mt-0.5 shrink-0" />
+                <div className="min-w-0">
+                  <p className="font-medium">Voor-invullen is niet gelukt</p>
+                  <p className="mt-0.5 text-amber-700 dark:text-amber-300/90">
+                    De AI-dienst was even niet bereikbaar. Probeer het opnieuw, of vul de velden
+                    hieronder zelf in.
+                  </p>
+                  <button
+                    type="button"
+                    className="opl-btn-secondary mt-2"
+                    onClick={() => void runPrefill(technique, clarification)}
+                    disabled={prefilling || generating}
+                  >
+                    <RefreshCw size={16} /> Opnieuw proberen
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                  {stripMarkdown(prefill.summary) ||
+                    'We hebben de velden alvast voor je ingevuld op basis van je prompt.'}
+                </p>
+                <p className="text-sm text-slate-600 dark:text-slate-300">
+                  Controleer en pas aan waar nodig, vooral de AI-suggesties met het oranje label{' '}
+                  <span className="font-medium">Controleren</span>. Wat je leeg laat, blijft een
+                  plaatshouder in de uiteindelijke prompt.
+                </p>
+              </>
+            )}
             <FollowUpQuestions
               projectContext={projectContext}
               technique={technique}

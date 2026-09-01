@@ -936,15 +936,44 @@ export default function GoalDialog({
                         <Package size={16} className="text-rijksblauw-500" />
                         {chosenFramework.name}: controleer de velden
                       </p>
-                      <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
-                        {stripMarkdown(prefill?.summary ?? '') ||
-                          'We hebben de velden alvast ingevuld met wat je in het gesprek hebt verteld.'}
-                      </p>
-                      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                        Pas aan waar nodig, vooral de AI-suggesties met het oranje label{' '}
-                        <span className="font-medium">Controleren</span>. Wat je leeg laat, blijft een
-                        plaatshouder in je prompt.
-                      </p>
+                      {/* Kwam er niets terug (AI-dienst druk of niet bereikbaar), dan
+                          zeggen we dat in plaats van te melden dat alles is ingevuld
+                          terwijl het formulier leeg is. */}
+                      {prefill && prefill.fields.length === 0 ? (
+                        <div
+                          role="alert"
+                          className="mt-2 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-200"
+                        >
+                          <AlertTriangle size={18} className="mt-0.5 shrink-0" />
+                          <div className="min-w-0">
+                            <p className="font-medium">Voor-invullen is niet gelukt</p>
+                            <p className="mt-0.5 text-amber-700 dark:text-amber-300/90">
+                              De AI-dienst was even niet bereikbaar. Probeer het opnieuw, of vul de
+                              velden hieronder zelf in.
+                            </p>
+                            <button
+                              type="button"
+                              className="opl-btn-secondary mt-2"
+                              onClick={() => void chooseFramework(chosenFramework.id)}
+                              disabled={prefilling}
+                            >
+                              <RotateCw size={16} /> Opnieuw proberen
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+                            {stripMarkdown(prefill?.summary ?? '') ||
+                              'We hebben de velden alvast ingevuld met wat je in het gesprek hebt verteld.'}
+                          </p>
+                          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                            Pas aan waar nodig, vooral de AI-suggesties met het oranje label{' '}
+                            <span className="font-medium">Controleren</span>. Wat je leeg laat, blijft
+                            een plaatshouder in je prompt.
+                          </p>
+                        </>
+                      )}
                     </div>
 
                     <div className="rounded-xl border border-rijksblauw-200 bg-rijksblauw-50/40 p-4 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10">
