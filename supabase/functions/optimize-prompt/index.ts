@@ -5035,18 +5035,24 @@ const PROVIDERS: Record<Provider, ProviderFn> = {
 };
 
 /**
- * De providers die PromptPlein daadwerkelijk gebruikt. Claude en OpenAI zijn
- * bewust uitgezet: hun code hierboven blijft staan zodat ze later weer aan
- * kunnen, maar geen enkele modus mag ze nog aanroepen. Houd dit in sync met
+ * De providers die PromptPlein daadwerkelijk gebruikt. Claude, OpenAI en
+ * DeepSeek zijn uitgezet: hun code hierboven blijft staan zodat ze later weer
+ * aan kunnen, maar geen enkele modus mag ze nog aanroepen. Houd dit in sync met
  * `ENABLED_PROVIDERS` in src/config/aiModels.ts.
+ *
+ * DeepSeek staat sinds 7 september 2026 uit: dat account heeft geen saldo en gaf
+ * op élke aanroep 402, zodat elke modus na Mistral nog een kansloze poging deed
+ * en de gebruiker onnodig langer op een foutmelding wachtte. Is het saldo weer
+ * op peil, dan mag 'deepseek' hier en in DEFAULT_ORDER terug.
  */
-const ENABLED_PROVIDERS: Provider[] = ['deepseek', 'mistral'];
+const ENABLED_PROVIDERS: Provider[] = ['mistral'];
 
 /**
- * De fallback-keten voor 'auto'. DeepSeek voorop (sterker redeneren), Mistral
- * als snelle achtervang.
+ * De fallback-keten voor 'auto'. Alleen Mistral, zolang DeepSeek uitstaat: valt
+ * Mistral om, dan levert de modus zijn lokale terugval (de ruwe template of
+ * trefwoord-matching) in plaats van nog een provider te proberen.
  */
-const DEFAULT_ORDER: Provider[] = ['deepseek', 'mistral'];
+const DEFAULT_ORDER: Provider[] = ['mistral'];
 
 /**
  * Incrementele variant van de clarity-gate voor streamende modi. Bepaalt op de

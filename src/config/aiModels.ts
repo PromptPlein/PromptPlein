@@ -8,13 +8,17 @@
 export type AiProvider = 'auto' | 'claude' | 'openai' | 'deepseek' | 'mistral';
 
 /**
- * De providers die PromptPlein daadwerkelijk gebruikt: alleen Mistral en
- * DeepSeek (beide Europees of goedkoop, en de sleutels die er zijn). Claude en
- * OpenAI zijn bewust uitgezet: hun code blijft staan zodat ze later weer aan
- * kunnen, maar ze zijn niet te kiezen en de fallback-keten slaat ze over.
+ * De providers die PromptPlein daadwerkelijk gebruikt: alleen Mistral. Claude,
+ * OpenAI en DeepSeek zijn uitgezet: hun code blijft staan zodat ze later weer
+ * aan kunnen, maar ze zijn niet te kiezen en de fallback-keten slaat ze over.
  * Houd dit in sync met `ENABLED_PROVIDERS` in de `optimize-prompt` edge function.
+ *
+ * DeepSeek staat sinds 7 september 2026 uit omdat dat account zonder saldo zit
+ * en op élke aanroep 402 gaf. Komt het saldo terug, dan mag 'deepseek' hier weer
+ * bij, samen met het item in AI_MODELS hieronder en de twee lijsten in de edge
+ * function.
  */
-export const ENABLED_PROVIDERS: AiProvider[] = ['auto', 'deepseek', 'mistral'];
+export const ENABLED_PROVIDERS: AiProvider[] = ['auto', 'mistral'];
 
 /** Mag deze provider gebruikt worden? Onbekend/uitgezet → false. */
 export function isEnabledProvider(id: string | undefined): id is AiProvider {
@@ -35,13 +39,7 @@ export interface AiModelOption {
 
 /** De keuzes in de admin: alleen wat er ook echt draait (zie ENABLED_PROVIDERS). */
 export const AI_MODELS: AiModelOption[] = [
-  { id: 'auto', label: 'Automatisch', hint: 'DeepSeek → Mistral, met fallback' },
-  {
-    id: 'deepseek',
-    label: 'DeepSeek',
-    hint: 'Kostenefficiënt',
-    apiKeysUrl: 'https://platform.deepseek.com/api_keys',
-  },
+  { id: 'auto', label: 'Automatisch', hint: 'Mistral, met lokale terugval' },
   {
     id: 'mistral',
     label: 'Mistral',

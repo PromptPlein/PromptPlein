@@ -204,10 +204,17 @@ mode in dat bestand, niet een nieuwe function. De 30 modes, gegroepeerd:
 
 ### Providers en modellen
 
-Aan staan alleen **DeepSeek** en **Mistral**. De keten bij `auto` is DeepSeek,
-dan Mistral. De Claude- en OpenAI-code staat er nog zodat ze later weer aan
+Aan staat alleen **Mistral**. De keten bij `auto` bestaat dus uit één provider;
+valt die om, dan is er geen tweede kans meer, alleen de lokale terugval. De
+code voor Claude, OpenAI en DeepSeek staat er nog zodat ze later weer aan
 kunnen, maar geen enkele mode roept ze aan en oude opgeslagen instellingen
 moeten blijven parsen.
+
+DeepSeek staat sinds 7 september 2026 uit: dat account heeft geen saldo en gaf op
+élke aanroep `402 Insufficient Balance`, zodat elke modus na Mistral nog een
+kansloze poging deed. Aanzetten is drie plekken terugdraaien:
+`ENABLED_PROVIDERS` en `DEFAULT_ORDER` in de edge function, plus
+`ENABLED_PROVIDERS` en het item in `AI_MODELS` in `src/config/aiModels.ts`.
 
 Standaardmodellen zijn het eerste item per provider: `deepseek-v4-flash` en
 `mistral-small-latest` (Mistral Small 4). Bij Mistral staan bewust de
