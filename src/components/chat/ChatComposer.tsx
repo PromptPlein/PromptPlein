@@ -105,6 +105,12 @@ interface ChatComposerProps {
   webSearch?: boolean;
   /** Zet zoeken op internet aan of uit voor de volgende beurt. */
   onToggleWebSearch?: (value: boolean) => void;
+  /**
+   * Nog geen bericht in dit gesprek? Dan is het invoerveld het enige waar de
+   * gebruiker iets moet doen: het krijgt een opvallender rand, een ruimer
+   * tekstvak en een placeholder die zegt wat er van hem verwacht wordt.
+   */
+  prominent?: boolean;
 }
 
 /**
@@ -141,6 +147,7 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
     onToggleThinking,
     webSearch = false,
     onToggleWebSearch,
+    prominent = false,
   },
   ref,
 ) {
@@ -326,7 +333,11 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
         className={clsx(
           'relative rounded-xl border bg-white transition-colors dark:bg-slate-800',
           'focus-within:border-rijksblauw-500 focus-within:ring-2 focus-within:ring-rijksblauw-500/20',
-          'border-slate-300 dark:border-slate-600',
+          // In een leeg gesprek springt het veld eruit: blauwe rand, zachte gloed
+          // en een schaduw, zodat meteen duidelijk is waar je typt.
+          prominent
+            ? 'border-rijksblauw-300 shadow-md ring-4 ring-rijksblauw-500/10 dark:border-rijksblauw-500/50 dark:ring-rijksblauw-500/10'
+            : 'border-slate-300 dark:border-slate-600',
           disabled && 'opacity-60',
         )}
         // Klikken op de rand of de lege ruimte eromheen zet de cursor in de
@@ -390,6 +401,9 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
               'opl-scroll-slim block w-full resize-none border-0 bg-transparent px-3.5 py-2.5',
               'text-sm leading-6 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-0',
               'dark:text-slate-100 dark:placeholder:text-slate-500',
+              // Leeg gesprek: een ruimer vak, zodat het als een uitnodiging leest
+              // en niet als een smal regeltje onderaan het scherm.
+              prominent && 'min-h-[3.5rem] py-3.5',
               // Ruimte rechtsboven voor het sterretje, zodat de tekst er niet
               // onder doorloopt. Vast (niet afhankelijk van of de knop er staat),
               // anders zou de tekst verspringen zodra je begint te typen.
@@ -398,7 +412,13 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
             // Eén regel als startpunt; de layout-effect hierboven laat het vak
             // daarna meegroeien met de tekst.
             rows={1}
-            placeholder={disabled ? 'Chat wordt geladen…' : 'Stel je vraag…'}
+            placeholder={
+              disabled
+                ? 'Chat wordt geladen…'
+                : prominent
+                  ? 'Typ hier je bericht en druk op Enter'
+                  : 'Stel je vraag…'
+            }
             value={text}
             disabled={disabled || optimizing}
             onChange={(e) => {

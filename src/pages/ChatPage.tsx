@@ -471,11 +471,10 @@ export default function ChatPage() {
             ) : (
               <>
                 {messages.length === 0 ? (
-                  <div className="min-h-0 flex-auto overflow-y-auto">
-                    {/* Een startsjabloon verstuurt niets: het komt in het
-                        invoerveld te staan, zodat de gebruiker het eerst met
-                        zijn eigen situatie aanvult. */}
-                    <ChatEmptyState onPick={(text) => composerRef.current?.fill(text)} />
+                  <div className="flex min-h-0 flex-auto overflow-y-auto">
+                    {/* Geen startsjablonen meer: een leeg gesprek wijst alleen
+                        het invoerveld aan. */}
+                    <ChatEmptyState />
                   </div>
                 ) : (
                   <ChatMessageList
@@ -512,6 +511,9 @@ export default function ChatPage() {
                   onToggleWebSearch={settings?.webSearchEnabled ? setWebSearch : undefined}
                   // Alleen in een nog leeg gesprek: zie ChatController.attachProject.
                   canPickProject={messages.length === 0 && conversation?.kind !== 'execution'}
+                  // Leeg gesprek: het invoerveld is het enige aanknopingspunt op
+                  // het scherm en wordt daarom groter en blauw omrand getoond.
+                  prominent={messages.length === 0}
                   badge={
                     settings ? (
                       <ChatModelBadge provider={settings.provider} model={settings.model} />
