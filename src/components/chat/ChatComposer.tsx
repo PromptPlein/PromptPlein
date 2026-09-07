@@ -477,8 +477,9 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
 
         {/* Werkbalk onderin hetzelfde veld: bijlage links, versturen rechts.
             Staat onder het tekstvak in plaats van eroverheen, dus de tekst kan er
-            nooit achter verdwijnen. */}
-        <div className="flex items-center gap-1 px-2 pb-2">
+            nooit achter verdwijnen. Een lichte scheidingslijn erboven zet de
+            knoppen los van wat je typt. */}
+        <div className="mt-1 flex items-center gap-1 border-t border-slate-100 px-2 pb-2 pt-1.5 dark:border-slate-700/60">
           {/* @-menu: hetzelfde project kiezen als vanuit de zijbalk, maar dan
               zonder het gesprek te verlaten. Bewust naast de paperclip: het is
               dezelfde soort handeling — bronmateriaal aan dit gesprek hangen. */}
