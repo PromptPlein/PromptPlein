@@ -12,7 +12,7 @@ import { ArrowDown, FileText, ShieldCheck } from 'lucide-react';
  */
 export default function ChatEmptyState() {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-5 px-6 py-8 text-center">
+    <div className="flex h-full w-full flex-col items-center justify-center gap-5 px-6 py-8 text-center">
       {/* Het merkteken van PromptPlein in plaats van een generiek chat-icoon: dit
           is het eerste wat je ziet in een leeg gesprek. Het teken is getekend
           voor een lichte ondergrond: in donkere modus zetten we het daarom op
