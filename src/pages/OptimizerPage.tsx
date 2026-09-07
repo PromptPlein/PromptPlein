@@ -237,24 +237,6 @@ export default function OptimizerPage() {
     }, 400);
   }
 
-  /**
-   * Een verbeter-ronde uit de Testkamer leverde een nieuwe versie op: achteraan
-   * toevoegen en meteen actief maken. `versions.length` is hier de index van de
-   * nieuwe versie — de Testkamer is single-flight, dus er lopen nooit twee
-   * verbeter-rondes tegelijk.
-   */
-  function handleRefined(res: OptimizeResult) {
-    void trackEvent({
-      event_type: 'optimization_run',
-      user_identifier: activityIdentifier(profile, user?.email),
-      prompt_id: sourcePromptId,
-      technique_id: resultTechnique?.id,
-      metadata: { provider: res.provider, flow: 'refine', version: versions.length + 1 },
-    });
-    setVersions((cur) => [...cur, res]);
-    setActiveVersion(versions.length);
-  }
-
   function handleReset() {
     setVersions([]);
     setActiveVersion(0);
@@ -287,9 +269,6 @@ export default function OptimizerPage() {
             versions={versions}
             activeVersion={activeVersion}
             onSelectVersion={setActiveVersion}
-            onRefined={handleRefined}
-            aiSettings={settingsRef.current}
-            projectContext={projectContext?.text}
           />
         </div>
       ) : (

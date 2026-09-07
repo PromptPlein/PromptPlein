@@ -371,19 +371,6 @@ export default function TechniquesPage() {
     }
   }
 
-  /** Een verbeter-ronde uit de Testkamer: achteraan toevoegen en actief maken. */
-  function handleRefined(res: OptimizeResult) {
-    void trackEvent({
-      event_type: 'optimization_run',
-      user_identifier: activityIdentifier(profile, user?.email),
-      prompt_id: null,
-      technique_id: technique?.id,
-      metadata: { provider: res.provider, flow: 'refine', version: versions.length + 1 },
-    });
-    setVersions((cur) => [...cur, res]);
-    setActiveVersion(versions.length);
-  }
-
   /** Terug naar de invoer met dezelfde techniek en antwoorden. */
   function handleReset() {
     setVersions([]);
@@ -450,8 +437,6 @@ export default function TechniquesPage() {
             versions={versions}
             activeVersion={activeVersion}
             onSelectVersion={setActiveVersion}
-            onRefined={handleRefined}
-            aiSettings={settingsRef.current}
           />
         </div>
       ) : (

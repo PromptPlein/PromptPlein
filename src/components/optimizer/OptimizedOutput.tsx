@@ -14,11 +14,10 @@ import toast from 'react-hot-toast';
 import { Link, useNavigate } from 'react-router-dom';
 import { copyToClipboard } from '@/lib/utils';
 import { writeHandoff } from '@/services/chatService';
-import { getChatSettingsCached, type ChatSettings, type AiSettings } from '@/services/settingsService';
+import { getChatSettingsCached, type ChatSettings } from '@/services/settingsService';
 import { useAuth } from '@/context/AuthContext';
 import ShareModal from '@/components/share/ShareModal';
 import SavePromptPanel from '@/components/prompts/SavePromptPanel';
-import TestRoom from '@/components/optimizer/TestRoom';
 import type { OptimizeResult, Prompt, PromptDialogue, Technique } from '@/types';
 
 interface OptimizedOutputProps {
@@ -36,12 +35,6 @@ interface OptimizedOutputProps {
   versions?: OptimizeResult[];
   activeVersion?: number;
   onSelectVersion?: (index: number) => void;
-  /** Een verbeterde versie is klaar (Testkamer) — voeg toe en maak actief. */
-  onRefined?: (res: OptimizeResult) => void;
-  /** Generator-AI-instellingen; de refine in de Testkamer draait hierop. */
-  aiSettings?: AiSettings;
-  /** Context van het aangehaakte chatproject; zie ProjectContextBar. */
-  projectContext?: string;
 }
 
 export default function OptimizedOutput({
@@ -52,9 +45,6 @@ export default function OptimizedOutput({
   versions,
   activeVersion = 0,
   onSelectVersion,
-  onRefined,
-  aiSettings,
-  projectContext,
 }: OptimizedOutputProps) {
   const { configured } = useAuth();
   const [copied, setCopied] = useState(false);
@@ -150,17 +140,6 @@ export default function OptimizedOutput({
         {result.optimized_content}
       </pre>
 
-      {/* De Testkamer: voer de prompt hier direct uit en stuur met feedback een
-          verbeterde versie aan — de bouw-test-verbeter-lus op één scherm. */}
-      <TestRoom
-        result={result}
-        technique={technique}
-        chatSettings={chatSettings}
-        aiSettings={aiSettings}
-        projectContext={projectContext}
-        onRefined={onRefined}
-      />
-
       {/* Kwam deze prompt uit de doel-dialoog? Dan is navolgbaar waar hij vandaan
           komt: het beschreven doel, de gestelde vragen met je antwoorden, de
           opdrachtbeschrijving die eruit volgde en het gekozen framework. Bewust
@@ -215,7 +194,7 @@ export default function OptimizedOutput({
             de chat uitzette, anders zou de prompt stilletjes verdwijnen in een
             handoff die nooit vuurt. */}
         <button
-          className="opl-btn-secondary"
+          className="opl-btn-accent"
           onClick={handleSendToChat}
           disabled={!chatAvailable}
           title={
