@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { FolderOpen, MessageSquare, Plus, Trash2 } from 'lucide-react';
 import clsx from 'clsx';
-import { Link } from 'react-router-dom';
 import { formatDate } from '@/lib/utils';
 import type { ChatIndexEntry, ChatProject } from '@/types';
 
@@ -88,8 +87,7 @@ export default function ChatSidebar({
   disabled: boolean;
   onSelect: (id: string) => void;
   onNew: () => void;
-  /** Ontbreekt voor gasten: projecten staan in de database en vragen een account. */
-  onNewProject?: () => void;
+  onNewProject: () => void;
   onOpenProject: (id: string) => void;
   onRequestDelete: (id: string) => void;
   onRequestDeleteAll: () => void;
@@ -120,25 +118,18 @@ export default function ChatSidebar({
     <aside className="hidden w-64 shrink-0 flex-col border-r border-slate-200 bg-slate-50/70 p-3 lg:flex dark:border-slate-700 dark:bg-slate-900/40">
       {/* Eén knop met een klein menu erachter: nieuw gesprek is de gewone daad,
           nieuw project de zeldzame. Twee even grote knoppen zouden suggereren
-          dat je elke keer moet kiezen. Zonder projecten (gast) is er niets te
-          kiezen en start de knop meteen een nieuw gesprek. */}
+          dat je elke keer moet kiezen. */}
       <div className="relative" ref={menuRef}>
-        {onNewProject ? (
-          <button
-            type="button"
-            className="opl-btn-primary w-full"
-            onClick={() => setMenuOpen((open) => !open)}
-            disabled={disabled}
-            aria-expanded={menuOpen}
-          >
-            <Plus size={16} /> Nieuw
-          </button>
-        ) : (
-          <button type="button" className="opl-btn-primary w-full" onClick={onNew} disabled={disabled}>
-            <Plus size={16} /> Nieuwe chat
-          </button>
-        )}
-        {menuOpen && onNewProject && (
+        <button
+          type="button"
+          className="opl-btn-primary w-full"
+          onClick={() => setMenuOpen((open) => !open)}
+          disabled={disabled}
+          aria-expanded={menuOpen}
+        >
+          <Plus size={16} /> Nieuw
+        </button>
+        {menuOpen && (
           <div className="absolute left-0 right-0 top-full z-20 mt-1 rounded-xl border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-700 dark:bg-slate-800">
             <button
               type="button"
@@ -171,16 +162,7 @@ export default function ChatSidebar({
             plusje staat rechts op dezelfde regel als het kopje. Daarom staan ze
             er ook als de lijst nog leeg is — anders is de knop pas te vinden
             nadat je al een project hebt. */}
-        {onNewProject ? (
-          <SectionHeading label="Projecten" addLabel="Nieuw project" onAdd={onNewProject} disabled={disabled} />
-        ) : (
-          <p className="px-2 pb-2 pt-1 text-xs text-slate-400 dark:text-slate-500">
-            <Link to="/auth/login" className="underline hover:text-slate-600 dark:hover:text-slate-300">
-              Log in
-            </Link>{' '}
-            voor projecten met eigen instructies en bestanden.
-          </p>
-        )}
+        <SectionHeading label="Projecten" addLabel="Nieuw project" onAdd={onNewProject} disabled={disabled} />
         {projects.length > 0 && (
           <>
             {projects.map((project) => (
@@ -208,13 +190,7 @@ export default function ChatSidebar({
           </>
         )}
 
-        <SectionHeading
-          label="Chats"
-          addLabel="Nieuwe chat"
-          onAdd={onNew}
-          disabled={disabled}
-          className={onNewProject ? 'pt-3' : undefined}
-        />
+        <SectionHeading label="Chats" addLabel="Nieuwe chat" onAdd={onNew} disabled={disabled} className="pt-3" />
 
         {entries.length === 0 && (
           <p className="px-2 py-4 text-xs text-slate-400 dark:text-slate-500">

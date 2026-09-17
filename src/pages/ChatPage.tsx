@@ -141,6 +141,18 @@ function ChatPageInner() {
     [controller.index, projectPage],
   );
 
+  // Gasten mogen in het lopende gesprek chatten, maar een nieuwe chat of een
+  // project vraagt een account: de knoppen blijven staan en sturen naar het
+  // inlogscherm, met /chat als terugkeeradres.
+  const navigate = useNavigate();
+  const requireLogin = useCallback(
+    (reason: string) => {
+      toast(reason);
+      navigate('/auth/login', { state: { from: '/chat' } });
+    },
+    [navigate],
+  );
+
   const handleOpenProject = useCallback((id: string) => {
     setProjectPage(id);
   }, []);
@@ -154,6 +166,10 @@ function ChatPageInner() {
   const draftProjectRef = useRef<string | null>(null);
 
   const handleNewProject = useCallback(async () => {
+    if (!user) {
+      requireLogin('Log in om een project te maken.');
+      return;
+    }
     const created = await projects.create('Nieuw project');
     if (!created) return;
     // Meteen door naar de instellingen: een leeg project zonder instructie is
@@ -161,7 +177,7 @@ function ChatPageInner() {
     draftProjectRef.current = created.id;
     setProjectPage(created.id);
     setSettingsProjectId(created.id);
-  }, [projects]);
+  }, [user, requireLogin, projects]);
 
   // Handoff vanuit de bouwer ("Project maken" in de projectbalk): daar staat de
   // knop, hier woont de handeling. De gebruiker landt dus niet op een chatpagina
@@ -213,9 +229,13 @@ function ChatPageInner() {
   );
 
   const handleNewConversation = useCallback(() => {
+    if (!user) {
+      requireLogin('Log in om een nieuwe chat te starten.');
+      return;
+    }
     setProjectPage(null);
     controller.newConversation();
-  }, [controller]);
+  }, [user, requireLogin, controller]);
 
   const handleDeleteProject = useCallback(async () => {
     if (!confirmDeleteProject) return;
@@ -234,7 +254,6 @@ function ChatPageInner() {
     : null;
 
   // --- Chat → generator: omgekeerde handoff en opslaan als prompt ---
-  const navigate = useNavigate();
   const handleImprove = useCallback(
     (text: string) => {
       writeGeneratorHandoff(text);
@@ -360,7 +379,7 @@ function ChatPageInner() {
           disabled={controller.streaming}
           onSelect={handleSelectConversation}
           onNew={handleNewConversation}
-          onNewProject={user ? () => void handleNewProject() : undefined}
+          onNewProject={() => void handleNewProject()}
           onOpenProject={handleOpenProject}
           onRequestDelete={setConfirmDeleteId}
           onRequestDeleteAll={() => setConfirmDeleteAll(true)}
