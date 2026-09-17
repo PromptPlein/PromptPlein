@@ -2399,9 +2399,10 @@ function withSearchBlock(
  * Is de aanroep afkomstig van een INGELOGDE gebruiker? De gateway (verify_jwt)
  * heeft de handtekening en de vervaldatum van de Bearer-JWT al gevalideerd,
  * maar de publieke anon key is óók een geldige JWT (role 'anon'). Voor de
- * chat-modus decoderen we daarom de payload en eisen we een echte gebruiker:
+ * projectmodi decoderen we daarom de payload en eisen we een echte gebruiker:
  * role 'authenticated' met een sub-claim. Belt-and-braces controleren we exp
- * zelf ook, voor het geval verify_jwt ooit uit gaat.
+ * zelf ook, voor het geval verify_jwt ooit uit gaat. De chat zelf staat open
+ * voor iedereen, net als de bouwer.
  */
 function isAuthenticatedRequest(req: Request): boolean {
   const auth = req.headers.get('authorization') ?? '';
@@ -7693,15 +7694,9 @@ Deno.serve(async (req: Request) => {
 
     // --- Chat-modus: meerturns gesprek met optionele bijlagen ---
     if (mode === 'chat') {
-      // Alleen voor ingelogde gebruikers; de anon key is óók een geldige JWT,
-      // dus verify_jwt alleen is niet genoeg (zie isAuthenticatedRequest).
-      if (!isAuthenticatedRequest(req)) {
-        return new Response(
-          JSON.stringify({ success: false, error: 'Log in om de chat te gebruiken.' }),
-          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-        );
-      }
-
+      // Open voor iedereen, ook zonder account: dezelfde poort als 'generate'.
+      // Gesprekken blijven op het apparaat van de gebruiker; alleen de
+      // projectmodi vragen een ingelogde gebruiker (zie isAuthenticatedRequest).
       const turns = sanitizeChatTurns(body.messages);
       if (turns.length === 0) {
         return new Response(
@@ -7814,15 +7809,7 @@ Deno.serve(async (req: Request) => {
     // streamend — de gebruiker ziet zijn eigen tekst in het veld pas wisselen
     // zodra het volledige resultaat er is.
     if (mode === 'chat-optimize') {
-      // Zelfde poort als de chat zelf: alleen ingelogde gebruikers (de anon key
-      // is óók een geldige JWT, dus verify_jwt alleen is niet genoeg).
-      if (!isAuthenticatedRequest(req)) {
-        return new Response(
-          JSON.stringify({ success: false, error: 'Log in om de chat te gebruiken.' }),
-          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-        );
-      }
-
+      // Zelfde poort als de chat zelf: open voor iedereen.
       const chatInput = (body.chatInput ?? '').trim().slice(0, MAX_CHAT_OPTIMIZE_CHARS);
       if (!chatInput) {
         return new Response(
@@ -7878,9 +7865,8 @@ Deno.serve(async (req: Request) => {
     // maar met een veel zwaardere slag erachter: de uitkomst moet elk gesprek in
     // het project sturen, niet één bericht.
     if (mode === 'project-optimize') {
-      // Zelfde poort als de chat zelf: projecten bestaan alleen voor ingelogde
-      // gebruikers (de anon key is óók een geldige JWT, dus verify_jwt alleen is
-      // niet genoeg).
+      // Projecten bestaan alleen voor ingelogde gebruikers (de anon key is óók
+      // een geldige JWT, dus verify_jwt alleen is niet genoeg).
       if (!isAuthenticatedRequest(req)) {
         return new Response(
           JSON.stringify({ success: false, error: 'Log in om je projectinstructie te verbeteren.' }),

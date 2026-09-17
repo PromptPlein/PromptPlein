@@ -11,6 +11,7 @@ import {
   createConversation,
   deleteAllConversations,
   deleteConversation,
+  GUEST_STORAGE_ID,
   loadChatIndex,
   loadConversation,
   saveConversation,
@@ -102,7 +103,9 @@ export default function useChatController(
   options?: ChatControllerOptions,
 ): ChatController {
   const { user } = useAuth();
-  const userId = user?.id ?? null;
+  // Zonder account landen de gesprekken in de gastbak van dit apparaat; bij
+  // inloggen wisselt de sleutel en zie je je eigen gesprekken.
+  const userId = user?.id ?? GUEST_STORAGE_ID;
   // Primitieven i.p.v. het options-object in de dependencies: de aanroeper
   // geeft doorgaans een inline object mee en dat zou elke render alle
   // callbacks verversen.
@@ -130,13 +133,13 @@ export default function useChatController(
   }, []);
 
   const refreshIndex = useCallback(() => {
-    setIndex(userId && !ephemeral ? loadChatIndex(userId) : []);
+    setIndex(ephemeral ? [] : loadChatIndex(userId));
   }, [userId, ephemeral]);
 
   /** Direct (niet-debounced) opslaan; waarschuwt eenmalig bij een volle opslag. */
   const persistNow = useCallback(
     (conv: ChatConversation) => {
-      if (ephemeral || !userId || conv.messages.length === 0) return;
+      if (ephemeral || conv.messages.length === 0) return;
       const ok = saveConversation(userId, conv);
       if (!ok && !quotaWarnedRef.current) {
         quotaWarnedRef.current = true;
@@ -149,17 +152,13 @@ export default function useChatController(
     [ephemeral, userId, refreshIndex],
   );
 
-  // Init per account: recentste gesprek hervatten, anders een vers gesprek.
-  // Valt de gebruiker weg (uitloggen), breek dan de lopende stream af en wis
-  // de in-memory state — de opslag zelf is al gewist door wipeAllChatStorage.
+  // Init per account (of per gastbak): recentste gesprek hervatten, anders een
+  // vers gesprek. Wisselt de sleutel (in- of uitloggen), breek dan de lopende
+  // stream af; bij uitloggen is de opslag al gewist door wipeAllChatStorage,
+  // dus de gast begint dan met een leeg gesprek.
   // Ephemeer (Testkamer): niets laden of hervatten, altijd een vers gesprek.
   useEffect(() => {
-    if (!userId) {
-      abortRef.current?.abort();
-      update(null);
-      setIndex([]);
-      return;
-    }
+    abortRef.current?.abort();
     if (ephemeral) {
       setIndex([]);
       update(createConversation(defaultKind));
@@ -202,7 +201,7 @@ export default function useChatController(
   const send = useCallback(
     async (rawText: string) => {
       const text = rawText.trim();
-      if (!text || streamingRef.current || !settings || !userId) return;
+      if (!text || streamingRef.current || !settings) return;
 
       const base = conversationRef.current ?? createConversation(defaultKind);
       const now = new Date().toISOString();
@@ -391,7 +390,7 @@ export default function useChatController(
 
   const selectConversation = useCallback(
     (id: string) => {
-      if (streamingRef.current || !userId) return;
+      if (streamingRef.current) return;
       if (conversationRef.current?.id === id) return;
       const loaded = loadConversation(userId, id);
       if (!loaded) {
@@ -406,7 +405,7 @@ export default function useChatController(
 
   const removeConversation = useCallback(
     (id: string) => {
-      if (streamingRef.current || !userId) return;
+      if (streamingRef.current) return;
       deleteConversation(userId, id);
       refreshIndex();
       if (conversationRef.current?.id === id) update(createConversation());
@@ -416,7 +415,7 @@ export default function useChatController(
   );
 
   const removeAllConversations = useCallback(() => {
-    if (streamingRef.current || !userId) return;
+    if (streamingRef.current) return;
     deleteAllConversations(userId);
     refreshIndex();
     update(createConversation());

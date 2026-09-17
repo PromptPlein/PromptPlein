@@ -3,7 +3,7 @@ import { useAuth } from '@/context/AuthContext';
 import type { AppRole } from '@/types';
 
 /** Eenvoudige laad-indicator terwijl de sessie wordt gecontroleerd. */
-function AuthLoading() {
+export function AuthLoading() {
   return (
     <div className="flex items-center justify-center py-24 text-sm text-slate-500">
       Bezig met laden…

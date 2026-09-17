@@ -1,10 +1,11 @@
 // Chatservice: verstuurt een gesprek naar de edge function (mode 'chat') en
 // leest het antwoord streamend terug.
 //
-// Anders dan de generator-aanroepen authenticeert de chat met het
-// SESSIE-token van de ingelogde gebruiker (niet de anon key): de edge function
-// weigert de chat-modus voor anonieme aanroepen. Er is bewust géén lokale
-// fallback — zonder AI-service is er geen chat (honest degrade).
+// De chat werkt met én zonder account: is er een sessie, dan gaat het
+// sessietoken mee, anders de anon key (net als bij de generator). Alleen de
+// projectaanroepen eisen een ingelogde gebruiker, want projecten staan in de
+// database. Er is bewust géén lokale fallback: zonder AI-service is er geen
+// chat (honest degrade).
 
 import { getAnonKey, getFunctionUrl, isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { streamNdjson, type StatusHandler, type StreamHandler } from '@/lib/ndjsonStream';
@@ -28,6 +29,17 @@ import type { ChatProjectContext, ChatSource } from '@/types';
  * daarbovenop nogmaals af.
  */
 const CHAT_WINDOW_MESSAGES = 12;
+
+/**
+ * Bearer-token voor de open chatmodi: het sessietoken als iemand is ingelogd,
+ * anders de anon key. Zo werkt de chat voor gasten en houdt een ingelogde
+ * gebruiker zijn eigen identiteit in de logs.
+ */
+async function sessionOrAnonToken(anonKey: string | undefined): Promise<string | undefined> {
+  if (!supabase) return anonKey;
+  const { data } = await supabase.auth.getSession();
+  return data.session?.access_token ?? anonKey;
+}
 
 export interface ChatSendResult {
   text: string;
@@ -89,13 +101,12 @@ export async function sendChatMessage(args: {
     return { text: '', error: 'Geen AI-service geconfigureerd. Neem contact op met de beheerder.' };
   }
 
-  const { data } = await supabase.auth.getSession();
-  const accessToken = data.session?.access_token;
+  const anonKey = getAnonKey();
+  const accessToken = await sessionOrAnonToken(anonKey);
   if (!accessToken) {
-    return { text: '', error: 'Log in om de chat te gebruiken.' };
+    return { text: '', error: 'Geen AI-service geconfigureerd. Neem contact op met de beheerder.' };
   }
 
-  const anonKey = getAnonKey();
   // Het antwoord gaat ongewijzigd naar het scherm — geen opschoning achteraf.
   // De opmaakregels staan in de systeemprompt en dat is de enige plek waar het
   // gedrag van de chat vandaan komt; een nabewerking hier zou een tweede,
@@ -192,11 +203,12 @@ export async function optimizeChatInput(args: {
   }
   if (!text) return noop;
 
-  const { data } = await supabase.auth.getSession();
-  const accessToken = data.session?.access_token;
-  if (!accessToken) return { ...noop, error: 'Log in om de chat te gebruiken.' };
-
   const anonKey = getAnonKey();
+  const accessToken = await sessionOrAnonToken(anonKey);
+  if (!accessToken) {
+    return { ...noop, error: 'Geen AI-service geconfigureerd. Neem contact op met de beheerder.' };
+  }
+
   try {
     const response = await fetch(functionUrl, {
       method: 'POST',

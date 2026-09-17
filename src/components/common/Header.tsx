@@ -34,8 +34,8 @@ interface NavItem {
   end: boolean;
   /** Markeert dit item als gereedschap en bepaalt de kleur van het icoonblokje. */
   accent?: NavAccent;
-  /** Alleen tonen voor ingelogde gebruikers (en zolang de chat aanstaat). */
-  authOnly?: boolean;
+  /** Alleen tonen zolang de beheerder de chat aan heeft staan. */
+  chatOnly?: boolean;
   /** Lazy chunk alvast laden bij hover/aanraken. */
   prefetch?: () => void;
 }
@@ -43,14 +43,14 @@ interface NavItem {
 const navItems: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/genereren', label: 'Genereren', icon: Sparkles, end: false, accent: 'oranje' },
-  // Chat is alleen zichtbaar voor ingelogde gebruikers (en als de admin hem aan heeft).
+  // Chat is voor iedereen zichtbaar, zolang de admin hem aan heeft.
   {
     to: '/chat',
     label: 'Chat',
     icon: MessageSquare,
     end: false,
     accent: 'blauw',
-    authOnly: true,
+    chatOnly: true,
     prefetch: prefetchChatPage,
   },
   { to: '/bibliotheek', label: 'Mijn prompts', icon: Library, end: false },
@@ -97,7 +97,7 @@ function NavIcon({ icon: Icon, accent, isActive, variant }: NavIconProps) {
 }
 
 export default function Header() {
-  const { isAdmin, isModerator, isAuthenticated } = useAuth();
+  const { isAdmin, isModerator } = useAuth();
   const [chatEnabled, setChatEnabled] = useState(true);
 
   useEffect(() => {
@@ -110,7 +110,7 @@ export default function Header() {
     };
   }, []);
 
-  const items = navItems.filter((item) => !item.authOnly || (isAuthenticated && chatEnabled));
+  const items = navItems.filter((item) => !item.chatOnly || chatEnabled);
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200 dark:border-slate-700 bg-white/90 dark:bg-slate-900/90 backdrop-blur">
       <div className="relative mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">

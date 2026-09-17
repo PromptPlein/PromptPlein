@@ -2,9 +2,10 @@
 //
 // Privacy-uitgangspunt (afgesproken met de beheerder): gespreksinhoud en
 // documentteksten blijven op het apparaat van de gebruiker, gescheiden per
-// ingelogd account. "Verwijder gesprek" wist definitief; bij uitloggen wordt
-// ALLES onder het prefix gewist (ook restdata van eerdere accounts op een
-// gedeelde werkplek).
+// ingelogd account. Wie niet is ingelogd chat onder de vaste gastsleutel
+// (GUEST_STORAGE_ID). "Verwijder gesprek" wist definitief; bij uitloggen wordt
+// ALLES onder het prefix gewist (ook restdata van eerdere accounts en van
+// gasten op een gedeelde werkplek).
 //
 // Indeling (key-per-gesprek, zodat debounced writes tijdens het streamen alleen
 // het actieve gesprek serialiseren en een quota-fout één gesprek raakt):
@@ -15,6 +16,9 @@ import { v4 as uuid } from 'uuid';
 import type { ChatConversation, ChatIndexEntry } from '@/types';
 
 export const CHAT_PREFIX = 'opl.chat.';
+
+/** Opslagsleutel voor wie niet is ingelogd: één gedeelde gastbak per apparaat. */
+export const GUEST_STORAGE_ID = 'gast';
 
 /** Maximum aantal bewaarde gesprekken per account; oudste worden geëvict. */
 const MAX_CONVERSATIONS = 30;

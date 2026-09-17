@@ -12,6 +12,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/context/AuthContext';
+import { AuthLoading } from '@/components/auth/RequireAuth';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import ChatComposer, { type ChatComposerHandle } from '@/components/chat/ChatComposer';
 import ChatEmptyState from '@/components/chat/ChatEmptyState';
@@ -39,11 +40,20 @@ import { getChatSettingsCached, type ChatSettings } from '@/services/settingsSer
 const NUDGE_DISMISSED_KEY = 'opl.ui.chatNudgeDismissed';
 
 /**
- * /chat — rechtstreeks gesprek met het door de admin gekozen model (basis:
- * Mistral). Alleen voor ingelogde gebruikers (route staat in de
- * RequireAuth-groep); gesprekken staan uitsluitend in localStorage.
+ * /chat: rechtstreeks gesprek met het door de admin gekozen model (basis:
+ * Mistral). Open voor iedereen, ook zonder account; gesprekken staan
+ * uitsluitend in localStorage (ingelogd per account, anders in de gastbak).
+ * Projecten vragen wél een account, want die staan in de database.
  */
 export default function ChatPage() {
+  // Eerst weten of er een sessie is: anders start de controller in de gastbak
+  // en springt hij een tel later naar het account.
+  const { loading } = useAuth();
+  if (loading) return <AuthLoading />;
+  return <ChatPageInner />;
+}
+
+function ChatPageInner() {
   const { configured, user } = useAuth();
   const [settings, setSettings] = useState<ChatSettings | null>(null);
   // Denkstand: de knop in de invoerbalk zet hem, de controller stuurt hem mee.
@@ -75,14 +85,14 @@ export default function ChatPage() {
   }, []);
 
   // Handoff vanuit de generator ("Kopiëren in chat"): prompt klaargezet in
-  // sessionStorage, dat overleeft ook de login-roundtrip van RequireAuth. Een
+  // sessionStorage, zodat hij niet naar andere tabs lekt. Een
   // compose-handoff verstuurt niets: de prompt komt in het invoerveld te staan,
   // zodat de gebruiker hem eerst kan aanvullen. Het gesprek is wel meteen een
   // UITVOERgesprek, dus bij versturen draait hij onder de neutrale
   // uitvoer-systeemprompt in plaats van de B1-huisregels.
   const { sendInNewConversation, newConversation } = controller;
   useEffect(() => {
-    if (!user || !settings?.enabled || handoffDone.current) return;
+    if (!settings?.enabled || handoffDone.current) return;
     const handoff = consumeHandoff();
     if (!handoff) return;
     handoffDone.current = true;
@@ -92,7 +102,7 @@ export default function ChatPage() {
       return;
     }
     sendInNewConversation(handoff.prompt, handoff.kind === 'execute' ? 'execution' : undefined);
-  }, [user, settings, sendInNewConversation, newConversation]);
+  }, [settings, sendInNewConversation, newConversation]);
 
   const conversation = controller.conversation;
   const messages = conversation?.messages ?? [];
@@ -350,7 +360,7 @@ export default function ChatPage() {
           disabled={controller.streaming}
           onSelect={handleSelectConversation}
           onNew={handleNewConversation}
-          onNewProject={() => void handleNewProject()}
+          onNewProject={user ? () => void handleNewProject() : undefined}
           onOpenProject={handleOpenProject}
           onRequestDelete={setConfirmDeleteId}
           onRequestDeleteAll={() => setConfirmDeleteAll(true)}
