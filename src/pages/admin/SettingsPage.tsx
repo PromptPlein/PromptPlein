@@ -190,7 +190,13 @@ export default function SettingsPage() {
       {/* 1. AI-model */}
       <section className="opl-card p-6">
         <SectionHeader icon={Cpu} title="AI-model voor optimalisatie">
-          De gekozen API wordt gebruikt voor alle optimalisaties. Gebruikers kiezen zelf geen model.
+          De gekozen API wordt gebruikt voor alle optimalisaties in de bouwer. Gebruikers kiezen
+          zelf geen model. Dit blok geldt <strong>niet</strong> voor de chat: die heeft een eigen
+          model, verderop in het blok{' '}
+          <a href="#chat-model" className="underline hover:text-rijksblauw-700 dark:hover:text-rijksblauw-200">
+            Chat
+          </a>
+          .
         </SectionHeader>
         <ProviderCards value={settings.provider} onSelect={selectProvider} />
 
@@ -275,6 +281,20 @@ export default function SettingsPage() {
                 return chosen ? <span> · {pricingSummary(chosen.pricing)}</span> : null;
               })()}
             </p>
+            {chat.provider !== 'auto' && (
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                De chat draait op{' '}
+                <span className="font-semibold text-rijksblauw-700 dark:text-rijksblauw-200">
+                  {AI_MODELS.find((m) => m.id === chat.provider)?.label}
+                  {modelLabel(chat.provider, chat.model) ? ` · ${modelLabel(chat.provider, chat.model)}` : ''}
+                </span>
+                ; dat stel je in bij{' '}
+                <a href="#chat-model" className="underline hover:text-rijksblauw-700 dark:hover:text-rijksblauw-200">
+                  Chat
+                </a>
+                .
+              </p>
+            )}
           </div>
         )}
       </section>
@@ -351,9 +371,9 @@ export default function SettingsPage() {
       {/* 3. Chat */}
       <section className="opl-card p-6">
         <SectionHeader icon={MessagesSquare} title="Chat">
-          De chatpagina waar ingelogde gebruikers rechtstreeks met het model praten en documenten
-          laten analyseren. Deze instellingen staan <strong>los</strong> van het
-          optimalisatie-model hierboven.
+          De chatpagina waar gebruikers rechtstreeks met het model praten en documenten laten
+          analyseren. Deze instellingen staan <strong>los</strong> van het optimalisatie-model
+          hierboven: het model dat je hier kiest is wat de chat gebruikt en als badge toont.
         </SectionHeader>
 
         <label className="flex cursor-pointer items-center gap-3">
@@ -364,12 +384,12 @@ export default function SettingsPage() {
             onChange={(e) => patchChat({ enabled: e.target.checked })}
           />
           <span className="text-sm text-slate-700 dark:text-slate-200">
-            Chat ingeschakeld (menu-item zichtbaar voor ingelogde gebruikers)
+            Chat ingeschakeld (menu-item zichtbaar voor alle bezoekers)
           </span>
         </label>
 
         <div className={clsx('mt-5 space-y-6', !chat.enabled && 'pointer-events-none opacity-50')}>
-          <div>
+          <div id="chat-model" className="scroll-mt-24">
             <div className="mb-3 flex items-center gap-2">
               <Cpu size={16} className="text-rijksblauw-500" />
               <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
