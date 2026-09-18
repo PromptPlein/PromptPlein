@@ -21,6 +21,27 @@ antwoorden blijven binnen.
   (A-record naar het IP van de VPS).
 - Poort 80 en 443 open in de firewall. Caddy regelt het certificaat zelf.
 
+## Op een Mac mini thuis of op kantoor
+
+Dat kan, en het is handig om mee te testen. Dezelfde stappen als hieronder,
+met daarbovenop:
+
+- In de router poort 80 en 443 doorsturen naar de Mac (geef hem een vast
+  lokaal IP). Zonder poort 80 kan Caddy geen certificaat aanvragen.
+- Geen vast publiek IP? Dan een dynamische DNS-naam die de router bijwerkt;
+  die naam wordt `DOMAIN` in `.env`.
+- Slaapstand uit, Docker Desktop starten bij inloggen, automatisch inloggen na
+  een herstart.
+- Heeft de provider je achter CGNAT gezet (gedeeld IP), dan werkt doorsturen
+  niet. Neem dan een VPS; een tunnel via Cloudflare zou al het zoekverkeer
+  langs een Amerikaanse partij sturen en dat is precies wat deze opzet vermijdt.
+
+Valt de Mac of de verbinding weg, dan antwoordt de chat zonder bronnen: de
+edge function wacht hoogstens 9 seconden en gaat dan door. Voor productie is
+een VPS beter: geen apparaat in het eigen netwerk aan het internet en geen
+zoekfunctie die afhangt van een thuisaansluiting. Verhuizen is deze map
+kopiëren en dezelfde commando's draaien.
+
 ## Installeren
 
 Op de server:
