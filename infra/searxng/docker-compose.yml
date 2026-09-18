@@ -1,0 +1,47 @@
+# SearXNG voor de zoekknop in de chat van PromptPlein.
+#
+# Twee containers: SearXNG zelf (luistert alleen binnen het Docker-netwerk) en
+# Caddy ervoor, die het HTTPS-certificaat regelt en elk verzoek zonder het
+# juiste X-Search-Token weigert. Zie README.md voor de stappen.
+services:
+  searxng:
+    image: searxng/searxng:latest
+    container_name: searxng
+    restart: unless-stopped
+    volumes:
+      - ./searxng:/etc/searxng:rw
+    environment:
+      - SEARXNG_BASE_URL=https://${DOMAIN}/
+      - SEARXNG_SECRET=${SEARXNG_SECRET}
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+    logging:
+      driver: json-file
+      options:
+        max-size: 1m
+        max-file: "1"
+
+  caddy:
+    image: caddy:2
+    container_name: searxng-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    environment:
+      - DOMAIN=${DOMAIN}
+      - SEARCH_TOKEN=${SEARCH_TOKEN}
+    depends_on:
+      - searxng
+
+volumes:
+  caddy-data:
+  caddy-config:

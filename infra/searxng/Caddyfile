@@ -1,0 +1,14 @@
+# Caddy vraagt zelf een Let's Encrypt-certificaat aan voor {$DOMAIN}; daarvoor
+# moeten poort 80 en 443 open staan en moet de DNS-naam naar deze server wijzen.
+#
+# Het slot: alleen verzoeken met de header X-Search-Token gelijk aan SEARCH_TOKEN
+# uit .env komen bij SearXNG. Al het andere krijgt een kale 403, ook de
+# webinterface. Dit is een zoekserver voor de edge function, niet voor mensen.
+{$DOMAIN} {
+	encode gzip
+
+	@zonder_token not header X-Search-Token {$SEARCH_TOKEN}
+	respond @zonder_token 403
+
+	reverse_proxy searxng:8080
+}

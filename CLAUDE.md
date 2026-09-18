@@ -255,10 +255,16 @@ client voor de bronnenlijst onder het antwoord.
 
 Welke zoekdienst draait staat in de **secrets** van de function en bewust niet in
 `app_settings`: een zoekadres dat de client mag kiezen, mag iedereen kiezen.
-`TAVILY_API_KEY` (1000 zoekopdrachten per maand gratis) heeft voorrang op
-`SEARXNG_URL` (eigen server). Staat er geen van beide, dan doet de knop niets en
-antwoordt het model uit eigen kennis. Aan/uit en de instructie bij de bronnen
-staan wél in Beheer, AI-instellingen.
+`SEARXNG_URL` plus `SEARXNG_TOKEN` (eigen server, de opzet staat in
+`infra/searxng/`) heeft voorrang op `TAVILY_API_KEY` (Amerikaanse dienst die de
+vragen bewaart). Staat er geen van beide, dan doet de knop niets en antwoordt
+het model uit eigen kennis. Aan/uit en de instructie bij de bronnen staan wél in
+Beheer, AI-instellingen.
+
+De keuze voor SearXNG is een privacykeuze: het enige wat de chat naar buiten
+stuurt is de zoekvraag zelf, en met een eigen server ziet geen derde partij die.
+Verplaats het zoeken niet terug naar een externe dienst zonder dat met de
+gebruiker af te stemmen.
 
 ### Systeemprompts staan in de database, niet in de code
 

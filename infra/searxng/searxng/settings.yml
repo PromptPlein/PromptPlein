@@ -1,0 +1,78 @@
+# Instellingen voor de SearXNG van PromptPlein. Alles wat hier niet staat komt
+# uit de standaardinstellingen van SearXNG (use_default_settings), zodat een
+# nieuwe versie van het image zijn eigen engine-lijst en fixes meeneemt.
+use_default_settings: true
+
+general:
+  instance_name: "PromptPlein zoeken"
+  privacypolicy_url: false
+  contact_url: false
+  # Geen gebruiksstatistieken bijhouden: er is maar één gebruiker (de edge
+  # function) en tellen is bewaren.
+  enable_metrics: false
+
+search:
+  # 0 uit, 1 gematigd, 2 streng. De edge function stuurt safesearch=1 mee; dit
+  # is de stand voor als die parameter ooit ontbreekt.
+  safe_search: 1
+  default_lang: "nl-NL"
+  # json moet aan staan, anders weigert SearXNG de API-aanroep van de function.
+  formats:
+    - html
+    - json
+
+server:
+  # base_url en secret_key komen uit de omgeving (SEARXNG_BASE_URL, SEARXNG_SECRET).
+  # De limiter is uit: Caddy laat alleen de edge function door, dus er valt niets
+  # te beperken, en de limiter zou een extra Valkey-container vragen.
+  limiter: false
+  public_instance: false
+  # Geen afbeeldingen via deze server ophalen; de chat toont ze toch niet.
+  image_proxy: false
+  method: "GET"
+
+ui:
+  static_use_hash: true
+
+outgoing:
+  # Ruim binnen de 9 seconden die de edge function op het zoeken wacht.
+  request_timeout: 4.0
+  max_request_timeout: 8.0
+
+# De edge function zoekt zonder categorie, dus SearXNG raadpleegt alleen de
+# engines uit de categorie "general". Afbeeldingen, video's en nieuws staan
+# daar niet in en worden dus nooit aangeroepen. Hieronder alleen wat er in
+# "general" bijgestuurd wordt: de webzoekmachines aan, en de hulpengines uit
+# die geen bronnen met tekst opleveren (valuta, woordenboek, vertaling).
+#
+# Google en Bing blokkeren scraping vanaf een datacenter-IP soms met een
+# captcha. SearXNG merkt dat en gaat door met de andere engines; de logregel
+# "CAPTCHA" of "Suspended" in `docker compose logs searxng` is dan normaal.
+engines:
+  - name: google
+    disabled: false
+  - name: bing
+    disabled: false
+  - name: duckduckgo
+    disabled: false
+  - name: brave
+    disabled: false
+  - name: startpage
+    disabled: false
+  - name: qwant
+    disabled: false
+  - name: mojeek
+    disabled: false
+  - name: wikipedia
+    disabled: false
+
+  - name: currency
+    disabled: true
+  - name: wikidata
+    disabled: true
+  - name: ddg definitions
+    disabled: true
+  - name: dictzone
+    disabled: true
+  - name: mymemory translated
+    disabled: true

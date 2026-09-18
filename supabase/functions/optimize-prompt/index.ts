@@ -2218,20 +2218,25 @@ function buildChatSystem(
 // deze function. Zou de client dat adres mogen kiezen, dan kan elke ingelogde
 // gebruiker de function een willekeurig adres laten ophalen.
 //
-//   supabase secrets set TAVILY_API_KEY=tvly-...   Tavily: 1000 zoekopdrachten
-//                                                  per maand gratis, zonder
-//                                                  creditcard.
 //   supabase secrets set SEARXNG_URL=https://...   Een eigen SearXNG-server:
-//                                                  open source, geen sleutel en
+//   supabase secrets set SEARXNG_TOKEN=...          open source, geen derde
+//                                                  partij die de vragen ziet,
 //                                                  geen prijs per zoekopdracht,
-//                                                  maar je host hem zelf. Zet in
-//                                                  settings.yml het json-formaat
-//                                                  aan, anders weigert hij de
-//                                                  API.
+//                                                  maar je host hem zelf. De
+//                                                  kant-en-klare opzet staat in
+//                                                  infra/searxng/. Het token gaat
+//                                                  mee als X-Search-Token en de
+//                                                  server weigert alles zonder.
+//   supabase secrets set TAVILY_API_KEY=tvly-...   Tavily (VS): 1000 zoek-
+//                                                  opdrachten per maand gratis.
+//                                                  Bewaart de vragen en mag ze
+//                                                  gebruiken om zijn dienst te
+//                                                  verbeteren; zie hun beleid.
 //
-// Staat er allebei iets, dan wint Tavily: die levert per treffer een
-// uitgeschreven fragment in plaats van een enkele regel, en daar heeft een klein
-// model als Mistral Small het meest aan.
+// Staat er allebei iets, dan wint SearXNG. Een eigen server is een privacykeuze,
+// en die mag niet ongedaan worden gemaakt door een Tavily-sleutel die is blijven
+// staan. Tavily levert wel langere fragmenten per treffer, waar een klein model
+// als Mistral Small meer aan heeft; dat is de prijs van de eigen server.
 
 /** Eén treffer, in de vorm die beide zoekdiensten opleveren. */
 interface SearchHit {
@@ -2261,8 +2266,8 @@ const SEARCH_TIMEOUT_MS = 9000;
  * knop in de chat levert dan niets op en de beurt loopt door zonder bronnen.
  */
 function searchBackend(): 'tavily' | 'searxng' | null {
-  if (Deno.env.get('TAVILY_API_KEY')) return 'tavily';
   if (Deno.env.get('SEARXNG_URL')) return 'searxng';
+  if (Deno.env.get('TAVILY_API_KEY')) return 'tavily';
   return null;
 }
 
@@ -2325,7 +2330,19 @@ async function searchSearxng(
 ): Promise<SearchHit[]> {
   const base = (Deno.env.get('SEARXNG_URL') ?? '').replace(/\/+$/, '');
   const url = `${base}/search?q=${encodeURIComponent(query)}&format=json&language=nl&safesearch=1`;
-  const response = await fetch(url, { headers: { Accept: 'application/json' }, signal });
+  // Het token is het slot op de server: de reverse proxy ervoor laat alleen
+  // verzoeken met de juiste X-Search-Token door. Zo kan niemand die het adres
+  // raadt op kosten van de rijksoverheid zoeken. Zonder token in de secrets gaat
+  // de header niet mee; dat is voor een server die op een andere manier is
+  // afgeschermd (bijvoorbeeld een IP-allowlist).
+  const token = Deno.env.get('SEARXNG_TOKEN');
+  const response = await fetch(url, {
+    headers: {
+      Accept: 'application/json',
+      ...(token ? { 'X-Search-Token': token } : {}),
+    },
+    signal,
+  });
   if (!response.ok) throw new Error(`SearXNG gaf status ${response.status}`);
   const data = (await response.json()) as { results?: unknown };
   return toSearchHits(data.results, count);
