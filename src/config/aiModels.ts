@@ -105,6 +105,14 @@ export interface ProviderModelOption {
  * Mistrals gespecialiseerde modellen staan er niet in: Codestral (code-aanvulling),
  * Voxtral (spraak), OCR, Shieldstral (moderatie), Leanstral (Lean 4-bewijzen) en
  * de embedding-modellen doen geen prompt-optimalisatie.
+ *
+ * Z.ai GLM 5.3 is geen model van Mistral zelf: een open-weight model van het
+ * Chinese Z.ai dat Mistral op La Plateforme host, "served without Mistral
+ * modifications". Het draait via dezelfde API-sleutel en hetzelfde endpoint. De
+ * oudere GLM 5.2 staat er niet in: dezelfde prijs, oudere versie. GLM staat niet
+ * in REASONING_EFFORT_MODELS in de edge function (of Mistral `reasoning_effort`
+ * daar doorgeeft is niet vastgesteld), dus bij "Denken" springt de chat over op
+ * Small 4.
  */
 export const PROVIDER_MODELS: Record<Exclude<AiProvider, 'auto'>, ProviderModelOption[]> = {
   claude: [
@@ -209,6 +217,12 @@ export const PROVIDER_MODELS: Record<Exclude<AiProvider, 'auto'>, ProviderModelO
       label: 'Ministral 3 3B',
       hint: 'Goedkoopst en laagste latency',
       pricing: { input: 0.1, output: 0.1 },
+    },
+    {
+      id: 'zai-glm-5-3',
+      label: 'Z.ai GLM 5.3',
+      hint: 'Model van Z.ai, gehost door Mistral: 1M context, sterk in lange agentische taken en code',
+      pricing: { input: 1.4, output: 4.4 },
     },
   ],
 };

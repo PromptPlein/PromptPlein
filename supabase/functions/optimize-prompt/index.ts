@@ -448,7 +448,10 @@ const PROVIDER_MODELS: Record<Provider, string[]> = {
   // mistral-medium-2604 (Medium 3.5), mistral-large-2512 (Large 3), en
   // ministral-8b-2512 / ministral-3b-2512 (Ministral 3). Ministral 3 14B staat
   // er met een gedateerde id: die maat is nieuw, dus een -latest-alias is er
-  // mogelijk nog niet.
+  // mogelijk nog niet. zai-glm-5-3 is een model van Z.ai dat Mistral ongewijzigd
+  // host op hetzelfde endpoint; het staat niet in REASONING_EFFORT_MODELS (of
+  // reasoning_effort daar werkt is niet vastgesteld), dus "denken" springt over
+  // op Small 4.
   mistral: [
     'mistral-small-latest',
     'mistral-medium-latest',
@@ -456,6 +459,7 @@ const PROVIDER_MODELS: Record<Provider, string[]> = {
     'ministral-14b-2512',
     'ministral-8b-latest',
     'ministral-3b-latest',
+    'zai-glm-5-3',
   ],
 };
 
