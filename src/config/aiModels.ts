@@ -110,9 +110,9 @@ export interface ProviderModelOption {
  * Chinese Z.ai dat Mistral op La Plateforme host, "served without Mistral
  * modifications". Het draait via dezelfde API-sleutel en hetzelfde endpoint. De
  * oudere GLM 5.2 staat er niet in: dezelfde prijs, oudere versie. GLM staat niet
- * in REASONING_EFFORT_MODELS in de edge function (of Mistral `reasoning_effort`
- * daar doorgeeft is niet vastgesteld), dus bij "Denken" springt de chat over op
- * Small 4.
+ * in {@link REASONING_EFFORT_MODELS}: Mistral accepteert `reasoning_effort` daar
+ * wel, maar er komt geen denkblok terug (gemeten op 18 september 2026), dus de
+ * knop "Denken" staat bij dat model uit.
  */
 export const PROVIDER_MODELS: Record<Exclude<AiProvider, 'auto'>, ProviderModelOption[]> = {
   claude: [
@@ -197,35 +197,80 @@ export const PROVIDER_MODELS: Record<Exclude<AiProvider, 'auto'>, ProviderModelO
     {
       id: 'mistral-large-latest',
       label: 'Mistral Large 3',
-      hint: 'Zwaar model tegen een schappelijke prijs, 675B met 41B actief',
+      hint: 'Zwaar model tegen een schappelijke prijs, 675B met 41B actief; kan niet denken',
       pricing: { input: 0.5, output: 1.5 },
     },
     {
       id: 'ministral-14b-2512',
       label: 'Ministral 3 14B',
-      hint: 'Grootste Ministral, vlakke prijs in en uit',
+      hint: 'Grootste Ministral, vlakke prijs in en uit; kan niet denken',
       pricing: { input: 0.2, output: 0.2 },
     },
     {
       id: 'ministral-8b-latest',
       label: 'Ministral 3 8B',
-      hint: 'Snel en goedkoop, vlakke prijs in en uit',
+      hint: 'Snel en goedkoop, vlakke prijs in en uit; kan niet denken',
       pricing: { input: 0.15, output: 0.15 },
     },
     {
       id: 'ministral-3b-latest',
       label: 'Ministral 3 3B',
-      hint: 'Goedkoopst en laagste latency',
+      hint: 'Goedkoopst en laagste latency; kan niet denken',
       pricing: { input: 0.1, output: 0.1 },
     },
     {
       id: 'zai-glm-5-3',
       label: 'Z.ai GLM 5.3',
-      hint: 'Model van Z.ai, gehost door Mistral: 1M context, sterk in lange agentische taken en code',
+      hint: 'Model van Z.ai, gehost door Mistral: 1M context, sterk in lange agentische taken en code; kan niet denken',
       pricing: { input: 1.4, output: 4.4 },
     },
   ],
 };
+
+/**
+ * De Mistral-modellen die de knop "Denken" aankunnen: ze accepteren de parameter
+ * `reasoning_effort` en redeneren dan eerst zichtbaar. Houd in sync met
+ * `REASONING_EFFORT_MODELS` in de `optimize-prompt` edge function; die beslist
+ * echt, dit exemplaar bepaalt alleen of de knop in de interface aan mag.
+ *
+ * Gemeten op 18 september 2026 tegen de Mistral-API: Small 4 en Medium 3.5 geven
+ * een denkblok terug; Large 3 en de drie Ministrals weigeren de parameter met
+ * `400 reasoning_effort is not enabled for this model`; GLM 5.3 slikt hem maar
+ * denkt niet zichtbaar. Een hernoemde of vervangen id die hier niet in staat,
+ * zet de knop uit.
+ */
+export const REASONING_EFFORT_MODELS: readonly string[] = [
+  'mistral-small-latest',
+  'mistral-medium-latest',
+];
+
+/**
+ * Kan er gedacht worden met deze provider-en-modelkeuze van de beheerder?
+ *
+ * Bij Mistral is denken een parameter op het model zelf, dus het hangt af van
+ * welk model er staat. Bij 'auto' begint de keten met het standaardmodel van
+ * Mistral (Small 4), en een onbekend of leeg model valt server-side op datzelfde
+ * standaardmodel terug; beide kunnen denken. Bij de andere providers is denken
+ * een overstap naar een zwaarder model (DeepSeek V4 Pro, Opus, GPT-5.5), dus
+ * daar kan het altijd.
+ */
+export function supportsThinking(provider: AiProvider, model: string | undefined): boolean {
+  if (provider !== 'mistral') return true;
+  const effective = isValidModelFor(provider, model) ? (model as string) : defaultModelFor(provider);
+  return REASONING_EFFORT_MODELS.includes(effective);
+}
+
+/**
+ * De uitleg voor de uitgeschakelde knop "Denken", of undefined als denken kan.
+ * Eén tekst voor de chat en de bouwer, zodat hij op beide plekken hetzelfde leest.
+ */
+export function thinkingUnavailableReason(
+  provider: AiProvider,
+  model: string | undefined,
+): string | undefined {
+  if (supportsThinking(provider, model)) return undefined;
+  return `Denken is niet beschikbaar bij ${modelLabel(provider, model)}, het model dat de beheerder heeft ingesteld.`;
+}
 
 /** Alle geldige model-ids per provider (voor validatie). */
 function modelIds(provider: Exclude<AiProvider, 'auto'>): string[] {
@@ -253,13 +298,6 @@ export function defaultModelFor(provider: AiProvider): string {
  * twaalf keer zo veel. Small 4 is hier het sterkste model dat de prijs per
  * projectinstelling nog verantwoordt. Wil je die bovengrens verleggen, zet dan
  * 'mistral-medium-latest' neer én dezelfde regel in de edge function.
- */
-/**
- * Let op bij het wijzigen van de Mistral-ids hierboven: de edge function houdt
- * een lijst `REASONING_EFFORT_MODELS` met de modellen die de knop "Denken"
- * aankunnen (`reasoning_effort`), en dat zijn nu net Small 4 en Medium 3.5. Een
- * hernoemde of vervangen id die daar niet in staat, laat de knop stilletjes
- * terugvallen op het denkmodel van de provider.
  */
 export const STRONGEST_MODELS: Record<Exclude<AiProvider, 'auto'>, string> = {
   claude: 'claude-opus-4-8',

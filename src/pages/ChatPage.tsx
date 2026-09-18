@@ -35,6 +35,7 @@ import {
   writeProjectHandoff,
 } from '@/services/handoffService';
 import { getChatSettingsCached, type ChatSettings } from '@/services/settingsService';
+import { thinkingUnavailableReason } from '@/config/aiModels';
 
 /** Permanente afmelding voor de bouw-een-prompt-tip (per apparaat). */
 const NUDGE_DISMISSED_KEY = 'opl.ui.chatNudgeDismissed';
@@ -63,7 +64,14 @@ function ChatPageInner() {
   // Zet hij het uit terwijl iemand de knop nog aan had, dan zoekt die beurt niet
   // alsnog stiekem mee.
   const webSearchOn = webSearch && settings?.webSearchEnabled === true;
-  const controller = useChatController(settings, { thinking, webSearch: webSearchOn });
+  // Denken kan alleen met een model dat het aankan. Heeft de beheerder een ander
+  // model gekozen, dan gaat de stand van de knop niet mee: de server zou hem
+  // toch negeren, en zo klopt wat de gebruiker ziet met wat er gebeurt.
+  const thinkingUnavailable = settings
+    ? thinkingUnavailableReason(settings.provider, settings.model)
+    : undefined;
+  const thinkingOn = thinking && !thinkingUnavailable;
+  const controller = useChatController(settings, { thinking: thinkingOn, webSearch: webSearchOn });
   const projects = useChatProjects();
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
@@ -535,6 +543,7 @@ function ChatPageInner() {
                   onPickProject={controller.attachProject}
                   thinking={thinking}
                   onToggleThinking={setThinking}
+                  thinkingUnavailable={thinkingUnavailable}
                   // Wereldbol alleen tonen als de beheerder zoeken aan heeft staan.
                   webSearch={webSearch}
                   onToggleWebSearch={settings?.webSearchEnabled ? setWebSearch : undefined}

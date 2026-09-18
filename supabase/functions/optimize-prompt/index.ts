@@ -449,9 +449,9 @@ const PROVIDER_MODELS: Record<Provider, string[]> = {
   // ministral-8b-2512 / ministral-3b-2512 (Ministral 3). Ministral 3 14B staat
   // er met een gedateerde id: die maat is nieuw, dus een -latest-alias is er
   // mogelijk nog niet. zai-glm-5-3 is een model van Z.ai dat Mistral ongewijzigd
-  // host op hetzelfde endpoint; het staat niet in REASONING_EFFORT_MODELS (of
-  // reasoning_effort daar werkt is niet vastgesteld), dus "denken" springt over
-  // op Small 4.
+  // host op hetzelfde endpoint; het staat niet in REASONING_EFFORT_MODELS (het
+  // slikt reasoning_effort, maar er komt geen denkblok terug), dus "denken"
+  // staat bij dat model uit.
   mistral: [
     'mistral-small-latest',
     'mistral-medium-latest',
@@ -496,35 +496,45 @@ const STRONGEST_MODEL: Record<Provider, string> = {
 
 /**
  * De modellen die de `reasoning_effort`-parameter accepteren: ze redeneren dan
- * eerst zichtbaar en schrijven daarna pas hun antwoord.
+ * eerst zichtbaar en schrijven daarna pas hun antwoord. Houd in sync met
+ * `REASONING_EFFORT_MODELS` in `src/config/aiModels.ts`, waar de knop "Denken"
+ * op uitgaat zodra het ingestelde model er niet in staat.
  *
  * Magistral, Mistrals losse denkmodel, bestaat niet meer: Magistral Small 1.2
  * en Medium 1.2 zijn per 31 juli 2026 uitgezet en Mistral wijst zelf Small 4 en
  * Medium 3.5 aan als vervanger. Het redeneren zit nu dus in het model dat hier
- * toch al draait; alleen de Ministrals kennen de parameter niet.
+ * toch al draait.
+ *
+ * Gemeten op 18 september 2026: Small 4 en Medium 3.5 geven een denkblok terug;
+ * Large 3 en de drie Ministrals weigeren de parameter met `400 reasoning_effort
+ * is not enabled for this model`; GLM 5.3 accepteert hem maar denkt niet.
  */
 const REASONING_EFFORT_MODELS: string[] = ['mistral-small-latest', 'mistral-medium-latest'];
 
 /**
  * Het model dat een provider inzet zodra de gebruiker "denken" aanzet, voor het
- * geval het ingestelde model zelf niet kan redeneren.
+ * geval het ingestelde model zelf niet kan redeneren. Alleen voor providers
+ * waar denken een ánder model is: bij DeepSeek is V4 Pro de redenerende variant
+ * van Flash, dus daar gaat het model omhoog.
  *
- * Bij Mistral blijft dat Small 4, hetzelfde model als anders: denken is daar een
- * parameter en geen ander model, dus het kost alleen extra uitvoertokens. Bij
- * DeepSeek bestaat die schakelaar niet en is V4 Pro de redenerende variant van
- * Flash, dus daar gaat het model wél omhoog.
+ * Mistral staat hier bewust niet in. Denken is daar een parameter op het model
+ * zelf, en kent het ingestelde model die parameter niet (Large 3, een
+ * Ministral, GLM), dan gaat denken voor die beurt uit. Vroeger sprong de
+ * aanroep dan over op Small 4, maar dat zette de modelkeuze van de beheerder
+ * ongemerkt opzij zodra iemand de knop aanzette.
  */
-const THINKING_MODEL: Record<Provider, string> = {
+const THINKING_MODEL: Partial<Record<Provider, string>> = {
   claude: 'claude-opus-4-8',
   openai: 'gpt-5.5',
   deepseek: 'deepseek-v4-pro',
-  mistral: 'mistral-small-latest',
 };
 
 /** Het model plus, waar de provider dat kent, de denkstand voor dat model. */
 interface ThinkingChoice {
   model: string;
   reasoningEffort?: 'high';
+  /** Wordt er in deze beurt echt gedacht? Anders geen denkfase en geen extra budget. */
+  thinking: boolean;
 }
 
 /**
@@ -532,16 +542,20 @@ interface ThinkingChoice {
  *
  * Staat denken uit, dan verandert er niets aan de keuze van de beheerder. Staat
  * het aan en kan het ingestelde model redeneren, dan blijft dat model staan en
- * gaat alleen `reasoning_effort` aan. Kan het dat niet (een Ministral, of
- * DeepSeek Flash), dan stapt de aanroep over op het denkmodel van die provider.
+ * gaat alleen `reasoning_effort` aan. Kan het dat niet, dan stapt de aanroep
+ * over op het denkmodel van die provider als dat er is (DeepSeek Flash naar
+ * V4 Pro), en anders blijft het model staan en gaat denken uit (Mistral).
  */
 function resolveThinking(candidate: Provider, model: string, thinking?: boolean): ThinkingChoice {
-  if (!thinking) return { model };
-  if (REASONING_EFFORT_MODELS.includes(model)) return { model, reasoningEffort: 'high' };
+  if (!thinking) return { model, thinking: false };
+  if (REASONING_EFFORT_MODELS.includes(model)) {
+    return { model, reasoningEffort: 'high', thinking: true };
+  }
   const upgraded = THINKING_MODEL[candidate];
+  if (!upgraded) return { model, thinking: false };
   return REASONING_EFFORT_MODELS.includes(upgraded)
-    ? { model: upgraded, reasoningEffort: 'high' }
-    : { model: upgraded };
+    ? { model: upgraded, reasoningEffort: 'high', thinking: true }
+    : { model: upgraded, thinking: true };
 }
 
 /**
@@ -5236,7 +5250,7 @@ function streamTextResponse(args: {
             system,
             temperature,
             choice.model,
-            thinking ? maxTokens + THINKING_TOKEN_BUDGET : maxTokens,
+            choice.thinking ? maxTokens + THINKING_TOKEN_BUDGET : maxTokens,
             (chunk) => {
               if (!announced) {
                 announced = true;
@@ -5258,7 +5272,7 @@ function streamTextResponse(args: {
               emitted = true;
             },
             undefined,
-            thinking
+            choice.thinking
               ? {
                   reasoningEffort: choice.reasoningEffort,
                   // De denktekst zelf sturen we niet door: die hoort niet in het

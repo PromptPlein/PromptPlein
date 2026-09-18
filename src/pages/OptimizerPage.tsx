@@ -20,6 +20,7 @@ import {
   consumeResultSnapshot,
 } from '@/services/handoffService';
 import { getAiSettings, DEFAULT_AI_SETTINGS, type AiSettings } from '@/services/settingsService';
+import { thinkingUnavailableReason } from '@/config/aiModels';
 import { activityIdentifier } from '@/lib/utils';
 import { usePersistentDraft } from '@/lib/usePersistentDraft';
 import type { OptimizeResult, Technique } from '@/types';
@@ -53,6 +54,10 @@ export default function OptimizerPage() {
   const [thinking, setThinking] = useThinking();
   // Admin-bepaalde AI-instellingen; gebruikers kiezen niet meer zelf.
   const settingsRef = useRef<AiSettings>(DEFAULT_AI_SETTINGS);
+  // Wél state, anders dan de ref hierboven: de knop "Denken" moet opnieuw
+  // renderen zodra blijkt dat het ingestelde model niet kan denken.
+  const [thinkingUnavailable, setThinkingUnavailable] = useState<string | undefined>();
+  const thinkingOn = thinking && !thinkingUnavailable;
   // Versiegeschiedenis van het resultaat: v1 is de gegenereerde prompt, elke
   // verbeter-ronde uit de Testkamer voegt een versie toe. Alleen in-memory;
   // "Opnieuw" wist de historie. Het getoonde resultaat is de actieve versie.
@@ -148,7 +153,9 @@ export default function OptimizerPage() {
   useEffect(() => {
     let active = true;
     getAiSettings().then((s) => {
-      if (active) settingsRef.current = s;
+      if (!active) return;
+      settingsRef.current = s;
+      setThinkingUnavailable(thinkingUnavailableReason(s.provider, s.model));
     });
     return () => {
       active = false;
@@ -327,7 +334,11 @@ export default function OptimizerPage() {
                   <span className="text-xs text-slate-500 dark:text-slate-400">
                     Lastige opdracht? Laat het model eerst nadenken.
                   </span>
-                  <ThinkingToggle value={thinking} onChange={setThinking} />
+                  <ThinkingToggle
+                    value={thinking}
+                    onChange={setThinking}
+                    unavailableReason={thinkingUnavailable}
+                  />
                 </div>
               </>
             );
@@ -344,7 +355,7 @@ export default function OptimizerPage() {
                 header={tabs}
                 initialPrompt={initialPrompt}
                 projectContext={projectContext?.text}
-                thinking={thinking}
+                thinking={thinkingOn}
               />
             ) : (
               <GoalDialog
@@ -352,7 +363,7 @@ export default function OptimizerPage() {
                 onResult={handleResult}
                 header={tabs}
                 projectContext={projectContext?.text}
-                thinking={thinking}
+                thinking={thinkingOn}
               />
             );
           })()}

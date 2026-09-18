@@ -99,6 +99,11 @@ interface ChatComposerProps {
   /** Zet denken aan of uit voor de volgende beurt. */
   onToggleThinking?: (value: boolean) => void;
   /**
+   * Staat er iets, dan kan het ingestelde model niet denken: de knop blijft
+   * staan maar is uit, met deze tekst als uitleg. Zie {@link ThinkingToggle}.
+   */
+  thinkingUnavailable?: string;
+  /**
    * Staat "Zoeken op internet" aan? Afwezige {@link onToggleWebSearch} = geen
    * knop; zo verdwijnt hij zodra de beheerder de functie uitzet.
    */
@@ -145,6 +150,7 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
     canPickProject = false,
     thinking = false,
     onToggleThinking,
+    thinkingUnavailable,
     webSearch = false,
     onToggleWebSearch,
     prominent = false,
@@ -555,6 +561,7 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
               value={thinking}
               onChange={onToggleThinking}
               disabled={disabled || streaming}
+              unavailableReason={thinkingUnavailable}
             />
           )}
 
