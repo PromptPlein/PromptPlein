@@ -128,4 +128,22 @@ export const PROMPT_EXAMPLES: PromptExample[] = [
     prompt:
       'Help me een programma van eisen opstellen voor de aanbesteding van een dienst. Splits harde eisen en wensen, formuleer ze functioneel en meetbaar in plaats van productgericht, en stel gunningscriteria voor met een weging en de manier waarop ik ze beoordeel. Neem eisen op voor digitale toegankelijkheid, informatiebeveiliging, gegevensbescherming en het voorkomen van leveranciersafhankelijkheid.',
   },
+  {
+    category: 'data',
+    title: 'Demo-dashboard bouwen',
+    subtitle: 'Vaste basis voor een datagericht dashboard, met invulregels voor je eigen wensen',
+    // Bewust in twee delen: eerst de basis die voor elk demo-dashboard geldt,
+    // daaronder invulregels tussen rechte haken. De gebruiker vervangt alleen
+    // die haken; de basis blijft staan en geeft de voor-invulling houvast.
+    prompt:
+      'Bouw een demo-dashboard als werkende React-webapplicatie op localhost, met dummy data in het geheugen en zonder backend, database of login. Het scherm is datagericht: cijfers en visualisaties dragen de boodschap, tekst niet. Rijkshuisstijl, rustig en neutraal; rood en groen alleen voor status of afwijking van een norm. Elke weergave heeft drie niveaus: bovenaan de belangrijkste cijfers groot, elk met een vergelijking of doelwaarde; daaronder de hoofdvisualisatie; onderaan een detailtabel met filters. Alles staat altijd zichtbaar in een vast raster dat op mobiel in dezelfde volgorde stackt.\n\n' +
+      'Wat er in dit dashboard moet:\n' +
+      '- Onderwerp en voor wie: [bijvoorbeeld de werkvoorraad van team Vergunningen, voor het MT]\n' +
+      '- Weergaven (tabs): [bijvoorbeeld Overzicht, Behandelaars en Trends; welke is de ster van de show]\n' +
+      '- Cijfers bovenaan per weergave: [bijvoorbeeld openstaande aanvragen, gemiddelde doorlooptijd, percentage binnen de termijn]\n' +
+      '- Hoofdvisualisatie: [bijvoorbeeld een heatmap, een lijngrafiek over 26 weken of een staafdiagram per team]\n' +
+      '- Filters en interacties: [bijvoorbeeld filter op type en team, klik op een kolomkop om te sorteren]\n' +
+      '- Dummy data: [bijvoorbeeld 400 aanvragen over 26 weken, 12 behandelaars in 3 teams, realistische Nederlandse namen]\n' +
+      '- Wanneer is de demo geslaagd: [bijvoorbeeld toonbaar aan het MT als voorbeeld van wat we in een halve dag met AI bouwen]',
+  },
 ];

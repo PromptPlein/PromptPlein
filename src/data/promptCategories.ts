@@ -10,6 +10,7 @@
 // BNC-fiches, Woo-besluiten, publieksteksten, inspectierapporten.
 
 import {
+  BarChart3,
   BookOpen,
   Briefcase,
   Compass,
@@ -39,7 +40,8 @@ export type PromptCategoryId =
   | 'onderzoek'
   | 'overleg'
   | 'privacy'
-  | 'inkoop';
+  | 'inkoop'
+  | 'data';
 
 export interface PromptCategory {
   label: string;
@@ -60,4 +62,5 @@ export const PROMPT_CATEGORIES: Record<PromptCategoryId, PromptCategory> = {
   overleg: { label: 'Overleg & verslag', icon: ListChecks },
   privacy: { label: 'Privacy & AVG', icon: Lock },
   inkoop: { label: 'Bedrijfsvoering & inkoop', icon: Briefcase },
+  data: { label: 'Data & dashboards', icon: BarChart3 },
 };
