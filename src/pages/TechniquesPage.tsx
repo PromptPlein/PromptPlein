@@ -659,6 +659,10 @@ export default function TechniquesPage() {
                                 type="button"
                                 className="opl-btn-primary"
                                 title="Vervangt de huidige antwoorden door een voorstel van de AI"
+                                // Zolang er een voor-invulling loopt geen tweede starten: elke
+                                // klik was een extra aanroep, en de laatste die klaar was
+                                // overschreef de velden, ook als die niets opleverde.
+                                disabled={prefilling}
                                 onClick={() => {
                                   setEditingContext(false);
                                   void runPrefill(technique, context.trim());

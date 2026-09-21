@@ -954,7 +954,12 @@ Verzin zelf NOOIT een onderwerp of bedoeling die de gebruiker niet heeft aangele
 onsamenhangend, betekenisloos of pure onzin (losse letters, herhaalde tekens of toetsaanslagen zoals
 "A-B-B", "C-C-C", "asdf", "test test"), doe dan NIETS van het bovenstaande en geef in plaats daarvan
 uitsluitend dit terug:
-{"unclear":true,"reason":"<één korte, vriendelijke zin in het Nederlands die uitlegt wat onduidelijk is en wat de gebruiker kan verduidelijken>"}`;
+{"unclear":true,"reason":"<één korte, vriendelijke zin in het Nederlands die uitlegt wat onduidelijk is en wat de gebruiker kan verduidelijken>"}
+Deze controle geldt UITSLUITEND voor tekst zonder enige betekenis. Een korte tekst met een herkenbare
+wens is NIET onduidelijk, ook niet als hij maar één zin lang is en details mist (als voorbeeld van zo'n
+zin: "een dashboard voor het team vergunningen"). Ontbrekende details zijn geen reden voor dit oordeel:
+die vul je aan volgens de instructies hierboven. Twijfel je, behandel de tekst dan als duidelijk en voer
+de gewone taak uit.`;
 
 /**
  * Routing-gate (alleen plan-modus): kan de planner de herhaalbaarheid niet uit de
@@ -5798,12 +5803,13 @@ function streamPrefillResponse(args: {
         // Melden wie er nu aan het werk is (en wie het eerder probeerde).
         attempted.push(candidate);
         send({ type: 'models', providers: [...attempted] });
+        const model = resolveModel(candidate, preferredProvider, preferredModel);
         try {
           const raw = await PROVIDERS[candidate](
             userMessage,
             system,
             temperature,
-            resolveModel(candidate, preferredProvider, preferredModel),
+            model,
             maxTokens,
             (chunk) => {
               buf += chunk;
@@ -5814,6 +5820,11 @@ function streamPrefillResponse(args: {
           // geen velden; onthouden en pas gebruiken als niemand iets oplevert.
           const unclear = detectUnclearJson(raw);
           if (unclear) {
+            // Dit is de enige uitgang zonder velden die verder nergens sporen
+            // achterlaat: zonder deze regel is een leeg formulier achteraf niet
+            // te onderscheiden van een storing. Op 21 september 2026 gaf Medium
+            // 3.5 dit oordeel twee keer op rij over een echte omschrijving.
+            console.warn(`${candidate}/${model} (prefill) vond de invoer onduidelijk: ${unclear}`);
             if (!unclearSeen) unclearSeen = { reason: unclear, provider: candidate };
             return null;
           }
@@ -6854,17 +6865,19 @@ Deno.serve(async (req: Request) => {
       let provider: Provider | 'local-template' = 'local-template';
 
       for (const candidate of order) {
+        const model = resolveModel(candidate, body.preferredProvider, body.preferredModel);
         try {
           const raw = await PROVIDERS[candidate](
             userMessage,
             prefillSystem,
             0.3,
-            resolveModel(candidate, body.preferredProvider, body.preferredModel),
+            model,
             maxTokens,
           );
           // Clarity-gate: is de prompt zelf onzin? Dan eerlijk terugkoppelen.
           const unclear = detectUnclearJson(raw);
           if (unclear) {
+            console.warn(`${candidate}/${model} (prefill) vond de invoer onduidelijk: ${unclear}`);
             return new Response(
               JSON.stringify({ success: false, unclear: true, reason: unclear, provider: candidate }),
               { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },

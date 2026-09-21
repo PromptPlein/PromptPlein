@@ -690,9 +690,12 @@ export default function OwnPromptOptimizer({
                 onClick={() => void handleSelectFramework(fw.id)}
                 aria-pressed={active}
                 // Tijdens het zoeken bewust onklikbaar: de lijst is nog niet af.
-                disabled={recommending}
+                // Tijdens het voor-invullen ook: een tweede keuze start een tweede
+                // aanroep, en de laatste die klaar is overschrijft de velden.
+                disabled={recommending || prefilling}
                 className={clsx(
                   'flex w-full flex-col rounded-xl border p-4 text-left transition-all duration-150',
+                  prefilling && !recommending && 'cursor-not-allowed opacity-60',
                   recommending
                     ? 'cursor-default border-dashed border-slate-300 bg-white/70 dark:border-slate-600 dark:bg-slate-800/60'
                     : [
