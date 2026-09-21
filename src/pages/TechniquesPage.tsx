@@ -542,6 +542,24 @@ export default function TechniquesPage() {
                   </div>
                 </div>
 
+                {/* Het oordeel van de voor-invulling hoort bovenaan het blok, waar
+                    de blik na het kiezen van een techniek al is: onder de knop
+                    "Bouw prompt" viel het pas op na scrollen. */}
+                {unclearReason && (
+                  <div
+                    role="alert"
+                    className="animate-fade-in mb-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-200"
+                  >
+                    <AlertTriangle size={18} className="mt-0.5 shrink-0" />
+                    <div>
+                      <p className="font-medium">Je invoer is nog niet duidelijk genoeg</p>
+                      <p className="mt-0.5 text-amber-700 dark:text-amber-300/90">
+                        {stripMarkdown(unclearReason)}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 {/* Zo begin je: waar de techniek over moet gaan. Alleen bij
                     technieken die anders lopen dan verwacht, zoals Socratic:
                     die geeft vragen terug in plaats van antwoorden. Zie
@@ -797,21 +815,6 @@ export default function TechniquesPage() {
                 })()}
               </div>
             </section>
-          )}
-
-          {unclearReason && (
-            <div
-              role="alert"
-              className="animate-fade-in flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-200"
-            >
-              <AlertTriangle size={18} className="mt-0.5 shrink-0" />
-              <div>
-                <p className="font-medium">Je invoer is nog niet duidelijk genoeg</p>
-                <p className="mt-0.5 text-amber-700 dark:text-amber-300/90">
-                  {stripMarkdown(unclearReason)}
-                </p>
-              </div>
-            </div>
           )}
 
           {optimizing && (
