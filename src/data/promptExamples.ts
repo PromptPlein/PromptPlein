@@ -31,6 +31,13 @@ export interface PromptExample {
  */
 export const PROMPT_EXAMPLES: PromptExample[] = [
   {
+    category: 'begrijpelijk',
+    title: 'Brief herschrijven voor de burger',
+    subtitle: 'Taalniveau B1 en een toon die de burger aanspreekt',
+    prompt:
+      'Maak voor mij een prompt die een brief op B1 taalniveau en toon herschrijft voor de burger',
+  },
+  {
     category: 'beleid',
     title: 'Beleidsvoorstel onderbouwen',
     subtitle: 'Probleem, doel, opties en gevolgen langs het Beleidskompas',
