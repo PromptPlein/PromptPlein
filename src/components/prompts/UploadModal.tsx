@@ -10,7 +10,7 @@ interface UploadModalProps {
 
 export default function UploadModal({ open, onClose, onCreated }: UploadModalProps) {
   return (
-    <Modal open={open} onClose={onClose} title="Nieuwe prompt uploaden" size="max-w-2xl">
+    <Modal open={open} onClose={onClose} title="Prompt toevoegen" size="max-w-2xl">
       <PromptUploadForm
         onCancel={onClose}
         onCreated={(prompt) => {

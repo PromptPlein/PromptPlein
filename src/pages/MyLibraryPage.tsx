@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Library, FileText, Star } from 'lucide-react';
+import { Library, FileText, Star, Plus } from 'lucide-react';
 import clsx from 'clsx';
 import PromptCard from '@/components/prompts/PromptCard';
+import UploadModal from '@/components/prompts/UploadModal';
 import { SkeletonGrid } from '@/components/common/Skeleton';
 import { listPrompts } from '@/services/repository';
 import { listPromptsByAuthor } from '@/services/communityService';
@@ -25,6 +26,9 @@ export default function MyLibraryPage() {
   const [favorites, setFavorites] = useState<Prompt[]>([]);
   const [loadingMine, setLoadingMine] = useState(true);
   const [loadingFavorites, setLoadingFavorites] = useState(true);
+  // Een prompt die de gebruiker al heeft (uit een ander hulpmiddel, een
+  // collega of zijn eigen notities) zonder de bouwer erin zetten.
+  const [uploadOpen, setUploadOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -59,6 +63,11 @@ export default function MyLibraryPage() {
   const loading = tab === 'mine' ? loadingMine : loadingFavorites;
   const { enriched, authors } = usePromptCommunity(prompts);
 
+  function handleCreated(prompt: Prompt) {
+    setMine((prev) => [prompt, ...prev]);
+    setTab('mine');
+  }
+
   function handleChanged(updated: Prompt) {
     // Eigen prompts blijven in de lijst staan (alleen bijwerken).
     setMine((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
@@ -72,9 +81,16 @@ export default function MyLibraryPage() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mb-6 flex items-center gap-2">
-        <Library className="text-rijksblauw-600 dark:text-rijksblauw-300" />
-        <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Mijn prompts</h1>
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Library className="text-rijksblauw-600 dark:text-rijksblauw-300" />
+          <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
+            Mijn prompts
+          </h1>
+        </div>
+        <button type="button" onClick={() => setUploadOpen(true)} className="opl-btn-primary">
+          <Plus size={18} /> Prompt toevoegen
+        </button>
       </div>
 
       {/* Tabbladen */}
@@ -98,7 +114,7 @@ export default function MyLibraryPage() {
       {loading ? (
         <SkeletonGrid count={3} />
       ) : prompts.length === 0 ? (
-        <EmptyState tab={tab} />
+        <EmptyState tab={tab} onAdd={() => setUploadOpen(true)} />
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {enriched.map((p) => (
@@ -111,6 +127,12 @@ export default function MyLibraryPage() {
           ))}
         </div>
       )}
+
+      <UploadModal
+        open={uploadOpen}
+        onClose={() => setUploadOpen(false)}
+        onCreated={handleCreated}
+      />
     </div>
   );
 }
@@ -156,15 +178,20 @@ function TabButton({
   );
 }
 
-function EmptyState({ tab }: { tab: Tab }) {
+function EmptyState({ tab, onAdd }: { tab: Tab; onAdd: () => void }) {
   if (tab === 'mine') {
     return (
       <div className="opl-card flex flex-col items-center gap-3 p-12 text-center">
         <FileText size={40} className="text-slate-300 dark:text-slate-500" />
         <p className="text-slate-600 dark:text-slate-300">Je hebt nog geen eigen prompts gemaakt.</p>
-        <Link to="/genereren" className="opl-btn-primary">
-          Maak je eerste prompt
-        </Link>
+        <div className="flex flex-wrap justify-center gap-2">
+          <Link to="/genereren" className="opl-btn-primary">
+            Maak je eerste prompt
+          </Link>
+          <button type="button" onClick={onAdd} className="opl-btn-secondary">
+            <Plus size={16} /> Zelf een prompt toevoegen
+          </button>
+        </div>
       </div>
     );
   }
