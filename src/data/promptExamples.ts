@@ -32,10 +32,10 @@ export interface PromptExample {
 export const PROMPT_EXAMPLES: PromptExample[] = [
   {
     category: 'begrijpelijk',
-    title: 'Brief herschrijven voor de burger',
-    subtitle: 'Taalniveau B1 en een toon die de burger aanspreekt',
+    title: 'Brief beoordelen op B1 en toon',
+    subtitle: 'Eerst een oordeel, daarna een suggestie op taalniveau B1',
     prompt:
-      'Maak voor mij een prompt die een brief op B1 taalniveau en toon herschrijft voor de burger',
+      'Maak een prompt die een brief beoordeelt op B1-taalniveau en toon. Laat daarna een suggestie schrijven voor hoe het wel op B1-taalniveau is.',
   },
   {
     category: 'beleid',
