@@ -403,6 +403,9 @@ interface RequestBody {
    * de chat). De server zoekt dan zelf en zet de treffers als bronblok onder de
    * systeemprompt. Welke zoekdienst dat doet staat in de secrets van deze
    * function, niet in dit verzoek: zie {@link searchBackend}.
+   *
+   * Ook bij 'generate' (de bouwer), maar daar alleen voor beheerders: zie
+   * {@link isAdminRequest}.
    */
   webSearch?: boolean;
   /** Hoeveel gevonden bronnen er mee mogen; de beheerder stelt dit in. */
@@ -2464,6 +2467,39 @@ function isAuthenticatedRequest(req: Request): boolean {
     }
     return true;
   } catch {
+    return false;
+  }
+}
+
+/**
+ * Is de aanroeper een beheerder? Zoeken op internet bij het schrijven van een
+ * prompt staat voorlopig alleen voor beheerders open. Die keuze mag niet van de
+ * browser afhangen: een knop verbergen houdt niemand tegen die het verzoek zelf
+ * opstelt. Daarom vragen we het de database, met het token van de gebruiker, via
+ * dezelfde `is_admin()` waar ook de RLS-policies op leunen.
+ *
+ * Gooit nooit: lukt de controle niet, dan is het antwoord nee en loopt de
+ * optimalisatie door zonder te zoeken.
+ */
+async function isAdminRequest(req: Request): Promise<boolean> {
+  if (!isAuthenticatedRequest(req)) return false;
+  const url = Deno.env.get('SUPABASE_URL');
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
+  if (!url || !anonKey) return false;
+  try {
+    const response = await fetch(`${url.replace(/\/+$/, '')}/rest/v1/rpc/is_admin`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: anonKey,
+        Authorization: req.headers.get('authorization') ?? '',
+      },
+      body: '{}',
+    });
+    if (!response.ok) return false;
+    return (await response.json()) === true;
+  } catch (err) {
+    console.error('Controle op beheerdersrol mislukt:', err);
     return false;
   }
 }
@@ -8759,6 +8795,28 @@ Deno.serve(async (req: Request) => {
       interviewResolved,
     });
 
+    // Zoeken op internet bij het schrijven van de prompt: voorlopig alleen voor
+    // beheerders, en dat controleert de server zelf (zie isAdminRequest). Vraagt
+    // iemand anders erom, dan wordt er niet gezocht en loopt de optimalisatie
+    // gewoon door. De zoekopdracht is wat de gebruiker zelf schreef: zijn
+    // eigen prompt of zijn doel.
+    const searchArgs =
+      body.webSearch === true && searchBackend() !== null && (await isAdminRequest(req))
+        ? {
+            // De plaatshouder van een leeg doel is geen zoekvraag; searchWeb
+            // slaat een lege opdracht over.
+            query:
+              body.promptContent.trim() === '[BESCHRIJF HIER WAT JE WILT BEREIKEN]'
+                ? ''
+                : body.promptContent,
+            count: clampSearchResults(body.webSearchResults),
+            instruction: (body.webSearchInstruction ?? '').trim(),
+          }
+        : undefined;
+    if (body.webSearch === true && !searchArgs) {
+      console.warn('generate: zoeken gevraagd maar niet toegestaan of geen zoekdienst ingesteld');
+    }
+
     // Streamend: de gebruiker ziet de template regel voor regel ontstaan in
     // plaats van een spinner tot alles klaar is. De clarity-gate blijft actief;
     // hij houdt de kop van de tekst vast tot zeker is dat het geen
@@ -8775,8 +8833,14 @@ Deno.serve(async (req: Request) => {
         label: 'generate',
         gate: true,
         thinking: body.thinking,
+        search: searchArgs,
       });
     }
+
+    // Niet-streamend: zoeken vóór de aanroep, er is geen stream om ondertussen
+    // iets in te melden.
+    const searchHits = searchArgs ? await searchWeb(searchArgs.query, searchArgs.count) : [];
+    const generateSystem = searchArgs ? withSearchBlock(system, searchArgs, searchHits) : system;
 
     // Doorloop de providers in voorkeursvolgorde; eerste succes wint.
     // Faalt alles (of ontbreken alle keys), dan de ruwe template.
@@ -8787,7 +8851,7 @@ Deno.serve(async (req: Request) => {
       try {
         const raw = await PROVIDERS[candidate](
           userMessage,
-          system,
+          generateSystem,
           temperature,
           resolveModel(candidate, body.preferredProvider, body.preferredModel),
           maxTokens,
@@ -8810,7 +8874,12 @@ Deno.serve(async (req: Request) => {
     }
 
     return new Response(
-      JSON.stringify({ success: true, optimized_content: optimized, provider }),
+      JSON.stringify({
+        success: true,
+        optimized_content: optimized,
+        provider,
+        sources: searchHits.map((h) => ({ title: h.title, url: h.url })),
+      }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   } catch (err) {

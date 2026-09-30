@@ -71,14 +71,20 @@ async function streamFromFunction(
   onChunk: StreamHandler,
   tidy: (text: string) => string = (t) => t,
   onStatus?: StatusHandler,
+  /** Token van de ingelogde gebruiker; zonder valt de aanroep terug op de anon key. */
+  accessToken?: string,
 ): Promise<StreamOutcome> {
   const functionUrl = getFunctionUrl('optimize-prompt');
   if (!functionUrl) throw new Error('Geen edge function geconfigureerd');
 
   const anonKey = getAnonKey();
+  const bearer = accessToken ?? anonKey;
   return streamNdjson({
     url: functionUrl,
-    headers: anonKey ? { Authorization: `Bearer ${anonKey}`, apikey: anonKey } : {},
+    headers: {
+      ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
+      ...(anonKey ? { apikey: anonKey } : {}),
+    },
     body,
     onChunk,
     tidy,
@@ -115,6 +121,15 @@ export async function optimizePrompt(args: {
    * van een knop van de gebruiker en staat nooit vanzelf aan.
    */
   thinking?: boolean;
+  /**
+   * Eerst op internet zoeken en de gevonden bronnen gebruiken bij het schrijven.
+   * Voorlopig alleen voor beheerders: de server controleert de rol zelf, dus de
+   * aanroep gaat dan met het token van de ingelogde gebruiker in plaats van de
+   * anon key. Voor iemand anders wordt er gewoon niet gezocht.
+   */
+  webSearch?: boolean;
+  /** Admin-instructie over wat het model met de bronnen doet; leeg = server-default. */
+  webSearchInstruction?: string;
   /**
    * Extra gelabelde antwoordvelden bovenop de vervolgvragen van de techniek.
    * Gebruikt door de plan-bouwer om het verzamelde materiaal van eerdere stappen
@@ -156,6 +171,8 @@ export async function optimizePrompt(args: {
     projectContext,
     temperature,
     thinking,
+    webSearch,
+    webSearchInstruction,
     extraAnsweredFields,
     interviewResolved,
     onChunk,
@@ -167,6 +184,14 @@ export async function optimizePrompt(args: {
   if (isSupabaseConfigured && functionUrl) {
     try {
       const anonKey = getAnonKey();
+      // Met zoeken aan moet de server kunnen zien wie er vraagt: hij zoekt alleen
+      // voor een beheerder. Zonder sessie gaat het verzoek gewoon met de anon key
+      // en wordt er niet gezocht.
+      const accessToken =
+        webSearch && supabase
+          ? ((await supabase.auth.getSession()).data.session?.access_token ?? undefined)
+          : undefined;
+      const bearer = accessToken ?? anonKey;
       const payload = {
         mode: 'generate',
         techniqueId: technique.id,
@@ -202,12 +227,25 @@ export async function optimizePrompt(args: {
         projectContext,
         temperature,
         thinking,
+        ...(webSearch ? { webSearch: true, webSearchInstruction } : {}),
       };
 
       // Meelezen gevraagd? Dan de streamende route: de eerste regels staan er na
       // ongeveer een seconde in plaats van na de volledige generatie.
       if (onChunk) {
-        const streamed = await streamFromFunction(payload, onChunk, tidyPromptMarkup, onStatus);
+        // De bronnen komen één keer voorbij, vóór de eerste tekst; vasthouden
+        // zodat ze bij het resultaat onder de prompt terechtkomen.
+        let sources: OptimizeResult['sources'];
+        const streamed = await streamFromFunction(
+          payload,
+          onChunk,
+          tidyPromptMarkup,
+          (status) => {
+            if (status.sources) sources = status.sources;
+            onStatus?.(status);
+          },
+          accessToken,
+        );
         if (streamed.unclear) {
           return {
             optimized_content: '',
@@ -223,6 +261,7 @@ export async function optimizePrompt(args: {
           optimized_content: tidyPromptMarkup(streamed.text),
           success: true,
           provider: (streamed.provider as OptimizeResult['provider']) ?? 'claude',
+          ...(sources?.length ? { sources } : {}),
         };
       }
 
@@ -230,7 +269,8 @@ export async function optimizePrompt(args: {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(anonKey ? { Authorization: `Bearer ${anonKey}`, apikey: anonKey } : {}),
+          ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
+          ...(anonKey ? { apikey: anonKey } : {}),
         },
         body: JSON.stringify(payload),
       });
@@ -259,6 +299,7 @@ export async function optimizePrompt(args: {
           optimized_content: tidyPromptMarkup(data.optimized_content),
           success: true,
           provider: (data.provider as OptimizeResult['provider']) ?? 'claude',
+          ...(data.sources?.length ? { sources: data.sources } : {}),
         };
       }
       throw new Error(data.error ?? 'Onbekende fout van de optimalisatie-service');

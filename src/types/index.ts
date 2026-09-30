@@ -303,6 +303,11 @@ export interface OptimizeResult {
    * voedt de inklapbare toelichting onder het resultaat.
    */
   dialogue?: PromptDialogue;
+  /**
+   * De internetbronnen die de AI kreeg bij het schrijven. Alleen gezet wanneer
+   * een beheerder "Zoeken" aan had en er iets gevonden is.
+   */
+  sources?: { title: string; url: string }[];
 }
 
 /** Eén techniekaanbeveling bij een door de gebruiker beschreven doel. */

@@ -8,6 +8,7 @@ import {
   Share2,
   FolderCheck,
   MessageSquarePlus,
+  Globe,
 } from 'lucide-react';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
@@ -139,6 +140,36 @@ export default function OptimizedOutput({
       <pre className="max-h-[420px] overflow-auto whitespace-pre-wrap rounded-xl border border-slate-200 bg-slate-50 p-4 font-mono text-[13px] leading-relaxed text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
         {result.optimized_content}
       </pre>
+
+      {/* Zocht de AI eerst op internet (alleen voor beheerders), dan staan hier
+          de pagina's die hij kreeg: echte links om na te lezen of de feiten in
+          de prompt kloppen. */}
+      {result.sources && result.sources.length > 0 && (
+        <div className="mt-3">
+          <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+            <Globe size={12} className="shrink-0" />
+            Bronnen van internet
+          </p>
+          <ol className="space-y-0.5">
+            {result.sources.map((source, i) => (
+              <li key={source.url} className="flex gap-1.5 text-xs">
+                <span className="shrink-0 tabular-nums text-slate-400 dark:text-slate-500">
+                  [{i + 1}]
+                </span>
+                <a
+                  href={source.url}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="min-w-0 truncate text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
+                  title={source.url}
+                >
+                  {source.title}
+                </a>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
 
       {/* Kwam deze prompt uit de doel-dialoog? Dan is navolgbaar waar hij vandaan
           komt: het beschreven doel, de gestelde vragen met je antwoorden, de

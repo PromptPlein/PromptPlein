@@ -120,6 +120,11 @@ interface GoalDialogProps {
    * dus niet mee overweg.
    */
   thinking?: boolean;
+  /**
+   * Eerst op internet zoeken bij het schrijven van de prompt. Alleen voor
+   * beheerders; de knop staat boven de bouwer, naast "Denken".
+   */
+  webSearch?: boolean;
 }
 
 /**
@@ -156,6 +161,7 @@ export default function GoalDialog({
   header,
   projectContext,
   thinking,
+  webSearch,
 }: GoalDialogProps) {
   const { techniques, techniqueById } = useReferenceData();
   const { profile, user, isAdmin } = useAuth();
@@ -651,6 +657,8 @@ export default function GoalDialog({
         preferredModel: settings.model,
         projectContext,
         thinking,
+        webSearch,
+        webSearchInstruction: settings.webSearchInstruction.trim() || undefined,
         systemPrompt: settings.systemPrompt.trim() || undefined,
         toneInstruction: settings.toneInstruction.trim() || undefined,
         temperature: settings.temperature,

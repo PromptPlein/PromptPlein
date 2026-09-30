@@ -16,9 +16,9 @@ import { useCallback, useState } from 'react';
 
 const KEY = 'opl.websearch';
 
-function readStored(): boolean {
+function readStored(key: string): boolean {
   try {
-    return localStorage.getItem(KEY) === '1';
+    return localStorage.getItem(key) === '1';
   } catch {
     return false;
   }
@@ -29,19 +29,29 @@ function readStored(): boolean {
  * vraag van de gebruiker naar een zoekdienst buiten PromptPlein en houdt het
  * antwoord een paar seconden op, dus het hoort een keuze te zijn en niet iets
  * wat ongevraagd aan staat.
+ *
+ * `scope` 'builder' is de knop in de promptbouwer. Die heeft een eigen stand:
+ * daar gaat een hele geplakte prompt naar de zoekdienst in plaats van één vraag,
+ * en wie zoeken in de chat aanzette, heeft daar niet mee ingestemd.
  */
-export default function useWebSearch(): [boolean, (value: boolean) => void] {
-  const [webSearch, setWebSearch] = useState(readStored);
+export default function useWebSearch(
+  scope: 'chat' | 'builder' = 'chat',
+): [boolean, (value: boolean) => void] {
+  const key = scope === 'builder' ? `${KEY}.builder` : KEY;
+  const [webSearch, setWebSearch] = useState(() => readStored(key));
 
-  const set = useCallback((value: boolean) => {
-    setWebSearch(value);
-    try {
-      if (value) localStorage.setItem(KEY, '1');
-      else localStorage.removeItem(KEY);
-    } catch {
-      /* negeren, bewaren is best-effort */
-    }
-  }, []);
+  const set = useCallback(
+    (value: boolean) => {
+      setWebSearch(value);
+      try {
+        if (value) localStorage.setItem(key, '1');
+        else localStorage.removeItem(key);
+      } catch {
+        /* negeren, bewaren is best-effort */
+      }
+    },
+    [key],
+  );
 
   return [webSearch, set];
 }

@@ -18,6 +18,7 @@ interface OptimizingLoaderProps {
   /** De provider die de prompt daadwerkelijk schrijft. */
   winner?: string | null;
   /**
+   * 'searching' = er wordt eerst op internet gezocht (alleen voor beheerders),
    * 'drafting' = het model leest mee, 'thinking' = het redeneert eerst (de
    * denkstand staat aan), 'writing' = de tekst loopt.
    */
@@ -96,6 +97,8 @@ export default function OptimizingLoader({
             <p className="text-sm text-slate-500 dark:text-slate-400">
               {streaming ? (
                 <>Je prompt wordt nu geschreven</>
+              ) : phase === 'searching' ? (
+                <>We zoeken eerst op internet naar actuele informatie over je opdracht…</>
               ) : phase === 'writing' ? (
                 <>Het model begint te schrijven…</>
               ) : phase === 'thinking' ? (
@@ -145,7 +148,10 @@ export default function OptimizingLoader({
           ) : (
             <>
               <Timer size={12} className="text-rijksblauw-500" />
-              {elapsed}s bezig · het model leest je antwoorden en bepaalt de opbouw
+              {elapsed}s bezig ·{' '}
+              {phase === 'searching'
+                ? 'bronnen op internet opzoeken'
+                : 'het model leest je antwoorden en bepaalt de opbouw'}
             </>
           )}
         </p>

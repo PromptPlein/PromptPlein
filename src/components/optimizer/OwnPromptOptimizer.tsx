@@ -81,6 +81,11 @@ interface OwnPromptOptimizerProps {
    * dus niet mee overweg.
    */
   thinking?: boolean;
+  /**
+   * Eerst op internet zoeken bij het schrijven van de prompt. Alleen voor
+   * beheerders; de knop staat boven de bouwer, naast "Denken".
+   */
+  webSearch?: boolean;
 }
 
 /**
@@ -107,6 +112,7 @@ export default function OwnPromptOptimizer({
   initialPrompt,
   projectContext,
   thinking,
+  webSearch,
 }: OwnPromptOptimizerProps) {
   const { techniques, techniqueById } = useReferenceData();
   const frameworks = techniques.filter(isContextPrompt);
@@ -437,6 +443,8 @@ export default function OwnPromptOptimizer({
         preferredModel: settings.model,
         projectContext,
         thinking,
+        webSearch,
+        webSearchInstruction: settings.webSearchInstruction.trim() || undefined,
         systemPrompt: settings.systemPrompt.trim() || undefined,
         toneInstruction: settings.toneInstruction.trim() || undefined,
         temperature: settings.temperature,

@@ -3,7 +3,9 @@ import { useParams } from 'react-router-dom';
 import { Sparkles, Compass, Wand2 } from 'lucide-react';
 import GoalDialog from '@/components/optimizer/GoalDialog';
 import ThinkingToggle from '@/components/common/ThinkingToggle';
+import WebSearchToggle from '@/components/common/WebSearchToggle';
 import useThinking from '@/lib/useThinking';
+import useWebSearch from '@/lib/useWebSearch';
 import EntryTab from '@/components/optimizer/EntryTab';
 import OwnPromptOptimizer from '@/components/optimizer/OwnPromptOptimizer';
 import OptimizedOutput from '@/components/optimizer/OptimizedOutput';
@@ -37,7 +39,7 @@ export default function OptimizerPage() {
   const { promptId } = useParams<{ promptId?: string }>();
   // De ingelogde gebruiker, zodat analytics-events op naam/e-mail worden gelogd
   // en een beheerder in "Recente activiteit" ziet wie iets deed (niet "Anoniem").
-  const { profile, user } = useAuth();
+  const { profile, user, isAdmin } = useAuth();
 
   // Bronprompt uit de bibliotheek (/genereren/:promptId). De tekst gaat als
   // startwaarde naar de eigen-prompt-flow, die hem analyseert en er een
@@ -58,6 +60,10 @@ export default function OptimizerPage() {
   // renderen zodra blijkt dat het ingestelde model niet kan denken.
   const [thinkingUnavailable, setThinkingUnavailable] = useState<string | undefined>();
   const thinkingOn = thinking && !thinkingUnavailable;
+  // Zoeken op internet bij het schrijven van de prompt. Voorlopig alleen voor
+  // beheerders; de server controleert dat zelf ook, dit verbergt alleen de knop.
+  const [webSearch, setWebSearch] = useWebSearch('builder');
+  const webSearchOn = isAdmin && webSearch;
   // Versiegeschiedenis van het resultaat: v1 is de gegenereerde prompt, elke
   // verbeter-ronde uit de Testkamer voegt een versie toe. Alleen in-memory;
   // "Opnieuw" wist de historie. Het getoonde resultaat is de actieve versie.
@@ -339,6 +345,7 @@ export default function OptimizerPage() {
                     onChange={setThinking}
                     unavailableReason={thinkingUnavailable}
                   />
+                  {isAdmin && <WebSearchToggle value={webSearch} onChange={setWebSearch} />}
                 </div>
               </>
             );
@@ -356,6 +363,7 @@ export default function OptimizerPage() {
                 initialPrompt={initialPrompt}
                 projectContext={projectContext?.text}
                 thinking={thinkingOn}
+                webSearch={webSearchOn}
               />
             ) : (
               <GoalDialog
@@ -364,6 +372,7 @@ export default function OptimizerPage() {
                 header={tabs}
                 projectContext={projectContext?.text}
                 thinking={thinkingOn}
+                webSearch={webSearchOn}
               />
             );
           })()}

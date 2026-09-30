@@ -40,6 +40,7 @@ import {
   DEFAULT_CHAT_OPTIMIZE_PROMPT,
   DEFAULT_CHAT_SYSTEM_PROMPT,
   DEFAULT_EXECUTION_SYSTEM_PROMPT,
+  DEFAULT_GENERATOR_WEB_SEARCH_INSTRUCTION,
   DEFAULT_PROJECT_OPTIMIZE_PROMPT,
   DEFAULT_SYSTEM_PROMPT,
   DEFAULT_WEB_SEARCH_INSTRUCTION,
@@ -365,6 +366,40 @@ export default function SettingsPage() {
             <span>Voorspelbaar</span>
             <span>Creatief</span>
           </div>
+        </div>
+
+        <div className="mt-5">
+          <label className="opl-label" htmlFor="generatorWebSearchInstruction">
+            Instructie bij internetbronnen (alleen beheerders)
+          </label>
+          <textarea
+            id="generatorWebSearchInstruction"
+            className="opl-input min-h-[180px] resize-y font-mono text-[13px]"
+            value={settings.webSearchInstruction}
+            onChange={(e) => patch({ webSearchInstruction: e.target.value })}
+            placeholder="Bijv. Gebruik de bronnen om de feiten in de prompt actueel te maken…"
+          />
+          <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400 dark:text-slate-500">
+            <span>
+              Beheerders zien in de promptbouwer naast &ldquo;Denken&rdquo; ook de knop
+              &ldquo;Zoeken&rdquo;. Staat die aan, dan zoekt de AI eerst op internet met de
+              prompt of het doel van de gebruiker en krijgt hij de gevonden pagina&rsquo;s met
+              deze instructie erbij. Andere gebruikers zien de knop niet, en de server zoekt
+              ook alleen voor een beheerder. Er gaan maximaal vijf bronnen mee.
+              Laat leeg om de ingebouwde standaard te gebruiken.
+            </span>
+            {settings.webSearchInstruction.trim() !== DEFAULT_GENERATOR_WEB_SEARCH_INSTRUCTION && (
+              <button
+                type="button"
+                className="shrink-0 font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
+                onClick={() =>
+                  patch({ webSearchInstruction: DEFAULT_GENERATOR_WEB_SEARCH_INSTRUCTION })
+                }
+              >
+                Herstel standaard
+              </button>
+            )}
+          </p>
         </div>
       </section>
 
