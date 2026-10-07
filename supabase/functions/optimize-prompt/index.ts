@@ -4663,6 +4663,22 @@ interface ThinkingOptions {
 }
 
 /**
+ * Wat een provider-aanroep over de vorm van het antwoord meekrijgt.
+ *
+ * `json` zet de JSON-modus van de API aan (`response_format: json_object`): het
+ * model kan dan alleen nog één geldig JSON-object schrijven, dus geen codeblok,
+ * geen inleidende zin en geen afgebroken aanhalingsteken midden in een waarde.
+ * Alleen voor de modi die hun antwoord als één JSON-object parsen, en nooit
+ * samen met denken. De prompt moet zelf nog steeds om JSON vragen: Mistral,
+ * OpenAI en DeepSeek eisen dat allemaal. De regex-extractie en reparatie in de
+ * parsers blijven staan als vangnet voor een provider of model dat de
+ * parameter negeert.
+ */
+interface OutputOptions {
+  json?: boolean;
+}
+
+/**
  * Hoe lang een provider mag zwijgen voordat we hem opgeven. Alleen zinvol bij
  * STREAMENDE aanroepen: daar hoort het eerste fragment binnen een paar seconden
  * binnen te komen. Bij een niet-streamende aanroep stuurt de provider pas iets
@@ -4944,6 +4960,8 @@ async function runOpenAiCompatible(args: {
   onDelta?: DeltaHandler;
   timeoutMs?: number;
   thinking?: ThinkingOptions;
+  /** JSON-modus van de API; zie {@link OutputOptions}. */
+  json?: boolean;
 }): Promise<string> {
   const {
     url,
@@ -4959,6 +4977,8 @@ async function runOpenAiCompatible(args: {
     timeoutMs,
     thinking,
   } = args;
+  // Kan tijdens de pogingen hieronder uitgaan: zie de 400-tak.
+  let json = Boolean(args.json);
 
   // Bij een tijdelijke fout (drukte, dienst even weg) proberen we het eerst nog
   // een paar keer bij dezelfde provider. Dat kan veilig: bij een niet-ok respons
@@ -4981,6 +5001,7 @@ async function runOpenAiCompatible(args: {
           // Alleen meesturen wanneer het model de parameter kent: een provider die
           // hem niet herkent, weigert de hele aanroep.
           ...(thinking?.reasoningEffort ? { reasoning_effort: thinking.reasoningEffort } : {}),
+          ...(json ? { response_format: { type: 'json_object' } } : {}),
           messages: [{ role: 'system', content: system }, ...toChatTurns(userMessage)],
         }),
         signal: dog.signal,
@@ -4994,6 +5015,13 @@ async function runOpenAiCompatible(args: {
         if (HARD_STATUS.has(response.status)) markProviderDown(provider, response.status);
         if (attempt < PROVIDER_RETRIES && RETRYABLE_STATUS.has(response.status)) {
           retryIn = retryDelayMs(response, attempt);
+        } else if (response.status === 400 && json) {
+          // Een model dat de JSON-modus niet kent, weigert de hele aanroep. Dan
+          // nog één keer zonder: de prompt vraagt zelf al om JSON en de parsers
+          // vangen een antwoord met tekst eromheen op. Zo blijft een nieuw of
+          // afwijkend model (een preview, een gehost model van derden) bruikbaar.
+          console.warn(`${label} weigerde de JSON-modus voor ${model}; opnieuw zonder response_format`);
+          json = false;
         } else {
           throw new Error(`${label} gaf status ${response.status}`);
         }
@@ -5029,8 +5057,12 @@ async function runOpenAiCompatible(args: {
       dog.done();
     }
 
-    console.warn(`${label} was tijdelijk niet beschikbaar; poging ${attempt + 2} over ${retryIn} ms`);
-    await new Promise((resolve) => setTimeout(resolve, retryIn));
+    // Zonder wachttijd is dit de herkansing zonder JSON-modus; die is hierboven
+    // al gemeld en hoeft niet te wachten.
+    if (retryIn > 0) {
+      console.warn(`${label} was tijdelijk niet beschikbaar; poging ${attempt + 2} over ${retryIn} ms`);
+      await new Promise((resolve) => setTimeout(resolve, retryIn));
+    }
   }
 }
 
@@ -5046,6 +5078,9 @@ async function runClaude(
   // (een eigen thinking-parameter, geen reasoning_effort). De parameter staat er
   // alleen zodat alle providers dezelfde vorm houden.
   _thinking?: ThinkingOptions,
+  // Ook de JSON-modus loopt hier niet: de Messages-API van Anthropic kent geen
+  // response_format. De prompt vraagt zelf om JSON en de parsers doen de rest.
+  _output?: OutputOptions,
 ): Promise<string> {
   const apiKey = Deno.env.get('CLAUDE_API_KEY');
   if (!apiKey) throw new Error('CLAUDE_API_KEY ontbreekt');
@@ -5107,6 +5142,7 @@ async function runDeepSeek(
   onDelta?: DeltaHandler,
   timeoutMs?: number,
   thinking?: ThinkingOptions,
+  output?: OutputOptions,
 ): Promise<string> {
   const apiKey = Deno.env.get('DEEPSEEK_API_KEY');
   if (!apiKey) throw new Error('DEEPSEEK_API_KEY ontbreekt');
@@ -5127,6 +5163,7 @@ async function runDeepSeek(
     // Geen reasoning_effort: bij DeepSeek zit het redeneren in het model zelf
     // (V4 Pro). Wel de denktekst opvangen, die komt in reasoning_content binnen.
     thinking: thinking ? { onThinking: thinking.onThinking } : undefined,
+    json: output?.json,
   });
 }
 
@@ -5139,6 +5176,7 @@ async function runOpenAI(
   onDelta?: DeltaHandler,
   timeoutMs?: number,
   _thinking?: ThinkingOptions,
+  output?: OutputOptions,
 ): Promise<string> {
   const apiKey = Deno.env.get('OPENAI_API_KEY');
   if (!apiKey) throw new Error('OPENAI_API_KEY ontbreekt');
@@ -5155,6 +5193,7 @@ async function runOpenAI(
     maxTokens,
     onDelta,
     timeoutMs,
+    json: output?.json,
   });
 }
 
@@ -5167,6 +5206,7 @@ async function runMistral(
   onDelta?: DeltaHandler,
   timeoutMs?: number,
   thinking?: ThinkingOptions,
+  output?: OutputOptions,
 ): Promise<string> {
   const apiKey = Deno.env.get('MISTRAL_API_KEY');
   if (!apiKey) throw new Error('MISTRAL_API_KEY ontbreekt');
@@ -5188,6 +5228,7 @@ async function runMistral(
     onDelta,
     timeoutMs,
     thinking,
+    json: output?.json,
   });
 }
 
@@ -5202,6 +5243,8 @@ type ProviderFn = (
   timeoutMs?: number,
   /** Denkstand plus de opvang van de denktekst; afwezig = gewoon antwoorden. */
   thinking?: ThinkingOptions,
+  /** Vorm van het antwoord (JSON-modus); afwezig = vrije tekst. */
+  output?: OutputOptions,
 ) => Promise<string>;
 
 const PROVIDERS: Record<Provider, ProviderFn> = {
@@ -5209,6 +5252,29 @@ const PROVIDERS: Record<Provider, ProviderFn> = {
   openai: runOpenAI,
   deepseek: runDeepSeek,
   mistral: runMistral,
+};
+
+/** Dezelfde provider, maar met de JSON-modus van de API aan. */
+function withJsonOutput(run: ProviderFn): ProviderFn {
+  return (userMessage, system, temperature, model, maxTokens, onDelta, timeoutMs, thinking) =>
+    run(userMessage, system, temperature, model, maxTokens, onDelta, timeoutMs, thinking, { json: true });
+}
+
+/**
+ * De providers voor de modi die hun antwoord als één JSON-object parsen
+ * (analyze, prefill, recommend, plan, de techniekbouwers, enzovoort). Zie
+ * {@link OutputOptions} voor wat de JSON-modus doet.
+ *
+ * Bewust NIET voor modi die tekst teruggeven, ook niet als er een JSON-oordeel
+ * van de clarity-gate aan hangt: clarify en plan-step antwoorden met een
+ * VRAAG:/KLAAR:-protocol of met platte tekst, en in de JSON-modus zou het model
+ * die tekst niet meer mogen schrijven.
+ */
+const JSON_PROVIDERS: Record<Provider, ProviderFn> = {
+  claude: withJsonOutput(runClaude),
+  openai: withJsonOutput(runOpenAI),
+  deepseek: withJsonOutput(runDeepSeek),
+  mistral: withJsonOutput(runMistral),
 };
 
 /**
@@ -5686,7 +5752,7 @@ function streamFrameworkResponse(args: {
       const attempt = async (candidate: Provider): Promise<{ provider: Provider; raw: string } | null> => {
         let buf = '';
         try {
-          const raw = await PROVIDERS[candidate](
+          const raw = await JSON_PROVIDERS[candidate](
             userMessage,
             system,
             temperature,
@@ -5805,7 +5871,7 @@ async function fillMissingPrefillFields(args: {
   const missing = args.allFields.filter((f) => !args.have.some((h) => h.id === f.id));
   if (missing.length === 0) return args.have;
   try {
-    const raw = await PROVIDERS[args.candidate](
+    const raw = await JSON_PROVIDERS[args.candidate](
       `${PREFILL_USER_PROMPT(args.ownPrompt, args.techniqueName, missing, args.clarification)}\n\n` +
         'LET OP: deze velden zijn in een eerdere ronde overgeslagen. Vul ze nu ALLEMAAL met een ' +
         'concreet voorstel. "Niet van toepassing" of een lege waarde is geen geldig antwoord: leid ' +
@@ -5941,7 +6007,7 @@ function streamPrefillResponse(args: {
         send({ type: 'models', providers: [...attempted] });
         const model = resolveModel(candidate, preferredProvider, preferredModel);
         try {
-          const raw = await PROVIDERS[candidate](
+          const raw = await JSON_PROVIDERS[candidate](
             userMessage,
             system,
             temperature,
@@ -6912,7 +6978,7 @@ Deno.serve(async (req: Request) => {
 
       for (const candidate of order) {
         try {
-          const raw = await PROVIDERS[candidate](
+          const raw = await JSON_PROVIDERS[candidate](
             userMessage,
             withProject(ANALYZE_SYSTEM_PROMPT, body.projectContext),
             0.2,
@@ -7003,7 +7069,7 @@ Deno.serve(async (req: Request) => {
       for (const candidate of order) {
         const model = resolveModel(candidate, body.preferredProvider, body.preferredModel);
         try {
-          const raw = await PROVIDERS[candidate](
+          const raw = await JSON_PROVIDERS[candidate](
             userMessage,
             prefillSystem,
             0.3,
@@ -7098,7 +7164,7 @@ Deno.serve(async (req: Request) => {
 
       for (const candidate of order) {
         try {
-          const raw = await PROVIDERS[candidate](
+          const raw = await JSON_PROVIDERS[candidate](
             userMessage,
             withProject(EXPAND_FIELD_SYSTEM_PROMPT, body.projectContext),
             0.3,
@@ -7196,7 +7262,7 @@ Deno.serve(async (req: Request) => {
 
       for (const candidate of order) {
         try {
-          const raw = await PROVIDERS[candidate](
+          const raw = await JSON_PROVIDERS[candidate](
             userMessage,
             METADATA_SYSTEM_PROMPT,
             0.3,
@@ -7293,7 +7359,7 @@ Deno.serve(async (req: Request) => {
         candidate: Provider,
       ): Promise<{ provider: Provider; raw: string } | null> => {
         try {
-          const raw = await PROVIDERS[candidate](
+          const raw = await JSON_PROVIDERS[candidate](
             userMessage,
             system,
             0.2,
@@ -7365,7 +7431,7 @@ Deno.serve(async (req: Request) => {
 
       for (const candidate of order) {
         try {
-          const raw = await PROVIDERS[candidate](
+          const raw = await JSON_PROVIDERS[candidate](
             userMessage,
             withProject(PLAN_SYSTEM_PROMPT, body.projectContext),
             0.2,
@@ -7562,7 +7628,7 @@ Deno.serve(async (req: Request) => {
 
       for (const candidate of order) {
         try {
-          const raw = await PROVIDERS[candidate](
+          const raw = await JSON_PROVIDERS[candidate](
             userMessage,
             withProject(PLAN_STEP_ANALYZE_SYSTEM_PROMPT, body.projectContext),
             0.3,
@@ -7697,6 +7763,8 @@ Deno.serve(async (req: Request) => {
 
       for (const candidate of order) {
         try {
+          // Gewone PROVIDERS, geen JSON_PROVIDERS: het antwoord is een
+          // VRAAG:/KLAAR:-tekst. Alleen het onduidelijk-oordeel is JSON.
           const raw = await PROVIDERS[candidate](
             clarifyMessage,
             // Mét de projectcontext: dit is de plek waar het verschil het grootst
@@ -7787,7 +7855,7 @@ Deno.serve(async (req: Request) => {
 
       for (const candidate of order) {
         try {
-          const raw = await PROVIDERS[candidate](
+          const raw = await JSON_PROVIDERS[candidate](
             userMessage,
             withProject(ASSUMPTION_CHECK_SYSTEM_PROMPT, body.projectContext),
             0.2,
@@ -8317,7 +8385,7 @@ Deno.serve(async (req: Request) => {
       const suggestMessage = buildRefineSuggestUserMessage(suggestTarget, suggestAnswer, knownLabels);
       for (const candidate of order) {
         try {
-          const raw = await PROVIDERS[candidate](
+          const raw = await JSON_PROVIDERS[candidate](
             suggestMessage,
             withProject(REFINE_SUGGEST_SYSTEM_PROMPT, body.projectContext),
             0.3,
@@ -8361,7 +8429,7 @@ Deno.serve(async (req: Request) => {
 
       for (const candidate of order) {
         try {
-          const raw = await PROVIDERS[candidate](
+          const raw = await JSON_PROVIDERS[candidate](
             userMessage,
             withProject(PERSONA_FILL_SYSTEM_PROMPT, body.projectContext),
             0.4,
@@ -8409,7 +8477,7 @@ Deno.serve(async (req: Request) => {
       });
       for (const candidate of order) {
         try {
-          const raw = await PROVIDERS[candidate](
+          const raw = await JSON_PROVIDERS[candidate](
             userMessage,
             withProject(FEWSHOT_EXAMPLE_SYSTEM_PROMPT, body.projectContext),
             0.5,
@@ -8458,7 +8526,7 @@ Deno.serve(async (req: Request) => {
       });
       for (const candidate of order) {
         try {
-          const raw = await PROVIDERS[candidate](
+          const raw = await JSON_PROVIDERS[candidate](
             userMessage,
             withProject(FEWSHOT_EXTRACT_SYSTEM_PROMPT, body.projectContext),
             0.3,
@@ -8501,7 +8569,7 @@ Deno.serve(async (req: Request) => {
       const userMessage = META_BUILD_USER_PROMPT(request, body.metaFeedback);
       for (const candidate of order) {
         try {
-          const raw = await PROVIDERS[candidate](
+          const raw = await JSON_PROVIDERS[candidate](
             userMessage,
             withProject(META_BUILD_SYSTEM_PROMPT, body.projectContext),
             0.4,
@@ -8548,7 +8616,7 @@ Deno.serve(async (req: Request) => {
       const toegestaan = new Set(soorten.map((s) => s.id));
       for (const candidate of order) {
         try {
-          const raw = await PROVIDERS[candidate](
+          const raw = await JSON_PROVIDERS[candidate](
             userMessage,
             withProject(COVE_SCAN_SYSTEM_PROMPT, body.projectContext),
             0.2,
@@ -8590,7 +8658,7 @@ Deno.serve(async (req: Request) => {
       const userMessage = STEP_BACK_USER_PROMPT(vraag, body.sbOpTafel);
       for (const candidate of order) {
         try {
-          const raw = await PROVIDERS[candidate](
+          const raw = await JSON_PROVIDERS[candidate](
             userMessage,
             withProject(STEP_BACK_SYSTEM_PROMPT, body.projectContext),
             0.4,
@@ -8642,7 +8710,7 @@ Deno.serve(async (req: Request) => {
       });
       for (const candidate of order) {
         try {
-          const raw = await PROVIDERS[candidate](
+          const raw = await JSON_PROVIDERS[candidate](
             userMessage,
             withProject(systemPrompt, body.projectContext),
             0.3,
@@ -8690,7 +8758,7 @@ Deno.serve(async (req: Request) => {
 
       for (const candidate of order) {
         try {
-          const raw = await PROVIDERS[candidate](
+          const raw = await JSON_PROVIDERS[candidate](
             userMessage,
             RECOMMEND_SYSTEM_PROMPT,
             0.2,
@@ -8744,7 +8812,7 @@ Deno.serve(async (req: Request) => {
 
       for (const candidate of order) {
         try {
-          const raw = await PROVIDERS[candidate](
+          const raw = await JSON_PROVIDERS[candidate](
             userMessage,
             FRAMEWORK_FIT_SYSTEM_PROMPT,
             0.2,
@@ -8815,7 +8883,7 @@ Deno.serve(async (req: Request) => {
 
       for (const candidate of order) {
         try {
-          const raw = await PROVIDERS[candidate](
+          const raw = await JSON_PROVIDERS[candidate](
             userMessage,
             system,
             0.2,
