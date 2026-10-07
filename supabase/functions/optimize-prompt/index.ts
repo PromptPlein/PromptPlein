@@ -7173,11 +7173,16 @@ Deno.serve(async (req: Request) => {
       );
 
       // Streamend: DeepSeek en Mistral racen, en elk afgerond veld gaat meteen
-      // door. Claude en OpenAI blijven als vangnet achter de hand.
+      // door. Claude en OpenAI blijven als vangnet achter de hand. Alleen
+      // providers die aan staan doen mee: een uitgezette DeepSeek gaf hier anders
+      // bij elke aanroep nog een kansloze 402.
+      const racers = (['deepseek', 'mistral'] as Provider[]).filter((p) =>
+        ENABLED_PROVIDERS.includes(p),
+      );
       if (body.stream) {
         return streamFrameworkResponse({
-          racers: ['deepseek', 'mistral'],
-          fallback: order.filter((p) => p !== 'deepseek' && p !== 'mistral'),
+          racers,
+          fallback: order.filter((p) => !racers.includes(p)),
           userMessage,
           system,
           temperature: 0.2,
@@ -7220,11 +7225,11 @@ Deno.serve(async (req: Request) => {
         parseFrameworkRecommendations(r.raw, validIds).recommendations.length > 0;
 
       let won = await firstUsable(
-        (['deepseek', 'mistral'] as Provider[]).map(tryProvider),
+        racers.map(tryProvider),
         isUsable,
       );
       if (!won) {
-        for (const candidate of order.filter((p) => p !== 'deepseek' && p !== 'mistral')) {
+        for (const candidate of order.filter((p) => !racers.includes(p))) {
           const attempted = await tryProvider(candidate);
           if (attempted && isUsable(attempted)) {
             won = attempted;
