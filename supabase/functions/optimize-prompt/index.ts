@@ -1509,6 +1509,7 @@ ${CLARITY_GATE_JSON_INSTRUCTION}
 Anders geef je UITSLUITEND geldige JSON terug, zonder codeblok of extra tekst, in dit formaat:
 {"summary":"<1 zin: wat is er al en wat mist nog, in het Nederlands>","material":"<het uitgeschreven materiaal voor deze stap>","gaps":[{"label":"<kort onderwerp>","question":"<concrete vraag aan de gebruiker>"}]}
 
+De waarde van "material" is één tekst in lopende zinnen, geen genest object en geen lijst.
 Geef maximaal 4 hiaten, alleen de echt belangrijke. Laat "gaps" leeg als de stap compleet genoeg is.`;
 
 /** Bouw de gebruikersprompt voor de plan-step-analyze-modus. */
@@ -1578,7 +1579,10 @@ function parsePlanStepAnalyze(
         label: typeof g.label === 'string' ? g.label : '',
         question: g.question as string,
       }));
-    const material = typeof parsed.material === 'string' ? parsed.material.trim() : '';
+    // In de JSON-modus schrijft het model het materiaal (een persona, rubrieken)
+    // graag als genest object of lijst in plaats van als tekst; zet dat om naar
+    // regels in plaats van de hele analyse af te keuren.
+    const material = (coerceFieldValue(parsed.material) ?? '').trim();
     if (!material) return null;
     return {
       summary: typeof parsed.summary === 'string' ? parsed.summary : '',
@@ -3744,7 +3748,7 @@ REGELS:
 - Schrijf in helder Nederlands (B1-taalniveau waar passend). Houd het intern gericht: de doelgroep
   is een overheidsmedewerker, niet de burger.
 - "note": één heel korte toelichting (max ~12 woorden) per veld, bijv. "Afgeleid uit je prompt" of
-  "Suggestie — controleer of dit klopt".
+  "Suggestie, controleer of dit klopt".
 
 ${lengthBudgetInstruction(
   'maximaal ~120 woorden per veld, ~60 woorden voor velden die je zelf invult ("source":"ai") ' +
