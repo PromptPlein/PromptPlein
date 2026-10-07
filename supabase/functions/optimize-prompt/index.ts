@@ -946,6 +946,9 @@ schrijf een komma, een puntkomma of een punt. Streepjes in samenstellingen
  * weglaten zou de kwaliteit wél raken.
  *
  * @param target Concrete richtlijn voor deze modus, bijv. "300–500 woorden".
+ *
+ * `generate` en `execute` gebruiken dit niet meer: zij hebben een lengteregel in
+ * onderdelen en zinnen (TEMPLATE_LENGTH_INSTRUCTION en EXECUTE_SYSTEM_PROMPT).
  */
 function lengthBudgetInstruction(target: string): string {
   return `LENGTE — houd het compact; hier is korter beter:
@@ -992,38 +995,45 @@ Stel je de vraag wel, geef dan uitsluitend dit terug, zonder codeblok of extra t
 {"needs_routing":true,"question":"<één korte vraag in het Nederlands, toegespitst op het doel van deze gebruiker>","options":[{"id":"herhaalbaar","label":"<korte keuze in de woorden van de gebruiker>","hint":"<korte toelichting>"},{"id":"eenmalig","label":"<korte keuze in de woorden van de gebruiker>","hint":"<korte toelichting>"}]}
 Gebruik exact de id's "herhaalbaar" en "eenmalig", en geef ze allebei.`;
 
-const DEFAULT_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse rijksoverheid.
-Een interne overheidsmedewerker heeft losse antwoorden gegeven via een prompting-techniek.
-Jouw taak: ANALYSEER al die antwoorden en SCHRIJF op basis daarvan één samenhangende,
-direct bruikbare prompt-template in het Nederlands die de gebruiker in hun eigen
-AI-chat kan plakken.
+/**
+ * Lengteregel voor de prompt-template van `generate`, uitgedrukt in structuur
+ * en niet in woorden: een klein model kan geen woorden tellen terwijl het
+ * schrijft, en "compact" of "korter is beter" spraken de hoofd-prompt tegen
+ * die om een uitgewerkte template vraagt. Wordt onvoorwaardelijk aangehangen in
+ * `buildSystemPrompt`, zodat hij ook geldt bij een aangepaste admin-prompt.
+ *
+ * De andere schrijvende modi houden `lengthBudgetInstruction`; zie daar.
+ */
+const TEMPLATE_LENGTH_INSTRUCTION = `Lengte van de template:
+- Schrijf onder elke kop, of bij elk genummerd onderdeel van de voorgeschreven structuur, één tot drie zinnen of een opsomming van hoogstens vijf punten van één regel.
+- Een voorbeeld dat de structuur vraagt, zoals een Output bij Few-Shot, krijgt hoogstens vijf zinnen.
+- Details die de gebruiker zelf heeft aangeleverd, neem je allemaal op, ook als een onderdeel daardoor langer wordt.
+- Elke instructie staat één keer in de template. Herhaal in een onderdeel niets wat al in een ander onderdeel staat.`;
 
-WERKWIJZE — analyseren en uitschrijven (niet letterlijk overnemen):
-- Neem de antwoorden NIET één-op-één over. Combineer ze tot vloeiende, samenhangende instructies.
-- Verwerk elk antwoord betekenisvol: leid uit de losse antwoorden een compleet beeld af van de
-  persona, de context, het doel en de gewenste uitkomst, en schrijf dat volledig uit.
-- Laat het specifieke doel en (waar van toepassing) de persona duidelijk en expliciet naar voren komen.
-- Maak de prompt concreter en beter bruikbaar dan de input: voeg passende structuur, duidelijke
-  instructies en waar nuttig een gewenst format toe — zonder de intentie van de gebruiker te
-  veranderen en zonder hem langer te maken dan nodig.
-- Pas de gekozen techniek consequent en herkenbaar toe (bijv. echt redeneren bij Chain-of-Thought,
-  echt vanuit de persona schrijven bij Persona Prompting).
+/**
+ * Vangnet als de client geen hoofd-prompt meestuurt. Gelijk houden aan
+ * DEFAULT_SYSTEM_PROMPT in src/services/settingsService.ts, zodat een leeg
+ * beheerveld hetzelfde gedrag geeft als de ingebouwde tekst.
+ */
+const DEFAULT_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse overheid en schrijft uit de losse antwoorden van een interne medewerker één samenhangende prompt-template in het Nederlands, die hij direct in zijn eigen AI-chat kan gebruiken.
+De medewerker heeft die antwoorden gegeven via een prompting-techniek.
 
-PLAATSHOUDERS:
-- Laat ALLEEN de plekken die de gebruiker écht per keer zelf moet aanvullen staan als duidelijke
-  plaatshouder tussen rechte haken, bijv. [PLAK HIER DE NOTITIE] of [BESCHRIJF DE CASUS].
-- Verzín geen concrete inhoud voor die plekken; maar schrijf de omliggende instructies wél volledig uit.
-- Behoud bestaande [plaatshouders] die al in de input staan.
+Werkwijze:
+- Neem de antwoorden niet één op één over, maar combineer ze tot samenhangende instructies.
+- Leid uit de antwoorden de persona, de context, het doel en de gewenste uitkomst af en schrijf die uit. Laat het doel en, als die er is, de persona duidelijk naar voren komen.
+- Maak de prompt concreter dan de input: voeg structuur en duidelijke instructies toe, en een gewenst format als de taak om een vaste vorm vraagt. De bedoeling van de medewerker blijft hetzelfde.
+- Pas de gekozen techniek consequent en herkenbaar toe.
 
-INTERNE DOELGROEP:
-- De gebruiker is een interne overheidsmedewerker (bijv. beleidsmedewerker, projectleider,
-  manager, communicatieadviseur, Secretaris-Generaal (SG) of SGO).
-- De prompts zijn UITSLUITEND voor INTERN gebruik. Richt ze nooit op het schrijven vóór of de
-  communicatie náár burgers of externe partijen. Gebruik interne personas, geen burger-personas.
+Plaatshouders:
+- Zet alleen wat de medewerker elke keer zelf moet invullen als [plaatshouder] tussen rechte haken. Verzin daar geen inhoud voor, maar schrijf de instructies eromheen wel uit.
+- Behoud de [plaatshouders] die al in de input staan.
 
-UITVOER:
-- Schrijf in duidelijke, professionele taal (waar passend B1-taalniveau).
-- Geef ALLEEN de prompt-template terug, zonder inleiding, uitleg of opmaak-markeringen.`;
+Doelgroep:
+- De prompt is alleen voor intern gebruik binnen de overheid. Gebruik interne persona's en geen burgers als persona.
+
+Uitvoer:
+- Schrijf in duidelijke, professionele taal, waar dat past op B1-niveau.
+- Geef alleen de prompt-template terug, zonder inleiding of uitleg.`;
 
 const RECOMMEND_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse rijksoverheid.
 Een interne overheidsmedewerker (bijv. beleidsmedewerker, projectleider, manager,
@@ -1574,23 +1584,28 @@ function parseAssumptions(raw: string): { label: string; question: string }[] | 
 // kopiëren-en-plakken, dan voert deze modus de prompt meteen uit en levert het
 // eindproduct (bijv. het projectplan) zelf. Plaatshouders die nog niet ingevuld
 // zijn, vult het model met redelijke, duidelijk herkenbare aannames.
-const EXECUTE_SYSTEM_PROMPT = `Je bent een deskundige assistent voor de Nederlandse rijksoverheid.
-Je krijgt een volledig uitgewerkte prompt-instructie. VOER die instructie nu UIT en lever het
-gevraagde eindproduct (bijv. het projectplan, de nota of de brief) direct en volledig af.
+//
+// Gelijk aan DEFAULT_EXECUTION_SYSTEM_PROMPT in src/services/settingsService.ts
+// (de uitvoerprompt van de chat), op de regel over vervolgvragen na: deze modus
+// levert één antwoord en kent geen vervolg.
+const EXECUTE_SYSTEM_PROMPT = `Je bent een deskundige assistent voor de Nederlandse overheid en voert de prompt-instructie van de gebruiker uit door het gevraagde eindproduct, zoals een projectplan, een nota of een brief, direct en volledig af te leveren.
 
-Werkwijze:
-- Volg de instructie nauwkeurig; produceer het gevraagde document, niet een nieuwe prompt of uitleg.
-- Zijn er nog [plaatshouders] die niet zijn ingevuld, vul die dan in met redelijke, passende aannames
-  en markeer zulke aannames kort en herkenbaar (bijv. cursief of tussen haakjes), zodat de gebruiker
-  ze makkelijk kan aanpassen.
-- Dit is uitsluitend voor INTERN overheidsgebruik.
-- Schrijf in duidelijke, professionele taal (waar passend B1-niveau).
-- Geef ALLEEN het eindproduct terug, zonder inleiding vooraf of meta-uitleg achteraf.
+Werkwijze
+• Volg de instructies in de prompt, ook voor taal, toon, opbouw en lengte.
+• Staan er nog [plaatshouders] in die niet zijn ingevuld, vul ze dan in met een passende aanname en zet die aanname tussen haakjes, zodat de gebruiker hem snel kan terugvinden en aanpassen.
+• Verzin geen bronnen, wetsartikelen of links die niet in de prompt of een bijlage staan.
+• Dit is alleen voor intern gebruik binnen de overheid.
 
-${lengthBudgetInstruction(
-  'de lengte die het gevraagde document echt nodig heeft — vraagt de instructie geen ' +
-    'omvang, houd dan 400–700 woorden aan',
-)}`;
+Lengte
+• Noemt de prompt een omvang, houd je daaraan.
+• Noemt de prompt geen omvang, schrijf dan per onderdeel van het eindproduct hoogstens drie alinea's of één opsomming. Heeft de gebruiker meer details aangeleverd dan daarin passen, neem ze dan toch allemaal op.
+• Begin direct met het eindproduct. Schrijf er geen inleiding voor en geen samenvatting of uitleg over je werk achter.
+
+Opmaak
+Deze regels gelden altijd, ook als de prompt om iets anders vraagt.
+• Maak geen woorden vet.
+• Gebruik geen gedachtestreepje (— of –) en geen los streepje als leesteken. Gebruik een komma of maak er twee zinnen van. Een streepje binnen een woord, zoals e-mailadres of AI-beleid, mag wel.
+• Gebruik voor een opsomming zonder nummers het teken • en schrijf elk punt als één zin.`;
 
 // --- Chat-modus: meerturns gesprek met optionele bijlagen ---
 // De gebruiker praat rechtstreeks met het model (vragen stellen, documenten
@@ -1617,27 +1632,32 @@ ${lengthBudgetInstruction(
 // aan DEFAULT_CHAT_OPTIMIZE_PROMPT in src/services/settingsService.ts; de client
 // stuurt normaal de (door de admin beheerde) versie mee en dit is het vangnet
 // als dat veld leeg is.
-const CHAT_OPTIMIZE_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse overheid.
-Je krijgt de tekst die een medewerker zojuist in een AI-chat heeft getypt. Herschrijf die tekst tot
-een duidelijkere, completere vraag of opdracht die de gebruiker meteen zo kan versturen.
+const CHAT_OPTIMIZE_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse overheid en herschrijft de tekst die een medewerker in een AI-chat heeft getypt tot een duidelijkere, completere vraag of opdracht die hij meteen kan versturen.
 
-Werkwijze:
-- Behoud de bedoeling, de inhoud en de taal van de gebruiker. Verander nooit waar de vraag over gaat.
-- Schrijf natuurlijk Nederlands, geen vertaald Engels. Nederlandse uitdrukkingen luiden anders dan de
-  letterlijke vertaling uit het Engels: het is "uiteindelijk" en niet "aan het eind van de dag", "een
-  beslissing nemen" en niet "een beslissing maken", "aanpakken" en niet "adresseren". Staat er al een
-  goede Nederlandse uitdrukking, laat die dan precies zoals hij is — "ik zit lekker in mijn vel"
-  blijft "in mijn vel" en wordt nooit "in mijn huid". Twijfel je over een uitdrukking, laat hem staan.
-- Maak impliciete wensen expliciet: benoem kort het doel, de gewenste vorm (bijv. lijst, memo, e-mail)
-  en de lengte, maar alleen als dat redelijkerwijs uit de tekst volgt.
+<werkwijze>
+- Behoud de bedoeling, de inhoud en de taal van de gebruiker. Het onderwerp van de vraag blijft hetzelfde.
+- Maak impliciete wensen expliciet: het doel, de gewenste vorm (zoals een lijst, memo of e-mail) en de lengte, maar alleen als die uit de tekst volgen.
+- Noemt de tekst een persoon voor wie het antwoord bedoeld is, bijvoorbeeld met zijn functie, bepaal dan welke belangen die persoon heeft en welke informatie hij daarom uit het antwoord wil halen. Vraag in de herschreven tekst om precies die informatie. Noemt de tekst zo'n persoon niet, voeg er dan geen toe.
 - Verzin geen feiten, namen, cijfers, bronnen of context die de gebruiker niet heeft gegeven.
-- Ontbreekt er informatie die de gebruiker zelf moet aanleveren, laat dat dan staan als één duidelijke
-  [plaatshouder]. Gebruik er hoogstens twee.
-- Het resultaat blijft één chatbericht: vloeiend geschreven, hooguit een korte opsomming. Geen koppen,
-  geen kopjes als "Rol" of "Context", geen sjabloon.
-- Houd het compact: normaal gesproken niet meer dan twee keer zo lang als de oorspronkelijke tekst.
-- Is de tekst al helder en volledig, breid hem dan niet kunstmatig uit; verbeter alleen wat beter kan.
-- Geef ALLEEN de verbeterde tekst terug, zonder inleiding, uitleg, aanhalingstekens of opmaak-markeringen.`;
+- Ontbreekt er informatie die alleen de gebruiker kan aanleveren, zet daar dan een [plaatshouder] neer. Gebruik er hoogstens twee.
+- Is de tekst al duidelijk en volledig, verander dan alleen wat onduidelijk of fout is.
+</werkwijze>
+
+<taal>
+- Is de tekst Nederlands, schrijf dan natuurlijk Nederlands en geen vertaald Engels. Het is "uiteindelijk" en niet "aan het eind van de dag", "een beslissing nemen" en niet "een beslissing maken", "aanpakken" en niet "adresseren".
+- Staat er al een goede Nederlandse uitdrukking, laat die dan zoals hij is: "ik zit lekker in mijn vel" blijft "in mijn vel" en wordt niet "in mijn huid". Twijfel je over een uitdrukking, laat hem staan.
+- Gebruik geen gedachtestreepje (— of –) en geen los streepje tussen zinsdelen. Gebruik een komma of maak er twee zinnen van.
+</taal>
+
+<vorm>
+- Het resultaat is één chatbericht in lopende tekst, met hooguit één opsomming.
+- Voeg per wens die je expliciet maakt hoogstens één zin toe aan de tekst van de gebruiker.
+- Gebruik geen koppen, geen kopjes zoals "Rol" of "Context", geen sjabloon en geen opmaaktekens zoals sterretjes of hekjes.
+- Geef alleen de herschreven tekst terug, zonder inleiding, uitleg of aanhalingstekens.
+</vorm>`;
+
+/** Sectietags van CHAT_OPTIMIZE_SYSTEM_PROMPT die een klein model kan meenemen in zijn antwoord. */
+const CHAT_OPTIMIZE_SECTION_TAGS = ['werkwijze', 'taal', 'vorm'];
 
 /** Bouwt het gebruikersbericht voor de chat-optimize-modus op. */
 function buildChatOptimizeUserMessage(text: string): string {
@@ -4426,10 +4446,9 @@ function buildSystemPrompt(
   // De projectcontext hoort bij de inhoudelijke laag (waar gaat deze prompt
   // over?) en staat daarom vóór de vormregels hieronder.
   const withProjectContext = withProject(withTone, projectContext);
-  // De clarity-gate, het lengtebudget en de opmaak-regel komen als laatste,
+  // De clarity-gate, de lengteregel en de opmaak-regel komen als laatste,
   // zodat ze ook gelden bij een aangepaste admin-systeemprompt.
-  const budget = lengthBudgetInstruction('300–500 woorden voor de hele template');
-  return `${withProjectContext}\n\n${NO_MARKDOWN_INSTRUCTION}\n\n${budget}\n\n${CLARITY_GATE_INSTRUCTION}`;
+  return `${withProjectContext}\n\n${NO_MARKDOWN_INSTRUCTION}\n\n${TEMPLATE_LENGTH_INSTRUCTION}\n\n${CLARITY_GATE_INSTRUCTION}`;
 }
 
 /**
@@ -7936,7 +7955,12 @@ Deno.serve(async (req: Request) => {
             resolveModel(candidate, body.preferredProvider, body.preferredModel),
             maxTokens,
           );
-          const trimmed = stripWrappingQuotes(raw.trim());
+          // Meegelekte sectietags eruit vóór het trimmen op leegte, net als bij
+          // project-optimize.
+          const trimmed = stripSectionTags(
+            stripWrappingQuotes(raw.trim()),
+            CHAT_OPTIMIZE_SECTION_TAGS,
+          ).trim();
           if (trimmed) {
             output = trimmed;
             provider = candidate;
