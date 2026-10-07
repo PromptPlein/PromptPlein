@@ -96,6 +96,12 @@ export interface ProviderModelOption {
  * `ministral-8b-2512` en `ministral-3b-2512` (Ministral 3, december 2025).
  * Alleen label, hint en prijs hoeven dan bij te blijven, de id's niet.
  *
+ * UITZONDERING: Mistral Large 4 staat er met zijn eigen id `mistral-large-4`.
+ * Bij invoering (6 oktober 2026) is het een public preview en wijst
+ * `mistral-large-latest` nog naar Large 3. De prijs hier is de gewone: de eerste
+ * twee weken rekent Mistral de helft ($0,68 in, $2,09 uit). Schuift de alias
+ * door naar Large 4, dan kan het item van Large 3 eruit.
+ *
  * UITZONDERING: Ministral 3 14B staat er met de gedateerde `ministral-14b-2512`.
  * Die maat is nieuw in de Ministral 3-generatie, dus er is geen oudere
  * `ministral-14b-latest` waarvan vaststaat dat hij bestaat; de gedateerde id
@@ -189,9 +195,15 @@ export const PROVIDER_MODELS: Record<Exclude<AiProvider, 'auto'>, ProviderModelO
       pricing: { input: 0.15, output: 0.6 },
     },
     {
+      id: 'mistral-large-4',
+      label: 'Mistral Large 4',
+      hint: 'Nieuwste en zwaarste: multimodaal, 1M context, kan denken; nog in preview',
+      pricing: { input: 1.36, output: 4.18 },
+    },
+    {
       id: 'mistral-medium-latest',
       label: 'Mistral Medium 3.5',
-      hint: 'Krachtigst: multimodaal, gemaakt voor agentisch werk en code',
+      hint: 'Multimodaal, gemaakt voor agentisch werk en code; duurder dan Large 4',
       pricing: { input: 1.5, output: 7.5 },
     },
     {
@@ -236,11 +248,13 @@ export const PROVIDER_MODELS: Record<Exclude<AiProvider, 'auto'>, ProviderModelO
  * Gemeten op 18 september 2026 tegen de Mistral-API: Small 4 en Medium 3.5 geven
  * een denkblok terug; Large 3 en de drie Ministrals weigeren de parameter met
  * `400 reasoning_effort is not enabled for this model`; GLM 5.3 slikt hem maar
- * denkt niet zichtbaar. Een hernoemde of vervangen id die hier niet in staat,
- * zet de knop uit.
+ * denkt niet zichtbaar. Large 4 staat erin op grond van Mistrals documentatie
+ * van oktober 2026, niet van een eigen meting. Een hernoemde of vervangen id
+ * die hier niet in staat, zet de knop uit.
  */
 export const REASONING_EFFORT_MODELS: readonly string[] = [
   'mistral-small-latest',
+  'mistral-large-4',
   'mistral-medium-latest',
 ];
 

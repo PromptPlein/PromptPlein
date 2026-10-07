@@ -455,8 +455,13 @@ const PROVIDER_MODELS: Record<Provider, string[]> = {
   // host op hetzelfde endpoint; het staat niet in REASONING_EFFORT_MODELS (het
   // slikt reasoning_effort, maar er komt geen denkblok terug), dus "denken"
   // staat bij dat model uit.
+  //
+  // mistral-large-4 (Large 4, oktober 2026) staat er met zijn eigen id en niet
+  // als mistral-large-latest: die alias wijst nog naar Large 3, en Large 4 is
+  // bij invoering nog een preview. Schuift de alias door, dan kan Large 3 eruit.
   mistral: [
     'mistral-small-latest',
+    'mistral-large-4',
     'mistral-medium-latest',
     'mistral-large-latest',
     'ministral-14b-2512',
@@ -511,8 +516,16 @@ const STRONGEST_MODEL: Record<Provider, string> = {
  * Gemeten op 18 september 2026: Small 4 en Medium 3.5 geven een denkblok terug;
  * Large 3 en de drie Ministrals weigeren de parameter met `400 reasoning_effort
  * is not enabled for this model`; GLM 5.3 accepteert hem maar denkt niet.
+ *
+ * Large 4 staat erin op grond van Mistrals documentatie (oktober 2026), niet van
+ * een eigen meting: die noemt `reasoning_effort` met dezelfde denk-chunks als bij
+ * Small 4. Weigert het model de parameter toch, dan geeft die beurt een 400.
  */
-const REASONING_EFFORT_MODELS: string[] = ['mistral-small-latest', 'mistral-medium-latest'];
+const REASONING_EFFORT_MODELS: string[] = [
+  'mistral-small-latest',
+  'mistral-large-4',
+  'mistral-medium-latest',
+];
 
 /**
  * Het model dat een provider inzet zodra de gebruiker "denken" aanzet, voor het
