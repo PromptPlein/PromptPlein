@@ -477,20 +477,72 @@ const DEEPSEEK_MODEL = PROVIDER_MODELS.deepseek[0];
 const MISTRAL_MODEL = PROVIDER_MODELS.mistral[0];
 
 /**
- * Het sterkste model per provider, voor modi waar kwaliteit boven prijs gaat.
+ * Bovengrens voor `max_tokens` per Mistral-model; {@link runMistral} kapt het
+ * gevraagde budget hierop af. Houd in sync met de Mistral-lijst in
+ * PROVIDER_MODELS.
  *
- * Nu alleen gebruikt door 'project-optimize'. Die aanroep gebeurt één keer per
- * projectinstelling in plaats van bij elk bericht, en wat eruit komt stuurt
- * daarna élk gesprek in dat project. De modelkeuze van de admin is gemaakt voor
- * de chat, waar snelheid en prijs per beurt tellen; hier is dat de verkeerde
- * afweging en wordt hij daarom bewust overruled. De providerkeuze blijft wél
- * staan: alleen het model binnen die provider gaat omhoog.
+ * Wat Mistral documenteert (nagekeken op 7 oktober 2026): de API zegt bij
+ * `max_tokens` alleen "The token count of your prompt plus `max_tokens` cannot
+ * exceed the model's context length" (https://docs.mistral.ai/api/). Een aparte
+ * uitvoergrens staat er per model niet bij, behalve bij GLM 5.3. De
+ * contextvensters volgens de modelpagina's:
+ *   Small 4 (mistral-small-2603)   256k  docs.mistral.ai/models/mistral-small-4-0-26-03
+ *   Medium 3.5                     256k  docs.mistral.ai/models/mistral-medium-3-5-26-04
+ *   Large 3 (mistral-large-2512)   256k  docs.mistral.ai/models/mistral-large-3-25-12
+ *   Large 4 (mistral-large-4)      1M    docs.mistral.ai/models/mistral-large-4-0
+ *   Ministral 3 14B / 8B / 3B      256k  docs.mistral.ai/models/ministral-3-14b-25-12,
+ *                                        ministral-3-8b-25-12, ministral-3-3b-25-12
+ *   GLM 5.3 (zai-glm-5-3)          1M, uitvoer maximaal 128k
+ *                                        docs.mistral.ai/models/zai-glm-5-3
+ * Het oude plafond van 4096 voor alle Mistral-modellen ("Small en Ministral
+ * hebben een lager plafond") staat dus nergens in de documentatie.
+ *
+ * De 32768 hieronder is een eigen veilige aanname, geen gedocumenteerde grens:
+ * ruim boven het grootste budget dat een modus vraagt (project-optimize 16384,
+ * plus THINKING_TOKEN_BUDGET bij denken), en ver genoeg onder het kleinste
+ * contextvenster (256k) dat ook de langste invoer (chat met projectcontext van
+ * 200.000 tekens) er nog naast past. Bij GLM 5.3 ligt de gedocumenteerde grens
+ * van 128k hoger, dus ook daar geldt 32768.
+ */
+const MISTRAL_OUTPUT_LIMIT: Record<string, number> = {
+  'mistral-small-latest': 32_768,
+  'mistral-large-4': 32_768,
+  'mistral-medium-latest': 32_768,
+  'mistral-large-latest': 32_768,
+  'ministral-14b-2512': 32_768,
+  'ministral-8b-latest': 32_768,
+  'ministral-3b-latest': 32_768,
+  'zai-glm-5-3': 32_768,
+};
+
+/**
+ * Grens voor een Mistral-model dat niet in {@link MISTRAL_OUTPUT_LIMIT} staat:
+ * het oude, krappe plafond (4096, met denken 8192 zodat THINKING_TOKEN_BUDGET
+ * er nog doorheen past). Eigen veilige aanname: van een onbekend id weten we
+ * niets, en een te hoge max_tokens geeft daar een 400 op de hele aanroep.
+ */
+function mistralOutputLimit(model: string, thinking: boolean): number {
+  return MISTRAL_OUTPUT_LIMIT[model] ?? (thinking ? 8192 : 4096);
+}
+
+/**
+ * Het sterkste model per provider: de terugvalkeuze voor 'project-optimize' en
+ * 'project-brief' wanneer de beheerder geen geldig model heeft gekozen (provider
+ * 'auto', geen model, een model van een andere provider, of een fallback naar
+ * een andere provider). Zie {@link resolveProjectModel}.
+ *
+ * Vroeger overrulede deze kaart de keuze van de beheerder altijd, met als
+ * redenering dat het chatmodel voor snelheid en prijs per beurt was gekozen.
+ * Dat pakte verkeerd uit zodra de beheerder juist een sterker model koos: de
+ * chat draaide dan op Medium 3.5 en de projectinstructie, die elk gesprek in
+ * het project stuurt, bleef op Small 4 hangen. Nu volgen beide modi het model
+ * uit Beheer, net als de andere modi van die kant.
  *
  * Let op de twee plekken waar het sterkste model NIET het eerste uit
  * PROVIDER_MODELS is: bij DeepSeek staat Flash vooraan (goedkoop) en is Pro de
  * sterkere. Bij Mistral staat hier Small 4 en niet Medium 3.5, hoewel Medium 3.5
- * sterker is: dat model kost tien tot twaalf keer zo veel per token, en dit is
- * de bovengrens die de prijs per projectinstelling nog verantwoordt.
+ * sterker is: dat model kost tien tot twaalf keer zo veel per token, en die
+ * prijs kiest de beheerder zelf in Beheer, niet deze terugval.
  *
  * Voor OpenAI staat hier het vlaggenschip en niet 'gpt-5.5-pro': dat is zes keer
  * zo duur en gericht op maximale precisie, niet op betere tekst.
@@ -593,6 +645,29 @@ function resolveModel(
     return preferredModel;
   }
   return PROVIDER_MODELS[candidate][0];
+}
+
+/**
+ * Modelkeuze voor 'project-optimize' en 'project-brief': het model dat de
+ * beheerder koos (chatinstellingen voor de eerste, optimalisatie-instellingen
+ * voor de tweede), net als bij {@link resolveModel}. Is er geen geldig model
+ * voor deze provider, dan niet het standaardmodel maar {@link STRONGEST_MODEL}:
+ * deze aanroep gebeurt één keer per projectversie en stuurt daarna elk gesprek
+ * of elke bouwstap in dat project.
+ */
+function resolveProjectModel(
+  candidate: Provider,
+  preferred: PreferredProvider | undefined,
+  preferredModel: string | undefined,
+): string {
+  if (
+    preferred === candidate &&
+    preferredModel &&
+    PROVIDER_MODELS[candidate].includes(preferredModel)
+  ) {
+    return preferredModel;
+  }
+  return STRONGEST_MODEL[candidate];
 }
 
 /**
@@ -1817,7 +1892,7 @@ const MAX_PROJECT_OPTIMIZE_CHARS = 20_000;
 // publiek, toon, vaste termen — en die tien regels stonden verspreid tussen de
 // rest. Het model kreeg dus alles en pikte er niets uit.
 //
-// Deze modus doet die selectie één keer, expliciet, mét het sterkste model, en
+// Deze modus doet die selectie één keer, expliciet, mét het ingestelde model, en
 // levert een vaste samenvatting op. Die samenvatting is wat daarna als
 // `projectContext` in élke stap meegaat (zie {@link withProject}).
 //
@@ -4609,6 +4684,21 @@ const STALL_TIMEOUT_MS = 20_000;
  * onbegrensd op. In de productielogs leverde dat aanroepen van 76 tot 91
  * seconden op, plus een 502 na 43s. Met een plafond faalt zo'n poging netjes en
  * schakelt de keten door naar de volgende provider.
+ *
+ * Afweging bij de grote budgetten (7 oktober 2026, sinds MISTRAL_OUTPUT_LIMIT
+ * de 16384 van project-optimize echt doorlaat): vanaf 4000 tokens geldt
+ * hoe dan ook de 120 s. Bij de gemeten 120 tot 170 tokens per seconde van
+ * Small 4 en Medium 3.5 duurt een vol budget van 16384 tokens 96 tot 137 s,
+ * dus aan de trage kant past het niet. Toch blijft het plafond 120 s:
+ * - Supabase geeft een 504 als een function binnen 150 s geen respons stuurt
+ *   ("Request idle timeout: 150s", supabase.com/docs/guides/functions/limits,
+ *   nagekeken 7 oktober 2026). project-optimize streamt niet, dus verder
+ *   ophogen levert geen tekst op maar een 504 zonder nette foutmelding.
+ * - Een echt antwoord blijft ruim onder dat volle budget. De invoer is hooguit
+ *   20.000 tekens (MAX_PROJECT_OPTIMIZE_CHARS), eigen schatting zo'n 5.000 tot
+ *   6.000 tokens, en het antwoord is van dezelfde orde: ook 9.000 tokens is bij
+ *   120 per seconde 75 s. De volle 16384 haalt alleen een model dat in een
+ *   herhaling blijft hangen, en dat antwoord is het bewaren niet waard.
  */
 function providerTimeoutMs(maxTokens: number): number {
   return Math.min(120_000, 20_000 + maxTokens * 25);
@@ -5081,13 +5171,10 @@ async function runMistral(
   const apiKey = Deno.env.get('MISTRAL_API_KEY');
   if (!apiKey) throw new Error('MISTRAL_API_KEY ontbreekt');
 
-  // Mistral gebruikt een OpenAI-compatibele API. Mistral Small/Ministral hebben
-  // een lager plafond dan de andere providers; begrens daarom op 4096.
-  //
-  // Met denken aan gaat dat plafond naar 8192, zodat het opgehoogde budget uit
-  // {@link THINKING_TOKEN_BUDGET} er ook echt doorheen past. Het contextvenster
-  // van Small 4 is ruim genoeg; alleen deze zelfgekozen bovengrens stond in de weg.
-  const budget = thinking?.reasoningEffort ? 8192 : 4096;
+  // Mistral gebruikt een OpenAI-compatibele API. Het gevraagde budget gaat door
+  // tot de grens van dit model (zie MISTRAL_OUTPUT_LIMIT); de ophoging voor
+  // denken (THINKING_TOKEN_BUDGET) zit al in maxTokens en past daar ruim onder.
+  const budget = mistralOutputLimit(model, Boolean(thinking?.reasoningEffort));
   return runOpenAiCompatible({
     url: 'https://api.mistral.ai/v1/chat/completions',
     apiKey,
@@ -8022,10 +8109,10 @@ Deno.serve(async (req: Request) => {
             userMessage,
             system,
             projectOptimizeTemp,
-            // Bewust NIET resolveModel: hier telt kwaliteit zwaarder dan prijs
-            // per aanroep (zie STRONGEST_MODEL). Valt de keten door naar een
-            // andere provider, dan pakt die zijn eigen sterkste model.
-            STRONGEST_MODEL[candidate],
+            // Het chatmodel uit Beheer; zonder geldige keuze het sterkste model
+            // van de provider (zie resolveProjectModel). Valt de keten door naar
+            // een andere provider, dan pakt die zijn eigen sterkste model.
+            resolveProjectModel(candidate, body.preferredProvider, body.preferredModel),
             maxTokens,
           );
           // Meegelekte sectietags eruit vóór het trimmen op leegte: een antwoord
@@ -8064,14 +8151,15 @@ Deno.serve(async (req: Request) => {
 
     // --- Project-brief-modus: lees het project één keer volledig ---
     // Zelfde vorm als project-optimize hierboven (klein, synchroon, één tekst in
-    // en uit) en om dezelfde reden het sterkste model van de provider: dit draait
-    // één keer per projectversie en stuurt daarna élke prompt die voor dit
-    // project wordt gebouwd. Zie PROJECT_BRIEF_SYSTEM_PROMPT voor het waarom.
+    // en uit) en dezelfde modelkeuze: het model uit Beheer, met het sterkste
+    // model van de provider als terugval. Dit draait één keer per projectversie
+    // en stuurt daarna élke prompt die voor dit project wordt gebouwd. Zie
+    // PROJECT_BRIEF_SYSTEM_PROMPT voor het waarom.
     if (mode === 'project-brief') {
       // Twee poorten, en beide zijn nodig. Inloggen: projecten bestaan alleen
       // voor ingelogde gebruikers, dus dit kost geen bereik. En een plafond op
       // het materiaal (MAX_PROJECT_BRIEF_CHARS), want dit is de enige modus waar
-      // een gebruiker met één klik het sterkste model over tienduizenden tekens
+      // een gebruiker met één klik het ingestelde model over tienduizenden tekens
       // laat lopen; de cache dekt de warme route af, niet de koude.
       if (!isAuthenticatedRequest(req)) {
         return new Response(
@@ -8108,9 +8196,9 @@ Deno.serve(async (req: Request) => {
             briefUserMessage,
             PROJECT_BRIEF_SYSTEM_PROMPT,
             briefTemp,
-            // Bewust NIET resolveModel: dit draait één keer per projectversie en
-            // stuurt daarna élke bouwstap (zie STRONGEST_MODEL).
-            STRONGEST_MODEL[candidate],
+            // Het optimalisatiemodel uit Beheer; zonder geldige keuze het
+            // sterkste model van de provider (zie resolveProjectModel).
+            resolveProjectModel(candidate, body.preferredProvider, body.preferredModel),
             maxTokens,
           );
           const trimmed = stripMarkdownEmphasis(

@@ -261,8 +261,9 @@ export async function optimizeChatInput(args: {
  * bestanden niet: die hoort in het gesprek thuis, niet in een instructie die
  * over alle gesprekken gaat.
  *
- * Draait op het STERKSTE model van de ingestelde provider in plaats van op het
- * chatmodel; de server regelt dat (zie STRONGEST_MODEL in de edge function).
+ * Draait op het chatmodel uit Beheer, net als de chat zelf. Is er geen geldig
+ * model gekozen, dan neemt de server het sterkste model van de provider (zie
+ * resolveProjectModel in de edge function).
  *
  * Gooit nooit; bij een fout komt de oorspronkelijke tekst terug met een melding,
  * zodat de UI de instructie van de gebruiker ongemoeid kan laten.
@@ -312,10 +313,11 @@ export async function optimizeProjectInstructions(args: {
         projectName: args.projectName ?? '',
         projectFileNames: args.fileNames ?? [],
         preferredProvider: settings.provider,
-        // Bewust GEEN preferredModel: de server kiest hier het sterkste model van
-        // de gekozen provider (STRONGEST_MODEL). Het chatmodel is gekozen voor
-        // snelheid en prijs per beurt; deze aanroep gebeurt één keer per project
-        // en het resultaat stuurt daarna élk gesprek erin.
+        // Het chatmodel uit Beheer: het resultaat stuurt daarna élk gesprek in
+        // het project, dus het hoort minstens zo sterk te zijn als het model van
+        // die gesprekken. Zonder geldige keuze kiest de server het sterkste
+        // model van de provider (STRONGEST_MODEL).
+        preferredModel: settings.model,
         systemPrompt: composeProjectOptimizePrompt(settings),
       }),
       signal,

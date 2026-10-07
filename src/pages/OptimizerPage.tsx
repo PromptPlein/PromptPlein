@@ -101,6 +101,7 @@ export default function OptimizerPage() {
       // versie, daarna uit de cache) en pas daarna bouwt de gebruiker.
       const ctx = await buildGeneratorContext(projectId, includeFiles, {
         provider: settingsRef.current.provider,
+        model: settingsRef.current.model,
       });
       setProjectContext(ctx);
       // Een project zonder instructie én zonder bestanden levert niets op; dan

@@ -460,7 +460,7 @@ async function ensureProjectBrief(args: {
   projectId: string;
   projectName: string;
   material: string;
-  ai?: { provider?: AiProvider };
+  ai?: { provider?: AiProvider; model?: string };
 }): Promise<string> {
   const { projectId, projectName, material, ai } = args;
   const hash = await hashMaterial(material);
@@ -480,6 +480,7 @@ async function ensureProjectBrief(args: {
     material,
     projectName,
     preferredProvider: ai?.provider,
+    preferredModel: ai?.model,
   });
   if (!result.success || !result.brief) return '';
 
@@ -512,7 +513,7 @@ async function ensureProjectBrief(args: {
 export async function buildGeneratorContext(
   projectId: string,
   includeFiles: boolean,
-  ai?: { provider?: AiProvider },
+  ai?: { provider?: AiProvider; model?: string },
 ): Promise<GeneratorContext | null> {
   const loaded = await loadProjectContext(projectId);
   if (!loaded) return null;

@@ -2756,7 +2756,7 @@ export async function generateMetadata(args: {
  * chatProjectService voor waar het antwoord blijft.
  *
  * Bewust met het toegangstoken van de gebruiker en niet met de anon key: deze
- * modus draait het sterkste model over duizenden tekens, dus de server eist een
+ * modus draait het ingestelde model over duizenden tekens, dus de server eist een
  * ingelogde gebruiker. Projecten bestaan sowieso alleen achter de login.
  *
  * Mislukt de analyse, dan komt er geen fout naar boven maar `success: false`:
@@ -2768,8 +2768,10 @@ export async function analyzeProjectContext(args: {
   /** De projectnaam — verraadt vaak het onderwerp waar de instructie over zwijgt. */
   projectName?: string;
   preferredProvider?: AiProvider;
+  /** Het model uit de optimalisatie-instellingen; leeg = de server kiest. */
+  preferredModel?: string;
 }): Promise<{ brief: string; provider: string; success: boolean; error?: string }> {
-  const { material, projectName, preferredProvider } = args;
+  const { material, projectName, preferredProvider, preferredModel } = args;
   const functionUrl = getFunctionUrl('optimize-prompt');
   const failed = { brief: '', provider: 'local-template', success: false };
   if (!isSupabaseConfigured || !supabase || !functionUrl || !material.trim()) {
@@ -2794,10 +2796,10 @@ export async function analyzeProjectContext(args: {
         projectContext: material,
         projectName,
         preferredProvider: preferredProvider ?? 'auto',
-        // Bewust GEEN preferredModel: de server kiest hier het sterkste model
-        // van de gekozen provider (STRONGEST_MODEL). Het ingestelde model is
-        // gekozen voor de bouwstappen, die per prompt meermaals draaien; deze
-        // aanroep gebeurt één keer per projectversie en stuurt daarna alles.
+        // Het model uit de optimalisatie-instellingen, net als de bouwstappen
+        // die deze analyse daarna stuurt. Zonder geldige keuze kiest de server
+        // het sterkste model van de provider (STRONGEST_MODEL).
+        preferredModel,
       }),
     });
 

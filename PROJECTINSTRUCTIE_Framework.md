@@ -281,14 +281,15 @@ Wat er daarnaast is veranderd omdat een 8B-model het niet aankon:
 - **XML-tags worden er naderhand uitgehaald** (`stripSectionTags`), want een klein model echoot een
   sectietag met enige regelmaat mee.
 
-## Deze modus draait op het sterkste model van de provider
+## Modelkeuze: het chatmodel, met het sterkste model als terugval
 
-`project-optimize` negeert bewust het chatmodel uit Beheer en gebruikt `STRONGEST_MODEL` uit de edge
-function. De afweging: deze aanroep gebeurt **één keer per projectinstelling** in plaats van bij elk
-bericht, en wat eruit komt stuurt daarna élk gesprek in dat project. Prijs per aanroep is hier dus
-bijna irrelevant, kwaliteit niet. De providerkeuze van de admin blijft wél staan — alleen het model
-binnen die provider gaat omhoog, en valt de fallback-keten door naar een andere provider, dan pakt
-die zijn eigen sterkste model.
+Bijgewerkt op 7 oktober 2026. `project-optimize` draait op het chatmodel uit Beheer (en
+`project-brief` op het optimalisatiemodel). Alleen zonder geldige keuze (provider 'auto', geen
+model, of een fallback naar een andere provider) gebruikt de edge function `STRONGEST_MODEL` in
+plaats van het standaardmodel, omdat deze aanroep één keer per projectinstelling gebeurt en daarna
+élk gesprek in dat project stuurt. Vroeger overrulede `STRONGEST_MODEL` de beheerder altijd, waardoor
+de projectinstructie op Small 4 bleef terwijl de chat al op Medium 3.5 draaide. De tabel hieronder
+is historisch; de code is leidend.
 
 | Provider | Standaard (chat) | Voor `project-optimize` |
 | --- | --- | --- |

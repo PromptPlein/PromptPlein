@@ -27,7 +27,7 @@ import {
   defaultModelFor,
   modelLabel,
   pricingSummary,
-  strongestModelLabelFor,
+  projectModelLabelFor,
 } from '@/config/aiModels';
 import type { AiProvider } from '@/config/aiModels';
 import {
@@ -594,19 +594,18 @@ export default function SettingsPage() {
             </p>
 
             <p className="mb-4 max-w-2xl rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
-              Deze slag draait op het <strong>sterkste model</strong> van de gekozen provider
-              {strongestModelLabelFor(chat.provider) ? (
+              Deze slag draait op het <strong>chatmodel</strong> hierboven
+              {projectModelLabelFor(chat.provider, chat.model) ? (
                 <>
                   {' '}
-                  · nu <strong>{strongestModelLabelFor(chat.provider)}</strong>
+                  · nu <strong>{projectModelLabelFor(chat.provider, chat.model)}</strong>
                 </>
               ) : (
-                ' (bij Automatisch: van de provider die als eerste antwoordt)'
+                ' (bij Automatisch: het sterkste model van de provider die als eerste antwoordt)'
               )}
-              , en dus niet op het chatmodel hierboven. Reden: dit gebeurt één keer per project in
-              plaats van bij elk bericht, en wat eruit komt stuurt daarna elk gesprek in dat
-              project. Een kleiner model verzint daar sneller regels bij die de gebruiker nooit
-              heeft opgeschreven.
+              . Is er geen geldig model gekozen, dan neemt hij het sterkste model van de provider.
+              Wat eruit komt stuurt daarna elk gesprek in dat project, en een kleiner model
+              verzint daar sneller regels bij die de gebruiker nooit heeft opgeschreven.
             </p>
 
             <label className="flex cursor-pointer items-center gap-3">

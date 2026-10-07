@@ -234,10 +234,22 @@ wijzig dan de andere.
 `STRONGEST_MODEL` is **niet** het eerste item uit `PROVIDER_MODELS`. Bij
 DeepSeek is Flash de standaard en Pro de sterkere. Bij Mistral staat Small 4 er
 als sterkste en niet Medium 3.5: dat kost tien tot twaalf keer zo veel per
-token. Alleen `project-optimize` gebruikt deze kaart: die aanroep gebeurt één
-keer per projectinstelling en stuurt daarna élk gesprek in dat project, dus
-daar weegt kwaliteit zwaarder dan de prijs per aanroep. `chat-optimize` doet
-dit expres niet, want die draait bij elk bericht.
+token. De kaart is alleen een terugval: `project-optimize` draait op het
+chatmodel en `project-brief` op het optimalisatiemodel uit Beheer, net als de
+andere modi van die kant (`resolveProjectModel`). Pas als er geen geldig model
+gekozen is (provider 'auto', geen model, of een fallback naar een andere
+provider) nemen ze `STRONGEST_MODEL` in plaats van het standaardmodel, omdat
+die aanroep één keer per projectversie gebeurt en daarna élk gesprek of elke
+bouwstap in dat project stuurt. Vroeger overrulede de kaart de beheerder
+altijd, waardoor de projectinstructie op Small 4 bleef terwijl de chat al op
+Medium 3.5 draaide.
+
+### Uitvoergrens per Mistral-model
+
+`runMistral` kapt `max_tokens` af op `MISTRAL_OUTPUT_LIMIT` (bij
+`PROVIDER_MODELS` in de edge function). Voeg je een Mistral-model toe, zet het
+daar ook in; een onbekend id krijgt de oude krappe grens van 4096 (8192 met
+denken), zodat bijvoorbeeld `project-optimize` zijn 16384 tokens niet haalt.
 
 ### Streamen
 

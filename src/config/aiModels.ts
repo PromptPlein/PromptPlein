@@ -298,9 +298,11 @@ export function defaultModelFor(provider: AiProvider): string {
 }
 
 /**
- * Het STERKSTE model per provider, voor aanroepen waar kwaliteit zwaarder weegt
- * dan de prijs per aanroep. Houd in sync met `STRONGEST_MODEL` in de
- * `optimize-prompt` edge function — die maakt de keuze echt; dit exemplaar is
+ * Het STERKSTE model per provider: de terugval voor de projectmodi
+ * ('project-optimize' en 'project-brief') wanneer de beheerder geen geldig
+ * model heeft gekozen. Met een geldige keuze draait gewoon dat model; zie
+ * {@link projectModelFor}. Houd in sync met `STRONGEST_MODEL` in de
+ * `optimize-prompt` edge function: die maakt de keuze echt, dit exemplaar is
  * er alleen om de admin te laten zien wat er gaat draaien.
  *
  * Let op: dit is NIET altijd het eerste model uit PROVIDER_MODELS. Die lijst
@@ -309,9 +311,8 @@ export function defaultModelFor(provider: AiProvider): string {
  *
  * Bij Mistral staat hier bewust Small 4 en niet Medium 3.5, hoewel Medium 3.5
  * sterker is: die kost $1,50/$7,50 tegen $0,15/$0,60 per 1M tokens, dus tien tot
- * twaalf keer zo veel. Small 4 is hier het sterkste model dat de prijs per
- * projectinstelling nog verantwoordt. Wil je die bovengrens verleggen, zet dan
- * 'mistral-medium-latest' neer én dezelfde regel in de edge function.
+ * twaalf keer zo veel. Die prijs kiest de beheerder zelf in Beheer, niet deze
+ * terugval.
  */
 export const STRONGEST_MODELS: Record<Exclude<AiProvider, 'auto'>, string> = {
   claude: 'claude-opus-4-8',
@@ -321,12 +322,19 @@ export const STRONGEST_MODELS: Record<Exclude<AiProvider, 'auto'>, string> = {
 };
 
 /**
- * Leesbare naam van het sterkste model van deze provider. Bij 'auto' leeg: de
- * fallback-keten bepaalt dan zelf welke provider antwoordt.
+ * Het model waarop een projectmodus draait bij deze instellingen: het gekozen
+ * model als dat bij de provider hoort, anders het sterkste model van die
+ * provider. Spiegel van `resolveProjectModel` in de edge function. Bij 'auto'
+ * leeg: de fallback-keten bepaalt dan zelf welke provider antwoordt.
  */
-export function strongestModelLabelFor(provider: AiProvider): string {
+export function projectModelFor(provider: AiProvider, model: string | undefined): string {
   if (provider === 'auto') return '';
-  return modelLabel(provider, STRONGEST_MODELS[provider]);
+  return model && modelIds(provider).includes(model) ? model : STRONGEST_MODELS[provider];
+}
+
+/** Leesbare naam van {@link projectModelFor}; leeg bij 'auto'. */
+export function projectModelLabelFor(provider: AiProvider, model: string | undefined): string {
+  return modelLabel(provider, projectModelFor(provider, model));
 }
 
 /** Hoort `model` bij `provider`? Zo niet, dan val terug op de default. */
