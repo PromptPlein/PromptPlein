@@ -31,7 +31,7 @@ import {
   type PrefillPhase,
   type TemplateAssumption,
 } from '@/services/optimizeService';
-import { hasOwnInputStep, isContextPrompt, structureFormat } from '@/lib/techniques';
+import { hasOwnInputStep, isContextPrompt, structureFormat, isSkillCreator } from '@/lib/techniques';
 import { stripMarkdown } from '@/lib/utils';
 import { usePersistentDraft } from '@/lib/usePersistentDraft';
 import { detectPii, detectBlockedTopics, type GuardrailFinding } from '@/services/guardrails';
@@ -403,7 +403,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
     try {
       // Complexe-doel-flow: alleen losse prompttechnieken plannen; complete
       // frameworks horen bij de eigen-prompt-flow.
-      const candidates = techniques.filter((t) => !isContextPrompt(t));
+      const candidates = techniques.filter((t) => !isContextPrompt(t) && !isSkillCreator(t));
       const res = await generatePlan({
         goal: goal.trim(),
         techniques: candidates,

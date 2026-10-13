@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { adviseTechnique } from '@/services/optimizeService';
 import type { AiSettings } from '@/services/settingsService';
-import { isContextPrompt } from '@/lib/techniques';
+import { isContextPrompt, isSkillCreator } from '@/lib/techniques';
 import type { AdvisorAdvies, AdvisorCandidate, AdvisorQuestion, Technique } from '@/types';
 
 /** Zelfde budget als in de edge function; alleen voor de voortgangsregel. */
@@ -93,7 +93,7 @@ export default function TechniqueAdvisor({
   // Alleen losse technieken. Filteren bij de bron in plaats van het antwoord
   // achteraf opschonen: wat de AI niet in zijn lijst ziet, kan hij ook niet
   // adviseren, en hij verspilt er geen vraag aan.
-  const options = techniques.filter((t) => !isContextPrompt(t));
+  const options = techniques.filter((t) => !isContextPrompt(t) && !isSkillCreator(t));
 
   const [turns, setTurns] = useState<{ question: string; answer: string }[]>([]);
   const [question, setQuestion] = useState<AdvisorQuestion | null>(null);

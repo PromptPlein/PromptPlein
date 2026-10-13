@@ -77,6 +77,7 @@ export function localFrameworkGuess(ownPrompt: string, frameworks: Technique[]):
  *  - 'chain-of-verification' → beweringen → verificatievragen → losse antwoorden → gecorrigeerde tekst.
  *  - 'step-back'        → eerst de algemenere vraag beantwoorden, dan pas terug naar de gestelde vraag.
  *  - 'rubric'           → toetsingskader met niveaubeschrijvingen, bewijsregel en eindoordeel.
+ *  - 'skill'            → vaste instructie in secties die elke invoer op dezelfde manier afhandelt.
  *  - undefined          → geen vaste structuur; de AI bepaalt zelf de vorm.
  */
 export type StructureFormat =
@@ -90,7 +91,8 @@ export type StructureFormat =
   | 'socratic'
   | 'chain-of-verification'
   | 'step-back'
-  | 'rubric';
+  | 'rubric'
+  | 'skill';
 
 const FEW_SHOT_IDS = new Set(['tech-few-shot']);
 const FEW_SHOT_NAMES = new Set(['few-shot voorbeelden', 'few-shot', 'few shot']);
@@ -117,6 +119,9 @@ const SOCRATIC_NAMES = new Set(['socratic prompting', 'socratisch prompting', 's
 const COVE_IDS = new Set(['tech-chain-of-verification']);
 const STEP_BACK_IDS = new Set(['tech-step-back']);
 const RUBRIC_IDS = new Set(['tech-rubric']);
+// De Skill Creator (migratie 0035): geen prompt voor één opdracht, maar een
+// vaste instructie die elke invoer op dezelfde manier afhandelt.
+const SKILL_IDS = new Set(['tech-skill-creator']);
 
 /** Welke vaste uitvoerstructuur hoort bij deze techniek (indien van toepassing)? */
 export function structureFormat(t: TechniqueIdentity): StructureFormat | undefined {
@@ -133,6 +138,7 @@ export function structureFormat(t: TechniqueIdentity): StructureFormat | undefin
     return 'step-back';
   }
   if (RUBRIC_IDS.has(id) || name.includes('rubric')) return 'rubric';
+  if (SKILL_IDS.has(id) || name.includes('skill')) return 'skill';
   if (FEW_SHOT_IDS.has(id) || FEW_SHOT_NAMES.has(name)) return 'few-shot';
   if (COT_IDS.has(id) || COT_NAMES.has(name)) return 'chain-of-thought';
   // Multi-persona vóór persona, want de naam bevat ook "persona".
@@ -179,6 +185,8 @@ const SELF_DIRECTED_BUILDERS: Partial<Record<StructureFormat, string>> = {
     'Deze techniek gebruikt een eigen bouwer: de AI stelt drie stap-terug-vragen voor op oplopend abstractieniveau, de gebruiker kiest de hoogte en splitst daarna wat vaststaat van wat alleen is aangenomen. Dat hangt volledig af van het vraagstuk, dus er is geen vaste vragenlijst.',
   rubric:
     'Deze techniek gebruikt een eigen bouwer: de gebruiker kiest een schaal, stelt criteria op en laat per criterium een niveaubeschrijving per schaalpunt schrijven. Het aantal velden verschilt dus per toetsingskader en is niet vooraf te beheren.',
+  skill:
+    'De Skill Creator gebruikt een eigen bouwer: de gebruiker beschrijft wat hij de AI telkens uitlegt, de AI stelt de overige velden voor of vraagt door waar alleen de gebruiker het antwoord weet, en een triggertest scherpt de beschrijving aan. De vragen liggen vast in de bouwer en zijn niet in de admin te beheren.',
 };
 
 /**
@@ -189,6 +197,15 @@ const SELF_DIRECTED_BUILDERS: Partial<Record<StructureFormat, string>> = {
 export function selfDirectedBuilder(t: TechniqueIdentity): string | undefined {
   const fmt = structureFormat(t);
   return fmt ? SELF_DIRECTED_BUILDERS[fmt] : undefined;
+}
+
+/**
+ * Is dit de Skill Creator? Die levert geen prompt voor één opdracht maar een
+ * vaste instructie, en hoort daarom niet in de techniekkeuze van /genereren,
+ * de doel-aanbeveling of de adviseur: die zoeken een techniek voor een prompt.
+ */
+export function isSkillCreator(t: TechniqueIdentity): boolean {
+  return structureFormat(t) === 'skill';
 }
 
 /**
@@ -205,6 +222,7 @@ const OWN_INPUT_FORMATS: StructureFormat[] = [
   'chain-of-verification',
   'step-back',
   'rubric',
+  'skill',
 ];
 
 /**
@@ -262,6 +280,7 @@ const FORMAT_EXAMPLES: Record<StructureFormat, string> = {
   'chain-of-verification': 'controleer deze Kamerbrief op cijfers, data en verwijzingen',
   'step-back': 'moeten we een meldplicht invoeren voor verhuurders?',
   rubric: 'beoordeel dit projectplan op volledigheid, onderbouwing en haalbaarheid',
+  skill: 'geef feedback op conceptbrieven aan burgers, elke keer volgens onze schrijfwijzer',
 };
 
 const DEFAULT_EXAMPLE = 'schrijf een brief aan bewoners over werkzaamheden in hun straat';

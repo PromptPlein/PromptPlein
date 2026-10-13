@@ -855,6 +855,140 @@ export async function proposeRubric(args: {
   }
 }
 
+/**
+ * Skill Creator: laat de AI de overige velden voorstellen op basis van wat de
+ * gebruiker de AI telkens uitlegt en de verzoeken die hij intikt. Per veld komt
+ * óf een voorstel óf een gerichte vraag terug: interne afspraken en bronnen
+ * kent alleen de gebruiker, dus daar vraagt de AI door in plaats van te gokken.
+ */
+export async function draftSkill(args: {
+  kern: string;
+  verzoeken?: string;
+  velden?: Record<string, string>;
+  preferredProvider?: AiProvider;
+  preferredModel?: string;
+}): Promise<{
+  success: boolean;
+  naam?: string;
+  beschrijving?: string;
+  velden?: Record<string, { waarde: string; vraag: string }>;
+  error?: string;
+  unclear?: boolean;
+  reason?: string;
+}> {
+  try {
+    const data = await postOptimize<{
+      success?: boolean;
+      naam?: string;
+      beschrijving?: string;
+      velden?: Record<string, { waarde?: string; vraag?: string }>;
+      error?: string;
+      unclear?: boolean;
+      reason?: string;
+    }>({
+      mode: 'skill-draft',
+      skillKern: args.kern,
+      skillVerzoeken: args.verzoeken,
+      skillVelden: args.velden,
+      preferredProvider: args.preferredProvider ?? 'auto',
+      preferredModel: args.preferredModel,
+    });
+    if (!data) return { success: false, error: 'Geen AI-service beschikbaar.' };
+    if (data.unclear) return { success: false, unclear: true, reason: data.reason };
+    if (data.success) {
+      const velden: Record<string, { waarde: string; vraag: string }> = {};
+      for (const [id, v] of Object.entries(data.velden ?? {})) {
+        velden[id] = {
+          waarde: typeof v?.waarde === 'string' ? v.waarde.trim() : '',
+          vraag: typeof v?.vraag === 'string' ? v.vraag.trim() : '',
+        };
+      }
+      return {
+        success: true,
+        naam: data.naam?.trim() ?? '',
+        beschrijving: data.beschrijving?.trim() ?? '',
+        velden,
+      };
+    }
+    return { success: false, error: data.error ?? 'Het voorstel kon niet worden gemaakt.' };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Onbekende fout.' };
+  }
+}
+
+/**
+ * Skill Creator, triggertest: de AI bedenkt verzoeken op de grens van de
+ * beschrijving en zegt per verzoek of de beschrijving het dekt.
+ */
+export async function testSkillTrigger(args: {
+  beschrijving: string;
+  kern?: string;
+  verzoeken?: string;
+  nietGebruiken?: string;
+  preferredProvider?: AiProvider;
+  preferredModel?: string;
+}): Promise<{ success: boolean; verzoeken?: { tekst: string; hoortErbij: boolean }[]; error?: string }> {
+  try {
+    const data = await postOptimize<{
+      success?: boolean;
+      verzoeken?: { tekst?: string; hoortErbij?: boolean }[];
+      error?: string;
+    }>({
+      mode: 'skill-trigger',
+      skillDoel: 'test',
+      skillBeschrijving: args.beschrijving,
+      skillKern: args.kern,
+      skillVerzoeken: args.verzoeken,
+      skillVelden: args.nietGebruiken ? { niet_gebruiken: args.nietGebruiken } : undefined,
+      preferredProvider: args.preferredProvider ?? 'auto',
+      preferredModel: args.preferredModel,
+    });
+    if (!data) return { success: false, error: 'Geen AI-service beschikbaar.' };
+    if (data.success) {
+      return {
+        success: true,
+        verzoeken: (data.verzoeken ?? [])
+          .filter((v) => typeof v?.tekst === 'string' && v.tekst.trim())
+          .map((v) => ({ tekst: v.tekst!.trim(), hoortErbij: v.hoortErbij === true })),
+      };
+    }
+    return { success: false, error: data.error ?? 'De testverzoeken konden niet worden gemaakt.' };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Onbekende fout.' };
+  }
+}
+
+/**
+ * Skill Creator: herschrijf de beschrijving op basis van de testverzoeken die
+ * de gebruiker heeft gecorrigeerd.
+ */
+export async function sharpenSkillDescription(args: {
+  beschrijving: string;
+  kern?: string;
+  oordelen: { tekst: string; hoortErbij: boolean; aiDacht: boolean }[];
+  preferredProvider?: AiProvider;
+  preferredModel?: string;
+}): Promise<{ success: boolean; beschrijving?: string; error?: string }> {
+  try {
+    const data = await postOptimize<{ success?: boolean; beschrijving?: string; error?: string }>({
+      mode: 'skill-trigger',
+      skillDoel: 'scherp',
+      skillBeschrijving: args.beschrijving,
+      skillKern: args.kern,
+      skillOordelen: args.oordelen,
+      preferredProvider: args.preferredProvider ?? 'auto',
+      preferredModel: args.preferredModel,
+    });
+    if (!data) return { success: false, error: 'Geen AI-service beschikbaar.' };
+    if (data.success && data.beschrijving?.trim()) {
+      return { success: true, beschrijving: data.beschrijving.trim() };
+    }
+    return { success: false, error: data.error ?? 'De beschrijving kon niet worden aangescherpt.' };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Onbekende fout.' };
+  }
+}
+
 /** Lokale trefwoord-matching als de backend niet beschikbaar is of faalt. */
 function localRecommend(goal: string, techniques: Technique[]): TechniqueRecommendation[] {
   const words = new Set(

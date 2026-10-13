@@ -20,6 +20,7 @@ import PromptExamplePicker from '@/components/optimizer/PromptExamplePicker';
 import VerificationBuilder from '@/components/optimizer/VerificationBuilder';
 import StepBackBuilder from '@/components/optimizer/StepBackBuilder';
 import RubricBuilder from '@/components/optimizer/RubricBuilder';
+import SkillBuilder from '@/components/optimizer/SkillBuilder';
 import DocumentUpload from '@/components/optimizer/DocumentUpload';
 import InterviewFlow from '@/components/optimizer/InterviewFlow';
 import OptimizableTextarea from '@/components/common/OptimizableTextarea';
@@ -39,6 +40,7 @@ import {
   techniqueStarter,
 } from '@/lib/techniques';
 import { activityIdentifier, stripMarkdown } from '@/lib/utils';
+import type { SkillData } from '@/lib/skill';
 import type { OptimizeResult, Technique } from '@/types';
 
 /**
@@ -57,6 +59,7 @@ function usesQuestionnaire(t: Technique): boolean {
     fmt !== 'chain-of-verification' &&
     fmt !== 'step-back' &&
     fmt !== 'rubric' &&
+    fmt !== 'skill' &&
     fmt !== 'chain-of-thought' &&
     fmt !== 'socratic'
   );
@@ -88,6 +91,9 @@ export default function TechniquesPage() {
   // Geserialiseerde output van een gespecialiseerde bouwer (Persona/Few-Shot/
   // Meta) of de conclusie van het interview. Gaat als context mee bij het bouwen.
   const [builderText, setBuilderText] = useState('');
+  // De Skill Creator houdt naam en beschrijving apart bij: die gaan na het
+  // bouwen als kop boven de SKILL.md-download.
+  const [skillData, setSkillData] = useState<SkillData | null>(null);
   const [fieldMeta, setFieldMeta] = useState<FieldMeta>({});
   const [prefilling, setPrefilling] = useState(false);
   // Staat het contextveld open binnen het invulblok? Bij een nieuwe techniek
@@ -145,6 +151,7 @@ export default function TechniquesPage() {
     setAnswers({});
     setFieldMeta({});
     setBuilderText('');
+    setSkillData(null);
     setUnclearReason(null);
     // Nieuwe techniek = het contextveld weer open (zie setEditingContext hierboven).
     setEditingContext(true);
@@ -281,6 +288,10 @@ export default function TechniquesPage() {
       toast.error('Kies eerst een techniek.');
       return;
     }
+    if (structureFormat(technique) === 'skill' && !skillData?.kern.trim()) {
+      toast.error('Beschrijf eerst wat je de AI telkens opnieuw uitlegt.');
+      return;
+    }
     const toCheck = [context, builderText, ...Object.values(answers)]
       .map((v) => v.trim())
       .filter(Boolean)
@@ -387,6 +398,7 @@ export default function TechniquesPage() {
     setEditingContext(false);
     setFieldMeta({});
     setBuilderText('');
+    setSkillData(null);
     setUnclearReason(null);
     setGuardrailFindings(null);
     setVersions([]);
@@ -437,6 +449,11 @@ export default function TechniquesPage() {
             versions={versions}
             activeVersion={activeVersion}
             onSelectVersion={setActiveVersion}
+            skill={
+              technique && structureFormat(technique) === 'skill' && skillData
+                ? { naam: skillData.naam, beschrijving: skillData.beschrijving }
+                : undefined
+            }
           />
         </div>
       ) : (
@@ -519,7 +536,7 @@ export default function TechniquesPage() {
                   </span>
                   <div>
                     <h2 className="font-semibold text-slate-800 dark:text-slate-100">
-                      Bouw je prompt
+                      {structureFormat(technique) === 'skill' ? 'Bouw je skill' : 'Bouw je prompt'}
                     </h2>
                     {(() => {
                       const fmt = structureFormat(technique);
@@ -528,7 +545,9 @@ export default function TechniquesPage() {
                           ? 'De AI denkt hier stap voor stap met je mee en vraagt door tot het beeld compleet is. Je antwoorden worden meteen uitgewerkt tot een kant-en-klare prompt.'
                           : fmt === 'socratic'
                             ? 'De AI vraagt hier socratisch door om je aannames bloot te leggen. Je inzichten worden meteen uitgewerkt tot een kant-en-klare prompt.'
-                            : 'Vul de velden met je eigen gegevens; zo ontstaat een herbruikbare prompt. Kopieer hem, of laat hem direct uitvoeren.';
+                            : fmt === 'skill'
+                              ? 'Beantwoord de vragen; de AI maakt er één vaste instructie van die je in je eigen AI-omgeving plakt of als SKILL.md downloadt.'
+                              : 'Vul de velden met je eigen gegevens; zo ontstaat een herbruikbare prompt. Kopieer hem, of laat hem direct uitvoeren.';
                       return (
                         <p className="text-sm text-slate-500 dark:text-slate-400">
                           Voor{' '}
@@ -598,7 +617,9 @@ export default function TechniquesPage() {
                     // stuk); een contextveld ervóór stelt dezelfde vraag nog eens.
                     fmt === 'chain-of-verification' ||
                     fmt === 'step-back' ||
-                    fmt === 'rubric'
+                    fmt === 'rubric' ||
+                    // De Skill Creator vraagt als eerste zelf waar het over gaat.
+                    fmt === 'skill'
                   ) {
                     return null;
                   }
@@ -768,6 +789,16 @@ export default function TechniquesPage() {
                       <RubricBuilder settings={s} context={context} onSerialized={setBuilderText} />
                     );
                   }
+                  if (fmt === 'skill') {
+                    return (
+                      <SkillBuilder
+                        settings={s}
+                        context={context}
+                        onSerialized={setBuilderText}
+                        onChange={setSkillData}
+                      />
+                    );
+                  }
                   // Chain-of-Thought / Socratic: het vraag-na-vraag-interview.
                   // De conclusie voedt het bouwen van de prompt. Het gesprek
                   // start pas als het contextveld dicht is — anders stelt de AI
@@ -837,7 +868,7 @@ export default function TechniquesPage() {
                   </>
                 ) : (
                   <>
-                    <Sparkles size={18} /> Bouw prompt
+                    <Sparkles size={18} /> {structureFormat(technique) === 'skill' ? 'Bouw skill' : 'Bouw prompt'}
                   </>
                 )}
               </button>

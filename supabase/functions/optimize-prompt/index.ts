@@ -59,7 +59,9 @@ type Mode =
   | 'refine-suggest'
   | 'cove-scan'
   | 'stepback-ladder'
-  | 'rubric-propose';
+  | 'rubric-propose'
+  | 'skill-draft'
+  | 'skill-trigger';
 
 /**
  * Eén beurt in een chatgesprek. De chat-modus stuurt de volledige (al
@@ -172,6 +174,7 @@ interface RequestBody {
    *  - 'chain-of-verification' → beweringen → verificatievragen → losse antwoorden → gecorrigeerde tekst.
    *  - 'step-back'        → eerst de algemenere vraag, dan pas terug naar de gestelde vraag.
    *  - 'rubric'           → toetsingskader met niveaubeschrijvingen, bewijsregel en eindoordeel.
+   *  - 'skill'            → vaste instructie in secties die elke invoer op dezelfde manier afhandelt.
    * Ontbreekt dit, dan valt 'care' terug op `isContextPrompt` (oude clients).
    */
   structureFormat?:
@@ -185,7 +188,8 @@ interface RequestBody {
     | 'socratic'
     | 'chain-of-verification'
     | 'step-back'
-    | 'rubric';
+    | 'rubric'
+    | 'skill';
   /** De ingevulde velden mét hun labels, voor analyse. */
   answeredFields?: AnsweredField[];
   /**
@@ -283,6 +287,19 @@ interface RequestBody {
   rubricNiveaus?: string[];
   /** Bij 'niveaus': de bestaande criteria die behandeld moeten worden. */
   rubricCriteria?: { naam: string; betekenis: string }[];
+  // 'skill-draft'- en 'skill-trigger'-velden: de antwoorden uit de Skill Creator.
+  /** Wat de medewerker de AI nu telkens opnieuw moet uitleggen. */
+  skillKern?: string;
+  /** Verzoeken zoals de medewerker ze echt intikt. */
+  skillVerzoeken?: string;
+  /** De overige velden die al zijn ingevuld, op id; die vult de AI niet opnieuw. */
+  skillVelden?: Record<string, string>;
+  /** 'skill-trigger': 'test' = testverzoeken bedenken, 'scherp' = beschrijving aanscherpen. */
+  skillDoel?: 'test' | 'scherp';
+  /** 'skill-trigger': de huidige beschrijving van de skill. */
+  skillBeschrijving?: string;
+  /** 'skill-trigger' met 'scherp': de testverzoeken met het oordeel van de gebruiker. */
+  skillOordelen?: { tekst: string; hoortErbij: boolean; aiDacht: boolean }[];
   // 'expand-field'-velden: verrijk ÉÉN framework-veld op zijn plek.
   /** De id van het framework-veld dat wordt uitgebreid (FollowUpQuestion.id). */
   fieldId?: string;
@@ -708,7 +725,8 @@ const GENERATE_USER_PROMPT = (args: {
     | 'socratic'
     | 'chain-of-verification'
     | 'step-back'
-    | 'rubric';
+    | 'rubric'
+    | 'skill';
   /** Interview al in de tool gevoerd → uitgewerkte prompt, geen dialoog-instructies. */
   interviewResolved?: boolean;
 }) => {
@@ -850,6 +868,13 @@ const GENERATE_USER_PROMPT = (args: {
         `scoreregels toe (eerst scoren dan onderbouwen, elke score met een letterlijke passage, ` +
         `"niet te beoordelen" bij ontbrekende informatie), het eindoordeel met de drempel, en het ` +
         `uitvoersjabloon dat per criterium vier regels herhaalt.`,
+    );
+  } else if (args.structureFormat === 'skill') {
+    parts.push(
+      `Houd je strikt aan de verplichte Skill-structuur. Je schrijft een vaste instructie die bij elke ` +
+        `nieuwe invoer opnieuw wordt gebruikt, geen prompt voor één opdracht. Neem elke afspraak, regel, ` +
+        `valkuil en grens uit de antwoorden concreet op in de sectie waar hij hoort: dat is precies de ` +
+        `kennis die de AI zonder deze skill mist. Zet er geen [plaatshouders] in.`,
     );
   }
 
@@ -3058,6 +3083,233 @@ function parseRubricProposal(
   }
 }
 
+// --- Skill Creator: velden voorstellen, en de beschrijving testen ---
+// Een skill is een vaste instructie die de medewerker één keer in een
+// AI-omgeving plakt, waarna elke invoer op dezelfde manier wordt afgehandeld.
+// De waarde zit in wat het model zonder skill NIET weet: interne afspraken,
+// valkuilen, grenzen. Die mag de AI dus nooit verzinnen; waar alleen de
+// medewerker het antwoord kent, stelt hij een vraag in plaats van een voorstel.
+
+/** De velden die de AI in 'skill-draft' mag voorstellen, met hun betekenis. */
+const SKILL_DRAFT_FIELDS: { id: string; betekenis: string }[] = [
+  {
+    id: 'niet_gebruiken',
+    betekenis:
+      'twee of drie soorten verzoeken die erop lijken maar er niet onder vallen, zoals een ander soort stuk, een andere doelgroep of een andere taak',
+  },
+  {
+    id: 'valkuilen',
+    betekenis:
+      'drie tot vijf fouten die een slimme nieuwe collega bij deze taak maakt; gebruik de fouten die bij dit soort taak horen',
+  },
+  { id: 'werkwijze', betekenis: 'vier tot zeven genummerde stappen waarin de taak wordt uitgevoerd' },
+  {
+    id: 'resultaat',
+    betekenis: 'de vaste onderdelen van een goed resultaat als koppen in vaste volgorde, met per kop wat eronder komt',
+  },
+  { id: 'bronnen', betekenis: 'interne afspraken, regels of documenten waar de taak op leunt' },
+  {
+    id: 'grenzen',
+    betekenis: 'twee tot vier dingen die de AI nooit doet, en wanneer hij doorverwijst naar een mens',
+  },
+];
+
+/** Gedeelde taalregels voor alle Skill Creator-modi; de tekst komt bij de gebruiker. */
+const SKILL_LANGUAGE_RULES = `- Schrijf in natuurlijk Nederlands zoals een collega dat schrijft, niet als vertaald Engels. Geen
+  letterlijk vertaalde uitdrukkingen: "in mijn vel" en niet "in mijn huid", "dat is logisch" en niet "dat maakt zin".
+- Gebruik nooit een gedachtestreepje (— of –) of een los streepje tussen zinsdelen. Schrijf een komma,
+  een dubbele punt of een punt. Streepjes binnen een woord, zoals "e-mail", mogen wel.`;
+
+const SKILL_DRAFT_SYSTEM_PROMPT = `Je bent prompt engineer bij de Nederlandse rijksoverheid en je helpt een medewerker een skill op te stellen: een vaste instructie die een AI bij elke nieuwe invoer op dezelfde manier laat werken.
+
+<taak>
+Je krijgt wat de medewerker de AI nu telkens opnieuw moet uitleggen, de verzoeken die hij daarbij intikt, en soms al een paar ingevulde velden.
+Vul voor elk van de zes velden hieronder "waarde" en "vraag":
+- "waarde" is jouw voorstel voor het veld, afgeleid uit de invoer en uit wat bij dit soort taak hoort.
+- "vraag" is één gerichte vraag over wat alleen de medewerker weet en wat het voorstel nog mist, zoals de interne afspraken of de naam van het document.
+Elk veld krijgt minstens een waarde of een vraag; laat ze nooit allebei leeg.
+Staat een veld onder AL INGEVULD, geef het dan terug met een lege "waarde" en een lege "vraag".
+Bedenk daarnaast een "naam" en een "beschrijving" voor de skill.
+</taak>
+
+<velden>
+${SKILL_DRAFT_FIELDS.map((f) => `${f.id}: ${f.betekenis}.`).join('\n')}
+</velden>
+
+<regels>
+- Verzin geen interne afspraken, huisregels, documentnamen, wetsartikelen, termijnen of cijfers. Die kent alleen de medewerker; vraag ernaar in "vraag".
+- Bij "bronnen" laat je "waarde" leeg, behalve als de invoer de bronnen zelf noemt, en stel je altijd een vraag.
+- Schrijf een waarde als regels onder elkaar, gescheiden door \\n. Elke regel is één concrete instructie die je kunt controleren.
+- Een vraag is één zin over deze taak, niet over taken in het algemeen.
+- "naam" is een korte naam van twee tot vier woorden die de taak beschrijft.
+- "beschrijving" staat in de derde persoon: eerst een zin over wat de skill doet, dan een zin die begint met "Gebruik deze skill wanneer" met de situaties en woorden uit de verzoeken.
+${SKILL_LANGUAGE_RULES}
+</regels>
+
+${CLARITY_GATE_JSON_INSTRUCTION}
+
+Anders geef je UITSLUITEND geldige JSON terug, zonder codeblok of extra tekst, in dit formaat:
+{"naam":"<twee tot vier woorden>","beschrijving":"<twee zinnen>","velden":{${SKILL_DRAFT_FIELDS.map((f) => `"${f.id}":{"waarde":"<regels of leeg>","vraag":"<één zin of leeg>"}`).join(',')}}}`;
+
+const SKILL_DRAFT_USER_PROMPT = (args: {
+  kern: string;
+  verzoeken?: string;
+  velden?: Record<string, string>;
+}) => {
+  const parts = [`WAT DE MEDEWERKER DE AI NU TELKENS OPNIEUW MOET UITLEGGEN:\n${args.kern}`];
+  if (args.verzoeken?.trim()) {
+    parts.push(`VERZOEKEN ZOALS DE MEDEWERKER ZE INTIKT:\n${args.verzoeken.trim()}`);
+  }
+  const ingevuld = Object.entries(args.velden ?? {}).filter(([, v]) => v?.trim());
+  if (ingevuld.length > 0) {
+    parts.push(
+      `AL INGEVULD (niet opnieuw invullen, wel gebruiken als context):\n` +
+        ingevuld.map(([k, v]) => `${k}: ${v.trim()}`).join('\n'),
+    );
+  }
+  return parts.join('\n\n');
+};
+
+/** Parseert het skill-voorstel; tekstvelden mogen als genest object of lijst binnenkomen. */
+function parseSkillDraft(raw: string): {
+  naam: string;
+  beschrijving: string;
+  velden: Record<string, { waarde: string; vraag: string }>;
+} | null {
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  try {
+    const p = JSON.parse(escapeRawControlChars(match[0])) as Record<string, unknown>;
+    const rawVelden =
+      p.velden && typeof p.velden === 'object' ? (p.velden as Record<string, unknown>) : {};
+    const velden: Record<string, { waarde: string; vraag: string }> = {};
+    for (const { id } of SKILL_DRAFT_FIELDS) {
+      const v = rawVelden[id];
+      if (!v || typeof v !== 'object' || Array.isArray(v)) {
+        // Soms schrijft het model de waarde direct onder de sleutel.
+        const waarde = (coerceFieldValue(v) ?? '').trim();
+        velden[id] = { waarde, vraag: '' };
+        continue;
+      }
+      const o = v as Record<string, unknown>;
+      velden[id] = {
+        waarde: (coerceFieldValue(o.waarde) ?? '').trim(),
+        vraag: typeof o.vraag === 'string' ? o.vraag.trim() : '',
+      };
+    }
+    const naam = typeof p.naam === 'string' ? p.naam.trim() : '';
+    const beschrijving = (coerceFieldValue(p.beschrijving) ?? '').trim();
+    if (!naam && !beschrijving && Object.values(velden).every((v) => !v.waarde && !v.vraag)) {
+      return null;
+    }
+    return { naam, beschrijving, velden };
+  } catch {
+    return null;
+  }
+}
+
+const SKILL_TRIGGER_SYSTEM_PROMPT = (doel: 'test' | 'scherp') =>
+  doel === 'test'
+    ? `Je bent prompt engineer bij de Nederlandse rijksoverheid en je test of de beschrijving van een skill precies de juiste verzoeken dekt.
+
+<taak>
+Bedenk acht verzoeken die een medewerker letterlijk in een AI-chat zou kunnen typen:
+- vier die volgens de beschrijving onder de skill vallen, met "hoort_erbij": true;
+- vier die erop lijken maar volgens de beschrijving niet onder de skill vallen, met "hoort_erbij": false.
+Kies verzoeken op de grens van de beschrijving, want daar blijkt of de beschrijving klopt.
+</taak>
+
+<regels>
+- Oordeel alleen op basis van de beschrijving, niet op wat de medewerker misschien bedoelt.
+- Elk verzoek is één zin, geschreven zoals een medewerker het intikt.
+- Herhaal de voorbeeldverzoeken van de medewerker niet letterlijk.
+- Wissel de volgorde: zet de verzoeken die erbij horen niet allemaal bovenaan.
+${SKILL_LANGUAGE_RULES}
+</regels>
+
+Geef UITSLUITEND geldige JSON terug, zonder codeblok of extra tekst, in dit formaat:
+{"verzoeken":[{"tekst":"<één zin>","hoort_erbij":true}]}`
+    : `Je bent prompt engineer bij de Nederlandse rijksoverheid en je herschrijft de beschrijving van een skill zodat die precies de juiste verzoeken dekt.
+
+<taak>
+Je krijgt de huidige beschrijving en twee lijsten testverzoeken: verzoeken die ONDER de skill moeten vallen en verzoeken die er BUITEN moeten vallen. Dat is het oordeel van de medewerker. Bij de verzoeken gemarkeerd met NU FOUT gaf de huidige beschrijving het tegenovergestelde antwoord; daar gaat het om.
+Herschrijf de beschrijving zo dat elk verzoek uit de eerste lijst er duidelijk onder valt en elk verzoek uit de tweede lijst er duidelijk buiten valt.
+</taak>
+
+<regels>
+- Het oordeel van de medewerker gaat altijd voor, ook als je het zelf anders zou indelen. Een verzoek uit de eerste lijst mag nooit onder "Niet gebruiken voor" terechtkomen.
+- Schrijf in de derde persoon: eerst wat de skill doet, dan een zin die begint met "Gebruik deze skill wanneer", en zo nodig een zin die begint met "Niet gebruiken voor".
+- Noem de kenmerken die het verschil maken, niet de testverzoeken zelf.
+- De beschrijving telt twee tot vier zinnen.
+${SKILL_LANGUAGE_RULES}
+</regels>
+
+Geef UITSLUITEND geldige JSON terug, zonder codeblok of extra tekst, in dit formaat:
+{"beschrijving":"<twee tot vier zinnen>"}`;
+
+const SKILL_TRIGGER_USER_PROMPT = (args: {
+  beschrijving: string;
+  kern?: string;
+  verzoeken?: string;
+  nietGebruiken?: string;
+  oordelen?: { tekst: string; hoortErbij: boolean; aiDacht: boolean }[];
+}) => {
+  const parts = [`BESCHRIJVING VAN DE SKILL:\n${args.beschrijving}`];
+  if (args.kern?.trim()) parts.push(`WAAR DE SKILL VOOR IS:\n${args.kern.trim()}`);
+  if (args.verzoeken?.trim()) parts.push(`VOORBEELDVERZOEKEN VAN DE MEDEWERKER:\n${args.verzoeken.trim()}`);
+  if (args.nietGebruiken?.trim()) {
+    parts.push(`WAT ER VOLGENS DE MEDEWERKER NIET ONDER VALT:\n${args.nietGebruiken.trim()}`);
+  }
+  if (args.oordelen?.length) {
+    // Twee aparte lijsten: een klein model haalt "hoort erbij" en "hoort er niet
+    // bij" door elkaar als ze per regel achter het verzoek staan.
+    const lijst = (erbij: boolean) =>
+      args
+        .oordelen!.filter((o) => o.hoortErbij === erbij)
+        .map((o) => `- ${o.tekst}${o.hoortErbij !== o.aiDacht ? ' (NU FOUT)' : ''}`)
+        .join('\n') || '- (geen)';
+    parts.push(`MOETEN ONDER DE SKILL VALLEN:\n${lijst(true)}`);
+    parts.push(`MOETEN BUITEN DE SKILL VALLEN:\n${lijst(false)}`);
+  }
+  return parts.join('\n\n');
+};
+
+/** Parseert de testverzoeken van de triggertest. */
+function parseSkillTriggerTest(raw: string): { verzoeken: { tekst: string; hoortErbij: boolean }[] } | null {
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  try {
+    const p = JSON.parse(escapeRawControlChars(match[0])) as Record<string, unknown>;
+    const verzoeken = (Array.isArray(p.verzoeken) ? p.verzoeken : [])
+      .filter(
+        (x): x is Record<string, unknown> =>
+          !!x && typeof (x as Record<string, unknown>).tekst === 'string',
+      )
+      .map((x) => ({
+        tekst: (x.tekst as string).trim(),
+        hoortErbij: x.hoort_erbij === true || x.hoort_erbij === 'true',
+      }))
+      .filter((x) => x.tekst)
+      .slice(0, 10);
+    return verzoeken.length > 0 ? { verzoeken } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Parseert de aangescherpte beschrijving. */
+function parseSkillDescription(raw: string): { beschrijving: string } | null {
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  try {
+    const p = JSON.parse(escapeRawControlChars(match[0])) as Record<string, unknown>;
+    const beschrijving = (coerceFieldValue(p.beschrijving) ?? '').trim();
+    return beschrijving ? { beschrijving } : null;
+  } catch {
+    return null;
+  }
+}
+
 const RECOMMEND_FRAMEWORK_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse rijksoverheid.
 Een interne overheidsmedewerker heeft een EIGEN prompt geschreven en wil die optimaliseren met een
 prompt framework (een compleet raamwerk dat de hele prompt structureert, bijv. CARE, CRISP, CO-STAR).
@@ -4482,6 +4734,77 @@ Bouw de prompt ALTIJD op in deze volgorde. Schrijf alles volledig uit op basis v
 
 Laat alleen écht per keer in te vullen plekken staan als [plaatshouder]. Plaats GEEN codeblok-tekens (\`\`\`).`;
 
+/**
+ * Verplichte uitvoerstructuur voor de Skill Creator.
+ *
+ * Een skill is geen prompt voor één opdracht maar een vaste instructie die de
+ * medewerker één keer in een AI-omgeving plakt (een Mistral-agent, een
+ * projectinstructie, een ander pakket). Daarna komt per keer alleen de invoer,
+ * en moet de AI die elke keer op dezelfde manier afhandelen. De secties staan
+ * tussen XML-achtige tags, volgens de richtlijnen van Mistral voor de modellen
+ * waar zo'n skill op draait.
+ */
+const SKILL_STRUCTURE_INSTRUCTION = `VERPLICHTE UITVOERSTRUCTUUR (Skill):
+Je schrijft hier geen prompt-template voor één opdracht, maar een skill: een vaste instructie die de
+medewerker één keer in een AI-omgeving plakt, zoals een agent, een projectinstructie of een ander
+softwarepakket. Daarna geeft hij per keer alleen zijn invoer, en de AI handelt die elke keer op dezelfde
+manier af. Schrijf de skill in de tweede persoon, gericht aan die AI.
+
+Gebruik ALTIJD exact dit sjabloon. Elke sectie opent en sluit met haar tag, elke tag op een eigen regel.
+Deze tags zijn geen Markdown; ze horen bij deze structuur. Wat tussen < > staat, vul je in.
+
+Jij bent <rol> en je <taak> voor <wie>.
+
+<wanneer>
+<welke invoer je krijgt en wat je ermee doet, afgeleid uit de voorbeeldverzoeken>
+<wanneer deze werkwijze niet geldt, met de ene zin die je dan zegt>
+</wanneer>
+
+<kennis>
+<elke afspraak, regel en valkuil uit de antwoorden als eigen regel>
+</kennis>
+
+<werkwijze>
+<genummerde stappen die je bij elke invoer doorloopt>
+</werkwijze>
+
+<grenzen>
+<wat je nooit doet, en wanneer je doorverwijst naar een mens, met de zin die je dan gebruikt>
+</grenzen>
+
+<uitvoer>
+<de regel over hoe strak het sjabloon is>
+<Kop 1>: <wat eronder komt>
+<Kop 2>: <wat eronder komt>
+<zo verder, één regel per vast onderdeel>
+</uitvoer>
+
+<ontbrekende_invoer>
+<wat je doet als de invoer onvolledig is: één gerichte vraag stellen over wat ontbreekt, niet gokken>
+</ontbrekende_invoer>
+
+Toelichting per sectie:
+- kennis: neem elke afspraak, regel en valkuil inhoudelijk volledig over. Een valkuil schrijf je om tot
+  een instructie. Vat niets samen tot een algemene aanwijzing. Zijn er geen afspraken of valkuilen
+  aangeleverd, laat de hele sectie dan weg, tags inbegrepen.
+- uitvoer: is er een voorbeeld van een goed resultaat aangeleverd, leid de onderdelen daar dan uit af en
+  neem de inhoud van het voorbeeld niet over. De regel over hoe strak het sjabloon is, volgt uit
+  "HOE STRAK" in de antwoorden:
+  Vast sjabloon: "Gebruik altijd exact dit sjabloon, met deze koppen in deze volgorde. Voeg geen koppen
+  toe en laat er geen weg."
+  Vaste onderdelen: "Gebruik deze koppen in deze volgorde; de invulling en de lengte eronder zijn vrij."
+  Eigen oordeel: "Kies zelf de vorm, maar zorg dat deze onderdelen erin staan."
+
+Regels voor de skill:
+- In een skill vult de medewerker niets in; zijn invoer komt per keer los in het gesprek. Zet er daarom
+  GEEN [plaatshouders] in.
+- Schrijf elke instructie concreet en controleerbaar. Gebruik geen woorden als goed, duidelijk, beter of
+  passend zonder te zeggen wat ermee bedoeld wordt.
+- Elke kop in de uitvoer krijgt na de dubbele punt een omschrijving van wat eronder komt; een kop
+  zonder omschrijving is fout.
+- De skill eindigt met de regel </ontbrekende_invoer>.
+- Geef alleen de skill terug, zonder inleiding of uitleg. Plaats GEEN codeblok-tekens (\`\`\`).`;
+
 const INTERVIEW_RESOLVED_INSTRUCTION = `VERPLICHTE UITVOERSTRUCTUUR (uitgewerkt gesprek → direct uitvoerbare prompt):
 Het verdiepende vraag-na-vraag-gesprek (chain-of-thought/socratisch) is al in de tool gevoerd. De
 conclusie daarvan is al uitgewerkt en staat bij de antwoorden van de gebruiker. Daarom:
@@ -4508,7 +4831,8 @@ type StructureFormat =
   | 'socratic'
   | 'chain-of-verification'
   | 'step-back'
-  | 'rubric';
+  | 'rubric'
+  | 'skill';
 
 /**
  * Kies de juiste structuur-instructie (of geen) op basis van de techniek.
@@ -4536,6 +4860,7 @@ function structureInstruction(
   if (format === 'chain-of-verification') return COVE_STRUCTURE_INSTRUCTION;
   if (format === 'step-back') return STEP_BACK_STRUCTURE_INSTRUCTION;
   if (format === 'rubric') return RUBRIC_STRUCTURE_INSTRUCTION;
+  if (format === 'skill') return SKILL_STRUCTURE_INSTRUCTION;
   return null;
 }
 
@@ -4681,6 +5006,10 @@ const MODE_MAX_TOKENS: Record<Mode, number> = {
   'mock-answer': 256,
   metadata: 512,
   title: 128,
+  // Skill Creator: zes korte veldvoorstellen plus naam en beschrijving.
+  'skill-draft': 3072,
+  // Acht testverzoeken van één regel, of één aangescherpte beschrijving.
+  'skill-trigger': 1536,
 };
 
 /** Vangnet voor het geval een modus (nog) geen expliciet budget heeft. */
@@ -7010,7 +7339,11 @@ Deno.serve(async (req: Request) => {
                                                   ? 'stepback-ladder'
                                                   : body.mode === 'rubric-propose'
                                                     ? 'rubric-propose'
-                                                    : 'generate';
+                                                    : body.mode === 'skill-draft'
+                                                      ? 'skill-draft'
+                                                      : body.mode === 'skill-trigger'
+                                                        ? 'skill-trigger'
+                                                        : 'generate';
     const order = buildOrder(body.preferredProvider);
     const temperature = clampTemp(body.temperature);
     // Uitvoerbudget van deze modus: bepaalt het max_tokens-plafond van elke
@@ -8793,6 +9126,108 @@ Deno.serve(async (req: Request) => {
       }
       return new Response(
         JSON.stringify({ success: false, error: 'Het voorstel kon niet worden gemaakt' }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    // --- Skill Creator: de overige velden voorstellen, of om aanvulling vragen ---
+    if (mode === 'skill-draft') {
+      const kern = body.skillKern?.trim();
+      if (!kern) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'skillKern is verplicht' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+      const userMessage = SKILL_DRAFT_USER_PROMPT({
+        kern,
+        verzoeken: body.skillVerzoeken,
+        velden: body.skillVelden,
+      });
+      for (const candidate of order) {
+        try {
+          const raw = await JSON_PROVIDERS[candidate](
+            userMessage,
+            SKILL_DRAFT_SYSTEM_PROMPT,
+            0.3,
+            resolveModel(candidate, body.preferredProvider, body.preferredModel),
+            maxTokens,
+          );
+          const unclear = detectUnclearJson(raw);
+          if (unclear) {
+            return new Response(
+              JSON.stringify({ success: false, unclear: true, reason: unclear, provider: candidate }),
+              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            );
+          }
+          const parsed = parseSkillDraft(raw);
+          if (parsed) {
+            return new Response(
+              JSON.stringify({ success: true, ...parsed, provider: candidate }),
+              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            );
+          }
+        } catch (providerErr) {
+          console.error(`${candidate} (skill-draft) mislukt, probeer volgende:`, providerErr);
+        }
+      }
+      return new Response(
+        JSON.stringify({ success: false, error: 'Het voorstel kon niet worden gemaakt' }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    // --- Skill Creator: testverzoeken bedenken, of de beschrijving aanscherpen ---
+    if (mode === 'skill-trigger') {
+      const beschrijving = body.skillBeschrijving?.trim();
+      if (!beschrijving) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'skillBeschrijving is verplicht' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+      const doel = body.skillDoel === 'scherp' ? 'scherp' : 'test';
+      const oordelen = (Array.isArray(body.skillOordelen) ? body.skillOordelen : []).filter(
+        (o) => o && typeof o.tekst === 'string' && o.tekst.trim(),
+      );
+      if (doel === 'scherp' && oordelen.length === 0) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'skillOordelen is verplicht bij aanscherpen' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+      const userMessage = SKILL_TRIGGER_USER_PROMPT({
+        beschrijving,
+        kern: body.skillKern,
+        verzoeken: body.skillVerzoeken,
+        nietGebruiken: body.skillVelden?.niet_gebruiken,
+        oordelen: doel === 'scherp' ? oordelen : undefined,
+      });
+      for (const candidate of order) {
+        try {
+          const raw = await JSON_PROVIDERS[candidate](
+            userMessage,
+            SKILL_TRIGGER_SYSTEM_PROMPT(doel),
+            doel === 'test' ? 0.6 : 0.3,
+            resolveModel(candidate, body.preferredProvider, body.preferredModel),
+            maxTokens,
+          );
+          const parsed = doel === 'test' ? parseSkillTriggerTest(raw) : parseSkillDescription(raw);
+          if (parsed) {
+            return new Response(
+              JSON.stringify({ success: true, ...parsed, provider: candidate }),
+              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            );
+          }
+        } catch (providerErr) {
+          console.error(`${candidate} (skill-trigger) mislukt, probeer volgende:`, providerErr);
+        }
+      }
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: doel === 'test' ? 'De testverzoeken konden niet worden gemaakt' : 'De beschrijving kon niet worden aangescherpt',
+        }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }

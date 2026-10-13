@@ -9,11 +9,14 @@ import {
   FolderCheck,
   MessageSquarePlus,
   Globe,
+  Download,
 } from 'lucide-react';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import { Link, useNavigate } from 'react-router-dom';
 import { copyToClipboard } from '@/lib/utils';
+import { downloadText } from '@/lib/download';
+import { buildSkillMd, type SkillMeta } from '@/lib/skill';
 import { writeHandoff } from '@/services/chatService';
 import { getChatSettingsCached, type ChatSettings } from '@/services/settingsService';
 import { useAuth } from '@/context/AuthContext';
@@ -36,6 +39,12 @@ interface OptimizedOutputProps {
   versions?: OptimizeResult[];
   activeVersion?: number;
   onSelectVersion?: (index: number) => void;
+  /**
+   * Gebouwd met de Skill Creator: dan is de uitvoer een vaste instructie in
+   * plaats van een prompt, en komt er een SKILL.md-download bij met deze naam
+   * en beschrijving als kop.
+   */
+  skill?: SkillMeta;
 }
 
 export default function OptimizedOutput({
@@ -46,6 +55,7 @@ export default function OptimizedOutput({
   versions,
   activeVersion = 0,
   onSelectVersion,
+  skill,
 }: OptimizedOutputProps) {
   const { configured } = useAuth();
   const [copied, setCopied] = useState(false);
@@ -76,7 +86,7 @@ export default function OptimizedOutput({
   async function handleCopy() {
     await copyToClipboard(result.optimized_content);
     setCopied(true);
-    toast.success('Prompt gekopieerd');
+    toast.success(skill ? 'Skill gekopieerd' : 'Prompt gekopieerd');
     setTimeout(() => setCopied(false), 1500);
   }
 
@@ -87,6 +97,14 @@ export default function OptimizedOutput({
    * verstuurd: de plekken tussen [haakjes] moet de gebruiker eerst zelf
    * invullen.
    */
+  /** Download de getoonde versie als SKILL.md, met naam en beschrijving als kop. */
+  function handleDownloadSkill() {
+    if (!skill) return;
+    // Het skillformaat schrijft precies deze bestandsnaam voor; de map eromheen
+    // krijgt de naam uit de kop.
+    downloadText('SKILL.md', buildSkillMd(skill, result.optimized_content), 'text/markdown');
+  }
+
   function handleSendToChat() {
     writeHandoff(result.optimized_content, 'compose');
     navigate('/chat');
@@ -95,15 +113,24 @@ export default function OptimizedOutput({
   return (
     <div className="space-y-4 animate-fade-in">
       <h3 className="text-lg font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
-        Je herbruikbare prompt
+        {skill ? 'Je skill' : 'Je herbruikbare prompt'}
       </h3>
 
-      <p className="text-sm text-slate-500 dark:text-slate-400">
-        Kopieer deze prompt naar je eigen AI-chat, sla hem op voor je collega&apos;s, of laat de AI
-        hem <span className="font-medium">direct uitvoeren</span> voor een kant-en-klaar resultaat.
-        Vul de plekken tussen <span className="font-mono text-xs">[haakjes]</span> per keer aan met je
-        eigen inhoud.
-      </p>
+      {skill ? (
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          Plak deze skill één keer in je eigen AI-omgeving, bijvoorbeeld als instructie van een
+          Mistral-agent of als projectinstructie. Daarna geef je alleen je invoer, en de AI pakt die
+          elke keer op dezelfde manier aan. Werk je met een omgeving die Agent Skills leest, download
+          hem dan als <span className="font-mono text-xs">SKILL.md</span>.
+        </p>
+      ) : (
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          Kopieer deze prompt naar je eigen AI-chat, sla hem op voor je collega&apos;s, of laat de AI
+          hem <span className="font-medium">direct uitvoeren</span> voor een kant-en-klaar resultaat.
+          Vul de plekken tussen <span className="font-mono text-xs">[haakjes]</span> per keer aan met
+          je eigen inhoud.
+        </p>
+      )}
 
       {result.error && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300">
@@ -236,9 +263,18 @@ export default function OptimizedOutput({
         >
           <MessageSquarePlus size={16} /> Kopiëren in chat
         </button>
+        {skill && (
+          <button
+            className="opl-btn-secondary"
+            onClick={handleDownloadSkill}
+            title="Download deze skill als SKILL.md, met naam en beschrijving erboven"
+          >
+            <Download size={16} /> Download SKILL.md
+          </button>
+        )}
         <button className="opl-btn-primary" onClick={handleCopy}>
           {copied ? <Check size={16} /> : <Copy size={16} />}
-          {copied ? 'Gekopieerd' : 'Kopieer prompt'}
+          {copied ? 'Gekopieerd' : skill ? 'Kopieer skill' : 'Kopieer prompt'}
         </button>
       </div>
 

@@ -152,7 +152,7 @@ src/
   types/          index.ts, alle domeinmodellen op één plek
 supabase/
   functions/      optimize-prompt (de grote), send-contact, register-brevo-contact
-  migrations/     0001 … 0033, oplopend genummerd
+  migrations/     0001 … 0035, oplopend genummerd
 ```
 
 `App.tsx` houdt de routetabel. Zware pagina's (chat, netwerk, community, alle
@@ -190,7 +190,7 @@ te stemmen.
 
 Eén edge function, `optimize-prompt`, ongeveer 8000 regels, met een
 `mode`-veld in de body als router. Nieuwe AI-functionaliteit wordt een nieuwe
-mode in dat bestand, niet een nieuwe function. De 30 modes, gegroepeerd:
+mode in dat bestand, niet een nieuwe function. De 32 modes, gegroepeerd:
 
 | Groep | Modes |
 | --- | --- |
@@ -198,7 +198,7 @@ mode in dat bestand, niet een nieuwe function. De 30 modes, gegroepeerd:
 | Techniek- en frameworkkeuze | `recommend`, `recommend-framework`, `framework-fit`, `technique-advisor` |
 | Veldhulp in de bouwer | `analyze`, `prefill`, `expand-field`, `title`, `metadata` |
 | PlanWizard | `plan`, `plan-step`, `plan-step-analyze`, `clarify`, `assumption-check` |
-| Techniekbouwers | `persona-fill`, `fewshot-example`, `fewshot-extract`, `meta-build`, `cove-scan`, `stepback-ladder`, `rubric-propose` |
+| Techniekbouwers | `persona-fill`, `fewshot-example`, `fewshot-extract`, `meta-build`, `cove-scan`, `stepback-ladder`, `rubric-propose`, `skill-draft`, `skill-trigger` |
 | Chat en projecten | `chat-optimize`, `project-optimize`, `project-brief` |
 | Testkamer-loop | `mock-answer`, `refine`, `refine-suggest` |
 

@@ -417,6 +417,22 @@ Beoordeel alleen op de genoemde criteria. Ontbreekt informatie om een criterium 
 Oorspronkelijke opdracht:
 {{PROMPT}}`,
   },
+  {
+    id: 'tech-skill-creator',
+    name: 'Skill Creator',
+    description:
+      'Maak een skill: één vaste instructie die je in je eigen AI-omgeving plakt, zodat de AI elke invoer op dezelfde manier afhandelt.',
+    strength:
+      'Sterk wanneer je de AI steeds hetzelfde uitlegt. De bouwer haalt op wat de AI zonder skill niet weet, zoals jullie afspraken, valkuilen en grenzen, en test of de beschrijving precies de juiste verzoeken dekt.',
+    use_cases: [
+      'Feedback op stukken die elke keer volgens hetzelfde kader moet',
+      'Een vaste werkwijze delen met collega\'s via een agent of projectinstructie',
+      'Een SKILL.md maken voor een omgeving die Agent Skills leest',
+    ],
+    follow_up_questions: [],
+    template: `Schrijf een skill: één vaste instructie die een AI bij elke nieuwe invoer op dezelfde manier laat werken.
+De antwoorden uit de Skill Creator bepalen de inhoud van de secties wanneer, kennis, werkwijze, grenzen, uitvoer en ontbrekende invoer.`,
+  },
 
   {
     id: 'tech-crisp',

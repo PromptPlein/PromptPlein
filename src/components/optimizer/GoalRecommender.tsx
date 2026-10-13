@@ -6,7 +6,7 @@ import { useReferenceData } from '@/context/ReferenceDataContext';
 import HoverPreview from '@/components/common/HoverPreview';
 import { GOAL_EXAMPLES, categoryOf } from '@/data/goalExamples';
 import { recommendTechniques } from '@/services/optimizeService';
-import { isContextPrompt } from '@/lib/techniques';
+import { isContextPrompt, isSkillCreator } from '@/lib/techniques';
 import { stripMarkdown } from '@/lib/utils';
 import type { TechniqueRecommendation } from '@/types';
 
@@ -100,7 +100,7 @@ export default function GoalRecommender({
     try {
       // Complex-vraagstuk-flow beveelt alleen losse prompttechnieken aan; complete
       // prompt frameworks (family 'context') horen bij de eigen-prompt-flow.
-      const candidates = techniques.filter((t) => !isContextPrompt(t));
+      const candidates = techniques.filter((t) => !isContextPrompt(t) && !isSkillCreator(t));
       const res = await recommendTechniques({ goal: goal.trim(), techniques: candidates });
       // Clarity-gate: het doel was onzin → toon uitleg i.p.v. willekeurige technieken.
       if (res.unclear) {
