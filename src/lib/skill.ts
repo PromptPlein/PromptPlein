@@ -177,29 +177,127 @@ export function serializeSkill(d: SkillData): string {
   return parts.join('\n\n');
 }
 
-/** Naam en beschrijving voor de kop van SKILL.md. */
+/**
+ * Wat er in de kop van SKILL.md komt. Naast naam en beschrijving de herkomst
+ * die de skills-marketplace van developer.overheid.nl per skill vastlegt
+ * (verantwoording onder het Overheidsbreed standpunt generatieve AI): of hij
+ * met AI is gemaakt, met welk model, op welke datum, en dat hij een concept is
+ * tot een eigenaar hem goedkeurt.
+ */
 export interface SkillMeta {
   naam: string;
   beschrijving: string;
+  /** De afspraken en bronnen uit de Skill Creator; gaan in de plugin mee als referentie. */
+  bronnen?: string;
+  /** Het model dat de skill schreef; leeg als de AI-service niet bereikbaar was. */
+  model?: string;
+}
+
+/** Bronnen vanaf deze lengte gaan in de plugin als los referentiebestand mee. */
+const BRONNEN_REFERENTIE_MIN = 400;
+
+/** Pad van het referentiebestand, relatief aan SKILL.md. */
+const BRONNEN_PAD = 'references/bronnen.md';
+
+function skillDescription(meta: SkillMeta): string {
+  return (meta.beschrijving.trim() || 'Vaste werkwijze, gemaakt in PromptPlein.')
+    .replace(/\s+/g, ' ')
+    .slice(0, SKILL_DESCRIPTION_MAX);
+}
+
+/** Datum van vandaag als JJJJ-MM-DD, in lokale tijd. */
+function vandaag(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 /**
- * Zet de skillprompt om naar een SKILL.md: YAML-frontmatter met naam en
- * beschrijving, daaronder de prompt zelf. De beschrijving gaat als JSON-string
- * de frontmatter in; dat is geldige YAML en vangt dubbele punten en
+ * Zet de skillprompt om naar een SKILL.md: YAML-frontmatter met naam,
+ * beschrijving en herkomst, daaronder de prompt zelf. De beschrijving gaat als
+ * JSON-string de frontmatter in; dat is geldige YAML en vangt dubbele punten en
  * aanhalingstekens in de tekst af.
+ *
+ * Met `metReferentie` verwijst de skill onderaan naar het bronnenbestand dat in
+ * de plugin naast SKILL.md staat.
  */
-export function buildSkillMd(meta: SkillMeta, prompt: string): string {
-  const description = (meta.beschrijving.trim() || 'Vaste werkwijze, gemaakt in PromptPlein.')
-    .replace(/\s+/g, ' ')
-    .slice(0, SKILL_DESCRIPTION_MAX);
-  return [
+export function buildSkillMd(meta: SkillMeta, prompt: string, metReferentie = false): string {
+  const model = meta.model?.trim();
+  const lines = [
     '---',
     `name: ${skillSlug(meta.naam)}`,
-    `description: ${JSON.stringify(description)}`,
+    `description: ${JSON.stringify(skillDescription(meta))}`,
+    'metadata:',
+    `  created-with-ai: "${model ? 'true' : 'false'}"`,
+    ...(model ? [`  created-with-model: ${JSON.stringify(model)}`] : []),
+    `  created-date: "${vandaag()}"`,
+    '  created-with: PromptPlein',
+    '  status: concept',
     '---',
     '',
     prompt.trim(),
     '',
-  ].join('\n');
+  ];
+  if (metReferentie) {
+    lines.push(
+      '## Bronnen',
+      '',
+      `De volledige afspraken en bronnen bij deze skill staan in [${BRONNEN_PAD}](${BRONNEN_PAD}). Lees dat bestand wanneer een taak op die afspraken leunt.`,
+      '',
+    );
+  }
+  return lines.join('\n');
+}
+
+/**
+ * Bouwt de skill als plugin in de mapstructuur van de skills-marketplace van
+ * developer.overheid.nl: `.plugin/plugin.json` als bron, `.claude-plugin/` voor
+ * Claude Code (Codex leest die ook) en de skill zelf in `skills/<naam>/SKILL.md`.
+ * Een SKILL.md in de wortel wordt daar niet gevonden.
+ *
+ * Geeft een lijst van pad en inhoud terug; de aanroeper pakt hem in.
+ */
+export function buildSkillPlugin(meta: SkillMeta, prompt: string): Record<string, string> {
+  const slug = skillSlug(meta.naam);
+  const bronnen = meta.bronnen?.trim() ?? '';
+  const metReferentie = bronnen.length >= BRONNEN_REFERENTIE_MIN;
+  const manifest = `${JSON.stringify(
+    { name: slug, description: skillDescription(meta), version: '0.1.0' },
+    null,
+    2,
+  )}\n`;
+
+  const files: Record<string, string> = {
+    [`${slug}/.plugin/plugin.json`]: manifest,
+    [`${slug}/.claude-plugin/plugin.json`]: manifest,
+    [`${slug}/skills/${slug}/SKILL.md`]: buildSkillMd(meta, prompt, metReferentie),
+    [`${slug}/README.md`]: [
+      `# ${meta.naam.trim() || slug}`,
+      '',
+      skillDescription(meta),
+      '',
+      'Gemaakt met PromptPlein. De skill heeft de status concept: laat hem nalezen door wie de afspraken erin beheert voordat collega\'s hem gebruiken.',
+      '',
+      '## Installeren',
+      '',
+      'Claude Code, lokaal uitproberen:',
+      '',
+      '```bash',
+      `claude --plugin-dir ./${slug}`,
+      '```',
+      '',
+      `Je roept de skill daarna aan als \`/${slug}:${slug}\`, of de assistent kiest hem zelf op basis van de beschrijving.`,
+      '',
+      'Gebruik je geen Claude Code, plak dan de inhoud van SKILL.md (zonder de kop tussen de streepjeslijnen) als instructie in je eigen AI-omgeving.',
+      '',
+      '## Aanmelden bij de overheidsmarketplace',
+      '',
+      'De skills-marketplace van developer.overheid.nl (github.com/developer-overheid-nl/skills-marketplace) neemt plugins op die in een publieke repository staan, een open-source licentie hebben (bijvoorbeeld EUPL-1.2) en Nederlandse documentatie hebben. Zet deze map in een repository, voeg een LICENSE toe en meld de plugin aan via een issue op die repository.',
+      '',
+    ].join('\n'),
+  };
+  if (metReferentie) {
+    files[`${slug}/skills/${slug}/${BRONNEN_PAD}`] = `# Bronnen en afspraken\n\n${bronnen}\n`;
+  }
+  return files;
 }

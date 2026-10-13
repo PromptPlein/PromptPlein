@@ -7,6 +7,7 @@ import {
   Save,
   Share2,
   FolderCheck,
+  FolderDown,
   MessageSquarePlus,
   Globe,
   Download,
@@ -15,8 +16,8 @@ import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import { Link, useNavigate } from 'react-router-dom';
 import { copyToClipboard } from '@/lib/utils';
-import { downloadText } from '@/lib/download';
-import { buildSkillMd, type SkillMeta } from '@/lib/skill';
+import { downloadText, downloadZip } from '@/lib/download';
+import { buildSkillMd, buildSkillPlugin, skillSlug, type SkillMeta } from '@/lib/skill';
 import { writeHandoff } from '@/services/chatService';
 import { getChatSettingsCached, type ChatSettings } from '@/services/settingsService';
 import { useAuth } from '@/context/AuthContext';
@@ -105,6 +106,23 @@ export default function OptimizedOutput({
     downloadText('SKILL.md', buildSkillMd(skill, result.optimized_content), 'text/markdown');
   }
 
+  /**
+   * Download de skill als plugin in de mapstructuur van de skills-marketplace
+   * van developer.overheid.nl, zodat hij in Claude Code, Codex of Cursor te
+   * installeren is en later bij die marketplace kan worden aangemeld.
+   */
+  async function handleDownloadPlugin() {
+    if (!skill) return;
+    try {
+      await downloadZip(
+        `${skillSlug(skill.naam)}.zip`,
+        buildSkillPlugin(skill, result.optimized_content),
+      );
+    } catch {
+      toast.error('Het pakket kon niet worden gemaakt. Download SKILL.md los.');
+    }
+  }
+
   function handleSendToChat() {
     writeHandoff(result.optimized_content, 'compose');
     navigate('/chat');
@@ -121,7 +139,10 @@ export default function OptimizedOutput({
           Plak deze skill één keer in je eigen AI-omgeving, bijvoorbeeld als instructie van een
           Mistral-agent of als projectinstructie. Daarna geef je alleen je invoer, en de AI pakt die
           elke keer op dezelfde manier aan. Werk je met een omgeving die Agent Skills leest, download
-          hem dan als <span className="font-mono text-xs">SKILL.md</span>.
+          hem dan als <span className="font-mono text-xs">SKILL.md</span>, of als plugin in de vorm
+          die de skills-marketplace van developer.overheid.nl gebruikt. In de kop staat dat hij met AI
+          is gemaakt en nog een concept is, zoals het overheidsbrede standpunt over generatieve AI
+          vraagt.
         </p>
       ) : (
         <p className="text-sm text-slate-500 dark:text-slate-400">
@@ -168,14 +189,15 @@ export default function OptimizedOutput({
         {result.optimized_content}
       </pre>
 
-      {/* Zocht de AI eerst op internet (alleen voor beheerders), dan staan hier
-          de pagina's die hij kreeg: echte links om na te lezen of de feiten in
-          de prompt kloppen. */}
+      {/* Zocht de AI eerst op internet (alleen voor beheerders), of kreeg hij
+          pagina's uit de kennisbank van developer.overheid.nl, dan staan hier de
+          pagina's die hij kreeg: echte links om na te lezen of de feiten in de
+          prompt kloppen. */}
       {result.sources && result.sources.length > 0 && (
         <div className="mt-3">
           <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
             <Globe size={12} className="shrink-0" />
-            Bronnen van internet
+            {sourcesLabel(result.sources)}
           </p>
           <ol className="space-y-0.5">
             {result.sources.map((source, i) => (
@@ -270,6 +292,15 @@ export default function OptimizedOutput({
             title="Download deze skill als SKILL.md, met naam en beschrijving erboven"
           >
             <Download size={16} /> Download SKILL.md
+          </button>
+        )}
+        {skill && (
+          <button
+            className="opl-btn-secondary"
+            onClick={() => void handleDownloadPlugin()}
+            title="Download de skill als plugin (zip) voor Claude Code, Codex of Cursor, in de opbouw van de overheidsmarketplace"
+          >
+            <FolderDown size={16} /> Download als plugin
           </button>
         )}
         <button className="opl-btn-primary" onClick={handleCopy}>
@@ -369,3 +400,12 @@ function DialogueSummary({ dialogue }: { dialogue: PromptDialogue }) {
   );
 }
 
+const KENNISBANK_PREFIX = 'https://developer.overheid.nl/';
+
+/** Kop boven de bronnen: kennisbank, internet of allebei. */
+function sourcesLabel(sources: { url: string }[]): string {
+  const kennisbank = sources.filter((s) => s.url.startsWith(KENNISBANK_PREFIX)).length;
+  if (kennisbank === sources.length) return 'Uit de kennisbank van developer.overheid.nl';
+  if (kennisbank === 0) return 'Bronnen van internet';
+  return 'Bronnen';
+}

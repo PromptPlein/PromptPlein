@@ -13,6 +13,7 @@ import {
   BarChart3,
   BookOpen,
   Briefcase,
+  CodeXml,
   Compass,
   FileSearch,
   FileText,
@@ -41,7 +42,8 @@ export type PromptCategoryId =
   | 'overleg'
   | 'privacy'
   | 'inkoop'
-  | 'data';
+  | 'data'
+  | 'digitaal';
 
 export interface PromptCategory {
   label: string;
@@ -63,4 +65,5 @@ export const PROMPT_CATEGORIES: Record<PromptCategoryId, PromptCategory> = {
   privacy: { label: 'Privacy & AVG', icon: Lock },
   inkoop: { label: 'Bedrijfsvoering & inkoop', icon: Briefcase },
   data: { label: 'Data & dashboards', icon: BarChart3 },
+  digitaal: { label: 'Digitaal & ICT', icon: CodeXml },
 };

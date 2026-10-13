@@ -32,7 +32,12 @@ import { useAuth } from '@/context/AuthContext';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { generatePrompt, prefillFields } from '@/services/optimizeService';
 import { trackEvent } from '@/services/analyticsService';
-import { getAiSettings, DEFAULT_AI_SETTINGS, type AiSettings } from '@/services/settingsService';
+import {
+  getAiSettings,
+  overheidsContext,
+  DEFAULT_AI_SETTINGS,
+  type AiSettings,
+} from '@/services/settingsService';
 import { detectPii, detectBlockedTopics, type GuardrailFinding } from '@/services/guardrails';
 import {
   contextExample,
@@ -43,6 +48,7 @@ import {
 } from '@/lib/techniques';
 import { activityIdentifier, stripMarkdown } from '@/lib/utils';
 import type { SkillData } from '@/lib/skill';
+import { defaultModelFor, isEnabledProvider } from '@/config/aiModels';
 import type { OptimizeResult, Technique } from '@/types';
 
 /**
@@ -370,6 +376,7 @@ export default function TechniquesPage() {
         preferredModel: s.model,
         systemPrompt: s.systemPrompt.trim() || undefined,
         toneInstruction: s.toneInstruction.trim() || undefined,
+        ...overheidsContext(s),
         temperature: s.temperature,
         onChunk: setStreamText,
       });
@@ -474,7 +481,12 @@ export default function TechniquesPage() {
             onSelectVersion={setActiveVersion}
             skill={
               technique && structureFormat(technique) === 'skill' && skillData
-                ? { naam: skillData.naam, beschrijving: skillData.beschrijving }
+                ? {
+                    naam: skillData.naam,
+                    beschrijving: skillData.beschrijving,
+                    bronnen: skillData.velden.bronnen,
+                    model: skillModel(result.provider, settingsRef.current),
+                  }
                 : undefined
             }
           />
@@ -940,4 +952,16 @@ export default function TechniquesPage() {
       )}
     </div>
   );
+}
+
+/**
+ * Het model dat de skill schreef, voor de herkomst in de kop van SKILL.md. De
+ * server meldt alleen de provider; was dat de provider uit Beheer, dan draaide
+ * het daar gekozen model, anders het standaardmodel van die provider. Leeg als
+ * de AI-service niet bereikbaar was en de skill een ingevuld sjabloon is.
+ */
+function skillModel(provider: OptimizeResult['provider'], settings: AiSettings): string {
+  if (!isEnabledProvider(provider)) return '';
+  if (settings.provider === provider && settings.model) return settings.model;
+  return defaultModelFor(provider);
 }

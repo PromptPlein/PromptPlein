@@ -28,6 +28,7 @@ import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import HoverPreview from '@/components/common/HoverPreview';
+import VerantwoordGebruikHint from '@/components/optimizer/VerantwoordGebruikHint';
 import { PROMPT_CATEGORIES } from '@/data/promptCategories';
 import { PROMPT_EXAMPLES } from '@/data/promptExamples';
 import {
@@ -51,7 +52,7 @@ import {
 import OptimizingLoader from './OptimizingLoader';
 import PrefillLoader from './PrefillLoader';
 import FollowUpQuestions, { type FieldMeta } from './FollowUpQuestions';
-import type { AiSettings } from '@/services/settingsService';
+import { overheidsContext, type AiSettings } from '@/services/settingsService';
 import type { StreamStatus } from '@/lib/ndjsonStream';
 import type {
   FrameworkFit,
@@ -560,6 +561,7 @@ export default function OwnPromptOptimizer({
         webSearchInstruction: settings.webSearchInstruction.trim() || undefined,
         systemPrompt: settings.systemPrompt.trim() || undefined,
         toneInstruction: settings.toneInstruction.trim() || undefined,
+        ...overheidsContext(settings),
         temperature: settings.temperature,
         // Meelezen terwijl de prompt wordt geschreven.
         onChunk: setStreamText,
@@ -865,6 +867,7 @@ export default function OwnPromptOptimizer({
             ? kindOption.hint
             : 'We analyseren je prompt en zoeken automatisch het best passende prompt framework voor je uit.'}
         </p>
+        <VerantwoordGebruikHint text={ownPrompt} />
       </div>
         </div>
       </div>

@@ -427,6 +427,17 @@ interface RequestBody {
    * wanneer er ook echt treffers zijn.
    */
   webSearchInstruction?: string;
+  /**
+   * Overheidskaders uit Beheer (persoonsgegevens, besluiten over burgers,
+   * publiekstekst, Woo, beveiliging). Alleen bij 'generate'. Leeg of afwezig =
+   * geen kaders; de server heeft zelf geen kopie van deze tekst.
+   */
+  kaderInstruction?: string;
+  /**
+   * Instructie bij pagina's uit de kennisbank van developer.overheid.nl. Alleen
+   * bij 'generate'. Leeg of afwezig = die pagina's worden niet opgehaald.
+   */
+  kennisbankInstruction?: string;
   preferredProvider?: PreferredProvider;
   /**
    * Het concrete API-model binnen de gekozen provider (bijv. 'claude-opus-4-8').
@@ -2568,6 +2579,187 @@ function withSearchBlock(
     .join('\n\n');
 }
 
+// --- Kennisbank van developer.overheid.nl ---
+// Het ontwikkelaarsportaal van de overheid publiceert een llms.txt: een lijst
+// van alle kennisbankpagina's met titel en korte omschrijving, elk ook als
+// markdown. Bij een digitale opdracht (API's, open source, toegankelijkheid van
+// websites, security) zoeken we daarin de best passende pagina's en geven we de
+// tekst mee als bron. Er gaat niets van de gebruiker naar buiten: we halen een
+// vaste lijst op en kiezen zelf.
+
+const KENNISBANK_INDEX_URL = 'https://developer.overheid.nl/llms.txt';
+/** Alleen pagina's op deze host worden opgehaald, wat er ook in de index staat. */
+const KENNISBANK_PAGE_PREFIX = 'https://developer.overheid.nl/';
+const KENNISBANK_MAX_PAGES = 3;
+/** Tekens per pagina. Drie pagina's van 4000 tekens is ruwweg 3000 tokens. */
+const KENNISBANK_PAGE_CHARS = 4000;
+const KENNISBANK_QUERY_CHARS = 2000;
+const KENNISBANK_TIMEOUT_MS = 5000;
+/** De index verandert hooguit dagelijks; een warme functie haalt hem niet elke beurt op. */
+const KENNISBANK_INDEX_TTL_MS = 6 * 60 * 60 * 1000;
+/**
+ * Minimale score van een pagina; daaronder past hij niet genoeg bij de opdracht.
+ * Eén zeldzaam woord in de titel haalt dit ruim, een paar algemene woorden in de
+ * omschrijving niet.
+ */
+const KENNISBANK_MIN_SCORE = 6;
+/** Kortere pagina's zijn een doorverwijzing en geen bron. */
+const KENNISBANK_MIN_PAGE_CHARS = 200;
+
+/**
+ * Woorden waaraan een digitale opdracht te herkennen is. Zonder een van deze
+ * woorden wordt er niets opgehaald, zodat een Kamerbrief of een vergaderverslag
+ * nooit API-richtlijnen als bron krijgt.
+ */
+const KENNISBANK_GATE =
+  /\b(api'?s?|openapi|oas|rest-?api|endpoints?|webhooks?|open ?source|publiccode|repositor(?:y|ies)|github|gitlab|eupl|wcag|digitoegankelijk|nl design system|front-?end|security\.txt|pki ?overheid|digid|eherkenning|oauth|oidc|saml|logboek dataverwerkingen|fsc|digikoppeling|kubernetes|devops|linked data|rdf|dcat|nis2|software|broncode|ontwikkelaars?|developers?)\b/i;
+
+const KENNISBANK_STOPWORDS = new Set(
+  (
+    'de het een en van voor met die dat dit deze is op in te aan als bij naar om of wat wie hoe ' +
+    'ook niet maar zijn worden wordt kan moet mag mijn ons onze je jij u wij ze er dan nog al ' +
+    'maak schrijf help prompt waar welke over door uit hebben heeft hun the and for'
+  ).split(' '),
+);
+
+interface KennisbankEntry {
+  title: string;
+  url: string;
+  description: string;
+}
+
+let kennisbankIndexCache: { at: number; entries: KennisbankEntry[] } | null = null;
+
+async function fetchWithTimeout(url: string): Promise<string> {
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), KENNISBANK_TIMEOUT_MS);
+  try {
+    const response = await fetch(url, { signal: abort.signal });
+    if (!response.ok) throw new Error(`${url} gaf status ${response.status}`);
+    return await response.text();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function kennisbankIndex(): Promise<KennisbankEntry[]> {
+  if (kennisbankIndexCache && Date.now() - kennisbankIndexCache.at < KENNISBANK_INDEX_TTL_MS) {
+    return kennisbankIndexCache.entries;
+  }
+  const text = await fetchWithTimeout(KENNISBANK_INDEX_URL);
+  const entries: KennisbankEntry[] = [];
+  for (const line of text.split('\n')) {
+    const m = line.match(/^- \[([^\]]+)\]\(([^)\s]+\.md)\):?\s*(.*)$/);
+    if (!m || !m[2].startsWith(KENNISBANK_PAGE_PREFIX)) continue;
+    // Alleen de kennisbank zelf; blogposts zijn een mening of een momentopname.
+    if (m[2].includes('/blog/')) continue;
+    entries.push({ title: m[1].trim(), url: m[2], description: m[3].trim() });
+  }
+  kennisbankIndexCache = { at: Date.now(), entries };
+  return entries;
+}
+
+/**
+ * De zoekwoorden uit de opdracht. Een woord op -heid, -en of -s telt ook zonder
+ * die uitgang mee, zodat "toegankelijkheid" de pagina DigiToegankelijk vindt en
+ * "licenties" de pagina over licenties.
+ */
+function kennisbankTokens(text: string): string[] {
+  const words = text
+    .toLowerCase()
+    .split(/[^a-z0-9à-ÿ.]+/)
+    .map((t) => t.replace(/^\.+|\.+$/g, ''))
+    .filter((t) => t.length >= 3 && !KENNISBANK_STOPWORDS.has(t));
+  const stems = words.flatMap((w) => {
+    const m = w.match(/^(.{5,}?)(heid|en|s)$/);
+    return m ? [m[1]] : [];
+  });
+  return [...new Set([...words, ...stems])];
+}
+
+/** Opschonen van een markdownpagina: MDX-imports en admonitie-randen eruit. */
+function tidyKennisbankPage(md: string): string {
+  return md
+    .split('\n')
+    .filter((line) => !/^\s*(import|export)\s/.test(line) && !/^\s*:::/.test(line))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+    .slice(0, KENNISBANK_PAGE_CHARS);
+}
+
+/**
+ * De best passende kennisbankpagina's voor deze opdracht, met hun tekst. Gooit
+ * nooit: is de site traag of stuk, dan schrijft het model zonder deze bronnen.
+ */
+async function kennisbankHits(query: string): Promise<SearchHit[]> {
+  if (!KENNISBANK_GATE.test(query)) return [];
+  try {
+    const entries = await kennisbankIndex();
+    const tokens = kennisbankTokens(query);
+    const docs = entries.map((e) => ({
+      entry: e,
+      title: e.title.toLowerCase(),
+      rest: `${e.description} ${e.url}`.toLowerCase(),
+    }));
+    // Een woord dat op veel pagina's staat ("open", "overheid") zegt weinig over
+    // welke pagina past; een zeldzaam woord ("publiccode", "wcag") veel.
+    const weight = new Map(
+      tokens.map((t) => {
+        const df = docs.filter((d) => d.title.includes(t) || d.rest.includes(t)).length;
+        return [t, Math.log(1 + docs.length / (1 + df))];
+      }),
+    );
+    const scored = docs
+      .map((d) => {
+        let score = 0;
+        for (const t of tokens) {
+          if (d.title.includes(t)) score += 3 * weight.get(t)!;
+          else if (d.rest.includes(t)) score += weight.get(t)!;
+        }
+        return { entry: d.entry, score };
+      })
+      .filter((x) => x.score >= KENNISBANK_MIN_SCORE)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, KENNISBANK_MAX_PAGES);
+    const pages = await Promise.all(
+      scored.map(async ({ entry }) => {
+        try {
+          const snippet = tidyKennisbankPage(await fetchWithTimeout(entry.url));
+          if (snippet.length < KENNISBANK_MIN_PAGE_CHARS) return null;
+          // De gebruiker krijgt de leesbare pagina als link, niet de markdown.
+          return { title: entry.title, url: entry.url.replace(/(\/index)?\.md$/, ''), snippet };
+        } catch (err) {
+          console.warn('Kennisbankpagina niet opgehaald:', entry.url, err);
+          return null;
+        }
+      }),
+    );
+    return pages.filter((p): p is SearchHit => p !== null);
+  } catch (err) {
+    console.error('Kennisbank van developer.overheid.nl niet bereikbaar:', err);
+    return [];
+  }
+}
+
+/**
+ * Zet de kennisbankpagina's onder de systeemprompt, in dezelfde vorm als de
+ * internetbronnen. Geen pagina's = systeemprompt ongewijzigd, om dezelfde
+ * reden als bij {@link withSearchBlock}.
+ */
+function withKennisbankBlock(system: string, instruction: string, hits: SearchHit[]): string {
+  if (hits.length === 0 || !instruction.trim()) return system;
+  const today = new Date().toISOString().slice(0, 10);
+  const blocks = hits
+    .map((h, i) => `Bron ${i + 1}: "${h.title}"\nURL: ${h.url}\n"""\n${h.snippet}\n"""`)
+    .join('\n\n');
+  return [
+    system,
+    instruction.trim(),
+    `PAGINA'S UIT DE KENNISBANK VAN DEVELOPER.OVERHEID.NL, opgehaald op ${today}:\n\n${blocks}`,
+  ].join('\n\n');
+}
+
 /**
  * Is de aanroep afkomstig van een INGELOGDE gebruiker? De gateway (verify_jwt)
  * heeft de handtekening en de vervaldatum van de Bearer-JWT al gevalideerd,
@@ -3120,6 +3312,14 @@ const SKILL_LANGUAGE_RULES = `- Schrijf in natuurlijk Nederlands zoals een colle
 - Gebruik nooit een gedachtestreepje (— of –) of een los streepje tussen zinsdelen. Schrijf een komma,
   een dubbele punt of een punt. Streepjes binnen een woord, zoals "e-mail", mogen wel.`;
 
+/**
+ * De beschrijving bepaalt wanneer een assistent de skill kiest. De
+ * skills-marketplace van developer.overheid.nl adviseert daarom triggerwoorden
+ * in het Nederlands én het Engels: de skill draait ook in Claude Code, Codex en
+ * Cursor, waar de gebruiker soms Engels typt.
+ */
+const SKILL_ZOEKWOORDEN_RULE = `- Sluit de beschrijving af met een regel die begint met "Zoekwoorden:", gevolgd door vijf tot acht korte termen gescheiden door komma's: eerst de Nederlandse termen die de medewerker zelf gebruikt, daarna dezelfde termen in het Engels.`;
+
 const SKILL_DRAFT_SYSTEM_PROMPT = `Je bent prompt engineer bij de Nederlandse rijksoverheid en je helpt een medewerker een skill op te stellen: een vaste instructie die een AI bij elke nieuwe invoer op dezelfde manier laat werken.
 
 <taak>
@@ -3143,13 +3343,14 @@ ${SKILL_DRAFT_FIELDS.map((f) => `${f.id}: ${f.betekenis}.`).join('\n')}
 - Een vraag is één zin over deze taak, niet over taken in het algemeen.
 - "naam" is een korte naam van twee tot vier woorden die de taak beschrijft.
 - "beschrijving" staat in de derde persoon: eerst een zin over wat de skill doet, dan een zin die begint met "Gebruik deze skill wanneer" met de situaties en woorden uit de verzoeken.
+${SKILL_ZOEKWOORDEN_RULE}
 ${SKILL_LANGUAGE_RULES}
 </regels>
 
 ${CLARITY_GATE_JSON_INSTRUCTION}
 
 Anders geef je UITSLUITEND geldige JSON terug, zonder codeblok of extra tekst, in dit formaat:
-{"naam":"<twee tot vier woorden>","beschrijving":"<twee zinnen>","velden":{${SKILL_DRAFT_FIELDS.map((f) => `"${f.id}":{"waarde":"<regels of leeg>","vraag":"<één zin of leeg>"}`).join(',')}}}`;
+{"naam":"<twee tot vier woorden>","beschrijving":"<twee zinnen en de zoekwoordenregel>","velden":{${SKILL_DRAFT_FIELDS.map((f) => `"${f.id}":{"waarde":"<regels of leeg>","vraag":"<één zin of leeg>"}`).join(',')}}}`;
 
 const SKILL_DRAFT_USER_PROMPT = (args: {
   kern: string;
@@ -3241,11 +3442,12 @@ Herschrijf de beschrijving zo dat elk verzoek uit de eerste lijst er duidelijk o
 - Schrijf in de derde persoon: eerst wat de skill doet, dan een zin die begint met "Gebruik deze skill wanneer", en zo nodig een zin die begint met "Niet gebruiken voor".
 - Noem de kenmerken die het verschil maken, niet de testverzoeken zelf.
 - De beschrijving telt twee tot vier zinnen.
+${SKILL_ZOEKWOORDEN_RULE} Staat er al een zoekwoordenregel in de huidige beschrijving, werk die dan bij.
 ${SKILL_LANGUAGE_RULES}
 </regels>
 
 Geef UITSLUITEND geldige JSON terug, zonder codeblok of extra tekst, in dit formaat:
-{"beschrijving":"<twee tot vier zinnen>"}`;
+{"beschrijving":"<twee tot vier zinnen en de zoekwoordenregel>"}`;
 
 const SKILL_TRIGGER_USER_PROMPT = (args: {
   beschrijving: string;
@@ -4875,14 +5077,20 @@ function buildSystemPrompt(
   headings: string[] = [],
   interviewResolved = false,
   projectContext?: string,
+  kaderInstruction?: string,
 ): string {
   const base = systemPrompt?.trim() ? systemPrompt.trim() : DEFAULT_SYSTEM_PROMPT;
   const instruction = structureInstruction(format, headings, interviewResolved);
   const withStructure = instruction ? `${base}\n\n${instruction}` : base;
   const withTone = tone?.trim() ? `${withStructure}\n\nToon en schrijfstijl: ${tone.trim()}` : withStructure;
+  // Overheidskaders uit Beheer: regels die alleen in de prompt komen als de
+  // opdracht eronder valt. Inhoudelijk, dus vóór de projectcontext.
+  const withKaders = kaderInstruction?.trim()
+    ? `${withTone}\n\n${kaderInstruction.trim()}`
+    : withTone;
   // De projectcontext hoort bij de inhoudelijke laag (waar gaat deze prompt
   // over?) en staat daarom vóór de vormregels hieronder.
-  const withProjectContext = withProject(withTone, projectContext);
+  const withProjectContext = withProject(withKaders, projectContext);
   // De clarity-gate, de lengteregel en de opmaak-regel komen als laatste,
   // zodat ze ook gelden bij een aangepaste admin-systeemprompt.
   return `${withProjectContext}\n\n${NO_MARKDOWN_INSTRUCTION}\n\n${TEMPLATE_LENGTH_INSTRUCTION}\n\n${CLARITY_GATE_INSTRUCTION}`;
@@ -5771,6 +5979,12 @@ function streamTextResponse(args: {
    * gezocht wordt in plaats van een paar seconden naar een stil scherm te kijken.
    */
   search?: { query: string; count: number; instruction: string };
+  /**
+   * Haal passende pagina's uit de kennisbank van developer.overheid.nl en zet ze
+   * onder de systeemprompt. Levert de opdracht geen digitale onderwerpen op, dan
+   * gebeurt er niets.
+   */
+  kennisbank?: { query: string; instruction: string };
 }): Response {
   const {
     order,
@@ -5783,6 +5997,7 @@ function streamTextResponse(args: {
     gate,
     thinking,
     search,
+    kennisbank,
   } = args;
   // Bewust niet meegedestructureerd: staat zoeken aan, dan komen de gevonden
   // bronnen hier straks onder te staan.
@@ -5826,11 +6041,22 @@ function streamTextResponse(args: {
       // systeemprompt én als 'sources'-event naar de client, zodat de gebruiker
       // onder het antwoord kan zien waar het vandaan komt. Levert het zoeken
       // niets op, dan gaat de beurt gewoon door zonder bronnen.
+      // De pagina's uit de kennisbank gaan mee in hetzelfde 'sources'-event: de
+      // client houdt alleen het laatste vast.
+      const sourceHits: SearchHit[] = [];
       if (search) {
         send({ type: 'phase', phase: 'searching' });
         const hits = await searchWeb(search.query, search.count);
         system = withSearchBlock(system, search, hits);
-        send({ type: 'sources', sources: hits.map((h) => ({ title: h.title, url: h.url })) });
+        sourceHits.push(...hits);
+      }
+      if (kennisbank) {
+        const hits = await kennisbankHits(kennisbank.query);
+        system = withKennisbankBlock(system, kennisbank.instruction, hits);
+        sourceHits.push(...hits);
+      }
+      if (search || sourceHits.length > 0) {
+        send({ type: 'sources', sources: sourceHits.map((h) => ({ title: h.title, url: h.url })) });
       }
 
       send({ type: 'phase', phase: 'drafting' });
@@ -9448,6 +9674,7 @@ Deno.serve(async (req: Request) => {
       headings,
       interviewResolved,
       body.projectContext,
+      body.kaderInstruction,
     );
     const userMessage = GENERATE_USER_PROMPT({
       filled,
@@ -9482,6 +9709,18 @@ Deno.serve(async (req: Request) => {
       console.warn('generate: zoeken gevraagd maar niet toegestaan of geen zoekdienst ingesteld');
     }
 
+    // Kennisbank van developer.overheid.nl: alleen als de beheerder hem aan heeft
+    // staan. Of er iets wordt opgehaald, hangt af van de opdracht zelf (zie
+    // kennisbankHits); er gaat geen tekst van de gebruiker naar buiten.
+    const kennisbankArgs = body.kennisbankInstruction?.trim()
+      ? {
+          query: [body.promptContent, ...(body.answeredFields ?? []).map((f) => f.answer)]
+            .join('\n')
+            .slice(0, KENNISBANK_QUERY_CHARS),
+          instruction: body.kennisbankInstruction.trim(),
+        }
+      : undefined;
+
     // Streamend: de gebruiker ziet de template regel voor regel ontstaan in
     // plaats van een spinner tot alles klaar is. De clarity-gate blijft actief;
     // hij houdt de kop van de tekst vast tot zeker is dat het geen
@@ -9499,13 +9738,19 @@ Deno.serve(async (req: Request) => {
         gate: true,
         thinking: body.thinking,
         search: searchArgs,
+        kennisbank: kennisbankArgs,
       });
     }
 
     // Niet-streamend: zoeken vóór de aanroep, er is geen stream om ondertussen
     // iets in te melden.
     const searchHits = searchArgs ? await searchWeb(searchArgs.query, searchArgs.count) : [];
-    const generateSystem = searchArgs ? withSearchBlock(system, searchArgs, searchHits) : system;
+    const kennisbankFound = kennisbankArgs ? await kennisbankHits(kennisbankArgs.query) : [];
+    const generateSystem = withKennisbankBlock(
+      searchArgs ? withSearchBlock(system, searchArgs, searchHits) : system,
+      kennisbankArgs?.instruction ?? '',
+      kennisbankFound,
+    );
 
     // Doorloop de providers in voorkeursvolgorde; eerste succes wint.
     // Faalt alles (of ontbreken alle keys), dan de ruwe template.
@@ -9543,7 +9788,7 @@ Deno.serve(async (req: Request) => {
         success: true,
         optimized_content: optimized,
         provider,
-        sources: searchHits.map((h) => ({ title: h.title, url: h.url })),
+        sources: [...searchHits, ...kennisbankFound].map((h) => ({ title: h.title, url: h.url })),
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );

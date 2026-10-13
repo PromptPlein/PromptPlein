@@ -29,6 +29,20 @@ const PII_RULES: PiiRule[] = [
   { label: 'Telefoonnummer', pattern: /\b(?:\+31|0)\s?6[\s-]?\d{8}\b|\b0\d{1,3}[\s-]?\d{6,7}\b/ },
   // IBAN (NL).
   { label: 'IBAN', pattern: /\bNL\d{2}[A-Z]{4}\d{10}\b/i },
+  // Naam met aanhef ("de heer Jansen", "mevrouw A. de Vries"). Een losse naam
+  // is niet van een gewoon woord met hoofdletter te onderscheiden; met aanhef
+  // wel. Hoofdlettergevoelig, zodat "Geachte heer, mevrouw," niet telt.
+  {
+    label: 'Naam',
+    pattern:
+      /\b(?:[Dd]e heer|[Hh]eer|[Mm]evrouw|[Mm]evr\.|[Mm]w\.|[Dd]hr\.|[Mm]eneer)\s+(?:[A-Z]\.\s?)*(?:(?:van|de|der|den|ter|ten|het)\s+)*[A-ZÀ-Ý][a-zà-ÿ]+/,
+  },
+  // Geboortedatum, alleen met een aankondiging ervoor; een losse datum is meestal
+  // een termijn of een vergaderdatum.
+  {
+    label: 'Geboortedatum',
+    pattern: /\b(?:geboren(?: op)?|geb\.|geboortedatum:?)\s*\d{1,2}[-/ .]\d{1,2}[-/ .]\d{2,4}/i,
+  },
 ];
 
 /** Elfproef voor een 9-cijferig BSN, om losse 9-cijfer-getallen te filteren. */

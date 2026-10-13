@@ -34,7 +34,14 @@ import {
   writeGeneratorHandoff,
   writeProjectHandoff,
 } from '@/services/handoffService';
-import { getChatSettingsCached, type ChatSettings } from '@/services/settingsService';
+import {
+  getAiSettings,
+  getChatSettingsCached,
+  type AiSettings,
+  type ChatSettings,
+} from '@/services/settingsService';
+import { detectPii, type GuardrailFinding } from '@/services/guardrails';
+import GuardrailDialog from '@/components/optimizer/GuardrailDialog';
 import { thinkingUnavailableReason } from '@/config/aiModels';
 
 /** Permanente afmelding voor de bouw-een-prompt-tip (per apparaat). */
@@ -114,6 +121,44 @@ function ChatPageInner() {
 
   const conversation = controller.conversation;
   const messages = conversation?.messages ?? [];
+
+  // --- Privacycheck vóór versturen ---
+  // Dezelfde check op persoonsgegevens als in de bouwer, met de instelling uit
+  // Beheer. Een bijlage wordt één keer gecontroleerd, bij het eerste bericht
+  // nadat hij is toegevoegd; daarna gaat hij elke beurt mee zonder nieuwe
+  // vraag. De verboden onderwerpen van de bouwer gelden hier bewust niet: in
+  // een gesprek over beleid vallen die woorden te vaak terecht.
+  const [aiSettings, setAiSettings] = useState<AiSettings | null>(null);
+  useEffect(() => {
+    let active = true;
+    void getAiSettings().then((s) => {
+      if (active) setAiSettings(s);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+  const checkedAttachments = useRef(new Set<string>());
+  const [pendingSend, setPendingSend] = useState<{
+    text: string;
+    findings: GuardrailFinding[];
+    attachmentIds: string[];
+  } | null>(null);
+
+  function guardedSend(text: string) {
+    const fresh = (conversation?.attachments ?? []).filter(
+      (a) => !checkedAttachments.current.has(a.id),
+    );
+    const findings = aiSettings?.pii.enabled
+      ? detectPii([text, ...fresh.map((a) => a.text)].join('\n'))
+      : [];
+    if (findings.length > 0) {
+      setPendingSend({ text, findings, attachmentIds: fresh.map((a) => a.id) });
+      return;
+    }
+    fresh.forEach((a) => checkedAttachments.current.add(a.id));
+    void controller.send(text);
+  }
 
   // --- Projecten ---
   // `projectPage` is de projectPAGINA: klik je links op een project, dan kom je
@@ -532,7 +577,7 @@ function ChatPageInner() {
                   streaming={controller.streaming}
                   extracting={controller.extracting}
                   attachments={conversation?.attachments ?? []}
-                  onSend={(text) => void controller.send(text)}
+                  onSend={guardedSend}
                   onStop={controller.stop}
                   onAddFile={(file) => void controller.addAttachment(file)}
                   onRemoveAttachment={controller.removeAttachment}
@@ -585,6 +630,23 @@ function ChatPageInner() {
         </p>
       </div>
 
+      {pendingSend && aiSettings && (
+        <GuardrailDialog
+          action="versturen"
+          findings={pendingSend.findings}
+          piiWarning={aiSettings.pii.warning}
+          onConfirm={() => {
+            pendingSend.attachmentIds.forEach((id) => checkedAttachments.current.add(id));
+            setPendingSend(null);
+            void controller.send(pendingSend.text);
+          }}
+          onCancel={() => {
+            // Het invoerveld is bij versturen al leeggemaakt; zet de tekst terug.
+            composerRef.current?.fill(pendingSend.text);
+            setPendingSend(null);
+          }}
+        />
+      )}
       <ConfirmDialog
         open={confirmDeleteId !== null}
         title="Chat verwijderen?"

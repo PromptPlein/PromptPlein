@@ -7,6 +7,8 @@ interface GuardrailDialogProps {
   piiWarning: string;
   onConfirm: () => void;
   onCancel: () => void;
+  /** Wat er na bevestiging gebeurt; standaard genereren, in de chat versturen. */
+  action?: 'genereren' | 'versturen';
 }
 
 export default function GuardrailDialog({
@@ -14,12 +16,13 @@ export default function GuardrailDialog({
   piiWarning,
   onConfirm,
   onCancel,
+  action = 'genereren',
 }: GuardrailDialogProps) {
   const pii = findings.filter((f) => f.kind === 'pii');
   const topics = findings.filter((f) => f.kind === 'topic');
 
   return (
-    <Modal open onClose={onCancel} title="Controle vóór genereren" size="max-w-lg">
+    <Modal open onClose={onCancel} title={`Controle vóór ${action}`} size="max-w-lg">
       <div className="flex gap-3">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400">
           <ShieldAlert size={20} />
@@ -46,13 +49,13 @@ export default function GuardrailDialog({
             </p>
           )}
           <p className="text-slate-500 dark:text-slate-400">
-            Wil je toch doorgaan met genereren?
+            Wil je toch doorgaan met {action}?
           </p>
         </div>
       </div>
       <div className="mt-6 flex justify-end gap-3">
         <button className="opl-btn-secondary" onClick={onCancel}>
-          Terug, ik pas de prompt aan
+          {action === 'versturen' ? 'Terug, ik pas het bericht aan' : 'Terug, ik pas de prompt aan'}
         </button>
         <button className="opl-btn bg-amber-600 text-white hover:bg-amber-700" onClick={onConfirm}>
           Ik begrijp het, ga door

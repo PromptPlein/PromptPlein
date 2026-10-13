@@ -9,6 +9,12 @@ export const SEED_ROLES: Role[] = [
   { id: 'role-projectleider', name: 'Projectleider', description: 'Aansturing van projecten en programma’s.' },
   { id: 'role-bestuursadviseur', name: 'Bestuursadviseur', description: 'Advisering aan bestuur en management.' },
   { id: 'role-klantcontact', name: 'Klantcontactmedewerker', description: 'Contact met burgers en bedrijven.' },
+  {
+    id: 'role-informatieadviseur',
+    name: 'Informatieadviseur',
+    description: 'Advies over informatievoorziening, architectuur en standaarden.',
+  },
+  { id: 'role-ontwikkelaar', name: 'Ontwikkelaar', description: 'Bouwt en onderhoudt software en API’s.' },
 ];
 
 // --- Categorieën (hardcoded voor Phase 1) ---

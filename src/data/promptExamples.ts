@@ -153,4 +153,36 @@ export const PROMPT_EXAMPLES: PromptExample[] = [
       '- Dummy data: [bijvoorbeeld 400 aanvragen over 26 weken, 12 behandelaars in 3 teams, realistische Nederlandse namen]\n' +
       '- Wanneer is de demo geslaagd: [bijvoorbeeld toonbaar aan het MT als voorbeeld van wat we in een halve dag met AI bouwen]',
   },
+  // Digitaal & ICT: voor informatieadviseurs en ontwikkelaars. Deze voorbeelden
+  // noemen bewust de standaard waar het om gaat (API Design Rules, publiccode.yml,
+  // WCAG, NeRDS): daaraan herkent de bouwer een digitale opdracht en haalt hij
+  // de passende pagina's uit de kennisbank van developer.overheid.nl erbij.
+  {
+    category: 'digitaal',
+    title: 'API ontwerpen volgens de API Design Rules',
+    subtitle: 'Resources, versienummering, foutmeldingen en de OpenAPI-specificatie',
+    prompt:
+      'Help me een REST API te ontwerpen die voldoet aan de API Design Rules van de overheid. Geef de resources en endpoints, de versienummering in de URI en in de API-Version-header, hoe foutmeldingen eruitzien, en een opzet van de OpenAPI-specificatie. Zet erbij hoe ik de specificatie controleer met de ADR-checker voordat ik code laat genereren.',
+  },
+  {
+    category: 'digitaal',
+    title: 'Repository klaarmaken voor open source',
+    subtitle: 'README, licentie, publiccode.yml en een controle vooraf',
+    prompt:
+      'Help me de repository van ons project klaar te maken om als open source software te publiceren, zoals de overheid dat met open tenzij vraagt. Geef de bestanden die erin horen (README, LICENSE, CONTRIBUTING, SECURITY en publiccode.yml) met wat er in elk bestand moet staan, leg uit waarom de EUPL-licentie voor de hand ligt, en geef een checklist van wat ik vooraf controleer, zoals wachtwoorden, sleutels of persoonsgegevens in de geschiedenis van de code.',
+  },
+  {
+    category: 'digitaal',
+    title: 'Webpagina toetsen op digitale toegankelijkheid',
+    subtitle: 'Bevindingen per WCAG-criterium, met de oplossing in de code',
+    prompt:
+      'Toets de HTML van een webpagina van onze organisatie op digitale toegankelijkheid volgens WCAG 2.1 niveau AA, zoals DigiToegankelijk dat voor overheidswebsites vraagt. Geef per bevinding het succescriterium, waar het in de code zit, wat iemand met een schermlezer of alleen een toetsenbord ervan merkt, en de oplossing. Sluit af met wat een automatische check zoals axe niet vindt en wat ik dus met de hand moet nalopen.',
+  },
+  {
+    category: 'digitaal',
+    title: 'Projectplan toetsen aan NeRDS',
+    subtitle: 'De richtlijnen voor digitale systemen langs een plan voor nieuwe software',
+    prompt:
+      'Beoordeel een projectplan voor nieuwe software aan de hand van de Nederlandse Richtlijn Digitale Systemen (NeRDS). Loop de richtlijnen langs, zoals werken vanuit de behoefte van de gebruiker, toegankelijkheid, open source, open standaarden, beveiliging, privacy en het voorkomen van leveranciersafhankelijkheid. Geef per richtlijn wat het plan al regelt, wat ontbreekt en welke vraag ik aan het projectteam stel. Sluit af met de drie punten die het eerst aandacht nodig hebben.',
+  },
 ];

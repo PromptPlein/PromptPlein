@@ -7,6 +7,7 @@ import {
 } from '@/lib/ndjsonStream';
 import { isContextPrompt, structureFormat } from '@/lib/techniques';
 import { tidyPromptMarkup } from '@/lib/utils';
+import { selectKaders } from '@/lib/verantwoordGebruik';
 import type { AiProvider } from '@/config/aiModels';
 import type {
   AdvisorTurnResult,
@@ -131,6 +132,16 @@ export async function optimizePrompt(args: {
   /** Admin-instructie over wat het model met de bronnen doet; leeg = server-default. */
   webSearchInstruction?: string;
   /**
+   * Overheidskaders uit Beheer (zie {@link overheidsContext}). Ontbreekt hij,
+   * dan voegt de server geen kaders toe.
+   */
+  kaderInstruction?: string;
+  /**
+   * Instructie bij pagina's uit de kennisbank van developer.overheid.nl.
+   * Ontbreekt hij, dan haalt de server die pagina's niet op.
+   */
+  kennisbankInstruction?: string;
+  /**
    * Extra gelabelde antwoordvelden bovenop de vervolgvragen van de techniek.
    * Gebruikt door de plan-bouwer om het verzamelde materiaal van eerdere stappen
    * (persona, format, brief) als context aan de eind-compose mee te geven, in
@@ -173,6 +184,8 @@ export async function optimizePrompt(args: {
     thinking,
     webSearch,
     webSearchInstruction,
+    kaderInstruction,
+    kennisbankInstruction,
     extraAnsweredFields,
     interviewResolved,
     onChunk,
@@ -228,6 +241,18 @@ export async function optimizePrompt(args: {
         temperature,
         thinking,
         ...(webSearch ? { webSearch: true, webSearchInstruction } : {}),
+        // Alleen de kaders waar deze opdracht onder valt; de rest blijft thuis.
+        kaderInstruction: kaderInstruction
+          ? selectKaders(
+              kaderInstruction,
+              [
+                promptContent,
+                ...Object.values(followUpAnswers),
+                ...(extraAnsweredFields ?? []).map((f) => f.answer),
+              ].join('\n'),
+            )
+          : undefined,
+        kennisbankInstruction,
       };
 
       // Meelezen gevraagd? Dan de streamende route: de eerste regels staan er na

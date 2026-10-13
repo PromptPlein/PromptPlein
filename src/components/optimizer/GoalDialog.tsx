@@ -33,10 +33,11 @@ import { logBehavior, newBehaviorSession, type BehaviorSession } from '@/service
 import { useAuth } from '@/context/AuthContext';
 import HoverPreview from '@/components/common/HoverPreview';
 import { GOAL_EXAMPLES, categoryOf } from '@/data/goalExamples';
-import type { AiSettings } from '@/services/settingsService';
+import { overheidsContext, type AiSettings } from '@/services/settingsService';
 import OptimizingLoader from './OptimizingLoader';
 import PrefillLoader from './PrefillLoader';
 import GuardrailDialog from './GuardrailDialog';
+import VerantwoordGebruikHint from './VerantwoordGebruikHint';
 import BriefSummary from './BriefSummary';
 import { InterviewPanel } from './InterviewPanel';
 import FollowUpQuestions, { type FieldMeta } from './FollowUpQuestions';
@@ -661,6 +662,7 @@ export default function GoalDialog({
         webSearchInstruction: settings.webSearchInstruction.trim() || undefined,
         systemPrompt: settings.systemPrompt.trim() || undefined,
         toneInstruction: settings.toneInstruction.trim() || undefined,
+        ...overheidsContext(settings),
         temperature: settings.temperature,
         // Meelezen terwijl de prompt wordt geschreven.
         onChunk: setStreamText,
@@ -836,6 +838,7 @@ export default function GoalDialog({
                 placeholder="Bijv. er moet een projectplan geschreven worden voor de invoering van een nieuwe interne tool"
                 onChange={(e) => setGoal(e.target.value)}
               />
+              <VerantwoordGebruikHint text={goal} />
               <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                 We kijken eerst welke prompttechniek bij jouw doel past en halen daar vraag voor
                 vraag de bouwstenen bij op. Zodra het beeld compleet is, bepalen we welk framework

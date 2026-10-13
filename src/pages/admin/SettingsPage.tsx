@@ -17,6 +17,7 @@ import {
   ExternalLink,
   Globe,
   KeyRound,
+  Landmark,
 } from 'lucide-react';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
@@ -41,6 +42,8 @@ import {
   DEFAULT_CHAT_SYSTEM_PROMPT,
   DEFAULT_EXECUTION_SYSTEM_PROMPT,
   DEFAULT_GENERATOR_WEB_SEARCH_INSTRUCTION,
+  DEFAULT_KADER_INSTRUCTION,
+  DEFAULT_KENNISBANK_INSTRUCTION,
   DEFAULT_PROJECT_OPTIMIZE_PROMPT,
   DEFAULT_SYSTEM_PROMPT,
   DEFAULT_WEB_SEARCH_INSTRUCTION,
@@ -394,6 +397,114 @@ export default function SettingsPage() {
                 className="shrink-0 font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
                 onClick={() =>
                   patch({ webSearchInstruction: DEFAULT_GENERATOR_WEB_SEARCH_INSTRUCTION })
+                }
+              >
+                Herstel standaard
+              </button>
+            )}
+          </p>
+        </div>
+      </section>
+
+      {/* 2b. Overheidskaders en kennisbank */}
+      <section className="opl-card p-6">
+        <SectionHeader icon={Landmark} title="Overheidskaders en kennisbank">
+          Laat de promptbouwer aansluiten op de kaders van de overheid. Per opdracht gaan alleen de
+          kaders mee waar die opdracht onder valt.
+          De kennisbank van developer.overheid.nl wordt alleen geraadpleegd bij een digitale
+          opdracht, zoals een API, open source of de toegankelijkheid van een website. Daarbij gaat
+          geen tekst van de gebruiker naar buiten.
+        </SectionHeader>
+
+        <label className="flex cursor-pointer items-center gap-3">
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded accent-rijksblauw-500"
+            checked={settings.kaders.enabled}
+            onChange={(e) =>
+              patch({ kaders: { ...settings.kaders, enabled: e.target.checked } })
+            }
+          />
+          <span className="text-sm text-slate-700 dark:text-slate-200">
+            Overheidskaders meegeven (persoonsgegevens, besluiten over burgers, publiekstekst, Woo,
+            beveiliging)
+          </span>
+        </label>
+        <div className={clsx('mt-3', !settings.kaders.enabled && 'pointer-events-none opacity-50')}>
+          <textarea
+            id="kaderInstruction"
+            aria-label="Overheidskaders"
+            className="opl-input min-h-[220px] resize-y font-mono text-[13px]"
+            value={settings.kaders.instruction}
+            onChange={(e) =>
+              patch({ kaders: { ...settings.kaders, instruction: e.target.value } })
+            }
+          />
+          <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400 dark:text-slate-500">
+            <span>
+              Elk blok tussen tags hoort bij een soort opdracht en gaat alleen mee als de opdracht
+              daaronder valt: &lt;persoonsgegevens&gt;, &lt;besluiten&gt; (over burgers of
+              bedrijven), &lt;publiekstekst&gt;, &lt;openbaarheid&gt; (Woo) en
+              &lt;beveiliging&gt;. Een blok met een eigen naam gaat altijd mee. Gebaseerd op de
+              Nederlandse Richtlijn Digitale Systemen (NeRDS) en het overheidsbrede standpunt over
+              generatieve AI. Laat leeg om de ingebouwde standaard te gebruiken.
+            </span>
+            {settings.kaders.instruction.trim() !== DEFAULT_KADER_INSTRUCTION && (
+              <button
+                type="button"
+                className="shrink-0 font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
+                onClick={() =>
+                  patch({ kaders: { ...settings.kaders, instruction: DEFAULT_KADER_INSTRUCTION } })
+                }
+              >
+                Herstel standaard
+              </button>
+            )}
+          </p>
+        </div>
+
+        <label className="mt-6 flex cursor-pointer items-center gap-3">
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded accent-rijksblauw-500"
+            checked={settings.kennisbank.enabled}
+            onChange={(e) =>
+              patch({ kennisbank: { ...settings.kennisbank, enabled: e.target.checked } })
+            }
+          />
+          <span className="text-sm text-slate-700 dark:text-slate-200">
+            Kennisbank van developer.overheid.nl gebruiken bij digitale opdrachten
+          </span>
+        </label>
+        <div
+          className={clsx('mt-3', !settings.kennisbank.enabled && 'pointer-events-none opacity-50')}
+        >
+          <textarea
+            id="kennisbankInstruction"
+            aria-label="Instructie bij de kennisbank"
+            className="opl-input min-h-[180px] resize-y font-mono text-[13px]"
+            value={settings.kennisbank.instruction}
+            onChange={(e) =>
+              patch({ kennisbank: { ...settings.kennisbank, instruction: e.target.value } })
+            }
+          />
+          <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400 dark:text-slate-500">
+            <span>
+              De server kiest maximaal drie pagina&rsquo;s uit de index van de kennisbank en geeft ze
+              met deze instructie mee. De gebruiker ziet ze als bronnen onder de prompt. Laat leeg
+              om de ingebouwde standaard te gebruiken.
+            </span>
+            {settings.kennisbank.instruction.trim() !== DEFAULT_KENNISBANK_INSTRUCTION && (
+              <button
+                type="button"
+                className="shrink-0 font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
+                onClick={() =>
+                  patch({
+                    kennisbank: {
+                      ...settings.kennisbank,
+                      instruction: DEFAULT_KENNISBANK_INSTRUCTION,
+                    },
+                  })
                 }
               >
                 Herstel standaard
@@ -793,8 +904,9 @@ export default function SettingsPage() {
       {/* 4. Guardrail: persoonsgegevens */}
       <section className="opl-card p-6">
         <SectionHeader icon={ShieldAlert} title="Guardrail: persoonsgegevens (AVG)">
-          Detecteert mogelijke persoonsgegevens (e-mail, BSN, telefoonnummer, IBAN) in de invoer. Bij
-          detectie wordt optimaliseren geblokkeerd tot de gebruiker bevestigt.
+          Detecteert mogelijke persoonsgegevens (e-mail, BSN, telefoonnummer, IBAN, naam met aanhef,
+          geboortedatum) in de invoer van de bouwer en in chatberichten en bijlagen. Bij detectie
+          gaat er niets naar de AI tot de gebruiker bevestigt.
         </SectionHeader>
 
         <label className="flex cursor-pointer items-center gap-3">

@@ -38,11 +38,12 @@ import { detectPii, detectBlockedTopics, type GuardrailFinding } from '@/service
 import { logBehavior, newBehaviorSession, type BehaviorSession } from '@/services/behaviorService';
 import { useAuth } from '@/context/AuthContext';
 import { activityIdentifier } from '@/lib/utils';
-import type { AiSettings } from '@/services/settingsService';
+import { overheidsContext, type AiSettings } from '@/services/settingsService';
 import OptimizingLoader from './OptimizingLoader';
 import type { StreamStatus } from '@/lib/ndjsonStream';
 import FollowUpQuestions, { type FieldMeta, type PrefillProgress } from './FollowUpQuestions';
 import GuardrailDialog from './GuardrailDialog';
+import VerantwoordGebruikHint from './VerantwoordGebruikHint';
 import PersonaBuilder from './PersonaBuilder';
 import FewShotBuilder from './FewShotBuilder';
 import MetaBuilder from './MetaBuilder';
@@ -1102,6 +1103,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
         preferredModel: settings.model,
         systemPrompt: settings.systemPrompt.trim() || undefined,
         toneInstruction: settings.toneInstruction.trim() || undefined,
+        ...overheidsContext(settings),
         temperature: settings.temperature,
         // Meelezen terwijl de eindprompt wordt geschreven.
         onChunk: setComposeStream,
@@ -1232,6 +1234,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
         preferredModel: settings.model,
         systemPrompt: settings.systemPrompt.trim() || undefined,
         toneInstruction: settings.toneInstruction.trim() || undefined,
+        ...overheidsContext(settings),
         temperature: settings.temperature,
         // Meelezen terwijl de eindprompt wordt geschreven.
         onChunk: setComposeStream,
@@ -1331,6 +1334,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
                 placeholder="Bijv. er moet een projectplan geschreven worden voor de invoering van een nieuwe interne tool"
                 onChange={(e) => setGoal(e.target.value)}
               />
+              <VerantwoordGebruikHint text={goal} />
               <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
                 We beginnen met vragen tot je vraagstuk compleet in beeld is, en versterken dat beeld
                 daarna met meerdere technieken tot één sterke, herbruikbare prompt.
