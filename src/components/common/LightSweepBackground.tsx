@@ -1,5 +1,5 @@
 // Heldachtergrond zonder WebGL: een vlak rijksblauw verloop met één lichtbaan die
-// eens per elf seconden voorbijkomt. De stijl staat in index.css (.hero-sweep).
+// elke twee seconden voorbijkomt. De stijl staat in index.css (.hero-sweep).
 // Decoratief: pointer-events staat uit en het blok is verborgen voor schermlezers.
 
 export default function LightSweepBackground({ className = '' }: { className?: string }) {

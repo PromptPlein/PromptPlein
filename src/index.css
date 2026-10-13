@@ -195,7 +195,7 @@ html.dark .skeleton::after {
     rgba(153, 199, 221, 0.13) 50%,
     transparent 58%
   );
-  animation: hero-sweep 11s ease-in-out infinite;
+  animation: hero-sweep 2s ease-in-out infinite;
 }
 @keyframes hero-sweep {
   0% {
