@@ -122,8 +122,7 @@ interface AnsweredField {
 /**
  * Is de taak van de gebruiker terugkerend of eenmalig? Dit is de voorwaarde voor
  * voorbeelden (few-shot/one-shot): die werken alleen als er telkens een
- * soortgelijke input binnenkomt. Deelt de vocabulaire van `FewShotIntent` in
- * src/lib/fewshot.ts, zodat het antwoord de bouwer rechtstreeks kan voor-invullen.
+ * soortgelijke input binnenkomt.
  */
 type Recurrence = 'herhaalbaar' | 'eenmalig';
 
@@ -253,16 +252,10 @@ interface RequestBody {
   personaContext?: string;
   /** De in te vullen persona-vragen (id + label + waarom die vraag ertoe doet). */
   personaQuestions?: { id: string; label: string; why?: string }[];
-  // 'fewshot-*'-velden: de taakbeschrijving en (bij extract) de voorbeeldparen.
-  /** Beschrijving van de input die de gebruiker straks aanlevert. */
-  fsInput?: string;
-  /** Beschrijving van de gewenste output. */
-  fsOutput?: string;
-  /** Vorm van de output: vrije_tekst/gestructureerd/lijst/classificatie. */
-  fsFormat?: string;
-  /** Bij classificatie: de mogelijke labels. */
-  fsLabels?: string;
-  /** De ingevulde input→output-voorbeeldparen (voor de extractie/analyse). */
+  // 'fewshot-*'-velden: de context en de input/output-paren.
+  /** De context waarin de prompt straks werkt (wat komt er binnen, wat moet ermee). */
+  fsContext?: string;
+  /** De ingevulde input→output-paren (bij example: de paren die er al staan). */
   fsPairs?: { input: string; output: string }[];
   // 'meta-build'-velden: het ruwe verzoek + optionele verfijn-feedback.
   /** Het ruwe verzoek/doel van de gebruiker waar de AI een PROMPT van bouwt. */
@@ -2672,36 +2665,45 @@ function parsePersonaFill(raw: string, validIds: Set<string>): { id: string; val
   }
 }
 
-// --- Few-shot-modus 1: genereer een concept-voorbeeldpaar ---
-// De gebruiker heeft (nog) geen eigen voorbeeld; de AI stelt er één voor op basis
-// van de taakbeschrijving, dat de gebruiker daarna kan bijstellen tot iets wat die
-// zou goedkeuren.
-const FEWSHOT_EXAMPLE_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse rijksoverheid.
-De gebruiker wil met de few-shot-techniek werken maar heeft nog geen voorbeeld. Stel op basis van de
-taakbeschrijving ÉÉN realistisch, concreet input→output-voorbeeldpaar voor dat past bij intern
-overheidswerk. Het is een CONCEPT dat de gebruiker mag aanpassen.
+// --- Few-shot-modus 1: stel een nieuw input/output-paar voor ---
+// De gebruiker heeft de context beschreven en wil een (volgend) paar. De AI stelt
+// een situatie voor die bij de context hoort en die de bestaande paren nog niet
+// dekken; de gebruiker past het daarna aan.
+const FEWSHOT_EXAMPLE_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse rijksoverheid en je stelt één nieuw input/output-paar voor bij de context van de gebruiker.
 
-- input: een plausibel voorbeeld van wat er binnenkomt (bijv. een burgervraag, een ruwe e-mail).
-- output: hoe daar idealiter op gereageerd wordt, in de gewenste vorm.
-- Blijf intern gericht, gebruik geen echte namen/dossiernummers, houd het bondig maar compleet.
+<wat_een_paar_is>
+- input: een situatie die de AI in de binnenkomende tekst moet herkennen, in één zin. Bijvoorbeeld een kenmerk van het bericht of een soort verzoek.
+- output: wat de AI in die situatie doet, met een letterlijke voorbeeldformulering van de reactie tussen aanhalingstekens.
+</wat_een_paar_is>
+
+<regels>
+- Het paar past bij de context van de gebruiker.
+- Kies een situatie die nog NIET in de bestaande paren staat. Staan er geen paren, kies dan de situatie die in deze context het vaakst voorkomt.
+- Geen echte namen, datums of dossiernummers.
+- Schrijf natuurlijk Nederlands zoals een ambtenaar het schrijft, geen vertaald Engels.
+- Gebruik nooit een gedachtestreepje (— of –) of een los streepje tussen zinsdelen. Gebruik een komma, een dubbele punt of een punt.
+</regels>
 
 ${CLARITY_GATE_JSON_INSTRUCTION}
 
 Anders geef je UITSLUITEND geldige JSON terug, zonder codeblok of extra tekst, in dit formaat:
-{"input":"<voorbeeld-input>","output":"<bijbehorende gewenste output>"}`;
+{"input":"<de situatie die de AI herkent>","output":"<wat de AI dan doet, met een voorbeeldformulering>"}`;
 
 const FEWSHOT_EXAMPLE_USER_PROMPT = (args: {
-  input?: string;
-  output?: string;
-  format?: string;
-  labels?: string;
+  context?: string;
+  pairs?: { input: string; output: string }[];
 }) => {
   const parts: string[] = [];
-  if (args.input?.trim()) parts.push(`SOORT INPUT:\n${args.input.trim()}`);
-  if (args.output?.trim()) parts.push(`GEWENSTE OUTPUT:\n${args.output.trim()}`);
-  if (args.format) parts.push(`VORM: ${args.format}`);
-  if (args.labels?.trim()) parts.push(`MOGELIJKE LABELS: ${args.labels.trim()}`);
-  parts.push('Stel nu één passend voorbeeldpaar voor.');
+  parts.push(`<context>\n${args.context?.trim() || '(geen context opgegeven)'}\n</context>`);
+  const pairs = (args.pairs ?? []).filter((p) => p.input?.trim() || p.output?.trim());
+  if (pairs.length > 0) {
+    parts.push(
+      `<bestaande_paren>\n${pairs
+        .map((p, i) => `Paar ${i + 1}:\nInput: ${p.input?.trim() ?? ''}\nOutput: ${p.output?.trim() ?? ''}`)
+        .join('\n\n')}\n</bestaande_paren>`,
+    );
+  }
+  parts.push('Stel nu één nieuw input/output-paar voor.');
   return parts.join('\n\n');
 };
 
@@ -2720,53 +2722,48 @@ function parseFewShotExample(raw: string): { input: string; output: string } | n
   }
 }
 
-// --- Few-shot-modus 2: extraheer kenmerken uit de voorbeelden (de kern) ---
-// De AI analyseert de voorbeeldparen en levert: (1) welke KENMERKEN je moet
-// overnemen (opbouw, toon, lengte, …), (2) welke CASUS-SPECIFIEKE details je juist
-// moet weglaten (namen, datums, dossiernummers), en bij meerdere voorbeelden een
-// dekkings- en consistentie-analyse.
-const FEWSHOT_EXTRACT_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse rijksoverheid.
-Analyseer de meegegeven voorbeeld(en) voor een few-shot-prompt en lever een gestructureerde analyse.
+// --- Few-shot-modus 2: analyseer de paren tegen de context ---
+// De AI legt de input/output-paren naast de context en levert: (1) welke
+// KENMERKEN van de reacties de prompt moet vastleggen (toon, opbouw, lengte, …),
+// (2) welke CASUS-SPECIFIEKE details juist weg moeten (namen, datums,
+// dossiernummers), (3) welke situaties uit de context nog geen paar hebben en
+// (4) waar paren elkaar tegenspreken of overlappen.
+const FEWSHOT_EXTRACT_SYSTEM_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse rijksoverheid en je analyseert de input/output-paren van de gebruiker tegen de context, als voorbereiding op een prompt voor een AI-agent.
 
-Doe vier dingen:
-1. KENMERKEN (overnemen): welke stijl-/vormkenmerken maken deze voorbeelden goed en moeten in de
-   prompt worden vastgelegd? Denk aan: opbouw/volgorde, toon en register, lengte, detailniveau,
-   aanhef/afsluiting, mate van stelligheid, gebruik van vaktaal, opmaak/koppen. Geef per kenmerk een
-   korte "detail" met wat je concreet in het voorbeeld zag.
-2. CASUS-SPECIFIEK (niet overnemen): welke concrete details horen bij DIT geval en moeten worden
-   geneutraliseerd of vervangen door een [plaatshouder]? Denk aan: namen, datums, dossier-/zaaknummers,
-   organisatienamen, bedragen, specifieke casusdetails.
-3. DEKKING (alleen bij meerdere voorbeelden): lijken de voorbeelden te veel op elkaar (allemaal kort,
-   allemaal standaardgevallen)? Zo ja, benoem dat kort in "dekking".
-4. CONSISTENTIE (alleen bij meerdere voorbeelden): spreken de voorbeelden elkaar tegen (bijv. het ene
-   formeel, het andere informeel)? Zo ja, beschrijf de tegenstrijdigheid kort in "consistentie".
+<invoer>
+- context: de situatie waarin de agent straks werkt.
+- paren: per paar een input (een situatie of voorbeeldtekst die de agent herkent) en een output (wat de agent dan doet).
+</invoer>
+
+<taak>
+1. kenmerken: welke kenmerken van de outputs moet de prompt vastleggen? Kies uit opbouw, toon en register, lengte, detailniveau, aanhef en afsluiting, mate van stelligheid, vaktaal, opmaak. Geef per kenmerk in "detail" wat je concreet in de outputs zag.
+2. casus_specifiek: welke concrete details horen bij één geval en moeten weg of een [plaatshouder] worden? Denk aan namen, datums, dossiernummers, organisatienamen, bedragen. Staan die er niet in, geef dan een lege lijst.
+3. dekking: welke situatie komt in deze context vaak voor maar heeft nog geen paar? Noem er één of twee in één zin. Zijn alle gangbare situaties gedekt, geef dan een lege tekst.
+4. consistentie: spreken twee paren elkaar tegen, of kan één bericht onder twee inputs vallen zonder dat duidelijk is welke voorgaat? Beschrijf dat in één zin. Is er geen tegenspraak, geef dan een lege tekst.
+</taak>
+
+<schrijfwijze>
+- Natuurlijk Nederlands, geen vertaald Engels.
+- Gebruik nooit een gedachtestreepje (— of –) of een los streepje tussen zinsdelen. Gebruik een komma, een dubbele punt of een punt.
+- Maximaal 8 kenmerken en 8 casus-specifieke punten.
+</schrijfwijze>
 
 ${CLARITY_GATE_JSON_INSTRUCTION}
 
 Anders geef je UITSLUITEND geldige JSON terug, zonder codeblok of extra tekst, in dit formaat:
-{"kenmerken":[{"label":"<kort>","detail":"<wat je zag>"}],"casus_specifiek":[{"label":"<kort>","detail":"<wat en waarom weg>"}],"dekking":"<zin of leeg>","consistentie":"<zin of leeg>"}
-
-Geef maximaal 8 kenmerken en 8 casus-specifieke punten; alleen de echt relevante.`;
+{"kenmerken":[{"label":"<kort>","detail":"<wat je zag>"}],"casus_specifiek":[{"label":"<kort>","detail":"<wat en waarom weg>"}],"dekking":"<zin of leeg>","consistentie":"<zin of leeg>"}`;
 
 const FEWSHOT_EXTRACT_USER_PROMPT = (args: {
-  input?: string;
-  output?: string;
-  format?: string;
-  labels?: string;
+  context?: string;
   pairs?: { input: string; output: string }[];
 }) => {
   const parts: string[] = [];
-  const taak: string[] = [];
-  if (args.input?.trim()) taak.push(`Input: ${args.input.trim()}`);
-  if (args.output?.trim()) taak.push(`Gewenste output: ${args.output.trim()}`);
-  if (args.format) taak.push(`Vorm: ${args.format}`);
-  if (args.labels?.trim()) taak.push(`Mogelijke labels: ${args.labels.trim()}`);
-  if (taak.length > 0) parts.push(`TAAK:\n${taak.join('\n')}`);
+  parts.push(`<context>\n${args.context?.trim() || '(geen context opgegeven)'}\n</context>`);
   const pairs = (args.pairs ?? []).filter((p) => p.input?.trim() || p.output?.trim());
   parts.push(
-    `VOORBEELD(EN):\n${pairs
-      .map((p, i) => `Voorbeeld ${i + 1}:\nInput: ${p.input?.trim() ?? ''}\nOutput: ${p.output?.trim() ?? ''}`)
-      .join('\n\n')}`,
+    `<paren>\n${pairs
+      .map((p, i) => `Paar ${i + 1}:\nInput: ${p.input?.trim() ?? ''}\nOutput: ${p.output?.trim() ?? ''}`)
+      .join('\n\n')}\n</paren>`,
   );
   return parts.join('\n\n');
 };
@@ -4155,29 +4152,65 @@ staan als [plaatshouder]. Geef geen tekst buiten deze koppen en plaats GEEN code
 }
 
 /**
- * Verplichte uitvoerstructuur voor de Few-Shot-techniek: een rol/taak-intro,
- * 2 à 3 voorbeeldblokken met Input/Output, en een afsluitend "Nieuwe taak"-blok
- * waar de gebruiker zijn eigen invoer plakt. Het model leert het patroon uit de
- * voorbeelden en voert daarna in dezelfde stijl de nieuwe taak uit.
+ * Verplichte uitvoerstructuur voor de Few-Shot-techniek: rol plus context, een
+ * werkwijze, de input/output-paren als voorbeelden, wat te doen als geen paar
+ * past, en een afsluitend "Nieuwe invoer"-blok. Komt er een ingevulde bouwer mee
+ * (context en paren), dan gaan ALLE paren erin: de gebruiker heeft bepaald
+ * hoeveel situaties de prompt moet kennen. Elk paar wordt één situatieblok
+ * met reactie en voorbeeldformulering. Er staat bewust één vorm in het
+ * sjabloon: met twee vormen naast elkaar zette Mistral Small elk paar er twee
+ * keer in.
  */
 const FEW_SHOT_STRUCTURE_INSTRUCTION = `VERPLICHTE UITVOERSTRUCTUUR (Few-Shot / voorbeeldgestuurd prompten):
-Bouw de prompt ALTIJD op in deze volgorde. Schrijf de voorbeelden volledig uit op
-basis van de antwoorden; gebruik dezelfde doelgroep, toon en soort tekst als de taak.
+Schrijf de prompt in de jij-vorm, gericht aan de AI die hem uitvoert. Gebruik dezelfde doelgroep, toon en
+soort tekst als de taak.
 
-1. Een korte rol/taak-intro (1-3 zinnen): wie de AI is en wat de taak is, met de
-   expliciete instructie om de stijl en structuur van de onderstaande voorbeelden te volgen.
-2. Twee à drie genummerde voorbeelden, elk in dit formaat:
-   Voorbeeld 1:
-   Input: "[voorbeeld van de invoer]"
-   Output: "[de gewenste, voorbeeldige uitvoer]"
-3. Een afsluitend blok:
-   Nieuwe taak:
-   Input: "[plak hier je eigen invoer]"
-   Output:
-   (laat Output bewust leeg zodat het model die invult)
+<onderdelen>
+1. Rol en context, twee tot vier zinnen: wie de AI is, in welke situatie hij werkt, wat er binnenkomt en
+   wat hij ermee doet. Staat er een CONTEXT in de ingevulde bouwer, gebruik die als basis.
+2. Werkwijze, een korte genummerde lijst: lees de invoer, bepaal welke situatie van toepassing is, en
+   reageer zoals bij die situatie staat, in dezelfde stijl.
+3. De situaties. Staan er paren onder INPUT EN OUTPUT in de ingevulde bouwer, maak dan van ELK paar
+   precies één situatieblok, in dezelfde volgorde. Verzin er geen bij en zet een paar er nooit twee keer
+   in. De input wordt de situatie, de output wordt de reactie. Staat er in de output een letterlijke
+   formulering, zet die dan bij "Voorbeeld van een goede reactie". Staan er geen paren, bedenk er dan
+   twee of drie die bij de taak passen.
+4. Als geen situatie past: één of twee zinnen. Staat er onder ALS GEEN ENKELE INPUT PAST iets in de
+   bouwer, neem dat over. Anders: niet gokken, maar beleefd om verduidelijking vragen.
+5. Het afsluitende blok voor de nieuwe invoer.
+</onderdelen>
 
-Houd Input/Output-paren consistent qua toon, lengte en niveau. Laat alleen écht per
-keer in te vullen plekken staan als [plaatshouder]. Plaats GEEN codeblok-tekens (\`\`\`).`;
+<uitvoersjabloon>
+[rol en context]
+
+Werkwijze:
+1. [stap]
+2. [stap]
+
+Situatie 1: [wanneer deze situatie geldt]
+Reactie: [wat je dan doet]
+Voorbeeld van een goede reactie: "[letterlijke formulering]"
+
+Situatie 2: [wanneer deze situatie geldt]
+Reactie: [wat je dan doet]
+Voorbeeld van een goede reactie: "[letterlijke formulering]"
+
+Als geen situatie past: [wat je dan doet]
+
+Nieuwe invoer:
+Input: "[plak hier de binnenkomende tekst]"
+Output:
+</uitvoersjabloon>
+
+<regels>
+- Zet de nummers en namen van de onderdelen hierboven NIET in de prompt; volg alleen het uitvoersjabloon.
+- Laat Output in het laatste blok leeg, zodat het model die invult.
+- Neem de kenmerken onder KENMERKEN OM OVER TE NEMEN op als regels voor stijl en vorm, in de werkwijze.
+- Vervang de details onder NIET OVERNEMEN door een [plaatshouder] of laat ze weg.
+- Laat alleen écht per keer in te vullen plekken staan als [plaatshouder].
+- Gebruik nooit een gedachtestreepje (— of –) of een los streepje tussen zinsdelen.
+- Plaats GEEN codeblok-tekens (\`\`\`).
+</regels>`;
 
 /**
  * Verplichte uitvoerstructuur voor Chain-of-Thought (stapsgewijs redeneren).
@@ -8495,13 +8528,11 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // --- Few-shot: genereer een concept-voorbeeldpaar ---
+    // --- Few-shot: stel een nieuw input/output-paar voor ---
     if (mode === 'fewshot-example') {
       const userMessage = FEWSHOT_EXAMPLE_USER_PROMPT({
-        input: body.fsInput,
-        output: body.fsOutput,
-        format: body.fsFormat,
-        labels: body.fsLabels,
+        context: body.fsContext,
+        pairs: Array.isArray(body.fsPairs) ? body.fsPairs : [],
       });
       for (const candidate of order) {
         try {
@@ -8536,7 +8567,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // --- Few-shot: extraheer kenmerken + casus-specifiek + dekking/consistentie ---
+    // --- Few-shot: analyseer de paren tegen de context ---
     if (mode === 'fewshot-extract') {
       const pairs = Array.isArray(body.fsPairs) ? body.fsPairs : [];
       if (pairs.length === 0) {
@@ -8546,10 +8577,7 @@ Deno.serve(async (req: Request) => {
         );
       }
       const userMessage = FEWSHOT_EXTRACT_USER_PROMPT({
-        input: body.fsInput,
-        output: body.fsOutput,
-        format: body.fsFormat,
-        labels: body.fsLabels,
+        context: body.fsContext,
         pairs,
       });
       for (const candidate of order) {

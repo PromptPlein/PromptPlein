@@ -220,8 +220,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
   const [showExamples, setShowExamples] = useState(false);
   const [unclearReason, setUnclearReason] = useState<string | null>(null);
   // Routing-gate: de vraag die de planner terugstelde, en het antwoord erop. Het
-  // antwoord gaat mee in de nieuwe plan-aanvraag én vult de few-shot-bouwer voor,
-  // zodat die niet nóg eens vraagt wat de gebruiker hier al beantwoord heeft.
+  // antwoord gaat mee in de nieuwe plan-aanvraag.
   const [routing, setRouting] = useState<PlanRouting | null>(null);
   const [recurrence, setRecurrence] = useState<Recurrence | null>(null);
   const [guardrailFindings, setGuardrailFindings] = useState<GuardrailFinding[] | null>(null);
@@ -1441,7 +1440,6 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
                 techniqueById={techniqueById}
                 currentStepIndex={currentStepIndex}
                 outcomes={outcomes}
-                recurrence={recurrence}
                 phase={phase}
                 error={phase === 'error' ? stepError : null}
                 onRetry={retryStep}
@@ -1738,7 +1736,6 @@ function PlanExecutor({
   onDescribeFormat,
   settings,
   goal,
-  recurrence,
   onPersonaChange,
   onFewShotChange,
   onMetaChange,
@@ -1783,8 +1780,6 @@ function PlanExecutor({
   onDescribeFormat: (brief: string) => Promise<boolean>;
   settings: AiSettings;
   goal: string;
-  /** Bij de intake vastgestelde herhaalbaarheid; vult de few-shot-bouwer voor. */
-  recurrence: Recurrence | null;
   onPersonaChange: (text: string) => void;
   onFewShotChange: (text: string) => void;
   onMetaChange: (text: string) => void;
@@ -1891,7 +1886,6 @@ function PlanExecutor({
                   settings={settings}
                   goal={goal}
                   contextText={contextText}
-                  recurrence={recurrence}
                   onPersonaChange={onPersonaChange}
                   onFewShotChange={onFewShotChange}
                   onMetaChange={onMetaChange}
@@ -1975,7 +1969,6 @@ function StepCollector({
   settings,
   goal,
   contextText,
-  recurrence,
   onPersonaChange,
   onFewShotChange,
   onMetaChange,
@@ -2013,11 +2006,6 @@ function StepCollector({
   goal: string;
   /** Doel + materiaal van eerdere stappen; voedt de persona-invulhulp. */
   contextText: string;
-  /**
-   * De bij de intake vastgestelde herhaalbaarheid, als de planner ernaar vroeg.
-   * Vult de few-shot-bouwer voor, zodat die niet nogmaals dezelfde vraag stelt.
-   */
-  recurrence: Recurrence | null;
   onPersonaChange: (text: string) => void;
   onFewShotChange: (text: string) => void;
   onMetaChange: (text: string) => void;
@@ -2042,7 +2030,7 @@ function StepCollector({
   // Persona/Multi-Persona krijgen de uitgebreide persona-builder i.p.v. de
   // generieke vragenlijst.
   const isPersona = format === 'persona' || format === 'multi-persona';
-  // Few-Shot krijgt de eigen meerstaps-bouwer (routing → voorbeelden → extractie).
+  // Few-Shot krijgt de eigen meerstaps-bouwer (context → input en output → analyse).
   const isFewShot = format === 'few-shot';
   // Meta Prompting: de AI bouwt zelf de prompt (geen antwoord).
   const isMeta = format === 'meta';
@@ -2106,7 +2094,9 @@ function StepCollector({
           <FewShotBuilder
             settings={settings}
             onSerialized={onFewShotChange}
-            initialIntent={recurrence ?? undefined}
+            // De context van de few-shot-bouwer begint bij het doel en wat
+            // eerdere stappen opleverden; de gebruiker scherpt hem daarna aan.
+            initialContext={contextText || goal}
           />
         )
       ) : isMeta ? (

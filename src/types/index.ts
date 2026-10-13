@@ -481,8 +481,6 @@ export interface PromptPlan {
  * Is de taak van de gebruiker terugkerend of eenmalig? Dit is de voorwaarde voor
  * voorbeelden (few-shot/one-shot): die werken alleen als er telkens een
  * soortgelijke input binnenkomt waarop op dezelfde manier gereageerd moet worden.
- * Deelt bewust de vocabulaire van `FewShotIntent` (src/lib/fewshot.ts), zodat het
- * antwoord de few-shot-bouwer rechtstreeks kan voor-invullen.
  */
 export type Recurrence = 'herhaalbaar' | 'eenmalig';
 

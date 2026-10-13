@@ -6,62 +6,73 @@ import {
   Check,
   Loader2,
   Plus,
+  RefreshCw,
   Sparkles,
   Trash2,
   Wand2,
 } from 'lucide-react';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
+import OptimizableTextarea from '@/components/common/OptimizableTextarea';
 import { generateFewShotExample, extractFewShot } from '@/services/optimizeService';
 import type { AiSettings } from '@/services/settingsService';
 import {
   DEFAULT_FEATURE_LABELS,
-  FEWSHOT_INTENT_OPTIONS,
-  OUTPUT_FORMAT_OPTIONS,
   deriveMode,
   emptyFewShot,
+  filledPairs,
   serializeFewShot,
   type FewShotData,
   type FewShotFeature,
-  type FewShotIntent,
   type FewShotPair,
 } from '@/lib/fewshot';
 
-/** De fasen van de few-shot-bouwer. */
-type Phase = 'routing' | 'task' | 'examples' | 'extract' | 'checks';
+/** De stappen van de few-shot-bouwer. */
+type Phase = 'context' | 'pairs' | 'analysis';
+
+const PHASES: Phase[] = ['context', 'pairs', 'analysis'];
+
+const PHASE_TITLES: Record<Phase, string> = {
+  context: 'Wat is de context?',
+  pairs: 'Input en output',
+  analysis: 'Analyse',
+};
 
 let pairSeq = 1;
 const newPairId = () => `pair-${++pairSeq}`;
+
+/** Vingerafdruk van wat de analyse heeft gezien; wijkt die af, dan is de analyse verouderd. */
+function analysisKey(d: FewShotData): string {
+  return JSON.stringify([d.context.trim(), filledPairs(d).map((p) => [p.input.trim(), p.output.trim()])]);
+}
 
 interface FewShotBuilderProps {
   settings: AiSettings;
   /** Aangeroepen met de geserialiseerde few-shot-definitie zodra die wijzigt. */
   onSerialized: (text: string) => void;
-  /**
-   * De herhaalbaarheid die bij de intake al is vastgesteld (routingvraag van de
-   * planner). Is die bekend, dan slaan we de routing-fase over: die vraag is dan
-   * al beantwoord en nogmaals vragen is alleen maar verwarrend.
-   */
-  initialIntent?: FewShotIntent;
+  /** Vult de context alvast in, bijvoorbeeld met het doel uit de PlanWizard. */
+  initialContext?: string;
 }
 
 /**
- * Bouwt een Few-Shot-prompt op via de fasen: routing (one-shot vs few-shot),
- * taakdefinitie, voorbeeldparen (met AI-conceptvoorbeeld), en de kern-extractie
- * waar de AI zelf de over-te-nemen kenmerken en de casus-specifieke (weg te laten)
- * details voorstelt. Bij few-shot volgt nog een dekkings- en consistentiecheck.
- * Het eindresultaat wordt geserialiseerd en als antwoord van de stap doorgegeven.
+ * Bouwt een Few-Shot-prompt in drie stappen. Eerst de context: waar werkt de
+ * prompt straks in, wat komt er binnen. Dan input/output-paren, met een plusje
+ * voor elk volgend paar: wat herkent de AI, en hoe reageert hij dan. Tot slot
+ * legt de AI de paren tegen de context (kenmerken, weg te laten details,
+ * ontbrekende situaties, tegenspraak). Het eindresultaat wordt geserialiseerd en
+ * als antwoord van de stap doorgegeven; de generator maakt er een agent-prompt van.
  */
-export default function FewShotBuilder({ settings, onSerialized, initialIntent }: FewShotBuilderProps) {
-  const [d, setD] = useState<FewShotData>(() =>
-    initialIntent ? { ...emptyFewShot(), intent: initialIntent } : emptyFewShot(),
-  );
-  const [phase, setPhase] = useState<Phase>(initialIntent ? 'task' : 'routing');
-  const [busy, setBusy] = useState(false);
-  // Analyse-observaties (dekking/consistentie) uit de extractie.
+export default function FewShotBuilder({ settings, onSerialized, initialContext }: FewShotBuilderProps) {
+  const [d, setD] = useState<FewShotData>(() => emptyFewShot(initialContext?.trim() ?? ''));
+  const [phase, setPhase] = useState<Phase>('context');
+  // Welk paar krijgt nu een AI-voorstel (null = geen), en loopt de analyse?
+  const [suggesting, setSuggesting] = useState<string | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  // Observaties uit de analyse, plus wat de analyse heeft gezien.
   const [dekking, setDekking] = useState('');
   const [consistentie, setConsistentie] = useState('');
-  const [extracted, setExtracted] = useState(false);
+  const [analyzedKey, setAnalyzedKey] = useState<string | null>(null);
+  const busy = analyzing || suggesting !== null;
 
   // Meld de geserialiseerde tekst terug zodra de data wijzigt.
   useEffect(() => {
@@ -75,8 +86,6 @@ export default function FewShotBuilder({ settings, onSerialized, initialIntent }
     if (d.mode !== mode) setD((prev) => ({ ...prev, mode }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
-
-  const isFewShot = mode === 'few-shot';
 
   function patch(p: Partial<FewShotData>) {
     setD((prev) => ({ ...prev, ...p }));
@@ -96,46 +105,42 @@ export default function FewShotBuilder({ settings, onSerialized, initialIntent }
     setD((prev) => (prev.pairs.length <= 1 ? prev : { ...prev, pairs: prev.pairs.filter((p) => p.id !== id) }));
   }
 
-  /** Genereer een concept-voorbeeldpaar (Q3 "nee, ik heb geen materiaal"). */
-  async function suggestExample(targetId: string) {
-    setBusy(true);
+  /** Laat de AI een paar voorstellen dat bij de context past en nog niet gedekt is. */
+  async function suggestPair(targetId: string) {
+    setSuggesting(targetId);
     try {
       const res = await generateFewShotExample({
-        input: d.inputBeschrijving,
-        output: d.outputBeschrijving,
-        format: d.outputFormaat,
-        labels: d.labels,
+        context: d.context,
+        pairs: filledPairs(d)
+          .filter((p) => p.id !== targetId)
+          .map((p) => ({ input: p.input, output: p.output })),
         preferredProvider: settings.provider,
         preferredModel: settings.model,
       });
       if (res.success && res.example) {
         updatePair(targetId, 'input', res.example.input);
         updatePair(targetId, 'output', res.example.output);
-        toast.success('Conceptvoorbeeld ingevuld. Pas het aan tot iets wat je zou goedkeuren.');
+        toast.success('Voorstel ingevuld. Pas het aan tot het klopt voor jouw situatie.');
       } else {
-        toast.error(res.error ?? 'Kon geen voorbeeld genereren.');
+        toast.error(res.error ?? 'Kon geen voorstel maken.');
       }
     } finally {
-      setBusy(false);
+      setSuggesting(null);
     }
   }
 
-  /** Draai de kern-extractie: kenmerken + casus-specifiek + dekking/consistentie. */
-  async function runExtract() {
-    const pairs = d.pairs
-      .filter((p) => p.input.trim() || p.output.trim())
-      .map((p) => ({ input: p.input, output: p.output }));
+  /** Leg de paren tegen de context: kenmerken, weg te laten details, dekking, tegenspraak. */
+  async function runAnalysis() {
+    const pairs = filledPairs(d).map((p) => ({ input: p.input, output: p.output }));
     if (pairs.length === 0) {
-      toast.error('Voeg eerst minstens één voorbeeld toe.');
+      toast.error('Vul eerst minstens één input en output in.');
       return;
     }
-    setBusy(true);
+    const key = analysisKey(d);
+    setAnalyzing(true);
     try {
       const res = await extractFewShot({
-        input: d.inputBeschrijving,
-        output: d.outputBeschrijving,
-        format: d.outputFormaat,
-        labels: d.labels,
+        context: d.context,
         pairs,
         preferredProvider: settings.provider,
         preferredModel: settings.model,
@@ -144,18 +149,16 @@ export default function FewShotBuilder({ settings, onSerialized, initialIntent }
         toast.error(res.error ?? 'Analyse mislukt.');
         return;
       }
-      // Zet de voorgestelde kenmerken standaard aangevinkt (overnemen), en de
-      // casus-specifieke standaard aangevinkt (weglaten) — de gebruiker corrigeert.
+      // De voorgestelde kenmerken staan standaard aan (overnemen), de
+      // casus-specifieke ook (weglaten); de gebruiker corrigeert.
       const kenmerken: FewShotFeature[] = (res.kenmerken ?? []).map((k) => ({
         label: k.label,
         detail: k.detail,
         checked: true,
       }));
-      const fallback = kenmerken.length === 0
-        ? DEFAULT_FEATURE_LABELS.map((label) => ({ label, checked: false }))
-        : kenmerken;
       patch({
-        overnemen: fallback,
+        overnemen:
+          kenmerken.length > 0 ? kenmerken : DEFAULT_FEATURE_LABELS.map((label) => ({ label, checked: false })),
         nietOvernemen: (res.casus_specifiek ?? []).map((c) => ({
           label: c.label,
           detail: c.detail,
@@ -164,9 +167,9 @@ export default function FewShotBuilder({ settings, onSerialized, initialIntent }
       });
       setDekking(res.dekking ?? '');
       setConsistentie(res.consistentie ?? '');
-      setExtracted(true);
+      setAnalyzedKey(key);
     } finally {
-      setBusy(false);
+      setAnalyzing(false);
     }
   }
 
@@ -177,29 +180,37 @@ export default function FewShotBuilder({ settings, onSerialized, initialIntent }
     }));
   }
 
-  // --- Fase-navigatie ---
-  const phases: Phase[] = isFewShot
-    ? ['routing', 'task', 'examples', 'extract', 'checks']
-    : ['routing', 'task', 'examples', 'extract'];
-  const phaseIndex = phases.indexOf(phase);
-  const canNext = phaseIndex < phases.length - 1;
-  const canBack = phaseIndex > 0;
+  /** Vanuit de analyse terug naar de paren, met een nieuw leeg paar klaar. */
+  function addPairFromAnalysis() {
+    addPair();
+    setPhase('pairs');
+  }
+
+  // --- Navigatie ---
+  const phaseIndex = PHASES.indexOf(phase);
+  const analyzed = analyzedKey !== null;
+  const stale = analyzed && analyzedKey !== analysisKey(d);
+  const hasPairs = filledPairs(d).length > 0;
+  const canNext =
+    phase === 'context' ? Boolean(d.context.trim()) : phase === 'pairs' ? hasPairs : false;
+
   function next() {
-    if (phase === 'extract' && !extracted) {
-      void runExtract();
-      return;
+    if (phase === 'context') setPhase('pairs');
+    else if (phase === 'pairs') {
+      setPhase('analysis');
+      // Eerste keer, of er is iets veranderd sinds de vorige analyse: meteen draaien.
+      if (!analyzed || stale) void runAnalysis();
     }
-    if (canNext) setPhase(phases[phaseIndex + 1]);
   }
   function back() {
-    if (canBack) setPhase(phases[phaseIndex - 1]);
+    if (phaseIndex > 0) setPhase(PHASES[phaseIndex - 1]);
   }
 
   return (
     <div className="space-y-4">
-      {/* Voortgang: welke fase van welke. */}
+      {/* Voortgang: welke stap van welke. */}
       <div className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
-        {phases.map((p, i) => (
+        {PHASES.map((p, i) => (
           <span key={p} className="flex items-center gap-2">
             <span
               className={clsx(
@@ -213,57 +224,56 @@ export default function FewShotBuilder({ settings, onSerialized, initialIntent }
             >
               {i < phaseIndex ? <Check size={11} /> : i + 1}
             </span>
-            {i < phases.length - 1 && <span className="h-px w-4 bg-slate-200 dark:bg-slate-700" />}
+            {i < PHASES.length - 1 && <span className="h-px w-4 bg-slate-200 dark:bg-slate-700" />}
           </span>
         ))}
         <span className="ml-1">{PHASE_TITLES[phase]}</span>
       </div>
 
-      {phase === 'routing' && <RoutingPhase d={d} patch={patch} derivedMode={mode} />}
-      {phase === 'task' && <TaskPhase d={d} patch={patch} />}
-      {phase === 'examples' && (
-        <ExamplesPhase
-          d={d}
-          isFewShot={isFewShot}
+      {phase === 'context' && (
+        <ContextPhase value={d.context} onChange={(context) => patch({ context })} />
+      )}
+      {phase === 'pairs' && (
+        <PairsPhase
+          pairs={d.pairs}
           busy={busy}
+          suggesting={suggesting}
           onUpdatePair={updatePair}
           onAddPair={addPair}
           onRemovePair={removePair}
-          onSuggest={suggestExample}
+          onSuggest={(id) => void suggestPair(id)}
         />
       )}
-      {phase === 'extract' && (
-        <ExtractPhase
+      {phase === 'analysis' && (
+        <AnalysisPhase
           d={d}
-          busy={busy}
-          extracted={extracted}
-          onExtract={runExtract}
+          analyzing={analyzing}
+          analyzed={analyzed}
+          stale={stale}
+          dekking={dekking}
+          consistentie={consistentie}
+          onAnalyze={() => void runAnalysis()}
           onToggle={toggleFeature}
+          onAddPair={addPairFromAnalysis}
+          onRandgeval={(randgeval) => patch({ randgeval })}
         />
-      )}
-      {phase === 'checks' && (
-        <ChecksPhase d={d} patch={patch} dekking={dekking} consistentie={consistentie} />
       )}
 
       {/* Navigatie. */}
       <div className="flex items-center justify-between gap-3 pt-1">
         <button
           type="button"
-          className={clsx('opl-btn-secondary', !canBack && 'invisible')}
+          className={clsx('opl-btn-secondary', phaseIndex === 0 && 'invisible')}
           onClick={back}
           disabled={busy}
         >
           <ArrowLeft size={16} /> Vorige
         </button>
-        {canNext ? (
-          <button type="button" className="opl-btn-primary" onClick={next} disabled={busy}>
-            {busy ? (
+        {phase !== 'analysis' ? (
+          <button type="button" className="opl-btn-primary" onClick={next} disabled={busy || !canNext}>
+            {phase === 'pairs' ? (
               <>
-                <Loader2 size={16} className="animate-spin" /> Bezig…
-              </>
-            ) : phase === 'extract' && !extracted ? (
-              <>
-                <Sparkles size={16} /> Analyseer voorbeeld
+                <Sparkles size={16} /> Analyseer
               </>
             ) : (
               <>
@@ -272,141 +282,53 @@ export default function FewShotBuilder({ settings, onSerialized, initialIntent }
             )}
           </button>
         ) : (
-          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-            <Check size={14} /> Klaar. Klik hieronder op &quot;Genereren&quot;.
-          </span>
+          analyzed &&
+          !stale &&
+          !analyzing && (
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+              <Check size={14} /> Klaar. Bouw hieronder de prompt.
+            </span>
+          )
         )}
       </div>
     </div>
   );
 }
 
-const PHASE_TITLES: Record<Phase, string> = {
-  routing: 'Wat wil je bereiken?',
-  task: 'Taak: input & output',
-  examples: 'Voorbeelden',
-  extract: 'Wat neem ik over?',
-  checks: 'Consistentie & randgevallen',
-};
-
-/** Fase 0: routing. */
-function RoutingPhase({
-  d,
-  patch,
-  derivedMode,
-}: {
-  d: FewShotData;
-  patch: (p: Partial<FewShotData>) => void;
-  derivedMode: 'one-shot' | 'few-shot';
-}) {
+/** Stap 1: de context, met het sterretje om hem uit te laten schrijven. */
+function ContextPhase({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       <p className="text-sm text-slate-600 dark:text-slate-300">
-        Wat wil je met deze voorbeelden bereiken? Op basis daarvan kiest de tool zelf of één voorbeeld
-        (one-shot) volstaat of dat meerdere nodig zijn (few-shot).
+        Beschrijf de situatie waarin de prompt straks werkt: wat komt er binnen, van wie, en wat moet
+        ermee gebeuren? Schrijf het in een paar steekwoorden en laat het sterretje er een heldere context
+        van maken.
       </p>
-      <div className="space-y-2">
-        {FEWSHOT_INTENT_OPTIONS.map((o) => (
-          <button
-            key={o.value}
-            type="button"
-            onClick={() => patch({ intent: o.value })}
-            className={clsx(
-              'block w-full rounded-xl border p-3 text-left transition-colors',
-              d.intent === o.value
-                ? 'border-rijksblauw-500 bg-rijksblauw-50 ring-2 ring-rijksblauw-500/20 dark:bg-rijksblauw-500/15'
-                : 'border-slate-200 bg-white hover:border-rijksblauw-300 dark:border-slate-700 dark:bg-slate-800',
-            )}
-          >
-            <span className="font-medium text-slate-800 dark:text-slate-100">{o.label}</span>
-            <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">{o.hint}</span>
-          </button>
-        ))}
-      </div>
-      <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-        Op dit moment gaat de tool uit van{' '}
-        <span className="font-semibold text-rijksblauw-700 dark:text-rijksblauw-200">
-          {derivedMode === 'few-shot' ? 'few-shot (meerdere voorbeelden)' : 'one-shot (één voorbeeld)'}
-        </span>
-        . Dit past zich vanzelf aan naarmate je meer invult.
-      </p>
+      <OptimizableTextarea
+        rows={5}
+        value={value}
+        onValueChange={onChange}
+        placeholder="Bijv. Ik krijg elke dag e-mails van burgers over hun aanvraag. Ik wil dat de AI elke mail beoordeelt en er passend op reageert."
+        className="opl-input min-h-[8rem] resize-y px-4 py-3 text-[15px] leading-relaxed"
+        optimizeTitle="Verduidelijk mijn context met AI; je oorspronkelijke tekst kun je daarna terughalen"
+      />
     </div>
   );
 }
 
-/** Fase 1: taakdefinitie. */
-function TaskPhase({ d, patch }: { d: FewShotData; patch: (p: Partial<FewShotData>) => void }) {
-  return (
-    <div className="space-y-3">
-      <div>
-        <label className="opl-label mb-0.5 block">Wat stop je er straks in? (de input)</label>
-        <textarea
-          className="opl-input min-h-[60px] resize-y text-sm"
-          value={d.inputBeschrijving}
-          placeholder="Bijv. binnenkomende e-mails van burgers met een vraag over een regeling"
-          onChange={(e) => patch({ inputBeschrijving: e.target.value })}
-        />
-      </div>
-      <div>
-        <label className="opl-label mb-0.5 block">Wat moet eruit komen? (de output)</label>
-        <textarea
-          className="opl-input min-h-[60px] resize-y text-sm"
-          value={d.outputBeschrijving}
-          placeholder="Bijv. een vriendelijk, duidelijk antwoord in maximaal 150 woorden"
-          onChange={(e) => patch({ outputBeschrijving: e.target.value })}
-        />
-      </div>
-      <div>
-        <label className="opl-label mb-0.5 block">Welke vorm heeft de output?</label>
-        <div className="flex flex-wrap gap-2">
-          {OUTPUT_FORMAT_OPTIONS.map((o) => (
-            <button
-              key={o.value}
-              type="button"
-              onClick={() => patch({ outputFormaat: o.value })}
-              className={clsx(
-                'rounded-lg border px-3 py-1.5 text-sm transition-colors',
-                d.outputFormaat === o.value
-                  ? 'border-rijksblauw-500 bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200'
-                  : 'border-slate-200 bg-white text-slate-600 hover:border-rijksblauw-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300',
-              )}
-            >
-              {o.label}
-            </button>
-          ))}
-        </div>
-        {d.outputFormaat === 'classificatie' && (
-          <div className="mt-2">
-            <label className="opl-label mb-0.5 block">Welke labels zijn mogelijk?</label>
-            <input
-              className="opl-input text-sm"
-              value={d.labels}
-              placeholder="Bijv. Spoed / Regulier / Doorsturen"
-              onChange={(e) => patch({ labels: e.target.value })}
-            />
-            <p className="mt-1 text-xs text-rijksoranje">
-              Bij classificatie is few-shot bijna altijd nodig; geef liefst een voorbeeld per label.
-            </p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/** Fase 2: voorbeeldparen. */
-function ExamplesPhase({
-  d,
-  isFewShot,
+/** Stap 2: de input/output-paren, met een plusje voor elk volgend paar. */
+function PairsPhase({
+  pairs,
   busy,
+  suggesting,
   onUpdatePair,
   onAddPair,
   onRemovePair,
   onSuggest,
 }: {
-  d: FewShotData;
-  isFewShot: boolean;
+  pairs: FewShotPair[];
   busy: boolean;
+  suggesting: string | null;
   onUpdatePair: (id: string, field: 'input' | 'output', value: string) => void;
   onAddPair: () => void;
   onRemovePair: (id: string) => void;
@@ -415,17 +337,17 @@ function ExamplesPhase({
   return (
     <div className="space-y-3">
       <p className="text-sm text-slate-600 dark:text-slate-300">
-        Geef {isFewShot ? 'enkele voorbeelden' : 'een voorbeeld'} van input met de bijbehorende gewenste
-        output. Heb je nog geen voorbeeld? Laat de AI er een voorstellen en pas het aan.
+        Leg per situatie vast wat de AI herkent (de input) en hoe hij dan reageert (de output). Met het
+        plusje voeg je de volgende situatie toe. Weet je er even geen? Laat de AI er een voorstellen.
       </p>
-      {d.pairs.map((p: FewShotPair, idx) => (
+      {pairs.map((p, idx) => (
         <div
           key={p.id}
           className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-800"
         >
           <div className="mb-2 flex items-center justify-between">
             <span className="text-sm font-semibold text-rijksblauw-700 dark:text-rijksblauw-200">
-              Voorbeeld {idx + 1}
+              Input en output {idx + 1}
             </span>
             <div className="flex items-center gap-2">
               <button
@@ -434,14 +356,14 @@ function ExamplesPhase({
                 onClick={() => onSuggest(p.id)}
                 disabled={busy}
               >
-                {busy ? <Loader2 size={13} className="animate-spin" /> : <Wand2 size={13} />}
+                {suggesting === p.id ? <Loader2 size={13} className="animate-spin" /> : <Wand2 size={13} />}
                 Laat AI voorstellen
               </button>
-              {d.pairs.length > 1 && (
+              {pairs.length > 1 && (
                 <button
                   type="button"
                   onClick={() => onRemovePair(p.id)}
-                  title="Verwijder voorbeeld"
+                  title="Verwijder dit paar"
                   className="rounded p-1 text-slate-400 hover:bg-rijksoranje/10 hover:text-rijksoranje dark:text-slate-500"
                 >
                   <Trash2 size={14} />
@@ -449,87 +371,164 @@ function ExamplesPhase({
               )}
             </div>
           </div>
-          <label className="opl-label mb-0.5 block text-xs">Input</label>
+          <label className="opl-label mb-0.5 block text-xs">Input: wat herkent de AI?</label>
           <textarea
             className="opl-input min-h-[56px] resize-y text-sm"
             value={p.input}
-            placeholder="Wat komt er binnen…"
+            placeholder={
+              idx === 0
+                ? 'Bijv. Analyseer of de mail onbeleefd is.'
+                : 'Bijv. Het bericht is onduidelijk: niet te zien wat de afzender vraagt.'
+            }
             onChange={(e) => onUpdatePair(p.id, 'input', e.target.value)}
           />
-          <label className="opl-label mb-0.5 mt-2 block text-xs">Gewenste output</label>
+          <label className="opl-label mb-0.5 mt-2 block text-xs">Output: hoe reageert de AI dan?</label>
           <textarea
             className="opl-input min-h-[56px] resize-y text-sm"
             value={p.output}
-            placeholder="Hoe daar idealiter op gereageerd wordt…"
+            placeholder={
+              idx === 0
+                ? 'Bijv. Reageer beleefd: "Vervelend dat u in deze situatie zit. We helpen u graag verder."'
+                : 'Bijv. Vraag om uitleg: "We begrijpen uw bericht niet helemaal. Kunt u wat meer uitleg geven?"'
+            }
             onChange={(e) => onUpdatePair(p.id, 'output', e.target.value)}
           />
         </div>
       ))}
-      {isFewShot && (
-        <button
-          type="button"
-          onClick={onAddPair}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-rijksblauw-300 px-3 py-2 text-sm font-medium text-rijksblauw-700 hover:bg-rijksblauw-50 dark:border-rijksblauw-500/40 dark:text-rijksblauw-200 dark:hover:bg-rijksblauw-500/10"
-        >
-          <Plus size={16} /> Nog een voorbeeld toevoegen
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={onAddPair}
+        className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-rijksblauw-300 px-3 py-2 text-sm font-medium text-rijksblauw-700 hover:bg-rijksblauw-50 dark:border-rijksblauw-500/40 dark:text-rijksblauw-200 dark:hover:bg-rijksblauw-500/10"
+      >
+        <Plus size={16} /> Input en output toevoegen
+      </button>
     </div>
   );
 }
 
-/** Fase 3: de kern-extractie (kenmerken + weg te laten details). */
-function ExtractPhase({
+/** Stap 3: de analyse van de paren tegen de context. */
+function AnalysisPhase({
   d,
-  busy,
-  extracted,
-  onExtract,
+  analyzing,
+  analyzed,
+  stale,
+  dekking,
+  consistentie,
+  onAnalyze,
   onToggle,
+  onAddPair,
+  onRandgeval,
 }: {
   d: FewShotData;
-  busy: boolean;
-  extracted: boolean;
-  onExtract: () => void;
+  analyzing: boolean;
+  analyzed: boolean;
+  stale: boolean;
+  dekking: string;
+  consistentie: string;
+  onAnalyze: () => void;
   onToggle: (list: 'overnemen' | 'nietOvernemen', index: number) => void;
+  onAddPair: () => void;
+  onRandgeval: (v: string) => void;
 }) {
-  if (!extracted) {
+  if (analyzing) {
+    return (
+      <p className="flex items-center gap-2 rounded-lg border border-dashed border-slate-300 px-4 py-6 text-sm text-slate-500 dark:border-slate-600 dark:text-slate-400">
+        <Loader2 size={16} className="animate-spin" /> De AI legt je input en output naast de context…
+      </p>
+    );
+  }
+  if (!analyzed) {
     return (
       <div className="space-y-3">
         <p className="text-sm text-slate-600 dark:text-slate-300">
-          Nu analyseert de AI je voorbeeld(en): welke kenmerken maken ze goed (en moeten we vastleggen),
-          en welke details horen alleen bij dít geval (en moeten weg). Klik om te analyseren.
+          De AI legt je input en output naast de context: welke kenmerken de prompt moet vastleggen, welke
+          details alleen bij één geval horen, en welke situaties nog ontbreken.
         </p>
-        <button type="button" className="opl-btn-primary" onClick={onExtract} disabled={busy}>
-          {busy ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-          Analyseer voorbeeld
+        <button type="button" className="opl-btn-primary" onClick={onAnalyze}>
+          <Sparkles size={16} /> Analyseer
         </button>
       </div>
     );
   }
   return (
     <div className="space-y-4">
+      {stale && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-200">
+          <span>Je hebt de context of de paren aangepast sinds deze analyse.</span>
+          <button type="button" className="opl-btn-secondary" onClick={onAnalyze}>
+            <RefreshCw size={14} /> Opnieuw analyseren
+          </button>
+        </div>
+      )}
+
+      {/* Dekking: situaties uit de context zonder paar. */}
+      {dekking && (
+        <div className="rounded-xl border border-rijksblauw-200 bg-rijksblauw-50/40 p-3 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10">
+          <p className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
+            <Sparkles size={15} className="mt-0.5 shrink-0 text-rijksblauw-500" />
+            <span>
+              <span className="font-medium">Nog niet gedekt:</span> {dekking}
+            </span>
+          </p>
+          <button
+            type="button"
+            onClick={onAddPair}
+            className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-rijksblauw-700 hover:underline dark:text-rijksblauw-200"
+          >
+            <Plus size={14} /> Input en output toevoegen
+          </button>
+        </div>
+      )}
+
+      {/* Tegenspraak of overlap tussen paren. */}
+      {consistentie && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-500/30 dark:bg-amber-500/15">
+          <p className="flex items-start gap-2 text-sm text-amber-800 dark:text-amber-200">
+            <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+            <span>
+              <span className="font-medium">Let op:</span> {consistentie}
+            </span>
+          </p>
+        </div>
+      )}
+
       <FeatureChecklist
-        title="Deze kenmerken zag ik; welke moet ik overnemen?"
+        title="Deze kenmerken zag ik in je outputs; welke moet de prompt vastleggen?"
         accent="rijksblauw"
         features={d.overnemen}
         onToggle={(i) => onToggle('overnemen', i)}
       />
       {d.nietOvernemen.length > 0 && (
         <FeatureChecklist
-          title="Deze details lijken casus-specifiek; deze laat ik weg (of plaats een [plaatshouder])"
+          title="Deze details horen bij één geval; deze laat ik weg (of maak ik een [plaatshouder])"
           accent="oranje"
           features={d.nietOvernemen}
           onToggle={(i) => onToggle('nietOvernemen', i)}
         />
       )}
-      <button
-        type="button"
-        className="text-xs font-medium text-slate-500 hover:text-rijksblauw-600 dark:text-slate-400"
-        onClick={onExtract}
-        disabled={busy}
-      >
-        Opnieuw analyseren
-      </button>
+
+      <div>
+        <label className="opl-label mb-0.5 block">
+          Wat doet de AI als geen enkele input past?{' '}
+          <span className="font-normal text-slate-400">(optioneel)</span>
+        </label>
+        <textarea
+          className="opl-input min-h-[56px] resize-y text-sm"
+          value={d.randgeval}
+          placeholder="Bijv. Niet gokken, maar de mail doorsturen naar een medewerker met een korte samenvatting."
+          onChange={(e) => onRandgeval(e.target.value)}
+        />
+      </div>
+
+      {!stale && (
+        <button
+          type="button"
+          className="text-xs font-medium text-slate-500 hover:text-rijksblauw-600 dark:text-slate-400"
+          onClick={onAnalyze}
+        >
+          Opnieuw analyseren
+        </button>
+      )}
     </div>
   );
 }
@@ -554,12 +553,7 @@ function FeatureChecklist({
             key={i}
             className="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 bg-white p-2.5 text-sm dark:border-slate-700 dark:bg-slate-800"
           >
-            <input
-              type="checkbox"
-              className="mt-0.5"
-              checked={f.checked}
-              onChange={() => onToggle(i)}
-            />
+            <input type="checkbox" className="mt-0.5" checked={f.checked} onChange={() => onToggle(i)} />
             <span>
               <span
                 className={clsx(
@@ -569,99 +563,10 @@ function FeatureChecklist({
               >
                 {f.label}
               </span>
-              {f.detail && (
-                <span className="block text-xs text-slate-500 dark:text-slate-400">{f.detail}</span>
-              )}
+              {f.detail && <span className="block text-xs text-slate-500 dark:text-slate-400">{f.detail}</span>}
             </span>
           </label>
         ))}
-      </div>
-    </div>
-  );
-}
-
-/** Fase 4 (alleen few-shot): dekking, consistentie (zacht blokkeren), randgeval, tegenvoorbeeld. */
-function ChecksPhase({
-  d,
-  patch,
-  dekking,
-  consistentie,
-}: {
-  d: FewShotData;
-  patch: (p: Partial<FewShotData>) => void;
-  dekking: string;
-  consistentie: string;
-}) {
-  const filledPairs = d.pairs.filter((p) => p.input.trim() || p.output.trim());
-  return (
-    <div className="space-y-4">
-      {/* Dekking. */}
-      {dekking && (
-        <div className="rounded-xl border border-rijksblauw-200 bg-rijksblauw-50/40 p-3 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10">
-          <p className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
-            <Sparkles size={15} className="mt-0.5 shrink-0 text-rijksblauw-500" />
-            <span>
-              <span className="font-medium">Dekking:</span> {dekking} Overweeg een afwijkend geval toe te
-              voegen bij de voorbeelden.
-            </span>
-          </p>
-        </div>
-      )}
-
-      {/* Consistentie — zacht blokkeren: waarschuwen + leidend kiezen. */}
-      {consistentie && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-500/30 dark:bg-amber-500/15">
-          <p className="flex items-start gap-2 text-sm text-amber-800 dark:text-amber-200">
-            <AlertTriangle size={15} className="mt-0.5 shrink-0" />
-            <span>
-              <span className="font-medium">Let op, tegenstrijdigheid:</span> {consistentie} Welk voorbeeld
-              is leidend?
-            </span>
-          </p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {filledPairs.map((_, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => patch({ leidendVoorbeeld: String(i + 1) })}
-                className={clsx(
-                  'rounded-lg border px-3 py-1 text-sm transition-colors',
-                  d.leidendVoorbeeld === String(i + 1)
-                    ? 'border-amber-500 bg-amber-100 text-amber-900 dark:bg-amber-500/25 dark:text-amber-100'
-                    : 'border-amber-200 bg-white text-amber-800 hover:bg-amber-100 dark:border-amber-500/30 dark:bg-slate-800 dark:text-amber-200',
-                )}
-              >
-                Voorbeeld {i + 1} is leidend
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Randgeval (Q8). */}
-      <div>
-        <label className="opl-label mb-0.5 block">
-          Wat moet er gebeuren als het misgaat? (ontbrekende info, verzoek buiten scope)
-        </label>
-        <textarea
-          className="opl-input min-h-[56px] resize-y text-sm"
-          value={d.randgeval}
-          placeholder="Bijv. bij ontbrekende gegevens: vraag beleefd om aanvulling in plaats van te gokken."
-          onChange={(e) => patch({ randgeval: e.target.value })}
-        />
-      </div>
-
-      {/* Tegenvoorbeeld (Q10, optioneel). */}
-      <div>
-        <label className="opl-label mb-0.5 block">
-          Tegenvoorbeeld: &quot;zo dus níét&quot; <span className="font-normal text-slate-400">(optioneel)</span>
-        </label>
-        <textarea
-          className="opl-input min-h-[56px] resize-y text-sm"
-          value={d.tegenvoorbeeld}
-          placeholder="Bijv. te lang, te formeel, of met beloftes over termijnen."
-          onChange={(e) => patch({ tegenvoorbeeld: e.target.value })}
-        />
       </div>
     </div>
   );

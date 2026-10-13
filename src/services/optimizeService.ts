@@ -556,15 +556,13 @@ async function postOptimize<T>(body: Record<string, unknown>): Promise<T | null>
 }
 
 /**
- * Genereert één concept-input→output-voorbeeldpaar voor de few-shot-bouwer, op
- * basis van de taakbeschrijving. Gebruikt wanneer de gebruiker (nog) geen eigen
- * voorbeeld heeft; de gebruiker stelt het daarna bij.
+ * Genereert één concept-input→output-paar voor de few-shot-bouwer, op basis van
+ * de context. De paren die er al staan gaan mee, zodat de AI een situatie
+ * voorstelt die nog niet gedekt is; de gebruiker stelt het daarna bij.
  */
 export async function generateFewShotExample(args: {
-  input?: string;
-  output?: string;
-  format?: string;
-  labels?: string;
+  context: string;
+  pairs: { input: string; output: string }[];
   preferredProvider?: AiProvider;
   preferredModel?: string;
 }): Promise<{ success: boolean; example?: { input: string; output: string }; error?: string }> {
@@ -575,10 +573,8 @@ export async function generateFewShotExample(args: {
       error?: string;
     }>({
       mode: 'fewshot-example',
-      fsInput: args.input,
-      fsOutput: args.output,
-      fsFormat: args.format,
-      fsLabels: args.labels,
+      fsContext: args.context,
+      fsPairs: args.pairs,
       preferredProvider: args.preferredProvider ?? 'auto',
       preferredModel: args.preferredModel,
     });
@@ -591,15 +587,13 @@ export async function generateFewShotExample(args: {
 }
 
 /**
- * Analyseert de few-shot-voorbeelden: welke KENMERKEN over te nemen, welke
- * CASUS-SPECIFIEKE details weg te laten, plus (bij meerdere voorbeelden) een
- * dekkings- en consistentie-observatie. Dit is de kern van de few-shot-bouwer.
+ * Legt de input/output-paren tegen de context: welke KENMERKEN over te nemen,
+ * welke CASUS-SPECIFIEKE details weg te laten, welke situaties uit de context nog
+ * geen paar hebben (dekking) en waar paren elkaar tegenspreken (consistentie).
+ * Dit is de analysestap van de few-shot-bouwer.
  */
 export async function extractFewShot(args: {
-  input?: string;
-  output?: string;
-  format?: string;
-  labels?: string;
+  context: string;
   pairs: { input: string; output: string }[];
   preferredProvider?: AiProvider;
   preferredModel?: string;
@@ -621,10 +615,7 @@ export async function extractFewShot(args: {
       error?: string;
     }>({
       mode: 'fewshot-extract',
-      fsInput: args.input,
-      fsOutput: args.output,
-      fsFormat: args.format,
-      fsLabels: args.labels,
+      fsContext: args.context,
       fsPairs: args.pairs,
       preferredProvider: args.preferredProvider ?? 'auto',
       preferredModel: args.preferredModel,

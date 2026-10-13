@@ -1,89 +1,43 @@
 /**
- * Datamodel + serialisatie voor de Few-Shot-bouwer (Few-Shot Voorbeelden-stap van
- * de plan-bouwer). De bouwer leidt zelf af of het one-shot of few-shot moet zijn,
- * verzamelt input/output-paren, en laat de AI de te behouden kenmerken en de
- * casus-specifieke (weg te laten) details uit de voorbeelden halen. Het eindpunt
- * is één stuk gestructureerde tekst dat als antwoord in de analyse/compose landt.
+ * Datamodel + serialisatie voor de Few-Shot-bouwer. De bouwer loopt in drie
+ * stappen: eerst de context (waar werkt de prompt straks in, wat komt er
+ * binnen), dan een reeks input/output-paren (wat herkent de AI, en hoe reageert
+ * hij dan), en tot slot een analyse waarin de AI de paren tegen de context legt.
+ * Het eindpunt is één stuk gestructureerde tekst dat als antwoord in de
+ * analyse/compose landt en waar de generator een agent-prompt van bouwt.
  */
 
-/** Wat de gebruiker wil bereiken (Q0-routing → bepaalt one-shot vs few-shot). */
-export type FewShotIntent = 'herhaalbaar' | 'eenmalig' | 'weet_niet';
-
-/** Vorm van de gewenste output (Q2). Classificatie dwingt few-shot af. */
-export type OutputFormat = 'vrije_tekst' | 'gestructureerd' | 'lijst' | 'classificatie';
-
-/** Eén input→output-voorbeeldpaar. */
+/** Eén input→output-paar: een situatie of voorbeeldinvoer met de gewenste reactie. */
 export interface FewShotPair {
   id: string;
   input: string;
   output: string;
 }
 
-/** Een kandidaat-kenmerk uit de extractie (Q5/Q6), aan/uit te vinken. */
+/** Een kandidaat-kenmerk uit de analyse, aan/uit te vinken. */
 export interface FewShotFeature {
   /** Korte naam, bijv. "Toon en register". */
   label: string;
-  /** Korte toelichting wat er in het voorbeeld gezien is. */
+  /** Korte toelichting wat er in de paren gezien is. */
   detail?: string;
-  /** Aangevinkt = overnemen (Q5) of weglaten (Q6). */
+  /** Aangevinkt = overnemen of weglaten, afhankelijk van de lijst. */
   checked: boolean;
 }
 
 /** De volledige staat van de few-shot-bouwer. */
 export interface FewShotData {
-  intent: FewShotIntent;
-  /** Afgeleid uit intent (+ aantal patroonvarianten): één of meerdere voorbeelden. */
+  /** Afgeleid uit het aantal ingevulde paren: één of meerdere voorbeelden. */
   mode: 'one-shot' | 'few-shot';
-  // Taakdefinitie (Q1-Q2).
-  inputBeschrijving: string;
-  outputBeschrijving: string;
-  outputFormaat: OutputFormat;
-  /** Bij classificatie: de mogelijke labels. */
-  labels: string;
-  // Voorbeeldmateriaal (Q3-Q4).
+  /** Stap 1: de context waarin de prompt straks werkt. */
+  context: string;
+  /** Stap 2: de input/output-paren. */
   pairs: FewShotPair[];
-  // Extractie (Q5-Q6) — door de AI voorgesteld, door de gebruiker bijgesteld.
+  // Stap 3: de analyse, door de AI voorgesteld en door de gebruiker bijgesteld.
   overnemen: FewShotFeature[];
   nietOvernemen: FewShotFeature[];
-  // Few-shot-checks (Q7-Q9).
-  /** Q9: welk voorbeeld leidend is bij tegenstrijdigheid (index, of leeg). */
-  leidendVoorbeeld: string;
-  /** Q8: wat te doen bij een randgeval (ontbrekende info / buiten scope). */
+  /** Wat de AI doet als geen enkele input op de binnenkomende tekst past. */
   randgeval: string;
-  // Optioneel (Q10).
-  tegenvoorbeeld: string;
 }
-
-/**
- * De routing-vraag (Q0). Eerst het enkele voorbeeld (one-shot), daarna het
- * herhaalbare geval (few-shot): zo loopt de lijst van één voorbeeld naar
- * meerdere, in dezelfde volgorde als de techniek zelf opbouwt.
- */
-export const FEWSHOT_INTENT_OPTIONS: { value: FewShotIntent; label: string; hint: string }[] = [
-  {
-    value: 'eenmalig',
-    label: 'Eén tekst, in de juiste vorm',
-    hint: 'Bijv. één specifieke brief of nota in een bepaalde stijl. → één voorbeeld volstaat.',
-  },
-  {
-    value: 'herhaalbaar',
-    label: 'Steeds hetzelfde soort output',
-    hint: 'Bijv. elke keer een burgervraag op dezelfde manier beantwoorden. → meerdere voorbeelden.',
-  },
-  {
-    value: 'weet_niet',
-    label: 'Weet ik nog niet',
-    hint: 'De tool bepaalt het zelf op basis van je voorbeelden.',
-  },
-];
-
-/** De vorm-opties (Q2). */
-export const OUTPUT_FORMAT_OPTIONS: { value: OutputFormat; label: string }[] = [
-  { value: 'vrije_tekst', label: 'Vrije tekst' },
-  { value: 'gestructureerd', label: 'Gestructureerd (vaste rubrieken)' },
-  { value: 'lijst', label: 'Lijst / opsomming' },
-  { value: 'classificatie', label: 'Classificatie / label' },
-];
 
 /** Standaard-kenmerken die de checklist toont als de AI niets kon afleiden (fallback). */
 export const DEFAULT_FEATURE_LABELS = [
@@ -97,38 +51,26 @@ export const DEFAULT_FEATURE_LABELS = [
   'Opmaak / koppen',
 ];
 
-/** Maak een lege bouwer-staat. */
-export function emptyFewShot(): FewShotData {
+/** Maak een lege bouwer-staat, eventueel met de context al ingevuld. */
+export function emptyFewShot(context = ''): FewShotData {
   return {
-    intent: 'weet_niet',
     mode: 'one-shot',
-    inputBeschrijving: '',
-    outputBeschrijving: '',
-    outputFormaat: 'vrije_tekst',
-    labels: '',
+    context,
     pairs: [{ id: 'pair-1', input: '', output: '' }],
     overnemen: [],
     nietOvernemen: [],
-    leidendVoorbeeld: '',
     randgeval: '',
-    tegenvoorbeeld: '',
   };
 }
 
-/** Leid de modus af: classificatie of "herhaalbaar" of ≥2 paren → few-shot. */
-export function deriveMode(d: FewShotData): 'one-shot' | 'few-shot' {
-  if (d.intent === 'herhaalbaar') return 'few-shot';
-  if (d.outputFormaat === 'classificatie') return 'few-shot';
-  if (d.pairs.filter((p) => p.input.trim() || p.output.trim()).length >= 2) return 'few-shot';
-  return 'one-shot';
+/** De paren waar de gebruiker iets in heeft gezet. */
+export function filledPairs(d: FewShotData): FewShotPair[] {
+  return d.pairs.filter((p) => p.input.trim() || p.output.trim());
 }
 
-/** Is er genoeg ingevuld om iets zinvols te genereren? */
-export function fewShotHasContent(d: FewShotData): boolean {
-  return (
-    d.pairs.some((p) => p.input.trim() || p.output.trim()) ||
-    Boolean(d.inputBeschrijving.trim() || d.outputBeschrijving.trim())
-  );
+/** Leid de modus af: twee of meer ingevulde paren is few-shot. */
+export function deriveMode(d: FewShotData): 'one-shot' | 'few-shot' {
+  return filledPairs(d).length >= 2 ? 'few-shot' : 'one-shot';
 }
 
 /**
@@ -140,18 +82,13 @@ export function serializeFewShot(d: FewShotData): string {
   const parts: string[] = [];
   parts.push(`AANPAK: ${d.mode === 'few-shot' ? 'Few-shot (meerdere voorbeelden)' : 'One-shot (één voorbeeld)'}`);
 
-  const taak: string[] = [];
-  if (d.inputBeschrijving.trim()) taak.push(`Input: ${d.inputBeschrijving.trim()}`);
-  if (d.outputBeschrijving.trim()) taak.push(`Gewenste output: ${d.outputBeschrijving.trim()}`);
-  taak.push(`Vorm: ${OUTPUT_FORMAT_OPTIONS.find((o) => o.value === d.outputFormaat)?.label ?? d.outputFormaat}`);
-  if (d.outputFormaat === 'classificatie' && d.labels.trim()) taak.push(`Mogelijke labels: ${d.labels.trim()}`);
-  parts.push(`TAAK:\n${taak.map((t) => `- ${t}`).join('\n')}`);
+  if (d.context.trim()) parts.push(`CONTEXT:\n${d.context.trim()}`);
 
-  const filledPairs = d.pairs.filter((p) => p.input.trim() || p.output.trim());
-  if (filledPairs.length > 0) {
+  const pairs = filledPairs(d);
+  if (pairs.length > 0) {
     parts.push(
-      `VOORBEELDEN:\n${filledPairs
-        .map((p, i) => `Voorbeeld ${i + 1}:\n  Input: ${p.input.trim() || '[nog invullen]'}\n  Output: ${p.output.trim() || '[nog invullen]'}`)
+      `INPUT EN OUTPUT:\n${pairs
+        .map((p, i) => `Paar ${i + 1}:\n  Input: ${p.input.trim() || '[nog invullen]'}\n  Output: ${p.output.trim() || '[nog invullen]'}`)
         .join('\n\n')}`,
     );
   }
@@ -167,9 +104,7 @@ export function serializeFewShot(d: FewShotData): string {
         .join('\n')}`,
     );
 
-  if (d.leidendVoorbeeld.trim()) parts.push(`LEIDEND VOORBEELD BIJ TWIJFEL: ${d.leidendVoorbeeld.trim()}`);
-  if (d.randgeval.trim()) parts.push(`BIJ RANDGEVALLEN (ontbrekende info / buiten scope):\n${d.randgeval.trim()}`);
-  if (d.tegenvoorbeeld.trim()) parts.push(`TEGENVOORBEELD (zo dus NIET):\n${d.tegenvoorbeeld.trim()}`);
+  if (d.randgeval.trim()) parts.push(`ALS GEEN ENKELE INPUT PAST:\n${d.randgeval.trim()}`);
 
   return parts.join('\n\n');
 }
