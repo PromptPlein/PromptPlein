@@ -327,8 +327,9 @@ export default function OwnPromptOptimizer({
     resetDownstream(); // andere soort = andere frameworks, het oude advies vervalt
   }
 
-  function handleVariant() {
-    setVariantOn((v) => !v);
+  function handleVariant(on: boolean) {
+    if (on === variantOn) return;
+    setVariantOn(on);
     resetDownstream();
   }
 
@@ -746,6 +747,63 @@ export default function OwnPromptOptimizer({
             })}
           </div>
 
+          {/* Vervolgkeuze bij Code en Dashboard: twee opties die elk een eigen
+              framework aanwijzen. Zichtbaar zodra de soort gekozen is, zodat je
+              ziet dát er een keuze is in plaats van hem te moeten ontdekken. */}
+          {variant && (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-slate-200 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-slate-800">
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                {variant.question}
+              </span>
+              <div
+                role="radiogroup"
+                aria-label={variant.question}
+                className="grid min-w-0 flex-1 grid-cols-1 gap-2 sm:grid-cols-2"
+              >
+                {[
+                  { on: true, option: variant.on },
+                  { on: false, option: variant.off },
+                ].map(({ on, option }) => {
+                  const active = variantOn === on;
+                  return (
+                    <button
+                      key={option.modality}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      onClick={() => handleVariant(on)}
+                      disabled={recommending || prefilling}
+                      className={clsx(
+                        'flex min-w-0 items-start gap-2.5 rounded-lg border px-3 py-2 text-left transition-colors',
+                        'focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500/40 disabled:cursor-not-allowed',
+                        active
+                          ? 'border-rijksblauw-500 bg-rijksblauw-50 ring-1 ring-rijksblauw-500 dark:bg-rijksblauw-500/15'
+                          : 'border-slate-200 hover:border-rijksblauw-300 dark:border-slate-600 dark:hover:border-rijksblauw-500/50',
+                      )}
+                    >
+                      <span
+                        className={clsx(
+                          'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2',
+                          active ? 'border-rijksblauw-500' : 'border-slate-400 dark:border-slate-500',
+                        )}
+                      >
+                        {active && <span className="h-1.5 w-1.5 rounded-full bg-rijksblauw-500" />}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-sm font-semibold text-slate-800 dark:text-slate-100">
+                          {option.label}
+                        </span>
+                        <span className="block text-xs text-slate-500 dark:text-slate-400">
+                          {option.detail}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <textarea
             id="own-prompt-input"
             className="block min-h-[120px] w-full resize-y border-0 bg-white px-3.5 py-3 font-mono text-[13px] text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-0 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
@@ -763,31 +821,6 @@ export default function OwnPromptOptimizer({
 
           <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5 border-t border-slate-200 px-3 py-2.5 dark:border-slate-700">
             <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-slate-500 dark:text-slate-400">
-              {variant && (
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={variantOn}
-                  onClick={handleVariant}
-                  disabled={recommending || prefilling}
-                  className="inline-flex items-center gap-2 text-sm font-medium text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500/40 disabled:cursor-not-allowed dark:text-slate-200"
-                >
-                  <span
-                    className={clsx(
-                      'relative h-[18px] w-8 shrink-0 rounded-full transition-colors',
-                      variantOn ? 'bg-rijksblauw-500' : 'bg-slate-300 dark:bg-slate-600',
-                    )}
-                  >
-                    <span
-                      className={clsx(
-                        'absolute left-0.5 top-0.5 h-3.5 w-3.5 rounded-full bg-white shadow transition-transform',
-                        variantOn && 'translate-x-3.5',
-                      )}
-                    />
-                  </span>
-                  {variant.label}
-                </button>
-              )}
               <span className="inline-flex min-w-0 items-center gap-1.5">
                 Opzet:
                 <span className="rounded-md bg-rijksblauw-50 px-2 py-0.5 font-mono text-[11px] text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">

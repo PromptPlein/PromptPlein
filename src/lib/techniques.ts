@@ -61,19 +61,33 @@ export type Modality =
   | 'agent';
 
 /**
- * De schakelaar onder een soort. Aan en uit wijzen elk een eigen framework aan:
- * bij Code iets nieuws of bestaande code, bij Dashboard eerst een prototype of
- * meteen de volledige bouwopdracht. Standaard staat hij aan.
+ * De vervolgkeuze onder een soort: twee opties die elk een eigen framework
+ * aanwijzen. Bij Code een nieuw project of bestaande code, bij Dashboard een
+ * prototype of een echt dashboard. De eerste optie (`on`) is de standaard.
  */
-export interface KindVariant {
+export interface KindVariantOption {
   label: string;
-  on: Modality;
-  off: Modality;
+  detail: string;
+  modality: Modality;
+}
+
+export interface KindVariant {
+  question: string;
+  on: KindVariantOption;
+  off: KindVariantOption;
 }
 
 export const KIND_VARIANTS: Partial<Record<PromptKind, KindVariant>> = {
-  code: { label: 'Iets nieuws bouwen', on: 'code_new', off: 'code_existing' },
-  dashboard: { label: 'Eerst een prototype', on: 'dashboard_prototype', off: 'dashboard_full' },
+  code: {
+    question: 'Wat bouw je?',
+    on: { label: 'Nieuw project', detail: 'iets wat er nog niet is', modality: 'code_new' },
+    off: { label: 'Bestaande code', detail: 'een fout, functie of aanpassing', modality: 'code_existing' },
+  },
+  dashboard: {
+    question: 'Wat wil je?',
+    on: { label: 'Prototype', detail: 'klikbaar, met nepdata, snel te laten zien', modality: 'dashboard_prototype' },
+    off: { label: 'Echt dashboard', detail: 'met databronnen, rollen en koppelingen', modality: 'dashboard_full' },
+  },
 };
 
 const KIND_MODALITIES: Record<Exclude<PromptKind, 'code' | 'dashboard' | 'skill'>, Modality> = {
@@ -85,7 +99,7 @@ const KIND_MODALITIES: Record<Exclude<PromptKind, 'code' | 'dashboard' | 'skill'
 function modalityFor(kind: PromptKind, variantOn: boolean): Modality | null {
   if (kind === 'skill') return null;
   const variant = KIND_VARIANTS[kind];
-  if (variant) return variantOn ? variant.on : variant.off;
+  if (variant) return variantOn ? variant.on.modality : variant.off.modality;
   return KIND_MODALITIES[kind as keyof typeof KIND_MODALITIES];
 }
 
