@@ -10,6 +10,7 @@ import { useFieldLayout } from '@/lib/useFieldLayout';
 import { expandField, type PrefillPhase } from '@/services/optimizeService';
 import { getAiSettings, DEFAULT_AI_SETTINGS, type AiSettings } from '@/services/settingsService';
 import { structureFormat } from '@/lib/techniques';
+import { splitFieldLabel } from '@/lib/fieldLabel';
 import type { AiProvider } from '@/config/aiModels';
 import type { FollowUpQuestion, PrefilledField, PrefillSource, Technique } from '@/types';
 
@@ -25,6 +26,16 @@ interface FieldBlockProps {
   autoFocus?: boolean;
   /** Hoger tekstvak; de stapsgewijze indeling toont er maar één tegelijk. */
   tall?: boolean;
+  /**
+   * Letter (C van CONTEXT) of volgnummer vóór de naam. Weggelaten in de
+   * letterrail, die de letter zelf al naast het veld toont.
+   */
+  marker?: string;
+  /**
+   * Het veld staat in de letterrail: geen eigen kaart, want de rail verbindt de
+   * velden al tot één geheel. Alleen als de AI eraan werkt kleurt het blok op.
+   */
+  rail?: boolean;
   onChange: (value: string) => void;
   /** Start "Vul verder aan" voor dit veld. */
   onExpand: () => void;
@@ -51,6 +62,8 @@ function FieldBlock({
   idPrefix,
   autoFocus,
   tall,
+  marker,
+  rail = false,
   onChange,
   onExpand,
   expanding,
@@ -62,22 +75,45 @@ function FieldBlock({
   const fieldId = `${idPrefix}-${question.id}`;
   const active = expanding || proposal !== null;
   const filled = value.trim() !== '';
+  const { name, instruction } = splitFieldLabel(question.label);
   return (
     <div
       className={clsx(
-        // Een stevige rand met een zachte schaduw: het veld, de toelichting en
-        // "Vul verder aan" horen zichtbaar bij elkaar. De rand volgt waar je
-        // bent: rustig grijs, blauw zodra je in het veld typt, en vol blauw met
-        // een lichte gloed zodra de AI aan dit veld werkt.
-        'rounded-2xl border-2 p-4 shadow-sm transition-all duration-200',
-        active
-          ? 'border-rijksblauw-400 bg-rijksblauw-50/50 shadow-md shadow-rijksblauw-500/10 ring-4 ring-rijksblauw-500/10 dark:border-rijksblauw-500/70 dark:bg-rijksblauw-500/10 dark:ring-rijksblauw-500/15'
-          : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md focus-within:border-rijksblauw-300 focus-within:shadow-md dark:border-slate-700 dark:bg-slate-800/40 dark:hover:border-slate-600 dark:focus-within:border-rijksblauw-500/50',
+        'transition-all duration-200',
+        rail
+          ? // In de rail: geen kaart, alleen een tint zolang de AI aan dit veld werkt.
+            clsx(
+              'rounded-xl border p-3',
+              active
+                ? 'border-rijksblauw-300 bg-rijksblauw-50/60 ring-4 ring-rijksblauw-500/10 dark:border-rijksblauw-500/50 dark:bg-rijksblauw-500/10 dark:ring-rijksblauw-500/15'
+                : 'border-transparent',
+            )
+          : // Een stevige rand met een zachte schaduw: het veld, de toelichting en
+            // "Vul verder aan" horen zichtbaar bij elkaar. De rand volgt waar je
+            // bent: rustig grijs, blauw zodra je in het veld typt, en vol blauw met
+            // een lichte gloed zodra de AI aan dit veld werkt.
+            clsx(
+              'rounded-2xl border-2 p-4 shadow-sm',
+              active
+                ? 'border-rijksblauw-400 bg-rijksblauw-50/50 shadow-md shadow-rijksblauw-500/10 ring-4 ring-rijksblauw-500/10 dark:border-rijksblauw-500/70 dark:bg-rijksblauw-500/10 dark:ring-rijksblauw-500/15'
+                : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md focus-within:border-rijksblauw-300 focus-within:shadow-md dark:border-slate-700 dark:bg-slate-800/40 dark:hover:border-slate-600 dark:focus-within:border-rijksblauw-500/50',
+            ),
       )}
     >
-      <div className="mb-1 flex flex-wrap items-center gap-2">
-        <label className="opl-label mb-0" htmlFor={fieldId}>
-          {question.label}
+      <div className="flex flex-wrap items-center gap-2">
+        <label
+          className="flex items-center gap-2 text-[15px] font-semibold text-slate-800 dark:text-slate-100"
+          htmlFor={fieldId}
+        >
+          {marker && (
+            <span
+              aria-hidden="true"
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-rijksblauw-500 text-sm font-bold text-white"
+            >
+              {marker}
+            </span>
+          )}
+          {name}
         </label>
         {meta && filled && <PrefillBadge source={meta.source} note={meta.note} />}
         {active && (
@@ -86,10 +122,14 @@ function FieldBlock({
           </span>
         )}
       </div>
+      {/* De uitleg uit het label staat los onder de naam, boven het veld. */}
+      {instruction && (
+        <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">{instruction}</p>
+      )}
       <textarea
         id={fieldId}
         autoFocus={autoFocus}
-        className={clsx('opl-input resize-y', tall ? 'min-h-[120px]' : 'min-h-[100px]')}
+        className={clsx('opl-input mt-2 resize-y', tall ? 'min-h-[120px]' : 'min-h-[100px]')}
         value={value}
         placeholder={question.placeholder}
         onChange={(e) => onChange(e.target.value)}
@@ -106,10 +146,12 @@ function FieldBlock({
         </p>
       )}
       {/* Voetregel van hetzelfde blok: een haarlijn scheidt de actie van het
-          veld, maar houdt hem er zichtbaar binnen. */}
+          veld, maar houdt hem er zichtbaar binnen. In de rail is er geen kaart,
+          dus ook geen haarlijn nodig. */}
       <div
         className={clsx(
-          'mt-3 flex border-t pt-3',
+          'flex',
+          rail ? 'mt-2' : 'mt-3 border-t pt-3',
           active
             ? 'border-rijksblauw-200 dark:border-rijksblauw-500/30'
             : 'border-slate-100 dark:border-slate-700/70',
@@ -129,7 +171,7 @@ function FieldBlock({
       </div>
       {proposal && (
         <ExpandProposal
-          fieldLabel={question.label}
+          fieldLabel={name}
           proposed={proposal.proposed}
           improvements={proposal.improvements}
           onAccept={onAccept}
@@ -225,6 +267,11 @@ export default function FollowUpQuestions({
 }: FollowUpQuestionsProps) {
   const questions = technique.follow_up_questions;
   const total = questions.length;
+  // Frameworks (CARE, CO-STAR) krijgen per veld hun letter; technieken met
+  // gewone vragen een volgnummer.
+  const labelParts = questions.map((q) => splitFieldLabel(q.label));
+  const lettered = labelParts.length > 0 && labelParts.every((p) => p.code);
+  const markers = labelParts.map((p, i) => (lettered && p.code ? p.code : String(i + 1)));
   const [step, setStep] = useState(0);
   const [reviewing, setReviewing] = useState(false);
   // Persoonlijke voorkeur: stap voor stap (default) of alle velden tegelijk.
@@ -268,7 +315,7 @@ export default function FollowUpQuestions({
       <PrefillLoader
         techniqueName={technique.name}
         source="je vraagstuk"
-        fields={questions.map((q) => ({ id: q.id, label: q.label }))}
+        fields={questions.map((q, i) => ({ id: q.id, label: labelParts[i].name }))}
         filled={prefillProgress?.fields}
         models={prefillProgress?.models}
         winner={prefillProgress?.winner}
@@ -355,29 +402,68 @@ export default function FollowUpQuestions({
     </button>
   ) : null;
 
-  // --- Indeling "alles tegelijk": alle velden onder elkaar ---
+  const answeredCount = questions.filter((q) => (answers[q.id] ?? '').trim()).length;
+
+  // --- Indeling "alles tegelijk": de velden langs een letterrail ---
+  // De letters (C, A, R, E) staan onder elkaar naast de velden, verbonden door
+  // een lijn, zodat het framework leest als één geheel met losse onderdelen en
+  // niet als een voortzetting van het contextvak erboven. Een gevulde letter
+  // betekent dat het veld is ingevuld.
   if (layout === 'stacked') {
     return (
       <div className="space-y-4">
-        <div className="flex items-center justify-end">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            {lettered && (
+              <span className="text-base font-bold tracking-[0.14em] text-rijksblauw-800 dark:text-rijksblauw-100">
+                {markers.join(' · ')}
+              </span>
+            )}
+            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+              {answeredCount} van {total} ingevuld
+            </span>
+          </p>
           <FieldLayoutToggle layout={layout} onChange={setLayout} />
         </div>
-        {questions.map((q) => (
-          <FieldBlock
-            key={q.id}
-            question={q}
-            value={answers[q.id] ?? ''}
-            meta={fieldMeta?.[q.id]}
-            idPrefix="fu-stacked"
-            onChange={(v) => editField(q.id, v)}
-            onExpand={() => handleExpand(q)}
-            expanding={expandingId === q.id}
-            busy={expandingId !== null}
-            proposal={proposal?.fieldId === q.id ? proposal : null}
-            onAccept={acceptProposal}
-            onReject={rejectProposal}
-          />
-        ))}
+        <ol>
+          {questions.map((q, i) => {
+            const filled = (answers[q.id] ?? '').trim() !== '';
+            const last = i === total - 1;
+            return (
+              <li key={q.id} className="grid grid-cols-[2.75rem_minmax(0,1fr)] gap-x-2">
+                <div className="flex flex-col items-center" aria-hidden="true">
+                  <span
+                    className={clsx(
+                      'mt-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border-2 text-lg font-bold transition-colors',
+                      filled
+                        ? 'border-rijksblauw-500 bg-rijksblauw-500 text-white'
+                        : 'border-rijksblauw-500 bg-white text-rijksblauw-600 dark:border-rijksblauw-400 dark:bg-slate-800 dark:text-rijksblauw-200',
+                    )}
+                  >
+                    {markers[i]}
+                  </span>
+                  {!last && <span className="my-1 w-0.5 flex-1 bg-rijksblauw-200 dark:bg-rijksblauw-500/40" />}
+                </div>
+                <div className={clsx(!last && 'pb-3')}>
+                  <FieldBlock
+                    question={q}
+                    value={answers[q.id] ?? ''}
+                    meta={fieldMeta?.[q.id]}
+                    idPrefix="fu-stacked"
+                    rail
+                    onChange={(v) => editField(q.id, v)}
+                    onExpand={() => handleExpand(q)}
+                    expanding={expandingId === q.id}
+                    busy={expandingId !== null}
+                    proposal={proposal?.fieldId === q.id ? proposal : null}
+                    onAccept={acceptProposal}
+                    onReject={rejectProposal}
+                  />
+                </div>
+              </li>
+            );
+          })}
+        </ol>
         {/* Alles staat al in beeld, dus er valt hier niets meer te navigeren:
             alleen de bouw-knop, rechts onderaan. */}
         {buildButton && <div className="flex justify-end pt-1">{buildButton}</div>}
@@ -386,7 +472,6 @@ export default function FollowUpQuestions({
   }
 
   const current = questions[step];
-  const answeredCount = questions.filter((q) => (answers[q.id] ?? '').trim()).length;
   const isLast = step === total - 1;
   const hasPrefill = Boolean(fieldMeta && Object.keys(fieldMeta).length > 0);
   const currentMeta = fieldMeta?.[current?.id ?? ''];
@@ -434,7 +519,15 @@ export default function FollowUpQuestions({
               <li key={q.id} className="flex items-start justify-between gap-3 py-3">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{q.label}</p>
+                    <p className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+                      <span
+                        aria-hidden="true"
+                        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-rijksblauw-500 text-xs font-bold text-white"
+                      >
+                        {markers[i]}
+                      </span>
+                      {labelParts[i].name}
+                    </p>
                     {meta && value && <PrefillBadge source={meta.source} note={meta.note} />}
                   </div>
                   <p
@@ -453,7 +546,7 @@ export default function FollowUpQuestions({
                     setStep(i);
                   }}
                   className="shrink-0 rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-rijksblauw-600 dark:hover:bg-slate-800"
-                  aria-label={`Bewerk: ${q.label}`}
+                  aria-label={`Bewerk: ${labelParts[i].name}`}
                   title="Bewerken"
                 >
                   <Pencil size={15} />
@@ -519,6 +612,7 @@ export default function FollowUpQuestions({
           idPrefix="fu"
           autoFocus
           tall
+          marker={markers[step]}
           onChange={update}
           onExpand={() => handleExpand(current)}
           expanding={expandingId === current.id}

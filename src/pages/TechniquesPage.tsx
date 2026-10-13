@@ -612,8 +612,10 @@ export default function TechniquesPage() {
                   // start pas als het veld dicht is, anders stelt de AI zijn
                   // eerste vraag terwijl de gebruiker nog aan het typen is.
                   const isInterview = fmt === 'chain-of-thought' || fmt === 'socratic';
+                  // Gestippelde rand: dit vak hoort niet bij de velden van de
+                  // techniek eronder, het vult ze alleen voor.
                   return (
-                    <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900/40">
+                    <div className="mb-6 rounded-xl border border-dashed border-rijksblauw-300 bg-rijksblauw-50/40 p-4 dark:border-rijksblauw-500/40 dark:bg-rijksblauw-500/5">
                       {editingContext ? (
                         <>
                           <label htmlFor="techniek-context" className="opl-label">
