@@ -173,3 +173,42 @@ html.dark .skeleton::after {
     transform: translateX(100%);
   }
 }
+
+/* Heldachtergrond "effen met lichtbaan" (LightSweepBackground). */
+.hero-sweep {
+  background:
+    radial-gradient(120% 90% at 15% 0%, theme('colors.rijksblauw.600') 0%, transparent 60%),
+    linear-gradient(
+      165deg,
+      theme('colors.rijksblauw.700') 0%,
+      theme('colors.rijksblauw.800') 70%,
+      theme('colors.rijksblauw.900') 100%
+    );
+}
+.hero-sweep::after {
+  content: '';
+  position: absolute;
+  inset: -50% -20%;
+  background: linear-gradient(
+    105deg,
+    transparent 42%,
+    rgba(153, 199, 221, 0.13) 50%,
+    transparent 58%
+  );
+  animation: hero-sweep 11s ease-in-out infinite;
+}
+@keyframes hero-sweep {
+  0% {
+    transform: translateX(-60%);
+  }
+  55%,
+  100% {
+    transform: translateX(60%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-sweep::after {
+    animation: none;
+    transform: translateX(-10%);
+  }
+}

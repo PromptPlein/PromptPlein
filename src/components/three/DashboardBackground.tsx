@@ -3,9 +3,15 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { rijksblauw, rijksoranje, hexToVec3 } from '@/config/brandColors';
 
-// Tegelachtergrond: een raster van vierkantjes dat in golven oplicht, afgeleid van
-// het logo. Heel af en toe kleurt een tegel oranje; het midden blijft rustig zodat
-// de kop leesbaar blijft. Decoratief (pointer-events: none in de wrapper).
+// Heldachtergrond in WebGL met twee varianten, beide decoratief (pointer-events:
+// none in de wrapper):
+//  - tegels: een raster van vierkantjes dat in golven oplicht, afgeleid van het
+//    logo. Heel af en toe kleurt een tegel oranje; het midden blijft rustig zodat
+//    de kop leesbaar blijft.
+//  - polder: hoogtelijnen zoals op een topografische kaart, die traag omhoog
+//    schuiven. Elke vierde lijn is iets sterker.
+
+export type ShaderBackground = 'tegels' | 'polder';
 
 const vertexShader = /* glsl */ `
   varying vec2 vUv;
@@ -15,7 +21,7 @@ const vertexShader = /* glsl */ `
   }
 `;
 
-const fragmentShader = /* glsl */ `
+const shaderHeader = /* glsl */ `
   precision highp float;
   varying vec2 vUv;
   uniform float uTime;
@@ -55,6 +61,20 @@ const fragmentShader = /* glsl */ `
     return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
   }
 
+  float fbm(vec2 p) {
+    float v = 0.0;
+    float a = 0.5;
+    for (int i = 0; i < 4; i++) {
+      v += a * snoise(p);
+      p *= 2.03;
+      a *= 0.5;
+    }
+    return v;
+  }
+`;
+
+// Kleuren komen uit src/config/brandColors.js.
+const tegelsShader = /* glsl */ `
   void main() {
     // uResolution is in apparaatpixels, net als gl_FragCoord.
     vec2 uv = gl_FragCoord.xy / uResolution;
@@ -69,7 +89,6 @@ const fragmentShader = /* glsl */ `
     vec2 q = abs(local - 0.5);
     float square = 1.0 - smoothstep(0.40, 0.41, max(q.x, q.y));
 
-    // Kleuren komen uit src/config/brandColors.js.
     vec3 bg = mix(${hexToVec3(rijksblauw[700])}, ${hexToVec3(rijksblauw[800])}, 0.35);
     vec3 tileLow = mix(${hexToVec3(rijksblauw[700])}, ${hexToVec3(rijksblauw[600])}, 0.6);
     vec3 tileHigh = mix(${hexToVec3(rijksblauw[400])}, ${hexToVec3(rijksblauw[300])}, 0.25);
@@ -84,7 +103,36 @@ const fragmentShader = /* glsl */ `
   }
 `;
 
-function NoisePlane() {
+const polderShader = /* glsl */ `
+  void main() {
+    vec2 uv = gl_FragCoord.xy / uResolution;
+    vec2 st = vec2(uv.x * uResolution.x / uResolution.y, uv.y);
+    float t = uTime * 0.035;
+
+    // Ruis vervormt horizontale banden; fract() van de hoogte geeft de lijnen.
+    float n = fbm(st * vec2(0.8, 1.4) + vec2(t, t * 0.4));
+    float height = uv.y * 13.0 + n * 3.2 - uTime * 0.12;
+    float f = fract(height);
+    float dist = min(f, 1.0 - f);
+    float line = 1.0 - smoothstep(0.0, fwidth(height) * 1.3, dist);
+    float major = mod(floor(height + 0.5), 4.0) < 0.5 ? 1.0 : 0.0;
+
+    vec3 bg = mix(${hexToVec3(rijksblauw[900])}, ${hexToVec3(rijksblauw[700])}, uv.y * 0.8 + 0.1);
+    bg += vec3(0.0, 0.03, 0.05) * fbm(st * 2.0 - t);
+    // Rond de kop iets zachter, zodat de tekst leesbaar blijft.
+    float calm = mix(0.55, 1.0, smoothstep(0.1, 0.5, abs(uv.y - 0.55)));
+    vec3 color = bg + ${hexToVec3(rijksblauw[300])} * line * mix(0.16, 0.42, major) * calm;
+
+    gl_FragColor = vec4(color, 1.0);
+  }
+`;
+
+const FRAGMENT_SHADERS: Record<ShaderBackground, string> = {
+  tegels: shaderHeader + tegelsShader,
+  polder: shaderHeader + polderShader,
+};
+
+function ShaderPlane({ variant }: { variant: ShaderBackground }) {
   const materialRef = useRef<THREE.ShaderMaterial>(null);
 
   const uniforms = useMemo(
@@ -107,14 +155,20 @@ function NoisePlane() {
       <shaderMaterial
         ref={materialRef}
         vertexShader={vertexShader}
-        fragmentShader={fragmentShader}
+        fragmentShader={FRAGMENT_SHADERS[variant]}
         uniforms={uniforms}
       />
     </mesh>
   );
 }
 
-export default function DashboardBackground({ className = '' }: { className?: string }) {
+export default function DashboardBackground({
+  variant,
+  className = '',
+}: {
+  variant: ShaderBackground;
+  className?: string;
+}) {
   return (
     <div className={`pointer-events-none absolute inset-0 ${className}`} aria-hidden="true">
       <Canvas
@@ -123,7 +177,7 @@ export default function DashboardBackground({ className = '' }: { className?: st
         frameloop="always"
         camera={{ position: [0, 0, 1] }}
       >
-        <NoisePlane />
+        <ShaderPlane key={variant} variant={variant} />
       </Canvas>
     </div>
   );

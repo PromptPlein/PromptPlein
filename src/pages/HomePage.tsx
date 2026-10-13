@@ -29,21 +29,34 @@ const CATEGORY_ICONS: Record<string, LucideIcon> = {
   Folder,
 };
 
-// De hero wisselt per kalenderdag tussen twee achtergronden: de tegels (Three.js)
-// en de promptregels (Canvas 2D). Beide lazy, zodat de hero direct rendert en
-// three.js alleen laadt op een tegeldag.
+// De hero rouleert per kalenderdag langs vier achtergronden: tegels en polder
+// (Three.js), promptregels (Canvas 2D) en effen met lichtbaan (alleen CSS). De
+// zware twee zijn lazy, zodat de hero direct rendert en three.js alleen laadt op
+// een dag die het nodig heeft.
 const DashboardBackground = lazy(() => import('@/components/three/DashboardBackground'));
 const PromptLinesBackground = lazy(() => import('@/components/common/PromptLinesBackground'));
 
-function heroBackgroundForToday(): 'tegels' | 'regels' {
+const HERO_BACKGROUNDS = ['tegels', 'polder', 'effen', 'regels'] as const;
+type HeroBackground = (typeof HERO_BACKGROUNDS)[number];
+
+// Grondkleur van de sectie, zichtbaar zolang de achtergrond nog laadt.
+const HERO_BASE_CLASS: Record<HeroBackground, string> = {
+  tegels: 'bg-rijksblauw-700',
+  polder: 'bg-rijksblauw-900',
+  effen: 'bg-rijksblauw-800',
+  regels: 'bg-rijksblauw-900',
+};
+
+function heroBackgroundForToday(): HeroBackground {
   const now = new Date();
   const dayNumber = Math.floor(
     Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 86_400_000,
   );
-  return dayNumber % 2 === 0 ? 'tegels' : 'regels';
+  return HERO_BACKGROUNDS[dayNumber % HERO_BACKGROUNDS.length];
 }
 // Recharts is zwaar; lazy-load de overzichtsgrafieken.
 const PromptBreakdown = lazy(() => import('@/components/analytics/PromptBreakdown'));
+import LightSweepBackground from '@/components/common/LightSweepBackground';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { listPrompts } from '@/services/repository';
 import { usePromptCommunity } from '@/hooks/usePromptCommunity';
@@ -76,14 +89,18 @@ export default function HomePage() {
   return (
     <div>
       {/* Hero met een achtergrond die per dag wisselt */}
-      <section
-        className={`relative overflow-hidden ${
-          heroBackground === 'tegels' ? 'bg-rijksblauw-700' : 'bg-rijksblauw-900'
-        }`}
-      >
-        <Suspense fallback={null}>
-          {heroBackground === 'tegels' ? <DashboardBackground /> : <PromptLinesBackground />}
-        </Suspense>
+      <section className={`relative overflow-hidden ${HERO_BASE_CLASS[heroBackground]}`}>
+        {heroBackground === 'effen' ? (
+          <LightSweepBackground />
+        ) : (
+          <Suspense fallback={null}>
+            {heroBackground === 'regels' ? (
+              <PromptLinesBackground />
+            ) : (
+              <DashboardBackground variant={heroBackground} />
+            )}
+          </Suspense>
+        )}
         <div className="relative mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-2xl text-center">
             <h1 className="text-4xl font-extrabold leading-tight text-white sm:text-5xl">
