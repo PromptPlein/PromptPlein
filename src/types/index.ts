@@ -74,6 +74,12 @@ export interface Technique {
   description?: string;
   /** Groepering in de generator: prompt framework of losse techniek. Default 'technique'. */
   family?: TechniqueFamily;
+  /**
+   * Soort uitkomst van een framework, voor "Wat wil je maken?" in /genereren
+   * (migratie 0036). Leeg = doet bij elke soort mee. Zie `Modality` in
+   * src/lib/techniques.ts.
+   */
+  modality?: string | null;
   /** De kracht van deze techniek — waar is hij sterk in? Voedt de AI-aanbeveling. */
   strength?: string;
   /** Concrete gebruikssituaties waarvoor de techniek geschikt is. */

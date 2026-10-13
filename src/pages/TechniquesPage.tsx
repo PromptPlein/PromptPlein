@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
   ArrowDown,
@@ -36,6 +37,7 @@ import { detectPii, detectBlockedTopics, type GuardrailFinding } from '@/service
 import {
   contextExample,
   isContextPrompt,
+  isSkillCreator,
   structureFormat,
   techniqueStarter,
 } from '@/lib/techniques';
@@ -182,6 +184,27 @@ export default function TechniquesPage() {
     setAdvisorOpen(false);
     handleSelectTechnique(chosen.id, draft || undefined);
   }
+
+  // Doorverwijzing vanaf /genereren: wie daar bij "Wat wil je maken?" Skill
+  // koos, komt hier binnen met de Skill Creator gekozen en zijn tekst als
+  // eerste antwoord. Eén keer; daarna gaat de state eraf, zodat herladen of
+  // terugbladeren niet opnieuw een techniek kiest.
+  const location = useLocation();
+  const navigate = useNavigate();
+  const skillHandoffRef = useRef(false);
+  useEffect(() => {
+    const skillContext = (location.state as { skillContext?: string } | null)?.skillContext;
+    if (skillContext === undefined || skillHandoffRef.current) return;
+    const skill = techniques.find(isSkillCreator);
+    if (!skill) return; // de technieken zijn nog niet geladen
+    skillHandoffRef.current = true;
+    if (skillContext) setContext(skillContext);
+    handleSelectTechnique(skill.id, skillContext || undefined);
+    navigate(location.pathname, { replace: true, state: null });
+    // handleSelectTechnique is stabiel genoeg; alleen de geladen lijst en de
+    // binnenkomende state bepalen of dit moet lopen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [techniques, location.state]);
 
   /** Vul de velden van de gekozen techniek voor op basis van de context. */
   async function runPrefill(chosen: Technique, draft: string) {

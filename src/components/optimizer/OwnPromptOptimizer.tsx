@@ -1,20 +1,28 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
+  ArrowRight,
+  Blocks,
+  Bot,
   Check,
   ChevronDown,
   ChevronRight,
   ClipboardCopy,
+  CodeXml,
   Compass,
   Eraser,
+  FileText,
   HelpCircle,
   Info,
   Layers,
+  LayoutDashboard,
   Lightbulb,
   Loader2,
   RefreshCw,
   Sparkles,
   Wand2,
+  type LucideIcon,
 } from 'lucide-react';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
@@ -22,7 +30,14 @@ import { useReferenceData } from '@/context/ReferenceDataContext';
 import HoverPreview from '@/components/common/HoverPreview';
 import { PROMPT_CATEGORIES } from '@/data/promptCategories';
 import { PROMPT_EXAMPLES } from '@/data/promptExamples';
-import { isContextPrompt, localFrameworkGuess } from '@/lib/techniques';
+import {
+  KIND_VARIANTS,
+  PROMPT_KINDS,
+  frameworksForKind,
+  isContextPrompt,
+  localFrameworkGuess,
+  type PromptKind,
+} from '@/lib/techniques';
 import { usePersistentDraft } from '@/lib/usePersistentDraft';
 import { stripMarkdown } from '@/lib/utils';
 import {
@@ -99,6 +114,54 @@ const PHASE_LABEL: Record<FrameworkSearchPhase, string> = {
 };
 
 /**
+ * De keuzes van "Wat wil je maken?" in de balk boven het invoerveld. De volgorde
+ * komt uit PROMPT_KINDS. `placeholderOff` hoort bij de schakelaar uit (bestaande
+ * code), want daar beschrijf je een verschil en geen nieuw hulpmiddel.
+ */
+const KIND_OPTIONS: Record<
+  PromptKind,
+  { label: string; icon: LucideIcon; hint: string; placeholder: string; placeholderOff?: string }
+> = {
+  text: {
+    label: 'Tekst',
+    icon: FileText,
+    hint: 'Een brief, nota, verslag of samenvatting.',
+    placeholder:
+      'Bijv. zet mijn ruwe vergaderaantekeningen om in een verslag met besluiten, actiepunten en open vragen.',
+  },
+  code: {
+    label: 'Code',
+    icon: CodeXml,
+    hint: 'Vibecoden: een tool, script of pagina laten bouwen, of bestaande code laten aanpassen.',
+    placeholder:
+      'Bijv. een webpagina die een Excel-export uit het zaaksysteem inleest en per afdeling de open zaken telt.',
+    placeholderOff:
+      'Bijv. de export in ons rapportagescherm negeert het actieve filter; alleen de gefilterde rijen moeten mee.',
+  },
+  dashboard: {
+    label: 'Dashboard',
+    icon: LayoutDashboard,
+    hint: 'Cijfers, grafieken en filters op één scherm.',
+    placeholder:
+      'Bijv. een overzicht van de doorlooptijden van Woo-verzoeken per directie, met een filter op kwartaal.',
+  },
+  agent: {
+    label: 'Agent',
+    icon: Bot,
+    hint: 'Een AI die zelfstandig een taak in stappen uitvoert.',
+    placeholder:
+      'Bijv. een agent die binnenkomende Woo-verzoeken leest, per onderwerp sorteert en een ontvangstbevestiging klaarzet.',
+  },
+  skill: {
+    label: 'Skill',
+    icon: Blocks,
+    hint: 'Een vaste werkwijze die een AI-assistent elke keer opnieuw toepast. Je bouwt hem verder in de Skill Creator.',
+    placeholder:
+      'Bijv. geef feedback op conceptbrieven aan burgers, elke keer volgens de schrijfwijzer van ons ministerie.',
+  },
+};
+
+/**
  * Flow om een EIGEN prompt te optimaliseren. De gebruiker plakt zijn prompt en
  * laat de AI bepalen welk prompt framework (CARE, CRISP, …) het beste past.
  * Uit de aanbevelingen (1–3) kiest de gebruiker er één. Daarna analyseren we de
@@ -115,7 +178,22 @@ export default function OwnPromptOptimizer({
   webSearch,
 }: OwnPromptOptimizerProps) {
   const { techniques, techniqueById } = useReferenceData();
+  const navigate = useNavigate();
   const frameworks = techniques.filter(isContextPrompt);
+
+  // "Wat wil je maken?": de gekozen soort (null = de AI kiest uit alles) en de
+  // stand van de schakelaar eronder. Die staat bij een nieuwe soort weer aan,
+  // want aan is de aanbevolen stand (iets nieuws, eerst een prototype).
+  const [kind, setKind] = useState<PromptKind | null>(null);
+  const [variantOn, setVariantOn] = useState(true);
+  const variant = kind ? KIND_VARIANTS[kind] : undefined;
+  const candidates = frameworksForKind(frameworks, kind, variantOn);
+  const kindOption = kind ? KIND_OPTIONS[kind] : null;
+  // De soort wees precies één framework aan: dan zoeken we niet, maar gaan we
+  // meteen door naar de velden.
+  const directFramework = kind && kind !== 'skill' && candidates.length === 1 ? candidates[0] : null;
+  // De aanbeveling kwam uit de soortkeuze, niet uit een AI-afweging.
+  const [pickedByKind, setPickedByKind] = useState(false);
 
   // De geplakte prompt wordt in localStorage bewaard, zodat hij niet verloren
   // gaat bij een fout of herlaadactie. "Opschonen" maakt hem (en de rest) leeg.
@@ -184,6 +262,7 @@ export default function OwnPromptOptimizer({
   /** Reset alles wat van de (oude) prompt afhangt: aanbevelingen, keuze, voor-invulling. */
   function resetDownstream() {
     setRecommendations(null);
+    setPickedByKind(false);
     setProvisional(false);
     setFitsRequested(false);
     setRecommendSummary('');
@@ -240,10 +319,43 @@ export default function OwnPromptOptimizer({
     toast.success('Voorbeeld ingevuld.');
   }
 
+  /** Kies een soort bij "Wat wil je maken?". Dezelfde soort nog eens kiezen doet niets. */
+  function handleKind(next: PromptKind | null) {
+    if (next === kind) return;
+    setKind(next);
+    setVariantOn(true);
+    resetDownstream(); // andere soort = andere frameworks, het oude advies vervalt
+  }
+
+  function handleVariant() {
+    setVariantOn((v) => !v);
+    resetDownstream();
+  }
+
+  /**
+   * Skill kiest geen framework: de Skill Creator op /technieken heeft een eigen
+   * bouwer. Wat de gebruiker hier typte, gaat mee als eerste antwoord.
+   */
+  function openSkillCreator() {
+    navigate('/technieken', { state: { skillContext: ownPrompt.trim() } });
+  }
+
   /** Stap 1: laat de AI op basis van de geplakte prompt het beste framework kiezen. */
   async function handleRecommend() {
     if (!ownPrompt.trim()) {
       toast.error('Plak eerst je eigen prompt.');
+      return;
+    }
+    if (kind === 'skill') {
+      openSkillCreator();
+      return;
+    }
+    // De soortkeuze wees één framework aan: niets af te wegen, meteen de velden in.
+    if (directFramework) {
+      resetDownstream();
+      setRecommendations([{ id: directFramework.id, reason: '', value: '' }]);
+      setPickedByKind(true);
+      void handleSelectFramework(directFramework.id);
       return;
     }
     setRecommending(true);
@@ -265,7 +377,7 @@ export default function OwnPromptOptimizer({
     // Meteen een voorlopige suggestie op basis van trefwoorden, zodat er iets
     // staat terwijl de AI nog werkt. Levert dat niets op, dan blijft het blok
     // leeg — een willekeurig framework tonen zou misleidend zijn.
-    const guess = localFrameworkGuess(ownPrompt, frameworks);
+    const guess = localFrameworkGuess(ownPrompt, candidates);
     setProvisional(guess.length > 0);
     setRecommendations(
       guess.length > 0 ? guess.map((t) => ({ id: t.id, reason: '', value: '' })) : null,
@@ -277,7 +389,7 @@ export default function OwnPromptOptimizer({
     try {
       const res = await recommendFramework({
         ownPrompt: ownPrompt.trim(),
-        frameworks,
+        frameworks: candidates,
         preferredProvider: settings.provider,
         preferredModel: settings.model,
         projectContext,
@@ -596,39 +708,131 @@ export default function OwnPromptOptimizer({
           </div>
         )}
 
-        <textarea
-          id="own-prompt-input"
-          className="opl-input min-h-[120px] resize-y font-mono text-[13px]"
-          value={ownPrompt}
-          placeholder="Plak hier de prompt die je wilt optimaliseren…"
-          onChange={(e) => {
-            setOwnPrompt(e.target.value);
-            resetDownstream(); // gewijzigde prompt = aanbeveling en analyse vervallen
-          }}
-        />
-        <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-          We analyseren je prompt en zoeken automatisch het best passende prompt framework voor je
-          uit.
+        {/* Het invoerveld met "Wat wil je maken?" als balk erboven en de
+            schakelaar, de opzet en de zoekknop eronder: één geheel. */}
+        <div className="overflow-hidden rounded-xl border border-slate-300 bg-slate-50 transition-colors focus-within:border-rijksblauw-500 focus-within:ring-2 focus-within:ring-rijksblauw-500/20 dark:border-slate-600 dark:bg-slate-900/40">
+          <div
+            role="radiogroup"
+            aria-label="Wat wil je maken?"
+            className="opl-scroll-slim flex gap-1 overflow-x-auto border-b border-slate-200 p-1.5 dark:border-slate-700"
+          >
+            {([null, ...PROMPT_KINDS] as (PromptKind | null)[]).map((k) => {
+              const option = k ? KIND_OPTIONS[k] : null;
+              const Icon = option ? option.icon : Sparkles;
+              const active = kind === k;
+              return (
+                <button
+                  key={k ?? 'auto'}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  onClick={() => handleKind(k)}
+                  disabled={recommending || prefilling}
+                  className={clsx(
+                    'inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
+                    'focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500/40 disabled:cursor-not-allowed',
+                    active
+                      ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200 dark:bg-slate-700 dark:text-white dark:ring-slate-600'
+                      : 'text-slate-500 hover:bg-white/60 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-700/50 dark:hover:text-slate-100',
+                  )}
+                >
+                  <Icon
+                    size={16}
+                    className={clsx(active && 'text-rijksblauw-600 dark:text-rijksblauw-300')}
+                  />
+                  {option ? option.label : 'Automatisch'}
+                </button>
+              );
+            })}
+          </div>
+
+          <textarea
+            id="own-prompt-input"
+            className="block min-h-[120px] w-full resize-y border-0 bg-white px-3.5 py-3 font-mono text-[13px] text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-0 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
+            value={ownPrompt}
+            placeholder={
+              kindOption
+                ? (!variantOn && kindOption.placeholderOff) || kindOption.placeholder
+                : 'Plak hier de prompt of stel hier je vraag…'
+            }
+            onChange={(e) => {
+              setOwnPrompt(e.target.value);
+              resetDownstream(); // gewijzigde prompt = aanbeveling en analyse vervallen
+            }}
+          />
+
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5 border-t border-slate-200 px-3 py-2.5 dark:border-slate-700">
+            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-slate-500 dark:text-slate-400">
+              {variant && (
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={variantOn}
+                  onClick={handleVariant}
+                  disabled={recommending || prefilling}
+                  className="inline-flex items-center gap-2 text-sm font-medium text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500/40 disabled:cursor-not-allowed dark:text-slate-200"
+                >
+                  <span
+                    className={clsx(
+                      'relative h-[18px] w-8 shrink-0 rounded-full transition-colors',
+                      variantOn ? 'bg-rijksblauw-500' : 'bg-slate-300 dark:bg-slate-600',
+                    )}
+                  >
+                    <span
+                      className={clsx(
+                        'absolute left-0.5 top-0.5 h-3.5 w-3.5 rounded-full bg-white shadow transition-transform',
+                        variantOn && 'translate-x-3.5',
+                      )}
+                    />
+                  </span>
+                  {variant.label}
+                </button>
+              )}
+              <span className="inline-flex min-w-0 items-center gap-1.5">
+                Opzet:
+                <span className="rounded-md bg-rijksblauw-50 px-2 py-0.5 font-mono text-[11px] text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">
+                  {kind === 'skill'
+                    ? 'Skill Creator'
+                    : directFramework
+                    ? directFramework.name
+                    : `de AI kiest uit ${candidates.length} frameworks`}
+                </span>
+              </span>
+            </div>
+
+            {/* 2. Beste framework laten zoeken op basis van de prompt */}
+            <button
+              type="button"
+              className="opl-btn-primary"
+              onClick={() => void handleRecommend()}
+              disabled={recommending || prefilling || !ownPrompt.trim()}
+            >
+              {recommending ? (
+                <>
+                  <Loader2 size={18} className="animate-spin" /> {PHASE_LABEL[searchPhase]}
+                </>
+              ) : kind === 'skill' ? (
+                <>
+                  Verder in de Skill Creator <ArrowRight size={18} />
+                </>
+              ) : directFramework ? (
+                <>
+                  <Wand2 size={18} /> Velden invullen
+                </>
+              ) : (
+                <>
+                  <Compass size={18} /> Zoek het beste prompt framework
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+        <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
+          {kindOption
+            ? kindOption.hint
+            : 'We analyseren je prompt en zoeken automatisch het best passende prompt framework voor je uit.'}
         </p>
       </div>
-
-          {/* 2. Beste framework laten zoeken op basis van de prompt */}
-          <button
-            type="button"
-            className="opl-btn-primary"
-            onClick={() => void handleRecommend()}
-            disabled={recommending || prefilling || !ownPrompt.trim()}
-          >
-            {recommending ? (
-              <>
-                <Loader2 size={18} className="animate-spin" /> {PHASE_LABEL[searchPhase]}
-              </>
-            ) : (
-              <>
-                <Compass size={18} /> Zoek het beste prompt framework
-              </>
-            )}
-          </button>
         </div>
       </div>
 
@@ -681,7 +885,9 @@ export default function OwnPromptOptimizer({
 
           {!recommending && (
             <p className="text-sm text-slate-600 dark:text-slate-300">
-              {recommendations.length === 1
+              {pickedByKind
+                ? 'Bij wat je wilt maken hoort dit framework. De velden worden alvast voor je ingevuld:'
+                : recommendations.length === 1
                 ? 'Dit framework past het beste bij jouw prompt. Kies het om verder te gaan:'
                 : 'Deze frameworks passen het beste bij jouw prompt. Kies welke je wilt toepassen:'}
             </p>

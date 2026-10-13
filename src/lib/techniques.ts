@@ -33,6 +33,86 @@ export function isContextPrompt(t: TechniqueIdentity): boolean {
 }
 
 /**
+ * De soorten die de gebruiker boven het invoerveld van /genereren kan kiezen
+ * ("Wat wil je maken?"), in de volgorde van de knoppen. Niets kiezen mag ook;
+ * dan kiest de AI uit alle frameworks.
+ *
+ * Alleen soorten die iemand met zekerheid kan aanwijzen. Of een nota zakelijk of
+ * creatief is weet niemand vooraf, en een verkeerde klik sluit het juiste
+ * framework uit. Binnen Tekst kiest de AI dus zelf.
+ *
+ * Skill kiest geen framework: die soort stuurt door naar de Skill Creator op
+ * /technieken.
+ */
+export const PROMPT_KINDS = ['text', 'code', 'dashboard', 'agent', 'skill'] as const;
+
+export type PromptKind = (typeof PROMPT_KINDS)[number];
+
+/**
+ * De waarden van `techniques.modality`. Moet gelijk blijven aan de
+ * CHECK-constraint uit migratie 0036.
+ */
+export type Modality =
+  | 'text'
+  | 'code_new'
+  | 'code_existing'
+  | 'dashboard_prototype'
+  | 'dashboard_full'
+  | 'agent';
+
+/**
+ * De schakelaar onder een soort. Aan en uit wijzen elk een eigen framework aan:
+ * bij Code iets nieuws of bestaande code, bij Dashboard eerst een prototype of
+ * meteen de volledige bouwopdracht. Standaard staat hij aan.
+ */
+export interface KindVariant {
+  label: string;
+  on: Modality;
+  off: Modality;
+}
+
+export const KIND_VARIANTS: Partial<Record<PromptKind, KindVariant>> = {
+  code: { label: 'Iets nieuws bouwen', on: 'code_new', off: 'code_existing' },
+  dashboard: { label: 'Eerst een prototype', on: 'dashboard_prototype', off: 'dashboard_full' },
+};
+
+const KIND_MODALITIES: Record<Exclude<PromptKind, 'code' | 'dashboard' | 'skill'>, Modality> = {
+  text: 'text',
+  agent: 'agent',
+};
+
+/** Welke `modality` hoort bij deze soort en stand van de schakelaar? */
+function modalityFor(kind: PromptKind, variantOn: boolean): Modality | null {
+  if (kind === 'skill') return null;
+  const variant = KIND_VARIANTS[kind];
+  if (variant) return variantOn ? variant.on : variant.off;
+  return KIND_MODALITIES[kind as keyof typeof KIND_MODALITIES];
+}
+
+/**
+ * De frameworks die bij de gekozen soort horen, in de volgorde van de lijst.
+ *
+ * Zonder soort (of bij Skill) komen ze allemaal terug. Met soort blijven de
+ * frameworks van die soort over, plus die zonder `modality`: die zijn aan geen
+ * vorm gebonden en doen overal mee.
+ *
+ * Levert het filter niets op (de migratie draait nog niet, of de lokale modus
+ * kent de soort niet), dan bewust de volledige lijst. Een lege lijst laat de
+ * zoekknop stil falen; een bredere keuze levert hooguit een minder scherp
+ * framework op.
+ */
+export function frameworksForKind<T extends { modality?: string | null }>(
+  frameworks: T[],
+  kind: PromptKind | null,
+  variantOn = true,
+): T[] {
+  const modality = kind ? modalityFor(kind, variantOn) : null;
+  if (!modality) return frameworks;
+  const matching = frameworks.filter((f) => !f.modality || f.modality === modality);
+  return matching.some((f) => f.modality === modality) ? matching : frameworks;
+}
+
+/**
  * Ruwe trefwoord-match tussen de eigen prompt en de frameworks, zodat er meteen
  * iets op het scherm staat terwijl de AI nog nadenkt. Bewust dezelfde aanpak als
  * de `localRecommend`-fallback in de edge function.
@@ -251,6 +331,8 @@ export function hasOwnInputStep(t: TechniqueIdentity): boolean {
  * voorbeeld. Volgorde telt: specifiekere namen eerst.
  */
 const NAME_EXAMPLES: [needle: string, example: string][] = [
+  ['nieuwe tool', 'bouw een webpagina die onze Excel-export inleest en per afdeling de open zaken telt'],
+  ['bestaande code', 'de export in ons rapportagescherm negeert het actieve filter'],
   ['chain-of-verification', 'controleer deze Kamerbrief op cijfers, data en verwijzingen'],
   ['verification', 'controleer deze Kamerbrief op cijfers, data en verwijzingen'],
   ['step-back', 'moeten we een meldplicht invoeren voor verhuurders?'],
