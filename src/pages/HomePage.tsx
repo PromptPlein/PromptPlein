@@ -29,8 +29,19 @@ const CATEGORY_ICONS: Record<string, LucideIcon> = {
   Folder,
 };
 
-// Three.js is zwaar; lazy-load zodat de hero direct rendert.
+// De hero wisselt per kalenderdag tussen twee achtergronden: de tegels (Three.js)
+// en de promptregels (Canvas 2D). Beide lazy, zodat de hero direct rendert en
+// three.js alleen laadt op een tegeldag.
 const DashboardBackground = lazy(() => import('@/components/three/DashboardBackground'));
+const PromptLinesBackground = lazy(() => import('@/components/common/PromptLinesBackground'));
+
+function heroBackgroundForToday(): 'tegels' | 'regels' {
+  const now = new Date();
+  const dayNumber = Math.floor(
+    Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 86_400_000,
+  );
+  return dayNumber % 2 === 0 ? 'tegels' : 'regels';
+}
 // Recharts is zwaar; lazy-load de overzichtsgrafieken.
 const PromptBreakdown = lazy(() => import('@/components/analytics/PromptBreakdown'));
 import { useReferenceData } from '@/context/ReferenceDataContext';
@@ -47,6 +58,7 @@ export default function HomePage() {
   const [recent, setRecent] = useState<Prompt[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const heroBackground = useMemo(heroBackgroundForToday, []);
 
   useEffect(() => {
     let active = true;
@@ -63,10 +75,14 @@ export default function HomePage() {
 
   return (
     <div>
-      {/* Hero met Three.js achtergrond */}
-      <section className="relative overflow-hidden bg-rijksblauw-700">
+      {/* Hero met een achtergrond die per dag wisselt */}
+      <section
+        className={`relative overflow-hidden ${
+          heroBackground === 'tegels' ? 'bg-rijksblauw-700' : 'bg-rijksblauw-900'
+        }`}
+      >
         <Suspense fallback={null}>
-          <DashboardBackground />
+          {heroBackground === 'tegels' ? <DashboardBackground /> : <PromptLinesBackground />}
         </Suspense>
         <div className="relative mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-2xl text-center">

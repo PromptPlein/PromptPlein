@@ -1,10 +1,11 @@
 import { useMemo, useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { backgroundGradient, hexToVec3 } from '@/config/brandColors';
+import { rijksblauw, rijksoranje, hexToVec3 } from '@/config/brandColors';
 
-// Vloeiend morphende achtergrond met Perlin-achtige noise in een fragment shader.
-// Subtiel rijksblauw verloop, ~30+ FPS, decoratief (pointer-events: none in de wrapper).
+// Tegelachtergrond: een raster van vierkantjes dat in golven oplicht, afgeleid van
+// het logo. Heel af en toe kleurt een tegel oranje; het midden blijft rustig zodat
+// de kop leesbaar blijft. Decoratief (pointer-events: none in de wrapper).
 
 const vertexShader = /* glsl */ `
   varying vec2 vUv;
@@ -50,28 +51,36 @@ const fragmentShader = /* glsl */ `
     return 130.0 * dot(m, g);
   }
 
+  float hash(vec2 p) {
+    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+  }
+
   void main() {
-    vec2 st = vUv;
-    float aspect = uResolution.x / uResolution.y;
-    st.x *= aspect;
+    // uResolution is in apparaatpixels, net als gl_FragCoord.
+    vec2 uv = gl_FragCoord.xy / uResolution;
+    float cellSize = uResolution.y / 9.0;
+    vec2 cell = floor(gl_FragCoord.xy / cellSize);
+    vec2 local = fract(gl_FragCoord.xy / cellSize);
 
-    float t = uTime * 0.06;
-    float n = 0.0;
-    n += snoise(st * 1.4 + vec2(t, t * 0.7)) * 0.6;
-    n += snoise(st * 2.8 - vec2(t * 0.8, t)) * 0.3;
-    n += snoise(st * 5.0 + vec2(t * 0.4, -t * 0.5)) * 0.1;
-    n = n * 0.5 + 0.5;
+    float r = hash(cell);
+    float n = snoise(cell * 0.13 + vec2(uTime * 0.09, uTime * 0.05)) * 0.5 + 0.5;
+    float level = smoothstep(0.45, 0.9, n + (r - 0.5) * 0.3);
 
-    // Verloop van diep rijksblauw naar een lichtere blauwe tint.
-    // Kleuren komen uit src/config/brandColors.js (backgroundGradient).
-    vec3 deep = ${hexToVec3(backgroundGradient.deep)};
-    vec3 mid  = ${hexToVec3(backgroundGradient.mid)};
-    vec3 light = ${hexToVec3(backgroundGradient.light)};
+    vec2 q = abs(local - 0.5);
+    float square = 1.0 - smoothstep(0.40, 0.41, max(q.x, q.y));
 
-    vec3 color = mix(deep, mid, smoothstep(0.2, 0.6, n));
-    color = mix(color, light, smoothstep(0.6, 0.95, n) * 0.6);
+    // Kleuren komen uit src/config/brandColors.js.
+    vec3 bg = mix(${hexToVec3(rijksblauw[700])}, ${hexToVec3(rijksblauw[800])}, 0.35);
+    vec3 tileLow = mix(${hexToVec3(rijksblauw[700])}, ${hexToVec3(rijksblauw[600])}, 0.6);
+    vec3 tileHigh = mix(${hexToVec3(rijksblauw[400])}, ${hexToVec3(rijksblauw[300])}, 0.25);
+    vec3 tile = mix(tileLow, tileHigh, level);
+    tile = mix(tile, ${hexToVec3(rijksoranje)}, step(0.988, r) * level);
 
-    gl_FragColor = vec4(color, 1.0);
+    vec2 fromCenter = (uv - 0.5) * vec2(1.0, 1.7);
+    float calm = smoothstep(0.08, 0.55, length(fromCenter));
+    float amount = square * (0.18 + 0.82 * level) * mix(0.25, 1.0, calm);
+
+    gl_FragColor = vec4(mix(bg, tile, amount), 1.0);
   }
 `;
 
@@ -89,8 +98,7 @@ function NoisePlane() {
   useFrame((state) => {
     if (!materialRef.current) return;
     materialRef.current.uniforms.uTime.value = state.clock.elapsedTime;
-    const { width, height } = state.size;
-    materialRef.current.uniforms.uResolution.value.set(width, height);
+    state.gl.getDrawingBufferSize(materialRef.current.uniforms.uResolution.value);
   });
 
   return (
