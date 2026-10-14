@@ -29,6 +29,7 @@ import toast from 'react-hot-toast';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import HoverPreview from '@/components/common/HoverPreview';
 import VerantwoordGebruikHint from '@/components/optimizer/VerantwoordGebruikHint';
+import PrefillSources from '@/components/optimizer/PrefillSources';
 import { PROMPT_CATEGORIES } from '@/data/promptCategories';
 import { PROMPT_EXAMPLES } from '@/data/promptExamples';
 import {
@@ -247,6 +248,9 @@ export default function OwnPromptOptimizer({
     winner: string | null;
     phase: PrefillPhase;
     fields: PrefilledField[];
+    /** Gevonden bronnen en zoekvragen (zoeken aan); undefined = nog niet gezocht. */
+    sources?: { title: string; url: string }[];
+    queries?: string[];
   }>({ models: [], winner: null, phase: 'reading', fields: [] });
   const [generating, setGenerating] = useState(false);
   // De prompt zoals de AI hem op dit moment schrijft (live meelezen).
@@ -493,11 +497,19 @@ export default function OwnPromptOptimizer({
   async function runPrefill(chosen: Technique, clarify?: string) {
     setPrefilling(true);
     // Voortgang van een vorige ronde wissen; het laadscherm begint weer leeg.
-    setPrefillProgress({ models: [], winner: null, phase: 'reading', fields: [] });
+    setPrefillProgress({
+      models: [],
+      winner: null,
+      phase: webSearch ? 'searching' : 'reading',
+      fields: [],
+    });
     try {
       const res = await prefillFields({
         ownPrompt: ownPrompt.trim(),
         technique: chosen,
+        thinking,
+        webSearch,
+        onSources: (sources, queries) => setPrefillProgress((p) => ({ ...p, sources, queries })),
         clarification: clarify?.trim() || undefined,
         preferredProvider: settings.provider,
         preferredModel: settings.model,
@@ -1175,6 +1187,10 @@ export default function OwnPromptOptimizer({
             models={prefillProgress.models}
             winner={prefillProgress.winner}
             phase={prefillProgress.phase}
+            thinking={thinking}
+            webSearch={webSearch}
+            sources={prefillProgress.sources}
+            queries={prefillProgress.queries}
           />
         )}
 
@@ -1229,6 +1245,7 @@ export default function OwnPromptOptimizer({
                   <span className="font-medium">Controleren</span>. Wat je leeg laat, blijft een
                   plaatshouder in de uiteindelijke prompt.
                 </p>
+                <PrefillSources prefill={prefill} />
               </>
             )}
             <FollowUpQuestions

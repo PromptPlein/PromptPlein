@@ -1,4 +1,5 @@
-import { Check, Loader2, Search } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Brain, Check, Globe, Loader2, Search, Timer } from 'lucide-react';
 import ModelStatus from './ModelStatus';
 import PhaseSteps from './PhaseSteps';
 import type { PrefillPhase } from '@/services/optimizeService';
@@ -19,14 +20,30 @@ interface PrefillLoaderProps {
   winner?: string | null;
   /** Waar het invullen op dit moment mee bezig is. */
   phase?: PrefillPhase;
+  /** Denken staat aan: een eigen stap, en de melding dat het langer duurt. */
+  thinking?: boolean;
+  /** Zoeken staat aan: eerst een stap "Internet raadplegen". */
+  webSearch?: boolean;
+  /** De gevonden bronnen, zodra het zoeken klaar is. */
+  sources?: { title: string; url: string }[];
+  /** De zoekvragen waarmee is gezocht. */
+  queries?: string[];
 }
 
-/** De drie stappen die de gebruiker in het laadscherm ziet aflopen. */
-const STEPS: { phase: PrefillPhase; label: string }[] = [
-  { phase: 'reading', label: 'Tekst lezen' },
-  { phase: 'matching', label: 'Inhoud koppelen' },
-  { phase: 'filling', label: 'Velden schrijven' },
-];
+/**
+ * De stappen die de gebruiker in het laadscherm ziet aflopen. Zoeken en denken
+ * krijgen een eigen stap als ze aanstaan, zodat zichtbaar is dat ze echt
+ * gebeuren en waar de extra tijd heen gaat.
+ */
+function stepsFor(webSearch: boolean, thinking: boolean): { phase: PrefillPhase; label: string }[] {
+  return [
+    ...(webSearch ? [{ phase: 'searching' as const, label: 'Internet raadplegen' }] : []),
+    { phase: 'reading', label: 'Tekst lezen' },
+    ...(thinking ? [{ phase: 'thinking' as const, label: 'Nadenken' }] : []),
+    { phase: 'matching', label: 'Inhoud koppelen' },
+    { phase: 'filling', label: 'Velden schrijven' },
+  ];
+}
 
 /**
  * Laadscherm terwijl de AI de velden van een raamwerk voor-invult. Gedeeld door
@@ -47,7 +64,19 @@ export default function PrefillLoader({
   models = [],
   winner,
   phase = 'reading',
+  thinking = false,
+  webSearch = false,
+  sources,
+  queries = [],
 }: PrefillLoaderProps) {
+  const STEPS = stepsFor(webSearch, thinking);
+  // Seconden sinds de start: denken en zoeken kosten tijd, en dat mag je zien.
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const started = Date.now();
+    const timer = window.setInterval(() => setElapsed(Math.round((Date.now() - started) / 1000)), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
   const byId = new Map(filled.map((f) => [f.id, f]));
   // Zonder veldenlijst (oudere aanroeper) tonen we drie neutrale plaatshouders.
   const rows = fields.length > 0 ? fields : [0, 1, 2].map((i) => ({ id: `_${i}`, label: '' }));
@@ -93,6 +122,55 @@ export default function PrefillLoader({
 
         {/* Stappenspoor: welke fase loopt er nu. */}
         <PhaseSteps steps={STEPS.map((s) => s.label)} activeIndex={stepIndex} className="mt-4" />
+
+        {/* Zoeken en denken in beeld: wat er gebeurt en dat het tijd kost. */}
+        {(webSearch || thinking) && (
+          <div className="mt-4 space-y-2 rounded-xl bg-slate-50 p-3 text-xs text-slate-600 dark:bg-slate-900/50 dark:text-slate-300">
+            {webSearch && (
+              <div>
+                <p className="flex items-center gap-1.5 font-medium text-rijksblauw-700 dark:text-rijksblauw-200">
+                  <Globe size={13} className={phase === 'searching' ? 'animate-pulse' : ''} />
+                  {sources === undefined
+                    ? 'Internet raadplegen: we zoeken feiten bij je opdracht…'
+                    : sources.length > 0
+                      ? `Internet geraadpleegd: ${sources.length} ${sources.length === 1 ? 'bron' : 'bronnen'} gevonden`
+                      : 'Internet geraadpleegd: geen bruikbare bronnen gevonden'}
+                </p>
+                {queries.length > 0 && (
+                  <p className="mt-0.5 text-slate-500 dark:text-slate-400">
+                    Gezocht op: {queries.map((q) => `"${q}"`).join(' en ')}
+                  </p>
+                )}
+                {sources && sources.length > 0 && (
+                  <ul className="mt-1 space-y-0.5">
+                    {sources.map((src) => (
+                      <li key={src.url} className="truncate">
+                        <a
+                          href={src.url}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          className="text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
+                          title={src.url}
+                        >
+                          {src.title}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+            {thinking && (
+              <p className="flex items-center gap-1.5 font-medium text-rijksblauw-700 dark:text-rijksblauw-200">
+                <Brain size={13} className={phase === 'thinking' ? 'animate-pulse' : ''} />
+                Denken staat aan: het model redeneert eerst over je opdracht, daarom duurt dit langer.
+              </p>
+            )}
+            <p className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+              <Timer size={13} /> {elapsed}s bezig
+            </p>
+          </div>
+        )}
 
         {models.length > 0 && (
           <ModelStatus

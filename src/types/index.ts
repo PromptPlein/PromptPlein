@@ -318,6 +318,12 @@ export interface OptimizeResult {
   usedSources?: string[];
   /** Meldingen over de bouw, bijvoorbeeld dat zoeken niets opleverde. */
   notices?: string[];
+  /**
+   * Wat er tijdens het bouwen gebeurde, voor de regel boven de prompt: heeft
+   * het model nagedacht, is er gezocht, was er een tweede ronde, en hoe lang
+   * duurde het. Alleen bij een stream.
+   */
+  trace?: { thought: boolean; searched: boolean; reviewed: boolean; seconds: number };
 }
 
 /** Eén techniekaanbeveling bij een door de gebruiker beschreven doel. */
@@ -850,7 +856,7 @@ export interface AnalyzeResult {
 }
 
 /** Herkomst van een voor-ingevuld veld: afgeleid uit de prompt of een AI-suggestie. */
-export type PrefillSource = 'prompt' | 'ai';
+export type PrefillSource = 'prompt' | 'ai' | 'bron';
 
 /**
  * Eén voor-ingevuld veld: een voorstel voor de inhoud van een techniek-/raamwerk-
@@ -884,6 +890,12 @@ export interface PrefillResult {
   /** De prompt was onzin; er is bewust niets voor-ingevuld. */
   unclear?: boolean;
   reason?: string;
+  /** De internetbronnen die bij het invullen zijn geraadpleegd (zoeken aan). */
+  sources?: { title: string; url: string }[];
+  /** De zoekvragen waarmee is gezocht. */
+  queries?: string[];
+  /** Meldingen, bijvoorbeeld dat zoeken niets opleverde of niet mocht. */
+  notices?: string[];
 }
 
 // --- Phase 3 entiteiten (authenticatie, organisaties & RBAC) ---

@@ -11,6 +11,7 @@ import {
   MessageSquarePlus,
   Globe,
   Download,
+  Brain,
 } from 'lucide-react';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
@@ -194,6 +195,32 @@ export default function OptimizedOutput({
               {i === versions.length - 1 && i > 0 ? ' · nieuwste' : ''}
             </button>
           ))}
+        </div>
+      )}
+
+      {/* Wat er tijdens het bouwen gebeurde: zo zie je dat denken en zoeken
+          echt zijn gebruikt, en waar de extra tijd heen ging. */}
+      {result.trace && (result.trace.thought || result.trace.searched || result.trace.reviewed) && (
+        <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+          {result.trace.thought && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-rijksblauw-50 px-2 py-0.5 font-medium text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">
+              <Brain size={11} /> Nagedacht
+            </span>
+          )}
+          {result.trace.reviewed && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-rijksblauw-50 px-2 py-0.5 font-medium text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">
+              <RotateCcw size={11} /> Twee rondes: eerste versie nagekeken
+            </span>
+          )}
+          {result.trace.searched && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-rijksblauw-50 px-2 py-0.5 font-medium text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">
+              <Globe size={11} /> Internet geraadpleegd
+              {result.sources?.length
+                ? ` · ${used?.size ?? 0} van ${result.sources.length} bronnen verwerkt`
+                : ' · geen bronnen gevonden'}
+            </span>
+          )}
+          <span className="text-slate-400 dark:text-slate-500">{result.trace.seconds}s</span>
         </div>
       )}
 

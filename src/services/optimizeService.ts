@@ -265,6 +265,9 @@ export async function optimizePrompt(args: {
         // zodat ze bij het resultaat onder de prompt terechtkomen.
         let sources: OptimizeResult['sources'];
         const notices: string[] = [];
+        // Welke fasen echt voorbijkwamen: dat is wat de gebruiker te zien krijgt.
+        const seen = new Set<string>();
+        const started = Date.now();
         const streamed = await streamFromFunction(
           payload,
           onChunk,
@@ -272,10 +275,17 @@ export async function optimizePrompt(args: {
           (status) => {
             if (status.sources) sources = status.sources;
             if (status.notice) notices.push(status.notice);
+            if (status.phase) seen.add(status.phase);
             onStatus?.(status);
           },
           accessToken,
         );
+        const trace = {
+          thought: seen.has('thinking'),
+          searched: seen.has('searching'),
+          reviewed: seen.has('reviewing'),
+          seconds: Math.round((Date.now() - started) / 1000),
+        };
         if (streamed.unclear) {
           return {
             optimized_content: '',
@@ -294,6 +304,7 @@ export async function optimizePrompt(args: {
           ...(sources?.length ? { sources } : {}),
           ...(streamed.usedSources ? { usedSources: streamed.usedSources } : {}),
           ...(notices.length ? { notices } : {}),
+          trace,
         };
       }
 
@@ -2390,7 +2401,11 @@ export async function analyzePrompt(args: {
  *  - 'matching' → er komt antwoord binnen; de inhoud wordt aan velden gekoppeld
  *  - 'filling'  → de velden worden geschreven (het eerste veld is compleet)
  */
-export type PrefillPhase = 'reading' | 'matching' | 'filling';
+/**
+ * 'searching' = eerst op internet zoeken (zoeken aan), 'thinking' = het model
+ * redeneert eerst (denken aan), daarna lezen, koppelen en schrijven.
+ */
+export type PrefillPhase = 'searching' | 'thinking' | 'reading' | 'matching' | 'filling';
 
 /** Het afsluitende 'done'-event van de streamende voor-invulling. */
 interface PrefillDoneEvent {
@@ -2445,6 +2460,15 @@ export async function prefillFields(args: {
   onSummary?: (text: string) => void;
   /** Eén afgerond veld; komt binnen zodra het compleet is. */
   onField?: (field: PrefilledField) => void;
+  /** Denken aan: het model redeneert eerst, met een eigen fase in de loader. */
+  thinking?: boolean;
+  /**
+   * Eerst op internet zoeken en de velden aanvullen met wat de bronnen zeggen.
+   * Alleen voor beheerders; de server controleert dat zelf.
+   */
+  webSearch?: boolean;
+  /** De gevonden bronnen en zoekvragen, zodra het zoeken klaar is. */
+  onSources?: (sources: { title: string; url: string }[], queries: string[]) => void;
 }): Promise<PrefillResult> {
   const {
     ownPrompt,
@@ -2458,6 +2482,9 @@ export async function prefillFields(args: {
     onStatus,
     onSummary,
     onField,
+    thinking,
+    webSearch,
+    onSources,
   } = args;
   const content = ownPrompt.trim();
   const empty: PrefillResult = {
@@ -2493,10 +2520,23 @@ export async function prefillFields(args: {
     let done: PrefillDoneEvent | null = null;
     let unclear: { reason?: string; provider?: string } | null = null;
     let streamError = '';
+    let sources: { title: string; url: string }[] = [];
+    let queries: string[] = [];
+    const notices: string[] = [];
+    // Met zoeken aan moet de server zien wie er vraagt: hij zoekt alleen voor
+    // een beheerder.
+    const accessToken =
+      webSearch && supabase
+        ? ((await supabase.auth.getSession()).data.session?.access_token ?? undefined)
+        : undefined;
+    const bearer = accessToken ?? anonKey;
 
     const read = await readNdjsonEvents({
       url: functionUrl,
-      headers: anonKey ? { Authorization: `Bearer ${anonKey}`, apikey: anonKey } : {},
+      headers: {
+        ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
+        ...(anonKey ? { apikey: anonKey } : {}),
+      },
       body: {
         mode: 'prefill',
         ownPrompt: content,
@@ -2508,9 +2548,32 @@ export async function prefillFields(args: {
         preferredProvider: preferredProvider ?? 'auto',
         preferredModel,
         projectContext,
+        ...(thinking ? { thinking: true } : {}),
+        ...(webSearch ? { webSearch: true } : {}),
       },
       onEvent: (ev) => {
         switch (ev.type) {
+          case 'sources':
+            sources = Array.isArray(ev.sources)
+              ? ev.sources.flatMap((x) => {
+                  const row = x as { title?: unknown; url?: unknown };
+                  return typeof row?.url === 'string'
+                    ? [{ title: typeof row.title === 'string' ? row.title : row.url, url: row.url }]
+                    : [];
+                })
+              : [];
+            queries = Array.isArray(ev.queries)
+              ? ev.queries.filter((q): q is string => typeof q === 'string')
+              : [];
+            onSources?.(sources, queries);
+            onStatus?.({ sources });
+            break;
+          case 'notice':
+            if (typeof ev.text === 'string') {
+              notices.push(ev.text);
+              onStatus?.({ notice: ev.text });
+            }
+            break;
           case 'models':
             if (Array.isArray(ev.providers)) {
               onStatus?.({
@@ -2617,6 +2680,8 @@ export async function prefillFields(args: {
         fields: settledFields,
         success: true,
         provider: (settled.provider as PrefillResult['provider']) ?? 'claude',
+        ...(sources.length ? { sources, queries } : {}),
+        ...(notices.length ? { notices } : {}),
       };
     }
 

@@ -38,6 +38,7 @@ import OptimizingLoader from './OptimizingLoader';
 import PrefillLoader from './PrefillLoader';
 import GuardrailDialog from './GuardrailDialog';
 import VerantwoordGebruikHint from './VerantwoordGebruikHint';
+import PrefillSources from './PrefillSources';
 import BriefSummary from './BriefSummary';
 import { InterviewPanel } from './InterviewPanel';
 import FollowUpQuestions, { type FieldMeta } from './FollowUpQuestions';
@@ -237,6 +238,9 @@ export default function GoalDialog({
     winner: string | null;
     phase: PrefillPhase;
     fields: PrefilledField[];
+    /** Gevonden bronnen en zoekvragen (zoeken aan); undefined = nog niet gezocht. */
+    sources?: { title: string; url: string }[];
+    queries?: string[];
   }>({ models: [], winner: null, phase: 'reading', fields: [] });
   // Dezelfde voortgang, maar dan voor het bouwen van de prompt zelf.
   const [composeProgress, setComposeProgress] = useState<StreamStatus>({});
@@ -560,7 +564,12 @@ export default function GoalDialog({
     setPhase('fields');
     setError(null);
     setPrefilling(true);
-    setPrefillProgress({ models: [], winner: null, phase: 'reading', fields: [] });
+    setPrefillProgress({
+      models: [],
+      winner: null,
+      phase: webSearch ? 'searching' : 'reading',
+      fields: [],
+    });
     log('framework_prefilled', {
       techniqueId: id,
       metadata: { fields: framework.follow_up_questions.length, answered: transcript.length },
@@ -575,6 +584,9 @@ export default function GoalDialog({
         // waardoor de laatste velden leeg bleven.
         ownPrompt: brief,
         technique: framework,
+        thinking,
+        webSearch,
+        onSources: (sources, queries) => setPrefillProgress((p) => ({ ...p, sources, queries })),
         preferredProvider: settings.provider,
         preferredModel: settings.model,
         projectContext,
@@ -939,6 +951,10 @@ export default function GoalDialog({
                     models={prefillProgress.models}
                     winner={prefillProgress.winner}
                     phase={prefillProgress.phase}
+                    thinking={thinking}
+                    webSearch={webSearch}
+                    sources={prefillProgress.sources}
+                    queries={prefillProgress.queries}
                   />
                 ) : chosenFramework ? (
                   <div className="animate-fade-in space-y-4">
@@ -983,6 +999,11 @@ export default function GoalDialog({
                             <span className="font-medium">Controleren</span>. Wat je leeg laat, blijft
                             een plaatshouder in je prompt.
                           </p>
+                          {prefill && (
+                            <div className="mt-2">
+                              <PrefillSources prefill={prefill} />
+                            </div>
+                          )}
                         </>
                       )}
                     </div>

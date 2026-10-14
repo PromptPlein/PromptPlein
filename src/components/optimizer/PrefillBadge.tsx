@@ -1,4 +1,4 @@
-import { Sparkles, Wand2 } from 'lucide-react';
+import { Globe, Sparkles, Wand2 } from 'lucide-react';
 import clsx from 'clsx';
 import type { PrefillSource } from '@/types';
 
@@ -16,6 +16,19 @@ interface PrefillBadgeProps {
  */
 export default function PrefillBadge({ source, note }: PrefillBadgeProps) {
   const fromPrompt = source === 'prompt';
+  // Aangevuld met een feit van internet: blauw met wereldbol, zodat zichtbaar
+  // is dat zoeken echt iets heeft opgeleverd. De URL staat in het veld zelf.
+  if (source === 'bron') {
+    return (
+      <span
+        className="inline-flex items-center gap-1 rounded-full bg-rijksblauw-50 px-2 py-0.5 text-[11px] font-medium text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200"
+        title={note || 'Aangevuld met een feit uit een internetbron; de URL staat in het veld'}
+      >
+        <Globe size={11} />
+        Aangevuld van internet
+      </span>
+    );
+  }
   return (
     <span
       className={clsx(
