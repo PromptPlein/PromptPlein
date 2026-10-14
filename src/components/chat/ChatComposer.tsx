@@ -418,8 +418,10 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
         <div className="relative">
           <textarea
             ref={textareaRef}
-            // De chat heeft zijn eigen microfoon in de werkbalk hieronder.
+            // De chat heeft zijn eigen microfoon in de werkbalk hieronder, en
+            // groeit zelf mee tot MAX_HEIGHT.
             data-dictation="off"
+            data-autogrow="off"
             className={clsx(
               // opl-scroll-slim: een slanke schuifbalk met vaste goot, zodat een
               // langere tekst geen brede systeembalk oplevert die tegen het

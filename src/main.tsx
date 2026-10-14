@@ -5,7 +5,11 @@ import { Toaster } from 'react-hot-toast';
 import App from './App';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { installAutoGrowTextareas } from './lib/autoGrowTextareas';
 import './index.css';
+
+// Vóór de eerste render: zie de uitleg in autoGrowTextareas.
+installAutoGrowTextareas();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
