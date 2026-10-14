@@ -18,7 +18,7 @@ interface OptimizingLoaderProps {
   /** De provider die de prompt daadwerkelijk schrijft. */
   winner?: string | null;
   /**
-   * 'searching' = er wordt eerst op internet gezocht (alleen voor beheerders),
+   * 'searching' = er wordt eerst op internet gezocht,
    * 'drafting' = het model leest mee, 'thinking' = het redeneert eerst (de
    * denkstand staat aan), 'writing' = de tekst loopt, 'reviewing' = de tweede
    * ronde waarin het model zijn eerste versie controleert (bij denken of zoeken).

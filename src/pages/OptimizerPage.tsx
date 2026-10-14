@@ -21,7 +21,12 @@ import {
   consumeProjectHandoff,
   consumeResultSnapshot,
 } from '@/services/handoffService';
-import { getAiSettings, DEFAULT_AI_SETTINGS, type AiSettings } from '@/services/settingsService';
+import {
+  getAiSettings,
+  getChatSettingsCached,
+  DEFAULT_AI_SETTINGS,
+  type AiSettings,
+} from '@/services/settingsService';
 import { thinkingUnavailableReason } from '@/config/aiModels';
 import { activityIdentifier } from '@/lib/utils';
 import { usePersistentDraft } from '@/lib/usePersistentDraft';
@@ -39,7 +44,7 @@ export default function OptimizerPage() {
   const { promptId } = useParams<{ promptId?: string }>();
   // De ingelogde gebruiker, zodat analytics-events op naam/e-mail worden gelogd
   // en een beheerder in "Recente activiteit" ziet wie iets deed (niet "Anoniem").
-  const { profile, user, isAdmin } = useAuth();
+  const { profile, user } = useAuth();
 
   // Bronprompt uit de bibliotheek (/genereren/:promptId). De tekst gaat als
   // startwaarde naar de eigen-prompt-flow, die hem analyseert en er een
@@ -60,10 +65,12 @@ export default function OptimizerPage() {
   // renderen zodra blijkt dat het ingestelde model niet kan denken.
   const [thinkingUnavailable, setThinkingUnavailable] = useState<string | undefined>();
   const thinkingOn = thinking && !thinkingUnavailable;
-  // Zoeken op internet bij het schrijven van de prompt. Voorlopig alleen voor
-  // beheerders; de server controleert dat zelf ook, dit verbergt alleen de knop.
+  // Zoeken op internet bij het invullen en schrijven van de prompt. Voor
+  // iedereen, net als in de chat, zolang zoeken in Beheer, AI-instellingen
+  // aanstaat.
   const [webSearch, setWebSearch] = useWebSearch('builder');
-  const webSearchOn = isAdmin && webSearch;
+  const [searchAvailable, setSearchAvailable] = useState(false);
+  const webSearchOn = searchAvailable && webSearch;
   // Versiegeschiedenis van het resultaat: v1 is de gegenereerde prompt, elke
   // verbeter-ronde uit de Testkamer voegt een versie toe. Alleen in-memory;
   // "Opnieuw" wist de historie. Het getoonde resultaat is de actieve versie.
@@ -163,6 +170,10 @@ export default function OptimizerPage() {
       if (!active) return;
       settingsRef.current = s;
       setThinkingUnavailable(thinkingUnavailableReason(s.provider, s.model));
+    });
+    // Of zoeken aanstaat, staat bij de chatinstellingen in Beheer.
+    void getChatSettingsCached().then((s) => {
+      if (active) setSearchAvailable(s.webSearchEnabled);
     });
     return () => {
       active = false;
@@ -349,7 +360,7 @@ export default function OptimizerPage() {
                     onChange={setThinking}
                     unavailableReason={thinkingUnavailable}
                   />
-                  {isAdmin && <WebSearchToggle value={webSearch} onChange={setWebSearch} />}
+                  {searchAvailable && <WebSearchToggle value={webSearch} onChange={setWebSearch} />}
                 </div>
               </>
             );

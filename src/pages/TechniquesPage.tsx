@@ -39,6 +39,7 @@ import { generatePrompt, prefillFields } from '@/services/optimizeService';
 import { trackEvent } from '@/services/analyticsService';
 import {
   getAiSettings,
+  getChatSettingsCached,
   overheidsContext,
   DEFAULT_AI_SETTINGS,
   type AiSettings,
@@ -88,7 +89,7 @@ function usesQuestionnaire(t: Technique): boolean {
  * analyse. Hier kiest de gebruiker en blijft de techniek het onderwerp.
  */
 export default function TechniquesPage() {
-  const { profile, user, isAdmin } = useAuth();
+  const { profile, user } = useAuth();
   const { techniques } = useReferenceData();
 
   // Denken en zoeken: dezelfde knoppen en dezelfde stand als op /genereren,
@@ -96,8 +97,10 @@ export default function TechniquesPage() {
   const [thinking, setThinking] = useThinking();
   const [thinkingUnavailable, setThinkingUnavailable] = useState<string | undefined>();
   const thinkingOn = thinking && !thinkingUnavailable;
+  // Zoeken op internet: voor iedereen, zolang het in Beheer aanstaat.
   const [webSearch, setWebSearch] = useWebSearch('builder');
-  const webSearchOn = isAdmin && webSearch;
+  const [searchAvailable, setSearchAvailable] = useState(false);
+  const webSearchOn = searchAvailable && webSearch;
   // Voortgang van het bouwen voor de loader: fase en modellen.
   const [genProgress, setGenProgress] = useState<StreamStatus>({});
 
@@ -154,6 +157,10 @@ export default function TechniquesPage() {
       if (!active) return;
       settingsRef.current = s;
       setThinkingUnavailable(thinkingUnavailableReason(s.provider, s.model));
+    });
+    // Of zoeken aanstaat, staat bij de chatinstellingen in Beheer.
+    void getChatSettingsCached().then((s) => {
+      if (active) setSearchAvailable(s.webSearchEnabled);
     });
     return () => {
       active = false;
@@ -924,7 +931,7 @@ export default function TechniquesPage() {
                 onChange={setThinking}
                 unavailableReason={thinkingUnavailable}
               />
-              {isAdmin && <WebSearchToggle value={webSearch} onChange={setWebSearch} />}
+              {searchAvailable && <WebSearchToggle value={webSearch} onChange={setWebSearch} />}
             </div>
           )}
 

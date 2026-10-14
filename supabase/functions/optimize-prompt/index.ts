@@ -414,8 +414,7 @@ interface RequestBody {
    * systeemprompt. Welke zoekdienst dat doet staat in de secrets van deze
    * function, niet in dit verzoek: zie {@link searchBackend}.
    *
-   * Ook bij 'generate' (de bouwer), maar daar alleen voor beheerders: zie
-   * {@link isAdminRequest}.
+   * Ook bij 'generate' en 'prefill' (de bouwer), voor iedereen.
    */
   webSearch?: boolean;
   /** Hoeveel gevonden bronnen er mee mogen; de beheerder stelt dit in. */
@@ -2933,11 +2932,11 @@ function isAuthenticatedRequest(req: Request): boolean {
 }
 
 /**
- * Is de aanroeper een beheerder? Zoeken op internet bij het schrijven van een
- * prompt staat voorlopig alleen voor beheerders open. Die keuze mag niet van de
- * browser afhangen: een knop verbergen houdt niemand tegen die het verzoek zelf
- * opstelt. Daarom vragen we het de database, met het token van de gebruiker, via
- * dezelfde `is_admin()` waar ook de RLS-policies op leunen.
+ * Is de aanroeper een beheerder? Voor modi die alleen beheerders mogen
+ * gebruiken. Die keuze mag niet van de browser afhangen: een knop verbergen
+ * houdt niemand tegen die het verzoek zelf opstelt. Daarom vragen we het de
+ * database, met het token van de gebruiker, via dezelfde `is_admin()` waar ook
+ * de RLS-policies op leunen.
  *
  * Gooit nooit: lukt de controle niet, dan is het antwoord nee en loopt de
  * optimalisatie door zonder te zoeken.
@@ -8124,16 +8123,13 @@ Deno.serve(async (req: Request) => {
         : body.fromFormatBrief
           ? PREFILL_FORMAT_BRIEF_INSTRUCTION + PREFILL_SYSTEM_PROMPT
           : PREFILL_SYSTEM_PROMPT;
-      // Zoeken bij het invullen: net als bij het schrijven alleen voor een
-      // beheerder en alleen met een zoekdienst. Mag het niet, dan krijgt de
-      // gebruiker dat te zien in plaats van een stille beurt zonder bronnen.
-      const prefillSearch =
-        body.webSearch === true && searchBackend() !== null && (await isAdminRequest(req));
+      // Zoeken bij het invullen: voor iedereen, net als in de chat, zolang er een
+      // zoekdienst is ingesteld. Ontbreekt die, dan krijgt de gebruiker dat te
+      // zien in plaats van een stille beurt zonder bronnen.
+      const prefillSearch = body.webSearch === true && searchBackend() !== null;
       const prefillNotice =
         body.webSearch === true && !prefillSearch
-          ? searchBackend() === null
-            ? 'Zoeken stond aan, maar er is geen zoekdienst ingesteld. De velden zijn zonder internetbronnen ingevuld.'
-            : 'Zoeken stond aan, maar is alleen voor beheerders beschikbaar en je sessie kon niet als beheerder worden herkend. Log opnieuw in en probeer het nog eens.'
+          ? 'Zoeken stond aan, maar er is geen zoekdienst ingesteld. De velden zijn zonder internetbronnen ingevuld.'
           : undefined;
 
       // De veldwaarden komen in gewone tekstvakken terecht: markdown leest de
@@ -10185,13 +10181,11 @@ Deno.serve(async (req: Request) => {
       interviewResolved,
     });
 
-    // Zoeken op internet bij het schrijven van de prompt: voorlopig alleen voor
-    // beheerders, en dat controleert de server zelf (zie isAdminRequest). Vraagt
-    // iemand anders erom, dan wordt er niet gezocht en loopt de optimalisatie
-    // gewoon door. De zoekopdracht is wat de gebruiker zelf schreef: zijn
-    // eigen prompt of zijn doel.
+    // Zoeken op internet bij het schrijven van de prompt: voor iedereen, net als
+    // in de chat, zolang er een zoekdienst is ingesteld. De zoekopdracht is wat
+    // de gebruiker zelf schreef: zijn eigen prompt of zijn doel.
     const searchArgs =
-      body.webSearch === true && searchBackend() !== null && (await isAdminRequest(req))
+      body.webSearch === true && searchBackend() !== null
         ? {
             // De plaatshouder van een leeg doel is geen zoekvraag; searchWeb
             // slaat een lege opdracht over.
@@ -10205,12 +10199,10 @@ Deno.serve(async (req: Request) => {
         : undefined;
     const searchNotice =
       body.webSearch === true && !searchArgs
-        ? searchBackend() === null
-          ? 'Zoeken stond aan, maar er is geen zoekdienst ingesteld. De prompt is zonder internetbronnen geschreven.'
-          : 'Zoeken stond aan, maar is alleen voor beheerders beschikbaar en je sessie kon niet als beheerder worden herkend. Log opnieuw in en probeer het nog eens.'
+        ? 'Zoeken stond aan, maar er is geen zoekdienst ingesteld. De prompt is zonder internetbronnen geschreven.'
         : undefined;
     if (searchNotice) {
-      console.warn('generate: zoeken gevraagd maar niet toegestaan of geen zoekdienst ingesteld');
+      console.warn('generate: zoeken gevraagd maar geen zoekdienst ingesteld');
     }
 
     // Kennisbank van developer.overheid.nl: alleen als de beheerder hem aan heeft

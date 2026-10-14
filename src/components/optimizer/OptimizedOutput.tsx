@@ -228,7 +228,7 @@ export default function OptimizedOutput({
         {result.optimized_content}
       </pre>
 
-      {/* Zocht de AI eerst op internet (alleen voor beheerders), of kreeg hij
+      {/* Zocht de AI eerst op internet, of kreeg hij
           pagina's uit de kennisbank van developer.overheid.nl, dan staan hier de
           pagina's die hij kreeg: echte links om na te lezen of de feiten in de
           prompt kloppen. */}

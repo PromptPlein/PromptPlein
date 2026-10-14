@@ -124,9 +124,7 @@ export async function optimizePrompt(args: {
   thinking?: boolean;
   /**
    * Eerst op internet zoeken en de gevonden bronnen gebruiken bij het schrijven.
-   * Voorlopig alleen voor beheerders: de server controleert de rol zelf, dus de
-   * aanroep gaat dan met het token van de ingelogde gebruiker in plaats van de
-   * anon key. Voor iemand anders wordt er gewoon niet gezocht.
+   * Voor iedereen; de server zoekt zolang er een zoekdienst is ingesteld.
    */
   webSearch?: boolean;
   /** Admin-instructie over wat het model met de bronnen doet; leeg = server-default. */
@@ -197,14 +195,7 @@ export async function optimizePrompt(args: {
   if (isSupabaseConfigured && functionUrl) {
     try {
       const anonKey = getAnonKey();
-      // Met zoeken aan moet de server kunnen zien wie er vraagt: hij zoekt alleen
-      // voor een beheerder. Zonder sessie gaat het verzoek gewoon met de anon key
-      // en wordt er niet gezocht.
-      const accessToken =
-        webSearch && supabase
-          ? ((await supabase.auth.getSession()).data.session?.access_token ?? undefined)
-          : undefined;
-      const bearer = accessToken ?? anonKey;
+      const bearer = anonKey;
       const payload = {
         mode: 'generate',
         techniqueId: technique.id,
@@ -278,7 +269,6 @@ export async function optimizePrompt(args: {
             if (status.phase) seen.add(status.phase);
             onStatus?.(status);
           },
-          accessToken,
         );
         const trace = {
           thought: seen.has('thinking'),
@@ -2464,7 +2454,7 @@ export async function prefillFields(args: {
   thinking?: boolean;
   /**
    * Eerst op internet zoeken en de velden aanvullen met wat de bronnen zeggen.
-   * Alleen voor beheerders; de server controleert dat zelf.
+   * Voor iedereen; de server zoekt zolang er een zoekdienst is ingesteld.
    */
   webSearch?: boolean;
   /** De gevonden bronnen en zoekvragen, zodra het zoeken klaar is. */
@@ -2523,13 +2513,7 @@ export async function prefillFields(args: {
     let sources: { title: string; url: string }[] = [];
     let queries: string[] = [];
     const notices: string[] = [];
-    // Met zoeken aan moet de server zien wie er vraagt: hij zoekt alleen voor
-    // een beheerder.
-    const accessToken =
-      webSearch && supabase
-        ? ((await supabase.auth.getSession()).data.session?.access_token ?? undefined)
-        : undefined;
-    const bearer = accessToken ?? anonKey;
+    const bearer = anonKey;
 
     const read = await readNdjsonEvents({
       url: functionUrl,
