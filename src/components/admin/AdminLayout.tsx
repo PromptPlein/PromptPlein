@@ -16,6 +16,7 @@ import {
   Bot,
   Briefcase,
   FolderPlus,
+  FileCode2,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '@/context/AuthContext';
@@ -35,6 +36,7 @@ const adminNav = [
   { to: '/admin/rapportage', label: 'Rapportage', icon: PieChart, end: false },
   { to: '/admin/audit', label: 'Audit log', icon: ScrollText, end: false },
   { to: '/admin/instellingen', label: 'AI-instellingen', icon: Bot, end: false },
+  { to: '/admin/prompts', label: 'Prompts', icon: FileCode2, end: false },
 ];
 
 export default function AdminLayout() {

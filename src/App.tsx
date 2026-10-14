@@ -42,6 +42,7 @@ const OrganizationManagerPage = lazy(() => import('@/pages/admin/OrganizationMan
 const ApprovalQueuePage = lazy(() => import('@/pages/admin/ApprovalQueuePage'));
 const ReportsPage = lazy(() => import('@/pages/admin/ReportsPage'));
 const SettingsPage = lazy(() => import('@/pages/admin/SettingsPage'));
+const PromptsPage = lazy(() => import('@/pages/admin/PromptsPage'));
 
 /** Behoudt het promptId bij de redirect van de oude /optimaliseren-URL. */
 function RedirectToGenereren() {
@@ -138,6 +139,7 @@ export default function App() {
                   <Route path="rapportage" element={<ReportsPage />} />
                   <Route path="audit" element={<AuditLogPage />} />
                   <Route path="instellingen" element={<SettingsPage />} />
+                  <Route path="prompts" element={<PromptsPage />} />
                 </Route>
               </Route>
 

@@ -285,6 +285,16 @@ Het gedrag van de chat, de uitvoering en de optimalisatie komt uit de tabel
 houdt de defaults (`DEFAULT_CHAT_SYSTEM_PROMPT`,
 `DEFAULT_PROJECT_OPTIMIZE_PROMPT`, en zo verder) en de `compose*`-functies.
 
+De systeemprompts van de edge function zelf (velden invullen, framework
+kiezen, PlanWizard, techniekbouwers, Testkamer, zoekvragen, tweede ronde en
+zo verder) staan in Beheer, Prompts (`/admin/prompts`). De tekst in de code is
+de standaard; een eigen versie staat in `app_settings` onder
+`prompt_overrides` en de server past die bij elke aanroep toe (cache 30 s).
+Schrijf je een nieuwe systeemprompt, maak hem dan een `let` en zet hem in
+`PROMPT_CATALOG` vlak voor `Deno.serve`, met groep, titel en uitleg. Een
+prompt met variabele delen krijgt invulplekken zoals `{{sleutels}}` in plaats
+van een functie.
+
 Twee regels die hierbij horen:
 
 - **Eén systeemprompt per gedrag.** Geen verborgen extra regels in de
