@@ -193,9 +193,6 @@ export interface SkillMeta {
   model?: string;
 }
 
-/** Bronnen vanaf deze lengte gaan in de plugin als los referentiebestand mee. */
-const BRONNEN_REFERENTIE_MIN = 400;
-
 /** Pad van het referentiebestand, relatief aan SKILL.md. */
 const BRONNEN_PAD = 'references/bronnen.md';
 
@@ -249,34 +246,147 @@ export function buildSkillMd(meta: SkillMeta, prompt: string, metReferentie = fa
   return lines.join('\n');
 }
 
+/** Extra bestanden voor de plugin die de aanroeper ophaalt; ontbreekt er een, dan blijft hij weg. */
+export interface SkillPluginExtras {
+  /** Volledige tekst van de EUPL-1.2, voor LICENSE. */
+  licentie?: string;
+}
+
+/** Plugintekst in YAML als dubbel gequote string; JSON-escaping is geldige YAML. */
+const yaml = (value: string) => JSON.stringify(value.replace(/\s+/g, ' ').trim());
+
+/**
+ * publiccode.yml volgens de opbouw van de plugins op developer.overheid.nl
+ * (skills-internet, NeRDS): de metadata waarmee de open-sourcecatalogus van de
+ * overheid een repository opneemt. Wat alleen de organisatie weet (de URL van
+ * de repository, eigenaar, contactpersoon) staat tussen rechte haken.
+ */
+function buildPublicCode(meta: SkillMeta): string {
+  const naam = meta.naam.trim() || skillSlug(meta.naam);
+  const beschrijving = skillDescription(meta).replace(/\s*Zoekwoorden:.*$/i, '');
+  const kort = beschrijving.length > 150 ? `${beschrijving.slice(0, 147).trimEnd()}...` : beschrijving;
+  const lang = `${beschrijving} De skill is een vaste instructie voor een AI-assistent: de assistent pakt elke nieuwe invoer op dezelfde manier aan, volgens de werkwijze, valkuilen en grenzen die erin staan. Gemaakt met PromptPlein; de skill heeft de status concept tot de eigenaar van de afspraken hem goedkeurt.`;
+  return [
+    '# Machine-leesbare metadata volgens de publiccode.yml-standaard, voor de',
+    '# open-sourcecatalogus op developer.overheid.nl. Vul de regels met [ ] in',
+    '# voordat je de repository publiceert.',
+    '',
+    'publiccodeYmlVersion: "0.5"',
+    '',
+    `name: ${yaml(naam)}`,
+    'url: "[URL van de repository, bijvoorbeeld https://github.com/organisatie/naam]"',
+    'softwareType: addon',
+    'developmentStatus: development',
+    '',
+    'platforms:',
+    '  - linux',
+    '  - mac',
+    '  - windows',
+    '',
+    'description:',
+    '  nl:',
+    `    shortDescription: ${yaml(kort)}`,
+    `    longDescription: ${yaml(lang)}`,
+    '    features:',
+    '      - Vaste werkwijze als skill voor AI-assistenten',
+    '      - Te gebruiken in Claude Code, Codex en Cursor',
+    '      - Herkomst en status in de kop van SKILL.md',
+    '',
+    'legal:',
+    '  license: EUPL-1.2',
+    '  mainCopyrightOwner: "[naam van de organisatie]"',
+    '',
+    'maintenance:',
+    '  type: internal',
+    '  contacts:',
+    '    - name: "[naam van het team of de contactpersoon]"',
+    '      email: "[e-mailadres]"',
+    '',
+    'localisation:',
+    '  localisationReady: false',
+    '  availableLanguages:',
+    '    - nl',
+    '',
+    'intendedAudience:',
+    '  countries:',
+    '    - NL',
+    '  scope:',
+    '    - government',
+    '',
+  ].join('\n');
+}
+
 /**
  * Bouwt de skill als plugin in de mapstructuur van de skills-marketplace van
- * developer.overheid.nl: `.plugin/plugin.json` als bron, `.claude-plugin/` voor
- * Claude Code (Codex leest die ook) en de skill zelf in `skills/<naam>/SKILL.md`.
- * Een SKILL.md in de wortel wordt daar niet gevonden.
+ * developer.overheid.nl, zoals skills-internet en NeRDS die hebben:
+ * `.plugin/plugin.json` als bron, `.claude-plugin/` voor Claude Code (Codex
+ * leest die ook) en `.cursor-plugin/` voor Cursor, de skill zelf in
+ * `skills/<naam>/SKILL.md` met de bronnen in `references/`, en daarnaast
+ * README, CHANGELOG, publiccode.yml en LICENSE. Een SKILL.md in de wortel wordt
+ * door de marketplace niet gevonden.
  *
  * Geeft een lijst van pad en inhoud terug; de aanroeper pakt hem in.
  */
-export function buildSkillPlugin(meta: SkillMeta, prompt: string): Record<string, string> {
+export function buildSkillPlugin(
+  meta: SkillMeta,
+  prompt: string,
+  extras: SkillPluginExtras = {},
+): Record<string, string> {
   const slug = skillSlug(meta.naam);
+  const naam = meta.naam.trim() || slug;
   const bronnen = meta.bronnen?.trim() ?? '';
-  const metReferentie = bronnen.length >= BRONNEN_REFERENTIE_MIN;
+  const metReferentie = bronnen.length > 0;
   const manifest = `${JSON.stringify(
     { name: slug, description: skillDescription(meta), version: '0.1.0' },
     null,
     2,
   )}\n`;
+  const cursorManifest = `${JSON.stringify(
+    { name: slug, displayName: naam, description: skillDescription(meta), version: '0.1.0' },
+    null,
+    2,
+  )}\n`;
+  const licentie = extras.licentie?.trim();
 
   const files: Record<string, string> = {
     [`${slug}/.plugin/plugin.json`]: manifest,
     [`${slug}/.claude-plugin/plugin.json`]: manifest,
+    [`${slug}/.cursor-plugin/plugin.json`]: cursorManifest,
     [`${slug}/skills/${slug}/SKILL.md`]: buildSkillMd(meta, prompt, metReferentie),
+    [`${slug}/publiccode.yml`]: buildPublicCode(meta),
+    [`${slug}/CHANGELOG.md`]: [
+      '# Changelog',
+      '',
+      `## 0.1.0 (${vandaag()})`,
+      '',
+      '### Toegevoegd',
+      '',
+      `* eerste versie van de skill ${slug}, gemaakt met PromptPlein (status concept)`,
+      '',
+    ].join('\n'),
     [`${slug}/README.md`]: [
-      `# ${meta.naam.trim() || slug}`,
+      `# ${naam}`,
       '',
       skillDescription(meta),
       '',
       'Gemaakt met PromptPlein. De skill heeft de status concept: laat hem nalezen door wie de afspraken erin beheert voordat collega\'s hem gebruiken.',
+      '',
+      '## Wat er in deze map staat',
+      '',
+      '| Bestand | Waarvoor |',
+      '| --- | --- |',
+      `| \`skills/${slug}/SKILL.md\` | De skill zelf: de instructie voor de AI-assistent, met herkomst en status in de kop |`,
+      ...(metReferentie
+        ? [`| \`skills/${slug}/${BRONNEN_PAD}\` | De afspraken en bronnen waar de skill op leunt |`]
+        : []),
+      '| `.plugin/plugin.json` | Beschrijving van de plugin; hieruit maakt de marketplace de andere twee |',
+      '| `.claude-plugin/plugin.json` | Voor Claude Code en Codex |',
+      '| `.cursor-plugin/plugin.json` | Voor Cursor |',
+      '| `publiccode.yml` | Metadata voor de open-sourcecatalogus van de overheid; vul de regels met [ ] in |',
+      ...(licentie ? ['| `LICENSE` | De licentie, EUPL-1.2 |'] : []),
+      '| `CHANGELOG.md` | Wat er per versie veranderde |',
+      '',
+      'De mappen die met een punt beginnen zijn op een Mac en in Windows standaard verborgen. Op een Mac zie je ze in de Finder met Cmd+Shift+punt.',
       '',
       '## Installeren',
       '',
@@ -292,12 +402,13 @@ export function buildSkillPlugin(meta: SkillMeta, prompt: string): Record<string
       '',
       '## Aanmelden bij de overheidsmarketplace',
       '',
-      'De skills-marketplace van developer.overheid.nl (github.com/developer-overheid-nl/skills-marketplace) neemt plugins op die in een publieke repository staan, een open-source licentie hebben (bijvoorbeeld EUPL-1.2) en Nederlandse documentatie hebben. Zet deze map in een repository, voeg een LICENSE toe en meld de plugin aan via een issue op die repository.',
+      `De skills-marketplace van developer.overheid.nl (github.com/developer-overheid-nl/skills-marketplace) neemt plugins op die in een publieke repository staan, een open-source licentie hebben en Nederlandse documentatie hebben. Deze map bevat ${licentie ? 'de EUPL-1.2, de licentie die de overheid aanbeveelt. Kiest je organisatie een andere, vervang dan LICENSE en het veld license in publiccode.yml' : 'nog geen licentie. Voeg een LICENSE toe, bijvoorbeeld de EUPL-1.2'}. Zet de map in een repository, vul publiccode.yml aan en meld de plugin aan via een issue op de marketplace.`,
       '',
     ].join('\n'),
   };
   if (metReferentie) {
     files[`${slug}/skills/${slug}/${BRONNEN_PAD}`] = `# Bronnen en afspraken\n\n${bronnen}\n`;
   }
+  if (licentie) files[`${slug}/LICENSE`] = `${licentie}\n`;
   return files;
 }

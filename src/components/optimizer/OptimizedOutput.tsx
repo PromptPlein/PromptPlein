@@ -114,9 +114,16 @@ export default function OptimizedOutput({
   async function handleDownloadPlugin() {
     if (!skill) return;
     try {
+      // De EUPL-tekst staat als los bestand in public/; lukt ophalen niet, dan
+      // gaat het pakket zonder LICENSE en zegt de README dat er een bij moet.
+      const licentie = await fetch('/licenses/EUPL-1.2.txt')
+        .then((r) => (r.ok ? r.text() : ''))
+        .catch(() => '');
       await downloadZip(
         `${skillSlug(skill.naam)}.zip`,
-        buildSkillPlugin(skill, result.optimized_content),
+        buildSkillPlugin(skill, result.optimized_content, {
+          licentie: licentie.startsWith('EUROPEAN UNION PUBLIC LICENCE') ? licentie : undefined,
+        }),
       );
     } catch {
       toast.error('Het pakket kon niet worden gemaakt. Download SKILL.md los.');
