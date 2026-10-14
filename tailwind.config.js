@@ -4,7 +4,16 @@ import {
   rijksoranjeDonker,
   rijksrood,
   rijksgroen,
+  accentDonker,
+  accentDonkerHover,
 } from './src/config/brandColors.js';
+import plugin from 'tailwindcss/plugin';
+
+/** '#e17000' wordt '225 112 0', de vorm die rgb(var() / alpha) verwacht. */
+const rgbTriplet = (hex) => {
+  const h = hex.replace('#', '');
+  return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)).join(' ');
+};
 
 /** @type {import('tailwindcss').Config} */
 export default {
@@ -17,8 +26,12 @@ export default {
         rijksblauw,
         rijksrood,
         // `rijksoranje` blijft als `bg-rijksoranje` werken via DEFAULT;
-        // `rijksoranje-dark` voor hover/gradient-einde.
-        rijksoranje: { DEFAULT: rijksoranje, dark: rijksoranjeDonker },
+        // `rijksoranje-dark` voor hover/gradient-einde. Via een CSS-variabele,
+        // zodat de donkere modus een ander accent krijgt (zie plugin onderaan).
+        rijksoranje: {
+          DEFAULT: 'rgb(var(--accent) / <alpha-value>)',
+          dark: 'rgb(var(--accent-hover) / <alpha-value>)',
+        },
         rijksgroen,
       },
       fontFamily: {
@@ -50,5 +63,18 @@ export default {
       },
     },
   },
-  plugins: [],
+  plugins: [
+    plugin(({ addBase }) => {
+      addBase({
+        ':root': {
+          '--accent': rgbTriplet(rijksoranje),
+          '--accent-hover': rgbTriplet(rijksoranjeDonker),
+        },
+        'html.dark': {
+          '--accent': rgbTriplet(accentDonker),
+          '--accent-hover': rgbTriplet(accentDonkerHover),
+        },
+      });
+    }),
+  ],
 };
