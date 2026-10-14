@@ -507,6 +507,18 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
             nooit achter verdwijnen. Een lichte scheidingslijn erboven zet de
             knoppen los van wat je typt. */}
         <div className="mt-1 flex items-center gap-1 border-t border-slate-100 px-2 pb-2 pt-1.5 dark:border-slate-700/60">
+          {/* Microfoon: linksonder, als eerste knop. Tijdens het opnemen wordt
+              hij rood en loopt de tijd ernaast mee. */}
+          {dictation.available && (
+            <DictationButton
+              state={dictationState}
+              seconds={dictation.seconds}
+              onToggle={dictation.toggle}
+              disabled={disabled || streaming}
+              size="md"
+            />
+          )}
+
           {/* @-menu: hetzelfde project kiezen als vanuit de zijbalk, maar dan
               zonder het gesprek te verlaten. Bewust naast de paperclip: het is
               dezelfde soort handeling — bronmateriaal aan dit gesprek hangen. */}
@@ -633,27 +645,10 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
             </>
           )}
 
-          {/* Microfoon: rechtsonder, vlak voor Verstuur. Tijdens het opnemen
-              wordt hij rood en loopt de tijd ernaast mee. */}
-          {dictation.available && (
-            <DictationButton
-              state={dictationState}
-              seconds={dictation.seconds}
-              onToggle={dictation.toggle}
-              disabled={disabled || streaming}
-              size="md"
-              className="ml-auto"
-            />
-          )}
-
           {streaming ? (
             <button
               type="button"
-              className={clsx(
-                'opl-btn-secondary shrink-0 !rounded-lg !px-3 !py-1.5',
-                // Staat de microfoon er, dan duwt die al naar rechts.
-                !dictation.available && 'ml-auto',
-              )}
+              className="opl-btn-secondary ml-auto shrink-0 !rounded-lg !px-3 !py-1.5"
               onClick={onStop}
               aria-label="Stop het antwoord"
             >
@@ -663,8 +658,7 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
             <button
               type="button"
               className={clsx(
-                'opl-btn-primary shrink-0 !rounded-lg !px-3 !py-1.5',
-                !dictation.available && 'ml-auto',
+                'opl-btn-primary ml-auto shrink-0 !rounded-lg !px-3 !py-1.5',
                 !canSend && 'opacity-50',
               )}
               onClick={submit}

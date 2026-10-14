@@ -37,7 +37,9 @@ export default function DictationButton({
   const icon = size === 'sm' ? 14 : 17;
 
   return (
-    <div className={clsx('flex items-center gap-1.5', className)} style={style}>
+    // Omgekeerde volgorde: de knop staat links, het label met de tijd rechts
+    // ervan, zodat het in het vak naar binnen wijst.
+    <div className={clsx('flex flex-row-reverse items-center gap-1.5', className)} style={style}>
       {recording && (
         <span
           className="pointer-events-none inline-flex items-center gap-1.5 rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-white shadow-sm"

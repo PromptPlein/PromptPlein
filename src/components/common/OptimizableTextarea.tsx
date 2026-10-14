@@ -105,9 +105,6 @@ const OptimizableTextarea = forwardRef<HTMLTextAreaElement, OptimizableTextareaP
           // doorloopt. Vast zodra de knop beschikbaar is (niet afhankelijk van
           // of er tekst staat), anders zou de tekst verspringen bij het typen.
           className={clsx(className, available && 'pr-12')}
-          // Het microfoontje (DictationLayer) wijkt in een laag vak uit voor het
-          // sterretje rechtsboven.
-          data-dictation-avoid={available ? 'top-right' : undefined}
         />
         {/* Verschijnt pas zodra er tekst staat, zodat een leeg veld rustig
             blijft. Zelfde oranje verloop als in de chat. */}

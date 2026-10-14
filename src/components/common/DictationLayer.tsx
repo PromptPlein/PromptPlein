@@ -20,13 +20,13 @@ function isDictationField(el: EventTarget | null): el is HTMLTextAreaElement {
 interface Placement {
   /** Het tekstvak zelf, voor de rode rand tijdens het opnemen. */
   field: { top: number; left: number; width: number; height: number };
-  /** Rechteronderhoek van de knop. */
-  right: number;
+  /** Linkeronderhoek van de knop. */
+  left: number;
   bottom: number;
 }
 
 /**
- * Eén microfoontje voor alle tekstvakken in de app, rechtsonder in het vak waar
+ * Eén microfoontje voor alle tekstvakken in de app, linksonder in het vak waar
  * je in staat of met de muis boven hangt. Zo krijgt elk invulveld dicteren
  * zonder dat elk formulier het zelf hoeft in te bouwen, ook velden die later
  * bijkomen.
@@ -113,17 +113,12 @@ export default function DictationLayer() {
         last = 'hidden';
         return;
       }
-      // Een eigen schuifbalk in het vak niet afdekken.
-      const scrollbar = Math.max(0, target.offsetWidth - target.clientWidth - 2);
-      // Een laag vak met een knop rechtsboven (het sterretje): dan schuift de
-      // microfoon ernaast in plaats van eronder.
-      const dodge = target.dataset.dictationAvoid === 'top-right' && rect.height < 80 ? 36 : 0;
       const next: Placement = {
         field: { top: rect.top, left: rect.left, width: rect.width, height: rect.height },
-        right: window.innerWidth - rect.right + 12 + scrollbar + dodge,
+        left: rect.left + 8,
         bottom: window.innerHeight - Math.min(rect.bottom, window.innerHeight) + 8,
       };
-      const key = `${next.field.top}|${next.field.left}|${next.field.width}|${next.field.height}|${next.right}|${next.bottom}`;
+      const key = `${next.field.top}|${next.field.left}|${next.field.width}|${next.field.height}|${next.left}|${next.bottom}`;
       if (key !== last) {
         last = key;
         setPlacement(next);
@@ -173,7 +168,7 @@ export default function DictationLayer() {
         seconds={dictation.seconds}
         onToggle={onToggle}
         className="fixed z-[60]"
-        style={{ right: placement.right, bottom: placement.bottom }}
+        style={{ left: placement.left, bottom: placement.bottom }}
       />
     </div>,
     document.body,
