@@ -3,44 +3,33 @@ import { useCallback, useState } from 'react';
 /**
  * De denkstand: laat het model eerst redeneren en dan pas antwoorden.
  *
- * Bewust één stand voor de hele app in plaats van per gesprek of per bouwsessie.
- * De gebruiker zet denken aan omdat hij aan een zwaardere vraag werkt, niet
- * omdat hij toevallig in de chat of in de generator zit; de knop op beide
- * plekken hoort dus dezelfde knop te zijn.
+ * Staat bij elke nieuwe prompt en elke nieuwe chat uit; de gebruiker zet hem
+ * zelf aan. Denken kost meer tokens en laat de gebruiker langer wachten, dus
+ * het hoort een bewuste keuze per opdracht te zijn en niet een voorkeur die
+ * ongemerkt blijft hangen. De stand wordt daarom niet bewaard: een nieuw
+ * bezoek begint uit, en de pagina's zetten hem terug bij een nieuwe chat
+ * (ChatPage) of een nieuwe prompt ("Opnieuw", "Opschonen").
  *
- * Staat in localStorage, net als de concepten en de gesprekken: het is een
- * voorkeur van dit apparaat en er hoeft niets voor naar de server. Is
- * localStorage niet beschikbaar (privémodus), dan werkt de knop nog gewoon,
- * alleen onthoudt hij het niet.
+ * Tot 14-10-2026 stond de stand in localStorage; die oude waarde ruimen we hier
+ * op, zodat hij nergens meer meeweegt.
  */
 
-const KEY = 'opl.thinking';
+const LEGACY_KEY = 'opl.thinking';
 
-function readStored(): boolean {
+function clearLegacy(): void {
   try {
-    return localStorage.getItem(KEY) === '1';
+    localStorage.removeItem(LEGACY_KEY);
   } catch {
-    return false;
+    /* localStorage niet beschikbaar: niets op te ruimen */
   }
 }
 
-/**
- * Geeft de denkstand terug plus een schakelaar. Standaard uit: denken kost meer
- * tokens en laat de gebruiker langer wachten op de eerste regel, dus het hoort
- * een keuze te zijn en niet iets wat ongevraagd aan staat.
- */
+/** Geeft de denkstand terug plus een schakelaar. Begint altijd uit. */
 export default function useThinking(): [boolean, (value: boolean) => void] {
-  const [thinking, setThinking] = useState(readStored);
-
-  const set = useCallback((value: boolean) => {
-    setThinking(value);
-    try {
-      if (value) localStorage.setItem(KEY, '1');
-      else localStorage.removeItem(KEY);
-    } catch {
-      /* negeren, bewaren is best-effort */
-    }
-  }, []);
-
+  const [thinking, setThinking] = useState(() => {
+    clearLegacy();
+    return false;
+  });
+  const set = useCallback((value: boolean) => setThinking(value), []);
   return [thinking, set];
 }

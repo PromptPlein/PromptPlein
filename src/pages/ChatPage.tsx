@@ -122,6 +122,14 @@ function ChatPageInner() {
   const conversation = controller.conversation;
   const messages = conversation?.messages ?? [];
 
+  // Elke nieuwe chat, en elke andere chat die je opent, begint zonder denken en
+  // zoeken: de gebruiker zet ze zelf aan voor dit gesprek.
+  const conversationId = conversation?.id;
+  useEffect(() => {
+    setThinking(false);
+    setWebSearch(false);
+  }, [conversationId, setThinking, setWebSearch]);
+
   // --- Privacycheck vóór versturen ---
   // Dezelfde check op persoonsgegevens als in de bouwer, met de instelling uit
   // Beheer. Een bijlage wordt één keer gecontroleerd, bij het eerste bericht

@@ -51,8 +51,8 @@ export default function OptimizerPage() {
   const [goal] = usePersistentDraft('goal');
   // Standaard staat de eigen-prompt-flow open: dat is het meest gebruikte startpunt.
   const [entryMode, setEntryMode] = useState<EntryMode>('own-prompt');
-  // Denkstand voor het schrijven van de prompt. Eén knop voor beide instappen,
-  // en dezelfde stand als in de chat: zie useThinking.
+  // Denkstand voor het schrijven van de prompt. Eén knop voor beide instappen.
+  // Staat bij elke nieuwe prompt uit: zie useThinking.
   const [thinking, setThinking] = useThinking();
   // Admin-bepaalde AI-instellingen; gebruikers kiezen niet meer zelf.
   const settingsRef = useRef<AiSettings>(DEFAULT_AI_SETTINGS);
@@ -257,6 +257,9 @@ export default function OptimizerPage() {
     setResultTechnique(null);
     snapTechniqueIdRef.current = null;
     setPhase('input');
+    // Een nieuwe prompt begint zonder denken en zoeken; de gebruiker zet ze zelf aan.
+    setThinking(false);
+    setWebSearch(false);
   }
 
   const ownActive = entryMode === 'own-prompt';

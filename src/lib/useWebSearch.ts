@@ -3,55 +3,39 @@ import { useCallback, useState } from 'react';
 /**
  * De zoekstand: laat de AI eerst het internet afzoeken en pas daarna antwoorden.
  *
- * Net als {@link useThinking} één stand voor de hele app in plaats van per
- * gesprek. De gebruiker zet zoeken aan omdat hij iets actueels wil weten, niet
- * omdat hij toevallig in dit gesprek zit; opent hij een nieuwe chat met dezelfde
- * vraag in zijn hoofd, dan hoort de knop nog aan te staan.
+ * Staat bij elke nieuwe prompt en elke nieuwe chat uit; de gebruiker zet hem
+ * zelf aan. Zoeken stuurt een zoekvraag naar een dienst buiten PromptPlein en
+ * houdt het antwoord een paar seconden op, dus het is een keuze per opdracht
+ * en geen voorkeur die blijft hangen. De stand wordt daarom niet bewaard: een
+ * nieuw bezoek begint uit, en de pagina's zetten hem terug bij een nieuwe chat
+ * (ChatPage) of een nieuwe prompt ("Opnieuw", "Opschonen").
  *
- * Staat in localStorage, net als de concepten en de gesprekken: het is een
- * voorkeur van dit apparaat en er hoeft niets voor naar de server. Is
- * localStorage niet beschikbaar (privémodus), dan werkt de knop nog gewoon,
- * alleen onthoudt hij het niet.
+ * Tot 14-10-2026 stond de stand in localStorage, met een aparte sleutel voor de
+ * bouwer; die oude waarden ruimen we hier op.
  */
 
-const KEY = 'opl.websearch';
+const LEGACY_KEYS = ['opl.websearch', 'opl.websearch.builder'];
 
-function readStored(key: string): boolean {
+function clearLegacy(): void {
   try {
-    return localStorage.getItem(key) === '1';
+    for (const key of LEGACY_KEYS) localStorage.removeItem(key);
   } catch {
-    return false;
+    /* localStorage niet beschikbaar: niets op te ruimen */
   }
 }
 
 /**
- * Geeft de zoekstand terug plus een schakelaar. Standaard uit: zoeken stuurt de
- * vraag van de gebruiker naar een zoekdienst buiten PromptPlein en houdt het
- * antwoord een paar seconden op, dus het hoort een keuze te zijn en niet iets
- * wat ongevraagd aan staat.
- *
- * `scope` 'builder' is de knop in de promptbouwer. Die heeft een eigen stand:
- * daar gaat een hele geplakte prompt naar de zoekdienst in plaats van één vraag,
- * en wie zoeken in de chat aanzette, heeft daar niet mee ingestemd.
+ * Geeft de zoekstand terug plus een schakelaar. Begint altijd uit. `scope` is
+ * er nog voor de bestaande aanroepen; de chat en de bouwer hebben elk hun eigen
+ * stand omdat het losse componenten zijn.
  */
 export default function useWebSearch(
-  scope: 'chat' | 'builder' = 'chat',
+  _scope: 'chat' | 'builder' = 'chat',
 ): [boolean, (value: boolean) => void] {
-  const key = scope === 'builder' ? `${KEY}.builder` : KEY;
-  const [webSearch, setWebSearch] = useState(() => readStored(key));
-
-  const set = useCallback(
-    (value: boolean) => {
-      setWebSearch(value);
-      try {
-        if (value) localStorage.setItem(key, '1');
-        else localStorage.removeItem(key);
-      } catch {
-        /* negeren, bewaren is best-effort */
-      }
-    },
-    [key],
-  );
-
+  const [webSearch, setWebSearch] = useState(() => {
+    clearLegacy();
+    return false;
+  });
+  const set = useCallback((value: boolean) => setWebSearch(value), []);
   return [webSearch, set];
 }

@@ -439,6 +439,9 @@ export default function TechniquesPage() {
     setVersions([]);
     setActiveVersion(0);
     setPhase('input');
+    // Een nieuwe prompt begint zonder denken en zoeken; de gebruiker zet ze zelf aan.
+    setThinking(false);
+    setWebSearch(false);
   }
 
   /** Alles leeg voor een frisse start (volgende oefening in de training). */
@@ -456,6 +459,8 @@ export default function TechniquesPage() {
     setVersions([]);
     setActiveVersion(0);
     setPhase('input');
+    setThinking(false);
+    setWebSearch(false);
     toast.success('Alles opgeschoond. Je begint met een schone lei.');
   }
 
