@@ -26,6 +26,11 @@ import DocumentUpload from '@/components/optimizer/DocumentUpload';
 import InterviewFlow from '@/components/optimizer/InterviewFlow';
 import OptimizableTextarea from '@/components/common/OptimizableTextarea';
 import OptimizingLoader from '@/components/optimizer/OptimizingLoader';
+import ThinkingToggle from '@/components/common/ThinkingToggle';
+import WebSearchToggle from '@/components/common/WebSearchToggle';
+import useThinking from '@/lib/useThinking';
+import useWebSearch from '@/lib/useWebSearch';
+import type { StreamStatus } from '@/lib/ndjsonStream';
 import OptimizedOutput from '@/components/optimizer/OptimizedOutput';
 import GuardrailDialog from '@/components/optimizer/GuardrailDialog';
 import { useAuth } from '@/context/AuthContext';
@@ -48,7 +53,7 @@ import {
 } from '@/lib/techniques';
 import { activityIdentifier, stripMarkdown } from '@/lib/utils';
 import type { SkillData } from '@/lib/skill';
-import { defaultModelFor, isEnabledProvider } from '@/config/aiModels';
+import { defaultModelFor, isEnabledProvider, thinkingUnavailableReason } from '@/config/aiModels';
 import type { OptimizeResult, Technique } from '@/types';
 
 /**
@@ -83,8 +88,18 @@ function usesQuestionnaire(t: Technique): boolean {
  * analyse. Hier kiest de gebruiker en blijft de techniek het onderwerp.
  */
 export default function TechniquesPage() {
-  const { profile, user } = useAuth();
+  const { profile, user, isAdmin } = useAuth();
   const { techniques } = useReferenceData();
+
+  // Denken en zoeken: dezelfde knoppen en dezelfde stand als op /genereren,
+  // zodat een skill of prompt die hier wordt gebouwd er net zo gebruik van maakt.
+  const [thinking, setThinking] = useThinking();
+  const [thinkingUnavailable, setThinkingUnavailable] = useState<string | undefined>();
+  const thinkingOn = thinking && !thinkingUnavailable;
+  const [webSearch, setWebSearch] = useWebSearch('builder');
+  const webSearchOn = isAdmin && webSearch;
+  // Voortgang van het bouwen voor de loader: fase en modellen.
+  const [genProgress, setGenProgress] = useState<StreamStatus>({});
 
   // Alle invoer op deze pagina is sessie-state, bewust niet bewaard: wie de
   // pagina opent begint bij de keuze, met een schone lijst. In een training
@@ -136,7 +151,9 @@ export default function TechniquesPage() {
   useEffect(() => {
     let active = true;
     getAiSettings().then((s) => {
-      if (active) settingsRef.current = s;
+      if (!active) return;
+      settingsRef.current = s;
+      setThinkingUnavailable(thinkingUnavailableReason(s.provider, s.model));
     });
     return () => {
       active = false;
@@ -344,6 +361,7 @@ export default function TechniquesPage() {
     setGuardrailFindings(null);
     setUnclearReason(null);
     setStreamText('');
+    setGenProgress({});
     setOptimizing(true);
     requestAnimationFrame(() => {
       optimizingRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -378,7 +396,11 @@ export default function TechniquesPage() {
         toneInstruction: s.toneInstruction.trim() || undefined,
         ...overheidsContext(s),
         temperature: s.temperature,
+        thinking: thinkingOn,
+        webSearch: webSearchOn,
+        webSearchInstruction: s.webSearchInstruction.trim() || undefined,
         onChunk: setStreamText,
+        onStatus: (status) => setGenProgress((p) => ({ ...p, ...status })),
       });
 
       // De AI vond de invoer onzin en maakte bewust geen prompt.
@@ -886,9 +908,30 @@ export default function TechniquesPage() {
             </section>
           )}
 
+          {/* Denken en zoeken voor het bouwen, net als op /genereren. */}
+          {!optimizing && technique && (
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                Lastige opdracht? Laat het model eerst nadenken.
+              </span>
+              <ThinkingToggle
+                value={thinking}
+                onChange={setThinking}
+                unavailableReason={thinkingUnavailable}
+              />
+              {isAdmin && <WebSearchToggle value={webSearch} onChange={setWebSearch} />}
+            </div>
+          )}
+
           {optimizing && (
             <div ref={optimizingRef} className="scroll-mt-24">
-              <OptimizingLoader techniqueName={technique?.name} streamText={streamText} />
+              <OptimizingLoader
+                techniqueName={technique?.name}
+                streamText={streamText}
+                phase={genProgress.phase}
+                models={genProgress.models}
+                winner={genProgress.provider ?? null}
+              />
             </div>
           )}
 

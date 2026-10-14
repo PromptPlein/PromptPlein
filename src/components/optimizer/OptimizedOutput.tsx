@@ -130,6 +130,11 @@ export default function OptimizedOutput({
     }
   }
 
+  // Welke bronnen er echt in de prompt staan. Alleen bekend bij een stream; en
+  // "geen enkele" is pas een melding waard als er wel bronnen waren.
+  const used = result.usedSources ? new Set(result.usedSources) : null;
+  const unusedAll = Boolean(used && used.size === 0 && result.sources?.length);
+
   function handleSendToChat() {
     writeHandoff(result.optimized_content, 'compose');
     navigate('/chat');
@@ -200,6 +205,20 @@ export default function OptimizedOutput({
           pagina's uit de kennisbank van developer.overheid.nl, dan staan hier de
           pagina's die hij kreeg: echte links om na te lezen of de feiten in de
           prompt kloppen. */}
+      {/* Meldingen over de bouw: zoeken leverde niets op of mocht niet, of de
+          bronnen kwamen niet in de prompt terecht. */}
+      {(result.notices?.length || unusedAll) && (
+        <div className="mt-3 space-y-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+          {result.notices?.map((n) => <p key={n}>{n}</p>)}
+          {unusedAll && (
+            <p>
+              De AI heeft geen van de gevonden bronnen in de prompt verwerkt. Bouw de prompt
+              opnieuw, of kijk in de bronnen hieronder of ze wel over je opdracht gaan.
+            </p>
+          )}
+        </div>
+      )}
+
       {result.sources && result.sources.length > 0 && (
         <div className="mt-3">
           <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
@@ -221,6 +240,14 @@ export default function OptimizedOutput({
                 >
                   {source.title}
                 </a>
+                {used?.has(source.url) && (
+                  <span
+                    className="inline-flex shrink-0 items-center gap-0.5 text-[11px] text-rijksgroen"
+                    title="Deze bron staat met zijn URL in de prompt"
+                  >
+                    <Check size={11} /> verwerkt
+                  </span>
+                )}
               </li>
             ))}
           </ol>

@@ -314,6 +314,10 @@ export interface OptimizeResult {
    * een beheerder "Zoeken" aan had en er iets gevonden is.
    */
   sources?: { title: string; url: string }[];
+  /** Welke van die bronnen in de prompt terugkomen (hun URL staat erin). */
+  usedSources?: string[];
+  /** Meldingen over de bouw, bijvoorbeeld dat zoeken niets opleverde. */
+  notices?: string[];
 }
 
 /** Eén techniekaanbeveling bij een door de gebruiker beschreven doel. */

@@ -438,6 +438,12 @@ interface RequestBody {
    * bij 'generate'. Leeg of afwezig = die pagina's worden niet opgehaald.
    */
   kennisbankInstruction?: string;
+  /**
+   * De client kan een tweede ronde aan (het 'reset'-event): bij denken of zoeken
+   * controleert en verbetert het model dan zijn eerste versie. Alleen bij
+   * 'generate' met stream.
+   */
+  review?: boolean;
   preferredProvider?: PreferredProvider;
   /**
    * Het concrete API-model binnen de gekozen provider (bijv. 'claude-opus-4-8').
@@ -2504,6 +2510,134 @@ function clampSearchResults(value: unknown): number {
       ? Math.round(value)
       : DEFAULT_SEARCH_RESULTS;
   return Math.max(1, Math.min(MAX_SEARCH_RESULTS, n));
+}
+
+// --- Zoeken bij het schrijven van een prompt: eerst gerichte zoekvragen ---
+// In de chat is de vraag van de gebruiker zelf de zoekopdracht. Bij de bouwer
+// is de invoer een opdracht ("schrijf een e-mail aan collega's over…"), en
+// daarmee vindt een zoekmachine vooral andere e-mails. Staat zoeken aan, dan
+// bedenkt het model daarom eerst twee zoekvragen: één naar de inhoud van het
+// onderwerp en één naar hoe de overheid dit soort stuk maakt. Kost één korte
+// aanroep vooraf; lukt die niet, dan zoeken we met de opdracht zelf.
+
+const SEARCH_QUERY_SYSTEM_PROMPT = `Je bent onderzoeker bij de Nederlandse rijksoverheid en je bedenkt zoekopdrachten waarmee een zoekmachine de feiten vindt die een prompt voor deze opdracht beter maken.
+
+<taak>
+Lees de opdracht van de medewerker en bedenk twee zoekopdrachten:
+- de eerste zoekt de inhoud van het onderwerp: de wet, de regeling, het beleid, de cijfers of de organisatie waar de opdracht over gaat;
+- de tweede zoekt hoe de overheid dit soort stuk maakt: richtlijnen, eisen of een handreiking.
+</taak>
+
+<regels>
+- Elke zoekopdracht telt drie tot acht woorden, in het Nederlands, zonder aanhalingstekens.
+- Noem alleen onderwerpen die in de opdracht staan. Verzin geen namen, jaartallen of cijfers.
+- Zet nooit een naam van een persoon of andere persoonsgegevens in een zoekopdracht.
+</regels>
+
+Geef UITSLUITEND geldige JSON terug, zonder codeblok of extra tekst, in dit formaat:
+{"zoekvragen":["<zoekopdracht>","<zoekopdracht>"]}`;
+
+/** Hoe lang het bedenken van de zoekvragen mag duren voordat we de opdracht zelf gebruiken. */
+const SEARCH_QUERY_TIMEOUT_MS = 8000;
+
+/**
+ * Twee gerichte zoekvragen voor deze opdracht. Gooit nooit: lukt het niet, dan
+ * is de opdracht zelf (ingekort) de enige zoekvraag.
+ */
+async function generatorSearchQueries(
+  opdracht: string,
+  order: Provider[],
+  preferredProvider: PreferredProvider | undefined,
+  preferredModel: string | undefined,
+): Promise<string[]> {
+  const fallback = [opdracht.trim().slice(0, MAX_SEARCH_QUERY_CHARS)].filter(Boolean);
+  const candidate = order[0];
+  if (!candidate || !opdracht.trim()) return fallback;
+  try {
+    const raw = await JSON_PROVIDERS[candidate](
+      `OPDRACHT VAN DE MEDEWERKER:\n${opdracht.trim().slice(0, 4000)}`,
+      SEARCH_QUERY_SYSTEM_PROMPT,
+      0.2,
+      resolveModel(candidate, preferredProvider, preferredModel),
+      200,
+      undefined,
+      SEARCH_QUERY_TIMEOUT_MS,
+    );
+    const match = raw.match(/\{[\s\S]*\}/);
+    const parsed = match ? (JSON.parse(match[0]) as { zoekvragen?: unknown }) : {};
+    const vragen = Array.isArray(parsed.zoekvragen)
+      ? parsed.zoekvragen
+          .filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
+          .map((v) => v.trim().slice(0, MAX_SEARCH_QUERY_CHARS))
+          .slice(0, 2)
+      : [];
+    return vragen.length > 0 ? vragen : fallback;
+  } catch (err) {
+    console.warn('Zoekvragen bedenken mislukt, zoek met de opdracht zelf:', err);
+    return fallback;
+  }
+}
+
+/**
+ * Zoekt met meerdere zoekvragen tegelijk en voegt de treffers samen: om en om
+ * per zoekvraag, zonder dubbele URL's, tot `count`. Zo komen beide kanten van
+ * de opdracht aan bod en niet alleen de eerste.
+ */
+async function searchWebMulti(queries: string[], count: number): Promise<SearchHit[]> {
+  const perQuery = await Promise.all(queries.map((q) => searchWeb(q, count)));
+  const seen = new Set<string>();
+  const merged: SearchHit[] = [];
+  for (let i = 0; merged.length < count && perQuery.some((hits) => i < hits.length); i++) {
+    for (const hits of perQuery) {
+      const hit = hits[i];
+      if (!hit || seen.has(hit.url) || merged.length >= count) continue;
+      seen.add(hit.url);
+      merged.push(hit);
+    }
+  }
+  return merged;
+}
+
+// --- Tweede ronde: het model controleert en verbetert zijn eerste versie ---
+// Staat denken aan, dan is één ronde met reasoning_effort 'high' het maximum dat
+// Mistral kent ('none' of 'high'). Wie het antwoord meer dan één keer wil laten
+// doordenken, krijgt daarom een tweede ronde: het model leest zijn concept
+// tegen dezelfde regels en de opdracht, en levert de verbeterde versie. Staat
+// zoeken aan, dan controleert die ronde ook of de bronnen echt zijn verwerkt:
+// zonder die stap liet het model ze bij een korte opdracht gewoon weg.
+
+function reviewInstruction(metBronnen: boolean): string {
+  const punten = [
+    'Volgt de prompt elke regel hierboven, ook de opbouw, de koppen en de [plaatshouders]? Herstel wat afwijkt.',
+    'Doet de prompt alles wat de medewerker vraagt? Vul aan wat ontbreekt.',
+    'Staat er iets in wat de medewerker niet vroeg en wat ook niet in de bronnen staat? Haal het weg.',
+    'Is elke instructie concreet en te controleren? Maak een algemene instructie concreet.',
+    ...(metBronnen
+      ? [
+          'Staat elk feit uit de bronnen dat bij de opdracht hoort in de prompt, met de URL van die bron erachter tussen haakjes? Voeg ontbrekende feiten toe in het deel over de context of de achtergrond. Gebruik alleen URL\'s die bij de bronnen staan.',
+        ]
+      : []),
+  ];
+  return `TWEEDE RONDE: CONTROLE EN VERBETERING
+In het bericht van de medewerker staat onder CONCEPTPROMPT een eerste versie die volgens de regels hierboven is geschreven. Controleer die versie op de punten hieronder en geef de verbeterde, volledige prompt terug.
+
+<controle>
+${punten.map((p, i) => `${i + 1}. ${p}`).join('\n')}
+</controle>
+
+Geef alleen de verbeterde prompt terug, zonder uitleg over wat je hebt veranderd en zonder het woord CONCEPTPROMPT. Is het concept al goed, geef het dan ongewijzigd terug.`;
+}
+
+/** Het bericht voor de tweede ronde: de oorspronkelijke opdracht plus het concept. */
+function reviewUserMessage(userMessage: string, draft: string): string {
+  return `${userMessage}\n\nCONCEPTPROMPT:\n"""\n${draft.trim()}\n"""`;
+}
+
+/** De bron-URL's die in de tekst terugkomen; ook zonder slash of met .md-variant. */
+function usedSourceUrls(text: string, hits: SearchHit[]): string[] {
+  return hits
+    .map((h) => h.url)
+    .filter((url) => text.includes(url.replace(/\/+$/, '')));
 }
 
 /**
@@ -5985,6 +6119,18 @@ function streamTextResponse(args: {
    * gebeurt er niets.
    */
   kennisbank?: { query: string; instruction: string };
+  /**
+   * Zoekvragen bedenken vóór het zoeken (de bouwer). Afwezig = met `search.query`
+   * zelf zoeken (de chat).
+   */
+  searchQueries?: () => Promise<string[]>;
+  /**
+   * Tweede ronde na de eerste versie: het model controleert die en levert de
+   * verbeterde prompt. Alleen met een tekstbericht (generate).
+   */
+  review?: boolean;
+  /** Melding die de client altijd te zien krijgt, bijv. dat zoeken niet mocht. */
+  notice?: string;
 }): Response {
   const {
     order,
@@ -5998,6 +6144,9 @@ function streamTextResponse(args: {
     thinking,
     search,
     kennisbank,
+    searchQueries,
+    review,
+    notice,
   } = args;
   // Bewust niet meegedestructureerd: staat zoeken aan, dan komen de gevonden
   // bronnen hier straks onder te staan.
@@ -6043,12 +6192,20 @@ function streamTextResponse(args: {
       // niets op, dan gaat de beurt gewoon door zonder bronnen.
       // De pagina's uit de kennisbank gaan mee in hetzelfde 'sources'-event: de
       // client houdt alleen het laatste vast.
+      if (notice) send({ type: 'notice', text: notice });
       const sourceHits: SearchHit[] = [];
       if (search) {
         send({ type: 'phase', phase: 'searching' });
-        const hits = await searchWeb(search.query, search.count);
-        system = withSearchBlock(system, search, hits);
+        const queries = searchQueries ? await searchQueries() : [search.query];
+        const hits = await searchWebMulti(queries, search.count);
+        system = withSearchBlock(system, { ...search, query: queries.join('; ') }, hits);
         sourceHits.push(...hits);
+        if (hits.length === 0) {
+          send({
+            type: 'notice',
+            text: 'Zoeken op internet leverde geen bruikbare bronnen op. De prompt is zonder internetbronnen geschreven.',
+          });
+        }
       }
       if (kennisbank) {
         const hits = await kennisbankHits(kennisbank.query);
@@ -6060,6 +6217,49 @@ function streamTextResponse(args: {
       }
 
       send({ type: 'phase', phase: 'drafting' });
+
+      /**
+       * Tweede ronde op dezelfde provider en met dezelfde denkstand. De eerste
+       * versie blijft in beeld tot de verbeterde begint te lopen; dan wist het
+       * 'reset'-event hem. Mislukt de ronde of komt er niets bruikbaars uit, dan
+       * blijft de eerste versie staan.
+       */
+      const runReview = async (
+        candidate: Provider,
+        choice: ThinkingChoice,
+        draft: string,
+      ): Promise<string> => {
+        send({ type: 'phase', phase: 'reviewing' });
+        let started = false;
+        try {
+          const revised = await PROVIDERS[candidate](
+            reviewUserMessage(userMessage as string, draft),
+            `${system}\n\n${reviewInstruction(sourceHits.length > 0)}`,
+            temperature,
+            choice.model,
+            choice.thinking ? maxTokens + THINKING_TOKEN_BUDGET : maxTokens,
+            (chunk) => {
+              if (!started) {
+                started = true;
+                send({ type: 'reset' });
+              }
+              send({ type: 'delta', text: chunk });
+            },
+            undefined,
+            choice.thinking ? { reasoningEffort: choice.reasoningEffort } : undefined,
+          );
+          if (revised.trim() && !detectUnclear(revised)) return revised;
+          console.warn(`${label}: tweede ronde gaf geen bruikbare tekst, eerste versie blijft staan`);
+        } catch (err) {
+          console.error(`${label}: tweede ronde mislukt, eerste versie blijft staan:`, err);
+        }
+        // Terug naar de eerste versie; was de tweede al begonnen, dan opnieuw tonen.
+        if (started) {
+          send({ type: 'reset' });
+          send({ type: 'delta', text: draft });
+        }
+        return draft;
+      };
 
       for (const candidate of order) {
         // Kop die we vasthouden tot de clarity-gate uitsluitsel geeft.
@@ -6138,7 +6338,17 @@ function streamTextResponse(args: {
             send({ type: 'delta', text: held });
             emitted = true;
           }
-          send({ type: 'done', text: raw, provider: candidate });
+
+          let final = raw;
+          if (review && typeof userMessage === 'string' && !closed) {
+            final = await runReview(candidate, choice, raw);
+          }
+          send({
+            type: 'done',
+            text: final,
+            provider: candidate,
+            ...(sourceHits.length > 0 ? { usedSources: usedSourceUrls(final, sourceHits) } : {}),
+          });
           close();
           return;
         } catch (providerErr) {
@@ -9705,7 +9915,13 @@ Deno.serve(async (req: Request) => {
             instruction: (body.webSearchInstruction ?? '').trim(),
           }
         : undefined;
-    if (body.webSearch === true && !searchArgs) {
+    const searchNotice =
+      body.webSearch === true && !searchArgs
+        ? searchBackend() === null
+          ? 'Zoeken stond aan, maar er is geen zoekdienst ingesteld. De prompt is zonder internetbronnen geschreven.'
+          : 'Zoeken stond aan, maar is alleen voor beheerders beschikbaar en je sessie kon niet als beheerder worden herkend. Log opnieuw in en probeer het nog eens.'
+        : undefined;
+    if (searchNotice) {
       console.warn('generate: zoeken gevraagd maar niet toegestaan of geen zoekdienst ingesteld');
     }
 
@@ -9739,6 +9955,21 @@ Deno.serve(async (req: Request) => {
         thinking: body.thinking,
         search: searchArgs,
         kennisbank: kennisbankArgs,
+        // De zoekvragen komen uit de opdracht én de ingevulde velden.
+        searchQueries: searchArgs
+          ? () =>
+              generatorSearchQueries(
+                [searchArgs.query, ...(body.answeredFields ?? []).map((f) => f.answer)]
+                  .filter((t) => t.trim())
+                  .join('\n'),
+                order,
+                body.preferredProvider,
+                body.preferredModel,
+              )
+          : undefined,
+        // Tweede ronde bij denken of zoeken, alleen als de client 'reset' kent.
+        review: body.review === true && (body.thinking === true || Boolean(searchArgs)),
+        notice: searchNotice,
       });
     }
 

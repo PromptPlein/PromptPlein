@@ -253,6 +253,9 @@ export async function optimizePrompt(args: {
             )
           : undefined,
         kennisbankInstruction,
+        // Denken of zoeken aan: de server controleert en verbetert in een
+        // tweede ronde zijn eerste versie. Kan alleen streamend ('reset').
+        ...(onChunk && (thinking || webSearch) ? { review: true } : {}),
       };
 
       // Meelezen gevraagd? Dan de streamende route: de eerste regels staan er na
@@ -261,12 +264,14 @@ export async function optimizePrompt(args: {
         // De bronnen komen één keer voorbij, vóór de eerste tekst; vasthouden
         // zodat ze bij het resultaat onder de prompt terechtkomen.
         let sources: OptimizeResult['sources'];
+        const notices: string[] = [];
         const streamed = await streamFromFunction(
           payload,
           onChunk,
           tidyPromptMarkup,
           (status) => {
             if (status.sources) sources = status.sources;
+            if (status.notice) notices.push(status.notice);
             onStatus?.(status);
           },
           accessToken,
@@ -287,6 +292,8 @@ export async function optimizePrompt(args: {
           success: true,
           provider: (streamed.provider as OptimizeResult['provider']) ?? 'claude',
           ...(sources?.length ? { sources } : {}),
+          ...(streamed.usedSources ? { usedSources: streamed.usedSources } : {}),
+          ...(notices.length ? { notices } : {}),
         };
       }
 

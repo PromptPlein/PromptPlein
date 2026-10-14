@@ -35,6 +35,11 @@ export interface StreamStatus {
    * dat er gezocht is maar niets bruikbaars gevonden.
    */
   sources?: { title: string; url: string }[];
+  /**
+   * Melding die de gebruiker moet zien, bijvoorbeeld dat zoeken niets opleverde
+   * of niet mocht. Kan meer dan eens voorbijkomen.
+   */
+  notice?: string;
 }
 
 /** Callback voor {@link StreamStatus}-updates; elke update bevat één veld. */
@@ -49,6 +54,8 @@ export interface StreamOutcome {
   error?: string;
   /** De aanroep is via het AbortSignal afgebroken; `text` bevat de deeltekst. */
   aborted?: boolean;
+  /** De bron-URL's die in de eindtekst terugkomen; alleen als er bronnen waren. */
+  usedSources?: string[];
 }
 
 function isAbortError(err: unknown): boolean {
@@ -253,6 +260,8 @@ export async function streamNdjson(args: {
       phase?: string;
       /** Alleen bij 'sources': de geraadpleegde internetbronnen. */
       sources?: unknown;
+      /** Alleen bij 'done': de bron-URL's die in de eindtekst staan. */
+      usedSources?: unknown;
     };
     try {
       event = JSON.parse(trimmed);
@@ -289,11 +298,24 @@ export async function streamNdjson(args: {
         accumulated += event.text ?? '';
         onChunk(tidy(accumulated));
         break;
+      case 'reset':
+        // Tweede ronde: de verbeterde versie begint en vervangt de eerste.
+        accumulated = '';
+        onChunk('');
+        break;
+      case 'notice':
+        if (event.text) onStatus?.({ notice: event.text });
+        break;
       case 'done':
         // De server stuurt de volledige tekst mee; die is leidend boven onze
         // eigen optelsom.
         outcome.text = event.text ?? accumulated;
         if (event.provider) outcome.provider = event.provider;
+        if (Array.isArray(event.usedSources)) {
+          outcome.usedSources = event.usedSources.filter(
+            (u): u is string => typeof u === 'string',
+          );
+        }
         break;
       case 'unclear':
         outcome.unclear = true;

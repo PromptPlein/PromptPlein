@@ -20,7 +20,8 @@ interface OptimizingLoaderProps {
   /**
    * 'searching' = er wordt eerst op internet gezocht (alleen voor beheerders),
    * 'drafting' = het model leest mee, 'thinking' = het redeneert eerst (de
-   * denkstand staat aan), 'writing' = de tekst loopt.
+   * denkstand staat aan), 'writing' = de tekst loopt, 'reviewing' = de tweede
+   * ronde waarin het model zijn eerste versie controleert (bij denken of zoeken).
    */
   phase?: string;
 }
@@ -95,7 +96,9 @@ export default function OptimizingLoader({
               <Loader2 size={15} className="animate-spin text-rijksblauw-500" />
             </p>
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              {streaming ? (
+              {phase === 'reviewing' ? (
+                <>Tweede ronde: het model controleert zijn eerste versie en verbetert die…</>
+              ) : streaming ? (
                 <>Je prompt wordt nu geschreven</>
               ) : phase === 'searching' ? (
                 <>We zoeken eerst op internet naar actuele informatie over je opdracht…</>
@@ -151,7 +154,9 @@ export default function OptimizingLoader({
               {elapsed}s bezig ·{' '}
               {phase === 'searching'
                 ? 'bronnen op internet opzoeken'
-                : 'het model leest je antwoorden en bepaalt de opbouw'}
+                : phase === 'reviewing'
+                  ? 'het model leest zijn eerste versie na'
+                  : 'het model leest je antwoorden en bepaalt de opbouw'}
             </>
           )}
         </p>
