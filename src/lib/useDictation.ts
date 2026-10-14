@@ -27,6 +27,8 @@ export function useDictation(onText: (text: string) => void) {
   const { user } = useAuth();
   const [state, setState] = useState<DictationState>('idle');
   const [seconds, setSeconds] = useState(0);
+  // De open microfoon, voor de geluidsmeter. Alleen gezet tijdens het opnemen.
+  const [stream, setStream] = useState<MediaStream | null>(null);
 
   const onTextRef = useRef(onText);
   onTextRef.current = onText;
@@ -46,6 +48,7 @@ export function useDictation(onText: (text: string) => void) {
   const releaseMicrophone = useCallback(() => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
+    setStream(null);
   }, []);
 
   const stop = useCallback(() => {
@@ -67,9 +70,9 @@ export function useDictation(onText: (text: string) => void) {
   /** Zet de microfoon aan. Geeft false terug als dat niet lukte. */
   const start = useCallback(async (): Promise<boolean> => {
     if (!available || state !== 'idle') return false;
-    let stream: MediaStream;
+    let media: MediaStream;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      media = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (err) {
       const denied = err instanceof DOMException && err.name === 'NotAllowedError';
       toast.error(
@@ -81,11 +84,12 @@ export function useDictation(onText: (text: string) => void) {
     }
 
     const mimeType = pickMimeType();
-    const recorder = new MediaRecorder(stream, {
+    const recorder = new MediaRecorder(media, {
       ...(mimeType ? { mimeType } : {}),
       audioBitsPerSecond: 32_000,
     });
-    streamRef.current = stream;
+    streamRef.current = media;
+    setStream(media);
     recorderRef.current = recorder;
     chunksRef.current = [];
     cancelledRef.current = false;
@@ -155,7 +159,7 @@ export function useDictation(onText: (text: string) => void) {
     else if (state === 'idle') void start();
   }, [state, start, stop]);
 
-  return { available, state, seconds, start, stop, cancel, toggle };
+  return { available, state, seconds, stream, start, stop, cancel, toggle };
 }
 
 /** "0:07", "1:42". */

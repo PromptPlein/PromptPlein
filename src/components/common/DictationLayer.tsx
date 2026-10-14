@@ -34,7 +34,7 @@ interface Placement {
  * De knop ligt in een portal met vaste positie en loopt elk frame mee met het
  * vak (scrollen, meegroeien, een modal die verschuift). Tijdens het opnemen
  * blijft hij aan dát vak vast zitten, ook als de focus ergens anders heen gaat,
- * en licht het vak rood op. De uitgeschreven tekst komt op de plek van de
+ * en krijgt het vak een blauwe rand. De uitgeschreven tekst komt op de plek van de
  * cursor.
  */
 export default function DictationLayer() {
@@ -159,13 +159,14 @@ export default function DictationLayer() {
     <div ref={layerRef}>
       {state === 'recording' && (
         <div
-          className="pointer-events-none fixed z-[60] rounded-lg ring-2 ring-red-500 motion-safe:animate-pulse"
+          className="pointer-events-none fixed z-[60] rounded-lg ring-2 ring-rijksblauw-400/50 dark:ring-rijksblauw-300/50"
           style={placement.field}
         />
       )}
       <DictationButton
         state={state}
         seconds={dictation.seconds}
+        stream={dictation.stream}
         onToggle={onToggle}
         className="fixed z-[60]"
         style={{ left: placement.left, bottom: placement.bottom }}

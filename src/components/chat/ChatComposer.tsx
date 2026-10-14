@@ -510,11 +510,12 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
             knoppen los van wat je typt. */}
         <div className="mt-1 flex items-center gap-1 border-t border-slate-100 px-2 pb-2 pt-1.5 dark:border-slate-700/60">
           {/* Microfoon: linksonder, als eerste knop. Tijdens het opnemen wordt
-              hij rood en loopt de tijd ernaast mee. */}
+              het een balk met een geluidsmeter en de tijd. */}
           {dictation.available && (
             <DictationButton
               state={dictationState}
               seconds={dictation.seconds}
+              stream={dictation.stream}
               onToggle={dictation.toggle}
               disabled={disabled || streaming}
               size="md"
