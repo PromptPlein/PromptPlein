@@ -20,9 +20,11 @@ import {
   X,
 } from 'lucide-react';
 import clsx from 'clsx';
+import DictationButton from '@/components/common/DictationButton';
 import ThinkingToggle from '@/components/common/ThinkingToggle';
 import WebSearchToggle from '@/components/common/WebSearchToggle';
 import { ACCEPTED_DOC_ACCEPT } from '@/lib/extractDocument';
+import { insertDictatedText, useDictation } from '@/lib/useDictation';
 import { MAX_CHAT_ATTACHMENTS } from './useChatController';
 import type { ChatAttachment, ChatProject } from '@/types';
 
@@ -171,6 +173,23 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
   );
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Inspreken: de uitgeschreven tekst komt op de plek van de cursor, en
+  // versturen blijft een eigen handeling, zodat je eerst kunt nalezen.
+  const dictation = useDictation((spoken) => {
+    if (textareaRef.current) insertDictatedText(textareaRef.current, spoken);
+  });
+  const { cancel: cancelDictation, state: dictationState } = dictation;
+
+  // Esc tijdens het opnemen breekt af zonder uit te schrijven.
+  useEffect(() => {
+    if (dictationState !== 'recording') return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') cancelDictation();
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [dictationState, cancelDictation]);
 
   // Meegroeien met de inhoud: eerst terug naar 'auto' (anders houdt het vak zijn
   // vorige, grotere hoogte vast en meet scrollHeight de oude stand), dan precies
@@ -399,6 +418,8 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
         <div className="relative">
           <textarea
             ref={textareaRef}
+            // De chat heeft zijn eigen microfoon in de werkbalk hieronder.
+            data-dictation="off"
             className={clsx(
               // opl-scroll-slim: een slanke schuifbalk met vaste goot, zodat een
               // langere tekst geen brede systeembalk oplevert die tegen het
@@ -612,10 +633,27 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
             </>
           )}
 
+          {/* Microfoon: rechtsonder, vlak voor Verstuur. Tijdens het opnemen
+              wordt hij rood en loopt de tijd ernaast mee. */}
+          {dictation.available && (
+            <DictationButton
+              state={dictationState}
+              seconds={dictation.seconds}
+              onToggle={dictation.toggle}
+              disabled={disabled || streaming}
+              size="md"
+              className="ml-auto"
+            />
+          )}
+
           {streaming ? (
             <button
               type="button"
-              className="opl-btn-secondary ml-auto shrink-0 !rounded-lg !px-3 !py-1.5"
+              className={clsx(
+                'opl-btn-secondary shrink-0 !rounded-lg !px-3 !py-1.5',
+                // Staat de microfoon er, dan duwt die al naar rechts.
+                !dictation.available && 'ml-auto',
+              )}
               onClick={onStop}
               aria-label="Stop het antwoord"
             >
@@ -625,7 +663,8 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
             <button
               type="button"
               className={clsx(
-                'opl-btn-primary ml-auto shrink-0 !rounded-lg !px-3 !py-1.5',
+                'opl-btn-primary shrink-0 !rounded-lg !px-3 !py-1.5',
+                !dictation.available && 'ml-auto',
                 !canSend && 'opacity-50',
               )}
               onClick={submit}

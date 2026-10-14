@@ -2941,6 +2941,86 @@ function isAuthenticatedRequest(req: Request): boolean {
  * Gooit nooit: lukt de controle niet, dan is het antwoord nee en loopt de
  * optimalisatie door zonder te zoeken.
  */
+// --- Transcribe-modus: spraak uit de microfoon wordt tekst in een invulveld ---
+// De opname komt als base64 binnen, gaat in hetzelfde verzoek door naar Mistral
+// en bestaat daarna nergens meer. Bewust niet via de Files-API van Mistral
+// (file_id): dan zou de audio als bestand in het account blijven staan tot
+// iemand hem weggooit. Hier wordt niets bewaard: niet in Storage, niet in de
+// database en niet in de logs, ook de uitgeschreven tekst niet.
+
+/** Het transcriptiemodel van Mistral (Voxtral Mini Transcribe). */
+const TRANSCRIBE_MODEL = 'voxtral-mini-latest';
+
+/**
+ * Grootste opname die we aannemen, in bytes. De client stopt na vijf minuten;
+ * met Opus op 32 kbit/s is dat ruim 1 MB, dus dit is alleen het vangnet.
+ */
+const MAX_TRANSCRIBE_BYTES = 8 * 1024 * 1024;
+
+/**
+ * Vaktermen die het model anders verkeerd verstaat ("Woo" werd "wol"). Mistral
+ * neemt er maximaal honderd; het zijn hints, geen verplichting.
+ */
+const TRANSCRIBE_TERMS = [
+  'Woo',
+  'Wob',
+  'AVG',
+  'DPIA',
+  'BIO',
+  'rijksoverheid',
+  'ministerie',
+  'directie',
+  'prompt',
+  'PromptPlein',
+  'Kamerbrief',
+  'Kamervragen',
+  'beslisnota',
+  'dashboard',
+];
+
+/** Bestandsextensie bij het audiotype, zodat Mistral weet hoe het moet decoderen. */
+function audioExtension(mimeType: string): string {
+  const type = mimeType.toLowerCase();
+  if (type.includes('webm')) return 'webm';
+  if (type.includes('ogg')) return 'ogg';
+  if (type.includes('mp4') || type.includes('m4a') || type.includes('aac')) return 'm4a';
+  if (type.includes('mpeg') || type.includes('mp3')) return 'mp3';
+  if (type.includes('wav')) return 'wav';
+  return 'webm';
+}
+
+async function transcribeAudio(base64: string, mimeType: string): Promise<string> {
+  const apiKey = Deno.env.get('MISTRAL_API_KEY');
+  if (!apiKey) throw new Error('MISTRAL_API_KEY ontbreekt');
+
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+  const form = new FormData();
+  form.append('model', TRANSCRIBE_MODEL);
+  form.append('language', 'nl');
+  for (const term of TRANSCRIBE_TERMS) form.append('context_bias', term);
+  form.append(
+    'file',
+    new Blob([bytes], { type: mimeType || 'audio/webm' }),
+    `opname.${audioExtension(mimeType)}`,
+  );
+
+  const response = await fetch('https://api.mistral.ai/v1/audio/transcriptions', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}` },
+    body: form,
+    signal: AbortSignal.timeout(120_000),
+  });
+  if (!response.ok) {
+    const detail = (await response.text()).slice(0, 300);
+    throw new Error(`Mistral transcriptie gaf status ${response.status}: ${detail}`);
+  }
+  const result = (await response.json()) as { text?: unknown };
+  return typeof result.text === 'string' ? result.text.trim() : '';
+}
+
 async function isAdminRequest(req: Request): Promise<boolean> {
   if (!isAuthenticatedRequest(req)) return false;
   const url = Deno.env.get('SUPABASE_URL');
@@ -7951,6 +8031,35 @@ Deno.serve(async (req: Request) => {
 
   try {
     const body = (await req.json()) as RequestBody;
+
+    // Dicteren: alleen voor ingelogde gebruikers, anders is dit een gratis
+    // transcriptiedienst voor wie het adres vindt. Staat vóór de prompts uit
+    // Beheer, want er draait geen systeemprompt.
+    if ((body as { mode?: string }).mode === 'transcribe') {
+      const json = (status: number, payload: Record<string, unknown>) =>
+        new Response(JSON.stringify(payload), {
+          status,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      if (!isAuthenticatedRequest(req)) {
+        return json(401, { success: false, error: 'Log in om te kunnen dicteren' });
+      }
+      const { audio, mimeType } = body as { audio?: unknown; mimeType?: unknown };
+      if (typeof audio !== 'string' || audio.length === 0) {
+        return json(400, { success: false, error: 'Geen opname ontvangen' });
+      }
+      if (audio.length * 0.75 > MAX_TRANSCRIBE_BYTES) {
+        return json(413, { success: false, error: 'De opname is te lang' });
+      }
+      try {
+        const text = await transcribeAudio(audio, typeof mimeType === 'string' ? mimeType : '');
+        return json(200, { success: true, text });
+      } catch (err) {
+        console.error('Transcriptie mislukt:', err instanceof Error ? err.message : err);
+        return json(502, { success: false, error: 'Uitschrijven lukte niet' });
+      }
+    }
+
     // De prompts uit Beheer, vóór welke modus dan ook.
     applyPromptOverrides(await loadPromptOverrides());
 

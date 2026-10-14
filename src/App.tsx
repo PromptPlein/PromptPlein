@@ -4,6 +4,7 @@ import { ReferenceDataProvider } from '@/context/ReferenceDataContext';
 import ErrorBoundary from '@/components/common/ErrorBoundary';
 import Header from '@/components/common/Header';
 import Footer from '@/components/common/Footer';
+import DictationLayer from '@/components/common/DictationLayer';
 import HomePage from '@/pages/HomePage';
 import SearchPage from '@/pages/SearchPage';
 import OptimizerPage from '@/pages/OptimizerPage';
@@ -149,6 +150,8 @@ export default function App() {
           </ErrorBoundary>
         </main>
         <Footer />
+        {/* Microfoontje rechtsonder in elk tekstvak: inspreken in plaats van typen. */}
+        <DictationLayer />
       </div>
     </ReferenceDataProvider>
   );
