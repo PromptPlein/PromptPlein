@@ -485,6 +485,7 @@ export default function TechniquesPage() {
                     naam: skillData.naam,
                     beschrijving: skillData.beschrijving,
                     bronnen: skillData.velden.bronnen,
+                    publicatie: skillData.publicatie,
                     model: skillModel(result.provider, settingsRef.current),
                   }
                 : undefined

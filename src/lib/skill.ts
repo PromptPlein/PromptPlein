@@ -94,6 +94,44 @@ export interface SkillTestVerzoek {
   hoortErbij: boolean;
 }
 
+/**
+ * Gegevens om de skill als plugin te delen: wat publiccode.yml, het
+ * pluginmanifest en de herkomst in SKILL.md nodig hebben. Komt niet in de
+ * instructie zelf.
+ */
+export interface SkillPublicatie {
+  /** Organisatie die eigenaar is van de afspraken in de skill. */
+  organisatie: string;
+  /** Team of contactpersoon dat de skill beheert. */
+  contact: string;
+  /** Adres voor vragen; bij voorkeur een teammailbox. */
+  email: string;
+  /** URL van de repository waar de plugin komt te staan; mag leeg. */
+  repository: string;
+  /** SPDX-code van de licentie, standaard EUPL-1.2. */
+  licentie: string;
+  /** Wie de skill heeft goedgekeurd; leeg betekent dat hij een concept is. */
+  goedgekeurdDoor: string;
+}
+
+export const DEFAULT_SKILL_LICENTIE = 'EUPL-1.2';
+
+export function emptyPublicatie(): SkillPublicatie {
+  return {
+    organisatie: '',
+    contact: '',
+    email: '',
+    repository: '',
+    licentie: DEFAULT_SKILL_LICENTIE,
+    goedgekeurdDoor: '',
+  };
+}
+
+/** Een eenvoudige controle op de vorm van een e-mailadres. */
+export function isEmailAdres(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
 /** De volledige staat van de Skill Creator. */
 export interface SkillData {
   /** Wat de medewerker de AI nu telkens opnieuw moet uitleggen. */
@@ -104,6 +142,7 @@ export interface SkillData {
   strakheid: SkillStrakheid;
   naam: string;
   beschrijving: string;
+  publicatie: SkillPublicatie;
 }
 
 export function emptySkill(): SkillData {
@@ -121,7 +160,51 @@ export function emptySkill(): SkillData {
     strakheid: 'vast',
     naam: '',
     beschrijving: '',
+    publicatie: emptyPublicatie(),
   };
+}
+
+/** Eén punt dat nog openstaat voor een volledige skill, met het veld waar het hoort. */
+export interface SkillOpenPunt {
+  /** Id van het invoerveld, om ernaartoe te springen. */
+  veld: string;
+  tekst: string;
+}
+
+const VELD_KORT: Record<SkillVeldId, string> = {
+  niet_gebruiken: 'Wanneer de skill niet geldt',
+  valkuilen: 'Valkuilen',
+  werkwijze: 'Werkwijze',
+  resultaat: 'Goed resultaat',
+  bronnen: 'Afspraken en bronnen',
+  grenzen: 'Grenzen en doorverwijzen',
+};
+
+/**
+ * Wat er nog ontbreekt voor een volledige skill en een plugin zonder
+ * invulplekken. `openVragen` zijn de vragen van de AI bij velden die nog
+ * precies het voorstel bevatten: die vraag is dan nog niet beantwoord.
+ */
+export function skillOpenPunten(
+  d: SkillData,
+  openVragen: Partial<Record<SkillVeldId, string>> = {},
+): SkillOpenPunt[] {
+  const punten: SkillOpenPunt[] = [];
+  for (const { id } of SKILL_VELDEN) {
+    const vraag = openVragen[id];
+    if (vraag) punten.push({ veld: `sk-${id}`, tekst: `${VELD_KORT[id]}: ${vraag}` });
+    else if (!d.velden[id].trim()) punten.push({ veld: `sk-${id}`, tekst: `${VELD_KORT[id]}: nog leeg` });
+  }
+  if (!d.naam.trim()) punten.push({ veld: 'sk-naam', tekst: 'Naam: nog leeg' });
+  if (!d.beschrijving.trim()) punten.push({ veld: 'sk-beschrijving', tekst: 'Beschrijving: nog leeg' });
+  const p = d.publicatie;
+  if (!p.organisatie.trim()) punten.push({ veld: 'sk-organisatie', tekst: 'Eigenaar van de afspraken: nog leeg' });
+  if (!p.contact.trim()) punten.push({ veld: 'sk-contact', tekst: 'Beheerder van de skill: nog leeg' });
+  if (!p.email.trim()) punten.push({ veld: 'sk-email', tekst: 'E-mailadres voor vragen: nog leeg' });
+  else if (!isEmailAdres(p.email)) punten.push({ veld: 'sk-email', tekst: 'E-mailadres voor vragen: geen geldig adres' });
+  if (!p.repository.trim()) punten.push({ veld: 'sk-repository', tekst: 'Plek van de repository: nog leeg' });
+  if (!p.licentie.trim()) punten.push({ veld: 'sk-licentie', tekst: 'Licentie: nog leeg' });
+  return punten;
 }
 
 /** Is er genoeg ingevuld om een zinvolle skill te bouwen? */
@@ -191,7 +274,12 @@ export interface SkillMeta {
   bronnen?: string;
   /** Het model dat de skill schreef; leeg als de AI-service niet bereikbaar was. */
   model?: string;
+  /** Eigenaar, beheerder, licentie en goedkeuring; vullen de invulplekken van de plugin. */
+  publicatie?: SkillPublicatie;
 }
+
+/** Ingevulde waarde, of de invulplek tussen rechte haken. */
+const ofInvulplek = (value: string | undefined, plek: string) => value?.trim() || `[${plek}]`;
 
 /** Pad van het referentiebestand, relatief aan SKILL.md. */
 const BRONNEN_PAD = 'references/bronnen.md';
@@ -229,7 +317,12 @@ export function buildSkillMd(meta: SkillMeta, prompt: string, metReferentie = fa
     ...(model ? [`  created-with-model: ${JSON.stringify(model)}`] : []),
     `  created-date: "${vandaag()}"`,
     '  created-with: PromptPlein',
-    '  status: concept',
+    ...(meta.publicatie?.goedgekeurdDoor.trim()
+      ? ['  status: goedgekeurd', `  approved-by: ${JSON.stringify(meta.publicatie.goedgekeurdDoor.trim())}`]
+      : ['  status: concept']),
+    ...(meta.publicatie?.organisatie.trim()
+      ? [`  owner: ${JSON.stringify(meta.publicatie.organisatie.trim())}`]
+      : []),
     '---',
     '',
     prompt.trim(),
@@ -262,19 +355,24 @@ const yaml = (value: string) => JSON.stringify(value.replace(/\s+/g, ' ').trim()
  * de repository, eigenaar, contactpersoon) staat tussen rechte haken.
  */
 function buildPublicCode(meta: SkillMeta): string {
+  const p = meta.publicatie;
   const naam = meta.naam.trim() || skillSlug(meta.naam);
   const beschrijving = skillDescription(meta).replace(/\s*Zoekwoorden:.*$/i, '');
   const kort = beschrijving.length > 150 ? `${beschrijving.slice(0, 147).trimEnd()}...` : beschrijving;
-  const lang = `${beschrijving} De skill is een vaste instructie voor een AI-assistent: de assistent pakt elke nieuwe invoer op dezelfde manier aan, volgens de werkwijze, valkuilen en grenzen die erin staan. Gemaakt met PromptPlein; de skill heeft de status concept tot de eigenaar van de afspraken hem goedkeurt.`;
+  const status = p?.goedgekeurdDoor.trim()
+    ? `De skill is goedgekeurd door ${p.goedgekeurdDoor.trim()}.`
+    : 'De skill heeft de status concept tot de eigenaar van de afspraken hem goedkeurt.';
+  const lang = `${beschrijving} De skill is een vaste instructie voor een AI-assistent: de assistent pakt elke nieuwe invoer op dezelfde manier aan, volgens de werkwijze, valkuilen en grenzen die erin staan. Gemaakt met PromptPlein. ${status}`;
+  const invulplekken = !p?.repository.trim() || !p.organisatie.trim() || !p.contact.trim() || !p.email.trim();
   return [
     '# Machine-leesbare metadata volgens de publiccode.yml-standaard, voor de',
-    '# open-sourcecatalogus op developer.overheid.nl. Vul de regels met [ ] in',
-    '# voordat je de repository publiceert.',
+    '# open-sourcecatalogus op developer.overheid.nl.',
+    ...(invulplekken ? ['# Vul de regels met [ ] in voordat je de repository publiceert.'] : []),
     '',
     'publiccodeYmlVersion: "0.5"',
     '',
     `name: ${yaml(naam)}`,
-    'url: "[URL van de repository, bijvoorbeeld https://github.com/organisatie/naam]"',
+    `url: ${yaml(ofInvulplek(p?.repository, 'URL van de repository, bijvoorbeeld https://github.com/organisatie/naam'))}`,
     'softwareType: addon',
     'developmentStatus: development',
     '',
@@ -293,14 +391,14 @@ function buildPublicCode(meta: SkillMeta): string {
     '      - Herkomst en status in de kop van SKILL.md',
     '',
     'legal:',
-    '  license: EUPL-1.2',
-    '  mainCopyrightOwner: "[naam van de organisatie]"',
+    `  license: ${p?.licentie.trim() || DEFAULT_SKILL_LICENTIE}`,
+    `  mainCopyrightOwner: ${yaml(ofInvulplek(p?.organisatie, 'naam van de organisatie'))}`,
     '',
     'maintenance:',
     '  type: internal',
     '  contacts:',
-    '    - name: "[naam van het team of de contactpersoon]"',
-    '      email: "[e-mailadres]"',
+    `    - name: ${yaml(ofInvulplek(p?.contact, 'naam van het team of de contactpersoon'))}`,
+    `      email: ${yaml(ofInvulplek(p?.email, 'e-mailadres'))}`,
     '',
     'localisation:',
     '  localisationReady: false',
@@ -336,17 +434,37 @@ export function buildSkillPlugin(
   const naam = meta.naam.trim() || slug;
   const bronnen = meta.bronnen?.trim() ?? '';
   const metReferentie = bronnen.length > 0;
+  const p = meta.publicatie;
+  const licentieCode = p?.licentie.trim() || DEFAULT_SKILL_LICENTIE;
+  // Auteur, repository en licentie in het manifest; leeg blijft weg, zodat er
+  // geen invulplek in JSON terechtkomt.
+  const auteur =
+    p?.contact.trim() || p?.organisatie.trim()
+      ? {
+          author: {
+            name: p.contact.trim() || p.organisatie.trim(),
+            ...(isEmailAdres(p.email) ? { email: p.email.trim() } : {}),
+          },
+        }
+      : {};
+  const extra = {
+    ...auteur,
+    ...(p?.repository.trim() ? { repository: p.repository.trim() } : {}),
+    license: licentieCode,
+  };
   const manifest = `${JSON.stringify(
-    { name: slug, description: skillDescription(meta), version: '0.1.0' },
+    { name: slug, description: skillDescription(meta), version: '0.1.0', ...extra },
     null,
     2,
   )}\n`;
   const cursorManifest = `${JSON.stringify(
-    { name: slug, displayName: naam, description: skillDescription(meta), version: '0.1.0' },
+    { name: slug, displayName: naam, description: skillDescription(meta), version: '0.1.0', ...extra },
     null,
     2,
   )}\n`;
-  const licentie = extras.licentie?.trim();
+  // De EUPL-tekst gaat alleen mee als die ook gekozen is; een andere licentie
+  // voegt de organisatie zelf toe.
+  const licentie = licentieCode === DEFAULT_SKILL_LICENTIE ? extras.licentie?.trim() : undefined;
 
   const files: Record<string, string> = {
     [`${slug}/.plugin/plugin.json`]: manifest,
@@ -369,8 +487,16 @@ export function buildSkillPlugin(
       '',
       skillDescription(meta),
       '',
-      'Gemaakt met PromptPlein. De skill heeft de status concept: laat hem nalezen door wie de afspraken erin beheert voordat collega\'s hem gebruiken.',
+      p?.goedgekeurdDoor.trim()
+        ? `Gemaakt met PromptPlein en goedgekeurd door ${p.goedgekeurdDoor.trim()}.`
+        : 'Gemaakt met PromptPlein. De skill heeft de status concept: laat hem nalezen door wie de afspraken erin beheert voordat collega\'s hem gebruiken.',
       '',
+      ...(p?.organisatie.trim() || p?.contact.trim()
+        ? [
+            `Eigenaar: ${ofInvulplek(p.organisatie, 'organisatie')}. Beheer: ${ofInvulplek(p.contact, 'team of contactpersoon')}${isEmailAdres(p.email) ? ` (${p.email.trim()})` : ''}.`,
+            '',
+          ]
+        : []),
       '## Wat er in deze map staat',
       '',
       '| Bestand | Waarvoor |',
@@ -382,7 +508,7 @@ export function buildSkillPlugin(
       '| `.plugin/plugin.json` | Beschrijving van de plugin; hieruit maakt de marketplace de andere twee |',
       '| `.claude-plugin/plugin.json` | Voor Claude Code en Codex |',
       '| `.cursor-plugin/plugin.json` | Voor Cursor |',
-      '| `publiccode.yml` | Metadata voor de open-sourcecatalogus van de overheid; vul de regels met [ ] in |',
+      '| `publiccode.yml` | Metadata voor de open-sourcecatalogus van de overheid |',
       ...(licentie ? ['| `LICENSE` | De licentie, EUPL-1.2 |'] : []),
       '| `CHANGELOG.md` | Wat er per versie veranderde |',
       '',
@@ -402,7 +528,7 @@ export function buildSkillPlugin(
       '',
       '## Aanmelden bij de overheidsmarketplace',
       '',
-      `De skills-marketplace van developer.overheid.nl (github.com/developer-overheid-nl/skills-marketplace) neemt plugins op die in een publieke repository staan, een open-source licentie hebben en Nederlandse documentatie hebben. Deze map bevat ${licentie ? 'de EUPL-1.2, de licentie die de overheid aanbeveelt. Kiest je organisatie een andere, vervang dan LICENSE en het veld license in publiccode.yml' : 'nog geen licentie. Voeg een LICENSE toe, bijvoorbeeld de EUPL-1.2'}. Zet de map in een repository, vul publiccode.yml aan en meld de plugin aan via een issue op de marketplace.`,
+      `De skills-marketplace van developer.overheid.nl (github.com/developer-overheid-nl/skills-marketplace) neemt plugins op die in een publieke repository staan, een open-source licentie hebben en Nederlandse documentatie hebben. Deze map bevat ${licentie ? 'de EUPL-1.2, de licentie die de overheid aanbeveelt. Kiest je organisatie een andere, vervang dan LICENSE en het veld license in publiccode.yml' : licentieCode === DEFAULT_SKILL_LICENTIE ? 'nog geen licentie. Voeg een LICENSE toe met de tekst van de EUPL-1.2' : `nog geen licentietekst. Voeg een LICENSE toe met de tekst van ${licentieCode}`}. Zet de map in een repository, vul publiccode.yml aan en meld de plugin aan via een issue op de marketplace.`,
       '',
     ].join('\n'),
   };

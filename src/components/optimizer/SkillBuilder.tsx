@@ -1,16 +1,30 @@
 import { useEffect, useState } from 'react';
-import { CheckCircle2, FlaskConical, Loader2, MessageCircleQuestion, Sparkles, Wand2 } from 'lucide-react';
+import {
+  CheckCircle2,
+  CircleDashed,
+  FlaskConical,
+  Loader2,
+  MessageCircleQuestion,
+  Package,
+  Sparkles,
+  Wand2,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import { draftSkill, sharpenSkillDescription, testSkillTrigger } from '@/services/optimizeService';
 import type { AiSettings } from '@/services/settingsService';
+import { useAuth } from '@/context/AuthContext';
+import { useReferenceData } from '@/context/ReferenceDataContext';
 import {
+  DEFAULT_SKILL_LICENTIE,
   SKILL_DESCRIPTION_MAX,
   SKILL_STRAKHEID,
   SKILL_VELDEN,
   emptySkill,
   serializeSkill,
+  skillOpenPunten,
   skillSlug,
   type SkillData,
+  type SkillPublicatie,
   type SkillTestVerzoek,
   type SkillVeldId,
 } from '@/lib/skill';
@@ -34,6 +48,10 @@ interface SkillBuilderProps {
  * 3. Triggertest: de AI bedenkt verzoeken op de grens van de beschrijving; de
  *    gebruiker corrigeert waar die verkeerd gelezen wordt, en de beschrijving
  *    wordt daarop aangescherpt.
+ * 4. Delen als plugin: eigenaar, beheerder, licentie en goedkeuring, zodat
+ *    publiccode.yml en het manifest geen invulplekken meer hebben. Daaronder
+ *    staat wat er nog openstaat, inclusief de vragen van de AI die nog niet
+ *    beantwoord zijn.
  */
 export default function SkillBuilder({ settings, context, onSerialized, onChange }: SkillBuilderProps) {
   const [data, setData] = useState<SkillData>(() => {
@@ -49,6 +67,45 @@ export default function SkillBuilder({ settings, context, onSerialized, onChange
   const [voorstel, setVoorstel] = useState<Partial<Record<SkillVeldId, boolean>>>({});
   const [busy, setBusy] = useState<'draft' | 'test' | 'scherp' | null>(null);
   const [tests, setTests] = useState<SkillTestVerzoek[]>([]);
+  // Licentie: de EUPL-1.2 of een eigen keuze. Bij een eigen keuze blijft het
+  // veld zichtbaar, ook als het (nog) leeg is.
+  const [eigenLicentie, setEigenLicentie] = useState(false);
+  const [goedgekeurd, setGoedgekeurd] = useState(false);
+
+  // De organisatie uit het profiel als eerste voorstel voor de eigenaar.
+  const { profile } = useAuth();
+  const { organizationById } = useReferenceData();
+  const profielOrganisatie = profile?.organization_id
+    ? (organizationById(profile.organization_id)?.name ?? '')
+    : '';
+  useEffect(() => {
+    if (!profielOrganisatie) return;
+    setData((d) =>
+      d.publicatie.organisatie.trim()
+        ? d
+        : { ...d, publicatie: { ...d.publicatie, organisatie: profielOrganisatie } },
+    );
+  }, [profielOrganisatie]);
+
+  function setPublicatie(patch: Partial<SkillPublicatie>) {
+    setData((d) => ({ ...d, publicatie: { ...d.publicatie, ...patch } }));
+  }
+
+  // Een vraag van de AI staat nog open zolang het veld leeg is of nog precies
+  // het voorstel bevat: dan heeft de gebruiker er niets mee gedaan.
+  const openVragen = Object.fromEntries(
+    Object.entries(vragen).filter(
+      ([id]) => voorstel[id as SkillVeldId] || !data.velden[id as SkillVeldId].trim(),
+    ),
+  ) as Partial<Record<SkillVeldId, string>>;
+  const openPunten = skillOpenPunten(data, openVragen);
+
+  function springNaar(id: string) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.focus({ preventScroll: true });
+  }
 
   useEffect(() => {
     onSerialized(serializeSkill(data));
@@ -434,6 +491,210 @@ export default function SkillBuilder({ settings, context, onSerialized, onChange
                 )}
               </div>
             )}
+          </div>
+
+          {/* Stap 4: delen als plugin. */}
+          <div className="animate-fade-in space-y-4 border-t border-slate-200 pt-5 dark:border-slate-700">
+            <div>
+              <p className="flex items-center gap-2 font-semibold text-slate-700 dark:text-slate-200">
+                <Package size={16} className="text-rijksblauw-500" /> Delen als plugin
+              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Deze gegevens komen niet in de instructie zelf, maar in de plugin: in publiccode.yml,
+                in het manifest en in de kop van SKILL.md. Daarmee kan de skill in een repository en
+                bij de skills-marketplace van developer.overheid.nl worden aangemeld.
+              </p>
+            </div>
+
+            <div>
+              <label className="opl-label mb-0.5 block" htmlFor="sk-organisatie">
+                Welke organisatie is eigenaar van de afspraken in deze skill?
+              </label>
+              <input
+                id="sk-organisatie"
+                className="opl-input text-sm"
+                value={data.publicatie.organisatie}
+                placeholder="Bijv. Ministerie van Binnenlandse Zaken en Koninkrijksrelaties"
+                onChange={(e) => setPublicatie({ organisatie: e.target.value })}
+              />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="opl-label mb-0.5 block" htmlFor="sk-contact">
+                  Wie beheert de skill en beantwoordt vragen erover?
+                </label>
+                <input
+                  id="sk-contact"
+                  className="opl-input text-sm"
+                  value={data.publicatie.contact}
+                  placeholder="Bijv. team Schrijfadvies, directie Communicatie"
+                  onChange={(e) => setPublicatie({ contact: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="opl-label mb-0.5 block" htmlFor="sk-email">
+                  Op welk e-mailadres kunnen collega&apos;s terecht?
+                </label>
+                <input
+                  id="sk-email"
+                  type="email"
+                  className="opl-input text-sm"
+                  value={data.publicatie.email}
+                  placeholder="Bijv. schrijfadvies@minbzk.nl"
+                  onChange={(e) => setPublicatie({ email: e.target.value })}
+                />
+                <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+                  Bij voorkeur een teammailbox: het adres komt in de openbare repository.
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <label className="opl-label mb-0.5 block" htmlFor="sk-repository">
+                Waar komt de repository te staan?
+              </label>
+              <input
+                id="sk-repository"
+                type="url"
+                className="opl-input text-sm"
+                value={data.publicatie.repository}
+                placeholder="Bijv. https://github.com/minbzk/skill-schrijfadvies of een adres op code.overheid.nl"
+                onChange={(e) => setPublicatie({ repository: e.target.value })}
+              />
+              <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+                Weet je het nog niet, laat het dan leeg. Dan blijft dit de enige regel in
+                publiccode.yml die je later invult.
+              </p>
+            </div>
+
+            <div>
+              <p className="opl-label mb-0.5">Onder welke licentie deel je de skill?</p>
+              <div className="flex flex-col gap-1.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
+                <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+                  <input
+                    type="radio"
+                    name="sk-licentie-keuze"
+                    className="h-4 w-4 accent-rijksoranje"
+                    checked={!eigenLicentie}
+                    onChange={() => {
+                      setEigenLicentie(false);
+                      setPublicatie({ licentie: DEFAULT_SKILL_LICENTIE });
+                    }}
+                  />
+                  EUPL-1.2, aanbevolen door de overheid (de tekst gaat mee)
+                </label>
+                <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+                  <input
+                    type="radio"
+                    name="sk-licentie-keuze"
+                    className="h-4 w-4 accent-rijksoranje"
+                    checked={eigenLicentie}
+                    onChange={() => {
+                      setEigenLicentie(true);
+                      setPublicatie({ licentie: '' });
+                    }}
+                  />
+                  Een andere licentie
+                </label>
+              </div>
+              {eigenLicentie && (
+                <input
+                  id="sk-licentie"
+                  className="opl-input mt-2 text-sm"
+                  value={data.publicatie.licentie}
+                  placeholder="De SPDX-code, bijv. MIT of Apache-2.0"
+                  onChange={(e) => setPublicatie({ licentie: e.target.value.trim() })}
+                />
+              )}
+            </div>
+
+            <div>
+              <p className="opl-label mb-0.5">
+                Heeft wie de afspraken beheert de skill al goedgekeurd?
+              </p>
+              <div className="flex flex-col gap-1.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
+                <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+                  <input
+                    type="radio"
+                    name="sk-goedkeuring"
+                    className="h-4 w-4 accent-rijksoranje"
+                    checked={!goedgekeurd}
+                    onChange={() => {
+                      setGoedgekeurd(false);
+                      setPublicatie({ goedgekeurdDoor: '' });
+                    }}
+                  />
+                  Nee, het is een concept
+                </label>
+                <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+                  <input
+                    type="radio"
+                    name="sk-goedkeuring"
+                    className="h-4 w-4 accent-rijksoranje"
+                    checked={goedgekeurd}
+                    onChange={() => setGoedgekeurd(true)}
+                  />
+                  Ja
+                </label>
+              </div>
+              {goedgekeurd && (
+                <input
+                  id="sk-goedgekeurd-door"
+                  className="opl-input mt-2 text-sm"
+                  value={data.publicatie.goedgekeurdDoor}
+                  placeholder="Door wie? Bijv. de juridische afdeling van DGOO"
+                  onChange={(e) => setPublicatie({ goedgekeurdDoor: e.target.value })}
+                />
+              )}
+              <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+                Het overheidsbrede standpunt over generatieve AI vraagt om bij een skill vast te
+                leggen of hij goedgekeurd is, en door wie.
+              </p>
+            </div>
+
+            {/* Wat er nog openstaat: lege velden, onbeantwoorde vragen van de AI en
+                invulplekken van de plugin. Klik springt naar het veld. */}
+            <div
+              className={`rounded-xl border p-3 ${
+                openPunten.length > 0
+                  ? 'border-amber-200 bg-amber-50/60 dark:border-amber-500/30 dark:bg-amber-500/10'
+                  : 'border-rijksgroen/30 bg-rijksgroen/5'
+              }`}
+            >
+              {openPunten.length > 0 ? (
+                <>
+                  <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                    {openPunten.length === 1
+                      ? 'Nog één punt voor een volledige skill'
+                      : `Nog ${openPunten.length} punten voor een volledige skill`}
+                  </p>
+                  <ul className="mt-1.5 space-y-1">
+                    {openPunten.map((punt) => (
+                      <li key={punt.veld}>
+                        <button
+                          type="button"
+                          onClick={() => springNaar(punt.veld)}
+                          className="flex items-start gap-1.5 text-left text-xs text-amber-800 hover:underline dark:text-amber-200"
+                        >
+                          <CircleDashed size={13} className="mt-0.5 shrink-0" />
+                          {punt.tekst}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                    Je kunt de skill ook nu al bouwen. Wat leeg is, komt in de plugin als invulplek
+                    tussen rechte haken.
+                  </p>
+                </>
+              ) : (
+                <p className="flex items-center gap-1.5 text-sm text-rijksgroen">
+                  <CheckCircle2 size={15} className="shrink-0" />
+                  Alles is ingevuld: de skill en de plugin zijn compleet.
+                </p>
+              )}
+            </div>
           </div>
         </>
       )}
