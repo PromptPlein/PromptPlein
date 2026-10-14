@@ -489,7 +489,7 @@ export function buildSkillPlugin(
       '',
       p?.goedgekeurdDoor.trim()
         ? `Gemaakt met PromptPlein en goedgekeurd door ${p.goedgekeurdDoor.trim()}.`
-        : 'Gemaakt met PromptPlein. De skill heeft de status concept: laat hem nalezen door wie de afspraken erin beheert voordat collega\'s hem gebruiken.',
+        : 'Gemaakt met PromptPlein. De skill heeft de status concept: laat hem nalezen door de beheerder van de afspraken voordat collega\'s hem gebruiken.',
       '',
       ...(p?.organisatie.trim() || p?.contact.trim()
         ? [

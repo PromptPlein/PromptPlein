@@ -611,7 +611,7 @@ export default function SkillBuilder({ settings, context, onSerialized, onChange
 
             <div>
               <p className="opl-label mb-0.5">
-                Heeft wie de afspraken beheert de skill al goedgekeurd?
+                Is de skill al goedgekeurd door de beheerder van de afspraken?
               </p>
               <div className="flex flex-col gap-1.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
                 <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
