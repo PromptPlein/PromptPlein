@@ -55,6 +55,8 @@ export interface ChatComposerHandle {
 interface ChatComposerProps {
   /** Volledig uitgeschakeld (bijv. chat uitgezet of geen AI-service). */
   disabled: boolean;
+  /** Tekst in het lege vak zolang het uitgeschakeld is; standaard "laden". */
+  disabledPlaceholder?: string;
   streaming: boolean;
   extracting: boolean;
   attachments: ChatAttachment[];
@@ -136,6 +138,7 @@ interface ChatComposerProps {
 const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function ChatComposer(
   {
     disabled,
+    disabledPlaceholder,
     streaming,
     extracting,
     attachments,
@@ -443,7 +446,7 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
             rows={1}
             placeholder={
               disabled
-                ? 'Chat wordt geladen…'
+                ? (disabledPlaceholder ?? 'Chat wordt geladen…')
                 : prominent
                   ? 'Typ hier je bericht en druk op Enter'
                   : 'Stel je vraag…'

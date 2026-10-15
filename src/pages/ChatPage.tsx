@@ -4,6 +4,7 @@ import {
   Database,
   Download,
   FolderOpen,
+  LogIn,
   MessageSquare,
   Play,
   Plus,
@@ -391,7 +392,14 @@ function ChatPageInner() {
     }
   }, []);
 
-  const composerDisabled = !configured || !settings || settings.enabled === false;
+  // Een projectchat staat in deze browser, maar de projectinstructie en de
+  // bronbestanden staan in de database en zijn alleen voor de ingelogde
+  // eigenaar te lezen. Uitgelogd zou zo'n gesprek stil verdergaan als gewone
+  // chat; daarom blijft het leesbaar, maar verder chatten vraagt inloggen.
+  const projectNeedsLogin = !user && Boolean(conversation?.projectId);
+
+  const composerDisabled =
+    !configured || !settings || settings.enabled === false || projectNeedsLogin;
 
   // Chat uitgezet door de beheerder of geen backend: nette melding.
   if (!configured || (settings && !settings.enabled)) {
@@ -582,7 +590,11 @@ function ChatPageInner() {
                     messages={messages}
                     streaming={controller.streaming}
                     phase={controller.phase}
-                    onRetry={controller.retry}
+                    onRetry={
+                      projectNeedsLogin
+                        ? () => requireLogin('Log in om verder te gaan in deze projectchat.')
+                        : controller.retry
+                    }
                     onImprove={handleImprove}
                     onSaveAsPrompt={handleSaveAsPrompt}
                     nudgeMessageId={nudgeMessageId}
@@ -590,9 +602,28 @@ function ChatPageInner() {
                   />
                 )}
 
+                {projectNeedsLogin && (
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+                    <span>
+                      Deze chat hoort bij een project. Log in om verder te gaan met de
+                      projectinstructies.
+                    </span>
+                    <button
+                      type="button"
+                      className="opl-btn-primary !px-3 !py-1.5 text-xs"
+                      onClick={() => requireLogin('Log in om verder te gaan in deze projectchat.')}
+                    >
+                      <LogIn size={14} /> Inloggen
+                    </button>
+                  </div>
+                )}
+
                 <ChatComposer
                   ref={composerRef}
                   disabled={composerDisabled}
+                  disabledPlaceholder={
+                    projectNeedsLogin ? 'Log in om verder te chatten in dit project' : undefined
+                  }
                   streaming={controller.streaming}
                   extracting={controller.extracting}
                   attachments={conversation?.attachments ?? []}
