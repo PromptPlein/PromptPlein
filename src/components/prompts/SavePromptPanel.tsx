@@ -525,13 +525,19 @@ function humanizeSaveError(err: unknown): string {
   const isAuthIssue =
     e?.status === 401 ||
     e?.code === 'PGRST301' || // JWT ontbreekt/ongeldig
-    e?.code === '42501' || // onvoldoende rechten (RLS)
     msg.includes('jwt') ||
-    msg.includes('unauthorized') ||
-    msg.includes('row-level security') ||
-    msg.includes('row level security');
+    msg.includes('unauthorized');
   if (isAuthIssue) {
     return 'Je bent niet (meer) ingelogd. Log opnieuw in om de prompt op te slaan.';
+  }
+  // Een RLS-weigering is geen loginprobleem: createPrompt controleert de sessie
+  // al vóór de insert. Wie hier komt is ingelogd, maar de database staat het niet toe.
+  const isRlsDenied =
+    e?.code === '42501' ||
+    msg.includes('row-level security') ||
+    msg.includes('row level security');
+  if (isRlsDenied) {
+    return 'De database staat het opslaan van deze prompt niet toe. Je bent wel ingelogd; meld dit bij de beheerder.';
   }
   return e?.message || 'Opslaan mislukt';
 }
