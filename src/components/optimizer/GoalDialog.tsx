@@ -25,7 +25,7 @@ import {
   runClarifyTurn,
   type PrefillPhase,
 } from '@/services/optimizeService';
-import { isContextPrompt } from '@/lib/techniques';
+import { isContextPrompt, isSjabloon } from '@/lib/techniques';
 import { activityIdentifier, stripMarkdown } from '@/lib/utils';
 import { usePersistentDraft } from '@/lib/usePersistentDraft';
 import { detectPii, detectBlockedTopics, type GuardrailFinding } from '@/services/guardrails';
@@ -515,7 +515,8 @@ export default function GoalDialog({
    * lijst — de gebruiker kan altijd zelf kiezen.
    */
   async function offerFramework(briefText: string, turns: TranscriptTurn[]) {
-    const frameworks = techniques.filter((tq) => isContextPrompt(tq));
+    // Sjablonen niet: die kies je zelf bij "Wat wil je maken?", een gesprek weegt ze niet.
+    const frameworks = techniques.filter((tq) => isContextPrompt(tq) && !isSjabloon(tq));
     if (frameworks.length === 0) {
       setError('Er zijn geen frameworks beschikbaar om je prompt in op te bouwen.');
       setPhase('error');
@@ -1057,7 +1058,7 @@ export default function GoalDialog({
               <FrameworkChoice
                 fits={frameworkFits}
                 fitting={fitting}
-                frameworks={techniques.filter((tq) => isContextPrompt(tq))}
+                frameworks={techniques.filter((tq) => isContextPrompt(tq) && !isSjabloon(tq))}
                 onChoose={(id) => void chooseFramework(id)}
               />
             ) : (

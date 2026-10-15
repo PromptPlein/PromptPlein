@@ -42,9 +42,10 @@ export function isContextPrompt(t: TechniqueIdentity): boolean {
  * framework uit. Binnen Tekst kiest de AI dus zelf.
  *
  * Skill kiest geen framework: die soort stuurt door naar de Skill Creator op
- * /technieken.
+ * /technieken. Sjabloon kiest ook niets af te wegen: de gebruiker wijst zelf een
+ * vast sjabloon aan (zoals de routekaart in rijksstijl) en vult dat in.
  */
-export const PROMPT_KINDS = ['text', 'code', 'dashboard', 'agent', 'skill'] as const;
+export const PROMPT_KINDS = ['text', 'code', 'dashboard', 'agent', 'skill', 'template'] as const;
 
 export type PromptKind = (typeof PROMPT_KINDS)[number];
 
@@ -58,7 +59,8 @@ export type Modality =
   | 'code_existing'
   | 'dashboard_prototype'
   | 'dashboard_full'
-  | 'agent';
+  | 'agent'
+  | 'template';
 
 /**
  * De vervolgkeuze onder een soort: twee opties die elk een eigen framework
@@ -93,6 +95,7 @@ export const KIND_VARIANTS: Partial<Record<PromptKind, KindVariant>> = {
 const KIND_MODALITIES: Record<Exclude<PromptKind, 'code' | 'dashboard' | 'skill'>, Modality> = {
   text: 'text',
   agent: 'agent',
+  template: 'template',
 };
 
 /** Welke `modality` hoort bij deze soort en stand van de schakelaar? */
@@ -106,24 +109,60 @@ function modalityFor(kind: PromptKind, variantOn: boolean): Modality | null {
 /**
  * De frameworks die bij de gekozen soort horen, in de volgorde van de lijst.
  *
- * Zonder soort (of bij Skill) komen ze allemaal terug. Met soort blijven de
- * frameworks van die soort over, plus die zonder `modality`: die zijn aan geen
- * vorm gebonden en doen overal mee.
+ * Zonder soort (of bij Skill) komen ze allemaal terug, behalve de sjablonen:
+ * "Laat de AI kiezen" weegt alleen frameworks voor tekst, code, dashboard en
+ * agent. Met soort blijven de frameworks van die soort over, plus die zonder
+ * `modality`: die zijn aan geen vorm gebonden en doen overal mee.
  *
  * Levert het filter niets op (de migratie draait nog niet, of de lokale modus
  * kent de soort niet), dan bewust de volledige lijst. Een lege lijst laat de
  * zoekknop stil falen; een bredere keuze levert hooguit een minder scherp
- * framework op.
+ * framework op. Sjabloon is de uitzondering: daar komen alleen echte sjablonen
+ * terug, ook als dat er nul zijn, want een gewoon framework is geen sjabloon.
  */
 export function frameworksForKind<T extends { modality?: string | null }>(
   frameworks: T[],
   kind: PromptKind | null,
   variantOn = true,
 ): T[] {
+  if (kind === 'template') return frameworks.filter(isSjabloon);
   const modality = kind ? modalityFor(kind, variantOn) : null;
-  if (!modality) return frameworks;
-  const matching = frameworks.filter((f) => !f.modality || f.modality === modality);
-  return matching.some((f) => f.modality === modality) ? matching : frameworks;
+  const general = frameworks.filter((f) => !isSjabloon(f));
+  if (!modality) return general;
+  const matching = general.filter((f) => !f.modality || f.modality === modality);
+  return matching.some((f) => f.modality === modality) ? matching : general;
+}
+
+/**
+ * Is dit framework een vast sjabloon? Een sjabloon heeft een vaste opmaak en
+ * één plek `{{INHOUD:<naam>}}` waar de AI de inhoud schrijft; de rest van de
+ * template gaat letterlijk mee (zie {@link fillSjabloon}).
+ */
+export function isSjabloon(t: { modality?: string | null }): boolean {
+  return t.modality === 'template';
+}
+
+const INHOUD_PLACEHOLDER = /\{\{\s*INHOUD(?::([\w-]+))?\s*\}\}/;
+
+/** De naam achter `{{INHOUD:naam}}`: welke schrijfprompt de server gebruikt. */
+export function sjabloonNaam(template: string): string | null {
+  const match = INHOUD_PLACEHOLDER.exec(template);
+  return match ? (match[1] ?? 'algemeen') : null;
+}
+
+/**
+ * Zet de door de AI geschreven inhoud op de plek van `{{INHOUD:naam}}`. De
+ * vaste delen van het sjabloon (vormgeving, beweging, techniek) blijven zo
+ * letterlijk staan en zijn bij elke routekaart gelijk.
+ */
+export function fillSjabloon(template: string, inhoud: string): string {
+  return template.replace(INHOUD_PLACEHOLDER, () => inhoud.trim()).trim();
+}
+
+/** De plaatshouders die nog in de inhoud staan, zoals [datum halte 2]. */
+export function openPlaatshouders(text: string): string[] {
+  const found = text.match(/\[[^\]\n]{2,80}\]/g) ?? [];
+  return [...new Set(found)];
 }
 
 /**

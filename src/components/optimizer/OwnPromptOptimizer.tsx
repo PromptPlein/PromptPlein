@@ -17,6 +17,7 @@ import {
   Info,
   Layers,
   LayoutDashboard,
+  LayoutTemplate,
   Lightbulb,
   Loader2,
   RefreshCw,
@@ -37,6 +38,7 @@ import {
   PROMPT_KINDS,
   frameworksForKind,
   isContextPrompt,
+  isSjabloon,
   localFrameworkGuess,
   type PromptKind,
 } from '@/lib/techniques';
@@ -161,6 +163,13 @@ const KIND_OPTIONS: Record<
     placeholder:
       'Bijv. geef feedback op conceptbrieven aan burgers, elke keer volgens de schrijfwijzer van ons ministerie.',
   },
+  template: {
+    label: 'Sjabloon',
+    icon: LayoutTemplate,
+    hint: 'Een vaste vorm in rijksstijl, zoals een routekaart. Jij geeft de inhoud; de vormgeving is elke keer hetzelfde.',
+    placeholder:
+      'Bijv. een routekaart van ons opleidingstraject: vijf bijeenkomsten vanaf 3 maart, met per bijeenkomst het thema, het huiswerk en wat het oplevert. We staan nu bij de tweede.',
+  },
 };
 
 /**
@@ -191,9 +200,21 @@ export default function OwnPromptOptimizer({
   const variant = kind ? KIND_VARIANTS[kind] : undefined;
   const candidates = frameworksForKind(frameworks, kind, variantOn);
   const kindOption = kind ? KIND_OPTIONS[kind] : null;
+  // Bij Sjabloon kiest de gebruiker zelf welk sjabloon; er valt niets te wegen.
+  const [sjabloonId, setSjabloonId] = useState<string | null>(null);
+  const sjabloon =
+    kind === 'template' ? (candidates.find((t) => t.id === sjabloonId) ?? candidates[0] ?? null) : null;
   // De soort wees precies één framework aan: dan zoeken we niet, maar gaan we
   // meteen door naar de velden.
-  const directFramework = kind && kind !== 'skill' && candidates.length === 1 ? candidates[0] : null;
+  const directFramework =
+    kind === 'template'
+      ? sjabloon
+      : kind && kind !== 'skill' && candidates.length === 1
+        ? candidates[0]
+        : null;
+  // "Kies een ander framework" en het fit-oordeel gaan over gewone frameworks;
+  // een sjabloon kies je bij "Wat wil je maken?".
+  const generalFrameworks = frameworks.filter((t) => !isSjabloon(t));
   // De aanbeveling kwam uit de soortkeuze, niet uit een AI-afweging.
   const [pickedByKind, setPickedByKind] = useState(false);
 
@@ -436,7 +457,7 @@ export default function OwnPromptOptimizer({
    */
   async function fetchFrameworkFits() {
     if (fitFetchedRef.current || fitLoading) return;
-    if (frameworks.length === 0) return;
+    if (generalFrameworks.length === 0) return;
     // Nooit gelijktijdig met de framework-aanbeveling: twee zware AI-calls op
     // dezelfde provider vertragen elkaar. Het effect wordt afgehandeld zodra
     // `recommending` weer false is.
@@ -446,7 +467,7 @@ export default function OwnPromptOptimizer({
     try {
       const res = await explainFrameworkFit({
         ownPrompt: ownPrompt.trim(),
-        frameworks,
+        frameworks: generalFrameworks,
         preferredProvider: settings.provider,
         preferredModel: settings.model,
       });
@@ -828,6 +849,71 @@ export default function OwnPromptOptimizer({
             </div>
           )}
 
+          {/* Bij Sjabloon: welk vast sjabloon. Staat er maar één, dan staat die
+              al aan; de keuze laat zien wat je krijgt voordat je begint. */}
+          {kind === 'template' && (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-slate-200 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-slate-800">
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                Welk sjabloon?
+              </span>
+              {candidates.length === 0 ? (
+                <span className="text-sm text-slate-500 dark:text-slate-400">
+                  Er zijn nog geen sjablonen. Vraag een beheerder er één toe te voegen.
+                </span>
+              ) : (
+                <div
+                  role="radiogroup"
+                  aria-label="Welk sjabloon?"
+                  className="grid min-w-0 flex-1 grid-cols-1 gap-2 sm:grid-cols-2"
+                >
+                  {candidates.map((t) => {
+                    const active = sjabloon?.id === t.id;
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={active}
+                        onClick={() => {
+                          if (active) return;
+                          setSjabloonId(t.id);
+                          resetDownstream();
+                        }}
+                        disabled={recommending || prefilling}
+                        className={clsx(
+                          'flex min-w-0 items-start gap-2.5 rounded-lg border px-3 py-2 text-left transition-colors',
+                          'focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500/40 disabled:cursor-not-allowed',
+                          active
+                            ? 'border-rijksblauw-500 bg-rijksblauw-50 ring-1 ring-rijksblauw-500 dark:bg-rijksblauw-500/15'
+                            : 'border-slate-200 hover:border-rijksblauw-300 dark:border-slate-600 dark:hover:border-rijksblauw-500/50',
+                        )}
+                      >
+                        <span
+                          className={clsx(
+                            'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2',
+                            active ? 'border-rijksblauw-500' : 'border-slate-400 dark:border-slate-500',
+                          )}
+                        >
+                          {active && <span className="h-1.5 w-1.5 rounded-full bg-rijksblauw-500" />}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-sm font-semibold text-slate-800 dark:text-slate-100">
+                            {t.name}
+                          </span>
+                          {t.description && (
+                            <span className="line-clamp-2 text-xs text-slate-500 dark:text-slate-400">
+                              {t.description}
+                            </span>
+                          )}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
           <textarea
             id="own-prompt-input"
             className="block min-h-[120px] w-full resize-y border-0 bg-white px-3.5 py-3 font-mono text-[13px] text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-0 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
@@ -850,6 +936,8 @@ export default function OwnPromptOptimizer({
                 <span className="rounded-md bg-rijksblauw-50 px-2 py-0.5 font-mono text-[11px] text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">
                   {kind === 'skill'
                     ? 'Skill Creator'
+                    : kind === 'template' && !sjabloon
+                    ? 'nog geen sjabloon beschikbaar'
                     : directFramework
                     ? directFramework.name
                     : `de AI kiest uit ${candidates.length} frameworks`}
@@ -862,7 +950,7 @@ export default function OwnPromptOptimizer({
               type="button"
               className="opl-btn-primary"
               onClick={() => void handleRecommend()}
-              disabled={recommending || prefilling || !ownPrompt.trim()}
+              disabled={recommending || prefilling || !ownPrompt.trim() || (kind === 'template' && !sjabloon)}
             >
               {recommending ? (
                 <>
@@ -887,7 +975,7 @@ export default function OwnPromptOptimizer({
         <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
           {kindOption
             ? kindOption.hint
-            : 'De AI zoekt het best passende framework voor een tekst, code, dashboard of agent. Wil je een skill maken, kies dan Skill.'}
+            : 'De AI zoekt het best passende framework voor een tekst, code, dashboard of agent. Wil je een skill maken of een vast sjabloon invullen, kies dan Skill of Sjabloon.'}
         </p>
         <VerantwoordGebruikHint text={ownPrompt} />
       </div>
@@ -943,7 +1031,9 @@ export default function OwnPromptOptimizer({
 
           {!recommending && (
             <p className="text-sm text-slate-600 dark:text-slate-300">
-              {pickedByKind
+              {pickedByKind && kind === 'template'
+                ? 'Je vult dit sjabloon in. De velden worden alvast voor je ingevuld:'
+                : pickedByKind
                 ? 'Bij wat je wilt maken hoort dit framework. De velden worden alvast voor je ingevuld:'
                 : recommendations.length === 1
                 ? 'Dit framework past het beste bij jouw prompt. Kies het om verder te gaan:'
@@ -1059,7 +1149,7 @@ export default function OwnPromptOptimizer({
           krijgen een groen "Aanbevolen" label; de overige staan er zonder label bij.
           Een keuze loopt via dezelfde handleSelectFramework, dus de velden worden óók
           automatisch voor-ingevuld. De fit-uitleg halen we op bij het uitklappen. */}
-      {recommendations && frameworks.length > 0 && (
+      {recommendations && generalFrameworks.length > 0 && !isSjabloon(technique ?? {}) && (
         <details
           className="group/choose"
           ref={chooseRef}
@@ -1088,7 +1178,7 @@ export default function OwnPromptOptimizer({
               framework om het toe te passen; we vullen de velden dan automatisch voor.
             </p>
             <div className="grid gap-2 sm:grid-cols-2">
-              {frameworks.map((fw) => {
+              {generalFrameworks.map((fw) => {
                 const active = fw.id === techniqueId;
                 const rec = recommendations.find((r) => r.id === fw.id);
                 const isRecommended = Boolean(rec);
@@ -1283,9 +1373,17 @@ export default function OwnPromptOptimizer({
             {(() => {
               // Velden die de AI heeft moeten gokken (niet uit de prompt afgeleid):
               // dat is wat dit framework nog mist. Koppel elk aan zijn veld-label.
+              // Bij een sjabloon staat in de note een concrete vraag naar het
+              // ontbrekende gegeven (datum, naam, onderdeel); die is scherper dan
+              // het veldlabel.
+              const sjabloonMode = isSjabloon(technique);
               const missingForFramework = prefill.fields
                 .filter((f) => f.source === 'ai')
-                .map((f) => technique.follow_up_questions.find((q) => q.id === f.id)?.label)
+                .map((f) => {
+                  const note = f.note?.trim();
+                  if (sjabloonMode && note?.endsWith('?')) return note;
+                  return technique.follow_up_questions.find((q) => q.id === f.id)?.label;
+                })
                 .filter((label): label is string => Boolean(label));
               return (
                 <div className="rounded-xl border border-rijksblauw-200 bg-white/70 p-4 dark:border-rijksblauw-500/30 dark:bg-slate-800/60">
@@ -1296,7 +1394,9 @@ export default function OwnPromptOptimizer({
                         Maak de prompt scherper voor {technique.name}
                       </p>
                       <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-300">
-                        {missingForFramework.length > 0
+                        {missingForFramework.length > 0 && sjabloonMode
+                          ? 'Deze gegevens ontbreken nog. De AI heeft ze niet verzonnen maar opengelaten of als voorstel ingevuld. Beantwoord ze hieronder, dan komen ze kloppend op het sjabloon:'
+                          : missingForFramework.length > 0
                           ? `Voor ${technique.name} heeft je prompt deze onderdelen nog niet aangeleverd; de AI heeft ze nu ingeschat. Licht ze toe voor een scherpere prompt:`
                           : 'Wil je nog iets verduidelijken? Vul het aan en we vullen de velden opnieuw voor.'}
                       </p>

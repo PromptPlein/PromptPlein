@@ -190,7 +190,7 @@ te stemmen.
 
 Eén edge function, `optimize-prompt`, ongeveer 8000 regels, met een
 `mode`-veld in de body als router. Nieuwe AI-functionaliteit wordt een nieuwe
-mode in dat bestand, niet een nieuwe function. De 32 modes, gegroepeerd:
+mode in dat bestand, niet een nieuwe function. De 33 modes, gegroepeerd:
 
 | Groep | Modes |
 | --- | --- |
@@ -201,6 +201,7 @@ mode in dat bestand, niet een nieuwe function. De 32 modes, gegroepeerd:
 | Techniekbouwers | `persona-fill`, `fewshot-example`, `fewshot-extract`, `meta-build`, `cove-scan`, `stepback-ladder`, `rubric-propose`, `skill-draft`, `skill-trigger` |
 | Chat en projecten | `chat-optimize`, `project-optimize`, `project-brief` |
 | Testkamer-loop | `mock-answer`, `refine`, `refine-suggest` |
+| Sjablonen | `sjabloon` |
 
 ### Providers en modellen
 
@@ -323,6 +324,13 @@ Merk het voorbeeld daarom onmiskenbaar als voorbeeld, of laat het weg.
 - **`/technieken`** is de trainingspagina waar de gebruiker zélf een techniek
   kiest en de velden invult. Bouw geen handmatige techniekkiezer in
   `/genereren`: dat is precies de scheiding tussen die twee pagina's.
+
+**Sjablonen** (soort "Sjabloon" bij "Wat wil je maken?", migratie 0039) zijn
+frameworks met `modality = 'template'`. De template is een vaste opdracht met
+één plek `{{INHOUD:<naam>}}`; alleen die plek schrijft de AI (mode `sjabloon`,
+systeemprompt per naam via `sjabloonSystemPrompt`), de rest gaat letterlijk mee.
+Een nieuw sjabloon is dus een rij in `techniques` plus een systeemprompt in
+`PROMPT_CATALOG`. Sjablonen doen niet mee in "Laat de AI kiezen".
 
 Vanuit de bouwer kun je een prompt met "Uitvoeren in chat" doorzetten naar
 `/chat`, en vanuit de chat weer terug (`handoffService`).

@@ -5,7 +5,14 @@ import {
   type StatusHandler,
   type StreamOutcome,
 } from '@/lib/ndjsonStream';
-import { isContextPrompt, structureFormat } from '@/lib/techniques';
+import {
+  fillSjabloon,
+  isContextPrompt,
+  isSjabloon,
+  openPlaatshouders,
+  sjabloonNaam,
+  structureFormat,
+} from '@/lib/techniques';
 import { tidyPromptMarkup } from '@/lib/utils';
 import { selectKaders } from '@/lib/verantwoordGebruik';
 import type { AiProvider } from '@/config/aiModels';
@@ -190,6 +197,12 @@ export async function optimizePrompt(args: {
     onStatus,
   } = args;
 
+  // Een vast sjabloon (routekaart in rijksstijl, …) schrijft alleen de inhoud;
+  // de vormgeving en techniek staan in het sjabloon en blijven letterlijk staan.
+  if (isSjabloon(technique) && sjabloonNaam(technique.template)) {
+    return writeSjabloon(args);
+  }
+
   const functionUrl = getFunctionUrl('optimize-prompt');
 
   if (isSupabaseConfigured && functionUrl) {
@@ -354,6 +367,99 @@ export async function optimizePrompt(args: {
     success: true,
     provider: 'local-template',
   };
+}
+
+/**
+ * Een sjabloon invullen (mode 'sjabloon'). De AI schrijft alleen het blok op de
+ * plek van `{{INHOUD:naam}}`, met de systeemprompt die bij die naam hoort; de
+ * rest van het sjabloon gaat letterlijk mee. Zo ziet elke routekaart er hetzelfde
+ * uit en verschilt alleen wat erop staat.
+ *
+ * Staan er na het schrijven nog [plaatshouders] in de inhoud, dan krijgt de
+ * gebruiker die als melding te zien: dat zijn gegevens die hij nog niet gaf en
+ * die de AI dus niet mocht verzinnen.
+ */
+async function writeSjabloon(args: Parameters<typeof optimizePrompt>[0]): Promise<OptimizeResult> {
+  const {
+    technique,
+    promptContent,
+    followUpAnswers,
+    preferredProvider,
+    preferredModel,
+    projectContext,
+    thinking,
+    onChunk,
+    onStatus,
+  } = args;
+  const answeredFields = technique.follow_up_questions
+    .map((q) => ({ id: q.id, label: q.label, answer: followUpAnswers[q.id] ?? '' }))
+    .filter((f) => f.answer.trim());
+
+  // Zonder AI: het sjabloon met de ruwe gegevens op de plek van de inhoud. Het
+  // bouwende model zet ze dan zelf in de vorm; beter dan een lege plek.
+  const localResult = (error?: string): OptimizeResult => ({
+    optimized_content: fillSjabloon(
+      technique.template,
+      [
+        'Zet deze gegevens van de gebruiker zelf in de vorm die hierboven beschreven staat:',
+        promptContent,
+        ...answeredFields.map((f) => `${f.label}\n${f.answer}`),
+      ].join('\n\n'),
+    ),
+    success: true,
+    provider: 'local-template',
+    ...(error ? { error } : {}),
+  });
+
+  const functionUrl = getFunctionUrl('optimize-prompt');
+  if (!isSupabaseConfigured || !functionUrl) return localResult();
+
+  const payload = {
+    mode: 'sjabloon',
+    sjabloon: sjabloonNaam(technique.template),
+    techniqueName: technique.name,
+    promptContent,
+    answeredFields,
+    preferredProvider: preferredProvider ?? 'auto',
+    preferredModel,
+    projectContext,
+    thinking,
+  };
+
+  try {
+    const notices: string[] = [];
+    const streamed = await streamFromFunction(payload, onChunk ?? (() => {}), tidyPromptMarkup, (status) => {
+      if (status.notice) notices.push(status.notice);
+      onStatus?.(status);
+    });
+    if (streamed.unclear) {
+      return {
+        optimized_content: '',
+        success: false,
+        unclear: true,
+        reason: streamed.reason,
+        provider: (streamed.provider as OptimizeResult['provider']) ?? 'mistral',
+      };
+    }
+    if (streamed.error) throw new Error(streamed.error);
+    const inhoud = tidyPromptMarkup(streamed.text);
+    if (!inhoud.trim()) throw new Error('De AI-service gaf geen inhoud terug');
+    const open = openPlaatshouders(inhoud);
+    if (open.length > 0) {
+      notices.push(
+        `Nog in te vullen: ${open.join(', ')}. Vul ze aan in de prompt of geef ze mee in je toelichting en genereer opnieuw.`,
+      );
+    }
+    return {
+      optimized_content: fillSjabloon(technique.template, inhoud),
+      success: true,
+      provider: (streamed.provider as OptimizeResult['provider']) ?? 'mistral',
+      ...(notices.length ? { notices } : {}),
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Onbekende fout';
+    return localResult(`Sjabloon invullen met AI mislukt (${message}); de gegevens staan er ruw in.`);
+  }
 }
 
 /**
@@ -2527,6 +2633,9 @@ export async function prefillFields(args: {
         clarification,
         fromDocument,
         fromFormatBrief,
+        // Een sjabloon gaat letterlijk op een vaste vorm: de server laat feiten
+        // die ontbreken dan open en zet er een vraag bij, in plaats van te gokken.
+        ...(isSjabloon(technique) ? { sjabloon: sjabloonNaam(technique.template) ?? 'algemeen' } : {}),
         techniqueName: technique.name,
         analyzeFields,
         preferredProvider: preferredProvider ?? 'auto',
