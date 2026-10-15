@@ -1,6 +1,8 @@
 import { useMemo } from 'react';
+import { AlertTriangle, ShieldCheck } from 'lucide-react';
 import RichText from '@/components/optimizer/RichText';
 import { splitAnswer } from '@/lib/chatFiles';
+import { checkCode } from '@/lib/fileCheck';
 import ChatFileCard from './ChatFileCard';
 import CopyMessageButton from './CopyMessageButton';
 
@@ -10,7 +12,16 @@ import CopyMessageButton from './CopyMessageButton';
  * deze splitsing werd een codeblok honderden losse alinea's, en een regel CSS
  * die met een streepje begint een opsommingsteken.
  */
-export default function ChatAnswer({ text, isStreaming }: { text: string; isStreaming: boolean }) {
+export default function ChatAnswer({
+  text,
+  isStreaming,
+  onRepair,
+}: {
+  text: string;
+  isStreaming: boolean;
+  /** Zie ChatFileCard: de gevonden fouten als nieuw bericht naar de AI. */
+  onRepair?: (text: string) => void;
+}) {
   const segments = useMemo(() => splitAnswer(text), [text]);
 
   return (
@@ -24,6 +35,7 @@ export default function ChatAnswer({ text, isStreaming }: { text: string; isStre
               code={segment.code}
               closed={segment.closed}
               isStreaming={isStreaming}
+              onRepair={onRepair}
             />
           );
         }
@@ -39,9 +51,30 @@ export default function ChatAnswer({ text, isStreaming }: { text: string; isStre
             <pre className="max-h-96 overflow-auto bg-slate-950 px-3 py-2.5 font-mono text-[12px] leading-relaxed text-slate-200">
               {segment.code}
             </pre>
+            {segment.closed && <CodeCheck lang={segment.lang} code={segment.code} />}
           </div>
         );
       })}
     </>
+  );
+}
+
+/** De snelle controle onder een codeblok (JSON, JavaScript, SVG), als die er is. */
+function CodeCheck({ lang, code }: { lang: string; code: string }) {
+  const result = useMemo(() => checkCode(lang, code), [lang, code]);
+  if (!result) return null;
+  return (
+    <p
+      className={
+        result.ok
+          ? 'flex items-center gap-1.5 bg-slate-50 px-3 py-1 text-[11px] text-emerald-700 dark:bg-slate-800/60 dark:text-emerald-400'
+          : 'flex items-center gap-1.5 bg-red-50 px-3 py-1 text-[11px] text-rijksrood dark:bg-red-500/10 dark:text-red-400'
+      }
+    >
+      {result.ok ? <ShieldCheck size={12} /> : <AlertTriangle size={12} />}
+      {result.ok
+        ? 'Gecontroleerd: geen fouten gevonden.'
+        : `Fout${result.problems[0].line ? ` op regel ${result.problems[0].line}` : ''}: ${result.problems[0].message}`}
+    </p>
   );
 }

@@ -15,6 +15,7 @@ export default function ChatMessageList({
   phase,
   onRetry,
   onContinue,
+  onRepair,
   onImprove,
   onSaveAsPrompt,
   nudgeMessageId,
@@ -31,6 +32,8 @@ export default function ChatMessageList({
   onRetry: () => void;
   /** "Ga verder": schrijf het laatste, afgebroken antwoord verder. */
   onContinue?: () => void;
+  /** Stuur de fouten uit de controle van een bestand als nieuw bericht. */
+  onRepair?: (text: string) => void;
   /**
    * "Verbeter in generator" op eigen berichten (omgekeerde handoff). Niet
    * meegegeven (bijv. in de Testkamer — je bent daar al in de generator) =
@@ -73,6 +76,7 @@ export default function ChatMessageList({
           phase={streaming && i === messages.length - 1 ? (phase ?? null) : null}
           onRetry={onRetry}
           onContinue={onContinue}
+          onRepair={streaming ? undefined : onRepair}
           canRetry={!streaming && i === messages.length - 1}
           onImprove={onImprove}
           onSaveAsPrompt={onSaveAsPrompt}
@@ -90,6 +94,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
   phase,
   onRetry,
   onContinue,
+  onRepair,
   canRetry,
   onImprove,
   onSaveAsPrompt,
@@ -101,6 +106,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
   phase?: string | null;
   onRetry: () => void;
   onContinue?: () => void;
+  onRepair?: (text: string) => void;
   canRetry: boolean;
   onImprove?: (text: string) => void;
   onSaveAsPrompt?: (text: string) => void;
@@ -191,7 +197,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
         )}
       >
         {message.content ? (
-          <ChatAnswer text={message.content} isStreaming={isStreaming} />
+          <ChatAnswer text={message.content} isStreaming={isStreaming} onRepair={onRepair} />
         ) : isStreaming ? (
           <span className="text-slate-400 dark:text-slate-500">
             {phase === 'searching' ? 'Aan het zoeken op internet…' : 'Aan het nadenken…'}

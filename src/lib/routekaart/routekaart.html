@@ -1,0 +1,1007 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__ROUTEKAART_TITEL__</title>
+<!-- Gemaakt met de vaste routekaart van PromptPlein. Alleen de inhoud in
+     rk-data verschilt per routekaart; de opmaak en de beweging zijn steeds gelijk. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --donkerblauw: #154273;
+  --blauw: #01689B;
+  --geel: #F9E11E;
+  --rood: #D52B1E;
+  --lichtblauw: #EAF2F9;
+  --bg: #ffffff;
+  --tekst: #1d2b3a;
+  --zacht: #5b6b7f;
+  --lijn: #d3dce6;
+  --weg: #dbe3ec;
+  --kop: var(--donkerblauw);
+  --accent: var(--blauw);
+  --draad: var(--rood);
+  --paneel: var(--lichtblauw);
+  --kaart: #ffffff;
+  --kaart-bezocht: #fff6f5;
+  --vlak: var(--donkerblauw);
+  --vlak-tekst: #ffffff;
+  --gepland: #9aabbf;
+  --op-geel: #1d2b3a;
+  --focus: #01689B;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e1828;
+    --tekst: #e2e9f2;
+    --zacht: #9db0c6;
+    --lijn: #2a3c54;
+    --weg: #2b3e58;
+    --kop: #d4e3f6;
+    --accent: #7cc7ee;
+    --draad: #ff5d50;
+    --paneel: #15273f;
+    --kaart: #12213a;
+    --kaart-bezocht: #2a1c22;
+    --vlak: #1c3b66;
+    --vlak-tekst: #f2f6fb;
+    --gepland: #5f7590;
+    --focus: #7cc7ee;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--tekst);
+  font-family: "Public Sans", Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.45;
+  overflow-x: hidden;
+}
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; border-radius: 4px; }
+.geelbalk { height: 10px; background: var(--geel); }
+.rk { max-width: 1440px; margin: 0 auto; padding: 28px 32px 40px; }
+.open { text-decoration: underline dotted; text-underline-offset: 3px; }
+.ico { width: 1em; height: 1em; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Kop */
+.bovenregel { margin: 0 0 10px; font-size: 14px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+.titelblok { border-left: 8px solid var(--kop); padding: 2px 0 4px 22px; }
+.titelblok h1 { margin: 0; font-size: clamp(30px, 4.2vw, 54px); line-height: 1.08; font-weight: 800; color: var(--kop); letter-spacing: -.01em; }
+.ondertitel { margin: 12px 0 0; font-size: clamp(18px, 1.9vw, 25px); color: var(--zacht); }
+.ondertitel .rood { color: var(--draad); text-decoration: underline wavy var(--draad); text-decoration-thickness: 1.5px; text-underline-offset: 6px; }
+.meta { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 22px; }
+.chip { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 3px; font-size: 15px; }
+.chip.datum { padding-left: 0; color: var(--zacht); }
+.chip.stand { background: var(--geel); color: var(--op-geel); font-weight: 700; }
+
+/* Balk met legenda en bediening */
+.balk { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 18px 32px; margin: 30px 0 22px; }
+.legenda { display: flex; flex-wrap: wrap; gap: 8px 22px; margin: 0; padding: 0; list-style: none; font-size: 14px; color: var(--zacht); }
+.legenda li { display: inline-flex; align-items: center; gap: 8px; }
+.leg-lijn { width: 28px; height: 3px; background: var(--draad); border-radius: 2px; }
+.leg-cirkel { width: 14px; height: 14px; border: 2.5px solid var(--kop); border-radius: 50%; }
+.leg-label { width: 28px; height: 16px; border: 1.5px dashed var(--zacht); border-radius: 3px; }
+.legenda .ico { font-size: 18px; color: var(--kop); }
+.bediening { display: flex; flex-direction: column; gap: 8px; min-width: min(100%, 520px); }
+.knoppen { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.knop { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 16px; border: 1.5px solid var(--lijn); border-radius: 4px; background: var(--kaart); font-weight: 700; color: var(--kop); cursor: pointer; }
+.knop:hover:not(:disabled) { border-color: var(--kop); }
+.knop:disabled { opacity: .45; cursor: default; }
+.knop.hoofd { background: var(--donkerblauw); border-color: var(--donkerblauw); color: #fff; min-width: 150px; }
+@media (prefers-color-scheme: dark) { .knop.hoofd { background: #2c5a94; border-color: #2c5a94; } }
+.knop .ico { font-size: 18px; }
+.voortgang { height: 3px; background: var(--lijn); border-radius: 2px; overflow: hidden; }
+.voortgang span { display: block; height: 100%; width: 0; background: var(--draad); }
+
+/* Route, breed */
+.route { position: relative; }
+.rij { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); column-gap: 20px; margin: 0; padding: 0; list-style: none; }
+.halte-kop { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; width: 100%; height: 100%; padding: 0 0 18px; border: 0; background: none; text-align: left; cursor: pointer; }
+.badges { display: flex; flex-wrap: wrap; gap: 6px; min-height: 30px; align-items: flex-end; margin-bottom: 4px; }
+.geel-label, .vlag { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; background: var(--geel); color: var(--op-geel); font-size: 12.5px; font-weight: 700; border-radius: 2px; }
+.vlag .ico { font-size: 14px; }
+.nummer { font-size: 13px; font-weight: 800; letter-spacing: .14em; color: var(--accent); }
+.halte-titel { font-size: clamp(16px, 1.4vw, 23px); font-weight: 800; line-height: 1.18; color: var(--kop); }
+.halte-datum { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; color: var(--zacht); }
+.kernvraag { margin-top: 6px; font-size: 15px; color: var(--accent); }
+.halte-kop::after { content: ""; position: absolute; left: 0; bottom: 4px; width: 38px; height: 4px; background: var(--geel); opacity: 0; transition: opacity .25s; }
+.halte-kop[aria-current="step"]::after { opacity: 1; }
+.halte-kop.gepland .halte-titel, .halte-kop.gepland .nummer { opacity: .78; }
+
+.weg { position: relative; height: 120px; }
+.weg svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.pad-grond { fill: none; stroke: var(--weg); stroke-width: 12; stroke-linecap: round; }
+.pad-draad { fill: none; stroke: var(--draad); stroke-width: 5; stroke-linecap: round; }
+.knoop { cursor: pointer; }
+.knoop circle.rand { fill: var(--bg); stroke: var(--gepland); stroke-width: 3; transition: stroke .3s, fill .3s; }
+.knoop.afgerond circle.rand { stroke: var(--kop); fill: var(--kop); }
+.knoop.bezocht circle.rand { stroke: var(--draad); }
+.knoop.afgerond.bezocht circle.rand { fill: var(--draad); }
+.knoop .ico-in { color: var(--kop); }
+.knoop.afgerond .ico-in, .knoop.afgerond.bezocht .ico-in { color: #fff; }
+.ring { fill: none; stroke: var(--draad); stroke-width: 2.5; opacity: 0; transform-box: fill-box; transform-origin: center; }
+.knoop.actief .ring { animation: puls 2s ease-out infinite; }
+@keyframes puls { 0% { opacity: .7; transform: scale(1); } 100% { opacity: 0; transform: scale(2.3); } }
+.huisje path { fill: var(--bg); stroke: var(--kop); stroke-width: 1.8; stroke-linejoin: round; transition: stroke .3s; }
+.huisje.voorbij path { stroke: var(--draad); }
+.bol circle { fill: var(--draad); }
+.bol .bol-ring { fill: none; stroke: var(--draad); stroke-opacity: .25; stroke-width: 6; }
+.bol-ico { color: #fff; transform-box: fill-box; transform-origin: center; }
+.bol-ico.pop, .lijst-bol.pop svg { animation: pop .45s cubic-bezier(.3, 1.6, .5, 1); }
+@keyframes pop { 0% { transform: scale(.3); } 100% { transform: scale(1); } }
+
+.opbrengst { display: flex; gap: 10px; align-items: flex-start; width: 100%; height: 100%; min-height: 100px; padding: 14px 14px 16px; border: 1.5px dashed var(--gepland); border-radius: 4px; background: var(--kaart); text-align: left; cursor: pointer; color: var(--zacht); transition: border-color .3s, background .3s, color .3s; }
+.opbrengst .ico { font-size: 20px; margin-top: 1px; }
+.opbrengst small { display: block; margin-bottom: 4px; font-size: 11.5px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.opbrengst span.tekst { font-size: 14.5px; line-height: 1.4; }
+.opbrengst.bezocht { border: 1.5px solid var(--draad); background: var(--kaart-bezocht); color: var(--draad); }
+.opbrengst.bezocht span.tekst { color: var(--tekst); }
+.opbrengst.spring { animation: spring .55s cubic-bezier(.3, 1.4, .5, 1); }
+@keyframes spring { 0% { transform: translateY(0); } 35% { transform: translateY(-10px); } 100% { transform: translateY(0); } }
+
+/* Detailpaneel */
+.detail { margin-top: 28px; padding: 26px 28px 28px; background: var(--paneel); border-top: 4px solid var(--kop); }
+.detail-raster { display: grid; grid-template-columns: 1.25fr 1fr 1fr 1fr; gap: 28px; }
+.detail h2 { margin: 4px 0 6px; font-size: clamp(20px, 2vw, 28px); line-height: 1.2; color: var(--kop); }
+.detail h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 13px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--kop); }
+.detail h3 .ico { font-size: 18px; }
+.detail .kernvraag { margin: 0 0 12px; font-size: 16.5px; }
+.detail ul { margin: 0; padding: 0; list-style: none; }
+.detail li { position: relative; padding: 0 0 8px 16px; }
+.detail li::before { content: ""; position: absolute; left: 0; top: .6em; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.detail .leeg { color: var(--zacht); font-size: 14.5px; }
+.themas { display: flex; flex-wrap: wrap; gap: 6px; }
+.thema { padding: 3px 9px; border: 1px solid var(--lijn); border-radius: 999px; background: var(--kaart); font-size: 12.5px; font-weight: 600; color: var(--kop); }
+.status { display: inline-block; margin-bottom: 4px; font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--zacht); }
+.detail-opbrengst { display: flex; gap: 10px; color: var(--draad); }
+.detail-opbrengst .ico { font-size: 24px; }
+.detail-opbrengst span { color: var(--tekst); font-weight: 600; }
+.finish-raster { display: grid; grid-template-columns: 1fr 2fr; gap: 36px; }
+.uitkomsten li { display: flex; gap: 10px; align-items: center; padding: 0 0 12px; font-weight: 600; }
+.uitkomsten li::before { display: none; }
+.uitkomsten .ico { font-size: 24px; color: var(--draad); }
+.keten { position: relative; display: grid; grid-template-columns: repeat(var(--k), minmax(0, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
+.keten::before { content: ""; position: absolute; left: 22px; right: 22px; top: 22px; height: 3px; background: var(--draad); }
+.keten li { position: relative; padding: 0; text-align: left; }
+.keten li::before { display: none; }
+.keten .schakel { position: relative; display: flex; align-items: center; justify-content: center; width: 46px; height: 46px; border: 2.5px solid var(--draad); border-radius: 50%; background: var(--kaart); color: var(--draad); }
+.keten .schakel .ico { font-size: 22px; }
+.keten span { display: block; margin-top: 8px; font-size: 13.5px; line-height: 1.35; }
+.keten.inkomen li { animation: inkomen .5s both; animation-delay: calc(var(--i) * .35s); }
+@keyframes inkomen { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* Onderbalk */
+.onderbalk { display: grid; grid-template-columns: 1.6fr 1fr; gap: 16px; margin-top: 24px; }
+.onderbalk.alleen { grid-template-columns: 1fr; }
+.eind { padding: 22px 26px; background: var(--vlak); color: var(--vlak-tekst); border: 4px solid transparent; transition: border-color .4s, box-shadow .4s; }
+.eind.bereikt { border-color: var(--geel); box-shadow: 0 0 0 6px rgba(249, 225, 30, .25); }
+.eind h2, .werkwijze h2 { margin: 0 0 8px; font-size: 18px; }
+.eind p { margin: 0; font-size: 17px; }
+.werkwijze { padding: 22px 26px; background: var(--paneel); }
+.werkwijze h2 { color: var(--kop); }
+.werkwijze ul { margin: 0; padding: 0; list-style: none; }
+.werkwijze li { display: flex; gap: 10px; align-items: flex-start; padding-bottom: 8px; }
+.werkwijze .ico { font-size: 20px; color: var(--kop); margin-top: 1px; }
+
+/* Route, smal: verticaal */
+.lijst { display: none; position: relative; margin: 0; padding: 0; list-style: none; }
+.lijst-rails, .lijst-draad { position: absolute; left: 19px; width: 4px; border-radius: 2px; }
+.lijst-rails { background: var(--weg); }
+.lijst-draad { background: var(--draad); height: 0; }
+.lijst-bol { position: absolute; left: 3px; width: 36px; height: 36px; margin-top: -18px; border-radius: 50%; background: var(--draad); color: #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 5px rgba(213, 43, 30, .2); z-index: 2; }
+.lijst-bol .ico { font-size: 18px; }
+.lijst > li { position: relative; padding: 0 0 26px 58px; }
+.lijst .knoop-sm { position: absolute; left: 10px; top: 36px; width: 22px; height: 22px; border: 3px solid var(--gepland); border-radius: 50%; background: var(--bg); z-index: 1; }
+.lijst .knoop-sm.afgerond { border-color: var(--kop); background: var(--kop); }
+.lijst .knoop-sm.bezocht { border-color: var(--draad); }
+.lijst .knoop-sm.afgerond.bezocht { background: var(--draad); }
+.lijst .halte-kop { padding-bottom: 10px; }
+.lijst .badges { min-height: 0; }
+.lijst .opbrengst { min-height: 0; }
+.lijst .detail { margin-top: 14px; padding: 18px; }
+.lijst .tussen-sm { display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 13.5px; color: var(--zacht); }
+.lijst .tussen-sm.voorbij { color: var(--draad); }
+
+@media (max-width: 899px) {
+  .rk { padding: 20px 16px 32px; }
+  .route { display: none; }
+  .lijst { display: block; }
+  .balk { align-items: stretch; }
+  .bediening { min-width: 100%; }
+  .knoppen { justify-content: flex-start; }
+  .knop { flex: 1 1 auto; padding: 0 12px; }
+  .knop.hoofd { min-width: 0; }
+  .detail-raster, .finish-raster { grid-template-columns: 1fr; gap: 18px; }
+  .keten { grid-template-columns: 1fr; gap: 14px; }
+  .keten::before { left: 22px; right: auto; top: 22px; bottom: 22px; width: 3px; height: auto; }
+  .keten li { display: flex; align-items: center; gap: 12px; }
+  .keten span { margin: 0; }
+  .onderbalk { grid-template-columns: 1fr; }
+  .eind, .werkwijze { padding: 18px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+</style>
+</head>
+<body>
+<div class="geelbalk"></div>
+<main class="rk" id="rk"></main>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="i-vraagteken" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5"/><path d="M9.3 9.2a2.8 2.8 0 0 1 5.4 1c0 1.9-2.7 2.5-2.7 4.2"/><path d="M12 17.6v.1"/></symbol>
+    <symbol id="i-canvas" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M3 9h18M9 9v11M15 9v11"/></symbol>
+    <symbol id="i-blokjes" viewBox="0 0 24 24"><rect x="2" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/><rect x="16" y="9" width="6" height="6" rx="1"/></symbol>
+    <symbol id="i-schild" viewBox="0 0 24 24"><path d="M12 3l7.5 3v5.5c0 4.5-3.2 8.2-7.5 9.5-4.3-1.3-7.5-5-7.5-9.5V6z"/><path d="M8.6 12.2l2.4 2.4 4.4-4.6"/></symbol>
+    <symbol id="i-proefbuis" viewBox="0 0 24 24"><path d="M9 3h6M10 3v11.5a2 2 0 0 0 4 0V3"/><path d="M10 10h4"/><path d="M7 21h10"/></symbol>
+    <symbol id="i-doos" viewBox="0 0 24 24"><path d="M3.5 8L12 4l8.5 4v8.5L12 20.5l-8.5-4z"/><path d="M3.5 8L12 12l8.5-4M12 12v8.5"/></symbol>
+    <symbol id="i-lamp" viewBox="0 0 24 24"><path d="M9 17.5h6M10 21h4"/><path d="M8.2 14.2A6 6 0 1 1 15.8 14.2c-.8.7-1.3 1.6-1.3 2.6v.7h-5v-.7c0-1-.5-1.9-1.3-2.6z"/></symbol>
+    <symbol id="i-wegwijzer" viewBox="0 0 24 24"><path d="M12 2.5V21.5M8 21.5h8"/><path d="M5 5h11l2.5 2.5L16 10H5z"/><path d="M19 12.5H8l-2.5 2.5L8 17.5h11z"/></symbol>
+    <symbol id="i-vlag" viewBox="0 0 24 24"><path d="M5 21.5V3.5"/><path d="M5 4.5h12.5l-2.5 4 2.5 4H5"/></symbol>
+    <symbol id="i-kalender" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="1.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></symbol>
+    <symbol id="i-mensen" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.5"/><path d="M16.5 14.1c2.6.2 4.5 2.4 4.5 5"/></symbol>
+    <symbol id="i-document" viewBox="0 0 24 24"><path d="M6 2.5h8.5L19 7v14.5H6z"/><path d="M14 2.5V7.5h5M9 12h7M9 15.5h7M9 19h4"/></symbol>
+    <symbol id="i-gesprek" viewBox="0 0 24 24"><path d="M4 5h16v11H11l-5 4v-4H4z"/></symbol>
+    <symbol id="i-doel" viewBox="0 0 24 24"><circle cx="11" cy="13" r="8"/><circle cx="11" cy="13" r="4.2"/><circle cx="11" cy="13" r=".8"/><path d="M11 13l9-9M16.5 4H20v3.5"/></symbol>
+    <symbol id="i-sleutel" viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.7 12.3L20.5 2.5M16.5 6.5l2.5 2.5M14 9l2 2"/></symbol>
+    <symbol id="i-grafiek" viewBox="0 0 24 24"><path d="M3.5 3.5v17h17"/><path d="M7.5 15l4-4.5 3 3 5.5-6.5"/></symbol>
+    <symbol id="i-puzzel" viewBox="0 0 24 24"><path d="M4 8h4a2 2 0 1 1 4 0h4v4a2 2 0 1 1 0 4v4H12a2 2 0 1 0-4 0H4v-4a2 2 0 1 0 0-4z"/></symbol>
+    <symbol id="i-ster" viewBox="0 0 24 24"><path d="M12 3l2.7 5.6 6.1.8-4.5 4.2 1.1 6.1L12 16.8l-5.4 2.9 1.1-6.1-4.5-4.2 6.1-.8z"/></symbol>
+    <symbol id="i-huisje" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7"/><path d="M6 9.5V20h12V9.5"/><path d="M10 20v-5h4v5"/></symbol>
+    <symbol id="i-vorige" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></symbol>
+    <symbol id="i-volgende" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></symbol>
+    <symbol id="i-afspelen" viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z"/></symbol>
+    <symbol id="i-pauze" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+    <symbol id="i-opnieuw" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 3.5v4h4"/></symbol>
+    <symbol id="i-scherm" viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/></symbol>
+  </defs>
+</svg>
+
+<script id="rk-data" type="application/json">__ROUTEKAART_DATA__</script>
+<script>
+(function () {
+  'use strict';
+
+  var DATA = JSON.parse(document.getElementById('rk-data').textContent);
+  var SVGNS = 'http://www.w3.org/2000/svg';
+  var ICONEN = ['vraagteken', 'canvas', 'blokjes', 'schild', 'proefbuis', 'doos', 'lamp', 'wegwijzer', 'vlag',
+    'kalender', 'mensen', 'document', 'gesprek', 'doel', 'sleutel', 'grafiek', 'puzzel', 'ster'];
+  var WACHT_MS = 7000;
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var smalMedia = window.matchMedia('(max-width: 899px)');
+
+  var kop = DATA.kop;
+  var namen = DATA.namen;
+  var S = DATA.stations;
+  var N = S.length;
+  var LAATSTE = N - 1;
+  var standIndex = Math.max(0, Math.min(LAATSTE, DATA.standIndex || 0));
+
+  /* Hulpjes */
+  function el(tag, cls, tekst) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (tekst != null) tekstMetHaken(e, tekst);
+    return e;
+  }
+  /* Tekst tussen [vierkante haken] is nog in te vullen: letterlijk tonen, wel gemarkeerd. */
+  function tekstMetHaken(ouder, tekst) {
+    String(tekst).split(/(\[[^\]]*\])/).forEach(function (deel) {
+      if (!deel) return;
+      if (/^\[[^\]]*\]$/.test(deel)) {
+        var s = document.createElement('span');
+        s.className = 'open';
+        s.textContent = deel;
+        ouder.appendChild(s);
+      } else {
+        ouder.appendChild(document.createTextNode(deel));
+      }
+    });
+  }
+  function icoonNaam(naam) {
+    return ICONEN.indexOf(naam) >= 0 ? naam : 'ster';
+  }
+  function icoon(naam, cls) {
+    var s = document.createElementNS(SVGNS, 'svg');
+    s.setAttribute('class', 'ico' + (cls ? ' ' + cls : ''));
+    s.setAttribute('aria-hidden', 'true');
+    s.setAttribute('focusable', 'false');
+    var u = document.createElementNS(SVGNS, 'use');
+    u.setAttribute('href', '#i-' + naam);
+    s.appendChild(u);
+    return s;
+  }
+  function svgEl(tag, attrs) {
+    var e = document.createElementNS(SVGNS, tag);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    return e;
+  }
+  function nummerTekst(st) {
+    if (st.soort === 'start') return 'START';
+    if (st.soort === 'finish') return 'FINISH';
+    return 'HALTE ' + st.nummer;
+  }
+  function opbrengstVan(st) {
+    if (st.opbrengst) return st.opbrengst;
+    if (st.opbrengstlabel && st.opbrengstlabel.length) return { tekst: st.opbrengstlabel.join(' · '), icoon: 'ster' };
+    return null;
+  }
+  function heeftTussen(i) {
+    return i < LAATSTE && S[i].tussen && S[i].tussen.length > 0;
+  }
+
+  /* Opbouw van de pagina */
+  var root = document.getElementById('rk');
+
+  var header = el('header', 'kop');
+  if (kop.bovenregel) header.appendChild(el('p', 'bovenregel', kop.bovenregel));
+  var titelblok = el('div', 'titelblok');
+  titelblok.appendChild(el('h1', '', kop.titel));
+  if (kop.ondertitel) {
+    var ot = el('p', 'ondertitel');
+    var rood = (kop.rood || '').trim();
+    var plek = rood ? kop.ondertitel.toLowerCase().indexOf(rood.toLowerCase()) : -1;
+    if (plek >= 0) {
+      tekstMetHaken(ot, kop.ondertitel.slice(0, plek));
+      ot.appendChild(el('span', 'rood', kop.ondertitel.slice(plek, plek + rood.length)));
+      tekstMetHaken(ot, kop.ondertitel.slice(plek + rood.length));
+    } else {
+      tekstMetHaken(ot, kop.ondertitel);
+    }
+    titelblok.appendChild(ot);
+  }
+  header.appendChild(titelblok);
+  var meta = el('div', 'meta');
+  if (kop.datum) {
+    var dc = el('span', 'chip datum');
+    dc.appendChild(icoon('kalender'));
+    tekstMetHaken(dc, kop.datum);
+    meta.appendChild(dc);
+  }
+  var sc = el('span', 'chip stand', 'Stand: ' + (kop.stand || S[standIndex].titel));
+  meta.appendChild(sc);
+  header.appendChild(meta);
+  root.appendChild(header);
+
+  var balk = el('div', 'balk');
+  var legenda = el('ul', 'legenda');
+  legenda.setAttribute('aria-label', 'Legenda');
+  [['leg-lijn', namen.rodeDraad], ['leg-cirkel', namen.opDeHalte], ['huisje', namen.tussen], ['leg-label', 'Opbrengst']]
+    .forEach(function (r) {
+      var li = el('li');
+      if (r[0] === 'huisje') li.appendChild(icoon('huisje'));
+      else li.appendChild(el('span', r[0]));
+      tekstMetHaken(li, r[1]);
+      legenda.appendChild(li);
+    });
+  balk.appendChild(legenda);
+
+  var bediening = el('div', 'bediening');
+  var knoppen = el('div', 'knoppen');
+  function maakKnop(naam, tekst, cls) {
+    var b = el('button', 'knop' + (cls ? ' ' + cls : ''));
+    b.type = 'button';
+    b.appendChild(icoon(naam));
+    var t = el('span', '', tekst);
+    b.appendChild(t);
+    b._tekst = t;
+    b._use = b.querySelector('use');
+    return b;
+  }
+  var kVorige = maakKnop('vorige', 'Vorige');
+  var kSpeel = maakKnop('afspelen', 'Afspelen', 'hoofd');
+  var kVolgende = maakKnop('volgende', 'Volgende');
+  var kScherm = maakKnop('scherm', 'Volledig scherm');
+  [kVorige, kSpeel, kVolgende, kScherm].forEach(function (b) { knoppen.appendChild(b); });
+  bediening.appendChild(knoppen);
+  var voortgang = el('div', 'voortgang');
+  voortgang.setAttribute('aria-hidden', 'true');
+  var voortgangVul = el('span');
+  voortgang.appendChild(voortgangVul);
+  bediening.appendChild(voortgang);
+  balk.appendChild(bediening);
+  root.appendChild(balk);
+
+  /* Breed: kolommen boven, weg, opbrengsten onder */
+  var route = el('section', 'route');
+  route.setAttribute('aria-label', 'De route');
+  route.style.setProperty('--n', N);
+  var boven = el('ol', 'rij boven');
+  var onder = el('ol', 'rij onder');
+  var weg = el('div', 'weg');
+  var svg = svgEl('svg', { 'aria-hidden': 'true' });
+  weg.appendChild(svg);
+
+  function maakKop(st, i) {
+    var b = el('button', 'halte-kop');
+    b.type = 'button';
+    b.dataset.i = i;
+    var badges = el('div', 'badges');
+    if (st.label) badges.appendChild(el('span', 'geel-label', st.label));
+    if (i === standIndex) {
+      var v = el('span', 'vlag');
+      v.appendChild(icoon('vlag'));
+      v.appendChild(document.createTextNode('Hier staan we'));
+      badges.appendChild(v);
+    }
+    b.appendChild(badges);
+    b.appendChild(el('span', 'nummer', nummerTekst(st)));
+    b.appendChild(el('span', 'halte-titel', st.titel));
+    if (st.datum) {
+      var d = el('span', 'halte-datum');
+      d.appendChild(icoon('kalender'));
+      tekstMetHaken(d, st.datum);
+      b.appendChild(d);
+    }
+    if (st.kernvraag) b.appendChild(el('span', 'kernvraag', st.kernvraag));
+    b.addEventListener('click', function () { handmatig(i); });
+    return b;
+  }
+  function maakOpbrengst(st, i) {
+    var ob = opbrengstVan(st);
+    var b = el('button', 'opbrengst');
+    b.type = 'button';
+    b.dataset.i = i;
+    b.appendChild(icoon(icoonNaam(ob ? ob.icoon : 'ster')));
+    var w = el('span');
+    w.appendChild(el('small', '', 'Opbrengst'));
+    w.appendChild(el('span', 'tekst', ob ? ob.tekst : ''));
+    b.appendChild(w);
+    b.addEventListener('click', function () { handmatig(i); });
+    return b;
+  }
+
+  var koppen = [];
+  var opbrengsten = [];
+  S.forEach(function (st, i) {
+    var li = el('li');
+    var k = maakKop(st, i);
+    koppen.push(k);
+    li.appendChild(k);
+    boven.appendChild(li);
+    var li2 = el('li');
+    var o = maakOpbrengst(st, i);
+    opbrengsten.push(o);
+    li2.appendChild(o);
+    onder.appendChild(li2);
+  });
+  route.appendChild(boven);
+  route.appendChild(weg);
+  route.appendChild(onder);
+  root.appendChild(route);
+
+  /* Smal: verticale lijst */
+  var lijst = el('ol', 'lijst');
+  lijst.setAttribute('aria-label', 'De route');
+  var rails = el('div', 'lijst-rails');
+  var draadSm = el('div', 'lijst-draad');
+  var bolSm = el('div', 'lijst-bol');
+  bolSm.setAttribute('aria-hidden', 'true');
+  lijst.appendChild(rails);
+  lijst.appendChild(draadSm);
+  lijst.appendChild(bolSm);
+  var lijstItems = [];
+  var knopenSm = [];
+  var koppenSm = [];
+  var opbrengstenSm = [];
+  var tussenSm = [];
+  S.forEach(function (st, i) {
+    var li = el('li');
+    var kn = el('span', 'knoop-sm');
+    knopenSm.push(kn);
+    li.appendChild(kn);
+    var k = maakKop(st, i);
+    koppenSm.push(k);
+    li.appendChild(k);
+    var o = maakOpbrengst(st, i);
+    opbrengstenSm.push(o);
+    li.appendChild(o);
+    if (heeftTussen(i)) {
+      var t = el('span', 'tussen-sm');
+      t.appendChild(icoon('huisje'));
+      tekstMetHaken(t, namen.tussen + ' tot de volgende halte');
+      li.appendChild(t);
+      tussenSm[i] = t;
+    }
+    var slot = el('div', 'slot');
+    li.appendChild(slot);
+    li._slot = slot;
+    lijst.appendChild(li);
+    lijstItems.push(li);
+  });
+  root.appendChild(lijst);
+
+  /* Detailpaneel */
+  var detail = el('section', 'detail');
+  detail.setAttribute('aria-live', 'polite');
+  detail.setAttribute('aria-label', 'Details van de halte');
+  root.appendChild(detail);
+
+  /* Onderbalk */
+  var onderbalk = el('footer', 'onderbalk');
+  var eind = el('div', 'eind');
+  eind.appendChild(el('h2', '', 'Eindresultaat'));
+  eind.appendChild(el('p', '', DATA.onderbalk.eindresultaat || ''));
+  onderbalk.appendChild(eind);
+  var werkwijze = DATA.onderbalk.werkwijze || [];
+  if (werkwijze.length) {
+    var ww = el('div', 'werkwijze');
+    ww.appendChild(el('h2', '', 'Werkwijze'));
+    var ul = el('ul');
+    werkwijze.forEach(function (r) {
+      var li = el('li');
+      li.appendChild(icoon(icoonNaam(r.icoon)));
+      li.appendChild(el('span', '', r.tekst));
+      ul.appendChild(li);
+    });
+    ww.appendChild(ul);
+    onderbalk.appendChild(ww);
+  } else {
+    onderbalk.classList.add('alleen');
+  }
+  root.appendChild(onderbalk);
+
+  function statusVan(i) {
+    if (i < standIndex) return 'Afgerond';
+    if (i === standIndex) return 'Hier staan we';
+    return 'Gepland';
+  }
+  function lijstblok(titel, icoonNaamH, items, leegTekst) {
+    var d = el('div');
+    var h = el('h3');
+    if (icoonNaamH) h.appendChild(icoonNaamH === 'cirkel' ? el('span', 'leg-cirkel') : icoon(icoonNaamH));
+    tekstMetHaken(h, titel);
+    d.appendChild(h);
+    if (items && items.length) {
+      var u = el('ul');
+      items.forEach(function (t) { u.appendChild(el('li', '', t)); });
+      d.appendChild(u);
+    } else {
+      d.appendChild(el('p', 'leeg', leegTekst));
+    }
+    return d;
+  }
+  function vulDetail(i) {
+    var st = S[i];
+    detail.textContent = '';
+    if (st.soort === 'finish') {
+      var fr = el('div', 'finish-raster');
+      var links = el('div');
+      links.appendChild(el('span', 'status', 'Finish'));
+      links.appendChild(el('h2', '', st.detailTitel || st.titel));
+      if (st.kernvraag) links.appendChild(el('p', 'kernvraag', st.kernvraag));
+      var uk = el('ul', 'uitkomsten');
+      (st.uitkomsten || []).forEach(function (u) {
+        var li = el('li');
+        li.appendChild(icoon(icoonNaam(u.icoon)));
+        li.appendChild(el('span', '', u.tekst));
+        uk.appendChild(li);
+      });
+      links.appendChild(uk);
+      fr.appendChild(links);
+      var rechts = el('div');
+      var h = el('h3');
+      h.appendChild(icoon('grafiek'));
+      tekstMetHaken(h, 'Zo groeide ' + namen.rodeDraad.charAt(0).toLowerCase() + namen.rodeDraad.slice(1));
+      rechts.appendChild(h);
+      var keten = el('ol', 'keten' + (reduce ? '' : ' inkomen'));
+      var schakels = S.slice(0, LAATSTE).map(opbrengstVan).filter(Boolean);
+      keten.style.setProperty('--k', Math.max(1, schakels.length));
+      schakels.forEach(function (ob, k) {
+        var li = el('li');
+        li.style.setProperty('--i', k);
+        var s = el('span', 'schakel');
+        s.appendChild(icoon(icoonNaam(ob.icoon)));
+        li.appendChild(s);
+        li.appendChild(el('span', '', ob.tekst));
+        keten.appendChild(li);
+      });
+      rechts.appendChild(keten);
+      fr.appendChild(rechts);
+      detail.appendChild(fr);
+      return;
+    }
+    var r = el('div', 'detail-raster');
+    var a = el('div');
+    a.appendChild(el('span', 'status', nummerTekst(st) + ' · ' + statusVan(i)));
+    a.appendChild(el('h2', '', st.detailTitel || st.titel));
+    if (st.kernvraag) a.appendChild(el('p', 'kernvraag', st.kernvraag));
+    var themas = (st.themas || []).slice();
+    if (themas.length) {
+      var th = el('div', 'themas');
+      themas.forEach(function (t) { th.appendChild(el('span', 'thema', t)); });
+      a.appendChild(th);
+    }
+    r.appendChild(a);
+    r.appendChild(lijstblok(namen.opDeHalte, 'cirkel', st.opDeHalte, 'Niets vastgelegd.'));
+    if (st.resultaat && st.resultaat.length) {
+      r.appendChild(lijstblok('Resultaat', 'doel', st.resultaat, ''));
+    } else {
+      r.appendChild(lijstblok(namen.tussen, 'huisje', st.tussen,
+        i === LAATSTE - 1 || i === LAATSTE ? 'Na deze halte volgt de finish.' : 'Geen ' + namen.tussen.toLowerCase() + ' na deze halte.'));
+    }
+    var c = el('div');
+    var hc = el('h3');
+    hc.appendChild(icoon('ster'));
+    hc.appendChild(document.createTextNode('Opbrengst'));
+    c.appendChild(hc);
+    var ob = opbrengstVan(st);
+    if (ob) {
+      var dob = el('div', 'detail-opbrengst');
+      dob.appendChild(icoon(icoonNaam(ob.icoon)));
+      dob.appendChild(el('span', '', ob.tekst));
+      c.appendChild(dob);
+    }
+    r.appendChild(c);
+    detail.appendChild(r);
+  }
+
+  /* Geometrie van de weg (breed) */
+  var geo = null;
+  var grond = svgEl('path', { 'class': 'pad-grond' });
+  var draad = svgEl('path', { 'class': 'pad-draad', pathLength: '1000', 'stroke-dasharray': '1000 1000' });
+  var huisjesLaag = svgEl('g', {});
+  var knopenLaag = svgEl('g', {});
+  var bol = svgEl('g', { 'class': 'bol' });
+  bol.appendChild(svgEl('circle', { r: 26, 'class': 'bol-ring' }));
+  bol.appendChild(svgEl('circle', { r: 19 }));
+  var bolIco = svgEl('svg', { 'class': 'bol-ico ico', x: -11, y: -11, width: 22, height: 22, viewBox: '0 0 24 24' });
+  var bolUse = svgEl('use', { href: '#i-ster' });
+  bolIco.appendChild(bolUse);
+  bol.appendChild(bolIco);
+  [grond, draad, huisjesLaag, knopenLaag, bol].forEach(function (x) { svg.appendChild(x); });
+
+  var knopen = [];
+  S.forEach(function (st, i) {
+    var g = svgEl('g', { 'class': 'knoop' });
+    g.appendChild(svgEl('circle', { 'class': 'ring', r: 14 }));
+    g.appendChild(svgEl('circle', { 'class': 'rand', r: st.soort === 'finish' ? 15 : 11 }));
+    if (st.soort === 'finish') {
+      var fi = svgEl('svg', { 'class': 'ico ico-in', x: -9, y: -9, width: 18, height: 18, viewBox: '0 0 24 24' });
+      fi.appendChild(svgEl('use', { href: '#i-vlag' }));
+      g.appendChild(fi);
+    }
+    g.addEventListener('click', function () { handmatig(i); });
+    knopenLaag.appendChild(g);
+    knopen.push(g);
+  });
+  var huisjes = [];
+  S.forEach(function (st, i) {
+    if (!heeftTussen(i)) return;
+    var g = svgEl('g', { 'class': 'huisje' });
+    g.appendChild(svgEl('path', { d: 'M-10 1 L0 -9 L10 1 L7 1 L7 10 L-7 10 L-7 1 Z' }));
+    huisjesLaag.appendChild(g);
+    huisjes.push({ i: i, g: g, len: 0, sm: tussenSm[i] });
+  });
+
+  function cubic(p0, p1, p2, p3, t) {
+    var u = 1 - t;
+    return {
+      x: u * u * u * p0.x + 3 * u * u * t * p1.x + 3 * u * t * t * p2.x + t * t * t * p3.x,
+      y: u * u * u * p0.y + 3 * u * u * t * p1.y + 3 * u * t * t * p2.y + t * t * t * p3.y
+    };
+  }
+  /* Bouwt de weg en een opzoektabel van booglengte naar punt, zodat de bol gelijkmatig rijdt. */
+  function bouwWeg() {
+    var w = weg.clientWidth;
+    var h = weg.clientHeight;
+    if (!w) return;
+    svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+    var basis = weg.getBoundingClientRect().left;
+    var y = h / 2;
+    var A = Math.min(26, h * 0.22);
+    var pts = koppen.map(function (k) {
+      var r = k.parentNode.getBoundingClientRect();
+      return { x: r.left - basis + r.width / 2, y: y };
+    });
+    var d = 'M' + pts[0].x + ' ' + y;
+    var tabel = [{ len: 0, x: pts[0].x, y: y }];
+    var stationLen = [0];
+    var len = 0;
+    for (var i = 0; i < pts.length - 1; i++) {
+      var p0 = pts[i], p3 = pts[i + 1];
+      var dx = p3.x - p0.x;
+      var dir = i % 2 === 0 ? -1 : 1;
+      var p1 = { x: p0.x + dx * 0.36, y: y + dir * A };
+      var p2 = { x: p3.x - dx * 0.36, y: y + dir * A };
+      d += ' C' + p1.x + ' ' + p1.y + ' ' + p2.x + ' ' + p2.y + ' ' + p3.x + ' ' + p3.y;
+      var vorige = p0;
+      for (var s = 1; s <= 120; s++) {
+        var q = cubic(p0, p1, p2, p3, s / 120);
+        len += Math.hypot(q.x - vorige.x, q.y - vorige.y);
+        tabel.push({ len: len, x: q.x, y: q.y });
+        vorige = q;
+      }
+      stationLen.push(len);
+    }
+    grond.setAttribute('d', d);
+    draad.setAttribute('d', d);
+    pts.forEach(function (p, k) { knopen[k].setAttribute('transform', 'translate(' + p.x + ' ' + p.y + ')'); });
+    geo = { tabel: tabel, totaal: len || 1, stationLen: stationLen };
+    huisjes.forEach(function (hu) {
+      hu.len = (stationLen[hu.i] + stationLen[hu.i + 1]) / 2;
+      var p = puntOp(hu.len);
+      hu.g.setAttribute('transform', 'translate(' + p.x + ' ' + p.y + ')');
+    });
+  }
+  function puntOp(L) {
+    var t = geo.tabel;
+    var lo = 0, hi = t.length - 1;
+    if (L <= 0) return t[0];
+    if (L >= t[hi].len) return t[hi];
+    while (hi - lo > 1) {
+      var mid = (lo + hi) >> 1;
+      if (t[mid].len < L) lo = mid; else hi = mid;
+    }
+    var a = t[lo], b = t[hi];
+    var f = (L - a.len) / ((b.len - a.len) || 1);
+    return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f };
+  }
+  /* Positie als halte-index met fractie (2.5 = halverwege halte 2 en 3), naar booglengte. */
+  function lengteBij(pos) {
+    var a = Math.floor(pos), b = Math.min(LAATSTE, a + 1);
+    return geo.stationLen[a] + (geo.stationLen[b] - geo.stationLen[a]) * (pos - a);
+  }
+
+  /* Geometrie van de lijst (smal) */
+  var lijstY = [];
+  function meetLijst() {
+    var basis = lijst.getBoundingClientRect().top;
+    lijstY = knopenSm.map(function (k) {
+      var r = k.getBoundingClientRect();
+      return r.top - basis + r.height / 2;
+    });
+    if (!lijstY.length) return;
+    rails.style.top = lijstY[0] + 'px';
+    rails.style.height = (lijstY[LAATSTE] - lijstY[0]) + 'px';
+    draadSm.style.top = lijstY[0] + 'px';
+  }
+  function lijstYBij(pos) {
+    var a = Math.floor(pos), b = Math.min(LAATSTE, a + 1);
+    return lijstY[a] + (lijstY[b] - lijstY[a]) * (pos - a);
+  }
+
+  /* Toestand */
+  var pos = standIndex;
+  var actief = standIndex;
+  var speelt = false;
+  var aftelStart = 0;
+  var rit = null;
+  var bolIcoon = '';
+
+  function smal() { return smalMedia.matches; }
+
+  function tekenPositie() {
+    var bezochtTot = Math.floor(pos + 1e-6);
+    if (!smal() && geo) {
+      var L = lengteBij(pos);
+      var p = puntOp(L);
+      bol.setAttribute('transform', 'translate(' + p.x + ' ' + p.y + ')');
+      draad.setAttribute('stroke-dashoffset', String(1000 - 1000 * (L / geo.totaal)));
+      huisjes.forEach(function (hu) { hu.g.classList.toggle('voorbij', L > hu.len + 0.5); });
+    }
+    if (smal() && lijstY.length) {
+      var yy = lijstYBij(pos);
+      bolSm.style.top = yy + 'px';
+      draadSm.style.height = Math.max(0, yy - lijstY[0]) + 'px';
+    }
+    huisjes.forEach(function (hu) {
+      if (hu.sm) hu.sm.classList.toggle('voorbij', pos > hu.i + 0.5);
+    });
+    for (var i = 0; i < N; i++) {
+      var bezocht = i <= bezochtTot;
+      knopen[i].classList.toggle('bezocht', bezocht);
+      knopenSm[i].classList.toggle('bezocht', bezocht);
+      opbrengsten[i].classList.toggle('bezocht', bezocht);
+      opbrengstenSm[i].classList.toggle('bezocht', bezocht);
+    }
+    var ob = opbrengstVan(S[bezochtTot]);
+    zetBolIcoon(icoonNaam(ob ? ob.icoon : 'ster'));
+  }
+  function zetBolIcoon(naam) {
+    if (naam === bolIcoon) return;
+    var eerste = !bolIcoon;
+    bolIcoon = naam;
+    bolUse.setAttribute('href', '#i-' + naam);
+    bolSm.textContent = '';
+    bolSm.appendChild(icoon(naam));
+    if (!eerste && !reduce) {
+      [bolIco, bolSm].forEach(function (x) {
+        x.classList.remove('pop');
+        void x.getBoundingClientRect();
+        x.classList.add('pop');
+      });
+    }
+  }
+
+  function zetActief(i, aankomst) {
+    actief = i;
+    for (var k = 0; k < N; k++) {
+      var huidig = k === i;
+      [koppen[k], koppenSm[k]].forEach(function (b) {
+        if (huidig) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current');
+        b.classList.toggle('gepland', k > standIndex);
+      });
+      knopen[k].classList.toggle('actief', huidig);
+      knopen[k].classList.toggle('afgerond', k < standIndex);
+      knopenSm[k].classList.toggle('afgerond', k < standIndex);
+    }
+    vulDetail(i);
+    plaatsDetail();
+    eind.classList.toggle('bereikt', i === LAATSTE);
+    if (aankomst && !reduce) {
+      [opbrengsten[i], opbrengstenSm[i]].forEach(function (o) {
+        o.classList.remove('spring');
+        void o.getBoundingClientRect();
+        o.classList.add('spring');
+      });
+    }
+    werkKnoppenBij();
+  }
+  function plaatsDetail() {
+    if (smal()) {
+      var slot = lijstItems[actief]._slot;
+      if (detail.parentNode !== slot) slot.appendChild(detail);
+      meetLijst();
+    } else if (detail.parentNode !== root || detail.nextSibling !== onderbalk) {
+      root.insertBefore(detail, onderbalk);
+    }
+  }
+
+  function werkKnoppenBij() {
+    kVorige.disabled = actief === 0 && !rit;
+    kVolgende.disabled = actief === LAATSTE && !rit;
+    var opFinish = actief === LAATSTE && !rit;
+    var naam = opFinish ? 'opnieuw' : speelt ? 'pauze' : 'afspelen';
+    var tekst = opFinish ? 'Opnieuw' : speelt ? 'Pauzeren' : 'Afspelen';
+    kSpeel._use.setAttribute('href', '#i-' + naam);
+    kSpeel._tekst.textContent = tekst;
+    kSpeel.setAttribute('aria-pressed', speelt ? 'true' : 'false');
+  }
+
+  function easeInOut(t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
+
+  function gaNaar(doel) {
+    doel = Math.max(0, Math.min(LAATSTE, doel));
+    if (rit) { pos = ritPositie(performance.now()); rit = null; }
+    if (doel === pos && !rit) { zetActief(doel, false); tekenPositie(); return; }
+    if (reduce) {
+      pos = doel;
+      tekenPositie();
+      aangekomen(doel);
+      return;
+    }
+    if (smal()) meetLijst();
+    var afstand = smal() || !geo
+      ? Math.abs(doel - pos) / Math.max(1, LAATSTE)
+      : Math.abs(lengteBij(doel) - lengteBij(pos)) / geo.totaal;
+    var duur = (0.7 + 2.1 * Math.min(1, afstand)) * 1000;
+    rit = { van: pos, naar: doel, start: performance.now(), duur: duur };
+    werkKnoppenBij();
+  }
+  function ritPositie(nu) {
+    var t = Math.min(1, (nu - rit.start) / rit.duur);
+    return rit.van + (rit.naar - rit.van) * easeInOut(t);
+  }
+  function aangekomen(i) {
+    zetActief(i, true);
+    if (i === LAATSTE) {
+      speelt = false;
+      werkKnoppenBij();
+    } else if (speelt) {
+      aftelStart = performance.now();
+    }
+    tekenPositie();
+  }
+
+  function lus(nu) {
+    if (rit) {
+      var t = Math.min(1, (nu - rit.start) / rit.duur);
+      pos = ritPositie(nu);
+      tekenPositie();
+      if (t >= 1) {
+        var doel = rit.naar;
+        rit = null;
+        pos = doel;
+        aangekomen(doel);
+      }
+    } else if (speelt) {
+      var verstreken = nu - aftelStart;
+      if (verstreken >= WACHT_MS) {
+        voortgangVul.style.width = '0';
+        gaNaar(actief + 1);
+      } else {
+        voortgangVul.style.width = (100 * verstreken / WACHT_MS) + '%';
+      }
+    }
+    if (!speelt || rit) voortgangVul.style.width = '0';
+    requestAnimationFrame(lus);
+  }
+
+  function speel() {
+    speelt = true;
+    aftelStart = performance.now();
+    werkKnoppenBij();
+  }
+  function pauzeer() {
+    speelt = false;
+    werkKnoppenBij();
+  }
+  /* Elke handmatige actie pauzeert het afspelen. */
+  function handmatig(i) {
+    pauzeer();
+    gaNaar(i);
+    if (smal()) {
+      var li = lijstItems[i];
+      if (li && li.scrollIntoView) li.scrollIntoView({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' });
+    }
+  }
+  function speelKnop() {
+    if (actief === LAATSTE && !rit) {
+      gaNaar(0);
+      if (!reduce) speelt = true;
+      werkKnoppenBij();
+      return;
+    }
+    if (speelt) pauzeer(); else speel();
+  }
+
+  kVorige.addEventListener('click', function () { handmatig((rit ? Math.round(pos) : actief) - 1); });
+  kVolgende.addEventListener('click', function () { handmatig((rit ? Math.round(pos) : actief) + 1); });
+  kSpeel.addEventListener('click', speelKnop);
+  kScherm.addEventListener('click', function () {
+    if (document.fullscreenElement) {
+      if (document.exitFullscreen) document.exitFullscreen();
+    } else if (document.documentElement.requestFullscreen) {
+      document.documentElement.requestFullscreen().catch(function () {});
+    }
+  });
+  document.addEventListener('fullscreenchange', function () {
+    kScherm._tekst.textContent = document.fullscreenElement ? 'Venster' : 'Volledig scherm';
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    var doelEl = e.target;
+    var tag = doelEl && doelEl.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    var hier = rit ? Math.round(pos) : actief;
+    switch (e.key) {
+      case 'ArrowRight': case 'PageDown': e.preventDefault(); handmatig(hier + 1); break;
+      case 'ArrowLeft': case 'PageUp': e.preventDefault(); handmatig(hier - 1); break;
+      case 'Home': e.preventDefault(); handmatig(0); break;
+      case 'End': e.preventDefault(); handmatig(LAATSTE); break;
+      case ' ':
+        if (tag === 'BUTTON') return;
+        e.preventDefault();
+        speelKnop();
+        break;
+    }
+  });
+
+  function herbouw() {
+    bouwWeg();
+    plaatsDetail();
+    if (smal()) meetLijst();
+    tekenPositie();
+  }
+  if (window.ResizeObserver) new ResizeObserver(herbouw).observe(root);
+  else window.addEventListener('resize', herbouw);
+  if (smalMedia.addEventListener) smalMedia.addEventListener('change', herbouw);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(herbouw);
+
+  /* Start: alles staat meteen in beeld, de bol bij de Stand en de rode lijn tot daar. */
+  zetActief(standIndex, false);
+  herbouw();
+  if (!reduce && standIndex < LAATSTE) speel();
+  requestAnimationFrame(lus);
+})();
+</script>
+</body>
+</html>

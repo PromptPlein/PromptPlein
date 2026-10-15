@@ -398,6 +398,17 @@ function ChatPageInner() {
   // chat; daarom blijft het leesbaar, maar verder chatten vraagt inloggen.
   const projectNeedsLogin = !user && Boolean(conversation?.projectId);
 
+  // Vast, zodat de berichtrijen (gememoïseerd) niet bij elk streamfragment
+  // opnieuw tekenen.
+  const sendMessage = controller.send;
+  const handleRepair = useCallback(
+    (text: string) => {
+      if (projectNeedsLogin) requireLogin('Log in om verder te gaan in deze projectchat.');
+      else void sendMessage(text);
+    },
+    [projectNeedsLogin, requireLogin, sendMessage],
+  );
+
   const composerDisabled =
     !configured || !settings || settings.enabled === false || projectNeedsLogin;
 
@@ -600,6 +611,7 @@ function ChatPageInner() {
                         ? () => requireLogin('Log in om verder te gaan in deze projectchat.')
                         : controller.continueLast
                     }
+                    onRepair={handleRepair}
                     onImprove={handleImprove}
                     onSaveAsPrompt={handleSaveAsPrompt}
                     nudgeMessageId={nudgeMessageId}
@@ -633,6 +645,7 @@ function ChatPageInner() {
                   extracting={controller.extracting}
                   attachments={conversation?.attachments ?? []}
                   onSend={guardedSend}
+                  onRoutekaart={(text) => void controller.addRoutekaart(text)}
                   onStop={controller.stop}
                   onAddFile={(file) => void controller.addAttachment(file)}
                   onRemoveAttachment={controller.removeAttachment}

@@ -22,6 +22,7 @@ import {
   titleFromFirstMessage,
 } from '@/lib/chatStorage';
 import { splitAnswer } from '@/lib/chatFiles';
+import { buildRoutekaartHtml, parseRoutekaart } from '@/lib/routekaart';
 import { downloadText } from '@/lib/download';
 import { sendChatMessage } from '@/services/chatService';
 import { loadProjectContext } from '@/services/chatProjectService';
@@ -90,6 +91,11 @@ export interface ChatController {
   stop: () => void;
   /** Probeer het laatste, mislukte antwoord opnieuw. */
   retry: () => void;
+  /**
+   * Maak de routekaart uit `text` direct met de vaste routekaart van
+   * PromptPlein, zonder AI. Het bericht en het bestand komen in het gesprek.
+   */
+  addRoutekaart: (text: string) => Promise<void>;
   /**
    * Schrijf het laatste antwoord verder vanaf waar het ophield: na de stop-knop,
    * of als ook het automatisch verderschrijven het niet heeft afgemaakt.
@@ -429,9 +435,10 @@ export default function useChatController(
       // zodat een refresh midden in de stream het gesprek niet kwijtraakt.
       persistNow({ ...updated, messages: [...base.messages, userMsg] });
 
-      // Geschiedenis voor het model: eerdere beurten zonder mislukte antwoorden.
+      // Geschiedenis voor het model: eerdere beurten zonder mislukte antwoorden
+      // en zonder bestanden die PromptPlein zelf maakte.
       const history = updated.messages
-        .filter((m) => m.id !== assistantMsg.id && !m.error && m.content.trim())
+        .filter((m) => m.id !== assistantMsg.id && !m.error && !m.madeBy && m.content.trim())
         .map((m) => ({ role: m.role, content: m.content }));
 
       await streamAnswer(updated, assistantMsg.id, history, '');
@@ -448,10 +455,49 @@ export default function useChatController(
     // Dezelfde geschiedenis als bij het begin van dit antwoord: alles ervoor.
     const history = cur.messages
       .slice(0, -1)
-      .filter((m) => !m.error && m.content.trim())
+      .filter((m) => !m.error && !m.madeBy && m.content.trim())
       .map((m) => ({ role: m.role, content: m.content }));
     void streamAnswer(cur, last.id, history, last.content);
   }, [streamAnswer]);
+
+  const addRoutekaart = useCallback(
+    async (rawText: string) => {
+      const text = rawText.trim();
+      if (!text || streamingRef.current) return;
+      const data = parseRoutekaart(text);
+      if (!data) {
+        toast.error('In dit bericht staat geen volledige routekaart (KOP, haltes en FINISH).');
+        return;
+      }
+      let html: string;
+      try {
+        html = await buildRoutekaartHtml(data);
+      } catch {
+        toast.error('De routekaart kon niet worden gemaakt.');
+        return;
+      }
+      const base = conversationRef.current ?? createConversation(defaultKind);
+      const now = new Date().toISOString();
+      const userMsg: ChatMessage = { id: uuid(), role: 'user', content: text, createdAt: now };
+      const fileMsg: ChatMessage = {
+        id: uuid(),
+        role: 'assistant',
+        content: `Gemaakt met de vaste routekaart van PromptPlein, met de inhoud uit je bericht. Zonder AI, dus elke routekaart heeft dezelfde opmaak.\n\n\`\`\`html\n${html}\n\`\`\``,
+        createdAt: now,
+        provider: 'local-template',
+        madeBy: 'routekaart',
+      };
+      const next: ChatConversation = {
+        ...base,
+        title: base.messages.length === 0 ? data.kop.titel || titleFromFirstMessage(text) : base.title,
+        updatedAt: now,
+        messages: [...base.messages, userMsg, fileMsg],
+      };
+      update(next);
+      persistNow(next);
+    },
+    [defaultKind, update, persistNow],
+  );
 
   const sendInNewConversation = useCallback(
     (text: string, kind?: ChatConversation['kind']) => {
@@ -685,6 +731,7 @@ export default function useChatController(
     sendInNewConversation,
     stop,
     retry,
+    addRoutekaart,
     continueLast,
     newConversation,
     newConversationInProject,

@@ -24,6 +24,8 @@ import { getChatSettingsCached, type ChatSettings } from '@/services/settingsSer
 import { useAuth } from '@/context/AuthContext';
 import ShareModal from '@/components/share/ShareModal';
 import SavePromptPanel from '@/components/prompts/SavePromptPanel';
+import RoutekaartResult from '@/components/optimizer/RoutekaartResult';
+import { isSjabloon, sjabloonNaam } from '@/lib/techniques';
 import type { OptimizeResult, Prompt, PromptDialogue, Technique } from '@/types';
 
 interface OptimizedOutputProps {
@@ -170,6 +172,12 @@ export default function OptimizedOutput({
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300">
           {result.error}
         </div>
+      )}
+
+      {/* Routekaart: het bestand zelf, met de vaste opmaak van PromptPlein. De
+          opdracht eronder blijft bruikbaar voor een andere AI-omgeving. */}
+      {technique && isSjabloon(technique) && sjabloonNaam(technique.template) === 'route' && (
+        <RoutekaartResult content={result.optimized_content} />
       )}
 
       {/* Versie-chips: verschijnen zodra de verbeter-lus een tweede versie

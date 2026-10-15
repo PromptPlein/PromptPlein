@@ -711,6 +711,13 @@ export interface ChatMessage {
    */
   incomplete?: boolean;
   /**
+   * Niet door de AI geschreven maar door PromptPlein zelf gemaakt:
+   * 'routekaart' = de vaste routekaart met de inhoud uit het bericht ervoor.
+   * Gaat niet mee als geschiedenis naar het model; het is een bestand, geen
+   * gespreksbeurt.
+   */
+  madeBy?: 'routekaart';
+  /**
    * De internetbronnen die dit antwoord heeft meegekregen, in de volgorde waarin
    * ze aan het model zijn voorgelegd: bron 1 in de tekst is hier het eerste
    * item. Alleen gevuld wanneer de gebruiker "Zoeken op internet" aan had staan

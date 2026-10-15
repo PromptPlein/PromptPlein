@@ -3,6 +3,7 @@ import {
   useEffect,
   useImperativeHandle,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -11,6 +12,7 @@ import {
   AtSign,
   FolderOpen,
   Loader2,
+  Map as MapIcon,
   Paperclip,
   Scissors,
   Send,
@@ -25,6 +27,7 @@ import ThinkingToggle from '@/components/common/ThinkingToggle';
 import WebSearchToggle from '@/components/common/WebSearchToggle';
 import { ACCEPTED_DOC_ACCEPT } from '@/lib/extractDocument';
 import { insertDictatedText, useDictation } from '@/lib/useDictation';
+import { parseRoutekaart } from '@/lib/routekaart';
 import { MAX_CHAT_ATTACHMENTS } from './useChatController';
 import type { ChatAttachment, ChatProject } from '@/types';
 
@@ -120,6 +123,12 @@ interface ChatComposerProps {
    * tekstvak en een placeholder die zegt wat er van hem verwacht wordt.
    */
   prominent?: boolean;
+  /**
+   * Staat er een routekaart in het veld (het inhoudsblok van het sjabloon
+   * Routekaart), dan biedt de balk aan hem direct te maken met de vaste
+   * routekaart, zonder AI. Afwezig = geen aanbod.
+   */
+  onRoutekaart?: (text: string) => void;
 }
 
 /**
@@ -159,10 +168,16 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
     webSearch = false,
     onToggleWebSearch,
     prominent = false,
+    onRoutekaart,
   },
   ref,
 ) {
   const [text, setText] = useState('');
+  // Een routekaart herken je aan het inhoudsblok: een regel KOP, haltes en FINISH.
+  const isRoutekaart = useMemo(
+    () => Boolean(onRoutekaart) && /^\s*KOP\s*$/m.test(text) && parseRoutekaart(text) !== null,
+    [onRoutekaart, text],
+  );
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const projectMenuRef = useRef<HTMLDivElement>(null);
   const [optimizing, setOptimizing] = useState(false);
@@ -350,8 +365,36 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
     }
   }
 
+  function makeRoutekaart() {
+    if (!onRoutekaart || disabled || streaming) return;
+    const value = text.trim();
+    setText('');
+    setBeforeOptimize(null);
+    onRoutekaart(value);
+  }
+
   return (
     <div className="border-t border-slate-200 px-4 pb-3 pt-3 dark:border-slate-700 sm:px-6">
+      {/* Een routekaart hoeft de AI niet zelf te programmeren: PromptPlein heeft
+          een vaste, geteste versie. Versturen kan nog steeds; dan schrijft de AI
+          de pagina zelf. */}
+      {isRoutekaart && !streaming && (
+        <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-rijksblauw-200 bg-rijksblauw-50/70 px-3 py-2 text-xs text-slate-700 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10 dark:text-slate-200">
+          <MapIcon size={15} className="shrink-0 text-rijksblauw-600 dark:text-rijksblauw-300" />
+          <span className="min-w-[12rem] flex-1">
+            Dit is een routekaart. PromptPlein maakt hem direct in de vaste rijksstijl, zonder AI:
+            altijd dezelfde opmaak en meteen klaar. Met Verstuur programmeert de AI de pagina zelf.
+          </span>
+          <button
+            type="button"
+            className="opl-btn-primary !px-2.5 !py-1.5 text-xs"
+            onClick={makeRoutekaart}
+            disabled={disabled}
+          >
+            <MapIcon size={14} /> Maak de routekaart
+          </button>
+        </div>
+      )}
       {/* Eén omhulsel dat er als hét invoerveld uitziet: bijlagen, tekstvak en
           knoppen zitten er samen in en de rand licht op zodra je in het tekstvak
           staat (focus-within). Zo hoort alles zichtbaar bij elkaar, terwijl de
