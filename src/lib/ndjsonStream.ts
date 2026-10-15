@@ -56,6 +56,18 @@ export interface StreamOutcome {
   aborted?: boolean;
   /** De bron-URL's die in de eindtekst terugkomen; alleen als er bronnen waren. */
   usedSources?: string[];
+  /**
+   * Het antwoord is niet af: het uitvoerbudget was op, of de stream hield op
+   * zonder afsluitend event (de function werd afgekapt). `text` is dan het
+   * begin, en de aanroeper kan het vervolg opvragen.
+   */
+  incomplete?: boolean;
+  /**
+   * Precies de tekst zoals hij binnenkwam, niet bijgesneden. Nodig om een
+   * vervolg naadloos aan te plakken: een weggeknipte regelovergang aan het eind
+   * plakt anders twee regels code aan elkaar.
+   */
+  raw?: string;
 }
 
 function isAbortError(err: unknown): boolean {
@@ -244,6 +256,9 @@ export async function streamNdjson(args: {
   let buffer = '';
   let accumulated = '';
   const outcome: StreamOutcome = { text: '' };
+  // Kwam er een afsluitend event (done, unclear, error)? Zo niet, dan is de
+  // stream onderweg afgebroken en is de tekst niet af.
+  let finished = false;
 
   const handleLine = (line: string): void => {
     const trimmed = line.trim();
@@ -307,6 +322,8 @@ export async function streamNdjson(args: {
         if (event.text) onStatus?.({ notice: event.text });
         break;
       case 'done':
+        finished = true;
+        if ((event as { incomplete?: unknown }).incomplete === true) outcome.incomplete = true;
         // De server stuurt de volledige tekst mee; die is leidend boven onze
         // eigen optelsom.
         outcome.text = event.text ?? accumulated;
@@ -318,11 +335,13 @@ export async function streamNdjson(args: {
         }
         break;
       case 'unclear':
+        finished = true;
         outcome.unclear = true;
         outcome.reason = event.reason;
         if (event.provider) outcome.provider = event.provider;
         break;
       case 'error':
+        finished = true;
         outcome.error = event.error ?? 'Onbekende fout van de AI-service';
         break;
     }
@@ -342,13 +361,17 @@ export async function streamNdjson(args: {
   } catch (err) {
     // Afgebroken met de stop-knop: de deeltekst is het resultaat.
     if (isAbortError(err) || signal?.aborted) {
-      return { ...outcome, text: outcome.text || accumulated, aborted: true };
+      return { ...outcome, text: outcome.text || accumulated, raw: accumulated, aborted: true };
     }
+    // Verbinding midden in het antwoord verbroken: wat er al staat is bruikbaar.
+    if (accumulated) return { ...outcome, text: accumulated, raw: accumulated, incomplete: true };
     throw err;
   }
   // Laatste regel zonder afsluitende newline.
   handleLine(buffer);
 
   if (!outcome.text) outcome.text = accumulated;
+  outcome.raw = accumulated;
+  if (!finished && accumulated) outcome.incomplete = true;
   return outcome;
 }

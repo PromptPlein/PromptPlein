@@ -705,6 +705,12 @@ export interface ChatMessage {
   /** De gebruiker heeft het antwoord met de stop-knop afgebroken. */
   stopped?: boolean;
   /**
+   * Het antwoord is niet af: het brak af op het uitvoerbudget en ook het
+   * automatisch verderschrijven heeft het niet afgemaakt. "Ga verder" pakt het
+   * op vanaf de laatste letter.
+   */
+  incomplete?: boolean;
+  /**
    * De internetbronnen die dit antwoord heeft meegekregen, in de volgorde waarin
    * ze aan het model zijn voorgelegd: bron 1 in de tekst is hier het eerste
    * item. Alleen gevuld wanneer de gebruiker "Zoeken op internet" aan had staan

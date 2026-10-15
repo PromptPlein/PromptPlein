@@ -49,6 +49,13 @@ export interface ChatSendResult {
   aborted?: boolean;
   error?: string;
   /**
+   * Het antwoord brak af voordat het klaar was (uitvoerbudget op of verbinding
+   * weg) en er staat al tekst. Vraag het vervolg op met `continueFrom`.
+   */
+  incomplete?: boolean;
+  /** De tekst van deze aanroep precies zoals hij binnenkwam, niet bijgesneden. */
+  raw?: string;
+  /**
    * De internetbronnen die dit antwoord heeft meegekregen, in de volgorde
    * waarin het model ze zag. Alleen gevuld wanneer er is gezocht én er iets
    * gevonden is.
@@ -88,9 +95,24 @@ export async function sendChatMessage(args: {
    * de eventuele losse bijlagen van het gesprek zelf.
    */
   project?: ChatProjectContext | null;
+  /**
+   * Het antwoord tot nu toe: deze aanroep schrijft het af in plaats van een
+   * nieuw antwoord te beginnen. `onChunk` krijgt dan alleen het vervolg.
+   */
+  continueFrom?: string;
 }): Promise<ChatSendResult> {
-  const { messages, attachments, settings, onChunk, signal, kind, project, thinking, webSearch } =
-    args;
+  const {
+    messages,
+    attachments,
+    settings,
+    onChunk,
+    signal,
+    kind,
+    project,
+    thinking,
+    webSearch,
+    continueFrom,
+  } = args;
   // Een uitvoergesprek en een projectgesprek sluiten elkaar uit; staat er toch
   // allebei iets klaar, dan wint de uitvoering (dat is een expliciete handoff).
   const isExecution = kind === 'execution';
@@ -127,6 +149,7 @@ export async function sendChatMessage(args: {
         ...(isExecution ? { chatKind: 'execute' } : {}),
         ...(isProject ? { chatKind: 'project' } : {}),
         messages: messages.slice(-CHAT_WINDOW_MESSAGES),
+        ...(continueFrom ? { continueFrom } : {}),
         // Projectbronnen eerst, dan de losse bijlagen van dit ene gesprek. Ze
         // reizen door hetzelfde kanaal omdat het model ze op dezelfde manier
         // gebruikt; de volgorde zegt welke bron het meest gezaghebbend is.
@@ -164,17 +187,35 @@ export async function sendChatMessage(args: {
       },
     });
 
+    const raw = outcome.raw ?? outcome.text;
     if (outcome.aborted) {
-      return { text: outcome.text, provider: outcome.provider, sources, aborted: true };
+      return { text: outcome.text, raw, provider: outcome.provider, sources, aborted: true };
     }
     if (outcome.error) {
-      return { text: outcome.text, provider: outcome.provider, sources, error: outcome.error };
+      // Viel de provider weg nadat er al tekst stond, dan is dat begin
+      // bruikbaar en kan het vervolg alsnog worden opgevraagd.
+      return {
+        text: outcome.text,
+        raw,
+        provider: outcome.provider,
+        sources,
+        error: outcome.error,
+        ...(raw.trim() ? { incomplete: true } : {}),
+      };
     }
     const text = outcome.text.trim();
+    // Een vervolg zonder nieuwe tekst is geen fout: het antwoord was al af.
+    if (!text && continueFrom) return { text: '', raw: '', provider: outcome.provider };
     if (!text) {
       return { text: '', provider: outcome.provider, error: 'De AI-service gaf een leeg antwoord.' };
     }
-    return { text, provider: outcome.provider, sources };
+    return {
+      text,
+      raw,
+      provider: outcome.provider,
+      sources,
+      ...(outcome.incomplete ? { incomplete: true } : {}),
+    };
   } catch (err) {
     return { text: '', error: err instanceof Error ? err.message : 'De chat-aanroep is mislukt.' };
   }

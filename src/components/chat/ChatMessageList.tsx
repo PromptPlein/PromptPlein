@@ -1,7 +1,7 @@
 import { memo, useEffect, useRef } from 'react';
-import { AlertTriangle, Globe, Lightbulb, RotateCcw, Save, Wand2, X } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Globe, Lightbulb, RotateCcw, Save, Wand2, X } from 'lucide-react';
 import clsx from 'clsx';
-import RichText from '@/components/optimizer/RichText';
+import ChatAnswer from './ChatAnswer';
 import CopyMessageButton from './CopyMessageButton';
 import type { ChatMessage } from '@/types';
 
@@ -14,6 +14,7 @@ export default function ChatMessageList({
   streaming,
   phase,
   onRetry,
+  onContinue,
   onImprove,
   onSaveAsPrompt,
   nudgeMessageId,
@@ -28,6 +29,8 @@ export default function ChatMessageList({
    */
   phase?: string | null;
   onRetry: () => void;
+  /** "Ga verder": schrijf het laatste, afgebroken antwoord verder. */
+  onContinue?: () => void;
   /**
    * "Verbeter in generator" op eigen berichten (omgekeerde handoff). Niet
    * meegegeven (bijv. in de Testkamer — je bent daar al in de generator) =
@@ -69,6 +72,7 @@ export default function ChatMessageList({
           // null, zodat een fasewissel niet elke rij opnieuw laat renderen.
           phase={streaming && i === messages.length - 1 ? (phase ?? null) : null}
           onRetry={onRetry}
+          onContinue={onContinue}
           canRetry={!streaming && i === messages.length - 1}
           onImprove={onImprove}
           onSaveAsPrompt={onSaveAsPrompt}
@@ -85,6 +89,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
   isStreaming,
   phase,
   onRetry,
+  onContinue,
   canRetry,
   onImprove,
   onSaveAsPrompt,
@@ -95,6 +100,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
   isStreaming: boolean;
   phase?: string | null;
   onRetry: () => void;
+  onContinue?: () => void;
   canRetry: boolean;
   onImprove?: (text: string) => void;
   onSaveAsPrompt?: (text: string) => void;
@@ -185,7 +191,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
         )}
       >
         {message.content ? (
-          <RichText text={message.content} />
+          <ChatAnswer text={message.content} isStreaming={isStreaming} />
         ) : isStreaming ? (
           <span className="text-slate-400 dark:text-slate-500">
             {phase === 'searching' ? 'Aan het zoeken op internet…' : 'Aan het nadenken…'}
@@ -238,15 +244,39 @@ const ChatMessageRow = memo(function ChatMessageRow({
         <CopyMessageButton text={message.content} label="Kopieer antwoord" className="-ml-1.5" />
       )}
 
+      {/* Een lang antwoord gaat in meerdere rondes; tussen twee rondes is het
+          even stil en zonder uitleg lijkt het dan of de chat is gestopt. */}
+      {isStreaming && phase === 'continuing' && message.content && (
+        <p className="text-[11px] text-slate-400 dark:text-slate-500">
+          Lang antwoord, de AI schrijft verder…
+        </p>
+      )}
+
       {message.stopped && (
         <p className="text-[11px] text-slate-400 dark:text-slate-500">Gestopt door jou.</p>
+      )}
+
+      {/* Niet af: gestopt, of ook na het automatisch verderschrijven nog niet
+          klaar. "Ga verder" pakt het op vanaf de laatste letter, zonder dat je
+          het zelf hoeft te vragen. */}
+      {canRetry && onContinue && (message.incomplete || message.stopped) && message.content.trim() && (
+        <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+          {message.incomplete && !message.error && <span>Het antwoord is nog niet af.</span>}
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 font-medium text-rijksblauw-700 hover:underline dark:text-rijksblauw-200"
+            onClick={onContinue}
+          >
+            <ArrowRight size={12} /> Ga verder
+          </button>
+        </div>
       )}
 
       {message.error && (
         <div className="flex items-center gap-2 text-xs text-rijksrood dark:text-red-400">
           <AlertTriangle size={14} />
           <span>{message.error}</span>
-          {canRetry && (
+          {canRetry && !message.incomplete && (
             <button
               type="button"
               className="inline-flex items-center gap-1 font-medium text-rijksblauw-700 hover:underline dark:text-rijksblauw-200"

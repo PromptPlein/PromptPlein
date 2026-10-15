@@ -72,6 +72,12 @@ type Mode =
 interface ChatTurn {
   role: 'user' | 'assistant';
   content: string;
+  /**
+   * Alleen op een laatste assistant-beurt: dit is het begin van het antwoord
+   * zelf, en het model schrijft precies daar verder (Mistral `prefix: true`).
+   * Zo maakt de chat een antwoord af dat op het uitvoerbudget afbrak.
+   */
+  prefix?: boolean;
 }
 
 /** Aanvaardt zowel het klassieke losse bericht als een gespreksgeschiedenis. */
@@ -375,6 +381,13 @@ interface RequestBody {
    * mee (ruimere grenzen) en het plafond is eveneens het ruimere.
    */
   chatKind?: 'execute' | 'project';
+  /**
+   * 'chat': het antwoord tot nu toe, ongewijzigd. Aanwezig = dit is geen nieuwe
+   * beurt maar het vervolg van een antwoord dat afbrak (uitvoerbudget op, of de
+   * verbinding viel weg). Het model krijgt dezelfde geschiedenis en schrijft
+   * verder vanaf de laatste letter van deze tekst.
+   */
+  continueFrom?: string;
   /**
    * 'chat-optimize': de tekst die de gebruiker in het invoerveld van de chat
    * heeft getypt en in één klik scherper wil hebben. Server-side nogmaals
@@ -2242,6 +2255,15 @@ const MAX_REFINE_TEST_ANSWER_CHARS = 8_000;
 const MAX_CHAT_TURNS = 16;
 /** Maximale totale omvang van de geschiedenis; de recentste beurten winnen. */
 const MAX_CHAT_HISTORY_CHARS = 24_000;
+/**
+ * Grens voor het antwoord tot nu toe bij een vervolgaanroep (continueFrom).
+ * Ruim genoeg voor een groot HTML-bestand (vijf rondes van zo'n 30.000 tekens).
+ * Het begin telt bij Mistral twee keer in het contextvenster van 256k: als
+ * invoer en als deel van max_tokens (zie runMistral, geschat op 2 tekens per
+ * token, dus hooguit 80.000). Met de projectbronnen (200.000 tekens) en de
+ * geschiedenis erbij blijft dat onder de grens.
+ */
+const MAX_CONTINUE_CHARS = 160_000;
 /** Maximum aantal bijlagen per gesprek. */
 const MAX_CHAT_ATTACHMENTS = 3;
 /** Maximale tekstomvang per bijlage (de client kapt op dezelfde grens af). */
@@ -5431,10 +5453,13 @@ function clampTemp(t?: number): number {
 const MODE_MAX_TOKENS: Record<Mode, number> = {
   generate: 4096,
   execute: 6144,
-  // Chat: een gespreksantwoord, geen document. Kort plafond = snelle beurten.
-  // Een uitvoergesprek (chatKind 'execute') krijgt in de handler het
-  // execute-plafond: daar is het antwoord juist wél een document.
-  chat: 2048,
+  // Chat: elk soort gesprek (gewoon, uitvoering, project). Vroeger 2048 voor
+  // een gewone beurt, maar wie in de chat om een document of een HTML-bestand
+  // vraagt, kreeg dan een antwoord dat halverwege stopte. Het plafond maakt een
+  // kort antwoord niet sneller, het model stopt vanzelf. Een antwoord dat er
+  // toch tegenaan loopt, schrijft de client in een volgende aanroep af
+  // (continueFrom); 8192 houdt elke ronde ruim binnen de 120 s van de waakhond.
+  chat: 8192,
   // Chat-optimize: één herschreven chatbericht, hooguit een paar alinea's.
   'chat-optimize': 1024,
   // Project-optimize: een volledige projectinstructie. Moet meebewegen met
@@ -5506,7 +5531,7 @@ function maxTokensFor(mode: Mode): number {
  * Extra uitvoerbudget zodra "denken" aan staat.
  *
  * Het denkspoor telt mee in hetzelfde `max_tokens` als het antwoord. Zonder deze
- * ruimte zou denken het antwoord juist korter maken: bij een chatbeurt (2048)
+ * ruimte zou denken het antwoord juist korter maken: bij een krap budget
  * gaat de redenering er eerst vanaf en breekt de tekst af waar het interessant
  * werd, precies bij de zware vraag waarvoor de gebruiker denken aanzette.
  */
@@ -5544,6 +5569,11 @@ interface ThinkingOptions {
  */
 interface OutputOptions {
   json?: boolean;
+  /**
+   * De finish_reason van de provider zodra het antwoord binnen is. 'length'
+   * betekent dat het uitvoerbudget op was en de tekst middenin afbrak.
+   */
+  onFinish?: (reason: string) => void;
 }
 
 /**
@@ -5773,6 +5803,7 @@ async function readSseDeltas(
   label: string,
   onDelta: DeltaHandler,
   onThinking?: DeltaHandler,
+  onFinish?: (reason: string) => void,
 ): Promise<string> {
   const reader = response.body?.getReader();
   if (!reader) throw new Error(`${label} gaf geen stream-body`);
@@ -5794,6 +5825,8 @@ async function readSseDeltas(
       if (!payload || payload === '[DONE]') continue;
       try {
         const json = JSON.parse(payload);
+        const finish = json?.choices?.[0]?.finish_reason;
+        if (typeof finish === 'string' && finish) onFinish?.(finish);
         const raw = json?.choices?.[0]?.delta;
         const { text: delta, thinking } = splitContent(raw?.content ?? '');
         // DeepSeek zet zijn redenering in een eigen veld in plaats van in
@@ -5830,6 +5863,7 @@ async function runOpenAiCompatible(args: {
   thinking?: ThinkingOptions;
   /** JSON-modus van de API; zie {@link OutputOptions}. */
   json?: boolean;
+  onFinish?: (reason: string) => void;
 }): Promise<string> {
   const {
     url,
@@ -5844,6 +5878,7 @@ async function runOpenAiCompatible(args: {
     onDelta,
     timeoutMs,
     thinking,
+    onFinish,
   } = args;
   // Kan tijdens de pogingen hieronder uitgaan: zie de 400-tak.
   let json = Boolean(args.json);
@@ -5870,7 +5905,17 @@ async function runOpenAiCompatible(args: {
           // hem niet herkent, weigert de hele aanroep.
           ...(thinking?.reasoningEffort ? { reasoning_effort: thinking.reasoningEffort } : {}),
           ...(json ? { response_format: { type: 'json_object' } } : {}),
-          messages: [{ role: 'system', content: system }, ...toChatTurns(userMessage)],
+          // `prefix` kent alleen Mistral; een andere provider krijgt de beurt
+          // zonder dat veld, want een onbekend veld kan de hele aanroep laten
+          // weigeren.
+          messages: [
+            { role: 'system', content: system },
+            ...toChatTurns(userMessage).map((t) =>
+              t.prefix && provider === 'mistral'
+                ? { role: t.role, content: t.content, prefix: true }
+                : { role: t.role, content: t.content },
+            ),
+          ],
         }),
         signal: dog.signal,
       });
@@ -5912,9 +5957,14 @@ async function runOpenAiCompatible(args: {
                   dog.ping();
                   thinking?.onThinking?.(chunk);
                 },
+                onFinish,
               )
             ).trim()
-          : splitContent((await response.json())?.choices?.[0]?.message?.content ?? '').text.trim();
+          : await (async () => {
+              const choice = (await response.json())?.choices?.[0];
+              if (typeof choice?.finish_reason === 'string') onFinish?.(choice.finish_reason);
+              return splitContent(choice?.message?.content ?? '').text.trim();
+            })();
 
         if (!text) throw new Error(`${label} gaf een lege respons`);
         return text;
@@ -5963,7 +6013,7 @@ async function runClaude(
     max_tokens: maxTokens,
     temperature,
     system,
-    messages: toChatTurns(userMessage),
+    messages: toChatTurns(userMessage).map((t) => ({ role: t.role, content: t.content })),
   };
 
   const dog = watchProvider('Claude', maxTokens, Boolean(onDelta), timeoutMs);
@@ -6032,6 +6082,7 @@ async function runDeepSeek(
     // (V4 Pro). Wel de denktekst opvangen, die komt in reasoning_content binnen.
     thinking: thinking ? { onThinking: thinking.onThinking } : undefined,
     json: output?.json,
+    onFinish: output?.onFinish,
   });
 }
 
@@ -6062,6 +6113,7 @@ async function runOpenAI(
     onDelta,
     timeoutMs,
     json: output?.json,
+    onFinish: output?.onFinish,
   });
 }
 
@@ -6083,6 +6135,16 @@ async function runMistral(
   // tot de grens van dit model (zie MISTRAL_OUTPUT_LIMIT); de ophoging voor
   // denken (THINKING_TOKEN_BUDGET) zit al in maxTokens en past daar ruim onder.
   const budget = mistralOutputLimit(model, Boolean(thinking?.reasoningEffort));
+  // Bij een vervolg (laatste beurt met `prefix`) telt Mistral dat begin mee in
+  // max_tokens: gemeten op 15 oktober 2026 gaf een begin van 1500 regels 43%
+  // minder nieuwe tekst, en een begin dat al af was gaf niets nieuws met
+  // finish_reason 'length'. Daarom komt de lengte van het begin bovenop het
+  // budget, ruim geschat op 2 tekens per token zodat het vervolg zijn volle
+  // budget houdt: 3 bleek te krap voor de cijferreeksen in SVG-paden.
+  // MAX_CONTINUE_CHARS houdt dit binnen het contextvenster.
+  const turns = toChatTurns(userMessage);
+  const last = turns[turns.length - 1];
+  const prefixTokens = last?.prefix ? Math.ceil(last.content.length / 2) : 0;
   return runOpenAiCompatible({
     url: 'https://api.mistral.ai/v1/chat/completions',
     apiKey,
@@ -6092,11 +6154,12 @@ async function runMistral(
     system,
     userMessage,
     temperature,
-    maxTokens: Math.min(maxTokens, budget),
+    maxTokens: Math.min(maxTokens, budget) + prefixTokens,
     onDelta,
     timeoutMs,
     thinking,
     json: output?.json,
+    onFinish: output?.onFinish,
   });
 }
 
@@ -6272,6 +6335,13 @@ function streamTextResponse(args: {
   review?: boolean;
   /** Melding die de client altijd te zien krijgt, bijv. dat zoeken niet mocht. */
   notice?: string;
+  /**
+   * Vervolg van een afgebroken antwoord: het begin dat als `prefix` meeging.
+   * Mistral zet dat begin volgens zijn eigen voorbeelden soms vóór het vervolg
+   * in de uitvoer; dan knippen we het eraf, zodat de client alleen nieuwe tekst
+   * krijgt.
+   */
+  echoPrefix?: string;
 }): Response {
   const {
     order,
@@ -6288,6 +6358,7 @@ function streamTextResponse(args: {
     searchQueries,
     review,
     notice,
+    echoPrefix,
   } = args;
   // Bewust niet meegedestructureerd: staat zoeken aan, dan komen de gevonden
   // bronnen hier straks onder te staan.
@@ -6414,6 +6485,25 @@ function streamTextResponse(args: {
         attempted.push(candidate);
         send({ type: 'models', providers: [...attempted] });
 
+        // 'length' = het uitvoerbudget was op en de tekst brak middenin af.
+        let finishReason = '';
+
+        // Herhaalt het model het begin (echoPrefix), dan houden we de tekst vast
+        // tot vaststaat of het een herhaling is, en sturen alleen wat erna komt.
+        let echoBuffer = '';
+        let echoOpen = Boolean(echoPrefix);
+        const stripEcho = (chunk: string): string => {
+          if (!echoOpen || !echoPrefix) return chunk;
+          echoBuffer += chunk;
+          if (echoBuffer.length < echoPrefix.length && echoPrefix.startsWith(echoBuffer)) return '';
+          echoOpen = false;
+          const out = echoBuffer.startsWith(echoPrefix)
+            ? echoBuffer.slice(echoPrefix.length)
+            : echoBuffer;
+          echoBuffer = '';
+          return out;
+        };
+
         const choice = resolveThinking(
           candidate,
           resolveModel(candidate, preferredProvider, preferredModel),
@@ -6427,12 +6517,14 @@ function streamTextResponse(args: {
             temperature,
             choice.model,
             choice.thinking ? maxTokens + THINKING_TOKEN_BUDGET : maxTokens,
-            (chunk) => {
+            (rawChunk) => {
               if (!announced) {
                 announced = true;
                 send({ type: 'meta', provider: candidate });
                 send({ type: 'phase', phase: 'writing' });
               }
+              const chunk = stripEcho(rawChunk);
+              if (!chunk) return;
               if (state === 'unclear') return;
               if (state === 'pending') {
                 held += chunk;
@@ -6463,6 +6555,11 @@ function streamTextResponse(args: {
                   },
                 }
               : undefined,
+            {
+              onFinish: (reason) => {
+                finishReason = reason;
+              },
+            },
           );
 
           // Definitieve toets op de volledige tekst — dezelfde als in de
@@ -6479,15 +6576,32 @@ function streamTextResponse(args: {
             send({ type: 'delta', text: held });
             emitted = true;
           }
+          // Hield de echo-controle nog tekst vast (het vervolg was korter dan
+          // het begin), dan was het geen herhaling.
+          if (echoBuffer) {
+            send({ type: 'delta', text: echoBuffer });
+            emitted = true;
+            echoBuffer = '';
+          }
 
-          let final = raw;
+          let final =
+            echoPrefix && raw.startsWith(echoPrefix) ? raw.slice(echoPrefix.length) : raw;
+          let reviewed = false;
           if (review && typeof userMessage === 'string' && !closed) {
             final = await runReview(candidate, choice, raw);
+            reviewed = final !== raw;
           }
+          // Afgebroken op het budget: de client vraagt dan zelf het vervolg op
+          // (zie continueFrom), in een nieuwe aanroep met een eigen tijdslimiet.
+          // Na een tweede ronde geldt dat niet: die heeft de tekst vervangen.
+          const incomplete =
+            !reviewed && (finishReason === 'length' || finishReason === 'model_length');
+          if (incomplete) console.warn(`${label}: antwoord brak af op het uitvoerbudget (${maxTokens})`);
           send({
             type: 'done',
             text: final,
             provider: candidate,
+            ...(incomplete ? { incomplete: true } : {}),
             ...(sourceHits.length > 0 ? { usedSources: usedSourceUrls(final, sourceHits) } : {}),
           });
           close();
@@ -9434,7 +9548,8 @@ Deno.serve(async (req: Request) => {
         attachments,
         isExecution ? 'execute' : isProject ? 'project' : 'chat',
       );
-      const chatMaxTokens = isExecution || isProject ? MODE_MAX_TOKENS.execute : maxTokens;
+      // Elk soort chatgesprek krijgt hetzelfde plafond; zie MODE_MAX_TOKENS.chat.
+      const chatMaxTokens = maxTokens;
       // Iets hogere temperatuur: dit is een gesprek, geen JSON.
       const chatTemp = clampTemp(body.temperature ?? 0.5);
 
@@ -9451,6 +9566,38 @@ Deno.serve(async (req: Request) => {
               instruction: (body.webSearchInstruction ?? '').trim(),
             }
           : undefined;
+
+      // Vervolg van een afgebroken antwoord: dezelfde geschiedenis met het
+      // antwoord tot nu toe als begin van de beurt, en het model schrijft daar
+      // verder. Geen zoekronde en geen denken: die hoorden bij het begin van het
+      // antwoord, en het vervolg moet aansluiten op wat er al staat.
+      const continueFrom = typeof body.continueFrom === 'string' ? body.continueFrom : '';
+      if (continueFrom && body.stream) {
+        if (continueFrom.length > MAX_CONTINUE_CHARS) {
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: 'Dit antwoord is te lang geworden om nog verder te schrijven.',
+            }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          );
+        }
+        // Alleen Mistral kent het verderschrijven vanaf een begin (`prefix`).
+        const continueOrder = order.filter((p) => p === 'mistral');
+        return streamTextResponse({
+          order: continueOrder,
+          userMessage: [...turns, { role: 'assistant', content: continueFrom, prefix: true }],
+          system,
+          temperature: chatTemp,
+          maxTokens: chatMaxTokens,
+          preferredProvider: body.preferredProvider,
+          preferredModel: body.preferredModel,
+          label: `${isExecution ? 'chat-exec' : isProject ? 'chat-project' : 'chat'}-vervolg`,
+          gate: false,
+          thinking: false,
+          echoPrefix: continueFrom,
+        });
+      }
 
       // Streamend (het normale pad): de gebruiker leest mee terwijl het model
       // schrijft. Geen clarity-gate — in een gesprek is doorvragen de gate.

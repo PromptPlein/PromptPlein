@@ -21,6 +21,7 @@ import {
   saveConversation,
   titleFromFirstMessage,
 } from '@/lib/chatStorage';
+import { splitAnswer } from '@/lib/chatFiles';
 import { downloadText } from '@/lib/download';
 import { sendChatMessage } from '@/services/chatService';
 import { loadProjectContext } from '@/services/chatProjectService';
@@ -32,12 +33,22 @@ import type {
   ChatIndexEntry,
   ChatMessage,
   ChatProjectContext,
+  ChatSource,
 } from '@/types';
 
 /** Maximum aantal bijlagen per gesprek (zelfde grens als server-side). */
 export const MAX_CHAT_ATTACHMENTS = 3;
 /** Maximale tekstomvang per bijlage (zelfde grens als server-side). */
 export const MAX_CHAT_ATTACHMENT_CHARS = 50_000;
+/**
+ * Zo vaak schrijft de chat een afgebroken antwoord vanzelf verder. Elke ronde
+ * is hooguit 8192 tokens (MODE_MAX_TOKENS.chat in de edge function), dus vijf
+ * rondes dekken zo'n 40.000 tokens: ruim voor een groot HTML-bestand, en binnen
+ * MAX_CONTINUE_CHARS van de edge function. Daarna beslist de gebruiker met
+ * "Ga verder", zodat een model dat in een herhaling blijft hangen niet
+ * eindeloos doorloopt.
+ */
+const MAX_AUTO_CONTINUE = 4;
 
 export interface ChatControllerOptions {
   /**
@@ -67,7 +78,8 @@ export interface ChatController {
   streaming: boolean;
   /**
    * Waar de lopende beurt is: 'searching' (op internet aan het zoeken),
-   * 'drafting', 'thinking' of 'writing'. Null zodra er niets loopt. Hiermee kan
+   * 'drafting', 'thinking', 'writing' of 'continuing' (een lang antwoord wordt
+   * in een volgende ronde verder geschreven). Null zodra er niets loopt. Hiermee kan
    * de berichtenlijst de stilte vóór de eerste regel verklaren.
    */
   phase: string | null;
@@ -78,6 +90,11 @@ export interface ChatController {
   stop: () => void;
   /** Probeer het laatste, mislukte antwoord opnieuw. */
   retry: () => void;
+  /**
+   * Schrijf het laatste antwoord verder vanaf waar het ophield: na de stop-knop,
+   * of als ook het automatisch verderschrijven het niet heeft afgemaakt.
+   */
+  continueLast: () => void;
   /**
    * Start een vers, leeg gesprek. Met `kind: 'execution'` draait dat gesprek
    * onder de neutrale uitvoer-systeemprompt (de gekopieerde prompt uit de
@@ -208,6 +225,189 @@ export default function useChatController(
     [settings],
   );
 
+  /**
+   * Streamt het antwoord in `assistantId` en schrijft het automatisch verder
+   * zolang het afbreekt voordat het klaar is: een lang document of een
+   * HTML-bestand past niet in één aanroep (uitvoerbudget en tijdslimiet van de
+   * edge function). Elke ronde is een nieuwe aanroep die verderschrijft vanaf de
+   * laatste letter; de gebruiker ziet één doorlopend antwoord.
+   *
+   * `startText` is wat er al staat ("Ga verder" op een afgebroken antwoord);
+   * leeg = een nieuw antwoord.
+   */
+  const streamAnswer = useCallback(
+    async (
+      conv: ChatConversation,
+      assistantId: string,
+      history: { role: 'user' | 'assistant'; content: string }[],
+      startText: string,
+    ) => {
+      if (!settings) return;
+      streamingRef.current = true;
+      setStreaming(true);
+      setPhase(startText ? 'continuing' : webSearch ? 'searching' : null);
+
+      // Hoort dit gesprek bij een project, dan halen we de projectinstructie en de
+      // bronbestanden erbij (gecachet, dus normaal gratis). Lukt dat niet — het
+      // project is verwijderd of de backend antwoordt niet — dan gaat de beurt
+      // gewoon door als gewone chat. Een mislukte projectophaling mag een
+      // gebruiker nooit zijn bericht kosten.
+      let project: ChatProjectContext | null = null;
+      if (conv.projectId) {
+        try {
+          const result = await loadProjectContext(conv.projectId);
+          project = result?.context ?? null;
+          if (result?.skipped.length && !startText) {
+            // Stil afkappen zou de gebruiker laten denken dat het model alles
+            // gelezen heeft; daarom benoemen we wat er buiten het budget viel.
+            toast(
+              `Te veel bronmateriaal: ${result.skipped.join(', ')} gaat niet mee in dit antwoord.`,
+              { icon: '✂️' },
+            );
+          }
+        } catch {
+          /* project onbereikbaar — de beurt draait verder als gewone chat */
+        }
+      }
+
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      /** Zet de eindstand of een tussenstand van het antwoord in het gesprek. */
+      const commit = (patch: Partial<ChatMessage>, save: boolean) => {
+        const cur = conversationRef.current;
+        if (!cur || cur.id !== conv.id) return;
+        const messages = cur.messages.map((m) => {
+          if (m.id !== assistantId) return m;
+          const next: ChatMessage = { ...m, ...patch };
+          // Vlaggen van een eerdere ronde gelden niet meer als deze ronde ze niet zet.
+          if (!('error' in patch)) delete next.error;
+          if (!('stopped' in patch)) delete next.stopped;
+          if (!('incomplete' in patch)) delete next.incomplete;
+          return next;
+        });
+        const next = { ...cur, messages, updatedAt: new Date().toISOString() };
+        update(next);
+        if (save) persistNow(next);
+      };
+
+      // De tekst van alle rondes samen, precies zoals hij binnenkwam.
+      let full = startText;
+      let sources: ChatSource[] | undefined;
+      let provider: AiProviderResult | undefined;
+      let model: string | undefined;
+
+      for (let round = 0; ; round++) {
+        const base = full;
+        // rAF-gethrottlede tussenstanden: maximaal één render per frame, en
+        // alleen het laatste bericht wijzigt (de rijen zelf zijn gememoïseerd).
+        let pendingText: string | null = null;
+        let rafId = 0;
+        const flushPending = () => {
+          rafId = 0;
+          if (pendingText === null) return;
+          const value = pendingText;
+          pendingText = null;
+          setConversation((cur) =>
+            cur && cur.id === conv.id
+              ? {
+                  ...cur,
+                  messages: cur.messages.map((m) =>
+                    m.id === assistantId ? { ...m, content: value } : m,
+                  ),
+                }
+              : cur,
+          );
+        };
+
+        const continuing = Boolean(base);
+        const res = await sendChatMessage({
+          messages: history,
+          attachments: conv.attachments.map((a) => ({ name: a.name, text: a.text })),
+          settings,
+          // Het gesprek zelf bepaalt de modus: een uitvoergesprek blijft dat ook
+          // voor vervolgbeurten, óók na een refresh (kind overleeft de opslag).
+          kind: conv.kind,
+          project,
+          // Denken en zoeken horen bij het begin van het antwoord; het vervolg
+          // sluit alleen aan op wat er al staat.
+          thinking: continuing ? false : thinking,
+          webSearch: continuing ? false : webSearch,
+          continueFrom: continuing ? base : undefined,
+          onChunk: (textSoFar) => {
+            pendingText = base + textSoFar;
+            if (!rafId) rafId = requestAnimationFrame(flushPending);
+          },
+          // Alleen de fase: die verklaart de stilte vóór de eerste regel (zoeken
+          // duurt een paar seconden). De bronnen zelf komen via het resultaat
+          // hieronder mee, want daar horen ze bij het bericht.
+          onStatus: (status) => {
+            if (status.phase) setPhase(continuing ? 'continuing' : status.phase);
+          },
+          signal: controller.signal,
+        });
+        if (rafId) cancelAnimationFrame(rafId);
+
+        // Vervolgrondes plakken de onbewerkte tekst aan; een bijgeknipte
+        // regelovergang zou twee regels code aan elkaar zetten.
+        const piece =
+          continuing || res.incomplete || res.aborted ? (res.raw ?? res.text) : res.text;
+        full = continuing ? base + piece : piece;
+        if (res.provider) {
+          provider = res.provider as AiProviderResult;
+          model = modelForProvider(res.provider);
+        }
+        // Lege bronnenlijst = er is gezocht maar niets gevonden; dan hoort er
+        // ook geen kopje "Bronnen" onder het antwoord te staan.
+        if (!continuing && res.sources?.length) sources = res.sources;
+        const fixed = { content: full, provider, model, ...(sources ? { sources } : {}) };
+
+        if (res.aborted) {
+          commit({ ...fixed, stopped: true }, true);
+          break;
+        }
+        const madeProgress = Boolean(piece.trim());
+        // Een vervolg zonder nieuwe tekst: het model had niets meer toe te
+        // voegen. Mistral meldt dan soms toch nog 'length', omdat het
+        // meegegeven begin meetelt in het budget. Staat er geen codeblok meer
+        // open, dan is het antwoord af; anders blijft "Ga verder" staan.
+        if (continuing && !madeProgress && !res.error) {
+          const lastSegment = splitAnswer(full).at(-1);
+          const openBlock = lastSegment?.kind === 'code' && !lastSegment.closed;
+          commit(
+            openBlock ? { ...fixed, incomplete: true } : { ...fixed, content: full.trimEnd() },
+            true,
+          );
+          break;
+        }
+        if (res.incomplete && madeProgress && round < MAX_AUTO_CONTINUE) {
+          // Tussenstand bewaren: een refresh halverwege houdt dan alles wat er
+          // al staat, en "Ga verder" pakt het daarna op.
+          commit({ ...fixed, incomplete: true }, true);
+          setPhase('continuing');
+          continue;
+        }
+        if (res.error) {
+          // Staat er al tekst, dan blijft die staan en is het antwoord "niet af"
+          // in plaats van mislukt: "Ga verder" maakt het dan alsnog af.
+          commit(
+            full.trim() ? { ...fixed, error: res.error, incomplete: true } : { ...fixed, error: res.error },
+            true,
+          );
+          break;
+        }
+        commit(res.incomplete ? { ...fixed, incomplete: true } : { ...fixed, content: full.trimEnd() }, true);
+        break;
+      }
+
+      abortRef.current = null;
+      streamingRef.current = false;
+      setStreaming(false);
+      setPhase(null);
+    },
+    [settings, thinking, webSearch, update, persistNow, modelForProvider],
+  );
+
   const send = useCallback(
     async (rawText: string) => {
       const text = rawText.trim();
@@ -224,9 +424,6 @@ export default function useChatController(
         messages: [...base.messages, userMsg, assistantMsg],
       };
       update(updated);
-      streamingRef.current = true;
-      setStreaming(true);
-      setPhase(webSearch ? 'searching' : null);
 
       // De vraag meteen bewaren (zonder de nog lege assistant-placeholder),
       // zodat een refresh midden in de stream het gesprek niet kwijtraakt.
@@ -237,108 +434,24 @@ export default function useChatController(
         .filter((m) => m.id !== assistantMsg.id && !m.error && m.content.trim())
         .map((m) => ({ role: m.role, content: m.content }));
 
-      // Hoort dit gesprek bij een project, dan halen we de projectinstructie en de
-      // bronbestanden erbij (gecachet, dus normaal gratis). Lukt dat niet — het
-      // project is verwijderd of de backend antwoordt niet — dan gaat de beurt
-      // gewoon door als gewone chat. Een mislukte projectophaling mag een
-      // gebruiker nooit zijn bericht kosten.
-      let project: ChatProjectContext | null = null;
-      if (updated.projectId) {
-        try {
-          const result = await loadProjectContext(updated.projectId);
-          project = result?.context ?? null;
-          if (result?.skipped.length) {
-            // Stil afkappen zou de gebruiker laten denken dat het model alles
-            // gelezen heeft; daarom benoemen we wat er buiten het budget viel.
-            toast(
-              `Te veel bronmateriaal: ${result.skipped.join(', ')} gaat niet mee in dit antwoord.`,
-              { icon: '✂️' },
-            );
-          }
-        } catch {
-          /* project onbereikbaar — de beurt draait verder als gewone chat */
-        }
-      }
-
-      const controller = new AbortController();
-      abortRef.current = controller;
-
-      // rAF-gethrottlede tussenstanden: maximaal één render per frame, en
-      // alleen het laatste bericht wijzigt (de rijen zelf zijn gememoïseerd).
-      let pendingText: string | null = null;
-      let rafId = 0;
-      const flushPending = () => {
-        rafId = 0;
-        if (pendingText === null) return;
-        const value = pendingText;
-        pendingText = null;
-        setConversation((cur) =>
-          cur && cur.id === updated.id
-            ? {
-                ...cur,
-                messages: cur.messages.map((m) =>
-                  m.id === assistantMsg.id ? { ...m, content: value } : m,
-                ),
-              }
-            : cur,
-        );
-      };
-
-      const res = await sendChatMessage({
-        messages: history,
-        attachments: updated.attachments.map((a) => ({ name: a.name, text: a.text })),
-        settings,
-        // Het gesprek zelf bepaalt de modus: een uitvoergesprek blijft dat ook
-        // voor vervolgbeurten, óók na een refresh (kind overleeft de opslag).
-        kind: updated.kind,
-        project,
-        thinking,
-        webSearch,
-        onChunk: (textSoFar) => {
-          pendingText = textSoFar;
-          if (!rafId) rafId = requestAnimationFrame(flushPending);
-        },
-        // Alleen de fase: die verklaart de stilte vóór de eerste regel (zoeken
-        // duurt een paar seconden). De bronnen zelf komen via het resultaat
-        // hieronder mee, want daar horen ze bij het bericht.
-        onStatus: (status) => {
-          if (status.phase) setPhase(status.phase);
-        },
-        signal: controller.signal,
-      });
-
-      if (rafId) cancelAnimationFrame(rafId);
-      abortRef.current = null;
-
-      // Eindstand samenstellen op basis van het (leidende) service-resultaat.
-      const provider = res.provider as AiProviderResult | undefined;
-      const model = modelForProvider(res.provider);
-      const cur = conversationRef.current;
-      if (cur && cur.id === updated.id) {
-        const messages = cur.messages.map((m) => {
-          if (m.id !== assistantMsg.id) return m;
-          // Lege bronnenlijst = er is gezocht maar niets gevonden; dan hoort er
-          // ook geen kopje "Bronnen" onder het antwoord te staan.
-          const sources = res.sources?.length ? { sources: res.sources } : {};
-          if (res.aborted) {
-            return { ...m, content: res.text, provider, model, ...sources, stopped: true };
-          }
-          if (res.error) {
-            return { ...m, content: res.text, provider, model, ...sources, error: res.error };
-          }
-          return { ...m, content: res.text, provider, model, ...sources };
-        });
-        const next = { ...cur, messages, updatedAt: new Date().toISOString() };
-        update(next);
-        persistNow(next);
-      }
-
-      streamingRef.current = false;
-      setStreaming(false);
-      setPhase(null);
+      await streamAnswer(updated, assistantMsg.id, history, '');
     },
-    [settings, userId, defaultKind, thinking, webSearch, update, persistNow, modelForProvider],
+    [settings, defaultKind, update, persistNow, streamAnswer],
   );
+
+  const continueLast = useCallback(() => {
+    const cur = conversationRef.current;
+    if (!cur || streamingRef.current) return;
+    const last = cur.messages[cur.messages.length - 1];
+    if (!last || last.role !== 'assistant' || !last.content.trim()) return;
+    if (!last.incomplete && !last.stopped) return;
+    // Dezelfde geschiedenis als bij het begin van dit antwoord: alles ervoor.
+    const history = cur.messages
+      .slice(0, -1)
+      .filter((m) => !m.error && m.content.trim())
+      .map((m) => ({ role: m.role, content: m.content }));
+    void streamAnswer(cur, last.id, history, last.content);
+  }, [streamAnswer]);
 
   const sendInNewConversation = useCallback(
     (text: string, kind?: ChatConversation['kind']) => {
@@ -572,6 +685,7 @@ export default function useChatController(
     sendInNewConversation,
     stop,
     retry,
+    continueLast,
     newConversation,
     newConversationInProject,
     attachProject,

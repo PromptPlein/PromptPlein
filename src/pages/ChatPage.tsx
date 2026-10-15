@@ -595,6 +595,11 @@ function ChatPageInner() {
                         ? () => requireLogin('Log in om verder te gaan in deze projectchat.')
                         : controller.retry
                     }
+                    onContinue={
+                      projectNeedsLogin
+                        ? () => requireLogin('Log in om verder te gaan in deze projectchat.')
+                        : controller.continueLast
+                    }
                     onImprove={handleImprove}
                     onSaveAsPrompt={handleSaveAsPrompt}
                     nudgeMessageId={nudgeMessageId}
