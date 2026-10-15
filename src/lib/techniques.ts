@@ -159,6 +159,24 @@ export function fillSjabloon(template: string, inhoud: string): string {
   return template.replace(INHOUD_PLACEHOLDER, () => inhoud.trim()).trim();
 }
 
+/**
+ * De context van een sjabloon als één tekst: de antwoorden op de vragen van het
+ * sjabloon (zie SjabloonVragen), elk onder zijn vraag, plus wat de gebruiker er
+ * los bij schreef. Die tekst gaat naar het voor-invullen en het schrijven, net
+ * als de vrije context bij een gewoon framework. Leeg als er niets is ingevuld.
+ */
+export function sjabloonContextTekst(
+  t: Pick<Technique, 'follow_up_questions'>,
+  antwoorden: Record<string, string>,
+  overig: string,
+): string {
+  const delen = t.follow_up_questions
+    .filter((q) => antwoorden[q.id]?.trim())
+    .map((q) => `${q.label}\n${antwoorden[q.id].trim()}`);
+  if (overig.trim()) delen.push(`OVERIGE CONTEXT\n${overig.trim()}`);
+  return delen.join('\n\n');
+}
+
 /** De plaatshouders die nog in de inhoud staan, zoals [datum halte 2]. */
 export function openPlaatshouders(text: string): string[] {
   const found = text.match(/\[[^\]\n]{2,80}\]/g) ?? [];

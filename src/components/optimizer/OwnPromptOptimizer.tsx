@@ -31,6 +31,7 @@ import { useReferenceData } from '@/context/ReferenceDataContext';
 import HoverPreview from '@/components/common/HoverPreview';
 import VerantwoordGebruikHint from '@/components/optimizer/VerantwoordGebruikHint';
 import PrefillSources from '@/components/optimizer/PrefillSources';
+import SjabloonVragen from '@/components/optimizer/SjabloonVragen';
 import { PROMPT_CATEGORIES } from '@/data/promptCategories';
 import { PROMPT_EXAMPLES } from '@/data/promptExamples';
 import {
@@ -40,6 +41,7 @@ import {
   isContextPrompt,
   isSjabloon,
   localFrameworkGuess,
+  sjabloonContextTekst,
   type PromptKind,
 } from '@/lib/techniques';
 import { usePersistentDraft } from '@/lib/usePersistentDraft';
@@ -221,6 +223,16 @@ export default function OwnPromptOptimizer({
   // De geplakte prompt wordt in localStorage bewaard, zodat hij niet verloren
   // gaat bij een fout of herlaadactie. "Opschonen" maakt hem (en de rest) leeg.
   const [ownPrompt, setOwnPrompt, clearOwnPromptDraft] = usePersistentDraft('ownPromptFlow');
+  // Bij Sjabloon: de antwoorden op de vragen van het sjabloon, net als de prompt
+  // bewaard zodat een herlaadactie ze niet wist (als JSON in één concept).
+  const [sjabloonDraft, setSjabloonDraft, clearSjabloonDraft] =
+    usePersistentDraft('sjabloonAntwoorden');
+  const sjabloonAntwoorden = parseAntwoorden(sjabloonDraft);
+  // Wat er als context naar de AI gaat. Bij een sjabloon de antwoorden op de
+  // vragen, elk onder zijn vraag, plus het vrije vak eronder.
+  const promptText = sjabloon
+    ? sjabloonContextTekst(sjabloon, sjabloonAntwoorden, ownPrompt)
+    : ownPrompt.trim();
   const [showExamples, setShowExamples] = useState(false);
   // Vraagstuk-specifiek fit-oordeel per framework (past het, waarom (niet), en
   // wat er nog bij moet), voor de "kies een ander framework"-lijst. Per
@@ -322,6 +334,7 @@ export default function OwnPromptOptimizer({
   /** "Opschonen": wis de geplakte prompt (ook uit localStorage) én alle voortgang. */
   function handleClearAll() {
     clearOwnPromptDraft();
+    clearSjabloonDraft();
     resetDownstream();
     setShowExamples(false);
     toast.success('Alles opgeschoond. Je begint met een schone lei.');
@@ -369,8 +382,8 @@ export default function OwnPromptOptimizer({
 
   /** Stap 1: laat de AI op basis van de geplakte prompt het beste framework kiezen. */
   async function handleRecommend() {
-    if (!ownPrompt.trim()) {
-      toast.error('Plak eerst je eigen prompt.');
+    if (!promptText) {
+      toast.error(sjabloon ? 'Beantwoord eerst een paar vragen.' : 'Plak eerst je eigen prompt.');
       return;
     }
     if (kind === 'skill') {
@@ -526,7 +539,7 @@ export default function OwnPromptOptimizer({
     });
     try {
       const res = await prefillFields({
-        ownPrompt: ownPrompt.trim(),
+        ownPrompt: promptText,
         technique: chosen,
         thinking,
         webSearch,
@@ -584,7 +597,7 @@ export default function OwnPromptOptimizer({
     try {
       const res = await generatePrompt({
         technique,
-        promptContent: ownPrompt.trim() || '[BESCHRIJF HIER WAT JE WILT BEREIKEN]',
+        promptContent: promptText || '[BESCHRIJF HIER WAT JE WILT BEREIKEN]',
         followUpAnswers: answers,
         preferredProvider: settings.provider,
         preferredModel: settings.model,
@@ -670,7 +683,7 @@ export default function OwnPromptOptimizer({
             <span>Voorbeelden</span>
           </button>
           {/* Opschonen — alleen tonen als er iets te wissen valt. */}
-          {ownPrompt.trim() && (
+          {(ownPrompt.trim() || promptText) && (
             <button
               type="button"
               onClick={handleClearAll}
@@ -877,6 +890,7 @@ export default function OwnPromptOptimizer({
                         onClick={() => {
                           if (active) return;
                           setSjabloonId(t.id);
+                          clearSjabloonDraft();
                           resetDownstream();
                         }}
                         disabled={recommending || prefilling}
@@ -914,12 +928,39 @@ export default function OwnPromptOptimizer({
             </div>
           )}
 
+          {/* Sjabloon: eerst de vragen van het sjabloon, elk met een eigen vak.
+              Het tekstvak eronder is dan voor wat er verder nog bij hoort. */}
+          {sjabloon && (
+            <div className="border-b border-slate-200 bg-white px-3.5 py-4 dark:border-slate-700 dark:bg-slate-800">
+              <p className="mb-1 text-sm font-semibold text-slate-800 dark:text-slate-100">
+                Eerst de context
+              </p>
+              <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
+                Sta bij elke vraag even stil en schrijf op wat je al weet. Met Velden invullen zet
+                de AI je antwoorden in de velden van het sjabloon, laat open wat je niet gaf en
+                vraagt daar naar.
+              </p>
+              <SjabloonVragen
+                technique={sjabloon}
+                antwoorden={sjabloonAntwoorden}
+                onChange={(next) => {
+                  setSjabloonDraft(JSON.stringify(next));
+                  resetDownstream(); // andere context = oude voor-invulling vervalt
+                }}
+                disabled={recommending || prefilling}
+              />
+            </div>
+          )}
+
           <textarea
             id="own-prompt-input"
             className="block min-h-[120px] w-full resize-y border-0 bg-white px-3.5 py-3 font-mono text-[13px] text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-0 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
             value={ownPrompt}
+            aria-label={sjabloon ? 'Nog iets wat de AI moet weten? (optioneel)' : undefined}
             placeholder={
-              kindOption
+              sjabloon
+                ? 'Nog iets wat de AI moet weten? (optioneel) Bijvoorbeeld aantekeningen uit een overleg of een eerdere planning.'
+                : kindOption
                 ? (!variantOn && kindOption.placeholderOff) || kindOption.placeholder
                 : 'Plak hier de prompt of stel hier je vraag…'
             }
@@ -950,7 +991,7 @@ export default function OwnPromptOptimizer({
               type="button"
               className="opl-btn-primary"
               onClick={() => void handleRecommend()}
-              disabled={recommending || prefilling || !ownPrompt.trim() || (kind === 'template' && !sjabloon)}
+              disabled={recommending || prefilling || !promptText || (kind === 'template' && !sjabloon)}
             >
               {recommending ? (
                 <>
@@ -977,7 +1018,7 @@ export default function OwnPromptOptimizer({
             ? kindOption.hint
             : 'De AI zoekt het best passende framework voor een tekst, code, dashboard of agent. Wil je een skill maken of een vast sjabloon invullen, kies dan Skill of Sjabloon.'}
         </p>
-        <VerantwoordGebruikHint text={ownPrompt} />
+        <VerantwoordGebruikHint text={promptText} />
       </div>
         </div>
       </div>
@@ -1507,4 +1548,20 @@ export default function OwnPromptOptimizer({
       )}
     </div>
   );
+}
+
+/** De bewaarde antwoorden van een sjabloon; leeg of kapot concept = geen antwoorden. */
+function parseAntwoorden(draft: string): Record<string, string> {
+  if (!draft) return {};
+  try {
+    const parsed = JSON.parse(draft) as unknown;
+    if (!parsed || typeof parsed !== 'object') return {};
+    return Object.fromEntries(
+      Object.entries(parsed as Record<string, unknown>).filter(
+        (e): e is [string, string] => typeof e[1] === 'string',
+      ),
+    );
+  } catch {
+    return {};
+  }
 }

@@ -24,6 +24,7 @@ import RubricBuilder from '@/components/optimizer/RubricBuilder';
 import SkillBuilder from '@/components/optimizer/SkillBuilder';
 import DocumentUpload from '@/components/optimizer/DocumentUpload';
 import InterviewFlow from '@/components/optimizer/InterviewFlow';
+import SjabloonVragen from '@/components/optimizer/SjabloonVragen';
 import OptimizableTextarea from '@/components/common/OptimizableTextarea';
 import OptimizingLoader from '@/components/optimizer/OptimizingLoader';
 import ThinkingToggle from '@/components/common/ThinkingToggle';
@@ -48,7 +49,9 @@ import { detectPii, detectBlockedTopics, type GuardrailFinding } from '@/service
 import {
   contextExample,
   isContextPrompt,
+  isSjabloon,
   isSkillCreator,
+  sjabloonContextTekst,
   structureFormat,
   techniqueStarter,
 } from '@/lib/techniques';
@@ -112,6 +115,9 @@ export default function TechniquesPage() {
   // Waar het over gaat: optioneel startpunt. Is dit gevuld, dan vult de AI de
   // velden van de gekozen techniek alvast voor en voedt het het interview.
   const [context, setContext] = useState('');
+  // Bij een sjabloon komt de context uit de vragen van het sjabloon (zie
+  // SjabloonVragen); `context` is dan het vak voor wat er verder nog bij hoort.
+  const [sjabloonAntwoorden, setSjabloonAntwoorden] = useState<Record<string, string>>({});
   const [techniqueId, setTechniqueId] = useState('');
   const [answers, setAnswers] = useState<Record<string, string>>({});
   // Geserialiseerde output van een gespecialiseerde bouwer (Persona/Few-Shot/
@@ -168,6 +174,13 @@ export default function TechniquesPage() {
   }, []);
 
   const technique = techniques.find((t) => t.id === techniqueId) ?? null;
+  const sjabloonMode = Boolean(technique && isSjabloon(technique));
+  // De context zoals hij naar het voor-invullen en het bouwen gaat. Bij een
+  // sjabloon: de antwoorden op de vragen, elk onder zijn vraag, plus het losse vak.
+  const contextText =
+    technique && sjabloonMode
+      ? sjabloonContextTekst(technique, sjabloonAntwoorden, context)
+      : context.trim();
 
   /**
    * Kies een techniek: antwoorden van de vorige techniek vervallen en het
@@ -184,6 +197,7 @@ export default function TechniquesPage() {
     setFieldMeta({});
     setBuilderText('');
     setSkillData(null);
+    setSjabloonAntwoorden({});
     setUnclearReason(null);
     // Nieuwe techniek = het contextveld weer open (zie setEditingContext hierboven).
     setEditingContext(true);
@@ -196,7 +210,9 @@ export default function TechniquesPage() {
     // `context` in de state is hier nog de oude waarde (setState is async), dus
     // het voor-invullen gaat uit van de meegegeven tekst als die er is.
     const draft = (contextOverride ?? context).trim();
-    if (chosen && chosen.follow_up_questions.length > 0 && draft) {
+    // Een sjabloon vult pas voor na "Klaar": eerst beantwoordt de gebruiker
+    // de vragen van het sjabloon.
+    if (chosen && chosen.follow_up_questions.length > 0 && draft && !isSjabloon(chosen)) {
       void runPrefill(chosen, draft);
     }
   }
@@ -345,7 +361,7 @@ export default function TechniquesPage() {
       toast.error('Beschrijf eerst wat je de AI telkens opnieuw uitlegt.');
       return;
     }
-    const toCheck = [context, builderText, ...Object.values(answers)]
+    const toCheck = [contextText, builderText, ...Object.values(answers)]
       .map((v) => v.trim())
       .filter(Boolean)
       .join('\n');
@@ -376,7 +392,7 @@ export default function TechniquesPage() {
     try {
       const s = settingsRef.current;
       // Leeg = de generator gebruikt een neutrale plaatshouder voor de eigen inhoud.
-      const draft = context.trim() || '[BESCHRIJF HIER WAT JE WILT BEREIKEN]';
+      const draft = contextText || '[BESCHRIJF HIER WAT JE WILT BEREIKEN]';
       // Chain-of-Thought/Socratic: is het gesprek al ín de tool gevoerd (de
       // conclusie staat in builderText)? Dan hoeft de prompt de dialoog niet
       // meer "aan te zetten" — de generator maakt een uitgewerkte prompt.
@@ -454,6 +470,7 @@ export default function TechniquesPage() {
   /** Alles leeg voor een frisse start (volgende oefening in de training). */
   function handleClearAll() {
     setContext('');
+    setSjabloonAntwoorden({});
     setTechniqueId('');
     setAdvisorOpen(false);
     setAnswers({});
@@ -475,6 +492,7 @@ export default function TechniquesPage() {
   // niet op het moment dat je er middenin zit en eruit wilt.
   const hasContent =
     Boolean(context.trim()) ||
+    Object.values(sjabloonAntwoorden).some((v) => v.trim()) ||
     Boolean(techniqueId) ||
     advisorOpen ||
     Object.keys(answers).length > 0;
@@ -617,7 +635,9 @@ export default function TechniquesPage() {
                             ? 'De AI vraagt hier socratisch door om je aannames bloot te leggen. Je inzichten worden meteen uitgewerkt tot een kant-en-klare prompt.'
                             : fmt === 'skill'
                               ? 'Beantwoord de vragen; de AI maakt er één vaste instructie van die je in je eigen AI-omgeving plakt of als SKILL.md downloadt.'
-                              : 'Vul de velden met je eigen gegevens; zo ontstaat een herbruikbare prompt. Kopieer hem, of laat hem direct uitvoeren.';
+                              : sjabloonMode
+                                ? 'Vertel eerst in je eigen woorden waar het over gaat; de vragen hieronder helpen je daarbij. Daarna zet de AI het in de velden van het sjabloon en scherp jij ze aan. De vormgeving ligt vast.'
+                                : 'Vul de velden met je eigen gegevens; zo ontstaat een herbruikbare prompt. Kopieer hem, of laat hem direct uitvoeren.';
                       return (
                         <p className="text-sm text-slate-500 dark:text-slate-400">
                           Voor{' '}
@@ -703,6 +723,85 @@ export default function TechniquesPage() {
                   // start pas als het veld dicht is, anders stelt de AI zijn
                   // eerste vraag terwijl de gebruiker nog aan het typen is.
                   const isInterview = fmt === 'chain-of-thought' || fmt === 'socratic';
+                  // Sjabloon: eerst de vragen van het sjabloon, elk met een eigen
+                  // vak, dan pas de velden. "Klaar" vult de velden voor uit de
+                  // antwoorden; de velden staan tot dan dicht (zie hieronder).
+                  if (sjabloonMode) {
+                    const beantwoord = technique.follow_up_questions.filter((q) =>
+                      sjabloonAntwoorden[q.id]?.trim(),
+                    ).length;
+                    return (
+                      <div className="mb-6 rounded-xl border border-dashed border-rijksblauw-300 bg-rijksblauw-50/40 p-4 dark:border-rijksblauw-500/40 dark:bg-rijksblauw-500/5">
+                        {editingContext ? (
+                          <>
+                            <p className="opl-label">Eerst de context</p>
+                            <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
+                              Sta bij elke vraag even stil en schrijf op wat je al weet. Klik daarna
+                              op Klaar: de AI zet je antwoorden in de velden, laat open wat je niet
+                              gaf en vraagt daar naar. Daarna kun je alles nog aanpassen.
+                            </p>
+                            <SjabloonVragen
+                              technique={technique}
+                              antwoorden={sjabloonAntwoorden}
+                              onChange={setSjabloonAntwoorden}
+                              disabled={prefilling}
+                            />
+                            <label htmlFor="techniek-context" className="opl-label mt-5 block">
+                              Nog iets wat de AI moet weten? (optioneel)
+                            </label>
+                            <OptimizableTextarea
+                              id="techniek-context"
+                              ref={contextRef}
+                              rows={3}
+                              value={context}
+                              onValueChange={setContext}
+                              placeholder="Bijvoorbeeld: een eerdere versie van de planning, of aantekeningen uit een overleg."
+                              className="opl-input resize-y px-4 py-3 text-sm leading-relaxed"
+                              optimizeTitle="Schrijf mijn context uit met AI; je oorspronkelijke tekst kun je daarna terughalen"
+                            />
+                            <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+                              <button
+                                type="button"
+                                className="opl-btn-secondary"
+                                title="Sla de vragen over en vul de velden zelf in"
+                                onClick={() => setEditingContext(false)}
+                              >
+                                Zelf invullen
+                              </button>
+                              <button
+                                type="button"
+                                className="opl-btn-primary"
+                                disabled={prefilling || !contextText}
+                                onClick={() => {
+                                  setEditingContext(false);
+                                  void runPrefill(technique, contextText);
+                                }}
+                              >
+                                <Sparkles size={16} /> Klaar, vul de velden in
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="flex items-start justify-between gap-3">
+                            <p className="text-sm text-slate-600 dark:text-slate-300">
+                              <span className="font-medium text-slate-700 dark:text-slate-200">
+                                Context:
+                              </span>{' '}
+                              {beantwoord} van {technique.follow_up_questions.length} vragen
+                              beantwoord{context.trim() ? ', met extra context' : ''}.
+                            </p>
+                            <button
+                              type="button"
+                              className="shrink-0 text-sm font-medium text-rijksblauw-600 transition-colors hover:text-rijksblauw-700 hover:underline dark:text-rijksblauw-300 dark:hover:text-rijksblauw-200"
+                              onClick={() => setEditingContext(true)}
+                            >
+                              Aanpassen
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
                   // Gestippelde rand: dit vak hoort niet bij de velden van de
                   // techniek eronder, het vult ze alleen voor.
                   return (
@@ -889,6 +988,15 @@ export default function TechniquesPage() {
                         goal={context}
                         onComplete={setBuilderText}
                       />
+                    );
+                  }
+                  // Sjabloon: de velden pas na de contextstap, zodat de gebruiker
+                  // niet meteen in het eerste veld begint.
+                  if (sjabloonMode && editingContext) {
+                    return (
+                      <p className="rounded-lg border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-600 dark:text-slate-400">
+                        De velden van het sjabloon verschijnen zodra je hierboven op Klaar klikt.
+                      </p>
                     );
                   }
                   // Template-based: upload-zone (document → velden voor-invullen)
