@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -736,27 +736,37 @@ export default function OwnPromptOptimizer({
               const Icon = option ? option.icon : Sparkles;
               const active = kind === k;
               return (
-                <button
-                  key={k ?? 'auto'}
-                  type="button"
-                  role="radio"
-                  aria-checked={active}
-                  onClick={() => handleKind(k)}
-                  disabled={recommending || prefilling}
-                  className={clsx(
-                    'inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
-                    'focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500/40 disabled:cursor-not-allowed',
-                    active
-                      ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200 dark:bg-slate-700 dark:text-white dark:ring-slate-600'
-                      : 'text-slate-500 hover:bg-white/60 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-700/50 dark:hover:text-slate-100',
+                <Fragment key={k ?? 'auto'}>
+                  {/* Skill staat apart: die kiest geen framework, maar gaat door
+                      naar de Skill Creator. Zonder scheiding lijkt het alsof "Laat
+                      de AI kiezen" ook een skill kan opleveren. */}
+                  {k === 'skill' && (
+                    <span
+                      aria-hidden="true"
+                      className="mx-1 my-1 w-px shrink-0 self-stretch bg-slate-200 dark:bg-slate-700"
+                    />
                   )}
-                >
-                  <Icon
-                    size={16}
-                    className={clsx(active && 'text-rijksblauw-600 dark:text-rijksblauw-300')}
-                  />
-                  {option ? option.label : 'Automatisch'}
-                </button>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    onClick={() => handleKind(k)}
+                    disabled={recommending || prefilling}
+                    className={clsx(
+                      'inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
+                      'focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500/40 disabled:cursor-not-allowed',
+                      active
+                        ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200 dark:bg-slate-700 dark:text-white dark:ring-slate-600'
+                        : 'text-slate-500 hover:bg-white/60 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-700/50 dark:hover:text-slate-100',
+                    )}
+                  >
+                    <Icon
+                      size={16}
+                      className={clsx(active && 'text-rijksblauw-600 dark:text-rijksblauw-300')}
+                    />
+                    {option ? option.label : 'Laat de AI kiezen'}
+                  </button>
+                </Fragment>
               );
             })}
           </div>
@@ -877,7 +887,7 @@ export default function OwnPromptOptimizer({
         <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
           {kindOption
             ? kindOption.hint
-            : 'We analyseren je prompt en zoeken automatisch het best passende prompt framework voor je uit.'}
+            : 'De AI zoekt het best passende framework voor een tekst, code, dashboard of agent. Wil je een skill maken, kies dan Skill.'}
         </p>
         <VerantwoordGebruikHint text={ownPrompt} />
       </div>
