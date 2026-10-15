@@ -503,9 +503,16 @@ export default function useChatController(
     (text: string, kind?: ChatConversation['kind']) => {
       if (streamingRef.current) return;
       update(createConversation(kind ?? defaultKind));
+      // Een routekaart (vanuit de bouwer via "Uitvoeren in chat") laat de AI
+      // niet zelf programmeren: met Mistral liepen labels en weg dan door elkaar.
+      // De vaste routekaart maakt hem altijd in dezelfde opmaak.
+      if (parseRoutekaart(text)) {
+        void addRoutekaart(text);
+        return;
+      }
       void send(text);
     },
-    [send, update, defaultKind],
+    [send, update, defaultKind, addRoutekaart],
   );
 
   const stop = useCallback(() => {

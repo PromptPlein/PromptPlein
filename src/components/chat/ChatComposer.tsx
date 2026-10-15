@@ -290,6 +290,13 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
 
   function submit() {
     if (!canSend) return;
+    // Een routekaart gaat niet naar de AI: die programmeerde de pagina zelf en
+    // leverde overlappende labels en een weg die niet aansloot. De vaste
+    // routekaart maakt hem altijd in dezelfde, geteste opmaak.
+    if (isRoutekaart) {
+      makeRoutekaart();
+      return;
+    }
     const value = text.trim();
     setText('');
     setBeforeOptimize(null);
@@ -375,15 +382,14 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
 
   return (
     <div className="border-t border-slate-200 px-4 pb-3 pt-3 dark:border-slate-700 sm:px-6">
-      {/* Een routekaart hoeft de AI niet zelf te programmeren: PromptPlein heeft
-          een vaste, geteste versie. Versturen kan nog steeds; dan schrijft de AI
-          de pagina zelf. */}
+      {/* Een routekaart programmeert de AI niet zelf: PromptPlein heeft een
+          vaste, geteste versie, en Verstuur maakt hem daarmee. */}
       {isRoutekaart && !streaming && (
         <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-rijksblauw-200 bg-rijksblauw-50/70 px-3 py-2 text-xs text-slate-700 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10 dark:text-slate-200">
           <MapIcon size={15} className="shrink-0 text-rijksblauw-600 dark:text-rijksblauw-300" />
           <span className="min-w-[12rem] flex-1">
             Dit is een routekaart. PromptPlein maakt hem direct in de vaste rijksstijl, zonder AI:
-            altijd dezelfde opmaak en meteen klaar. Met Verstuur programmeert de AI de pagina zelf.
+            altijd dezelfde opmaak en meteen klaar. Ook Verstuur maakt hem zo.
           </span>
           <button
             type="button"
