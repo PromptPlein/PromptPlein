@@ -466,7 +466,34 @@ async function writeSjabloon(args: Parameters<typeof optimizePrompt>[0]): Promis
 export type VraagHerkomst = 'tekst' | 'aangevuld' | 'ai';
 
 /** De kop boven wat de AI zelf aan een antwoord toevoegt. */
-const AANGEVULD_KOP = 'Aangevuld door de AI:';
+export const AANGEVULD_KOP = 'Aangevuld door de AI:';
+
+/** Tekst zonder hoofdletters en leestekens, om herhaling te herkennen. */
+const kaal = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+
+/**
+ * Een aanvulling die alleen herhaalt wat er al staat, voegt niets toe. Ook
+ * niet als ze het in andere woorden doet: staan vrijwel alle inhoudswoorden
+ * (langer dan drie letters) van de aanvulling al in het antwoord, dan telt ze
+ * als herhaling.
+ */
+function herhaalt(bestaand: string | undefined, aanvulling: string): boolean {
+  if (!bestaand) return false;
+  const oud = kaal(bestaand);
+  const nieuw = kaal(aanvulling);
+  if (oud.includes(nieuw)) return true;
+  const woorden = nieuw.split(' ').filter((w) => w.length > 3);
+  if (woorden.length === 0) return true;
+  const bekend = new Set(oud.split(' '));
+  return woorden.filter((w) => bekend.has(w)).length / woorden.length >= 0.8;
+}
+
+/** Zet een aanvulling onder een antwoord, met de kop ertussen. */
+export function voegAanvullingToe(antwoord: string, aanvulling: string): string {
+  return antwoord.trim()
+    ? `${antwoord.trim()}\n\n${AANGEVULD_KOP}\n${aanvulling.trim()}`
+    : `${AANGEVULD_KOP}\n${aanvulling.trim()}`;
+}
 
 /**
  * Vul de vragen van een sjabloon in uit tekst die de gebruiker al had
@@ -519,24 +546,57 @@ export async function vragenUitVoorbereiding(args: {
   );
   const antwoorden: Record<string, string> = {};
   const herkomst: Record<string, VraagHerkomst> = {};
-  // Een aanvulling die alleen herhaalt wat er al staat, voegt niets toe.
-  const kaal = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
   for (const q of args.technique.follow_up_questions) {
     const tekst = uitTekst.get(q.id);
     const bijTekst = aanvulling.get(q.id);
-    const extra = bijTekst && tekst && kaal(tekst).includes(kaal(bijTekst)) ? undefined : bijTekst;
+    const extra = bijTekst && !herhaalt(tekst, bijTekst) ? bijTekst : undefined;
     if (tekst && extra) {
-      antwoorden[q.id] = `${tekst}\n\n${AANGEVULD_KOP}\n${extra}`;
+      antwoorden[q.id] = voegAanvullingToe(tekst, extra);
       herkomst[q.id] = 'aangevuld';
     } else if (tekst) {
       antwoorden[q.id] = tekst;
       herkomst[q.id] = 'tekst';
     } else if (extra) {
-      antwoorden[q.id] = `${AANGEVULD_KOP}\n${extra}`;
+      antwoorden[q.id] = voegAanvullingToe('', extra);
       herkomst[q.id] = 'ai';
     }
   }
   return { antwoorden, herkomst };
+}
+
+/**
+ * Na "Klaar" bij een sjabloon: de antwoorden staan letterlijk in de velden, en
+ * de AI stelt per veld alleen een aanvulling voor. Die verandert niets aan het
+ * antwoord; de gebruiker voegt haar toe of verwerpt haar. Een veld dat al een
+ * aanvulling van de AI heeft, krijgt geen tweede (geen AI over AI), en een
+ * aanvulling die alleen herhaalt wat er staat, valt weg.
+ *
+ * `tekst` is alles wat de gebruiker gaf: de voorbereide tekst en de antwoorden.
+ */
+export async function aanvullingenVoorVelden(args: {
+  technique: Technique;
+  tekst: string;
+  antwoorden: Record<string, string>;
+  preferredProvider?: AiProvider;
+  preferredModel?: string;
+}): Promise<Record<string, string>> {
+  const res = await prefillFields({
+    ownPrompt: args.tekst,
+    technique: args.technique,
+    sjabloonVragen: 'aanvullen',
+    preferredProvider: args.preferredProvider,
+    preferredModel: args.preferredModel,
+  });
+  if (res.unclear) return {};
+  const voorstellen: Record<string, string> = {};
+  for (const f of res.fields) {
+    const antwoord = args.antwoorden[f.id];
+    if (antwoord && /aangevuld door de ai:/i.test(antwoord)) continue;
+    const extra = f.value.replace(/^\s*aangevuld door de ai:\s*/i, '').trim();
+    if (!extra || herhaalt(antwoord, extra)) continue;
+    voorstellen[f.id] = extra;
+  }
+  return voorstellen;
 }
 
 /**

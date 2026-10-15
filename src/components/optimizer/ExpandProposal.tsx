@@ -11,6 +11,12 @@ interface ExpandProposalProps {
   onAccept: () => void;
   /** Verwerp het voorstel (veld blijft ongewijzigd). */
   onReject: () => void;
+  /** Eigen koptekst, bijvoorbeeld voor een aanvulling in plaats van een herschrijving. */
+  title?: string;
+  /** Eigen tekst op de overneem-knop. */
+  acceptLabel?: string;
+  /** Korte regel onder het voorstel, bijvoorbeeld wat overnemen met je tekst doet. */
+  hint?: string;
 }
 
 /**
@@ -24,6 +30,9 @@ export default function ExpandProposal({
   improvements,
   onAccept,
   onReject,
+  title,
+  acceptLabel,
+  hint,
 }: ExpandProposalProps) {
   // Veldnamen zijn vaak lang ("EXAMPLES: geef voorbeelden van ..."); voor de
   // koptekst is het deel vóór de toelichting genoeg om het veld te herkennen.
@@ -35,7 +44,7 @@ export default function ExpandProposal({
       <div className="flex items-center gap-2 border-b border-rijksoranje/25 bg-rijksoranje/10 px-3 py-2 dark:border-rijksoranje/25 dark:bg-rijksoranje/15">
         <Sparkles size={14} className="shrink-0 text-rijksoranje" />
         <span className="truncate text-xs font-semibold text-rijksoranje" title={fieldLabel}>
-          {shortLabel ? `AI-voorstel voor ${shortLabel}` : 'AI-voorstel'}
+          {title ?? (shortLabel ? `AI-voorstel voor ${shortLabel}` : 'AI-voorstel')}
         </span>
       </div>
 
@@ -43,6 +52,10 @@ export default function ExpandProposal({
       <p className="whitespace-pre-wrap px-3 py-3 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
         {proposed}
       </p>
+
+      {hint && (
+        <p className="px-3 pb-2 text-xs text-slate-500 dark:text-slate-400">{hint}</p>
+      )}
 
       {improvements.length > 0 && (
         <div className="border-t border-slate-100 bg-slate-50/60 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-900/30">
@@ -73,7 +86,7 @@ export default function ExpandProposal({
           onClick={onAccept}
           className="inline-flex items-center gap-1 rounded-md bg-rijksoranje px-2.5 py-1 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-rijksoranje-dark"
         >
-          <Check size={13} /> Overnemen
+          <Check size={13} /> {acceptLabel ?? 'Overnemen'}
         </button>
       </div>
     </div>

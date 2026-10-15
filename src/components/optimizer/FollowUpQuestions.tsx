@@ -47,6 +47,10 @@ interface FieldBlockProps {
   proposal: { proposed: string; improvements: string[] } | null;
   onAccept: () => void;
   onReject: () => void;
+  /** Voorgestelde aanvulling onder het eigen antwoord (sjabloon), of null. */
+  aanvulling?: string | null;
+  onAanvullingToevoegen?: () => void;
+  onAanvullingVerwerpen?: () => void;
 }
 
 /**
@@ -71,6 +75,9 @@ function FieldBlock({
   proposal,
   onAccept,
   onReject,
+  aanvulling,
+  onAanvullingToevoegen,
+  onAanvullingVerwerpen,
 }: FieldBlockProps) {
   const fieldId = `${idPrefix}-${question.id}`;
   const active = expanding || proposal !== null;
@@ -178,6 +185,19 @@ function FieldBlock({
           onReject={onReject}
         />
       )}
+      {/* Een aanvulling vervangt niets: ze komt pas onder het eigen antwoord als
+          de gebruiker haar toevoegt, zodat zichtbaar blijft wat er veranderde. */}
+      {aanvulling && onAanvullingToevoegen && onAanvullingVerwerpen && (
+        <ExpandProposal
+          title={`Aanvulling van de AI voor ${name}`}
+          proposed={aanvulling}
+          improvements={[]}
+          hint='Je eigen antwoord blijft staan. Voeg je dit toe, dan komt het eronder na "Aangevuld door de AI:".'
+          acceptLabel="Toevoegen aan mijn antwoord"
+          onAccept={onAanvullingToevoegen}
+          onReject={onAanvullingVerwerpen}
+        />
+      )}
     </div>
   );
 }
@@ -241,6 +261,12 @@ interface FollowUpQuestionsProps {
   onBuild?: () => void;
   /** Opschrift van die bouw-knop. */
   buildLabel?: string;
+  /**
+   * Sjabloon: per veld een voorgestelde aanvulling van de AI. Die verandert het
+   * antwoord niet; de gebruiker voegt haar toe of verwerpt haar.
+   */
+  aanvullingen?: Record<string, string>;
+  onAanvulling?: (id: string, toevoegen: boolean) => void;
 }
 
 /**
@@ -264,6 +290,8 @@ export default function FollowUpQuestions({
   finishLabel = 'Genereren en optimaliseren prompt',
   onBuild,
   buildLabel = 'Bouw prompt',
+  aanvullingen,
+  onAanvulling,
 }: FollowUpQuestionsProps) {
   const questions = technique.follow_up_questions;
   const total = questions.length;
@@ -458,6 +486,9 @@ export default function FollowUpQuestions({
                     proposal={proposal?.fieldId === q.id ? proposal : null}
                     onAccept={acceptProposal}
                     onReject={rejectProposal}
+                    aanvulling={aanvullingen?.[q.id] ?? null}
+                    onAanvullingToevoegen={onAanvulling && (() => onAanvulling(q.id, true))}
+                    onAanvullingVerwerpen={onAanvulling && (() => onAanvulling(q.id, false))}
                   />
                 </div>
               </li>
@@ -620,6 +651,9 @@ export default function FollowUpQuestions({
           proposal={proposal?.fieldId === current.id ? proposal : null}
           onAccept={acceptProposal}
           onReject={rejectProposal}
+          aanvulling={aanvullingen?.[current.id] ?? null}
+          onAanvullingToevoegen={onAanvulling && (() => onAanvulling(current.id, true))}
+          onAanvullingVerwerpen={onAanvulling && (() => onAanvulling(current.id, false))}
         />
       </div>
 

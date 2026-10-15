@@ -55,6 +55,8 @@ import {
   type FrameworkSearchPhase,
   type PrefillPhase,
   type VraagHerkomst,
+  aanvullingenVoorVelden,
+  voegAanvullingToe,
   vragenUitVoorbereiding,
 } from '@/services/optimizeService';
 import OptimizingLoader from './OptimizingLoader';
@@ -312,6 +314,7 @@ export default function OwnPromptOptimizer({
     setPrefill(null);
     setAnswers({});
     setFieldMeta({});
+    setAanvullingen({});
     setUnclearReason(null);
     // Oude fit-oordelen vervallen; opnieuw ophalen bij uitklappen.
     setFrameworkFits({});
@@ -366,6 +369,9 @@ export default function OwnPromptOptimizer({
   const [vragenVullen, setVragenVullen] = useState(false);
   // Waar elk antwoord vandaan komt na "Vul de vragen in uit je tekst".
   const [vraagHerkomst, setVraagHerkomst] = useState<Record<string, VraagHerkomst>>({});
+  // Na "Velden invullen" bij de routekaart: per veld een voorgestelde aanvulling
+  // van de AI, die de gebruiker toevoegt of verwerpt. null = wordt nog gezocht.
+  const [aanvullingen, setAanvullingen] = useState<Record<string, string> | null>({});
 
   /**
    * Routekaart: haal uit de voorbereide tekst de antwoorden op de vragen. Wat de
@@ -572,11 +578,85 @@ export default function OwnPromptOptimizer({
     setClarification('');
     const chosen = frameworks.find((t) => t.id === id);
     if (!chosen) return;
+    setAanvullingen({});
+    // Routekaart met beantwoorde vragen: die antwoorden gaan letterlijk in de
+    // velden, de AI stelt alleen aanvullingen voor (zie startSjabloonVelden).
+    if (isSjabloon(chosen) && Object.values(sjabloonAntwoorden).some((v) => v.trim())) {
+      void startSjabloonVelden(chosen);
+      return;
+    }
     // Wacht tot het laadblok is gerenderd en scroll het rustig in beeld.
     requestAnimationFrame(() => {
       analysisRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
     void runPrefill(chosen);
+  }
+
+  /**
+   * Routekaart: de antwoorden op de vragen gaan letterlijk in de velden; de AI
+   * schrijft ze niet opnieuw. Daarna stelt de AI per veld hooguit een aanvulling
+   * voor, die pas iets verandert als de gebruiker haar toevoegt.
+   */
+  async function startSjabloonVelden(chosen: Technique) {
+    const overgenomen = Object.fromEntries(
+      chosen.follow_up_questions
+        .filter((q) => sjabloonAntwoorden[q.id]?.trim())
+        .map((q) => [q.id, sjabloonAntwoorden[q.id].trim()]),
+    );
+    const note = 'Jouw antwoord, ongewijzigd overgenomen.';
+    setPrefill({
+      summary: 'Je antwoorden staan ongewijzigd in de velden.',
+      fields: Object.entries(overgenomen).map(([id, value]) => ({
+        id,
+        value,
+        source: 'prompt' as const,
+        note,
+      })),
+      success: true,
+      provider: 'local-template',
+    });
+    setAnswers(overgenomen);
+    setFieldMeta(
+      Object.fromEntries(Object.keys(overgenomen).map((id) => [id, { source: 'prompt' as const, note }])),
+    );
+    setAanvullingen(null);
+    try {
+      setAanvullingen(
+        await aanvullingenVoorVelden({
+          technique: chosen,
+          tekst: promptText,
+          antwoorden: overgenomen,
+          preferredProvider: settings.provider,
+          preferredModel: settings.model,
+        }),
+      );
+    } catch {
+      // Aanvullen is een extraatje; zonder blijven de antwoorden gewoon staan.
+      setAanvullingen({});
+    }
+  }
+
+  /** Voeg een voorgestelde aanvulling toe aan het veld, of verwerp haar. */
+  function handleAanvulling(id: string, toevoegen: boolean) {
+    const extra = aanvullingen?.[id];
+    if (toevoegen && extra) {
+      setAnswers((prev) => ({ ...prev, [id]: voegAanvullingToe(prev[id] ?? '', extra) }));
+      setFieldMeta((prev) => ({
+        ...prev,
+        [id]: {
+          source: 'ai',
+          note: prev[id]
+            ? 'Jouw antwoord, met de aanvulling van de AI eronder.'
+            : 'Aanvulling van de AI; dit veld had je nog niet ingevuld.',
+        },
+      }));
+    }
+    setAanvullingen((prev) => {
+      if (!prev) return prev;
+      const rest = { ...prev };
+      delete rest[id];
+      return rest;
+    });
   }
 
   /**
@@ -654,7 +734,11 @@ export default function OwnPromptOptimizer({
     try {
       const res = await generatePrompt({
         technique,
-        promptContent: promptText || '[BESCHRIJF HIER WAT JE WILT BEREIKEN]',
+        // Bij de routekaart staan de antwoorden al in de velden; als context gaat
+        // dan alleen de voorbereide tekst mee, zodat niets dubbel binnenkomt.
+        promptContent: isSjabloon(technique)
+          ? ownPrompt.trim() || '(geen voorbereide tekst; alles staat in de velden)'
+          : promptText || '[BESCHRIJF HIER WAT JE WILT BEREIKEN]',
         followUpAnswers: answers,
         preferredProvider: settings.provider,
         preferredModel: settings.model,
@@ -1486,11 +1570,26 @@ export default function OwnPromptOptimizer({
                   {stripMarkdown(prefill.summary) ||
                     'We hebben de velden alvast voor je ingevuld op basis van je prompt.'}
                 </p>
-                <p className="text-sm text-slate-600 dark:text-slate-300">
-                  Controleer en pas aan waar nodig, vooral de AI-suggesties met het oranje label{' '}
-                  <span className="font-medium">Controleren</span>. Wat je leeg laat, blijft een
-                  plaatshouder in de uiteindelijke prompt.
-                </p>
+                {isSjabloon(technique) ? (
+                  <p className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300">
+                    {aanvullingen === null && (
+                      <Loader2 size={15} className="mt-0.5 shrink-0 animate-spin text-rijksblauw-500" />
+                    )}
+                    {aanvullingen === null
+                      ? 'De AI kijkt nog of er per veld iets aan te vullen is.'
+                      : Object.keys(aanvullingen).length > 0
+                        ? `De AI stelt bij ${Object.keys(aanvullingen).length} ${
+                            Object.keys(aanvullingen).length === 1 ? 'veld' : 'velden'
+                          } een aanvulling voor; die staat oranje onder het veld. Voeg toe wat klopt, de rest verwerp je.`
+                        : 'De AI had niets aan te vullen. Wat je leeg laat, blijft een plaatshouder in de prompt.'}
+                  </p>
+                ) : (
+                  <p className="text-sm text-slate-600 dark:text-slate-300">
+                    Controleer en pas aan waar nodig, vooral de AI-suggesties met het oranje label{' '}
+                    <span className="font-medium">Controleren</span>. Wat je leeg laat, blijft een
+                    plaatshouder in de uiteindelijke prompt.
+                  </p>
+                )}
                 <PrefillSources prefill={prefill} />
               </>
             )}
@@ -1499,6 +1598,8 @@ export default function OwnPromptOptimizer({
               technique={technique}
               answers={answers}
               onChange={setAnswers}
+              aanvullingen={isSjabloon(technique) ? (aanvullingen ?? undefined) : undefined}
+              onAanvulling={isSjabloon(technique) ? handleAanvulling : undefined}
               fieldMeta={fieldMeta}
               onUserEdit={(id) =>
                 setFieldMeta((prev) => {
@@ -1516,7 +1617,9 @@ export default function OwnPromptOptimizer({
                 voor dit raamwerk. We tonen die als "wat mist nog", laten de gebruiker
                 toelichten, en vullen dan opnieuw voor (runPrefill) zodat die velden
                 concreet worden. Herhaalbaar; genereren kan altijd al. */}
-            {(() => {
+            {/* Bij de routekaart niet: daar zou een nieuwe ronde de velden opnieuw
+                door de AI laten schrijven. De aanvullingen per veld doen dat werk. */}
+            {!isSjabloon(technique) && (() => {
               // Velden die de AI heeft moeten gokken (niet uit de prompt afgeleid):
               // dat is wat dit framework nog mist. Koppel elk aan zijn veld-label.
               // Bij een sjabloon staat in de note een concrete vraag naar het

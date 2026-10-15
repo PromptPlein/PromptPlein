@@ -37,8 +37,10 @@ import GuardrailDialog from '@/components/optimizer/GuardrailDialog';
 import { useAuth } from '@/context/AuthContext';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import {
+  aanvullingenVoorVelden,
   generatePrompt,
   prefillFields,
+  voegAanvullingToe,
   vragenUitVoorbereiding,
   type VraagHerkomst,
 } from '@/services/optimizeService';
@@ -127,6 +129,9 @@ export default function TechniquesPage() {
   const [vragenVullen, setVragenVullen] = useState(false);
   // Waar elk antwoord vandaan komt na "Vul de vragen in uit deze tekst".
   const [vraagHerkomst, setVraagHerkomst] = useState<Record<string, VraagHerkomst>>({});
+  // Na "Klaar": per veld een voorgestelde aanvulling van de AI, die de
+  // gebruiker toevoegt of verwerpt. null = er wordt nog gezocht.
+  const [aanvullingen, setAanvullingen] = useState<Record<string, string> | null>({});
   const [techniqueId, setTechniqueId] = useState('');
   const [answers, setAnswers] = useState<Record<string, string>>({});
   // Geserialiseerde output van een gespecialiseerde bouwer (Persona/Few-Shot/
@@ -208,6 +213,7 @@ export default function TechniquesPage() {
     setSkillData(null);
     setSjabloonAntwoorden({});
     setVraagHerkomst({});
+    setAanvullingen({});
     setUnclearReason(null);
     // Nieuwe techniek = het contextveld weer open (zie setEditingContext hierboven).
     setEditingContext(true);
@@ -305,6 +311,76 @@ export default function TechniquesPage() {
     } finally {
       setVragenVullen(false);
     }
+  }
+
+  /**
+   * Sjabloon, "Klaar": de antwoorden op de vragen gaan letterlijk in de velden;
+   * de AI schrijft ze niet opnieuw. Daarna stelt de AI per veld hooguit een
+   * aanvulling voor, die pas iets verandert als de gebruiker haar toevoegt.
+   */
+  async function startSjabloonVelden() {
+    if (!technique) return;
+    setEditingContext(false);
+    setUnclearReason(null);
+    const overgenomen = Object.fromEntries(
+      technique.follow_up_questions
+        .filter((q) => sjabloonAntwoorden[q.id]?.trim())
+        .map((q) => [q.id, sjabloonAntwoorden[q.id].trim()]),
+    );
+    // Geen enkele vraag beantwoord, alleen een voorbereide tekst: dan is er
+    // niets van de gebruiker te bewaren en vult de AI de velden uit die tekst.
+    if (Object.keys(overgenomen).length === 0) {
+      setAanvullingen({});
+      void runPrefill(technique, contextText);
+      return;
+    }
+    setAnswers(overgenomen);
+    setFieldMeta(
+      Object.fromEntries(
+        Object.keys(overgenomen).map((id) => [
+          id,
+          { source: 'prompt' as const, note: 'Jouw antwoord, ongewijzigd overgenomen.' },
+        ]),
+      ),
+    );
+    setAanvullingen(null);
+    try {
+      setAanvullingen(
+        await aanvullingenVoorVelden({
+          technique,
+          tekst: contextText,
+          antwoorden: overgenomen,
+          preferredProvider: settingsRef.current.provider,
+          preferredModel: settingsRef.current.model,
+        }),
+      );
+    } catch {
+      // Aanvullen is een extraatje; zonder blijven de antwoorden gewoon staan.
+      setAanvullingen({});
+    }
+  }
+
+  /** Voeg een voorgestelde aanvulling toe aan het veld, of verwerp haar. */
+  function handleAanvulling(id: string, toevoegen: boolean) {
+    const extra = aanvullingen?.[id];
+    if (toevoegen && extra) {
+      setAnswers((prev) => ({ ...prev, [id]: voegAanvullingToe(prev[id] ?? '', extra) }));
+      setFieldMeta((prev) => ({
+        ...prev,
+        [id]: {
+          source: 'ai',
+          note: prev[id]
+            ? 'Jouw antwoord, met de aanvulling van de AI eronder.'
+            : 'Aanvulling van de AI; dit veld had je nog niet ingevuld.',
+        },
+      }));
+    }
+    setAanvullingen((prev) => {
+      if (!prev) return prev;
+      const rest = { ...prev };
+      delete rest[id];
+      return rest;
+    });
   }
 
   /** Vul de velden van de gekozen techniek voor op basis van de context. */
@@ -447,7 +523,11 @@ export default function TechniquesPage() {
     try {
       const s = settingsRef.current;
       // Leeg = de generator gebruikt een neutrale plaatshouder voor de eigen inhoud.
-      const draft = contextText || '[BESCHRIJF HIER WAT JE WILT BEREIKEN]';
+      // Bij een sjabloon staan de antwoorden al in de velden; als context gaat
+      // dan alleen de voorbereide tekst mee, zodat niets dubbel binnenkomt.
+      const draft = sjabloonMode
+        ? context.trim() || '(geen voorbereide tekst; alles staat in de velden)'
+        : contextText || '[BESCHRIJF HIER WAT JE WILT BEREIKEN]';
       // Chain-of-Thought/Socratic: is het gesprek al ín de tool gevoerd (de
       // conclusie staat in builderText)? Dan hoeft de prompt de dialoog niet
       // meer "aan te zetten" — de generator maakt een uitgewerkte prompt.
@@ -525,9 +605,10 @@ export default function TechniquesPage() {
   /** Alles leeg voor een frisse start (volgende oefening in de training). */
   function handleClearAll() {
     setContext('');
+    setContext('');
     setSjabloonAntwoorden({});
     setVraagHerkomst({});
-    setTechniqueId('');
+    setAanvullingen({});
     setAdvisorOpen(false);
     setAnswers({});
     setEditingContext(false);
@@ -866,10 +947,7 @@ export default function TechniquesPage() {
                                 type="button"
                                 className="opl-btn-primary"
                                 disabled={prefilling || vragenVullen || !contextText}
-                                onClick={() => {
-                                  setEditingContext(false);
-                                  void runPrefill(technique, contextText);
-                                }}
+                                onClick={() => void startSjabloonVelden()}
                               >
                                 <Sparkles size={16} /> Klaar, vul de velden in
                               </button>
@@ -1104,10 +1182,31 @@ export default function TechniquesPage() {
                           disabled={prefilling}
                         />
                       )}
+                      {sjabloonMode && (
+                        <div className="flex items-start gap-2 rounded-lg border border-rijksblauw-200 bg-rijksblauw-50/60 px-3 py-2.5 text-sm text-slate-700 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10 dark:text-slate-200">
+                          {aanvullingen === null ? (
+                            <Loader2 size={16} className="mt-0.5 shrink-0 animate-spin text-rijksblauw-500" />
+                          ) : (
+                            <Check size={16} className="mt-0.5 shrink-0 text-rijksblauw-500" />
+                          )}
+                          <p>
+                            Je antwoorden staan ongewijzigd in de velden.{' '}
+                            {aanvullingen === null
+                              ? 'De AI kijkt nog of er per veld iets aan te vullen is.'
+                              : Object.keys(aanvullingen).length > 0
+                                ? `De AI stelt bij ${Object.keys(aanvullingen).length} ${
+                                    Object.keys(aanvullingen).length === 1 ? 'veld' : 'velden'
+                                  } een aanvulling voor; die staat oranje onder het veld. Voeg toe wat klopt, de rest verwerp je.`
+                                : 'De AI had niets aan te vullen.'}
+                          </p>
+                        </div>
+                      )}
                       <FollowUpQuestions
                         technique={technique}
                         answers={answers}
                         onChange={setAnswers}
+                        aanvullingen={sjabloonMode ? (aanvullingen ?? undefined) : undefined}
+                        onAanvulling={sjabloonMode ? handleAanvulling : undefined}
                         fieldMeta={fieldMeta}
                         onUserEdit={handleFieldEdit}
                         prefilling={prefilling}
