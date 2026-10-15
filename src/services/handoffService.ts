@@ -1,7 +1,7 @@
 // Handoffs tussen de chat en de generator, via sessionStorage. Zelfde patroon
 // als de chat-handoff in chatService.ts: sessionStorage in plaats van
 // router-state overleeft de login-roundtrip van RequireAuth in dezelfde tab en
-// lekt niet naar andere tabs. wipeAllChatStorage wist deze keys bij uitloggen.
+// lekt niet naar andere tabs. clearChatHandoffs wist deze keys bij uitloggen.
 
 import { CHAT_PREFIX } from '@/lib/chatStorage';
 import type { OptimizeResult } from '@/types';

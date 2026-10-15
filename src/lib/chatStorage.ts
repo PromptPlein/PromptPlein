@@ -1,26 +1,29 @@
 // Opslag van chatgesprekken — uitsluitend in localStorage, nooit in de database.
 //
 // Privacy-uitgangspunt (afgesproken met de beheerder): gespreksinhoud en
-// documentteksten blijven op het apparaat van de gebruiker, gescheiden per
-// ingelogd account. Wie niet is ingelogd chat onder de vaste gastsleutel
-// (GUEST_STORAGE_ID). "Verwijder gesprek" wist definitief; bij uitloggen wordt
-// ALLES onder het prefix gewist (ook restdata van eerdere accounts en van
-// gasten op een gedeelde werkplek).
+// documentteksten blijven op het apparaat van de gebruiker. De gesprekken horen
+// bij de browser, niet bij een account: wie wel of niet is ingelogd, ziet op
+// dit apparaat dezelfde chats (DEVICE_STORAGE_ID), en uitloggen wist niets.
+// Weg zijn ze pas als de gebruiker ze zelf verwijdert of de browsergegevens
+// wist; op een andere pc staan ze niet.
 //
 // Indeling (key-per-gesprek, zodat debounced writes tijdens het streamen alleen
 // het actieve gesprek serialiseren en een quota-fout één gesprek raakt):
-//   opl.chat.<userId>.index      -> { v: 1, conversations: ChatIndexEntry[] }
-//   opl.chat.<userId>.conv.<id>  -> ChatConversation
+//   opl.chat.<bak>.index      -> { v: 1, conversations: ChatIndexEntry[] }
+//   opl.chat.<bak>.conv.<id>  -> ChatConversation
 
 import { v4 as uuid } from 'uuid';
 import type { ChatConversation, ChatIndexEntry, ChatMessage } from '@/types';
 
 export const CHAT_PREFIX = 'opl.chat.';
 
-/** Opslagsleutel voor wie niet is ingelogd: één gedeelde gastbak per apparaat. */
-export const GUEST_STORAGE_ID = 'gast';
+/**
+ * De ene opslagbak van dit apparaat. Heet nog 'gast' omdat de gasten hier al
+ * stonden; zo blijven hun gesprekken staan zonder omzetting.
+ */
+export const DEVICE_STORAGE_ID = 'gast';
 
-/** Maximum aantal bewaarde gesprekken per account; oudste worden geëvict. */
+/** Maximum aantal bewaarde gesprekken op dit apparaat; oudste worden geëvict. */
 export const MAX_CONVERSATIONS = 30;
 
 const INDEX_VERSION = 1;
@@ -36,6 +39,56 @@ function indexKey(userId: string): string {
 
 function convKey(userId: string, conversationId: string): string {
   return `${CHAT_PREFIX}${userId}.conv.${conversationId}`;
+}
+
+/**
+ * Eenmalige omzetting: vroeger had elk account een eigen bak
+ * (opl.chat.<userId>.…). Die gesprekken verhuizen naar de bak van dit
+ * apparaat, zodat niemand zijn chats kwijtraakt doordat ze niet meer onder zijn
+ * account staan. Draait bij elke start maar doet niets zodra er geen oude bak
+ * meer is.
+ */
+export function migrateAccountBuckets(): void {
+  let legacyIds: string[];
+  try {
+    legacyIds = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key || !key.startsWith(CHAT_PREFIX) || !key.endsWith('.index')) continue;
+      const id = key.slice(CHAT_PREFIX.length, -'.index'.length);
+      if (id && id !== DEVICE_STORAGE_ID && !id.includes('.')) legacyIds.push(id);
+    }
+  } catch {
+    return;
+  }
+  if (legacyIds.length === 0) return;
+
+  const merged = new Map(loadChatIndex(DEVICE_STORAGE_ID).map((e) => [e.id, e]));
+  for (const legacyId of legacyIds) {
+    for (const entry of loadChatIndex(legacyId)) {
+      const conv = loadConversation(legacyId, entry.id);
+      const current = merged.get(entry.id);
+      if (conv && conv.messages.length > 0 && (!current || current.updatedAt < conv.updatedAt)) {
+        try {
+          localStorage.setItem(convKey(DEVICE_STORAGE_ID, conv.id), JSON.stringify(conv));
+          merged.set(conv.id, toIndexEntry(conv));
+        } catch {
+          /* opslag vol: dit gesprek gaat niet mee */
+        }
+      }
+    }
+    deleteAllConversations(legacyId);
+  }
+
+  const entries = [...merged.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  for (const evicted of entries.splice(MAX_CONVERSATIONS)) {
+    try {
+      localStorage.removeItem(convKey(DEVICE_STORAGE_ID, evicted.id));
+    } catch {
+      /* negeren */
+    }
+  }
+  writeIndex(DEVICE_STORAGE_ID, entries);
 }
 
 /** Lees de gesprekkenlijst; corrupte of ontbrekende data -> lege lijst. */
@@ -174,7 +227,7 @@ export function deleteConversation(userId: string, conversationId: string): void
   writeIndex(userId, loadChatIndex(userId).filter((e) => e.id !== conversationId));
 }
 
-/** Verwijder alle gesprekken van dit account definitief van dit apparaat. */
+/** Verwijder alle gesprekken in deze bak definitief van dit apparaat. */
 export function deleteAllConversations(userId: string): void {
   for (const entry of loadChatIndex(userId)) {
     try {
@@ -192,9 +245,10 @@ export function deleteAllConversations(userId: string): void {
 
 // --- Geschiedenis bewaren als bestand -------------------------------------
 //
-// Omdat de chats bij uitloggen verdwijnen, kan de gebruiker ze zelf als bestand
-// op zijn eigen apparaat bewaren en later terugzetten. Ook dit gaat nergens
-// langs een server: opbouwen, downloaden en inlezen gebeurt in de browser.
+// De chats staan alleen in deze browser. Wie ze naar een andere pc wil
+// meenemen of wil bewaren voor het wissen van de browsergegevens, bewaart ze
+// als bestand en zet ze later terug. Ook dit gaat nergens langs een server:
+// opbouwen, downloaden en inlezen gebeurt in de browser.
 
 const BACKUP_APP = 'promptplein-chats';
 const BACKUP_VERSION = 1;
@@ -206,7 +260,7 @@ export interface ChatBackup {
   conversations: ChatConversation[];
 }
 
-/** Alle gesprekken van dit account als één bewaarbestand, recentste eerst. */
+/** Alle gesprekken in deze bak als één bewaarbestand, recentste eerst. */
 export function buildChatBackup(userId: string): ChatBackup {
   const conversations = loadChatIndex(userId)
     .map((entry) => loadConversation(userId, entry.id))
@@ -229,7 +283,7 @@ export interface RestoreResult {
 }
 
 /**
- * Zet een bewaarbestand terug in de opslag van dit account. Een gesprek dat er
+ * Zet een bewaarbestand terug in deze bak. Een gesprek dat er
  * al staat wordt alleen vervangen als het bestand een nieuwere versie heeft.
  * Gooit een Error met een leesbare melding als het bestand niet van PromptPlein
  * is.
@@ -309,30 +363,22 @@ function formatStamp(iso: string): string {
 }
 
 /**
- * Wis ALLE chatdata op dit apparaat, van elk account. Aangeroepen bij
- * uitloggen (SIGNED_OUT), zodat er op een gedeelde werkplek niets achterblijft
- * — ook geen restdata van eerdere accounts of een openstaande handoff.
+ * Ruim bij uitloggen de doorgeefluiken in sessionStorage op. De gesprekken
+ * zelf blijven staan: die horen bij het apparaat, niet bij het account. Wat
+ * hier weg moet, draagt wel iets van de vorige gebruiker mee (een project-id,
+ * een half doorgegeven prompt) en zou na het volgende inloggen ongevraagd
+ * iets doen.
  */
-export function wipeAllChatStorage(): void {
-  try {
-    const doomed: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && key.startsWith(CHAT_PREFIX)) doomed.push(key);
-    }
-    doomed.forEach((key) => localStorage.removeItem(key));
-  } catch {
-    /* localStorage niet beschikbaar — dan valt er ook niets te wissen */
-  }
+export function clearChatHandoffs(): void {
   try {
     sessionStorage.removeItem(`${CHAT_PREFIX}handoff`);
-    // Ook de omgekeerde handoff (chat → generator) en het resultaat-snapshot
-    // van de Testkamer-login: op een gedeelde werkplek blijft niets achter.
+    // De omgekeerde handoff (chat → generator) en het resultaat-snapshot van
+    // de Testkamer-login.
     sessionStorage.removeItem(`${CHAT_PREFIX}generator-handoff`);
-    // En de project→bouwer-handoff: die draagt een project-id van de vorige
+    // De project→bouwer-handoff: die draagt een project-id van de vorige
     // gebruiker, en de bouwer zou daar na het inloggen context mee ophalen.
     sessionStorage.removeItem(`${CHAT_PREFIX}project-handoff`);
-    // En het verzoek "maak meteen een project": anders maakt de volgende
+    // Het verzoek "maak meteen een project": anders maakt de volgende
     // gebruiker op dit apparaat er ongevraagd een aan zodra hij de chat opent.
     sessionStorage.removeItem(`${CHAT_PREFIX}new-project-handoff`);
     sessionStorage.removeItem('opl.gen.result');

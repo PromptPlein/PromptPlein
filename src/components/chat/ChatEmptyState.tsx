@@ -38,7 +38,7 @@ export default function ChatEmptyState() {
       <div className="flex flex-col items-center gap-1 text-[11px] text-slate-400 dark:text-slate-500">
         <span className="inline-flex items-center gap-1.5">
           <ShieldCheck size={12} className="shrink-0" />
-          Chats worden alleen op dit apparaat bewaard en verdwijnen bij uitloggen, tenzij je ze als bestand bewaart.
+          Chats staan alleen in deze browser, ook zonder account. Wis je de browsergegevens of wissel je van pc, dan zie je ze daar niet.
         </span>
         <span className="hidden items-center gap-1.5 sm:inline-flex">
           <FileText size={12} className="shrink-0" />

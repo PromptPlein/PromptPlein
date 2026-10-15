@@ -205,8 +205,8 @@ function ChatPageInner() {
     [controller.index, projectPage],
   );
 
-  // Gasten mogen in het lopende gesprek chatten, maar een nieuwe chat of een
-  // project vraagt een account: de knoppen blijven staan en sturen naar het
+  // Chatten kan zonder account; alleen een project vraagt er een, want dat
+  // staat in de database. De projectknop blijft staan en stuurt naar het
   // inlogscherm, met /chat als terugkeeradres.
   const navigate = useNavigate();
   const requireLogin = useCallback(
@@ -293,13 +293,9 @@ function ChatPageInner() {
   );
 
   const handleNewConversation = useCallback(() => {
-    if (!user) {
-      requireLogin('Log in om een nieuwe chat te starten.');
-      return;
-    }
     setProjectPage(null);
     controller.newConversation();
-  }, [user, requireLogin, controller]);
+  }, [controller]);
 
   const handleDeleteProject = useCallback(async () => {
     if (!confirmDeleteProject) return;
@@ -648,13 +644,14 @@ function ChatPageInner() {
           </span>
           <span className="inline-flex items-center gap-1.5">
             <ShieldCheck size={12} className="shrink-0 text-slate-400 dark:text-slate-500" />
-            chats blijven op dit apparaat en verdwijnen bij uitloggen
+            chats blijven in deze browser, ook na uitloggen
           </span>
         </p>
       </div>
-      {/* Wie zijn chats wil houden, bewaart ze zelf als bestand en zet ze na het
-          inloggen terug. Het bestand gaat nergens heen: opbouwen en inlezen
-          gebeurt in de browser. */}
+      {/* Wie zijn chats naar een andere pc wil meenemen, of ze wil houden als de
+          browsergegevens gewist worden, bewaart ze als bestand en zet ze later
+          terug. Het bestand gaat nergens heen: opbouwen en inlezen gebeurt in
+          de browser. */}
       <div className="mt-2 flex flex-wrap justify-center gap-2 text-xs">
         <button
           type="button"

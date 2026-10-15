@@ -347,7 +347,7 @@ export async function optimizeProjectInstructions(args: {
 // --- Handoff vanuit de generator ("Kopiëren in chat") ---
 // sessionStorage in plaats van router-state: die overleeft de login-roundtrip
 // van RequireAuth in dezelfde tab en lekt niet naar andere tabs. Bij uitloggen
-// wist wipeAllChatStorage deze key mee.
+// wist clearChatHandoffs deze key mee.
 
 const HANDOFF_KEY = `${CHAT_PREFIX}handoff`;
 const HANDOFF_TTL_MS = 15 * 60 * 1000;

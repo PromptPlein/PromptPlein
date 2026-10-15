@@ -5,7 +5,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { v4 as uuid } from 'uuid';
-import { useAuth } from '@/context/AuthContext';
 import { defaultModelFor } from '@/config/aiModels';
 import {
   buildChatBackup,
@@ -13,10 +12,11 @@ import {
   createConversation,
   deleteAllConversations,
   deleteConversation,
-  GUEST_STORAGE_ID,
+  DEVICE_STORAGE_ID,
   loadChatIndex,
   loadConversation,
   MAX_CONVERSATIONS,
+  migrateAccountBuckets,
   restoreChatBackup,
   saveConversation,
   titleFromFirstMessage,
@@ -113,10 +113,9 @@ export default function useChatController(
   settings: ChatSettings | null,
   options?: ChatControllerOptions,
 ): ChatController {
-  const { user } = useAuth();
-  // Zonder account landen de gesprekken in de gastbak van dit apparaat; bij
-  // inloggen wisselt de sleutel en zie je je eigen gesprekken.
-  const userId = user?.id ?? GUEST_STORAGE_ID;
+  // De gesprekken horen bij dit apparaat, niet bij een account: ingelogd of
+  // niet, je ziet dezelfde chats, en uitloggen wist niets.
+  const userId = DEVICE_STORAGE_ID;
   // Primitieven i.p.v. het options-object in de dependencies: de aanroeper
   // geeft doorgaans een inline object mee en dat zou elke render alle
   // callbacks verversen.
@@ -163,10 +162,9 @@ export default function useChatController(
     [ephemeral, userId, refreshIndex],
   );
 
-  // Init per account (of per gastbak): recentste gesprek hervatten, anders een
-  // vers gesprek. Wisselt de sleutel (in- of uitloggen), breek dan de lopende
-  // stream af; bij uitloggen is de opslag al gewist door wipeAllChatStorage,
-  // dus de gast begint dan met een leeg gesprek.
+  // Init: recentste gesprek hervatten, anders een vers gesprek. Staan er nog
+  // chats in een oude bak per account, dan verhuizen die eerst naar dit
+  // apparaat.
   // Ephemeer (Testkamer): niets laden of hervatten, altijd een vers gesprek.
   useEffect(() => {
     abortRef.current?.abort();
@@ -175,6 +173,7 @@ export default function useChatController(
       update(createConversation(defaultKind));
       return;
     }
+    migrateAccountBuckets();
     const entries = loadChatIndex(userId);
     setIndex(entries);
     const recent = entries[0] ? loadConversation(userId, entries[0].id) : null;

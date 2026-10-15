@@ -166,7 +166,8 @@ goedkeuringswachtrij, die admins én moderatoren mogen zien. De echte
 afdwinging staat in RLS-policies, niet in de frontend: de wachtrij filtert
 server-side op wat jij mag beoordelen.
 
-Ingelogd vereist: `/chat`, `/bibliotheek`, `/profiel`, `/netwerk`. Admin
+Ingelogd vereist: `/bibliotheek`, `/profiel`, `/netwerk`. De chat (`/chat`)
+werkt zonder account; alleen chatprojecten vragen er een. Admin
 vereist: alles onder `/admin`. De rest is openbaar, inclusief `/genereren`,
 `/zoeken`, `/community` en `/technieken`.
 
@@ -179,8 +180,11 @@ ministeries (`orgTree.ts`, migraties 0020/0021/0024).
 - **Postgres**: prompts, gebruikers, organisaties, technieken, categorieën,
   rollen, analytics, audit log, meldingen, chat*projecten* (0030).
 - **localStorage, nooit de database**: de chat*gesprekken* zelf
-  (`src/lib/chatStorage.ts`, per gebruiker, met eviction) en de concepten in de
-  bouwer (`usePersistentDraft`, zodat een refresh je invoer niet wist).
+  (`src/lib/chatStorage.ts`, één bak per browser, met eviction). Ze horen bij
+  het apparaat en niet bij het account: ingelogd of niet zie je dezelfde chats,
+  en uitloggen wist ze niet. Weg zijn ze pas na verwijderen of het wissen van de
+  browsergegevens. Ook in localStorage: de concepten in de bouwer
+  (`usePersistentDraft`, zodat een refresh je invoer niet wist).
 
 Chatgesprekken staan bewust niet op de server: dat is de privacybelofte van de
 chat. Verplaats ze niet naar Postgres zonder dat expliciet met de gebruiker af
