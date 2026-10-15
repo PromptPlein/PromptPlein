@@ -8,15 +8,20 @@ import { v4 as uuid } from 'uuid';
 import { useAuth } from '@/context/AuthContext';
 import { defaultModelFor } from '@/config/aiModels';
 import {
+  buildChatBackup,
+  conversationToMarkdown,
   createConversation,
   deleteAllConversations,
   deleteConversation,
   GUEST_STORAGE_ID,
   loadChatIndex,
   loadConversation,
+  MAX_CONVERSATIONS,
+  restoreChatBackup,
   saveConversation,
   titleFromFirstMessage,
 } from '@/lib/chatStorage';
+import { downloadText } from '@/lib/download';
 import { sendChatMessage } from '@/services/chatService';
 import { loadProjectContext } from '@/services/chatProjectService';
 import type { ChatSettings } from '@/services/settingsService';
@@ -94,6 +99,12 @@ export interface ChatController {
   selectConversation: (id: string) => void;
   removeConversation: (id: string) => void;
   removeAllConversations: () => void;
+  /** Download alle gesprekken als één bestand dat later terug te zetten is. */
+  exportHistory: () => void;
+  /** Download één gesprek als leesbare tekst (Markdown). */
+  exportConversation: (id: string) => void;
+  /** Zet een eerder gedownload geschiedenisbestand terug op dit apparaat. */
+  importHistory: (file: File) => Promise<void>;
   addAttachment: (file: File) => Promise<void>;
   removeAttachment: (id: string) => void;
 }
@@ -422,6 +433,75 @@ export default function useChatController(
     toast.success('Alle chats verwijderd van dit apparaat.');
   }, [userId, update, refreshIndex]);
 
+  const exportHistory = useCallback(() => {
+    const backup = buildChatBackup(userId);
+    if (backup.conversations.length === 0) {
+      toast.error('Er zijn nog geen chats om te bewaren.');
+      return;
+    }
+    downloadText(
+      `promptplein-chats-${backup.exportedAt.slice(0, 10)}.json`,
+      JSON.stringify(backup, null, 2),
+      'application/json',
+    );
+    toast.success(
+      backup.conversations.length === 1
+        ? '1 chat bewaard als bestand op dit apparaat.'
+        : `${backup.conversations.length} chats bewaard als bestand op dit apparaat.`,
+    );
+  }, [userId]);
+
+  const exportConversation = useCallback(
+    (id: string) => {
+      const conv =
+        conversationRef.current?.id === id ? conversationRef.current : loadConversation(userId, id);
+      if (!conv || conv.messages.length === 0) {
+        toast.error('Deze chat is leeg of kon niet worden geladen.');
+        return;
+      }
+      const slug =
+        conv.title
+          .toLowerCase()
+          .normalize('NFKD')
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '')
+          .slice(0, 40) || 'chat';
+      downloadText(`${slug}.md`, conversationToMarkdown(conv), 'text/markdown');
+    },
+    [userId],
+  );
+
+  const importHistory = useCallback(
+    async (file: File) => {
+      if (streamingRef.current) return;
+      let data: unknown;
+      try {
+        data = JSON.parse(await file.text());
+      } catch {
+        toast.error('Dit bestand kon niet worden gelezen. Kies een bestand dat je eerder hebt bewaard.');
+        return;
+      }
+      try {
+        const { restored, unchanged, dropped } = restoreChatBackup(userId, data);
+        refreshIndex();
+        // Stond het open gesprek in het bestand in een nieuwere versie, toon
+        // die dan; anders schrijft de oude versie hem bij de volgende beurt over.
+        const cur = conversationRef.current;
+        const fresh = cur ? loadConversation(userId, cur.id) : null;
+        if (cur && fresh && fresh.updatedAt > cur.updatedAt) update(fresh);
+        const parts = [
+          restored === 1 ? '1 chat teruggezet' : `${restored} chats teruggezet`,
+          unchanged > 0 ? `${unchanged} stond${unchanged === 1 ? '' : 'en'} er al` : '',
+          dropped > 0 ? `${dropped} niet bewaard (opslag vol of meer dan ${MAX_CONVERSATIONS} chats)` : '',
+        ].filter(Boolean);
+        toast.success(`${parts.join(', ')}.`);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Terugzetten is niet gelukt.');
+      }
+    },
+    [userId, refreshIndex, update],
+  );
+
   const addAttachment = useCallback(
     async (file: File) => {
       const cur = conversationRef.current;
@@ -499,6 +579,9 @@ export default function useChatController(
     selectConversation,
     removeConversation,
     removeAllConversations,
+    exportHistory,
+    exportConversation,
+    importHistory,
     addAttachment,
     removeAttachment,
   };

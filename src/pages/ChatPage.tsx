@@ -2,12 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   Database,
+  Download,
   FolderOpen,
   MessageSquare,
   Play,
   Plus,
   ShieldCheck,
   Trash2,
+  Upload,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -82,6 +84,7 @@ function ChatPageInner() {
   const projects = useChatProjects();
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
+  const restoreInputRef = useRef<HTMLInputElement>(null);
   const handoffDone = useRef(false);
   // Hoogteplafond van de chatkaart: precies wat het venster overlaat.
   const [cardRef, cardMaxHeight] = useFitHeight<HTMLDivElement>();
@@ -544,6 +547,18 @@ function ChatPageInner() {
                   <FolderOpen size={11} /> {activeProject.name}
                 </button>
               )}
+              {!openProject && conversation && messages.length > 0 && (
+                <button
+                  type="button"
+                  className="ml-auto shrink-0 rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:opacity-40 dark:text-slate-500 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+                  onClick={() => controller.exportConversation(conversation.id)}
+                  disabled={controller.streaming}
+                  aria-label="Bewaar deze chat als bestand"
+                  title="Bewaar deze chat als bestand op dit apparaat"
+                >
+                  <Download size={16} />
+                </button>
+              )}
             </div>
 
             {openProject ? (
@@ -636,6 +651,40 @@ function ChatPageInner() {
             chats blijven op dit apparaat en verdwijnen bij uitloggen
           </span>
         </p>
+      </div>
+      {/* Wie zijn chats wil houden, bewaart ze zelf als bestand en zet ze na het
+          inloggen terug. Het bestand gaat nergens heen: opbouwen en inlezen
+          gebeurt in de browser. */}
+      <div className="mt-2 flex flex-wrap justify-center gap-2 text-xs">
+        <button
+          type="button"
+          className="opl-btn-ghost !px-2.5 !py-1"
+          onClick={controller.exportHistory}
+          disabled={controller.streaming || controller.index.length === 0}
+          title="Download al je chats als één bestand op dit apparaat"
+        >
+          <Download size={13} /> Chatgeschiedenis bewaren
+        </button>
+        <button
+          type="button"
+          className="opl-btn-ghost !px-2.5 !py-1"
+          onClick={() => restoreInputRef.current?.click()}
+          disabled={controller.streaming}
+          title="Zet een eerder bewaard bestand terug op dit apparaat"
+        >
+          <Upload size={13} /> Terugzetten
+        </button>
+        <input
+          ref={restoreInputRef}
+          type="file"
+          accept="application/json,.json"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = '';
+            if (file) void controller.importHistory(file);
+          }}
+        />
       </div>
 
       {pendingSend && aiSettings && (
