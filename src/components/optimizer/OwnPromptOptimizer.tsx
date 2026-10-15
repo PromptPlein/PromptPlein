@@ -17,10 +17,10 @@ import {
   Info,
   Layers,
   LayoutDashboard,
-  LayoutTemplate,
   Lightbulb,
   Loader2,
   RefreshCw,
+  Route,
   Sparkles,
   Wand2,
   type LucideIcon,
@@ -166,9 +166,9 @@ const KIND_OPTIONS: Record<
       'Bijv. geef feedback op conceptbrieven aan burgers, elke keer volgens de schrijfwijzer van ons ministerie.',
   },
   template: {
-    label: 'Sjabloon',
-    icon: LayoutTemplate,
-    hint: 'Een vaste vorm in rijksstijl, zoals een routekaart. Jij geeft de inhoud; de vormgeving is elke keer hetzelfde.',
+    label: 'Routekaart',
+    icon: Route,
+    hint: 'Een geanimeerde routekaart in rijksstijl: waar je vandaan komt, waar je nu staat en waar je naartoe wilt. Jij geeft de inhoud; de vormgeving is elke keer hetzelfde.',
     placeholder:
       'Bijv. een routekaart van ons opleidingstraject: vijf bijeenkomsten vanaf 3 maart, met per bijeenkomst het thema, het huiswerk en wat het oplevert. We staan nu bij de tweede.',
   },
@@ -359,8 +359,10 @@ export default function OwnPromptOptimizer({
   }
 
   /** Kies een soort bij "Wat wil je maken?". Dezelfde soort nog eens kiezen doet niets. */
-  function handleKind(next: PromptKind | null) {
-    if (next === kind) return;
+  function handleKind(clicked: PromptKind) {
+    // Nog eens op de gekozen soort klikken zet hem uit: zonder soort kiest de
+    // AI zelf uit alle frameworks. Een aparte knop daarvoor is er niet meer.
+    const next = clicked === kind ? null : clicked;
     setKind(next);
     setVariantOn(true);
     resetDownstream(); // andere soort = andere frameworks, het oude advies vervalt
@@ -760,20 +762,24 @@ export default function OwnPromptOptimizer({
         {/* Het invoerveld met "Wat wil je maken?" als balk erboven en de
             schakelaar, de opzet en de zoekknop eronder: één geheel. */}
         <div className="overflow-hidden rounded-xl border border-slate-300 bg-slate-50 transition-colors focus-within:border-rijksblauw-500 focus-within:ring-2 focus-within:ring-rijksblauw-500/20 dark:border-slate-600 dark:bg-slate-900/40">
+          {/* Wat wil je maken? Kies je niets, dan bepaalt de AI het zelf; een
+              gekozen soort zet je uit door er nog eens op te klikken. Daarom
+              knoppen die aan of uit staan en geen radiogroep: daarin kun je
+              niet terug naar niets. */}
           <div
-            role="radiogroup"
-            aria-label="Wat wil je maken?"
+            role="group"
+            aria-label="Wat wil je maken? Kies je niets, dan bepaalt de AI het zelf."
             className="opl-scroll-slim flex gap-1 overflow-x-auto border-b border-slate-200 p-1.5 dark:border-slate-700"
           >
-            {([null, ...PROMPT_KINDS] as (PromptKind | null)[]).map((k) => {
-              const option = k ? KIND_OPTIONS[k] : null;
-              const Icon = option ? option.icon : Sparkles;
+            {PROMPT_KINDS.map((k) => {
+              const option = KIND_OPTIONS[k];
+              const Icon = option.icon;
               const active = kind === k;
               return (
-                <Fragment key={k ?? 'auto'}>
-                  {/* Skill staat apart: die kiest geen framework, maar gaat door
-                      naar de Skill Creator. Zonder scheiding lijkt het alsof "Laat
-                      de AI kiezen" ook een skill kan opleveren. */}
+                <Fragment key={k}>
+                  {/* Skill en Routekaart staan apart: die kiezen geen framework
+                      uit de lijst, maar hebben een eigen bouwer of een vast
+                      sjabloon. */}
                   {k === 'skill' && (
                     <span
                       aria-hidden="true"
@@ -782,8 +788,8 @@ export default function OwnPromptOptimizer({
                   )}
                   <button
                     type="button"
-                    role="radio"
-                    aria-checked={active}
+                    aria-pressed={active}
+                    title={active ? 'Klik nog eens om de keuze uit te zetten' : undefined}
                     onClick={() => handleKind(k)}
                     disabled={recommending || prefilling}
                     className={clsx(
@@ -798,7 +804,7 @@ export default function OwnPromptOptimizer({
                       size={16}
                       className={clsx(active && 'text-rijksblauw-600 dark:text-rijksblauw-300')}
                     />
-                    {option ? option.label : 'Laat de AI kiezen'}
+                    {option.label}
                   </button>
                 </Fragment>
               );
@@ -862,9 +868,9 @@ export default function OwnPromptOptimizer({
             </div>
           )}
 
-          {/* Bij Sjabloon: welk vast sjabloon. Staat er maar één, dan staat die
-              al aan; de keuze laat zien wat je krijgt voordat je begint. */}
-          {kind === 'template' && (
+          {/* Bij Routekaart: welk vast sjabloon. Alleen als er iets te kiezen
+              valt; met één sjabloon zegt de knop zelf al wat je krijgt. */}
+          {kind === 'template' && candidates.length !== 1 && (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-slate-200 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-slate-800">
               <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
                 Welk sjabloon?
@@ -1016,7 +1022,7 @@ export default function OwnPromptOptimizer({
         <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
           {kindOption
             ? kindOption.hint
-            : 'De AI zoekt het best passende framework voor een tekst, code, dashboard of agent. Wil je een skill maken of een vast sjabloon invullen, kies dan Skill of Sjabloon.'}
+            : 'Kies wat je wilt maken, of kies niets: dan bepaalt de AI zelf welk framework past bij je tekst, code, dashboard of agent. Voor een skill of een routekaart in rijksstijl kies je Skill of Routekaart.'}
         </p>
         <VerantwoordGebruikHint text={promptText} />
       </div>

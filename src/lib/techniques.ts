@@ -110,7 +110,7 @@ function modalityFor(kind: PromptKind, variantOn: boolean): Modality | null {
  * De frameworks die bij de gekozen soort horen, in de volgorde van de lijst.
  *
  * Zonder soort (of bij Skill) komen ze allemaal terug, behalve de sjablonen:
- * "Laat de AI kiezen" weegt alleen frameworks voor tekst, code, dashboard en
+ * zonder keuze weegt de AI alleen frameworks voor tekst, code, dashboard en
  * agent. Met soort blijven de frameworks van die soort over, plus die zonder
  * `modality`: die zijn aan geen vorm gebonden en doen overal mee.
  *
