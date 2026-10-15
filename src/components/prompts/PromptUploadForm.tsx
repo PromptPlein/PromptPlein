@@ -8,6 +8,7 @@ import { trackEvent } from '@/services/analyticsService';
 import { requestCategory } from '@/services/categoryRequestService';
 import { requestFunction } from '@/services/functionRequestService';
 import { getCurrentUser } from '@/lib/utils';
+import { usePersistentDraft } from '@/lib/usePersistentDraft';
 import SearchableSelect from '@/components/common/SearchableSelect';
 import VisibilityPicker from '@/components/prompts/VisibilityPicker';
 import type { NewPromptInput, Prompt, VisibilityLevel } from '@/types';
@@ -21,9 +22,12 @@ export default function PromptUploadForm({ onCreated, onCancel }: PromptUploadFo
   const { categories, roles, organizations } = useReferenceData();
   const { user } = useAuth();
   const requireAuth = useAuthGuard();
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [content, setContent] = useState('');
+  // De tekstvelden staan als concept in localStorage: sluit het venster per
+  // ongeluk (Escape, kruisje, klik ernaast), dan staat de tekst er bij het
+  // heropenen weer. Pas na opslaan wordt het concept gewist.
+  const [title, setTitle, clearTitle] = usePersistentDraft('upload.title');
+  const [description, setDescription, clearDescription] = usePersistentDraft('upload.description');
+  const [content, setContent, clearContent] = usePersistentDraft('upload.content');
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [roleId, setRoleId] = useState<string | null>(null);
   const [organizationId, setOrganizationId] = useState<string>('');
@@ -64,6 +68,9 @@ export default function PromptUploadForm({ onCreated, onCancel }: PromptUploadFo
         prompt_id: prompt.id,
       });
       toast.success('Prompt opgeslagen');
+      clearTitle();
+      clearDescription();
+      clearContent();
       onCreated(prompt);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Opslaan mislukt';
