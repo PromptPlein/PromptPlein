@@ -346,6 +346,12 @@ interface RequestBody {
    * bij 'sjabloon' kiest hij hiermee de systeemprompt die de inhoud schrijft.
    */
   sjabloon?: string;
+  /**
+   * 'prefill' bij een sjabloon: de vragen van de contextstap invullen uit een
+   * voorbereide tekst. 'uithalen' (of true) neemt alleen over wat er staat,
+   * 'aanvullen' schrijft alleen wat het model toevoegt.
+   */
+  sjabloonVragen?: boolean | 'uithalen' | 'aanvullen';
   // 'title'-velden: vat een gegenereerde template samen tot een korte titel.
   templateContent?: string;
   // 'metadata'-velden: stel titel + omschrijving + best passende categorie voor.
@@ -8034,6 +8040,55 @@ Wat in de velden staat, komt straks letterlijk in een vaste vormgeving terecht. 
 
 `;
 
+/**
+ * De vragen van een sjabloon invullen uit een voorbereide tekst (bijvoorbeeld
+ * uit een andere chat) gebeurt in twee opdrachten die tegelijk lopen: één haalt
+ * eruit wat er staat, één bedenkt wat erbij kan. De client zet ze per vraag
+ * onder elkaar met "Aangevuld door de AI:" ertussen. Eén opdracht die allebei
+ * doet, mengde op Mistral het eigen werk door de feiten van de medewerker of
+ * liet het aanvullen soms helemaal weg.
+ */
+let SJABLOON_VRAGEN_INSTRUCTION = `BELANGRIJK: HAAL ALLEEN UIT DE TEKST WAT ER STAAT.
+De medewerker heeft een voorbereide tekst geplakt. Jij zet uit die tekst per veld over wat erbij hoort. Wat jij hier schrijft, ziet de medewerker terug met het label "Uit je tekst".
+
+<regels>
+- Neem alleen over wat in de tekst staat: feiten, namen, datums, stappen, activiteiten, opbrengsten en formuleringen. Je mag ze inkorten en ordenen.
+- Voeg niets toe wat niet in de tekst staat. Geen activiteit, kernvraag, opbrengst, jaartal of datum die logisch lijkt maar er niet staat. Staat er "juni" zonder jaar, dan schrijf je "juni".
+- Geen plaatshouders tussen vierkante haken. Ontbreekt iets binnen een veld, laat het dan gewoon weg.
+- Staat er in de tekst niets voor een veld, zet dan "value":"" en "source":"ai".
+- Bij elk veld met inhoud uit de tekst zet je "source":"prompt".
+</regels>
+
+`;
+
+/** De tweede opdracht naast {@link SJABLOON_VRAGEN_INSTRUCTION}: alleen aanvullen. */
+let SJABLOON_AANVUL_INSTRUCTION = `BELANGRIJK: SCHRIJF PER VELD ALLEEN WAT JIJ TOEVOEGT AAN DE TEKST.
+De medewerker heeft een voorbereide tekst geplakt. Wat in die tekst staat, wordt al apart overgenomen. Jij schrijft per veld alleen de aanvulling: wat het veld nodig heeft en logisch volgt uit de tekst, maar er nog niet in staat. De medewerker ziet jouw aanvulling terug onder het kopje "Aangevuld door de AI".
+
+<wat_je_aanvult>
+- Doel: voor wie de routekaart is en wat zij moeten onthouden.
+- Rode draad: hoe die per halte groeit.
+- Haltes: per halte een kernvraag, wat er op de halte gebeurt en wat de halte oplevert. Zet het nummer van de halte ervoor, in de volgorde van de tekst.
+- Datum en stand: alleen waar de groep nu staat, als dat uit de tekst volgt.
+- Eindresultaat: wat er dan anders is.
+- Namen en Kop: een voorstel.
+</wat_je_aanvult>
+
+<regels>
+- Herhaal niets wat al in de tekst staat.
+- Verzin nooit datums, jaartallen, namen van personen of organisaties, of aantallen.
+- Geen plaatshouders tussen vierkante haken.
+- Is er voor een veld niets toe te voegen, zet dan "value":"".
+- Zet bij elk veld "source":"ai".
+</regels>
+
+<vorm_bij_haltes>
+1. Kernvraag: <vraag>. Op de halte: <wat er gebeurt>. Opbrengst: <opbrengst>.
+2. Kernvraag: <vraag>. Op de halte: <wat er gebeurt>. Opbrengst: <opbrengst>.
+</vorm_bij_haltes>
+
+`;
+
 /** Welke systeemprompt hoort bij welke sjabloonnaam uit {{INHOUD:<naam>}}. */
 function sjabloonSystemPrompt(naam: string | undefined): string | null {
   if (naam === 'route') return ROUTE_SJABLOON_SYSTEM_PROMPT;
@@ -8126,6 +8181,8 @@ const PROMPT_CATALOG: PromptCatalogEntry[] = [
   { id: 'SKILL_DRAFT_SYSTEM_PROMPT', groep: "Techniekbouwers", titel: "Skill Creator: velden voorstellen", uitleg: "Stelt de velden van een skill voor en stelt vragen over wat alleen de medewerker weet.", get: () => SKILL_DRAFT_SYSTEM_PROMPT, set: (v) => { SKILL_DRAFT_SYSTEM_PROMPT = v; } },
   { id: 'SKILL_TRIGGER_TEST_PROMPT', groep: "Techniekbouwers", titel: "Skill Creator: triggertest", uitleg: "Bedenkt testverzoeken op de grens van de beschrijving.", get: () => SKILL_TRIGGER_TEST_PROMPT, set: (v) => { SKILL_TRIGGER_TEST_PROMPT = v; } },
   { id: 'ROUTE_SJABLOON_SYSTEM_PROMPT', groep: "Sjablonen", titel: "Routekaart in rijksstijl: inhoud schrijven", uitleg: "Zet de context en de velden van de medewerker om in de inhoud van de routekaart (Start, haltes, Finish, onderbalk). Die inhoud komt op de plek van {{INHOUD:route}} in het sjabloon; de vormgeving in het sjabloon zelf blijft letterlijk staan.", get: () => ROUTE_SJABLOON_SYSTEM_PROMPT, set: (v) => { ROUTE_SJABLOON_SYSTEM_PROMPT = v; } },
+  { id: 'SJABLOON_VRAGEN_INSTRUCTION', groep: "Sjablonen", titel: "Vragen invullen: uit de voorbereide tekst", uitleg: "Komt vóór \"Velden voor-invullen\" als de medewerker bij een sjabloon op \"Vul de vragen in uit deze tekst\" klikt: alleen overnemen wat in de geplakte tekst staat. Krijgt het label Uit je tekst.", get: () => SJABLOON_VRAGEN_INSTRUCTION, set: (v) => { SJABLOON_VRAGEN_INSTRUCTION = v; } },
+  { id: 'SJABLOON_AANVUL_INSTRUCTION', groep: "Sjablonen", titel: "Vragen invullen: aanvulling van de AI", uitleg: "Loopt tegelijk met de vorige: schrijft per vraag alleen wat de AI toevoegt aan de geplakte tekst. Komt onder \"Aangevuld door de AI:\".", get: () => SJABLOON_AANVUL_INSTRUCTION, set: (v) => { SJABLOON_AANVUL_INSTRUCTION = v; } },
   { id: 'SJABLOON_PREFILL_INSTRUCTION', groep: "Sjablonen", titel: "Velden van een sjabloon invullen", uitleg: "Komt vóór \"Velden voor-invullen\" als de medewerker een sjabloon kiest: geen feiten gokken, ontbrekende gegevens openlaten en er een vraag bij zetten.", get: () => SJABLOON_PREFILL_INSTRUCTION, set: (v) => { SJABLOON_PREFILL_INSTRUCTION = v; } },
   { id: 'SKILL_TRIGGER_SCHERP_PROMPT', groep: "Techniekbouwers", titel: "Skill Creator: beschrijving aanscherpen", uitleg: "Herschrijft de beschrijving na de triggertest.", get: () => SKILL_TRIGGER_SCHERP_PROMPT, set: (v) => { SKILL_TRIGGER_SCHERP_PROMPT = v; } },
   { id: 'EXECUTE_SYSTEM_PROMPT', groep: "Uitvoeren, Testkamer en projecten", titel: "Prompt direct uitvoeren", uitleg: "De knop \"Uitvoeren\" die het eindproduct meteen laat maken.", get: () => EXECUTE_SYSTEM_PROMPT, set: (v) => { EXECUTE_SYSTEM_PROMPT = v; } },
@@ -8400,7 +8457,13 @@ Deno.serve(async (req: Request) => {
       // Een sjabloon gaat letterlijk op een vaste vorm: ontbrekende feiten
       // openlaten met een vraag erbij in plaats van ze te raden.
       const prefillBase =
-        (body.sjabloon ? SJABLOON_PREFILL_INSTRUCTION : '') +
+        (body.sjabloon
+          ? body.sjabloonVragen === 'aanvullen'
+            ? SJABLOON_AANVUL_INSTRUCTION
+            : body.sjabloonVragen
+              ? SJABLOON_VRAGEN_INSTRUCTION
+              : SJABLOON_PREFILL_INSTRUCTION
+          : '') +
         (body.fromDocument
           ? PREFILL_DOCUMENT_INSTRUCTION + PREFILL_SYSTEM_PROMPT
           : body.fromFormatBrief

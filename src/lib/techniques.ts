@@ -161,8 +161,8 @@ export function fillSjabloon(template: string, inhoud: string): string {
 
 /**
  * De context van een sjabloon als één tekst: de antwoorden op de vragen van het
- * sjabloon (zie SjabloonVragen), elk onder zijn vraag, plus wat de gebruiker er
- * los bij schreef. Die tekst gaat naar het voor-invullen en het schrijven, net
+ * sjabloon (zie SjabloonVragen), elk onder zijn vraag, met daarvóór wat de
+ * gebruiker al had voorbereid en erin plakte. Die tekst gaat naar het voor-invullen en het schrijven, net
  * als de vrije context bij een gewoon framework. Leeg als er niets is ingevuld.
  */
 export function sjabloonContextTekst(
@@ -173,7 +173,8 @@ export function sjabloonContextTekst(
   const delen = t.follow_up_questions
     .filter((q) => antwoorden[q.id]?.trim())
     .map((q) => `${q.label}\n${antwoorden[q.id].trim()}`);
-  if (overig.trim()) delen.push(`OVERIGE CONTEXT\n${overig.trim()}`);
+  // De voorbereide tekst staat bovenaan de contextstap en gaat ook vooraan mee.
+  if (overig.trim()) delen.unshift(`VOORBEREIDE CONTEXT\n${overig.trim()}`);
   return delen.join('\n\n');
 }
 

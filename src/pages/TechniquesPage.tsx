@@ -36,7 +36,12 @@ import OptimizedOutput from '@/components/optimizer/OptimizedOutput';
 import GuardrailDialog from '@/components/optimizer/GuardrailDialog';
 import { useAuth } from '@/context/AuthContext';
 import { useReferenceData } from '@/context/ReferenceDataContext';
-import { generatePrompt, prefillFields } from '@/services/optimizeService';
+import {
+  generatePrompt,
+  prefillFields,
+  vragenUitVoorbereiding,
+  type VraagHerkomst,
+} from '@/services/optimizeService';
 import { trackEvent } from '@/services/analyticsService';
 import {
   getAiSettings,
@@ -118,6 +123,10 @@ export default function TechniquesPage() {
   // Bij een sjabloon komt de context uit de vragen van het sjabloon (zie
   // SjabloonVragen); `context` is dan het vak voor wat er verder nog bij hoort.
   const [sjabloonAntwoorden, setSjabloonAntwoorden] = useState<Record<string, string>>({});
+  // Loopt het invullen van de vragen uit de voorbereide tekst?
+  const [vragenVullen, setVragenVullen] = useState(false);
+  // Waar elk antwoord vandaan komt na "Vul de vragen in uit deze tekst".
+  const [vraagHerkomst, setVraagHerkomst] = useState<Record<string, VraagHerkomst>>({});
   const [techniqueId, setTechniqueId] = useState('');
   const [answers, setAnswers] = useState<Record<string, string>>({});
   // Geserialiseerde output van een gespecialiseerde bouwer (Persona/Few-Shot/
@@ -198,6 +207,7 @@ export default function TechniquesPage() {
     setBuilderText('');
     setSkillData(null);
     setSjabloonAntwoorden({});
+    setVraagHerkomst({});
     setUnclearReason(null);
     // Nieuwe techniek = het contextveld weer open (zie setEditingContext hierboven).
     setEditingContext(true);
@@ -251,6 +261,51 @@ export default function TechniquesPage() {
     // binnenkomende state bepalen of dit moet lopen.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [techniques, location.state]);
+
+  /**
+   * Sjabloon: haal uit de voorbereide tekst (bovenaan de contextstap) de
+   * antwoorden op de vragen. Wat de gebruiker al had ingevuld blijft staan; een
+   * vraag waar de tekst niets over zegt blijft leeg.
+   */
+  async function handleVragenUitTekst() {
+    if (!technique || !context.trim()) return;
+    setVragenVullen(true);
+    try {
+      const { antwoorden, herkomst, onduidelijk } = await vragenUitVoorbereiding({
+        technique,
+        tekst: context.trim(),
+        preferredProvider: settingsRef.current.provider,
+        preferredModel: settingsRef.current.model,
+      });
+      if (onduidelijk) {
+        toast(onduidelijk, { icon: 'ℹ️' });
+        return;
+      }
+      const nieuw = Object.entries(antwoorden).filter(([id]) => !sjabloonAntwoorden[id]?.trim());
+      if (nieuw.length === 0) {
+        toast('Je tekst gaf geen antwoord op de vragen die nog leeg waren.', { icon: 'ℹ️' });
+        return;
+      }
+      setSjabloonAntwoorden((prev) => ({ ...Object.fromEntries(nieuw), ...prev }));
+      setVraagHerkomst((prev) => ({
+        ...prev,
+        ...Object.fromEntries(nieuw.map(([id]) => [id, herkomst[id] ?? 'tekst'])),
+      }));
+      const alIngevuld = technique.follow_up_questions.filter((q) =>
+        sjabloonAntwoorden[q.id]?.trim(),
+      ).length;
+      const leeg = technique.follow_up_questions.length - alIngevuld - nieuw.length;
+      toast.success(
+        leeg > 0
+          ? `${nieuw.length} vragen ingevuld uit je tekst. Kijk ze na; ${leeg} vragen zijn nog leeg.`
+          : `${nieuw.length} vragen ingevuld uit je tekst. Kijk na wat de AI heeft aangevuld en klik dan op Klaar.`,
+      );
+    } catch {
+      toast.error('Vragen invullen uit je tekst mislukt. Probeer het opnieuw.');
+    } finally {
+      setVragenVullen(false);
+    }
+  }
 
   /** Vul de velden van de gekozen techniek voor op basis van de context. */
   async function runPrefill(chosen: Technique, draft: string) {
@@ -471,6 +526,7 @@ export default function TechniquesPage() {
   function handleClearAll() {
     setContext('');
     setSjabloonAntwoorden({});
+    setVraagHerkomst({});
     setTechniqueId('');
     setAdvisorOpen(false);
     setAnswers({});
@@ -740,24 +796,62 @@ export default function TechniquesPage() {
                               op Klaar: de AI zet je antwoorden in de velden, laat open wat je niet
                               gaf en vraagt daar naar. Daarna kun je alles nog aanpassen.
                             </p>
+                            {/* Voorbereid materiaal bovenaan: wie in een andere chat al
+                                iets heeft uitgewerkt, plakt het hier en laat de vragen
+                                eronder daaruit invullen. */}
+                            <div className="mb-5 rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-800">
+                              <label htmlFor="techniek-context" className="opl-label">
+                                Heb je al iets voorbereid? (optioneel)
+                              </label>
+                              <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
+                                Plak hier wat je al hebt, bijvoorbeeld een uitwerking uit een andere
+                                chat, een planning of aantekeningen. De AI haalt eruit wat bij de
+                                vragen hoort en vult aan; per vraag zie je wat uit je tekst komt en
+                                wat de AI heeft bedacht.
+                              </p>
+                              <OptimizableTextarea
+                                id="techniek-context"
+                                ref={contextRef}
+                                rows={5}
+                                value={context}
+                                onValueChange={setContext}
+                                placeholder="Plak hier je voorbereide tekst."
+                                className="opl-input resize-y px-4 py-3 text-sm leading-relaxed"
+                                optimizeTitle="Schrijf mijn context uit met AI; je oorspronkelijke tekst kun je daarna terughalen"
+                              />
+                              <div className="mt-2 flex justify-end">
+                                <button
+                                  type="button"
+                                  className="opl-btn-secondary"
+                                  disabled={!context.trim() || vragenVullen || prefilling}
+                                  onClick={() => void handleVragenUitTekst()}
+                                >
+                                  {vragenVullen ? (
+                                    <>
+                                      <Loader2 size={16} className="animate-spin" /> Vragen invullen…
+                                    </>
+                                  ) : (
+                                    <>
+                                      <ArrowDown size={16} /> Vul de vragen in uit deze tekst
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            </div>
                             <SjabloonVragen
                               technique={technique}
                               antwoorden={sjabloonAntwoorden}
-                              onChange={setSjabloonAntwoorden}
-                              disabled={prefilling}
-                            />
-                            <label htmlFor="techniek-context" className="opl-label mt-5 block">
-                              Nog iets wat de AI moet weten? (optioneel)
-                            </label>
-                            <OptimizableTextarea
-                              id="techniek-context"
-                              ref={contextRef}
-                              rows={3}
-                              value={context}
-                              onValueChange={setContext}
-                              placeholder="Bijvoorbeeld: een eerdere versie van de planning, of aantekeningen uit een overleg."
-                              className="opl-input resize-y px-4 py-3 text-sm leading-relaxed"
-                              optimizeTitle="Schrijf mijn context uit met AI; je oorspronkelijke tekst kun je daarna terughalen"
+                              herkomst={vraagHerkomst}
+                              onChange={(next, aangepast) => {
+                                setSjabloonAntwoorden(next);
+                                setVraagHerkomst((prev) => {
+                                  if (!prev[aangepast]) return prev;
+                                  const rest = { ...prev };
+                                  delete rest[aangepast];
+                                  return rest;
+                                });
+                              }}
+                              disabled={prefilling || vragenVullen}
                             />
                             <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
                               <button
@@ -771,7 +865,7 @@ export default function TechniquesPage() {
                               <button
                                 type="button"
                                 className="opl-btn-primary"
-                                disabled={prefilling || !contextText}
+                                disabled={prefilling || vragenVullen || !contextText}
                                 onClick={() => {
                                   setEditingContext(false);
                                   void runPrefill(technique, contextText);
@@ -788,7 +882,7 @@ export default function TechniquesPage() {
                                 Context:
                               </span>{' '}
                               {beantwoord} van {technique.follow_up_questions.length} vragen
-                              beantwoord{context.trim() ? ', met extra context' : ''}.
+                              beantwoord{context.trim() ? ', met voorbereide tekst' : ''}.
                             </p>
                             <button
                               type="button"

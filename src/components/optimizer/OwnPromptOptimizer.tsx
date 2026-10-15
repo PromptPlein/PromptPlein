@@ -2,6 +2,7 @@ import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
+  ArrowDown,
   ArrowRight,
   Blocks,
   Bot,
@@ -53,6 +54,8 @@ import {
   recommendFramework,
   type FrameworkSearchPhase,
   type PrefillPhase,
+  type VraagHerkomst,
+  vragenUitVoorbereiding,
 } from '@/services/optimizeService';
 import OptimizingLoader from './OptimizingLoader';
 import PrefillLoader from './PrefillLoader';
@@ -335,6 +338,7 @@ export default function OwnPromptOptimizer({
   function handleClearAll() {
     clearOwnPromptDraft();
     clearSjabloonDraft();
+    setVraagHerkomst({});
     resetDownstream();
     setShowExamples(false);
     toast.success('Alles opgeschoond. Je begint met een schone lei.');
@@ -356,6 +360,57 @@ export default function OwnPromptOptimizer({
     resetDownstream(); // nieuwe inhoud = oude aanbeveling/analyse vervalt
     setShowExamples(false);
     toast.success('Voorbeeld ingevuld.');
+  }
+
+  // Loopt het invullen van de vragen uit de voorbereide tekst?
+  const [vragenVullen, setVragenVullen] = useState(false);
+  // Waar elk antwoord vandaan komt na "Vul de vragen in uit je tekst".
+  const [vraagHerkomst, setVraagHerkomst] = useState<Record<string, VraagHerkomst>>({});
+
+  /**
+   * Routekaart: haal uit de voorbereide tekst de antwoorden op de vragen. Wat de
+   * gebruiker al had ingevuld blijft staan; een vraag waar de tekst niets over
+   * zegt blijft leeg.
+   */
+  async function handleVragenUitTekst() {
+    if (!sjabloon || !ownPrompt.trim()) return;
+    setVragenVullen(true);
+    try {
+      const { antwoorden, herkomst, onduidelijk } = await vragenUitVoorbereiding({
+        technique: sjabloon,
+        tekst: ownPrompt.trim(),
+        preferredProvider: settings.provider,
+        preferredModel: settings.model,
+      });
+      if (onduidelijk) {
+        toast(onduidelijk, { icon: 'ℹ️' });
+        return;
+      }
+      const nieuw = Object.entries(antwoorden).filter(([id]) => !sjabloonAntwoorden[id]?.trim());
+      if (nieuw.length === 0) {
+        toast('Je tekst gaf geen antwoord op de vragen die nog leeg waren.', { icon: 'ℹ️' });
+        return;
+      }
+      setSjabloonDraft(JSON.stringify({ ...Object.fromEntries(nieuw), ...sjabloonAntwoorden }));
+      setVraagHerkomst((prev) => ({
+        ...prev,
+        ...Object.fromEntries(nieuw.map(([id]) => [id, herkomst[id] ?? 'tekst'])),
+      }));
+      resetDownstream();
+      const alIngevuld = sjabloon.follow_up_questions.filter((q) =>
+        sjabloonAntwoorden[q.id]?.trim(),
+      ).length;
+      const leeg = sjabloon.follow_up_questions.length - alIngevuld - nieuw.length;
+      toast.success(
+        leeg > 0
+          ? `${nieuw.length} vragen ingevuld uit je tekst. Kijk ze na; ${leeg} vragen zijn nog leeg.`
+          : `${nieuw.length} vragen ingevuld uit je tekst. Kijk na wat de AI heeft aangevuld en klik dan op Velden invullen.`,
+      );
+    } catch {
+      toast.error('Vragen invullen uit je tekst mislukt. Probeer het opnieuw.');
+    } finally {
+      setVragenVullen(false);
+    }
   }
 
   /** Kies een soort bij "Wat wil je maken?". Dezelfde soort nog eens kiezen doet niets. */
@@ -897,6 +952,7 @@ export default function OwnPromptOptimizer({
                           if (active) return;
                           setSjabloonId(t.id);
                           clearSjabloonDraft();
+                          setVraagHerkomst({});
                           resetDownstream();
                         }}
                         disabled={recommending || prefilling}
@@ -934,38 +990,31 @@ export default function OwnPromptOptimizer({
             </div>
           )}
 
-          {/* Sjabloon: eerst de vragen van het sjabloon, elk met een eigen vak.
-              Het tekstvak eronder is dan voor wat er verder nog bij hoort. */}
+          {/* Routekaart: eerst het vak voor wat je al hebt voorbereid, dan de
+              vragen van het sjabloon (onder het tekstvak). */}
           {sjabloon && (
-            <div className="border-b border-slate-200 bg-white px-3.5 py-4 dark:border-slate-700 dark:bg-slate-800">
-              <p className="mb-1 text-sm font-semibold text-slate-800 dark:text-slate-100">
-                Eerst de context
-              </p>
-              <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
-                Sta bij elke vraag even stil en schrijf op wat je al weet. Met Velden invullen zet
-                de AI je antwoorden in de velden van het sjabloon, laat open wat je niet gaf en
-                vraagt daar naar.
-              </p>
-              <SjabloonVragen
-                technique={sjabloon}
-                antwoorden={sjabloonAntwoorden}
-                onChange={(next) => {
-                  setSjabloonDraft(JSON.stringify(next));
-                  resetDownstream(); // andere context = oude voor-invulling vervalt
-                }}
-                disabled={recommending || prefilling}
-              />
-            </div>
+            <label
+              htmlFor="own-prompt-input"
+              className="block border-b border-slate-100 bg-white px-3.5 pt-3 pb-2 dark:border-slate-700 dark:bg-slate-800"
+            >
+              <span className="block text-sm font-semibold text-slate-800 dark:text-slate-100">
+                Heb je al iets voorbereid? (optioneel)
+              </span>
+              <span className="block text-xs text-slate-500 dark:text-slate-400">
+                Plak hier wat je al hebt, bijvoorbeeld een uitwerking uit een andere chat, een
+                planning of aantekeningen. De AI haalt eruit wat bij de vragen hoort en vult aan;
+                per vraag zie je wat uit je tekst komt en wat de AI heeft bedacht.
+              </span>
+            </label>
           )}
 
           <textarea
             id="own-prompt-input"
             className="block min-h-[120px] w-full resize-y border-0 bg-white px-3.5 py-3 font-mono text-[13px] text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-0 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
             value={ownPrompt}
-            aria-label={sjabloon ? 'Nog iets wat de AI moet weten? (optioneel)' : undefined}
             placeholder={
               sjabloon
-                ? 'Nog iets wat de AI moet weten? (optioneel) Bijvoorbeeld aantekeningen uit een overleg of een eerdere planning.'
+                ? 'Plak hier je voorbereide tekst.'
                 : kindOption
                 ? (!variantOn && kindOption.placeholderOff) || kindOption.placeholder
                 : 'Plak hier de prompt of stel hier je vraag…'
@@ -975,6 +1024,56 @@ export default function OwnPromptOptimizer({
               resetDownstream(); // gewijzigde prompt = aanbeveling en analyse vervallen
             }}
           />
+
+          {/* De vragen van het sjabloon, elk met een eigen vak. Bovenaan de knop
+              die ze invult uit de voorbereide tekst hierboven. */}
+          {sjabloon && (
+            <div className="border-t border-slate-200 bg-white px-3.5 py-4 dark:border-slate-700 dark:bg-slate-800">
+              <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                  De vragen van de routekaart
+                </p>
+                <button
+                  type="button"
+                  className="opl-btn-secondary text-sm"
+                  disabled={!ownPrompt.trim() || vragenVullen || recommending || prefilling}
+                  title={ownPrompt.trim() ? undefined : 'Plak eerst je voorbereide tekst hierboven'}
+                  onClick={() => void handleVragenUitTekst()}
+                >
+                  {vragenVullen ? (
+                    <>
+                      <Loader2 size={15} className="animate-spin" /> Vragen invullen…
+                    </>
+                  ) : (
+                    <>
+                      <ArrowDown size={15} /> Vul de vragen in uit je tekst
+                    </>
+                  )}
+                </button>
+              </div>
+              <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
+                Sta bij elke vraag even stil en schrijf op wat je al weet. Met Velden invullen zet
+                de AI je antwoorden in de velden van het sjabloon, laat open wat je niet gaf en
+                vraagt daar naar.
+              </p>
+              <SjabloonVragen
+                technique={sjabloon}
+                antwoorden={sjabloonAntwoorden}
+                herkomst={vraagHerkomst}
+                onChange={(next, aangepast) => {
+                  setSjabloonDraft(JSON.stringify(next));
+                  setVraagHerkomst((prev) => {
+                    if (!prev[aangepast]) return prev;
+                    const rest = { ...prev };
+                    delete rest[aangepast];
+                    return rest;
+                  });
+                  resetDownstream(); // andere context = oude voor-invulling vervalt
+                }}
+                disabled={recommending || prefilling || vragenVullen}
+              />
+            </div>
+          )}
 
           <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5 border-t border-slate-200 px-3 py-2.5 dark:border-slate-700">
             <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-slate-500 dark:text-slate-400">

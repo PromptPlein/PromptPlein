@@ -462,6 +462,83 @@ async function writeSjabloon(args: Parameters<typeof optimizePrompt>[0]): Promis
   }
 }
 
+/** Waar het antwoord op een vraag van een sjabloon vandaan komt. */
+export type VraagHerkomst = 'tekst' | 'aangevuld' | 'ai';
+
+/** De kop boven wat de AI zelf aan een antwoord toevoegt. */
+const AANGEVULD_KOP = 'Aangevuld door de AI:';
+
+/**
+ * Vul de vragen van een sjabloon in uit tekst die de gebruiker al had
+ * voorbereid (bijvoorbeeld een uitwerking uit een andere chat). Twee opdrachten
+ * lopen tegelijk: één haalt eruit wat in de tekst staat, één schrijft alleen
+ * wat de AI erbij bedenkt. Per vraag komen ze onder elkaar, met de aanvulling
+ * na "Aangevuld door de AI:", en per vraag komt terug waar het antwoord vandaan
+ * komt. Zo hangt de scheiding tussen tekst en aanvulling niet af van het model.
+ */
+export async function vragenUitVoorbereiding(args: {
+  technique: Technique;
+  tekst: string;
+  preferredProvider?: AiProvider;
+  preferredModel?: string;
+}): Promise<{
+  antwoorden: Record<string, string>;
+  herkomst: Record<string, VraagHerkomst>;
+  onduidelijk?: string;
+}> {
+  const opdracht = (sjabloonVragen: 'uithalen' | 'aanvullen') =>
+    prefillFields({
+      ownPrompt: args.tekst,
+      technique: args.technique,
+      sjabloonVragen,
+      preferredProvider: args.preferredProvider,
+      preferredModel: args.preferredModel,
+    });
+  // Het aanvullen is een extraatje: mislukt het, dan blijft wat uit de tekst komt staan.
+  const [uit, bij] = await Promise.all([
+    opdracht('uithalen'),
+    opdracht('aanvullen').catch(() => null),
+  ]);
+  if (uit.unclear) {
+    return {
+      antwoorden: {},
+      herkomst: {},
+      onduidelijk:
+        uit.reason?.trim() || 'Uit deze tekst kon de AI geen antwoorden op de vragen halen.',
+    };
+  }
+  const uitTekst = new Map(
+    uit.fields
+      .filter((f) => f.source !== 'ai' && f.value.trim())
+      .map((f) => [f.id, f.value.trim()]),
+  );
+  const aanvulling = new Map(
+    (bij && !bij.unclear ? bij.fields : [])
+      .map((f) => [f.id, f.value.replace(/^\s*aangevuld door de ai:\s*/i, '').trim()] as const)
+      .filter(([, v]) => v),
+  );
+  const antwoorden: Record<string, string> = {};
+  const herkomst: Record<string, VraagHerkomst> = {};
+  // Een aanvulling die alleen herhaalt wat er al staat, voegt niets toe.
+  const kaal = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  for (const q of args.technique.follow_up_questions) {
+    const tekst = uitTekst.get(q.id);
+    const bijTekst = aanvulling.get(q.id);
+    const extra = bijTekst && tekst && kaal(tekst).includes(kaal(bijTekst)) ? undefined : bijTekst;
+    if (tekst && extra) {
+      antwoorden[q.id] = `${tekst}\n\n${AANGEVULD_KOP}\n${extra}`;
+      herkomst[q.id] = 'aangevuld';
+    } else if (tekst) {
+      antwoorden[q.id] = tekst;
+      herkomst[q.id] = 'tekst';
+    } else if (extra) {
+      antwoorden[q.id] = `${AANGEVULD_KOP}\n${extra}`;
+      herkomst[q.id] = 'ai';
+    }
+  }
+  return { antwoorden, herkomst };
+}
+
 /**
  * Alias voor de generatorflow: genereert een herbruikbare prompt-template.
  * Functioneel identiek aan `optimizePrompt` — de generator denkt in "genereren".
@@ -2541,6 +2618,12 @@ export async function prefillFields(args: {
    */
   fromFormatBrief?: boolean;
   /**
+   * Sjabloon: de vragen van de contextstap invullen uit een voorbereide tekst.
+   * 'uithalen' neemt alleen over wat erin staat, 'aanvullen' schrijft alleen wat
+   * de AI toevoegt (zie vragenUitVoorbereiding).
+   */
+  sjabloonVragen?: 'uithalen' | 'aanvullen';
+  /**
    * Context van het aangehaakte chatproject; zie {@link buildGeneratorContext}.
    * Hiermee vult de AI de velden van het raamwerk vast met wat het project al
    * weet, in plaats van de gebruiker ernaar te vragen.
@@ -2574,6 +2657,7 @@ export async function prefillFields(args: {
     clarification,
     fromDocument,
     fromFormatBrief,
+    sjabloonVragen,
     projectContext,
     onStatus,
     onSummary,
@@ -2636,6 +2720,7 @@ export async function prefillFields(args: {
         // Een sjabloon gaat letterlijk op een vaste vorm: de server laat feiten
         // die ontbreken dan open en zet er een vraag bij, in plaats van te gokken.
         ...(isSjabloon(technique) ? { sjabloon: sjabloonNaam(technique.template) ?? 'algemeen' } : {}),
+        ...(isSjabloon(technique) && sjabloonVragen ? { sjabloonVragen } : {}),
         techniqueName: technique.name,
         analyzeFields,
         preferredProvider: preferredProvider ?? 'auto',
