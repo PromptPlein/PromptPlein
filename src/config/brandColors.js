@@ -38,16 +38,16 @@ export const rijksoranje = '#e17000';
 export const rijksoranjeDonker = '#c45f00';
 
 /**
- * Accentkleur in de donkere modus. Het verzadigde oranje vloekt met de
- * donkerblauwe ondergrond en tinten ervan worden modderig bruin, dus daar
- * neemt een zacht violet zijn plaats in. Tailwind schakelt via een
- * CSS-variabele om, zodat elke `rijksoranje`-klasse meegaat.
+ * Accentkleur in de donkere modus. Het felle rijksoranje springt op de
+ * donkerblauwe ondergrond te hard naar voren, dus daar staat een dieper,
+ * gebrand oranje. Tailwind schakelt via een CSS-variabele om, zodat elke
+ * `rijksoranje`-klasse meegaat.
  * @type {string}
  */
-export const accentDonker = '#9a7cf0';
+export const accentDonker = '#c75a1a';
 
 /** Donkere variant van het accent in de donkere modus. @type {string} */
-export const accentDonkerHover = '#7f5fe0';
+export const accentDonkerHover = '#a84a12';
 
 /** Overige rijkshuisstijl-accenten. */
 export const rijksrood = '#d52b1e';
