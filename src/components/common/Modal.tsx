@@ -11,18 +11,16 @@ interface ModalProps {
 }
 
 export default function Modal({ open, onClose, title, children, size = 'max-w-2xl' }: ModalProps) {
+  // Een venster sluit alleen via het kruisje of een eigen knop (Annuleren,
+  // Opslaan). Geen klik op de achtergrond en geen Escape: daarmee ging per
+  // ongeluk alles verloren wat er al was ingevuld.
   useEffect(() => {
     if (!open) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
-    }
-    document.addEventListener('keydown', onKey);
     document.body.style.overflow = 'hidden';
     return () => {
-      document.removeEventListener('keydown', onKey);
       document.body.style.overflow = '';
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 
@@ -33,14 +31,7 @@ export default function Modal({ open, onClose, title, children, size = 'max-w-2x
       aria-modal="true"
       aria-label={title}
     >
-      {/* Het klikvlak dat sluit is een eigen laag binnen het scrollvak. Een klik
-          op de schuifbalk raakt het scrollvak zelf en sluit het venster dus niet. */}
-      <div
-        className="flex min-h-full items-start justify-center p-4 sm:p-8"
-        onMouseDown={(e) => {
-          if (e.target === e.currentTarget) onClose();
-        }}
-      >
+      <div className="flex min-h-full items-start justify-center p-4 sm:p-8">
         <div className={`mt-6 w-full ${size} animate-fade-in rounded-2xl bg-white dark:bg-slate-800 shadow-2xl`}>
           <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 px-6 py-4">
             <h2 className="text-lg font-bold text-rijksblauw-700 dark:text-rijksblauw-200">{title}</h2>
