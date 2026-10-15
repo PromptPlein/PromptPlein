@@ -336,6 +336,16 @@ systeemprompt per naam via `sjabloonSystemPrompt`), de rest gaat letterlijk mee.
 Een nieuw sjabloon is dus een rij in `techniques` plus een systeemprompt in
 `PROMPT_CATALOG`. Kiest de gebruiker geen soort, dan doen sjablonen niet mee.
 
+De routekaart zelf (de HTML-pagina) programmeert geen taalmodel meer:
+`src/lib/routekaart/` leest het inhoudsblok en zet het in één vaste, geteste
+pagina (`routekaart.html`). Dat bestand verschijnt in de bouwer onder de
+opdracht en in de chat via "Maak de routekaart". Wijzig je het formaat van het
+inhoudsblok in de systeemprompt, pas dan ook `parseRoutekaart` aan.
+
+Elk HTML-bestand in de chat wordt na het schrijven onzichtbaar en afgeschermd
+gedraaid (`src/lib/fileCheck.ts`); scriptfouten komen met regelnummer op de
+bestandskaart.
+
 Vanuit de bouwer kun je een prompt met "Uitvoeren in chat" doorzetten naar
 `/chat`, en vanuit de chat weer terug (`handoffService`).
 
