@@ -7,7 +7,9 @@ import {
 } from '@/lib/ndjsonStream';
 import {
   fillSjabloon,
+  ensureGoalCommand,
   isContextPrompt,
+  isGoalCommand,
   isSjabloon,
   openPlaatshouders,
   sjabloonNaam,
@@ -203,6 +205,12 @@ export async function optimizePrompt(args: {
     return writeSjabloon(args);
   }
 
+  // Een /goal-opdracht moet met /goal beginnen, anders zet de agent het doel
+  // niet aan; ook als het model of de lokale terugval dat woord weglaat.
+  const tidy = isGoalCommand(technique)
+    ? (text: string) => ensureGoalCommand(tidyPromptMarkup(text))
+    : tidyPromptMarkup;
+
   const functionUrl = getFunctionUrl('optimize-prompt');
 
   if (isSupabaseConfigured && functionUrl) {
@@ -275,7 +283,7 @@ export async function optimizePrompt(args: {
         const streamed = await streamFromFunction(
           payload,
           onChunk,
-          tidyPromptMarkup,
+          tidy,
           (status) => {
             if (status.sources) sources = status.sources;
             if (status.notice) notices.push(status.notice);
@@ -301,7 +309,7 @@ export async function optimizePrompt(args: {
         if (streamed.error) throw new Error(streamed.error);
         if (!streamed.text.trim()) throw new Error('De AI-service gaf een lege prompt terug');
         return {
-          optimized_content: tidyPromptMarkup(streamed.text),
+          optimized_content: tidy(streamed.text),
           success: true,
           provider: (streamed.provider as OptimizeResult['provider']) ?? 'claude',
           ...(sources?.length ? { sources } : {}),
@@ -342,7 +350,7 @@ export async function optimizePrompt(args: {
         return {
           // Sterretjes van het model opruimen op de plek waar élke consument
           // (tonen, kopiëren, uitvoeren, opslaan) de prompt ophaalt.
-          optimized_content: tidyPromptMarkup(data.optimized_content),
+          optimized_content: tidy(data.optimized_content),
           success: true,
           provider: (data.provider as OptimizeResult['provider']) ?? 'claude',
           ...(data.sources?.length ? { sources: data.sources } : {}),
@@ -353,7 +361,7 @@ export async function optimizePrompt(args: {
       // Val terug op lokale template als de remote-call faalt.
       const message = err instanceof Error ? err.message : 'Onbekende fout';
       return {
-        optimized_content: fillTemplate(technique.template, promptContent, followUpAnswers),
+        optimized_content: tidy(fillTemplate(technique.template, promptContent, followUpAnswers)),
         success: true,
         provider: 'local-template',
         error: `Remote optimalisatie mislukt (${message}); lokale template gebruikt.`,
@@ -363,7 +371,7 @@ export async function optimizePrompt(args: {
 
   // Geen backend: gebruik de lokale template-fill (deterministisch, geen API).
   return {
-    optimized_content: fillTemplate(technique.template, promptContent, followUpAnswers),
+    optimized_content: tidy(fillTemplate(technique.template, promptContent, followUpAnswers)),
     success: true,
     provider: 'local-template',
   };

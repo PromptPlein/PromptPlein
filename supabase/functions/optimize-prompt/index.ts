@@ -4900,6 +4900,35 @@ staan als [plaatshouder]. Geef geen tekst buiten deze koppen en plaats GEEN code
 }
 
 /**
+ * Verplichte uitvoerstructuur voor Goal (Agents), migratie 0042: één regel die
+ * met /goal begint, zodat de gebruiker hem in een codeeragent plakt en het doel
+ * meteen actief is. De vier onderdelen staan vast; een vage succesvoorwaarde
+ * wordt een plaatshouder in plaats van een verzonnen test.
+ */
+let GOAL_STRUCTURE_INSTRUCTION = `VERPLICHTE UITVOERSTRUCTUUR (Goal):
+Je schrijft één /goal-opdracht voor een AI-agent die zelfstandig doorwerkt tot het doel bereikt is.
+
+<onderdelen>
+taak: wat er gebouwd of opgelost wordt, als één zin in de gebiedende wijs.
+succes: een commando, test of zichtbaar resultaat dat je kunt controleren, zoals "npm test eindigt met exitcode 0" of "GET /api/export geeft status 200". Een gevoel of bijvoeglijk naamwoord ("het werkt", "het is goed") is geen succesvoorwaarde.
+scope: wat niet mag veranderen, zoals een map, module of bestand.
+grens: een maximum aantal beurten, of de opdracht om te stoppen en te vragen bij een blokkade.
+</onderdelen>
+
+<regels>
+Haal elk onderdeel uit de antwoorden en de eigen tekst van de gebruiker.
+Is de succesvoorwaarde vaag of ontbreekt hij, schrijf dan [controleerbare succesvoorwaarde, bijvoorbeeld een test of commando] en verzin er geen.
+Ontbreekt de scope, schrijf dan [wat niet mag veranderen].
+Ontbreekt de grens, schrijf dan: Stop en vraag het als je vastloopt.
+De eerste vijf tekens van je antwoord zijn altijd /goal.
+Geef alleen de opdracht: geen koppen, geen uitleg ervoor of erna, geen codeblok.
+</regels>
+
+<uitvoersjabloon>
+/goal <taak>. Success: <succes>. Scope: <scope>. <grens>.
+</uitvoersjabloon>`;
+
+/**
  * Verplichte uitvoerstructuur voor de Few-Shot-techniek: rol plus context, een
  * werkwijze, de input/output-paren als voorbeelden, wat te doen als geen paar
  * past, en een afsluitend "Nieuwe invoer"-blok. Komt er een ingevulde bouwer mee
@@ -5328,7 +5357,8 @@ type StructureFormat =
   | 'chain-of-verification'
   | 'step-back'
   | 'rubric'
-  | 'skill';
+  | 'skill'
+  | 'goal';
 
 /**
  * Kies de juiste structuur-instructie (of geen) op basis van de techniek.
@@ -5357,6 +5387,7 @@ function structureInstruction(
   if (format === 'step-back') return STEP_BACK_STRUCTURE_INSTRUCTION;
   if (format === 'rubric') return RUBRIC_STRUCTURE_INSTRUCTION;
   if (format === 'skill') return SKILL_STRUCTURE_INSTRUCTION;
+  if (format === 'goal') return GOAL_STRUCTURE_INSTRUCTION;
   return null;
 }
 
@@ -8265,6 +8296,7 @@ const PROMPT_CATALOG: PromptCatalogEntry[] = [
   { id: 'STEP_BACK_STRUCTURE_INSTRUCTION', groep: "Structuur per techniek", titel: "Step-back", uitleg: "Opbouw die de prompt krijgt bij Step-back.", get: () => STEP_BACK_STRUCTURE_INSTRUCTION, set: (v) => { STEP_BACK_STRUCTURE_INSTRUCTION = v; } },
   { id: 'RUBRIC_STRUCTURE_INSTRUCTION', groep: "Structuur per techniek", titel: "Rubric", uitleg: "Opbouw die de prompt krijgt bij een toetsingskader.", get: () => RUBRIC_STRUCTURE_INSTRUCTION, set: (v) => { RUBRIC_STRUCTURE_INSTRUCTION = v; } },
   { id: 'SKILL_STRUCTURE_INSTRUCTION', groep: "Structuur per techniek", titel: "Skill", uitleg: "Opbouw van een skill uit de Skill Creator.", get: () => SKILL_STRUCTURE_INSTRUCTION, set: (v) => { SKILL_STRUCTURE_INSTRUCTION = v; } },
+  { id: 'GOAL_STRUCTURE_INSTRUCTION', groep: "Structuur per techniek", titel: "Goal (Agents)", uitleg: "Eén /goal-regel met taak, succesvoorwaarde, scope en grens.", get: () => GOAL_STRUCTURE_INSTRUCTION, set: (v) => { GOAL_STRUCTURE_INSTRUCTION = v; } },
   { id: 'RECOMMEND_SYSTEM_PROMPT', groep: "Framework kiezen en velden", titel: "Techniek aanbevelen (oud)", uitleg: "De oudere aanbeveling van een techniek bij een doel (mode recommend).", get: () => RECOMMEND_SYSTEM_PROMPT, set: (v) => { RECOMMEND_SYSTEM_PROMPT = v; } },
   { id: 'RECOMMEND_FRAMEWORK_SYSTEM_PROMPT', groep: "Framework kiezen en velden", titel: "Framework zoeken bij een eigen prompt", uitleg: "\"Zoek het beste prompt framework\" op /genereren.", get: () => RECOMMEND_FRAMEWORK_SYSTEM_PROMPT, set: (v) => { RECOMMEND_FRAMEWORK_SYSTEM_PROMPT = v; } },
   { id: 'DIALOGUE_FRAMEWORK_SYSTEM_PROMPT', groep: "Framework kiezen en velden", titel: "Framework kiezen na de brainstorm", uitleg: "De frameworkkeuze aan het eind van de brainstormsessie.", get: () => DIALOGUE_FRAMEWORK_SYSTEM_PROMPT, set: (v) => { DIALOGUE_FRAMEWORK_SYSTEM_PROMPT = v; } },

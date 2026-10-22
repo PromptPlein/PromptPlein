@@ -479,7 +479,8 @@ export interface PlanStep {
     | 'chain-of-verification'
     | 'step-back'
     | 'rubric'
-    | 'skill';
+    | 'skill'
+    | 'goal';
   /** Afgeleid: true bij chain-of-thought/socratic (vraag-na-vraag stappen). */
   interactive?: boolean;
 }

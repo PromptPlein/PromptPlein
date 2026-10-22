@@ -230,6 +230,7 @@ export function localFrameworkGuess(ownPrompt: string, frameworks: Technique[]):
  *  - 'step-back'        → eerst de algemenere vraag beantwoorden, dan pas terug naar de gestelde vraag.
  *  - 'rubric'           → toetsingskader met niveaubeschrijvingen, bewijsregel en eindoordeel.
  *  - 'skill'            → vaste instructie in secties die elke invoer op dezelfde manier afhandelt.
+ *  - 'goal'             → één /goal-regel voor een agent: taak, succesvoorwaarde, scope en grens.
  *  - undefined          → geen vaste structuur; de AI bepaalt zelf de vorm.
  */
 export type StructureFormat =
@@ -244,7 +245,8 @@ export type StructureFormat =
   | 'chain-of-verification'
   | 'step-back'
   | 'rubric'
-  | 'skill';
+  | 'skill'
+  | 'goal';
 
 const FEW_SHOT_IDS = new Set(['tech-few-shot']);
 const FEW_SHOT_NAMES = new Set(['few-shot voorbeelden', 'few-shot', 'few shot']);
@@ -277,6 +279,9 @@ const SKILL_IDS = new Set(['tech-skill-creator']);
 
 /** Welke vaste uitvoerstructuur hoort bij deze techniek (indien van toepassing)? */
 export function structureFormat(t: TechniqueIdentity): StructureFormat | undefined {
+  // Vóór de context-raamwerken: Goal (Agents) hoort bij die familie, maar levert
+  // één /goal-regel op in plaats van koppen.
+  if (isGoalCommand(t)) return 'goal';
   if (isContextPrompt(t)) return 'care';
   const id = t.id;
   const name = t.name.trim().toLowerCase();
@@ -311,6 +316,21 @@ export function structureFormat(t: TechniqueIdentity): StructureFormat | undefin
   if (META_IDS.has(id) || META_NAMES.has(name) || name.includes('meta')) return 'meta';
   if (SOCRATIC_IDS.has(id) || SOCRATIC_NAMES.has(name) || name.includes('socrat')) return 'socratic';
   return undefined;
+}
+
+/** Bouwt deze techniek een /goal-opdracht (migratie 0042)? */
+export function isGoalCommand(t: TechniqueIdentity): boolean {
+  return t.name.trim().toLowerCase().startsWith('goal');
+}
+
+/**
+ * Zorgt dat een /goal-opdracht ook echt met /goal begint: zonder dat woord
+ * vooraan zet de agent het doel niet aan.
+ */
+export function ensureGoalCommand(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed || /^\/goal\b/i.test(trimmed)) return trimmed;
+  return `/goal ${trimmed.replace(/^goal\s*:?\s*/i, '')}`;
 }
 
 /**
@@ -417,6 +437,7 @@ const NAME_EXAMPLES: [needle: string, example: string][] = [
   ['raise', 'vat de reacties uit de internetconsultatie samen tot de rode draad'],
   ['craft', 'maak een factsheet over de nieuwe legesverordening voor baliemedewerkers'],
   ['create', 'schrijf een vacaturetekst voor een beleidsadviseur, in de toon van onze eerdere vacatures'],
+  ['goal', 'los de fout in de export op tot alle tests weer slagen'],
   ['react', 'beoordeel of deze klacht binnen de wettelijke termijn is afgehandeld'],
   ['care', 'schrijf een brief aan bewoners over werkzaamheden in hun straat'],
 ];
@@ -435,6 +456,7 @@ const FORMAT_EXAMPLES: Record<StructureFormat, string> = {
   'step-back': 'moeten we een meldplicht invoeren voor verhuurders?',
   rubric: 'beoordeel dit projectplan op volledigheid, onderbouwing en haalbaarheid',
   skill: 'geef feedback op conceptbrieven aan burgers, elke keer volgens onze schrijfwijzer',
+  goal: 'los de fout in de export op tot alle tests weer slagen',
 };
 
 const DEFAULT_EXAMPLE = 'schrijf een brief aan bewoners over werkzaamheden in hun straat';
