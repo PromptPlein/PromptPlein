@@ -4954,6 +4954,7 @@ layout: per scherm de indeling, de stijl en eigen vormregels.
 
 <regels>
 Haal elk onderdeel uit de antwoorden en de eigen tekst van de gebruiker.
+Staat er in de /goal-regel van de STRUCTUUR-REFERENTIE vaste tekst naast de invulplekken, neem die tekst dan letterlijk over.
 Is de succesvoorwaarde vaag of ontbreekt hij, schrijf dan [controleerbare succesvoorwaarde, bijvoorbeeld een test of commando] en verzin er geen.
 Ontbreekt de scope, schrijf dan [wat niet mag veranderen].
 Ontbreekt de grens, schrijf dan: Stop en vraag het als je vastloopt.
