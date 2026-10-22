@@ -318,9 +318,13 @@ export function structureFormat(t: TechniqueIdentity): StructureFormat | undefin
   return undefined;
 }
 
-/** Bouwt deze techniek een /goal-opdracht (migratie 0042)? */
+/**
+ * Bouwt deze techniek een /goal-opdracht? Goal (Agents) uit migratie 0042 en de
+ * TILSSG-frameworks voor prototype en dashboard uit 0043.
+ */
 export function isGoalCommand(t: TechniqueIdentity): boolean {
-  return t.name.trim().toLowerCase().startsWith('goal');
+  const name = t.name.trim().toLowerCase();
+  return name.startsWith('goal') || name.startsWith('tilssg');
 }
 
 /**
@@ -437,6 +441,7 @@ const NAME_EXAMPLES: [needle: string, example: string][] = [
   ['raise', 'vat de reacties uit de internetconsultatie samen tot de rode draad'],
   ['craft', 'maak een factsheet over de nieuwe legesverordening voor baliemedewerkers'],
   ['create', 'schrijf een vacaturetekst voor een beleidsadviseur, in de toon van onze eerdere vacatures'],
+  ['tilssg', 'bouw een dashboard dat per afdeling de open zaken en de doorlooptijd laat zien'],
   ['goal', 'los de fout in de export op tot alle tests weer slagen'],
   ['react', 'beoordeel of deze klacht binnen de wettelijke termijn is afgehandeld'],
   ['care', 'schrijf een brief aan bewoners over werkzaamheden in hun straat'],

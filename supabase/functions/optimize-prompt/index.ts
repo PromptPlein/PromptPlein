@@ -768,7 +768,8 @@ const GENERATE_USER_PROMPT = (args: {
     | 'chain-of-verification'
     | 'step-back'
     | 'rubric'
-    | 'skill';
+    | 'skill'
+    | 'goal';
   /** Interview al in de tool gevoerd → uitgewerkte prompt, geen dialoog-instructies. */
   interviewResolved?: boolean;
 }) => {
@@ -830,6 +831,11 @@ const GENERATE_USER_PROMPT = (args: {
           `met een lege regel tussen de blokken. Vul elke kop volledig uit op basis van de antwoorden.`,
       );
     }
+  } else if (args.structureFormat === 'goal') {
+    parts.push(
+      `Houd je strikt aan de verplichte Goal-structuur: begin je antwoord met /goal en volg het ` +
+        `uitvoersjabloon uit de systeemprompt.`,
+    );
   } else if (args.structureFormat === 'few-shot') {
     parts.push(
       `Houd je strikt aan de verplichte Few-Shot-structuur: een korte rol/taak-intro, daarna ` +
@@ -4929,6 +4935,49 @@ Geef alleen de opdracht: geen koppen, geen uitleg ervoor of erna, geen codeblok.
 </uitvoersjabloon>`;
 
 /**
+ * Verplichte uitvoerstructuur voor de goal-frameworks met ontwerp (TILSSG,
+ * migratie 0043): eerst de /goal-regel, daaronder wat erin komt en hoe het
+ * eruitziet, en tot slot de vaste regels uit de template, letterlijk. Gekozen
+ * zodra een goal-template koppen heeft (zie structureInstruction).
+ */
+let GOAL_DESIGN_STRUCTURE_INSTRUCTION = `VERPLICHTE UITVOERSTRUCTUUR (Goal met ontwerp):
+Je schrijft een /goal-opdracht voor een AI-agent die een dashboard of tool bouwt en zelfstandig doorwerkt tot het doel bereikt is. De eerste regel is het doel; daaronder staat wat erin komt en hoe het eruitziet.
+
+<onderdelen>
+taak: wat er gebouwd wordt, voor wie en waarvoor, als één zin in de gebiedende wijs.
+succes: een commando, test of zichtbaar resultaat dat je kunt controleren, zoals "npm run build slaagt en elke tab toont zijn cijfers". Een gevoel of bijvoeglijk naamwoord ("het ziet er mooi uit") is geen succesvoorwaarde.
+scope: wat niet mag veranderen of niet gebouwd wordt.
+grens: een maximum aantal beurten, of de opdracht om te stoppen en te vragen bij een blokkade.
+inhoud: per scherm wat erop staat: cijfers, grafieken, tabellen en de data erachter.
+layout: per scherm de indeling, de stijl en eigen vormregels.
+</onderdelen>
+
+<regels>
+Haal elk onderdeel uit de antwoorden en de eigen tekst van de gebruiker.
+Is de succesvoorwaarde vaag of ontbreekt hij, schrijf dan [controleerbare succesvoorwaarde, bijvoorbeeld een test of commando] en verzin er geen.
+Ontbreekt de scope, schrijf dan [wat niet mag veranderen].
+Ontbreekt de grens, schrijf dan: Stop en vraag het als je vastloopt.
+Is LAYOUT leeg, schrijf daar dan alleen: Volg de vaste regels.
+Schrijf INHOUD en LAYOUT als korte regels, één punt per regel, in de gebiedende wijs.
+Neem het blok VASTE REGELS uit de STRUCTUUR-REFERENTIE letterlijk over.
+De eerste vijf tekens van je antwoord zijn altijd /goal.
+Geen uitleg ervoor of erna, geen codeblok.
+</regels>
+
+<uitvoersjabloon>
+/goal <taak>. Success: <succes>. Scope: <scope>. <grens>.
+
+INHOUD:
+<per scherm wat erop staat>
+
+LAYOUT:
+<per scherm de indeling en de stijl>
+
+VASTE REGELS:
+<het blok VASTE REGELS, letterlijk>
+</uitvoersjabloon>`;
+
+/**
  * Verplichte uitvoerstructuur voor de Few-Shot-techniek: rol plus context, een
  * werkwijze, de input/output-paren als voorbeelden, wat te doen als geen paar
  * past, en een afsluitend "Nieuwe invoer"-blok. Komt er een ingevulde bouwer mee
@@ -5387,7 +5436,9 @@ function structureInstruction(
   if (format === 'step-back') return STEP_BACK_STRUCTURE_INSTRUCTION;
   if (format === 'rubric') return RUBRIC_STRUCTURE_INSTRUCTION;
   if (format === 'skill') return SKILL_STRUCTURE_INSTRUCTION;
-  if (format === 'goal') return GOAL_STRUCTURE_INSTRUCTION;
+  if (format === 'goal') {
+    return headings.length > 0 ? GOAL_DESIGN_STRUCTURE_INSTRUCTION : GOAL_STRUCTURE_INSTRUCTION;
+  }
   return null;
 }
 
@@ -8297,6 +8348,7 @@ const PROMPT_CATALOG: PromptCatalogEntry[] = [
   { id: 'RUBRIC_STRUCTURE_INSTRUCTION', groep: "Structuur per techniek", titel: "Rubric", uitleg: "Opbouw die de prompt krijgt bij een toetsingskader.", get: () => RUBRIC_STRUCTURE_INSTRUCTION, set: (v) => { RUBRIC_STRUCTURE_INSTRUCTION = v; } },
   { id: 'SKILL_STRUCTURE_INSTRUCTION', groep: "Structuur per techniek", titel: "Skill", uitleg: "Opbouw van een skill uit de Skill Creator.", get: () => SKILL_STRUCTURE_INSTRUCTION, set: (v) => { SKILL_STRUCTURE_INSTRUCTION = v; } },
   { id: 'GOAL_STRUCTURE_INSTRUCTION', groep: "Structuur per techniek", titel: "Goal (Agents)", uitleg: "Eén /goal-regel met taak, succesvoorwaarde, scope en grens.", get: () => GOAL_STRUCTURE_INSTRUCTION, set: (v) => { GOAL_STRUCTURE_INSTRUCTION = v; } },
+  { id: 'GOAL_DESIGN_STRUCTURE_INSTRUCTION', groep: "Structuur per techniek", titel: "TILSSG (Prototype en Dashboard)", uitleg: "Een /goal-regel met daaronder inhoud, layout en de vaste regels van het framework.", get: () => GOAL_DESIGN_STRUCTURE_INSTRUCTION, set: (v) => { GOAL_DESIGN_STRUCTURE_INSTRUCTION = v; } },
   { id: 'RECOMMEND_SYSTEM_PROMPT', groep: "Framework kiezen en velden", titel: "Techniek aanbevelen (oud)", uitleg: "De oudere aanbeveling van een techniek bij een doel (mode recommend).", get: () => RECOMMEND_SYSTEM_PROMPT, set: (v) => { RECOMMEND_SYSTEM_PROMPT = v; } },
   { id: 'RECOMMEND_FRAMEWORK_SYSTEM_PROMPT', groep: "Framework kiezen en velden", titel: "Framework zoeken bij een eigen prompt", uitleg: "\"Zoek het beste prompt framework\" op /genereren.", get: () => RECOMMEND_FRAMEWORK_SYSTEM_PROMPT, set: (v) => { RECOMMEND_FRAMEWORK_SYSTEM_PROMPT = v; } },
   { id: 'DIALOGUE_FRAMEWORK_SYSTEM_PROMPT', groep: "Framework kiezen en velden", titel: "Framework kiezen na de brainstorm", uitleg: "De frameworkkeuze aan het eind van de brainstormsessie.", get: () => DIALOGUE_FRAMEWORK_SYSTEM_PROMPT, set: (v) => { DIALOGUE_FRAMEWORK_SYSTEM_PROMPT = v; } },
