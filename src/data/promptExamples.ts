@@ -31,6 +31,13 @@ export interface PromptExample {
  */
 export const PROMPT_EXAMPLES: PromptExample[] = [
   {
+    category: 'data',
+    title: 'De werkdag in beeld',
+    subtitle: 'Interactief dashboard dat een werkdag van 8 uur verdeelt en vergelijkt',
+    prompt:
+      'Bouw een interactief dashboard ‘De werkdag in beeld’. Laat gebruikers met schuifjes een werkdag van 8 uur verdelen over vergaderen, mailen, geconcentreerd werken en koffiepauzes. Toon direct de verdeling in een kleurrijk diagram en waarschuw als het totaal boven 8 uur komt. Laat de huidige en ideale werkdag naast elkaar vergelijken. Start met een fictieve voorbeeldverdeling. Gebruik donkerblauw, zachte pastelkleuren en duidelijke knoppen.',
+  },
+  {
     category: 'begrijpelijk',
     title: 'Brief beoordelen op B1 en toon',
     subtitle: 'Eerst een oordeel, daarna een suggestie op taalniveau B1',
