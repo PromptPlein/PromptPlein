@@ -1,4 +1,20 @@
 # PromptPlein is bedoeld voor intern overheidsgebruik en mag niet
-# worden geïndexeerd of gecrawld door zoekmachines of AI-bots.
+# worden geïndexeerd door zoekmachines.
+#
+# Zoekmachines mogen hier bewust wel komen: alleen zo zien ze de kop
+# X-Robots-Tag: noindex (vercel.json) en halen ze de site uit hun index.
+# Met Disallow ziet Google die kop nooit en blijft het adres zonder
+# beschrijving in de zoekresultaten staan.
 User-agent: *
+Allow: /
+
+# AI-crawlers horen niet in een zoekindex, die blijven geweerd.
+User-agent: GPTBot
+User-agent: ChatGPT-User
+User-agent: CCBot
+User-agent: ClaudeBot
+User-agent: anthropic-ai
+User-agent: Google-Extended
+User-agent: PerplexityBot
+User-agent: Bytespider
 Disallow: /
