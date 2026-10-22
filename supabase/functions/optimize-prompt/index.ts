@@ -10771,8 +10771,11 @@ Deno.serve(async (req: Request) => {
     }
 
     // Nieuwe clients sturen `structureFormat`; oude clients alleen `isContextPrompt`.
-    const format: StructureFormat | undefined =
-      body.structureFormat ?? (body.isContextPrompt ? 'care' : undefined);
+    // Een template die met /goal begint krijgt altijd de goal-structuur, ook als
+    // een tabblad met een oudere versie van de app nog 'care' meestuurt.
+    const format: StructureFormat | undefined = /^\/goal\b/.test(body.template.trim())
+      ? 'goal'
+      : body.structureFormat ?? (body.isContextPrompt ? 'care' : undefined);
 
     const filled = fillTemplate(body.template, body.promptContent, body.followUpAnswers ?? {});
     // Koppen van DIT raamwerk afleiden uit de template, zodat de generator de
