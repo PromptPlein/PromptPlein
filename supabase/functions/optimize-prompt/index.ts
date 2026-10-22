@@ -4935,8 +4935,8 @@ Geef alleen de opdracht: geen koppen, geen uitleg ervoor of erna, geen codeblok.
 </uitvoersjabloon>`;
 
 /**
- * Verplichte uitvoerstructuur voor de goal-frameworks met ontwerp (TILSSG,
- * migratie 0043): eerst de /goal-regel, daaronder wat erin komt en hoe het
+ * Verplichte uitvoerstructuur voor de goal-frameworks met ontwerp, Dashboard
+ * (Prototype) en Dashboard (Volledig) uit migratie 0043: eerst de /goal-regel, daaronder wat erin komt en hoe het
  * eruitziet, en tot slot de vaste regels uit de template, letterlijk. Gekozen
  * zodra een goal-template koppen heeft (zie structureInstruction).
  */
@@ -8349,7 +8349,7 @@ const PROMPT_CATALOG: PromptCatalogEntry[] = [
   { id: 'RUBRIC_STRUCTURE_INSTRUCTION', groep: "Structuur per techniek", titel: "Rubric", uitleg: "Opbouw die de prompt krijgt bij een toetsingskader.", get: () => RUBRIC_STRUCTURE_INSTRUCTION, set: (v) => { RUBRIC_STRUCTURE_INSTRUCTION = v; } },
   { id: 'SKILL_STRUCTURE_INSTRUCTION', groep: "Structuur per techniek", titel: "Skill", uitleg: "Opbouw van een skill uit de Skill Creator.", get: () => SKILL_STRUCTURE_INSTRUCTION, set: (v) => { SKILL_STRUCTURE_INSTRUCTION = v; } },
   { id: 'GOAL_STRUCTURE_INSTRUCTION', groep: "Structuur per techniek", titel: "Goal (Agents)", uitleg: "Eén /goal-regel met taak, succesvoorwaarde, scope en grens.", get: () => GOAL_STRUCTURE_INSTRUCTION, set: (v) => { GOAL_STRUCTURE_INSTRUCTION = v; } },
-  { id: 'GOAL_DESIGN_STRUCTURE_INSTRUCTION', groep: "Structuur per techniek", titel: "TILSSG (Prototype en Dashboard)", uitleg: "Een /goal-regel met daaronder inhoud, layout en de vaste regels van het framework.", get: () => GOAL_DESIGN_STRUCTURE_INSTRUCTION, set: (v) => { GOAL_DESIGN_STRUCTURE_INSTRUCTION = v; } },
+  { id: 'GOAL_DESIGN_STRUCTURE_INSTRUCTION', groep: "Structuur per techniek", titel: "Dashboard (Prototype en Volledig)", uitleg: "Een /goal-regel met daaronder inhoud, layout en de vaste regels van het framework.", get: () => GOAL_DESIGN_STRUCTURE_INSTRUCTION, set: (v) => { GOAL_DESIGN_STRUCTURE_INSTRUCTION = v; } },
   { id: 'RECOMMEND_SYSTEM_PROMPT', groep: "Framework kiezen en velden", titel: "Techniek aanbevelen (oud)", uitleg: "De oudere aanbeveling van een techniek bij een doel (mode recommend).", get: () => RECOMMEND_SYSTEM_PROMPT, set: (v) => { RECOMMEND_SYSTEM_PROMPT = v; } },
   { id: 'RECOMMEND_FRAMEWORK_SYSTEM_PROMPT', groep: "Framework kiezen en velden", titel: "Framework zoeken bij een eigen prompt", uitleg: "\"Zoek het beste prompt framework\" op /genereren.", get: () => RECOMMEND_FRAMEWORK_SYSTEM_PROMPT, set: (v) => { RECOMMEND_FRAMEWORK_SYSTEM_PROMPT = v; } },
   { id: 'DIALOGUE_FRAMEWORK_SYSTEM_PROMPT', groep: "Framework kiezen en velden", titel: "Framework kiezen na de brainstorm", uitleg: "De frameworkkeuze aan het eind van de brainstormsessie.", get: () => DIALOGUE_FRAMEWORK_SYSTEM_PROMPT, set: (v) => { DIALOGUE_FRAMEWORK_SYSTEM_PROMPT = v; } },

@@ -319,12 +319,15 @@ export function structureFormat(t: TechniqueIdentity): StructureFormat | undefin
 }
 
 /**
- * Bouwt deze techniek een /goal-opdracht? Goal (Agents) uit migratie 0042 en de
- * TILSSG-frameworks voor prototype en dashboard uit 0043.
+ * De frameworks voor Dashboard die een /goal-opdracht bouwen (migratie 0043,
+ * hernoemd in 0045). TILSSG blijft staan voor wie de oude naam nog heeft.
  */
+const GOAL_DASHBOARD_NAMES = new Set(['dashboard (prototype)', 'dashboard (volledig)']);
+
+/** Bouwt deze techniek een /goal-opdracht? Goal (Agents) uit 0042 en de dashboards. */
 export function isGoalCommand(t: TechniqueIdentity): boolean {
   const name = t.name.trim().toLowerCase();
-  return name.startsWith('goal') || name.startsWith('tilssg');
+  return name.startsWith('goal') || name.startsWith('tilssg') || GOAL_DASHBOARD_NAMES.has(name);
 }
 
 /**
@@ -441,7 +444,7 @@ const NAME_EXAMPLES: [needle: string, example: string][] = [
   ['raise', 'vat de reacties uit de internetconsultatie samen tot de rode draad'],
   ['craft', 'maak een factsheet over de nieuwe legesverordening voor baliemedewerkers'],
   ['create', 'schrijf een vacaturetekst voor een beleidsadviseur, in de toon van onze eerdere vacatures'],
-  ['tilssg', 'bouw een dashboard dat per afdeling de open zaken en de doorlooptijd laat zien'],
+  ['dashboard (', 'bouw een dashboard dat per afdeling de open zaken en de doorlooptijd laat zien'],
   ['goal', 'los de fout in de export op tot alle tests weer slagen'],
   ['react', 'beoordeel of deze klacht binnen de wettelijke termijn is afgehandeld'],
   ['care', 'schrijf een brief aan bewoners over werkzaamheden in hun straat'],
