@@ -153,6 +153,13 @@ export const PROMPT_EXAMPLES: PromptExample[] = [
       '- Dummy data: [bijvoorbeeld 400 aanvragen over 26 weken, 12 behandelaars in 3 teams, realistische Nederlandse namen]\n' +
       '- Wanneer is de demo geslaagd: [bijvoorbeeld toonbaar aan het MT als voorbeeld van wat we in een halve dag met AI bouwen]',
   },
+  {
+    category: 'data',
+    title: 'De AI-kansenmeter',
+    subtitle: 'Interactief dashboard dat per taak de tijdwinst met AI schat',
+    prompt:
+      'Bouw een interactief dashboard ‘De AI-kansenmeter’. Laat gebruikers taken toevoegen met frequentie per week, tijdsduur en verwachte AI-besparing via een schuifregelaar. Toon direct de geschatte tijdwinst per week en per jaar, een vergelijkende grafiek en de taak met de grootste besparing. Start met drie fictieve voorbeelden: notulen, teksten schrijven en documenten samenvatten. Gebruik donkerblauw, zachte pastelkleuren en duidelijke knoppen. Vermeld dat de uitkomsten schattingen zijn en controle nodig blijft.',
+  },
   // Digitaal & ICT: voor informatieadviseurs en ontwikkelaars. Deze voorbeelden
   // noemen bewust de standaard waar het om gaat (API Design Rules, publiccode.yml,
   // WCAG, NeRDS): daaraan herkent de bouwer een digitale opdracht en haalt hij
