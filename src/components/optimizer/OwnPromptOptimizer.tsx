@@ -29,7 +29,6 @@ import {
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import { useReferenceData } from '@/context/ReferenceDataContext';
-import HoverPreview from '@/components/common/HoverPreview';
 import VerantwoordGebruikHint from '@/components/optimizer/VerantwoordGebruikHint';
 import PrefillSources from '@/components/optimizer/PrefillSources';
 import SjabloonVragen from '@/components/optimizer/SjabloonVragen';
@@ -854,10 +853,10 @@ export default function OwnPromptOptimizer({
                 const category = PROMPT_CATEGORIES[ex.category];
                 return (
                   // De prompt zelf staat niet op het kaartje (dan wordt de lijst
-                  // onleesbaar lang); wie hem vooraf wil lezen, houdt de muis
-                  // erboven of zet hem met "Gebruik" in het veld.
-                  <HoverPreview key={ex.title} label="Voorbeeldprompt" text={ex.prompt}>
+                  // onleesbaar lang); wie hem wil lezen, zet hem met "Gebruik"
+                  // in het veld.
                   <div
+                    key={ex.title}
                     className="group rounded-lg border border-slate-200 bg-white p-2.5 transition-colors hover:border-rijksblauw-300 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-rijksblauw-500/40"
                   >
                     <div className="flex items-start justify-between gap-2">
@@ -891,7 +890,6 @@ export default function OwnPromptOptimizer({
                       </div>
                     </div>
                   </div>
-                  </HoverPreview>
                 );
               })}
             </div>
