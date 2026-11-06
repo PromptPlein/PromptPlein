@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { AlertTriangle, Check, ClipboardCopy, Eraser, Info, Loader2, Sparkles, Wand2 } from 'lucide-react';
+import { AlertTriangle, Check, ClipboardCopy, Eraser, Info, Loader2, Sparkles, Wand2 } from '@/components/common/icons';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import { useReferenceData } from '@/context/ReferenceDataContext';

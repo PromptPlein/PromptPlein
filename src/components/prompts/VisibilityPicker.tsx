@@ -1,4 +1,4 @@
-import { Check, Lock, Info } from 'lucide-react';
+import { Check, Lock, Info } from '@/components/common/icons';
 import clsx from 'clsx';
 import { VISIBILITY_LEVELS } from '@/lib/utils';
 import type { VisibilityLevel } from '@/types';

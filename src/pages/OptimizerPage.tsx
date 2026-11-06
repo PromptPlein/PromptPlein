@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Sparkles, Compass, Wand2 } from 'lucide-react';
+import { Sparkles, Compass, Wand2 } from '@/components/common/icons';
 import GoalDialog from '@/components/optimizer/GoalDialog';
 import ThinkingToggle from '@/components/common/ThinkingToggle';
 import WebSearchToggle from '@/components/common/WebSearchToggle';

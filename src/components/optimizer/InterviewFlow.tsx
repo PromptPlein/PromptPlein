@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Check } from 'lucide-react';
+import { Check } from '@/components/common/icons';
 import toast from 'react-hot-toast';
 import { runPlanStep } from '@/services/optimizeService';
 import { structureFormat } from '@/lib/techniques';

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import { Copy, Check, Mail, Loader2 } from 'lucide-react';
+import { Copy, Check, Mail, Loader2 } from '@/components/common/icons';
 import toast from 'react-hot-toast';
 import Modal from '@/components/common/Modal';
 import { buildMailto, createShareLink, shareUrl } from '@/services/shareService';

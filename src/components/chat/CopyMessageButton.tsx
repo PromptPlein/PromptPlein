@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Check, ClipboardCopy } from 'lucide-react';
+import { Check, ClipboardCopy } from '@/components/common/icons';
 import clsx from 'clsx';
 import { copyToClipboard } from '@/lib/utils';
 

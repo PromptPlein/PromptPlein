@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowUpNarrowWide, Loader2, Lock, Plus, Trash2, Unlock } from 'lucide-react';
+import { ArrowUpNarrowWide, Loader2, Lock, Plus, Trash2, Unlock } from '@/components/common/icons';
 import toast from 'react-hot-toast';
 import { proposeLadder } from '@/services/optimizeService';
 import type { AiSettings } from '@/services/settingsService';

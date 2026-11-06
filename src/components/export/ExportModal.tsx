@@ -1,4 +1,4 @@
-import { FileText, FileType2, FileCode2, FileJson, Hash } from 'lucide-react';
+import { FileText, FileType2, FileCode2, FileJson, Hash } from '@/components/common/icons';
 import toast from 'react-hot-toast';
 import Modal from '@/components/common/Modal';
 import { exportPrompt, type ExportFormat, type ExportMeta } from '@/services/exportService';

@@ -26,7 +26,7 @@ import {
   Megaphone,
   ShieldAlert,
   type LucideIcon,
-} from 'lucide-react';
+} from '@/components/common/icons';
 
 export type PromptCategoryId =
   | 'samenvatten'

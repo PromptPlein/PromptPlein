@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pencil, ShieldCheck, ShieldOff } from 'lucide-react';
+import { Pencil, ShieldCheck, ShieldOff } from '@/components/common/icons';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
 import Modal from '@/components/common/Modal';

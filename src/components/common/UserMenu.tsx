@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { UserCircle2, LogOut, ShieldCheck, ChevronDown, User, Sun, Moon, Monitor, Mail } from 'lucide-react';
+import { UserCircle2, LogOut, ShieldCheck, ChevronDown, User, Sun, Moon, Monitor, Mail } from '@/components/common/icons';
 import clsx from 'clsx';
 import { useTheme, type ThemeChoice } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';

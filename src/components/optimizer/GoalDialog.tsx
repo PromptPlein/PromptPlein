@@ -13,7 +13,7 @@ import {
   RotateCw,
   Sparkles,
   Wand2,
-} from 'lucide-react';
+} from '@/components/common/icons';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import { useReferenceData } from '@/context/ReferenceDataContext';

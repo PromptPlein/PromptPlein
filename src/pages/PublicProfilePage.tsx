@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { UserCircle2, Building2, FileText, ThumbsUp, ArrowLeft } from 'lucide-react';
+import { UserCircle2, Building2, FileText, ThumbsUp, ArrowLeft } from '@/components/common/icons';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { usePromptCommunity } from '@/hooks/usePromptCommunity';
 import { getPublicProfile, listPromptsByAuthor, firstName } from '@/services/communityService';

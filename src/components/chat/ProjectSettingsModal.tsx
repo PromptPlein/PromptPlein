@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { FileText, Loader2, RotateCcw, Scissors, Sparkles, Trash2, Upload } from 'lucide-react';
+import { FileText, Loader2, RotateCcw, Scissors, Sparkles, Trash2, Upload } from '@/components/common/icons';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import Modal from '@/components/common/Modal';

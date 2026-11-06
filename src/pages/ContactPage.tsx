@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Bug, Lightbulb, Mail, MessageSquare, Send } from 'lucide-react';
+import { Bug, Lightbulb, Mail, MessageSquare, Send } from '@/components/common/icons';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
 import { useAuth } from '@/context/AuthContext';

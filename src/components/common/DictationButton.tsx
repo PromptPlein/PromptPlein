@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { Loader2, Mic } from 'lucide-react';
+import { Loader2, Mic } from '@/components/common/icons';
 import clsx from 'clsx';
 import VoiceLevelMeter from './VoiceLevelMeter';
 import { formatDictationTime, type DictationState } from '@/lib/useDictation';

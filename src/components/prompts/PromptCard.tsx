@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Copy, Star, Check, Share2, ThumbsUp } from 'lucide-react';
+import { Copy, Star, Check, Share2, ThumbsUp } from '@/components/common/icons';
 import toast from 'react-hot-toast';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { useAuth } from '@/context/AuthContext';

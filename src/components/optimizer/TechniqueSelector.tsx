@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Check, ChevronRight, Info, Layers, Wrench, X } from 'lucide-react';
+import { Check, ChevronRight, Info, Layers, Wrench, X } from '@/components/common/icons';
 import clsx from 'clsx';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { isContextPrompt } from '@/lib/techniques';

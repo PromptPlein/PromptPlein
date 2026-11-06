@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Loader2, PenLine, Sparkles, Timer } from 'lucide-react';
+import { Loader2, PenLine, Sparkles, Timer } from '@/components/common/icons';
 import clsx from 'clsx';
 import ModelStatus from './ModelStatus';
 import PhaseSteps from './PhaseSteps';

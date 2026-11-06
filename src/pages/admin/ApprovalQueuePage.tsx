@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Check, X, Inbox, ExternalLink } from 'lucide-react';
+import { Check, X, Inbox, ExternalLink } from '@/components/common/icons';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
 import { formatDate, visibilityMeta } from '@/lib/utils';

@@ -1,4 +1,4 @@
-import { Check, Sparkles, X } from 'lucide-react';
+import { Check, Sparkles, X } from '@/components/common/icons';
 
 interface ExpandProposalProps {
   /** Naam van het veld waar dit voorstel bij hoort; staat in de koptekst. */
@@ -84,7 +84,7 @@ export default function ExpandProposal({
         <button
           type="button"
           onClick={onAccept}
-          className="inline-flex items-center gap-1 rounded-md bg-rijksoranje px-2.5 py-1 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-rijksoranje-dark"
+          className="inline-flex items-center gap-1 rounded-md bg-rijksoranje px-2.5 py-1 text-xs font-semibold text-slate-950 shadow-sm transition-colors hover:bg-rijksoranje-dark dark:hover:text-white"
         >
           <Check size={13} /> {acceptLabel ?? 'Overnemen'}
         </button>

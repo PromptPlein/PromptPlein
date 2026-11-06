@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useState } from 'react';
-import { Network, Boxes } from 'lucide-react';
+import { Network, Boxes } from '@/components/common/icons';
 import clsx from 'clsx';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { listOrganizations } from '@/services/orgService';

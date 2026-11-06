@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Download, Printer, FileText, CheckCircle2, Clock, XCircle, Building2, Users } from 'lucide-react';
+import { Download, Printer, FileText, CheckCircle2, Clock, XCircle, Building2, Users } from '@/components/common/icons';
 import toast from 'react-hot-toast';
 import { BarChartCard, LineChartCard, PieChartCard } from '@/components/analytics/Charts';
 import { useReferenceData } from '@/context/ReferenceDataContext';

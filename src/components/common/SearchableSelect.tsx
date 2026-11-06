@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown, Search, X } from 'lucide-react';
+import { Check, ChevronDown, Search, X } from '@/components/common/icons';
 
 export interface SearchableOption {
   id: string;

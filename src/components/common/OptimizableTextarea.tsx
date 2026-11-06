@@ -4,7 +4,7 @@ import {
   useState,
   type TextareaHTMLAttributes,
 } from 'react';
-import { Loader2, Sparkles, Undo2 } from 'lucide-react';
+import { Loader2, Sparkles, Undo2 } from '@/components/common/icons';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/context/AuthContext';

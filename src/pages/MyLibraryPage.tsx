@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Library, FileText, Star, Plus } from 'lucide-react';
+import { Library, FileText, Star, Plus } from '@/components/common/icons';
 import clsx from 'clsx';
 import PromptCard from '@/components/prompts/PromptCard';
 import UploadModal from '@/components/prompts/UploadModal';

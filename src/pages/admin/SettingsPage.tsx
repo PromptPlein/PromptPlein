@@ -18,7 +18,7 @@ import {
   Globe,
   KeyRound,
   Landmark,
-} from 'lucide-react';
+} from '@/components/common/icons';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import {

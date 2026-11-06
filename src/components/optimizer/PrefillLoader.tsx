@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Brain, Check, Globe, Loader2, Search, Timer } from 'lucide-react';
+import { Brain, Check, Globe, Loader2, Search, Timer } from '@/components/common/icons';
 import ModelStatus from './ModelStatus';
 import PhaseSteps from './PhaseSteps';
 import type { PrefillPhase } from '@/services/optimizeService';

@@ -1,4 +1,4 @@
-import { Bot } from 'lucide-react';
+import { Bot } from '@/components/common/icons';
 import { modelLabel, PROVIDER_LABELS, type AiProvider } from '@/config/aiModels';
 
 /**

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Check, X, Globe2, Pencil, Save } from 'lucide-react';
+import { Check, X, Globe2, Pencil, Save } from '@/components/common/icons';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
 import {

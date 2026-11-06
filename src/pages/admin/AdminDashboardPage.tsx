@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { FileText, Users, Sparkles, Share2 } from 'lucide-react';
+import { FileText, Users, Sparkles, Share2 } from '@/components/common/icons';
 import { BarChartCard, LineChartCard } from '@/components/analytics/Charts';
 import SystemStatus from '@/components/admin/SystemStatus';
 import { useReferenceData } from '@/context/ReferenceDataContext';

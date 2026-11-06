@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { TrendingUp, Flame } from 'lucide-react';
+import { TrendingUp, Flame } from '@/components/common/icons';
 import PromptCard from '@/components/prompts/PromptCard';
 import { BarChartCard } from '@/components/analytics/Charts';
 import { SkeletonGrid } from '@/components/common/Skeleton';

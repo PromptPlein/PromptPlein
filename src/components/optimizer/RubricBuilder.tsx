@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle, ChevronDown, ChevronRight, Loader2, Plus, Ruler, Sparkles, Trash2 } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronRight, Loader2, Plus, Ruler, Sparkles, Trash2 } from '@/components/common/icons';
 import toast from 'react-hot-toast';
 import { proposeRubric } from '@/services/optimizeService';
 import type { AiSettings } from '@/services/settingsService';

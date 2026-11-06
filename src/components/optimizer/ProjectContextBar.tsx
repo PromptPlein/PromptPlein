@@ -9,7 +9,7 @@ import {
   Scissors,
   Sparkles,
   X,
-} from 'lucide-react';
+} from '@/components/common/icons';
 import { Link } from 'react-router-dom';
 import clsx from 'clsx';
 import { useAuth } from '@/context/AuthContext';

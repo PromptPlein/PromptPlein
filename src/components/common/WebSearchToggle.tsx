@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Globe } from 'lucide-react';
+import { Globe } from '@/components/common/icons';
 import clsx from 'clsx';
 import ConfirmDialog from './ConfirmDialog';
 

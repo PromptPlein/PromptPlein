@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { FolderOpen, MessageSquare, Plus, Trash2 } from 'lucide-react';
+import { FolderOpen, MessageSquare, Plus, Trash2 } from '@/components/common/icons';
 import clsx from 'clsx';
 import { formatDate } from '@/lib/utils';
 import type { ChatIndexEntry, ChatProject } from '@/types';

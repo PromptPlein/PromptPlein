@@ -11,7 +11,7 @@ import {
   ShieldCheck,
   Trash2,
   Upload,
-} from 'lucide-react';
+} from '@/components/common/icons';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/context/AuthContext';

@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff } from '@/components/common/icons';
 import toast from 'react-hot-toast';
 import { updatePassword } from '@/services/authService';
 import { useAuth } from '@/context/AuthContext';

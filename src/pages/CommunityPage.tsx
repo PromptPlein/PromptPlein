@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Users, Trophy, ThumbsUp, FileText, Building2, ChevronRight, Flame } from 'lucide-react';
+import { Users, Trophy, ThumbsUp, FileText, Building2, ChevronRight, Flame } from '@/components/common/icons';
 import clsx from 'clsx';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { listCommunityMembers, firstName } from '@/services/communityService';

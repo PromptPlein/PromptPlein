@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, ArrowRight, Check, Loader2, Pencil, Sparkles, Wand2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Loader2, Pencil, Sparkles, Wand2 } from '@/components/common/icons';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import PrefillBadge from './PrefillBadge';

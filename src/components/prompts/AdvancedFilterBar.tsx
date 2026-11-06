@@ -1,4 +1,4 @@
-import { Search, X, SlidersHorizontal } from 'lucide-react';
+import { Search, X, SlidersHorizontal } from '@/components/common/icons';
 import { useState } from 'react';
 import clsx from 'clsx';
 import { useReferenceData } from '@/context/ReferenceDataContext';

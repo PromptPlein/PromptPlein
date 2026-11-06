@@ -11,7 +11,7 @@ import {
   Maximize2,
   ShieldCheck,
   Wrench,
-} from 'lucide-react';
+} from '@/components/common/icons';
 import { downloadText } from '@/lib/download';
 import { htmlFileName, htmlLooksComplete } from '@/lib/chatFiles';
 import { checkHtml, repairRequest, type FileCheckResult } from '@/lib/fileCheck';

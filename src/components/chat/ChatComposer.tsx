@@ -20,7 +20,7 @@ import {
   Square,
   Undo2,
   X,
-} from 'lucide-react';
+} from '@/components/common/icons';
 import clsx from 'clsx';
 import DictationButton from '@/components/common/DictationButton';
 import ThinkingToggle from '@/components/common/ThinkingToggle';

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, Lightbulb, Wand2 } from 'lucide-react';
+import { ChevronDown, Lightbulb, Wand2 } from '@/components/common/icons';
 import clsx from 'clsx';
 import HoverPreview from '@/components/common/HoverPreview';
 import { PROMPT_CATEGORIES } from '@/data/promptCategories';

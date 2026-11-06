@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle, Loader2, ScanLine, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, Loader2, ScanLine, ShieldCheck } from '@/components/common/icons';
 import toast from 'react-hot-toast';
 import { scanClaims } from '@/services/optimizeService';
 import type { AiSettings } from '@/services/settingsService';

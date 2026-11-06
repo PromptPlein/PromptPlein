@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { X } from 'lucide-react';
+import { X } from '@/components/common/icons';
 import { BarChartCard } from '@/components/analytics/Charts';
 import PromptCard from '@/components/prompts/PromptCard';
 import { listPrompts, listTechniquePromptLinks } from '@/services/repository';

@@ -7,7 +7,7 @@ import {
   useState,
 } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Minus, Plus, Maximize2, Building2, Search, X, ArrowRight } from 'lucide-react';
+import { Minus, Plus, Maximize2, Building2, Search, X, ArrowRight } from '@/components/common/icons';
 import clsx from 'clsx';
 import type { Organization, OrganizationType } from '@/types';
 import { useTheme } from '@/context/ThemeContext';

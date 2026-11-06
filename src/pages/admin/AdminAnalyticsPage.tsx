@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Download, FileJson, Activity } from 'lucide-react';
+import { Download, FileJson, Activity } from '@/components/common/icons';
 import { BarChartCard, LineChartCard, PieChartCard } from '@/components/analytics/Charts';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import {

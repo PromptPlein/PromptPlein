@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ScrollText } from 'lucide-react';
+import { ScrollText } from '@/components/common/icons';
 import { listAuditEntries } from '@/services/adminService';
 import { formatDate } from '@/lib/utils';
 import type { AuditLogEntry } from '@/types';

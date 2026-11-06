@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CheckCircle2, XCircle, AlertTriangle, Loader2, RefreshCw } from 'lucide-react';
+import { CheckCircle2, XCircle, AlertTriangle, Loader2, RefreshCw } from '@/components/common/icons';
 import { isSupabaseConfigured, supabase, getFunctionUrl } from '@/lib/supabase';
 
 type Health = 'ok' | 'warn' | 'error' | 'checking';

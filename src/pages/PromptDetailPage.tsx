@@ -14,7 +14,7 @@ import {
   Download,
   ThumbsUp,
   Building2,
-} from 'lucide-react';
+} from '@/components/common/icons';
 import toast from 'react-hot-toast';
 import ShareModal from '@/components/share/ShareModal';
 import ExportModal from '@/components/export/ExportModal';

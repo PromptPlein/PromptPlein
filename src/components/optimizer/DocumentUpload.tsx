@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Check, FileUp, Loader2, Sparkles } from 'lucide-react';
+import { Check, FileUp, Loader2, Sparkles } from '@/components/common/icons';
 import toast from 'react-hot-toast';
 
 /**

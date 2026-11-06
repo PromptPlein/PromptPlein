@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, FileText, Sparkles, Share2, Star } from 'lucide-react';
+import { Activity, FileText, Sparkles, Share2, Star } from '@/components/common/icons';
 import { LineChartCard } from '@/components/analytics/Charts';
 import { listEvents, eventsPerDay } from '@/services/analyticsService';
 import { useReferenceData } from '@/context/ReferenceDataContext';

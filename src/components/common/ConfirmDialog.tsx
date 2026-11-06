@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle } from '@/components/common/icons';
 import Modal from './Modal';
 
 interface ConfirmDialogProps {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Loader2, Save, Sparkles } from 'lucide-react';
+import { Loader2, Save, Sparkles } from '@/components/common/icons';
 import toast from 'react-hot-toast';
 import { Link } from 'react-router-dom';
 import { getCurrentUser } from '@/lib/utils';

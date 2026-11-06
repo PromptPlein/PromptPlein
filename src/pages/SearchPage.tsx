@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Plus, SearchX } from 'lucide-react';
+import { Plus, SearchX } from '@/components/common/icons';
 import AdvancedFilterBar from '@/components/prompts/AdvancedFilterBar';
 import PromptCard from '@/components/prompts/PromptCard';
 import UploadModal from '@/components/prompts/UploadModal';

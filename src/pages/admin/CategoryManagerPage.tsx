@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2, ArrowUp, ArrowDown, Upload } from 'lucide-react';
+import { Plus, Pencil, Trash2, ArrowUp, ArrowDown, Upload } from '@/components/common/icons';
 import toast from 'react-hot-toast';
 import Modal from '@/components/common/Modal';
 import ConfirmDialog from '@/components/common/ConfirmDialog';

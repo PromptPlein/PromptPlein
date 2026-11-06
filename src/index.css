@@ -77,7 +77,8 @@ html.dark body {
    * optimaliseren). Springt eruit naast de blauwe navigatieknoppen ernaast.
    */
   .opl-btn-accent {
-    @apply opl-btn bg-rijksoranje text-white hover:bg-rijksoranje-dark focus:ring-rijksoranje;
+    @apply opl-btn bg-rijksoranje text-slate-950 hover:bg-rijksoranje-dark focus:ring-rijksoranje
+      dark:hover:text-white;
   }
 
   .opl-btn-secondary {

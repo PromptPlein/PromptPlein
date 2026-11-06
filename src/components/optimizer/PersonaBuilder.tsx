@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Loader2, Plus, Sparkles, Trash2, UserRound } from 'lucide-react';
+import { Loader2, Plus, Sparkles, Trash2, UserRound } from '@/components/common/icons';
 import toast from 'react-hot-toast';
 import PrefillBadge from './PrefillBadge';
 import { fillPersona } from '@/services/optimizeService';

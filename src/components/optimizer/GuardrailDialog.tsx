@@ -1,4 +1,4 @@
-import { ShieldAlert } from 'lucide-react';
+import { ShieldAlert } from '@/components/common/icons';
 import Modal from '@/components/common/Modal';
 import type { GuardrailFinding } from '@/services/guardrails';
 

@@ -1,4 +1,4 @@
-import { ArrowDown, FileText, ShieldCheck } from 'lucide-react';
+import { ArrowDown, FileText, ShieldCheck } from '@/components/common/icons';
 
 /**
  * Lege staat van een nieuw gesprek: het merkteken, één vraag en een pijl naar

@@ -1,4 +1,4 @@
-import { Globe, Sparkles, Wand2 } from 'lucide-react';
+import { Globe, Sparkles, Wand2 } from '@/components/common/icons';
 import clsx from 'clsx';
 import type { PrefillSource } from '@/types';
 

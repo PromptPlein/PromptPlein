@@ -120,6 +120,12 @@ database. Wordt er code van daar geport, hernummer dan de migratie.
 | Backend | Supabase: Postgres met RLS, Auth, Storage, Edge Functions (Deno) |
 | Hosting | Vercel, SPA-rewrite in `vercel.json`, `X-Robots-Tag: noindex` |
 
+Iconen komen altijd uit `@/components/common/icons`, niet uit `lucide-react`.
+Dat bestand geeft de officiële functionele iconen van de Rijkshuisstijl de
+lucide-naam en laat de rest doorlopen uit lucide. Neem een officieel icoon alleen
+op als de betekenis gelijk blijft: Star blijft lucide omdat de favorietstatus uit
+leeg of gevuld leest.
+
 Env-variabelen (alle vier `VITE_`-prefixed, dus client-side):
 `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_ADMIN_TOKEN`,
 `VITE_OPTIMIZE_FUNCTION_URL` (optionele override van de function-URL).

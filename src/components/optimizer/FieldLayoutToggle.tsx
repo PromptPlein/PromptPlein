@@ -1,4 +1,4 @@
-import { List, Rows3 } from 'lucide-react';
+import { List, Rows3 } from '@/components/common/icons';
 import clsx from 'clsx';
 import type { FieldLayout } from '@/lib/useFieldLayout';
 

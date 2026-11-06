@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef } from 'react';
-import { AlertTriangle, ArrowRight, Globe, Lightbulb, RotateCcw, Save, Wand2, X } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Globe, Lightbulb, RotateCcw, Save, Wand2, X } from '@/components/common/icons';
 import clsx from 'clsx';
 import ChatAnswer from './ChatAnswer';
 import CopyMessageButton from './CopyMessageButton';

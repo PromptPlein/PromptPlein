@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, Check, CheckCheck, MessageSquare, ClipboardCheck, UserPlus, Info } from 'lucide-react';
+import { Bell, Check, CheckCheck, MessageSquare, ClipboardCheck, UserPlus, Info } from '@/components/common/icons';
 import { useAuth } from '@/context/AuthContext';
 import { formatDate } from '@/lib/utils';
 import {

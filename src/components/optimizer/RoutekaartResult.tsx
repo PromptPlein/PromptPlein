@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Loader2, Map as MapIcon } from 'lucide-react';
+import { Loader2, Map as MapIcon } from '@/components/common/icons';
 import ChatFileCard from '@/components/chat/ChatFileCard';
 import { buildRoutekaartHtml, parseRoutekaart, routekaartBestandsnaam } from '@/lib/routekaart';
 

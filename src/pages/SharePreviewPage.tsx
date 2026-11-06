@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
-import { Copy, Check, Library, Eye, ExternalLink, Lock, LogIn } from 'lucide-react';
+import { Copy, Check, Library, Eye, ExternalLink, Lock, LogIn } from '@/components/common/icons';
 import toast from 'react-hot-toast';
 import { getShareByToken, trackShareView } from '@/services/shareService';
 import { getPrompt } from '@/services/repository';

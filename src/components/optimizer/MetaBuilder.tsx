@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Brain, Check, Info, Loader2, RotateCw, Sparkles, X } from 'lucide-react';
+import { Brain, Check, Info, Loader2, RotateCw, Sparkles, X } from '@/components/common/icons';
 import toast from 'react-hot-toast';
 import { buildMetaPrompt } from '@/services/optimizeService';
 import type { AiSettings } from '@/services/settingsService';

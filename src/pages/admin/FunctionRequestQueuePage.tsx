@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Check, X, Inbox, Briefcase } from 'lucide-react';
+import { Check, X, Inbox, Briefcase } from '@/components/common/icons';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/context/AuthContext';
 import { useReferenceData } from '@/context/ReferenceDataContext';

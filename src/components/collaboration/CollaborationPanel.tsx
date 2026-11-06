@@ -4,7 +4,7 @@ import {
   History,
   Trash2,
   ChevronDown,
-} from 'lucide-react';
+} from '@/components/common/icons';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
 import { useAuth } from '@/context/AuthContext';

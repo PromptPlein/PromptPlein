@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowRight, Check, Dices, Loader2, MessageCircleQuestion } from 'lucide-react';
+import { ArrowRight, Check, Dices, Loader2, MessageCircleQuestion } from '@/components/common/icons';
 import toast from 'react-hot-toast';
 import { runPlanStep } from '@/services/optimizeService';
 import { structureFormat } from '@/lib/techniques';

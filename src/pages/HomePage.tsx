@@ -15,7 +15,7 @@ import {
   MessageSquare,
   Layers,
   type LucideIcon,
-} from 'lucide-react';
+} from '@/components/common/icons';
 
 // Expliciete icoon-map (geen `import *`, dat zou de hele icon-set bundelen).
 const CATEGORY_ICONS: Record<string, LucideIcon> = {

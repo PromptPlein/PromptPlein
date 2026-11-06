@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Sun, Moon, Monitor, Check } from 'lucide-react';
+import { Sun, Moon, Monitor, Check } from '@/components/common/icons';
 import clsx from 'clsx';
 import { useTheme, type ThemeChoice } from '@/context/ThemeContext';
 

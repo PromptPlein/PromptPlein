@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ShieldCheck, ArrowLeft } from 'lucide-react';
+import { ShieldCheck, ArrowLeft } from '@/components/common/icons';
 import type { ReactNode } from 'react';
 
 /** Gedeelde, gecentreerde kaart-layout voor de auth-pagina's. */

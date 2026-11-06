@@ -1,4 +1,4 @@
-import { Check } from 'lucide-react';
+import { Check } from '@/components/common/icons';
 import clsx from 'clsx';
 import { splitFieldLabel } from '@/lib/fieldLabel';
 import type { VraagHerkomst } from '@/services/optimizeService';

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Plus, Pencil, Trash2, Upload, ImageOff } from 'lucide-react';
+import { Plus, Pencil, Trash2, Upload, ImageOff } from '@/components/common/icons';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
 import Modal from '@/components/common/Modal';

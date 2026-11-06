@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FolderCheck } from 'lucide-react';
+import { FolderCheck } from '@/components/common/icons';
 import { Link } from 'react-router-dom';
 import Modal from '@/components/common/Modal';
 import SavePromptPanel from '@/components/prompts/SavePromptPanel';

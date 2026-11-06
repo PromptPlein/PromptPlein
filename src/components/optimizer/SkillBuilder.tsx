@@ -8,7 +8,7 @@ import {
   Package,
   Sparkles,
   Wand2,
-} from 'lucide-react';
+} from '@/components/common/icons';
 import toast from 'react-hot-toast';
 import { draftSkill, sharpenSkillDescription, testSkillTrigger } from '@/services/optimizeService';
 import type { AiSettings } from '@/services/settingsService';

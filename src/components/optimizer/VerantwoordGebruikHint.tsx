@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { ExternalLink, Scale } from 'lucide-react';
+import { ExternalLink, Scale } from '@/components/common/icons';
 import { detectVerantwoordSignalen } from '@/lib/verantwoordGebruik';
 
 /**

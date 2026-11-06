@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Brain } from 'lucide-react';
+import { Brain } from '@/components/common/icons';
 import clsx from 'clsx';
 import ConfirmDialog from './ConfirmDialog';
 

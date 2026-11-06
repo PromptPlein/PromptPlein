@@ -10,7 +10,7 @@ import {
   GripVertical,
   Info,
   X,
-} from 'lucide-react';
+} from '@/components/common/icons';
 import toast from 'react-hot-toast';
 import {
   DndContext,

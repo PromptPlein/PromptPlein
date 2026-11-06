@@ -9,7 +9,7 @@ import {
   RotateCcw,
   Sparkles,
   X,
-} from 'lucide-react';
+} from '@/components/common/icons';
 import { adviseTechnique } from '@/services/optimizeService';
 import type { AiSettings } from '@/services/settingsService';
 import { isContextPrompt, isSkillCreator } from '@/lib/techniques';

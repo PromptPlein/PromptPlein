@@ -8,7 +8,7 @@ import {
   Settings2,
   Trash2,
   Wand2,
-} from 'lucide-react';
+} from '@/components/common/icons';
 import { formatDate } from '@/lib/utils';
 import type { ChatIndexEntry, ChatProject } from '@/types';
 

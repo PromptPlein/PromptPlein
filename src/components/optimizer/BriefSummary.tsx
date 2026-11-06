@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Check, ChevronDown, ClipboardCopy, Download, ListChecks, Sparkles } from 'lucide-react';
+import { Check, ChevronDown, ClipboardCopy, Download, ListChecks, Sparkles } from '@/components/common/icons';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import { stripMarkdown } from '@/lib/utils';

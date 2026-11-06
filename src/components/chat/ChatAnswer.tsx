@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { AlertTriangle, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, ShieldCheck } from '@/components/common/icons';
 import RichText from '@/components/optimizer/RichText';
 import { splitAnswer } from '@/lib/chatFiles';
 import { checkCode } from '@/lib/fileCheck';

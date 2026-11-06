@@ -7,7 +7,7 @@ import {
   MessageSquare,
   ShieldCheck,
   ClipboardCheck,
-} from 'lucide-react';
+} from '@/components/common/icons';
 import clsx from 'clsx';
 import { useAuth } from '@/context/AuthContext';
 import { getChatSettingsCached } from '@/services/settingsService';

@@ -9,7 +9,7 @@ import {
   Layers,
   Loader2,
   Sparkles,
-} from 'lucide-react';
+} from '@/components/common/icons';
 import toast from 'react-hot-toast';
 import TechniqueSelector from '@/components/optimizer/TechniqueSelector';
 import TechniqueAdvisor from '@/components/optimizer/TechniqueAdvisor';
