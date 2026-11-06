@@ -143,7 +143,7 @@ export default function Header() {
                   'transition-colors hover:bg-white/10 focus-visible:outline focus-visible:outline-2',
                   'focus-visible:-outline-offset-2 focus-visible:outline-white',
                   'lg:h-14 lg:flex-none lg:flex-row lg:gap-2.5 lg:px-5 lg:py-0 lg:text-lg',
-                  isActive && 'shadow-[inset_0_-3px_0_0_#fff]',
+                  isActive && 'shadow-[inset_0_-3px_0_0_theme(colors.rijksoranje.vast)]',
                 )
               }
             >
