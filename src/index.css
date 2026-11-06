@@ -200,3 +200,11 @@ html.dark .skeleton::after {
 .hero-sweep {
   background-color: theme('colors.rijksblauw.700');
 }
+
+/*
+ * Vaste kolom voor het microfoontje (DictationLayer). Ruimte opzij scrolt niet
+ * mee, dus de tekst kan nooit onder de knop door lopen.
+ */
+html[data-dictation='on'] textarea:not([readonly], [data-dictation='off'], [data-dictation='off'] *) {
+  padding-right: 2.75rem;
+}

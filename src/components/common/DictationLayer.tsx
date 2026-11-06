@@ -20,16 +20,26 @@ function isDictationField(el: EventTarget | null): el is HTMLTextAreaElement {
 interface Placement {
   /** Het tekstvak zelf, voor de rode rand tijdens het opnemen. */
   field: { top: number; left: number; width: number; height: number };
-  /** Linkeronderhoek van de knop. */
-  left: number;
+  /** Rechteronderhoek van de knop. */
+  right: number;
   bottom: number;
 }
 
+/** De knop in rust is 28 pixels hoog; vanaf deze hoogte gaat hij onderaan staan. */
+const TALL_FIELD = 72;
+/** Ruimte voor de greep waarmee je het vak groter trekt, rechtsonder in de hoek. */
+const RESIZE_GRIP = 20;
+
 /**
- * Eén microfoontje voor alle tekstvakken in de app, linksonder in het vak waar
- * je in staat of met de muis boven hangt. Zo krijgt elk invulveld dicteren
- * zonder dat elk formulier het zelf hoeft in te bouwen, ook velden die later
- * bijkomen.
+ * Eén microfoontje voor alle tekstvakken in de app, rechts in het vak waar je in
+ * staat of met de muis boven hangt. Zo krijgt elk invulveld dicteren zonder dat
+ * elk formulier het zelf hoeft in te bouwen, ook velden die later bijkomen.
+ *
+ * De knop staat in een eigen kolom rechts (zie de regel voor
+ * `html[data-dictation='on']` in index.css). Ruimte aan de zijkant scrolt niet
+ * mee, ruimte onderaan wel: daar schoof de tekst tijdens het scrollen alsnog
+ * onder de knop door. De brede opnamebalk past niet in die kolom en staat daarom
+ * boven het vak.
  *
  * De knop ligt in een portal met vaste positie en loopt elk frame mee met het
  * vak (scrollen, meegroeien, een modal die verschuift). Tijdens het opnemen
@@ -59,6 +69,8 @@ export default function DictationLayer() {
     }
   });
   const { available, state, cancel } = dictation;
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   // Klaar of afgebroken: het vak loslaten.
   useEffect(() => {
@@ -88,6 +100,16 @@ export default function DictationLayer() {
     };
   }, [available]);
 
+  // Zet de kolom voor de knop aan in alle tekstvakken, ook als ze nog niet
+  // aangeraakt zijn: anders loopt de tekst opnieuw af zodra de muis erboven komt.
+  useEffect(() => {
+    if (!available) return;
+    document.documentElement.dataset.dictation = 'on';
+    return () => {
+      delete document.documentElement.dataset.dictation;
+    };
+  }, [available]);
+
   const target = locked ?? focused ?? hovered;
 
   // Elk frame meelopen met het vak. Goedkoop (één getBoundingClientRect) en het
@@ -113,12 +135,24 @@ export default function DictationLayer() {
         last = 'hidden';
         return;
       }
+      const fieldBottom = window.innerHeight - Math.min(rect.bottom, window.innerHeight);
+      const inset =
+        rect.height >= TALL_FIELD ? RESIZE_GRIP : Math.max(2, (rect.height - 28) / 2);
+      const panelFits = rect.top >= 44;
       const next: Placement = {
         field: { top: rect.top, left: rect.left, width: rect.width, height: rect.height },
-        left: rect.left + 8,
-        bottom: window.innerHeight - Math.min(rect.bottom, window.innerHeight) + 8,
+        // offsetWidth min clientWidth is de rand plus een eventuele schuifbalk.
+        right:
+          document.documentElement.clientWidth -
+          rect.right +
+          (target.offsetWidth - target.clientWidth) +
+          6,
+        bottom:
+          stateRef.current !== 'idle' && panelFits
+            ? window.innerHeight - rect.top + 4
+            : fieldBottom + inset,
       };
-      const key = `${next.field.top}|${next.field.left}|${next.field.width}|${next.field.height}|${next.left}|${next.bottom}`;
+      const key = `${next.field.top}|${next.field.left}|${next.field.width}|${next.field.height}|${next.right}|${next.bottom}`;
       if (key !== last) {
         last = key;
         setPlacement(next);
@@ -169,7 +203,7 @@ export default function DictationLayer() {
         stream={dictation.stream}
         onToggle={onToggle}
         className="fixed z-[60]"
-        style={{ left: placement.left, bottom: placement.bottom }}
+        style={{ right: placement.right, bottom: placement.bottom }}
       />
     </div>,
     document.body,
