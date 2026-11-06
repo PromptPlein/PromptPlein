@@ -13,6 +13,8 @@ import {
   FolderOpen,
   Loader2,
   Map as MapIcon,
+  Maximize2,
+  Minimize2,
   Paperclip,
   Scissors,
   Send,
@@ -28,6 +30,7 @@ import ThinkingToggle from '@/components/common/ThinkingToggle';
 import WebSearchToggle from '@/components/common/WebSearchToggle';
 import { ACCEPTED_DOC_ACCEPT } from '@/lib/extractDocument';
 import { insertDictatedText, useDictation } from '@/lib/useDictation';
+import { usePersistentDraft } from '@/lib/usePersistentDraft';
 import { parseRoutekaart } from '@/lib/routekaart';
 import { MAX_CHAT_ATTACHMENTS } from './useChatController';
 import type { ChatAttachment, ChatProject } from '@/types';
@@ -38,6 +41,8 @@ import type { ChatAttachment, ChatProject } from '@/types';
  * wegdrukken.
  */
 const MAX_HEIGHT = 240;
+/** Het vergrote tekstvak: dit deel van de vensterhoogte. */
+const ENLARGED_SHARE = 0.55;
 
 /** Uitkomst van een verbeterslag op de getypte tekst. */
 export interface OptimizeResult {
@@ -173,7 +178,12 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
   },
   ref,
 ) {
-  const [text, setText] = useState('');
+  // Wat je typt, overleeft een refresh of per ongeluk gesloten tab.
+  const [text, setText, clearText] = usePersistentDraft('chatComposer');
+  // Lange prompts zijn hier de hoofdzaak, dus het vak mag groter als de tekst
+  // niet meer past.
+  const [enlarged, setEnlarged] = useState(false);
+  const [overflowing, setOverflowing] = useState(false);
   // Een routekaart herken je aan het inhoudsblok: een regel KOP, haltes en FINISH.
   const isRoutekaart = useMemo(
     () => Boolean(onRoutekaart) && /^\s*KOP\s*$/m.test(text) && parseRoutekaart(text) !== null,
@@ -222,8 +232,11 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
     // hoogte. Alleen scrollHeight aanhouden laat de tekst er net overheen lopen,
     // en dat is precies genoeg voor een schuifbalk bij tekst die eigenlijk past.
     const borders = el.offsetHeight - el.clientHeight;
-    el.style.height = `${Math.min(MAX_HEIGHT, el.scrollHeight + borders)}px`;
-  }, [text]);
+    const needed = el.scrollHeight + borders;
+    const limit = enlarged ? Math.round(window.innerHeight * ENLARGED_SHARE) : MAX_HEIGHT;
+    el.style.height = `${Math.min(limit, needed)}px`;
+    setOverflowing(needed > MAX_HEIGHT);
+  }, [text, enlarged]);
 
   // Van buitenaf tekst klaarzetten (startsjablonen). Focussen doen we pas nadat
   // React de nieuwe waarde in het veld heeft gezet — anders zou de cursor nog op
@@ -238,7 +251,7 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
         focusAfterFill.current = true;
       },
     }),
-    [],
+    [setText],
   );
   useLayoutEffect(() => {
     if (!focusAfterFill.current) return;
@@ -279,7 +292,7 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
     onPickProject?.(projectId);
     // Heeft de gebruiker het menu met een getypte @ geopend, haal die dan weer
     // weg: het is een commando geweest, geen tekst die hij wil versturen.
-    setText((cur) => (cur === '@' ? '' : cur));
+    if (text === '@') clearText();
     textareaRef.current?.focus();
   }
 
@@ -299,9 +312,12 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
       return;
     }
     const value = text.trim();
-    setText('');
+    clearText();
     setBeforeOptimize(null);
+    setEnlarged(false);
     onSend(value);
+    // Na een klik op Verstuur stond de focus op een knop die nu uitgaat.
+    textareaRef.current?.focus();
   }
 
   async function optimize() {
@@ -376,7 +392,7 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
   function makeRoutekaart() {
     if (!onRoutekaart || disabled || streaming) return;
     const value = text.trim();
-    setText('');
+    clearText();
     setBeforeOptimize(null);
     onRoutekaart(value);
   }
@@ -481,8 +497,8 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
               // sterretje aan botst — en de tekst niet verspringt op het moment
               // dat de balk verschijnt.
               'opl-scroll-slim block w-full resize-none border-0 bg-transparent px-3.5 py-2.5',
-              'text-sm leading-6 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-0',
-              'dark:text-slate-100 dark:placeholder:text-slate-500',
+              'text-base leading-7 text-slate-800 placeholder:text-slate-500 focus:outline-none focus:ring-0',
+              'dark:text-slate-100 dark:placeholder:text-slate-400',
               // Leeg gesprek: een ruimer vak, zodat het als een uitnodiging leest
               // en niet als een smal regeltje onderaan het scherm.
               prominent && 'min-h-[3.5rem] py-3.5',
@@ -494,6 +510,7 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
             // Eén regel als startpunt; de layout-effect hierboven laat het vak
             // daarna meegroeien met de tekst.
             rows={1}
+            aria-label="Je bericht"
             placeholder={
               disabled
                 ? (disabledPlaceholder ?? 'Chat wordt geladen…')
@@ -517,7 +534,8 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
             }}
             onKeyDown={(e) => {
               // Enter verzendt; Shift+Enter maakt een nieuwe regel.
-              if (e.key === 'Enter' && !e.shiftKey) {
+              // Tijdens samenstellen van een teken bevestigt Enter dat teken.
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                 e.preventDefault();
                 submit();
               }
@@ -663,6 +681,19 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
               onChange={onToggleWebSearch}
               disabled={disabled || streaming}
             />
+          )}
+
+          {(overflowing || enlarged) && (
+            <button
+              type="button"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-rijksblauw-500/40 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+              onClick={() => setEnlarged((value) => !value)}
+              aria-pressed={enlarged}
+              aria-label="Groter tekstvak"
+              title={enlarged ? 'Kleiner tekstvak' : 'Groter tekstvak'}
+            >
+              {enlarged ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+            </button>
           )}
 
           {allowAttachments && (

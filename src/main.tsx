@@ -5,6 +5,7 @@ import { Toaster } from 'react-hot-toast';
 import App from './App';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { AccessibilityProvider } from './context/AccessibilityContext';
 import { installAutoGrowTextareas } from './lib/autoGrowTextareas';
 import './index.css';
 
@@ -15,6 +16,7 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
       <ThemeProvider>
+        <AccessibilityProvider>
         <AuthProvider>
           <App />
           <Toaster
@@ -29,6 +31,7 @@ createRoot(document.getElementById('root')!).render(
             }}
           />
         </AuthProvider>
+        </AccessibilityProvider>
       </ThemeProvider>
     </BrowserRouter>
   </StrictMode>,

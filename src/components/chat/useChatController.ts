@@ -25,6 +25,7 @@ import { splitAnswer } from '@/lib/chatFiles';
 import { buildRoutekaartHtml, parseRoutekaart } from '@/lib/routekaart';
 import { downloadText } from '@/lib/download';
 import { sendChatMessage } from '@/services/chatService';
+import { generateTitle } from '@/services/optimizeService';
 import { loadProjectContext } from '@/services/chatProjectService';
 import type { ChatSettings } from '@/services/settingsService';
 import type {
@@ -50,6 +51,10 @@ export const MAX_CHAT_ATTACHMENT_CHARS = 50_000;
  * eindeloos doorloopt.
  */
 const MAX_AUTO_CONTINUE = 4;
+/** Tot deze lengte is het eerste bericht zelf een goede titel. */
+const MAX_LOCAL_TITLE = 48;
+/** Voor een titel is het begin van een prompt genoeg. */
+const MAX_TITLE_SOURCE = 2000;
 
 export interface ChatControllerOptions {
   /**
@@ -101,6 +106,12 @@ export interface ChatController {
    * of als ook het automatisch verderschrijven het niet heeft afgemaakt.
    */
   continueLast: () => void;
+  /**
+   * Vervang een eigen bericht door `text`: alles vanaf dat bericht vervalt en de
+   * AI schrijft opnieuw. Alleen voor het laatste eigen bericht, omdat een gesprek
+   * één lijn is en eerdere beurten er anders onherstelbaar uit zouden vallen.
+   */
+  editMessage: (messageId: string, text: string) => void;
   /**
    * Start een vers, leeg gesprek. Met `kind: 'execution'` draait dat gesprek
    * onder de neutrale uitvoer-systeemprompt (de gekopieerde prompt uit de
@@ -438,6 +449,7 @@ export default function useChatController(
         messages: [...base.messages, userMsg, assistantMsg],
       };
       update(updated);
+      const isFirstMessage = base.messages.length === 0;
 
       // De vraag meteen bewaren (zonder de nog lege assistant-placeholder),
       // zodat een refresh midden in de stream het gesprek niet kwijtraakt.
@@ -450,8 +462,25 @@ export default function useChatController(
         .map((m) => ({ role: m.role, content: m.content }));
 
       await streamAnswer(updated, assistantMsg.id, history, '');
+
+      // Een lang eerste bericht is meestal een prompt, en dan zegt het begin
+      // ervan niets ("#CONTEXT: Je bent een..."). Pas na het antwoord: de titel
+      // mag het gesprek niet ophouden en is bijzaak als hij niet lukt.
+      if (isFirstMessage && text.length > MAX_LOCAL_TITLE && !ephemeral) {
+        const title = await generateTitle({
+          templateContent: text.slice(0, MAX_TITLE_SOURCE),
+          preferredProvider: settings.provider,
+          preferredModel: settings.model,
+        });
+        const cur = conversationRef.current;
+        if (cur && cur.id === updated.id && title && title !== 'Nieuwe prompt') {
+          const next = { ...cur, title };
+          update(next);
+          persistNow(next);
+        }
+      }
     },
-    [settings, defaultKind, update, persistNow, streamAnswer],
+    [settings, defaultKind, ephemeral, update, persistNow, streamAnswer],
   );
 
   const continueLast = useCallback(() => {
@@ -532,7 +561,7 @@ export default function useChatController(
     if (!cur || streamingRef.current) return;
     const messages = [...cur.messages];
     const last = messages[messages.length - 1];
-    if (!last || last.role !== 'assistant' || !last.error) return;
+    if (!last || last.role !== 'assistant' || last.madeBy) return;
     messages.pop();
     const lastUser = messages[messages.length - 1];
     if (!lastUser || lastUser.role !== 'user') return;
@@ -540,6 +569,18 @@ export default function useChatController(
     update({ ...cur, messages });
     void send(lastUser.content);
   }, [send, update]);
+
+  const editMessage = useCallback(
+    (messageId: string, text: string) => {
+      const cur = conversationRef.current;
+      if (!cur || streamingRef.current) return;
+      const at = cur.messages.findIndex((m) => m.id === messageId);
+      if (at < 0) return;
+      update({ ...cur, messages: cur.messages.slice(0, at) });
+      void send(text);
+    },
+    [send, update],
+  );
 
   const newConversation = useCallback(
     (kind?: ChatConversation['kind']) => {
@@ -748,6 +789,7 @@ export default function useChatController(
     retry,
     addRoutekaart,
     continueLast,
+    editMessage,
     newConversation,
     newConversationInProject,
     attachProject,

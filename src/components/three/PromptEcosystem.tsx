@@ -1,3 +1,4 @@
+import { prefersReducedMotion } from '@/context/AccessibilityContext';
 import { useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Billboard, Text } from '@react-three/drei';
@@ -151,7 +152,11 @@ export default function PromptEcosystem({
     );
   }
   return (
-    <Canvas camera={{ position: [0, 8, 20], fov: 50 }} dpr={[1, 1.5]}>
+    <Canvas
+      camera={{ position: [0, 8, 20], fov: 50 }}
+      dpr={[1, 1.5]}
+      frameloop={prefersReducedMotion() ? 'demand' : 'always'}
+    >
       <color attach="background" args={[bg]} />
       <Scene clusters={clusters} labelColor={labelColor} outline={outline} />
     </Canvas>

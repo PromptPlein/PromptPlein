@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { Routes, Route, Navigate, useParams } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom';
 import { ReferenceDataProvider } from '@/context/ReferenceDataContext';
 import ErrorBoundary from '@/components/common/ErrorBoundary';
 import Header from '@/components/common/Header';
@@ -22,6 +22,7 @@ const NetworkPage = lazy(() => import('@/pages/NetworkPage'));
 const CommunityPage = lazy(() => import('@/pages/CommunityPage'));
 const PublicProfilePage = lazy(() => import('@/pages/PublicProfilePage'));
 const ChatPage = lazy(() => import('@/pages/ChatPage'));
+const AccessibilityPage = lazy(() => import('@/pages/AccessibilityPage'));
 // De techniekenlijst met invulvelden (training): eigen instap naast /genereren.
 const TechniquesPage = lazy(() => import('@/pages/TechniquesPage'));
 
@@ -60,11 +61,16 @@ function PageFallback() {
 }
 
 export default function App() {
+  const { pathname } = useLocation();
+
   return (
     <ReferenceDataProvider>
       <div className="flex min-h-screen flex-col">
+        <a href="#inhoud" className="opl-skip-link">
+          Naar de inhoud
+        </a>
         <Header />
-        <main className="flex-1">
+        <main id="inhoud" tabIndex={-1} className="flex-1 focus:outline-none">
           <ErrorBoundary>
             <Suspense fallback={<PageFallback />}>
             <Routes>
@@ -101,6 +107,9 @@ export default function App() {
               {/* Chat: ook zonder account. Gesprekken staan alleen op het
                   apparaat; projecten (Postgres) vragen wel een account. */}
               <Route path="/chat" element={<ChatPage />} />
+
+              {/* Openbaar, net als de chat: ook zonder account in te stellen. */}
+              <Route path="/toegankelijkheid" element={<AccessibilityPage />} />
 
               {/* Vereist een ingelogde gebruiker */}
               <Route element={<RequireAuth />}>
@@ -149,7 +158,9 @@ export default function App() {
             </Suspense>
           </ErrorBoundary>
         </main>
-        <Footer />
+        {/* De chat gebruikt het hele venster om te lezen. De tekst uit de footer
+            staat daar onder de kaart. */}
+        {pathname !== '/chat' && <Footer />}
         {/* Microfoontje rechtsonder in elk tekstvak: inspreken in plaats van typen. */}
         <DictationLayer />
       </div>

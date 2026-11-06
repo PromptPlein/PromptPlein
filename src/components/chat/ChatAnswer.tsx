@@ -27,7 +27,18 @@ export default function ChatAnswer({
   return (
     <>
       {segments.map((segment, i) => {
-        if (segment.kind === 'text') return <RichText key={i} text={segment.text} />;
+        if (segment.kind === 'text') {
+          const live = isStreaming && i === segments.length - 1;
+          return (
+            <RichText
+              key={i}
+              text={segment.text}
+              variant="chat"
+              streaming={live}
+              trailing={live ? <WritingCursor /> : null}
+            />
+          );
+        }
         if (segment.isHtmlFile) {
           return (
             <ChatFileCard
@@ -48,7 +59,7 @@ export default function ChatAnswer({
               <span>{segment.lang || 'code'}</span>
               {segment.closed && <CopyMessageButton text={segment.code} label="Kopieer" />}
             </div>
-            <pre className="max-h-96 overflow-auto bg-slate-950 px-3 py-2.5 font-mono text-[12px] leading-relaxed text-slate-200">
+            <pre className="max-h-96 overflow-auto bg-slate-950 px-3 py-2.5 font-mono text-[13px] leading-relaxed text-slate-200">
               {segment.code}
             </pre>
             {segment.closed && <CodeCheck lang={segment.lang} code={segment.code} />}
@@ -56,6 +67,16 @@ export default function ChatAnswer({
         );
       })}
     </>
+  );
+}
+
+/** Staat direct achter de laatste letter, dus het oog hoeft niet te zoeken. */
+function WritingCursor() {
+  return (
+    <span
+      className="ml-0.5 inline-block h-[1em] w-1.5 animate-pulse rounded-sm bg-rijksblauw-500 align-text-bottom"
+      aria-hidden="true"
+    />
   );
 }
 

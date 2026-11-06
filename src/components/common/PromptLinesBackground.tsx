@@ -1,3 +1,4 @@
+import { prefersReducedMotion } from '@/context/AccessibilityContext';
 import { useEffect, useRef } from 'react';
 import { rijksblauw } from '@/config/brandColors';
 
@@ -99,7 +100,7 @@ export default function PromptLinesBackground({ className = '' }: { className?: 
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
 
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const reduceMotion = prefersReducedMotion();
     const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
     let rows: Row[] = [];
     const now = () => (reduceMotion ? 12 : performance.now() / 1000);

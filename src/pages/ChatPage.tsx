@@ -157,9 +157,11 @@ function ChatPageInner() {
     text: string;
     findings: GuardrailFinding[];
     attachmentIds: string[];
+    replaceId?: string;
   } | null>(null);
 
-  function guardedSend(text: string) {
+  /** Met `replaceId` vervangt de tekst dat eigen bericht in plaats van erachter te komen. */
+  function guardedSend(text: string, replaceId?: string) {
     const fresh = (conversation?.attachments ?? []).filter(
       (a) => !checkedAttachments.current.has(a.id),
     );
@@ -167,11 +169,12 @@ function ChatPageInner() {
       ? detectPii([text, ...fresh.map((a) => a.text)].join('\n'))
       : [];
     if (findings.length > 0) {
-      setPendingSend({ text, findings, attachmentIds: fresh.map((a) => a.id) });
+      setPendingSend({ text, findings, attachmentIds: fresh.map((a) => a.id), replaceId });
       return;
     }
     fresh.forEach((a) => checkedAttachments.current.add(a.id));
-    void controller.send(text);
+    if (replaceId) controller.editMessage(replaceId, text);
+    else void controller.send(text);
   }
 
   // --- Projecten ---
@@ -470,14 +473,15 @@ function ChatPageInner() {
   return (
     /* Gesprekkenlijst en gesprek zitten in ÉÉN kaart: de lijst is geen los
        zwevend blok naast de chat maar hoort er zichtbaar bij, gescheiden door
-       niet meer dan een lijn. Geen vaste hoogte — de kaart groeit mee met het
-       gesprek tot de hoogte die het venster toelaat (useFitHeight); daarboven
-       scrollt alleen de berichtenlijst. */
+       niet meer dan een lijn. De kaart vult altijd het hele venster
+       (useFitHeight): zo blijft de leesruimte zo groot mogelijk en verspringt
+       het tekstvak niet. Alleen de berichtenlijst scrollt. */
     <div className="mx-auto w-full max-w-6xl px-4 py-4 sm:px-6 lg:px-8">
+      <h1 className="sr-only">Chat</h1>
       <div
         ref={cardRef}
-        style={cardMaxHeight ? { maxHeight: cardMaxHeight } : undefined}
-        className="opl-card flex max-h-[calc(100dvh-16rem)] overflow-hidden lg:max-h-[calc(100dvh-15rem)]"
+        style={cardMaxHeight ? { height: cardMaxHeight } : undefined}
+        className="opl-card flex h-[calc(100dvh-14rem)] overflow-hidden"
       >
         <ChatSidebar
           entries={looseEntries}
@@ -653,6 +657,7 @@ function ChatPageInner() {
                         : controller.continueLast
                     }
                     onRepair={handleRepair}
+                    onEdit={composerDisabled ? undefined : (id, text) => guardedSend(text, id)}
                     onImprove={handleImprove}
                     onSaveAsPrompt={handleSaveAsPrompt}
                     nudgeMessageId={nudgeMessageId}
@@ -723,7 +728,10 @@ function ChatPageInner() {
           Eén korte belofte in beeld, de rest achter het infobolletje; ernaast
           de twee knoppen waarmee je je chats als bestand meeneemt. Het bestand
           gaat nergens heen: opbouwen en inlezen gebeurt in de browser. */}
-      <div className="mt-3 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm">
+      <div
+        data-fit-below
+        className="mt-3 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm"
+      >
         <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white py-0.5 pl-3 pr-1 font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
           <ShieldCheck size={15} className="shrink-0 text-rijksblauw-700 dark:text-rijksblauw-200" />
           Chats blijven in deze browser
@@ -763,6 +771,9 @@ function ChatPageInner() {
             if (file) void controller.importHistory(file);
           }}
         />
+        <p className="w-full text-center text-xs text-slate-600 dark:text-slate-300">
+          Niet voor verwerking van persoonsgegevens.
+        </p>
       </div>
 
       {pendingSend && aiSettings && (
@@ -773,7 +784,11 @@ function ChatPageInner() {
           onConfirm={() => {
             pendingSend.attachmentIds.forEach((id) => checkedAttachments.current.add(id));
             setPendingSend(null);
-            void controller.send(pendingSend.text);
+            if (pendingSend.replaceId) {
+              controller.editMessage(pendingSend.replaceId, pendingSend.text);
+            } else {
+              void controller.send(pendingSend.text);
+            }
           }}
           onCancel={() => {
             // Het invoerveld is bij versturen al leeggemaakt; zet de tekst terug.

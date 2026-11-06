@@ -184,7 +184,7 @@ server-side op wat jij mag beoordelen.
 Ingelogd vereist: `/bibliotheek`, `/profiel`, `/netwerk`. De chat (`/chat`)
 werkt zonder account; alleen chatprojecten vragen er een. Admin
 vereist: alles onder `/admin`. De rest is openbaar, inclusief `/genereren`,
-`/zoeken`, `/community` en `/technieken`.
+`/zoeken`, `/community`, `/technieken` en `/toegankelijkheid`.
 
 Prompts hebben een zichtbaarheidsniveau met een goedkeuringsstroom
 (`visibilityService`, `ApprovalQueuePage`). Organisaties vormen een boom van
@@ -204,6 +204,31 @@ ministeries (`orgTree.ts`, migraties 0020/0021/0024).
 Chatgesprekken staan bewust niet op de server: dat is de privacybelofte van de
 chat. Verplaats ze niet naar Postgres zonder dat expliciet met de gebruiker af
 te stemmen.
+
+## Toegankelijkheid en leesgemak in de chat
+
+`/toegankelijkheid` is bewust openbaar, omdat de chat ook zonder account werkt.
+De keuzes staan per browser in localStorage (`AccessibilityContext`, sleutel
+`opl-toegankelijkheid`) en gelden via `<html>`: tekstgrootte als `font-size`
+(alles staat in rem, dus reken ook marges in rem), de rest als `data-contrast`,
+`data-motion` en `data-actions` met de regels in `index.css`. Code die zelf
+animeert vraagt `prefersReducedMotion()`, dat ook de systeeminstelling meeneemt.
+
+Basistoegankelijkheid is geen instelling en staat altijd aan: skiplink, koppen
+per bericht, en een aparte `role="status"` in `ChatMessageList`. Zet de
+berichtenlijst nooit zelf in een live-regio: een schermlezer pikt dan elk woord
+van een streamend antwoord op.
+
+Voorlezen (`src/lib/speech.ts`) gebruikt de stem van de browser en geen dienst
+aan de serverkant, om dezelfde reden als de opslagscheiding hierboven. Online
+stemmen sturen de tekst naar hun leverancier en worden daarom nooit vanzelf
+gekozen.
+
+De chat scrolt bewust niet mee: een nieuwe vraag gaat bovenaan staan en het
+antwoord groeit eronder, zodat je vanaf het begin in je eigen tempo leest.
+"Naar beneden" zet volgen aan, omhoog scrollen zet het weer uit. De leeskolom is
+`60ch`, wat in Rijks Sans zo'n 72 tekens per regel is (gemeten). Maak hem niet
+breder zonder opnieuw te meten.
 
 ## De AI-laag
 

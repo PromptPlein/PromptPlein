@@ -1,3 +1,4 @@
+import { prefersReducedMotion } from '@/context/AccessibilityContext';
 import { useMemo, useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -174,7 +175,7 @@ export default function DashboardBackground({
       <Canvas
         gl={{ antialias: false, powerPreference: 'low-power' }}
         dpr={[1, 1.5]}
-        frameloop="always"
+        frameloop={prefersReducedMotion() ? 'demand' : 'always'}
         camera={{ position: [0, 0, 1] }}
       >
         <ShaderPlane key={variant} variant={variant} />

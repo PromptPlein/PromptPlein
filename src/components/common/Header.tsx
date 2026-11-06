@@ -8,6 +8,7 @@ import {
   Search,
   ShieldCheck,
   ClipboardCheck,
+  Accessibility,
 } from '@/components/common/icons';
 import clsx from 'clsx';
 import { useAuth } from '@/context/AuthContext';
@@ -116,6 +117,19 @@ export default function Header() {
               aria-label="Beheer"
             >
               <ShieldCheck size={18} />
+            </NavLink>
+            <NavLink
+              to="/toegankelijkheid"
+              className={({ isActive }) =>
+                clsx(
+                  'rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-800',
+                  isActive ? 'text-rijksblauw-700 dark:text-rijksblauw-200' : 'text-slate-500 dark:text-slate-400',
+                )
+              }
+              title="Toegankelijkheid"
+              aria-label="Toegankelijkheid"
+            >
+              <Accessibility size={18} />
             </NavLink>
             <ThemeToggle />
             <NotificationBell />

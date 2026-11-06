@@ -208,3 +208,100 @@ html.dark .skeleton::after {
 html[data-dictation='on'] textarea:not([readonly], [data-dictation='off'], [data-dictation='off'] *) {
   padding-right: 2.75rem;
 }
+
+/* Eerste tabstop op elke pagina: sla de navigatie over. */
+.opl-skip-link {
+  position: absolute;
+  left: 0.75rem;
+  top: -4rem;
+  z-index: 100;
+  border-radius: 0.25rem;
+  background: theme('colors.rijksblauw.700');
+  color: #fff;
+  font-weight: 600;
+  padding: 0.5rem 1rem;
+}
+
+.opl-skip-link:focus {
+  top: 0.75rem;
+}
+
+/*
+ * Knoppen bij berichten: in beeld bij de muis of toetsenbordfocus, zodat het
+ * gesprek rustig blijft. Alleen het oog ziet ze niet; ze blijven in de tabvolgorde
+ * en voor schermlezers gewoon bestaan.
+ */
+@media (hover: hover) {
+  html:not([data-actions='always']) .opl-msg-actions {
+    opacity: 0;
+    transition: opacity 120ms;
+  }
+
+  html:not([data-actions='always']) .group:hover > .opl-msg-actions,
+  html:not([data-actions='always']) .opl-msg-actions:focus-within {
+    opacity: 1;
+  }
+}
+
+/* Minder beweging: de systeeminstelling geldt altijd, de keuze in de app ook. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+html[data-motion='reduce'] *,
+html[data-motion='reduce'] *::before,
+html[data-motion='reduce'] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+/*
+ * Hoog contrast. Alle grijstinten van tekst en randen gaan naar de sterkste
+ * variant. Codeblokken blijven licht op donker, ook in de lichte stand.
+ */
+html[data-contrast='high'] [class*='text-slate-']:not(pre, pre *) {
+  color: theme('colors.slate.950') !important;
+}
+
+html[data-contrast='high'].dark [class*='text-slate-']:not(pre, pre *) {
+  color: #fff !important;
+}
+
+html[data-contrast='high'] [class*='border-slate-'],
+html[data-contrast='high'] .opl-card,
+html[data-contrast='high'] .opl-input {
+  border-color: theme('colors.slate.700') !important;
+}
+
+html[data-contrast='high'].dark [class*='border-slate-'],
+html[data-contrast='high'].dark .opl-card,
+html[data-contrast='high'].dark .opl-input {
+  border-color: theme('colors.slate.300') !important;
+}
+
+html[data-contrast='high'] ::placeholder {
+  color: theme('colors.slate.700') !important;
+  opacity: 1;
+}
+
+html[data-contrast='high'].dark ::placeholder {
+  color: theme('colors.slate.200') !important;
+}
+
+html[data-contrast='high'] main a {
+  text-decoration-line: underline;
+}
+
+html[data-contrast='high'] :focus-visible {
+  outline: 3px solid currentColor !important;
+  outline-offset: 2px;
+}

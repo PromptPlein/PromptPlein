@@ -1,9 +1,34 @@
-import { memo, useEffect, useRef } from 'react';
-import { AlertTriangle, ArrowRight, Globe, Lightbulb, RotateCcw, Save, Wand2, X } from '@/components/common/icons';
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import {
+  AlertTriangle,
+  ArrowDown,
+  ArrowRight,
+  Globe,
+  Lightbulb,
+  Pencil,
+  RotateCcw,
+  Save,
+  Send,
+  Volume2,
+  VolumeX,
+  Wand2,
+  X,
+} from '@/components/common/icons';
 import clsx from 'clsx';
+import toast from 'react-hot-toast';
+import { prefersReducedMotion, useAccessibility } from '@/context/AccessibilityContext';
+import { speak, stopSpeaking, toSpeakableText, useSpeakingId } from '@/lib/speech';
 import ChatAnswer from './ChatAnswer';
 import CopyMessageButton from './CopyMessageButton';
 import type { ChatMessage } from '@/types';
+
+/** Ruimte boven de vraag zodra die bovenaan staat; gelijk aan de `py-4` van de lijst. */
+const LIST_PADDING = 16;
+/** Zo veel tekst onder beeld hoort er te zijn voordat de knop "Naar beneden" komt. */
+const JUMP_THRESHOLD = 48;
+/** Eigen berichten boven deze omvang klappen in: het zijn vaak hele prompts. */
+const LONG_MESSAGE_CHARS = 800;
+const LONG_MESSAGE_LINES = 12;
 
 /**
  * De berichtenlijst van de chat. Elke rij is gememoïseerd: tijdens het streamen
@@ -16,6 +41,7 @@ export default function ChatMessageList({
   onRetry,
   onContinue,
   onRepair,
+  onEdit,
   onImprove,
   onSaveAsPrompt,
   nudgeMessageId,
@@ -34,6 +60,8 @@ export default function ChatMessageList({
   onContinue?: () => void;
   /** Stuur de fouten uit de controle van een bestand als nieuw bericht. */
   onRepair?: (text: string) => void;
+  /** Vervang je laatste bericht en laat het antwoord opnieuw schrijven. */
+  onEdit?: (messageId: string, text: string) => void;
   /**
    * "Verbeter in generator" op eigen berichten (omgekeerde handoff). Niet
    * meegegeven (bijv. in de Testkamer — je bent daar al in de generator) =
@@ -47,43 +75,424 @@ export default function ChatMessageList({
   onNudgeDismiss?: () => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [showJump, setShowJump] = useState(false);
+  const [status, setStatus] = useState('');
+  const { settings } = useAccessibility();
 
-  // Automatisch naar beneden scrollen zodra er tekst bij komt (ook tijdens het
-  // streamen): de nieuwste regel blijft in beeld.
-  const last = messages[messages.length - 1];
+  // De knop "Naar beneden" zet volgen aan; omhoog scrollen zet het weer uit.
+  const followRef = useRef(false);
+  const lastTopRef = useRef(0);
+  const streamingRef = useRef(streaming);
+  streamingRef.current = streaming;
+
+  const lastUserIndex = messages.map((m) => m.role).lastIndexOf('user');
+  const lastUserId = lastUserIndex >= 0 ? messages[lastUserIndex].id : null;
+  const lastIsAnswerToQuestion =
+    lastUserIndex >= 0 && lastUserIndex === messages.length - 2;
+
+  /**
+   * De laatste beurt vult minstens de hele lijst. Alleen dan is er genoeg ruimte
+   * om de vraag bovenaan te zetten terwijl het antwoord nog kort is. Staat als
+   * CSS-variabele op de lijst, zodat de maat meteen geldt en de rijen niet
+   * opnieuw hoeven te renderen.
+   */
+  const fitLastTurn = useCallback(() => {
+    const list = scrollRef.current;
+    if (!list || !lastUserId) return;
+    const row = list.querySelector<HTMLElement>(`[data-message-id="${lastUserId}"]`);
+    if (!row) return;
+    const fill = list.clientHeight - row.getBoundingClientRect().height - 2 * LIST_PADDING - 24;
+    list.style.setProperty('--turn-fill', `${Math.max(0, fill)}px`);
+  }, [lastUserId]);
+
+  // Een nieuwe vraag gaat bovenaan staan en daarna blijft het scherm stil: het
+  // antwoord groeit eronder en je leest in je eigen tempo vanaf het begin. Ook
+  // een geopend gesprek begint bij de laatste vraag.
+  useLayoutEffect(() => {
+    const list = scrollRef.current;
+    if (!list || !lastUserId) return;
+    followRef.current = false;
+    stopSpeaking();
+    fitLastTurn();
+    const row = list.querySelector<HTMLElement>(`[data-message-id="${lastUserId}"]`);
+    if (!row) return;
+    const offset = row.getBoundingClientRect().top - list.getBoundingClientRect().top;
+    list.scrollTo({
+      top: list.scrollTop + offset - LIST_PADDING,
+      behavior: streamingRef.current && !prefersReducedMotion() ? 'smooth' : 'auto',
+    });
+  }, [lastUserId, fitLastTurn]);
+
   useEffect(() => {
-    const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [messages.length, last?.content]);
+    const list = scrollRef.current;
+    const content = contentRef.current;
+    if (!list || !content) return;
 
-  // flex-auto (niet flex-1): de lijst houdt zijn inhoudshoogte zolang de kaart
-  // nog groeit, en krimpt pas — met interne scroll — zodra het hoogteplafond
-  // van de kaart is bereikt.
+    const syncJump = () =>
+      setShowJump(list.scrollHeight - list.scrollTop - list.clientHeight > JUMP_THRESHOLD);
+
+    const onResize = () => {
+      fitLastTurn();
+      if (followRef.current) list.scrollTop = list.scrollHeight;
+      syncJump();
+    };
+
+    const onScroll = () => {
+      if (list.scrollTop < lastTopRef.current - 2) followRef.current = false;
+      lastTopRef.current = list.scrollTop;
+      syncJump();
+    };
+
+    const observer = new ResizeObserver(onResize);
+    observer.observe(list);
+    observer.observe(content);
+    list.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      observer.disconnect();
+      list.removeEventListener('scroll', onScroll);
+    };
+  }, [fitLastTurn]);
+
+  function jumpToEnd() {
+    const list = scrollRef.current;
+    if (!list) return;
+    followRef.current = streaming;
+    list.scrollTo({
+      top: list.scrollHeight,
+      behavior: streaming || prefersReducedMotion() ? 'auto' : 'smooth',
+    });
+    // De knop verdwijnt zo meteen; de focus mag niet met hem mee verdwijnen.
+    list.focus({ preventScroll: true });
+  }
+
+  // Wat een schermlezer hoort. Niet de hele lijst als live-regio: dan zou hij
+  // elk woord van een lopend antwoord oppikken. Alleen begin en einde, en de
+  // volledige tekst als de gebruiker dat in de instellingen heeft gekozen.
+  // Begint op false: bij het eerste bericht van een gesprek verschijnt deze lijst
+  // pas als het schrijven al loopt, en ook dat moet gemeld worden.
+  const wasStreaming = useRef(false);
+  const lastMessage = messages[messages.length - 1];
+  useEffect(() => {
+    if (streaming === wasStreaming.current) return;
+    wasStreaming.current = streaming;
+    if (streaming) {
+      setStatus('De AI schrijft een antwoord.');
+      return;
+    }
+    if (!lastMessage || lastMessage.role !== 'assistant') return;
+    if (lastMessage.error) {
+      setStatus(`Het antwoord is mislukt. ${lastMessage.error}`);
+      return;
+    }
+    if (lastMessage.stopped) {
+      setStatus('Het antwoord is gestopt.');
+      return;
+    }
+    const spoken = toSpeakableText(lastMessage.content);
+    if (settings.answerDone === 'schermlezer') {
+      setStatus(`Antwoord: ${spoken}`);
+      return;
+    }
+    setStatus('Het antwoord is klaar.');
+    if (settings.answerDone === 'voorlezen') {
+      const result = speak(lastMessage.id, spoken, {
+        voice: settings.speechVoice,
+        rate: settings.speechRate,
+      });
+      if (result === 'geen-stem') toast.error(NO_VOICE_MESSAGE);
+    }
+    // Alleen de overgang van streaming telt, niet elke wijziging in de instellingen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [streaming]);
+
+  // Voorlezen stopt met Escape en stopt ook als je deze pagina verlaat.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') stopSpeaking();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      stopSpeaking();
+    };
+  }, []);
+
   return (
-    <div
-      ref={scrollRef}
-      className="min-h-0 flex-auto space-y-4 overflow-y-auto px-4 py-4 sm:px-6"
-      aria-live="polite"
-      aria-busy={streaming}
+    <div className="relative flex min-h-0 flex-auto flex-col">
+      {/* Bereikbaar met het toetsenbord, zodat de pijltjes en PageDown het gesprek
+          scrollen. Zie de status hieronder voor wat een schermlezer hoort. */}
+      <div
+        ref={scrollRef}
+        tabIndex={0}
+        role="region"
+        aria-label="Gesprek"
+        aria-busy={streaming}
+        className="opl-scroll-slim min-h-0 flex-auto overflow-y-auto px-4 py-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-rijksblauw-500 sm:px-6"
+      >
+        {/* Vaste leeskolom: 60ch is in Rijks Sans zo'n 72 tekens per regel (gemeten),
+            en onder de 75 leest het oog het prettigst. De schuifbalk blijft wel aan
+            de rand van de kaart. */}
+        <div ref={contentRef} className="mx-auto max-w-[60ch] space-y-6">
+          {messages.map((message, i) => (
+            <ChatMessageRow
+              key={message.id}
+              message={message}
+              isStreaming={streaming && i === messages.length - 1 && message.role === 'assistant'}
+              // Alleen de rij die nu schrijft heeft de fase nodig; de rest krijgt
+              // null, zodat een fasewissel niet elke rij opnieuw laat renderen.
+              phase={streaming && i === messages.length - 1 ? (phase ?? null) : null}
+              onRetry={onRetry}
+              onContinue={onContinue}
+              onRepair={streaming ? undefined : onRepair}
+              canRetry={!streaming && i === messages.length - 1}
+              fillsTurn={lastIsAnswerToQuestion && i === messages.length - 1}
+              onEdit={!streaming && i === lastUserIndex ? onEdit : undefined}
+              onImprove={onImprove}
+              onSaveAsPrompt={onSaveAsPrompt}
+              showNudge={message.id === nudgeMessageId}
+              onNudgeDismiss={onNudgeDismiss}
+            />
+          ))}
+        </div>
+      </div>
+
+      {showJump && (
+        <button
+          type="button"
+          onClick={jumpToEnd}
+          className="absolute bottom-3 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-rijksblauw-700 shadow-md hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-rijksblauw-500 dark:border-slate-600 dark:bg-slate-800 dark:text-rijksblauw-200 dark:hover:bg-slate-700"
+        >
+          <ArrowDown size={15} /> Naar beneden
+        </button>
+      )}
+
+      <div role="status" aria-atomic="true" className="sr-only">
+        {status}
+      </div>
+    </div>
+  );
+}
+
+const NO_VOICE_MESSAGE =
+  'Er staat geen Nederlandse stem op dit apparaat. Kies er een bij Toegankelijkheid.';
+
+/** Knop onder een antwoord; alleen zichtbaar als voorlezen in de instellingen aanstaat. */
+function SpeakButton({ messageId, text }: { messageId: string; text: string }) {
+  const { settings } = useAccessibility();
+  const speakingId = useSpeakingId();
+  const active = speakingId === messageId;
+
+  function toggle() {
+    if (active) {
+      stopSpeaking();
+      return;
+    }
+    const result = speak(messageId, toSpeakableText(text), {
+      voice: settings.speechVoice,
+      rate: settings.speechRate,
+    });
+    if (result === 'geen-stem') toast.error(NO_VOICE_MESSAGE);
+    if (result === 'niet-ondersteund') toast.error('Deze browser kan niet voorlezen.');
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      aria-pressed={active}
+      className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-rijksblauw-700 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-rijksblauw-200"
     >
-      {messages.map((message, i) => (
-        <ChatMessageRow
-          key={message.id}
-          message={message}
-          isStreaming={streaming && i === messages.length - 1 && message.role === 'assistant'}
-          // Alleen de rij die nu schrijft heeft de fase nodig; de rest krijgt
-          // null, zodat een fasewissel niet elke rij opnieuw laat renderen.
-          phase={streaming && i === messages.length - 1 ? (phase ?? null) : null}
-          onRetry={onRetry}
-          onContinue={onContinue}
-          onRepair={streaming ? undefined : onRepair}
-          canRetry={!streaming && i === messages.length - 1}
-          onImprove={onImprove}
-          onSaveAsPrompt={onSaveAsPrompt}
-          showNudge={message.id === nudgeMessageId}
-          onNudgeDismiss={onNudgeDismiss}
-        />
-      ))}
+      {active ? <VolumeX size={12} /> : <Volume2 size={12} />}
+      {active ? 'Stop voorlezen' : 'Voorlezen'}
+    </button>
+  );
+}
+
+/** Een eigen bericht: inklappen als het lang is, en bewerken als het het laatste is. */
+function UserMessage({
+  message,
+  onEdit,
+  onImprove,
+  onSaveAsPrompt,
+  showNudge,
+  onNudgeDismiss,
+}: {
+  message: ChatMessage;
+  onEdit?: (messageId: string, text: string) => void;
+  onImprove?: (text: string) => void;
+  onSaveAsPrompt?: (text: string) => void;
+  showNudge?: boolean;
+  onNudgeDismiss?: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [expanded, setExpanded] = useState(false);
+  const editorRef = useRef<HTMLTextAreaElement>(null);
+  const editButtonRef = useRef<HTMLButtonElement>(null);
+
+  const long =
+    message.content.length > LONG_MESSAGE_CHARS ||
+    message.content.split('\n').length > LONG_MESSAGE_LINES;
+  const collapsed = long && !expanded;
+
+  useEffect(() => {
+    if (!editing) return;
+    const el = editorRef.current;
+    if (!el) return;
+    el.focus();
+    el.setSelectionRange(el.value.length, el.value.length);
+  }, [editing]);
+
+  function startEdit() {
+    setDraft(message.content);
+    setEditing(true);
+  }
+
+  function cancelEdit() {
+    setEditing(false);
+    // De knop bestaat weer zodra React heeft gerenderd.
+    requestAnimationFrame(() => editButtonRef.current?.focus());
+  }
+
+  function saveEdit() {
+    const value = draft.trim();
+    if (!value || !onEdit) return;
+    setEditing(false);
+    onEdit(message.id, value);
+  }
+
+  return (
+    <div data-message-id={message.id} className="group flex flex-col items-end">
+      <h2 className="sr-only">Jouw bericht</h2>
+
+      {editing ? (
+        <div className="w-full">
+          <textarea
+            ref={editorRef}
+            value={draft}
+            aria-label="Bewerk je bericht"
+            rows={Math.min(14, draft.split('\n').length + 1)}
+            className="opl-input !text-base leading-7"
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                e.stopPropagation();
+                cancelEdit();
+              }
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                saveEdit();
+              }
+            }}
+          />
+          <div className="mt-2 flex justify-end gap-2">
+            <button type="button" className="opl-btn-ghost !px-3 !py-1.5" onClick={cancelEdit}>
+              Annuleren
+            </button>
+            <button
+              type="button"
+              className="opl-btn-primary !px-3 !py-1.5"
+              disabled={!draft.trim()}
+              onClick={saveEdit}
+            >
+              <Send size={14} /> Versturen
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="max-w-[85%] rounded-2xl rounded-br-md bg-rijksblauw-50 px-4 py-2.5 text-base leading-7 text-slate-900 dark:bg-rijksblauw-500/15 dark:text-slate-100">
+          <div
+            className={clsx(
+              'whitespace-pre-wrap break-words',
+              collapsed &&
+                'max-h-48 overflow-hidden [mask-image:linear-gradient(to_bottom,black_65%,transparent)]',
+            )}
+          >
+            {message.content}
+          </div>
+          {long && (
+            <button
+              type="button"
+              aria-expanded={expanded}
+              onClick={() => setExpanded((v) => !v)}
+              className="mt-1 text-sm font-medium text-rijksblauw-700 hover:underline dark:text-rijksblauw-200"
+            >
+              {expanded ? 'Toon minder' : 'Toon alles'}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Acties onder het eigen bericht verschijnen bij de muis of toetsenbordfocus,
+          zodat het gesprek rustig blijft. In de instellingen kun je ze altijd
+          tonen; onzichtbaar zijn ze alleen voor het oog, niet voor de tabvolgorde. */}
+      {message.content.trim() && !editing && (
+        <div className="opl-msg-actions mt-1 flex items-center gap-3">
+          <CopyMessageButton text={message.content} label="" />
+          {onEdit && (
+            <button
+              ref={editButtonRef}
+              type="button"
+              className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-rijksblauw-700 dark:text-slate-300 dark:hover:text-rijksblauw-200"
+              onClick={startEdit}
+            >
+              <Pencil size={12} /> Bewerk
+            </button>
+          )}
+          {onImprove && (
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-rijksblauw-700 dark:text-slate-300 dark:hover:text-rijksblauw-200"
+              onClick={() => onImprove(message.content)}
+              title="Maak hier in de generator een sterkere, herbruikbare prompt van"
+            >
+              <Wand2 size={12} /> Verbeter in generator
+            </button>
+          )}
+          {onSaveAsPrompt && (
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-rijksblauw-700 dark:text-slate-300 dark:hover:text-rijksblauw-200"
+              onClick={() => onSaveAsPrompt(message.content)}
+              title="Sla dit bericht op als prompt in de bibliotheek"
+            >
+              <Save size={12} /> Bewaar als prompt
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* De bouw-een-prompt-tip: dit bericht leek een opdracht zonder
+          structuur (zie looksLikeMessyPrompt). Subtiel, en definitief weg te
+          klikken. */}
+      {showNudge && onImprove && (
+        <div className="mt-1.5 flex max-w-[85%] items-center gap-2 rounded-lg border border-rijksblauw-200 bg-rijksblauw-50/60 px-3 py-2 text-xs text-slate-600 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10 dark:text-slate-300">
+          <Lightbulb size={14} className="shrink-0 text-rijksoranje" />
+          <span>
+            Tip: dit lijkt op een opdracht. In de generator bouw je er een sterkere, herbruikbare
+            prompt van.
+          </span>
+          <button
+            type="button"
+            className="shrink-0 font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
+            onClick={() => onImprove(message.content)}
+          >
+            Bouw in generator
+          </button>
+          {onNudgeDismiss && (
+            <button
+              type="button"
+              className="shrink-0 rounded p-0.5 text-slate-400 hover:bg-slate-200 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300"
+              onClick={onNudgeDismiss}
+              aria-label="Verberg deze tip voortaan"
+              title="Verberg deze tip voortaan"
+            >
+              <X size={12} />
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -96,6 +505,8 @@ const ChatMessageRow = memo(function ChatMessageRow({
   onContinue,
   onRepair,
   canRetry,
+  fillsTurn,
+  onEdit,
   onImprove,
   onSaveAsPrompt,
   showNudge,
@@ -108,107 +519,50 @@ const ChatMessageRow = memo(function ChatMessageRow({
   onContinue?: () => void;
   onRepair?: (text: string) => void;
   canRetry: boolean;
+  /** Dit antwoord hoort bij de laatste vraag en vult de rest van de lijst. */
+  fillsTurn: boolean;
+  onEdit?: (messageId: string, text: string) => void;
   onImprove?: (text: string) => void;
   onSaveAsPrompt?: (text: string) => void;
   showNudge?: boolean;
   onNudgeDismiss?: () => void;
 }) {
+  const { speechOn } = useAccessibility();
+
   if (message.role === 'user') {
     return (
-      <div className="flex flex-col items-end">
-        <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-rijksblauw-50 px-4 py-2.5 text-sm text-slate-900 dark:bg-rijksblauw-500/15 dark:text-slate-100">
-          {message.content}
-        </div>
-
-        {/* Acties onder het eigen bericht. Staan er altijd: op aanraakschermen
-            bestaat hover niet, en verborgen acties worden simpelweg niet
-            gevonden. Ze blijven wel klein en grijs, zodat het gesprek rustig
-            oogt en het antwoord de aandacht houdt. */}
-        {message.content.trim() && (
-          <div className="mt-1 flex items-center gap-3">
-            <CopyMessageButton text={message.content} label="" />
-            {(onImprove || onSaveAsPrompt) && (
-              <span className="flex gap-3">
-                {onImprove && (
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-rijksblauw-700 dark:text-slate-300 dark:hover:text-rijksblauw-200"
-                    onClick={() => onImprove(message.content)}
-                    title="Maak hier in de generator een sterkere, herbruikbare prompt van"
-                  >
-                    <Wand2 size={12} /> Verbeter in generator
-                  </button>
-                )}
-                {onSaveAsPrompt && (
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-rijksblauw-700 dark:text-slate-300 dark:hover:text-rijksblauw-200"
-                    onClick={() => onSaveAsPrompt(message.content)}
-                    title="Sla dit bericht op als prompt in de bibliotheek"
-                  >
-                    <Save size={12} /> Bewaar als prompt
-                  </button>
-                )}
-              </span>
-            )}
-          </div>
-        )}
-
-        {/* De bouw-een-prompt-tip: dit bericht leek een opdracht zonder
-            structuur (zie looksLikeMessyPrompt). Subtiel, en definitief weg te
-            klikken. */}
-        {showNudge && onImprove && (
-          <div className="mt-1.5 flex max-w-[85%] items-center gap-2 rounded-lg border border-rijksblauw-200 bg-rijksblauw-50/60 px-3 py-2 text-xs text-slate-600 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10 dark:text-slate-300">
-            <Lightbulb size={14} className="shrink-0 text-rijksoranje" />
-            <span>
-              Tip: dit lijkt op een opdracht. In de generator bouw je er een sterkere, herbruikbare
-              prompt van.
-            </span>
-            <button
-              type="button"
-              className="shrink-0 font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
-              onClick={() => onImprove(message.content)}
-            >
-              Bouw in generator
-            </button>
-            {onNudgeDismiss && (
-              <button
-                type="button"
-                className="shrink-0 rounded p-0.5 text-slate-400 hover:bg-slate-200 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300"
-                onClick={onNudgeDismiss}
-                aria-label="Verberg deze tip voortaan"
-                title="Verberg deze tip voortaan"
-              >
-                <X size={12} />
-              </button>
-            )}
-          </div>
-        )}
-      </div>
+      <UserMessage
+        message={message}
+        onEdit={onEdit}
+        onImprove={onImprove}
+        onSaveAsPrompt={onSaveAsPrompt}
+        showNudge={showNudge}
+        onNudgeDismiss={onNudgeDismiss}
+      />
     );
   }
 
   return (
-    <div className="flex flex-col items-start gap-1.5">
+    <div
+      className={clsx(
+        'group flex flex-col items-start gap-2',
+        fillsTurn && 'min-h-[var(--turn-fill,0px)]',
+      )}
+    >
+      <h2 className="sr-only">Antwoord</h2>
       <div
         className={clsx(
-          'max-w-full text-sm text-slate-700 dark:text-slate-200',
+          'w-full text-base leading-7 text-slate-800 dark:text-slate-100',
           message.error && !message.content && 'text-rijksrood dark:text-red-400',
         )}
       >
         {message.content ? (
           <ChatAnswer text={message.content} isStreaming={isStreaming} onRepair={onRepair} />
         ) : isStreaming ? (
-          <span className="text-slate-400 dark:text-slate-500">
+          <span className="text-slate-500 dark:text-slate-400">
             {phase === 'searching' ? 'Aan het zoeken op internet…' : 'Aan het nadenken…'}
           </span>
         ) : null}
-        {isStreaming && (
-          <span
-            className="ml-0.5 inline-block h-4 w-1.5 animate-pulse rounded-sm bg-rijksblauw-500 align-text-bottom"
-            aria-hidden="true"
-          />
-        )}
       </div>
 
       {/* Kopieerknop onder het antwoord: dit is de tekst waar de gebruiker voor
@@ -246,8 +600,25 @@ const ChatMessageRow = memo(function ChatMessageRow({
         </div>
       )}
 
+      {/* Onder het laatste antwoord altijd in beeld; bij oudere pas bij de muis
+          of toetsenbordfocus, anders staat er na elk antwoord dezelfde rij. */}
       {!isStreaming && message.content.trim() && (
-        <CopyMessageButton text={message.content} label="Kopieer antwoord" className="-ml-1.5" />
+        <div
+          className={clsx('-ml-1.5 flex flex-wrap items-center gap-2', !canRetry && 'opl-msg-actions')}
+        >
+          <CopyMessageButton text={message.content} label="Kopieer antwoord" />
+          {canRetry && !message.error && !message.madeBy && (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-rijksblauw-700 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-rijksblauw-200"
+              title="Laat de AI dit antwoord opnieuw schrijven"
+            >
+              <RotateCcw size={12} /> Opnieuw
+            </button>
+          )}
+          {speechOn && <SpeakButton messageId={message.id} text={message.content} />}
+        </div>
       )}
 
       {/* Een lang antwoord gaat in meerdere rondes; tussen twee rondes is het

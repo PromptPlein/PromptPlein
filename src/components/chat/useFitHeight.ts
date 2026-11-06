@@ -2,8 +2,13 @@ import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
 
 /** Ondergrens: hieronder wordt de chat onbruikbaar klein. */
 const MIN_HEIGHT = 260;
-/** Ruimte die onder het element vrij blijft (de onderste paginamarge). */
-const BOTTOM_GAP = 16;
+/**
+ * Ruimte die onder het element vrij blijft, in rem: de onderste paginamarge
+ * (`py-4`). In rem omdat de tekstgrootte uit Toegankelijkheid die marge meeschaalt.
+ */
+const BOTTOM_GAP_REM = 1;
+/** De marge boven het element met `data-fit-below` (`mt-3`), in rem. */
+const BELOW_MARGIN_REM = 0.75;
 
 /**
  * Berekent hoeveel hoogte er voor de chatkaart overblijft: de vensterhoogte
@@ -16,8 +21,8 @@ const BOTTOM_GAP = 16;
  * een vaste aftrek werd de pagina nét scrollbaar, waardoor de chatkaart onder
  * de sticky header schoof. Meten geeft op elk toestel een exacte pasvorm.
  *
- * De uitkomst is een MAXIMUM: zolang het gesprek kort is, bepaalt de inhoud de
- * hoogte en blijft de kaart klein.
+ * Een element met `data-fit-below` staat onder de kaart en telt mee als ruimte
+ * die vrij moet blijven, zodat de pagina zelf nooit scrollt.
  */
 export default function useFitHeight<T extends HTMLElement>(): [RefObject<T>, number | undefined] {
   const ref = useRef<T>(null);
@@ -33,7 +38,11 @@ export default function useFitHeight<T extends HTMLElement>(): [RefObject<T>, nu
       const top = el.getBoundingClientRect().top + window.scrollY;
       const footer = document.querySelector('footer');
       const footerHeight = footer?.getBoundingClientRect().height ?? 0;
-      const available = window.innerHeight - top - footerHeight - BOTTOM_GAP;
+      const below = document.querySelector<HTMLElement>('[data-fit-below]');
+      const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+      const belowHeight = below ? below.getBoundingClientRect().height + BELOW_MARGIN_REM * rem : 0;
+      const available =
+        window.innerHeight - top - footerHeight - belowHeight - BOTTOM_GAP_REM * rem;
       setMaxHeight(Math.round(Math.max(MIN_HEIGHT, available)));
     };
 
@@ -44,7 +53,9 @@ export default function useFitHeight<T extends HTMLElement>(): [RefObject<T>, nu
     window.addEventListener('resize', measure);
     window.addEventListener('orientationchange', measure);
     const observer = new ResizeObserver(measure);
-    document.querySelectorAll('header, footer').forEach((node) => observer.observe(node));
+    document
+      .querySelectorAll('header, footer, [data-fit-below]')
+      .forEach((node) => observer.observe(node));
 
     return () => {
       window.removeEventListener('resize', measure);
