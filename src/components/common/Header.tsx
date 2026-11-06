@@ -147,7 +147,7 @@ export default function Header() {
                 )
               }
             >
-              <Icon size={22} />
+              <Icon size={22} className="text-rijksoranje-vast" />
               {label}
             </NavLink>
           ))}

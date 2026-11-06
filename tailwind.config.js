@@ -28,9 +28,12 @@ export default {
         // `rijksoranje` blijft als `bg-rijksoranje` werken via DEFAULT;
         // `rijksoranje-dark` voor hover/gradient-einde. Via een CSS-variabele,
         // zodat de donkere modus een ander accent krijgt (zie plugin onderaan).
+        // `rijksoranje-vast` schakelt niet mee: op lintblauw, dat in beide modi
+        // gelijk blijft, haalt alleen het felle oranje de 3:1 van een icoon.
         rijksoranje: {
           DEFAULT: 'rgb(var(--accent) / <alpha-value>)',
           dark: 'rgb(var(--accent-hover) / <alpha-value>)',
+          vast: rijksoranje,
         },
         rijksgroen,
       },
