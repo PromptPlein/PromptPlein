@@ -10,7 +10,6 @@ import {
   type LucideIcon,
 } from '@/components/common/icons';
 import clsx from 'clsx';
-import DailyBackground from '@/components/common/DailyBackground';
 import InfoDot from '@/components/common/InfoDot';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { categoryIcon } from '@/lib/categoryIcons';
@@ -22,18 +21,10 @@ import PromptCard from '@/components/prompts/PromptCard';
 import { SkeletonGrid } from '@/components/common/Skeleton';
 import type { Prompt } from '@/types';
 
-// Tekst die rechtstreeks op de bewegende achtergrond staat. De schaduw houdt hem
-// leesbaar als er een licht vlak of een regel langs schuift.
-const ON_BACKGROUND = 'text-white [text-shadow:0_1px_4px_rgba(1,29,46,0.9)]';
-
 /**
  * De startpagina in tegels: eerst de vier dingen die je hier kunt doen, dan de
  * categorieën als iconen met een aantal, dan de nieuwste prompts. Uitleg staat
  * niet als lopende tekst op de pagina, maar achter een infobolletje.
- *
- * Achter de hele pagina beweegt de achtergrond van de dag. Die is altijd
- * donkerblauw, dus koppen staan hier in het wit en alle tegels zijn dekkend:
- * een doorzichtige tegel zou per dag en per seconde een andere kleur krijgen.
  */
 export default function HomePage() {
   const navigate = useNavigate();
@@ -74,11 +65,12 @@ export default function HomePage() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-      <DailyBackground />
-
       {/* Wat ga je doen? Vier grote tegels, elk één taak. */}
       <section className="mb-10" aria-labelledby="home-taken">
-        <h1 id="home-taken" className={`mb-4 text-3xl font-bold ${ON_BACKGROUND}`}>
+        <h1
+          id="home-taken"
+          className="mb-4 text-3xl font-bold text-rijksblauw-700 dark:text-rijksblauw-100"
+        >
           Wat ga je doen?
         </h1>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -86,7 +78,7 @@ export default function HomePage() {
             to="/genereren"
             icon={Sparkles}
             label="Wat wil je maken?"
-            className="bg-rijksoranje text-slate-950 hover:bg-rijksoranje-dark dark:hover:text-white"
+            className="bg-rijksblauw-700 text-white hover:bg-rijksblauw-800 dark:bg-rijksblauw-600 dark:hover:bg-rijksblauw-500"
           />
           {chatEnabled && (
             <TaskTile
@@ -118,11 +110,13 @@ export default function HomePage() {
       {/* Categorieën als iconen met het aantal prompts. */}
       <section className="mb-10" aria-labelledby="home-categorieen">
         <div className="mb-3 flex items-center gap-1">
-          <h2 id="home-categorieen" className={`text-xl font-bold ${ON_BACKGROUND}`}>
+          <h2
+            id="home-categorieen"
+            className="text-xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200"
+          >
             Categorieën
           </h2>
           <InfoDot
-            onDark
             label="Uitleg over categorieën"
             text="Klik een categorie. Het getal is het aantal prompts."
           />
@@ -161,12 +155,12 @@ export default function HomePage() {
       {/* Nieuwste prompts */}
       <section aria-labelledby="home-nieuw">
         <div className="mb-3 flex items-center justify-between">
-          <h2 id="home-nieuw" className={`text-xl font-bold ${ON_BACKGROUND}`}>
+          <h2 id="home-nieuw" className="text-xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
             Nieuwe prompts
           </h2>
           <Link
             to="/zoeken"
-            className={`inline-flex items-center gap-1 text-sm font-semibold hover:underline ${ON_BACKGROUND}`}
+            className="inline-flex items-center gap-1 text-sm font-semibold text-rijksblauw-500 hover:text-rijksblauw-700 dark:text-rijksblauw-300 dark:hover:text-rijksblauw-200"
           >
             Alles <ArrowRight size={16} />
           </Link>

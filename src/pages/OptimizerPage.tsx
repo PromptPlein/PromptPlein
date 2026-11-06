@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Sparkles, Compass, Wand2 } from '@/components/common/icons';
 import GoalDialog from '@/components/optimizer/GoalDialog';
+import DailyBackground from '@/components/common/DailyBackground';
 import InfoDot from '@/components/common/InfoDot';
 import StepHeading from '@/components/optimizer/StepHeading';
 import ThinkingToggle from '@/components/common/ThinkingToggle';
@@ -278,7 +279,12 @@ export default function OptimizerPage() {
   const ownActive = entryMode === 'own-prompt';
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+      {/* De bewegende achtergrond van de dag. Alle inhoud staat op een dekkend
+          paneel: deze pagina heeft veel tussenstappen en meldingen die los op
+          de pagina staan, en die moeten op elke achtergrond leesbaar blijven. */}
+      <DailyBackground />
+      <div className="rounded-2xl bg-slate-100 p-4 shadow-lg sm:p-6 dark:bg-slate-900">
       <div className="mb-5 flex items-center gap-1">
         <h1 className="flex items-center gap-2 text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
           <Sparkles className="text-rijksoranje" /> Prompt maken
@@ -409,6 +415,7 @@ export default function OptimizerPage() {
           })()}
         </div>
       )}
+      </div>
     </div>
   );
 }

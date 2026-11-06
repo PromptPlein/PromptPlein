@@ -35,8 +35,8 @@ function variantForToday(): Variant {
  * vullen dat vele malen hoger is dan wat je ziet. `-z-10` legt hem achter de
  * kopbalk en de voetbalk; die hebben geen eigen stapelvolgorde.
  *
- * Wie hem gebruikt, zet zijn tekst er in het wit op: de ondergrond is altijd
- * donkerblauw, ook in de lichte modus.
+ * De ondergrond is altijd donkerblauw, ook in de lichte modus. Zet de inhoud
+ * er daarom op een dekkend paneel, zoals op de pagina Prompt maken.
  */
 export default function DailyBackground() {
   const variant = useMemo(variantForToday, []);
