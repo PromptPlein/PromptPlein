@@ -77,7 +77,7 @@ export default function HomePage() {
           <TaskTile
             to="/genereren"
             icon={Sparkles}
-            label="Wat wil je maken?"
+            label="Prompt maken"
             className="bg-rijksblauw-700 text-white hover:bg-rijksblauw-800 dark:bg-rijksblauw-600 dark:hover:bg-rijksblauw-500"
           />
           {chatEnabled && (
