@@ -26,17 +26,17 @@ export const MAX_PROJECT_FILE_BYTES = 50 * 1024 * 1024;
 
 /**
  * Maximale tekstomvang per bronbestand. Spiegel van de CHECK-constraint
- * `chat_project_files_text_len` in migratie 0030 — verhoog je er één, verhoog
- * dan de ander mee, anders weigert de database de upload.
+ * `chat_project_files_text_len` (0030, verruimd in 0046): verhoog je er één,
+ * verhoog dan de ander mee, anders weigert de database de upload.
  */
-export const MAX_PROJECT_FILE_CHARS = 100_000;
+export const MAX_PROJECT_FILE_CHARS = 1_000_000;
 
 /**
  * Totaal tekenbudget dat per beurt als bron meegaat naar het model. Bewust een
- * eigen, lagere grens dan 50 × 100.000: die zou bij elke beurt vijf miljoen
+ * eigen, lagere grens dan 50 × 1.000.000: die zou bij elke beurt vijftig miljoen
  * tekens de context in duwen (traag, duur, en bij de meeste modellen te groot).
  * Wordt het budget bereikt, dan gaan de OUDSTE bestanden mee tot het vol is en
- * meldt de UI wat er buiten viel — stil afkappen zou de gebruiker laten denken
+ * meldt de UI wat er buiten viel; stil afkappen zou de gebruiker laten denken
  * dat het model alles gelezen heeft.
  */
 export const MAX_PROJECT_CONTEXT_CHARS = 200_000;
