@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Sparkles, Compass, Wand2 } from '@/components/common/icons';
 import GoalDialog from '@/components/optimizer/GoalDialog';
+import InfoDot from '@/components/common/InfoDot';
+import StepHeading from '@/components/optimizer/StepHeading';
 import ThinkingToggle from '@/components/common/ThinkingToggle';
 import WebSearchToggle from '@/components/common/WebSearchToggle';
 import useThinking from '@/lib/useThinking';
@@ -277,14 +279,14 @@ export default function OptimizerPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mb-6">
+      <div className="mb-5 flex items-center gap-1">
         <h1 className="flex items-center gap-2 text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
-          <Sparkles className="text-rijksoranje" /> Prompt genereren
+          <Sparkles className="text-rijksoranje" /> Prompt maken
         </h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          Genereer een herbruikbare prompt. De inhoud vul je zelf aan in je eigen chat.
-          Kopieer en plak de prompt telkens wanneer je hem nodig hebt.
-        </p>
+        <InfoDot
+          label="Uitleg over prompt maken"
+          text="Je maakt een herbruikbare prompt. Kopieer hem naar je eigen chat, zo vaak als je wilt."
+        />
       </div>
 
       {phase === 'output' && result ? (
@@ -326,41 +328,55 @@ export default function OptimizerPage() {
                   onClear={clearProjectContext}
                   onToggleFiles={toggleProjectFiles}
                 />
-                <div
-                  role="tablist"
-                  aria-label="Kies hoe je wilt starten"
-                  className="grid grid-cols-1 divide-y divide-slate-200 border-b border-slate-200 sm:grid-cols-2 sm:divide-x sm:divide-y-0 dark:divide-slate-700 dark:border-slate-700"
-                >
-                  <EntryTab
-                    active={ownActive}
-                    onClick={() => setEntryMode('own-prompt')}
-                    icon={<Wand2 size={20} />}
-                    title="Optimaliseer je prompt"
-                    description="Heb je al een prompt? Wij zoeken het best passende prompt framework, analyseren je prompt en vullen aan wat nog ontbreekt."
+                {/* Stap 1: twee tegels. Wat elke instap doet staat achter het
+                    infobolletje, niet meer als alinea op de tegel. */}
+                <div className="border-b border-slate-200 bg-white px-5 pb-4 pt-5 dark:border-slate-700 dark:bg-slate-800 sm:px-6">
+                  <StepHeading
+                    step={1}
+                    title="Hoe begin je?"
+                    info={
+                      'Prompt: wij zoeken het passende framework en vullen aan wat ontbreekt.\nIdee: we denken eerst stap voor stap met je mee.'
+                    }
                   />
-                  <EntryTab
-                    active={!ownActive}
-                    accent="blauw"
-                    onClick={() => setEntryMode('goal')}
-                    icon={<Compass size={20} />}
-                    title="Start een brainstormsessie"
-                    description="Beschrijf wat je wilt bereiken, dan denken we stap voor stap mee naar je doel."
-                  />
+                  <div
+                    role="tablist"
+                    aria-label="Kies hoe je wilt starten"
+                    className="grid grid-cols-1 gap-3 sm:grid-cols-2"
+                  >
+                    <EntryTab
+                      active={ownActive}
+                      onClick={() => setEntryMode('own-prompt')}
+                      icon={<Wand2 size={20} />}
+                      title="Ik heb al een prompt"
+                    />
+                    <EntryTab
+                      active={!ownActive}
+                      accent="blauw"
+                      onClick={() => setEntryMode('goal')}
+                      icon={<Compass size={20} />}
+                      title="Ik heb een idee"
+                    />
+                  </div>
                 </div>
                 {/* Denken: geldt voor het schrijven van de prompt aan het eind
                     van beide instappen. Staat hier en niet bij de knop zelf,
                     omdat de doel-flow vanzelf doorloopt naar het schrijven; wie
                     het pas daar mag kiezen, is te laat. */}
-                <div className="flex items-center justify-end gap-2 border-b border-slate-200 px-3 py-1.5 dark:border-slate-700">
-                  <span className="text-xs text-slate-500 dark:text-slate-400">
-                    Lastige opdracht? Laat het model eerst nadenken.
-                  </span>
+                <div className="flex items-center justify-end gap-1 border-b border-slate-200 px-3 py-1.5 dark:border-slate-700">
                   <ThinkingToggle
                     value={thinking}
                     onChange={setThinking}
                     unavailableReason={thinkingUnavailable}
                   />
                   {searchAvailable && <WebSearchToggle value={webSearch} onChange={setWebSearch} />}
+                  <InfoDot
+                    label="Uitleg over denken en zoeken"
+                    text={
+                      searchAvailable
+                        ? 'Denken: grondiger, wel trager. Alleen bij een lastige opdracht.\nZoeken: met bronnen van internet.'
+                        : 'Denken: grondiger, wel trager. Alleen bij een lastige opdracht.'
+                    }
+                  />
                 </div>
               </>
             );

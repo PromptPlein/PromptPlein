@@ -1,197 +1,193 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Plus,
   ArrowRight,
-  FileText,
-  Megaphone,
-  Scale,
-  BarChart3,
-  Mail,
-  Users,
   Search,
-  Folder,
   Sparkles,
   MessageSquare,
   Layers,
   type LucideIcon,
 } from '@/components/common/icons';
-
-// Expliciete icoon-map (geen `import *`, dat zou de hele icon-set bundelen).
-const CATEGORY_ICONS: Record<string, LucideIcon> = {
-  FileText,
-  Megaphone,
-  Scale,
-  BarChart3,
-  Mail,
-  Users,
-  Search,
-  Folder,
-};
-
-// De hero rouleert per kalenderdag langs vier achtergronden: tegels en polder
-// (Three.js), promptregels (Canvas 2D) en effen met lichtbaan (alleen CSS). De
-// zware twee zijn lazy, zodat de hero direct rendert en three.js alleen laadt op
-// een dag die het nodig heeft.
-const DashboardBackground = lazy(() => import('@/components/three/DashboardBackground'));
-const PromptLinesBackground = lazy(() => import('@/components/common/PromptLinesBackground'));
-
-const HERO_BACKGROUNDS = ['tegels', 'polder', 'effen', 'regels'] as const;
-type HeroBackground = (typeof HERO_BACKGROUNDS)[number];
-
-// Grondkleur van de sectie, zichtbaar zolang de achtergrond nog laadt.
-const HERO_BASE_CLASS: Record<HeroBackground, string> = {
-  tegels: 'bg-rijksblauw-700',
-  polder: 'bg-rijksblauw-900',
-  effen: 'bg-rijksblauw-800',
-  regels: 'bg-rijksblauw-900',
-};
-
-function heroBackgroundForToday(): HeroBackground {
-  const now = new Date();
-  const dayNumber = Math.floor(
-    Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 86_400_000,
-  );
-  return HERO_BACKGROUNDS[dayNumber % HERO_BACKGROUNDS.length];
-}
-// Recharts is zwaar; lazy-load de overzichtsgrafieken.
-const PromptBreakdown = lazy(() => import('@/components/analytics/PromptBreakdown'));
-import LightSweepBackground from '@/components/common/LightSweepBackground';
+import clsx from 'clsx';
+import InfoDot from '@/components/common/InfoDot';
 import { useReferenceData } from '@/context/ReferenceDataContext';
+import { categoryIcon } from '@/lib/categoryIcons';
 import { listPrompts } from '@/services/repository';
+import { getChatSettingsCached } from '@/services/settingsService';
 import { usePromptCommunity } from '@/hooks/usePromptCommunity';
 import UploadModal from '@/components/prompts/UploadModal';
 import PromptCard from '@/components/prompts/PromptCard';
 import { SkeletonGrid } from '@/components/common/Skeleton';
 import type { Prompt } from '@/types';
 
+/**
+ * De startpagina in tegels: eerst de vier dingen die je hier kunt doen, dan de
+ * categorieën als iconen met een aantal, dan de nieuwste prompts. Uitleg staat
+ * niet als lopende tekst op de pagina, maar achter een infobolletje.
+ */
 export default function HomePage() {
   const navigate = useNavigate();
-  const { categories } = useReferenceData();
+  const { categories, techniques } = useReferenceData();
   const [recent, setRecent] = useState<Prompt[]>([]);
+  // Aantal prompts in totaal en per categorie, voor de getallen op de tegels.
+  const [total, setTotal] = useState<number | null>(null);
+  const [perCategory, setPerCategory] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [uploadOpen, setUploadOpen] = useState(false);
-  const heroBackground = useMemo(heroBackgroundForToday, []);
+  // De chattegel staat er alleen zolang de beheerder de chat aan heeft, net als
+  // het menu-item in de kopbalk.
+  const [chatEnabled, setChatEnabled] = useState(true);
 
   useEffect(() => {
     let active = true;
     listPrompts()
-      .then((p) => active && setRecent(p.slice(0, 6)))
+      .then((p) => {
+        if (!active) return;
+        setRecent(p.slice(0, 6));
+        setTotal(p.length);
+        const counts: Record<string, number> = {};
+        for (const prompt of p) {
+          if (prompt.category_id) counts[prompt.category_id] = (counts[prompt.category_id] ?? 0) + 1;
+        }
+        setPerCategory(counts);
+      })
       .finally(() => active && setLoading(false));
+    void getChatSettingsCached().then((s) => {
+      if (active) setChatEnabled(s.enabled);
+    });
     return () => {
       active = false;
     };
   }, []);
 
-  const totalPrompts = recent.length;
   const { enriched, authors } = usePromptCommunity(recent);
 
   return (
-    <div>
-      {/* Hero met een achtergrond die per dag wisselt */}
-      <section className={`relative overflow-hidden ${HERO_BASE_CLASS[heroBackground]}`}>
-        {heroBackground === 'effen' ? (
-          <LightSweepBackground />
-        ) : (
-          <Suspense fallback={null}>
-            {heroBackground === 'regels' ? (
-              <PromptLinesBackground />
-            ) : (
-              <DashboardBackground variant={heroBackground} />
-            )}
-          </Suspense>
-        )}
-        <div className="relative mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
-          <div className="mx-auto max-w-2xl text-center">
-            <h1 className="text-4xl font-extrabold leading-tight text-white sm:text-5xl">
-              Prompt Library voor de Nederlandse overheid
-            </h1>
-            <p className="mt-4 text-lg text-rijksblauw-50/90">
-              Upload, deel, zoek en optimaliseer AI-prompts op basis van bewezen
-              prompting-technieken. Voor ambtenaren, door ambtenaren.
-            </p>
-            <div className="mx-auto mt-8 flex w-full max-w-md flex-col gap-3 sm:flex-row">
-              <Link
-                to="/genereren"
-                className="opl-btn flex-1 justify-center border border-white/70 text-white hover:bg-white/10"
-              >
-                <Sparkles size={18} className="text-rijksoranje" /> Genereer een prompt
-              </Link>
-              <Link
-                to="/chat"
-                className="opl-btn flex-1 justify-center border border-white/70 text-white hover:bg-white/10"
-              >
-                <MessageSquare size={18} /> Start een chat
-              </Link>
-            </div>
-            {/* Derde instap: de lijst met prompttechnieken zelf. Voor de training —
-                deelnemers kiezen een techniek en vullen hem met hun eigen gegevens.
-                Zelfde maat, tekstgrootte en vorm als de twee knoppen erboven; hij
-                valt op door de gevulde witte achtergrond en de volle breedte, niet
-                door een groter formaat. De witte rand houdt zijn hoogte gelijk aan
-                de omrande knoppen. */}
-            <div className="mx-auto mt-3 w-full max-w-md">
-              <Link
-                to="/technieken"
-                className="opl-btn w-full justify-center border border-white bg-white text-rijksblauw-700 shadow-lg hover:bg-rijksblauw-50 focus:ring-white"
-              >
-                <Layers size={18} className="text-rijksoranje" /> Werken met Prompt Engineering
-              </Link>
-            </div>
-          </div>
+    <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+      {/* Wat ga je doen? Vier grote tegels, elk één taak. */}
+      <section className="mb-10" aria-labelledby="home-taken">
+        <h1
+          id="home-taken"
+          className="mb-4 text-3xl font-bold text-rijksblauw-700 dark:text-rijksblauw-100"
+        >
+          Wat ga je doen?
+        </h1>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <TaskTile
+            to="/genereren"
+            icon={Sparkles}
+            label="Prompt maken"
+            className="bg-rijksblauw-700 text-white hover:bg-rijksblauw-800 dark:bg-rijksblauw-600 dark:hover:bg-rijksblauw-500"
+          />
+          {chatEnabled && (
+            <TaskTile
+              to="/chat"
+              icon={MessageSquare}
+              label="Chatten"
+              className="bg-rijksblauw-50 text-rijksblauw-700 hover:bg-rijksblauw-100 dark:bg-rijksblauw-500/20 dark:text-white dark:hover:bg-rijksblauw-500/30"
+            />
+          )}
+          <TaskTile
+            to="/zoeken"
+            icon={Search}
+            label="Prompts zoeken"
+            count={total}
+            countLabel="prompts"
+            className="bg-[#76d2b6]/25 text-rijksblauw-700 hover:bg-[#76d2b6]/40 dark:bg-[#76d2b6]/15 dark:text-white dark:hover:bg-[#76d2b6]/25"
+          />
+          <TaskTile
+            to="/technieken"
+            icon={Layers}
+            label="Technieken leren"
+            count={techniques.length || null}
+            countLabel="technieken"
+            className="bg-[#ffb612]/20 text-rijksblauw-700 hover:bg-[#ffb612]/35 dark:bg-[#ffb612]/15 dark:text-white dark:hover:bg-[#ffb612]/25"
+          />
         </div>
       </section>
 
-      <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-        {/* Categorie-grid */}
-        <section className="mb-12">
-          <h2 className="mb-4 text-xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Categorieën</h2>
-          <CategoryGrid />
-        </section>
+      {/* Categorieën als iconen met het aantal prompts. */}
+      <section className="mb-10" aria-labelledby="home-categorieen">
+        <div className="mb-3 flex items-center gap-1">
+          <h2
+            id="home-categorieen"
+            className="text-xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200"
+          >
+            Categorieën
+          </h2>
+          <InfoDot
+            label="Uitleg over categorieën"
+            text="Klik een categorie. Het getal is het aantal prompts."
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
+          {categories.map((c) => {
+            const Icon = categoryIcon(c.icon);
+            const count = perCategory[c.id] ?? 0;
+            return (
+              <Link
+                key={c.id}
+                to={`/zoeken?category=${c.id}`}
+                title={c.description || undefined}
+                className="opl-card group relative flex min-h-[7.5rem] flex-col items-center justify-center gap-2.5 px-2 pb-3 pt-5 text-center hover:border-rijksblauw-500 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500"
+              >
+                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-rijksblauw-50 text-rijksblauw-700 transition-colors group-hover:bg-rijksblauw-700 group-hover:text-white dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">
+                  <Icon size={24} />
+                </span>
+                <span className="text-sm font-semibold leading-tight text-slate-900 dark:text-slate-100">
+                  {c.name}
+                </span>
+                {!loading && (
+                  <span
+                    aria-label={`${count} prompts`}
+                    className="absolute right-2 top-2 min-w-[1.5rem] rounded-full bg-rijksblauw-700 px-1.5 text-center text-xs font-bold leading-6 text-white dark:bg-rijksblauw-500"
+                  >
+                    {count}
+                  </span>
+                )}
+              </Link>
+            );
+          })}
+        </div>
+      </section>
 
-        {/* Recente prompts */}
-        <section className="mb-12">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Recente prompts</h2>
-            <Link
-              to="/zoeken"
-              className="inline-flex items-center gap-1 text-sm font-medium text-rijksblauw-500 hover:text-rijksblauw-700 dark:text-rijksblauw-300 dark:hover:text-rijksblauw-200"
-            >
-              Alles bekijken <ArrowRight size={16} />
-            </Link>
+      {/* Nieuwste prompts */}
+      <section aria-labelledby="home-nieuw">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 id="home-nieuw" className="text-xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
+            Nieuwe prompts
+          </h2>
+          <Link
+            to="/zoeken"
+            className="inline-flex items-center gap-1 text-sm font-semibold text-rijksblauw-500 hover:text-rijksblauw-700 dark:text-rijksblauw-300 dark:hover:text-rijksblauw-200"
+          >
+            Alles <ArrowRight size={16} />
+          </Link>
+        </div>
+
+        {loading ? (
+          <SkeletonGrid count={6} />
+        ) : recent.length === 0 ? (
+          <div className="opl-card flex flex-col items-center gap-3 p-10 text-center">
+            <p className="text-slate-600 dark:text-slate-300">Er zijn nog geen prompts.</p>
+            <button onClick={() => setUploadOpen(true)} className="opl-btn-primary">
+              <Plus size={18} /> Nieuwe prompt
+            </button>
           </div>
-
-          {loading ? (
-            <SkeletonGrid count={6} />
-          ) : totalPrompts === 0 ? (
-            <div className="opl-card flex flex-col items-center gap-3 p-10 text-center">
-              <p className="text-slate-600 dark:text-slate-300">Er zijn nog geen prompts. Voeg de eerste toe!</p>
-              <button onClick={() => setUploadOpen(true)} className="opl-btn-primary">
-                <Plus size={18} /> Nieuwe prompt
-              </button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {enriched.map((p) => (
-                <PromptCard
-                  key={p.id}
-                  prompt={p}
-                  author={p.created_by_user ? authors[p.created_by_user] : null}
-                  onChanged={(u) => setRecent((prev) => prev.map((x) => (x.id === u.id ? u : x)))}
-                />
-              ))}
-            </div>
-          )}
-        </section>
-
-        {/* Overzicht: prompts per categorie en per techniek (klikbaar) */}
-        <section>
-          <h2 className="mb-4 text-xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Overzicht</h2>
-          <Suspense fallback={<div className="skeleton h-72 w-full rounded-xl" />}>
-            <PromptBreakdown />
-          </Suspense>
-        </section>
-      </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {enriched.map((p) => (
+              <PromptCard
+                key={p.id}
+                prompt={p}
+                author={p.created_by_user ? authors[p.created_by_user] : null}
+                onChanged={(u) => setRecent((prev) => prev.map((x) => (x.id === u.id ? u : x)))}
+              />
+            ))}
+          </div>
+        )}
+      </section>
 
       <UploadModal
         open={uploadOpen}
@@ -200,30 +196,47 @@ export default function HomePage() {
       />
     </div>
   );
+}
 
-  function CategoryGrid() {
-    const items = useMemo(() => categories, [categories]);
-    return (
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-        {items.map((c) => {
-          const Icon = CATEGORY_ICONS[c.icon ?? 'Folder'] ?? Folder;
-          return (
-            <Link
-              key={c.id}
-              to={`/zoeken?category=${c.id}`}
-              className="opl-card group flex items-start gap-3 p-4 hover:shadow-md"
-            >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-rijksblauw-50 text-rijksblauw-500 group-hover:bg-rijksblauw-500 group-hover:text-white dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">
-                <Icon size={20} />
-              </span>
-              <div className="min-w-0">
-                <p className="font-semibold text-slate-800 dark:text-slate-100">{c.name}</p>
-                <p className="line-clamp-2 text-xs text-slate-500 dark:text-slate-400">{c.description}</p>
-              </div>
-            </Link>
-          );
-        })}
-      </div>
-    );
-  }
+/** Eén taaktegel: groot icoon, één label, een pijl en soms een aantal. */
+function TaskTile({
+  to,
+  icon: Icon,
+  label,
+  count,
+  countLabel,
+  className,
+}: {
+  to: string;
+  icon: LucideIcon;
+  label: string;
+  count?: number | null;
+  countLabel?: string;
+  className: string;
+}): ReactNode {
+  return (
+    <Link
+      to={to}
+      className={clsx(
+        'flex min-h-[10.5rem] flex-col justify-between gap-4 rounded-xl p-5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900',
+        className,
+      )}
+    >
+      <span className="flex items-start justify-between">
+        <Icon size={44} strokeWidth={1.5} />
+        {count != null && (
+          <span
+            aria-label={`${count} ${countLabel ?? ''}`.trim()}
+            className="rounded-full bg-white px-2.5 py-0.5 text-sm font-bold text-rijksblauw-700"
+          >
+            {count}
+          </span>
+        )}
+      </span>
+      <span className="flex items-center justify-between gap-2">
+        <span className="text-2xl font-bold leading-tight">{label}</span>
+        <ArrowRight size={22} className="shrink-0" />
+      </span>
+    </Link>
+  );
 }

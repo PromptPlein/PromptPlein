@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -30,6 +30,7 @@ import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import VerantwoordGebruikHint from '@/components/optimizer/VerantwoordGebruikHint';
+import StepHeading from '@/components/optimizer/StepHeading';
 import PrefillSources from '@/components/optimizer/PrefillSources';
 import SjabloonVragen from '@/components/optimizer/SjabloonVragen';
 import { PROMPT_CATEGORIES } from '@/data/promptCategories';
@@ -800,12 +801,56 @@ export default function OwnPromptOptimizer({
         >
           {header}
           <div className="space-y-5 bg-white p-5 dark:bg-slate-800 sm:p-6">
-          {/* 1. Eigen prompt plakken */}
+          {/* Stap 2 en 3: soort kiezen en de eigen prompt plakken */}
           <div>
-            <div className="mb-1 flex items-center gap-1.5">
-              <label className="opl-label mb-0" htmlFor="own-prompt-input">
-                Jouw eigen prompt
-              </label>
+            {/* Stap 2: wat wil je maken? Kies je niets, dan bepaalt de AI het
+                zelf; die stand heeft een eigen tegel ("AI kiest"). Een gekozen
+                soort zet je ook uit door er nog eens op te klikken. Daarom
+                knoppen die aan of uit staan en geen radiogroep. */}
+            <StepHeading
+              step={2}
+              title="Wat wordt het?"
+              info={
+                kindOption
+                  ? kindOption.hint
+                  : 'Kies niets, dan kiest de AI het framework dat bij je tekst past.\nSkill en Routekaart kies je zelf.'
+              }
+            />
+            <div
+              role="group"
+              aria-label="Wat wil je maken? Kies je niets, dan bepaalt de AI het zelf."
+              className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7"
+            >
+              {[null, ...PROMPT_KINDS].map((k) => {
+                const option = k ? KIND_OPTIONS[k] : { label: 'AI kiest', icon: Sparkles };
+                const Icon = option.icon;
+                const active = kind === k;
+                return (
+                  <button
+                    key={k ?? 'auto'}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => {
+                      if (k) handleKind(k);
+                      else if (kind) handleKind(kind); // de gekozen soort uitzetten
+                    }}
+                    disabled={recommending || prefilling}
+                    className={clsx(
+                      'flex min-h-[5.5rem] flex-col items-center justify-center gap-2 rounded-xl border-2 px-2 py-3 text-sm font-semibold transition-colors',
+                      'focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed dark:focus-visible:ring-offset-slate-800',
+                      active
+                        ? 'border-rijksblauw-700 bg-rijksblauw-50 text-rijksblauw-700 dark:border-rijksblauw-300 dark:bg-rijksblauw-500/15 dark:text-white'
+                        : 'border-slate-200 bg-white text-rijksblauw-700 hover:border-rijksblauw-500 dark:border-slate-600 dark:bg-slate-800 dark:text-rijksblauw-200 dark:hover:border-rijksblauw-300',
+                    )}
+                  >
+                    <Icon size={26} strokeWidth={1.5} />
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <StepHeading step={3} title="Jouw tekst" htmlFor="own-prompt-input">
           <button
             type="button"
             onClick={() => setShowExamples((v) => !v)}
@@ -816,13 +861,13 @@ export default function OwnPromptOptimizer({
               'inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-medium transition-colors',
               showExamples
                 ? 'text-rijksblauw-700 dark:text-rijksblauw-200'
-                : 'text-slate-400 hover:text-rijksblauw-600 dark:text-slate-500 dark:hover:text-rijksblauw-300',
+                : 'text-slate-600 hover:text-rijksblauw-600 dark:text-slate-300 dark:hover:text-rijksblauw-300',
             )}
           >
             <Info size={15} />
             <span>Voorbeelden</span>
           </button>
-          {/* Opschonen — alleen tonen als er iets te wissen valt. */}
+          {/* Opschonen: alleen tonen als er iets te wissen valt. */}
           {(ownPrompt.trim() || promptText) && (
             <button
               type="button"
@@ -834,7 +879,7 @@ export default function OwnPromptOptimizer({
               <span>Opschonen</span>
             </button>
           )}
-        </div>
+            </StepHeading>
 
         {/* Uitklapbaar paneel met voorbeeldprompts per raamwerk. */}
         {showExamples && (
@@ -899,55 +944,6 @@ export default function OwnPromptOptimizer({
         {/* Het invoerveld met "Wat wil je maken?" als balk erboven en de
             schakelaar, de opzet en de zoekknop eronder: één geheel. */}
         <div className="overflow-hidden rounded-xl border border-slate-300 bg-slate-50 transition-colors focus-within:border-rijksblauw-500 focus-within:ring-2 focus-within:ring-rijksblauw-500/20 dark:border-slate-600 dark:bg-slate-900/40">
-          {/* Wat wil je maken? Kies je niets, dan bepaalt de AI het zelf; een
-              gekozen soort zet je uit door er nog eens op te klikken. Daarom
-              knoppen die aan of uit staan en geen radiogroep: daarin kun je
-              niet terug naar niets. */}
-          <div
-            role="group"
-            aria-label="Wat wil je maken? Kies je niets, dan bepaalt de AI het zelf."
-            className="opl-scroll-slim flex gap-1 overflow-x-auto border-b border-slate-200 p-1.5 dark:border-slate-700"
-          >
-            {PROMPT_KINDS.map((k) => {
-              const option = KIND_OPTIONS[k];
-              const Icon = option.icon;
-              const active = kind === k;
-              return (
-                <Fragment key={k}>
-                  {/* Skill en Routekaart staan apart: die kiezen geen framework
-                      uit de lijst, maar hebben een eigen bouwer of een vast
-                      sjabloon. */}
-                  {k === 'skill' && (
-                    <span
-                      aria-hidden="true"
-                      className="mx-1 my-1 w-px shrink-0 self-stretch bg-slate-200 dark:bg-slate-700"
-                    />
-                  )}
-                  <button
-                    type="button"
-                    aria-pressed={active}
-                    title={active ? 'Klik nog eens om de keuze uit te zetten' : undefined}
-                    onClick={() => handleKind(k)}
-                    disabled={recommending || prefilling}
-                    className={clsx(
-                      'inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
-                      'focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500/40 disabled:cursor-not-allowed',
-                      active
-                        ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200 dark:bg-slate-700 dark:text-white dark:ring-slate-600'
-                        : 'text-slate-500 hover:bg-white/60 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-700/50 dark:hover:text-slate-100',
-                    )}
-                  >
-                    <Icon
-                      size={16}
-                      className={clsx(active && 'text-rijksblauw-600 dark:text-rijksblauw-300')}
-                    />
-                    {option.label}
-                  </button>
-                </Fragment>
-              );
-            })}
-          </div>
-
           {/* Vervolgkeuze bij Code en Dashboard: twee opties die elk een eigen
               framework aanwijzen. Zichtbaar zodra de soort gekozen is, zodat je
               ziet dát er een keuze is in plaats van hem te moeten ontdekken. */}
@@ -1200,11 +1196,6 @@ export default function OwnPromptOptimizer({
             </button>
           </div>
         </div>
-        <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
-          {kindOption
-            ? kindOption.hint
-            : 'Kies wat je wilt maken, of kies niets: dan bepaalt de AI zelf welk framework past bij je tekst, code, dashboard of agent. Voor een skill of een routekaart in rijksstijl kies je Skill of Routekaart.'}
-        </p>
         <VerantwoordGebruikHint text={promptText} />
       </div>
         </div>
@@ -1746,12 +1737,6 @@ export default function OwnPromptOptimizer({
         </div>
       </div>
 
-      {!recommendations && !recommending && (
-        <p className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500">
-          <Wand2 size={13} /> Laat eerst het beste framework zoeken; daarna vul je aan en
-          optimaliseer je.
-        </p>
-      )}
     </div>
   );
 }

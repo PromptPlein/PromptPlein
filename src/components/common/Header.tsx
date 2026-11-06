@@ -5,6 +5,7 @@ import {
   Sparkles,
   Library,
   MessageSquare,
+  Search,
   ShieldCheck,
   ClipboardCheck,
 } from '@/components/common/icons';
@@ -32,8 +33,8 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { to: '/genereren', label: 'Genereren', icon: Sparkles, end: false },
+  { to: '/', label: 'Start', icon: LayoutDashboard, end: true },
+  { to: '/genereren', label: 'Maken', icon: Sparkles, end: false },
   // Chat is voor iedereen zichtbaar, zolang de admin hem aan heeft.
   {
     to: '/chat',
@@ -44,6 +45,7 @@ const navItems: NavItem[] = [
     prefetch: prefetchChatPage,
   },
   { to: '/bibliotheek', label: 'Mijn prompts', icon: Library, end: false },
+  { to: '/zoeken', label: 'Ontdekken', icon: Search, end: false },
 ];
 
 export default function Header() {

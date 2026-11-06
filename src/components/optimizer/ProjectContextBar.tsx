@@ -12,6 +12,7 @@ import {
 } from '@/components/common/icons';
 import { Link } from 'react-router-dom';
 import clsx from 'clsx';
+import InfoDot from '@/components/common/InfoDot';
 import { useAuth } from '@/context/AuthContext';
 import { writeNewProjectHandoff } from '@/services/handoffService';
 import type { ChatProject } from '@/types';
@@ -227,12 +228,15 @@ export default function ProjectContextBar({
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-rijksblauw-500 shadow-sm ring-1 ring-rijksblauw-500/15 sm:h-10 sm:w-10 dark:bg-slate-800 dark:text-rijksblauw-300 dark:ring-rijksblauw-500/30">
           <FolderOpen size={18} />
         </span>
-        {/* basis-full: op telefoon krijgen kop en uitleg een hele regel en zakt
-            de knop eronder, in plaats van dat beide om dezelfde regel vechten
-            en de zin in vier woorden-brede stukjes breekt. */}
-        <div className="min-w-0 flex-1 basis-full sm:basis-0">
-          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-bold leading-tight text-slate-900 dark:text-white">
-            Genereer de prompt met projectcontext
+        {/* Alleen de kop; wat een project oplevert staat achter het
+            infobolletje. De knop past er daardoor ook op een telefoon naast. */}
+        <div className="min-w-0 flex-1">
+          <p className="flex flex-wrap items-center gap-x-1 gap-y-1 text-sm font-bold leading-tight text-slate-900 dark:text-white">
+            Met projectcontext
+            <InfoDot
+              label="Uitleg over projectcontext"
+              text="Kies een project. De bouwer kent je product, merk of site dan al en schrijft een scherpere prompt."
+            />
             {/* Projecten wonen achter de login (de chatpagina zit in de
                 RequireAuth-groep). Zeg dat vooraf, in plaats van iemand op een
                 knop te laten drukken die hem naar een inlogscherm stuurt. */}
@@ -242,9 +246,6 @@ export default function ProjectContextBar({
                 Account
               </span>
             )}
-          </p>
-          <p className="mt-0.5 text-[13px] leading-snug text-slate-600 dark:text-slate-300">
-            De bouwer kent je product, merk of site dan al, zodat de prompt van hoge kwaliteit is.
           </p>
         </div>
 

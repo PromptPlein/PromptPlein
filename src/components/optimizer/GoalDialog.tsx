@@ -15,6 +15,7 @@ import {
   Wand2,
 } from '@/components/common/icons';
 import clsx from 'clsx';
+import StepHeading from '@/components/optimizer/StepHeading';
 import toast from 'react-hot-toast';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import {
@@ -746,10 +747,12 @@ export default function GoalDialog({
           {header}
           <div className="space-y-5 bg-white p-5 dark:bg-slate-800 sm:p-6">
             <div>
-              <div className="mb-1 flex items-center gap-1.5">
-                <label className="opl-label mb-0" htmlFor="goal-dialog-input">
-                  Wat wil je graag bereiken?
-                </label>
+              <StepHeading
+                step={2}
+                title="Wat wil je bereiken?"
+                htmlFor="goal-dialog-input"
+                info="We stellen eerst een paar vragen. Daarna kiezen we het framework en bouwen we je prompt."
+              >
                 <button
                   type="button"
                   onClick={() => setShowExamples((v) => !v)}
@@ -777,7 +780,7 @@ export default function GoalDialog({
                     <span>Opschonen</span>
                   </button>
                 )}
-              </div>
+              </StepHeading>
 
               {showExamples && (
                 <div
@@ -852,11 +855,6 @@ export default function GoalDialog({
                 onChange={(e) => setGoal(e.target.value)}
               />
               <VerantwoordGebruikHint text={goal} />
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                We kijken eerst welke prompttechniek bij jouw doel past en halen daar vraag voor
-                vraag de bouwstenen bij op. Zodra het beeld compleet is, bepalen we welk framework
-                past en bouwen we je prompt.
-              </p>
 
               {/* Hervat-melding: er staat nog een niet-afgemaakt gesprek klaar. */}
               {resumable && phase === 'goal' && (
