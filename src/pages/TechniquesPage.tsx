@@ -753,7 +753,7 @@ export default function TechniquesPage() {
               ref={builderRef}
               className="animate-fade-in scroll-mt-24 overflow-hidden rounded-2xl border border-rijksblauw-200 bg-white shadow-sm dark:border-rijksblauw-500/30 dark:bg-slate-800"
             >
-              <div className="h-1 w-full bg-gradient-to-r from-rijksblauw-400 to-rijksblauw-700" />
+              <div className="h-1 w-full bg-rijksblauw-700" />
               <div className="p-6">
                 <div className="mb-4 flex items-start gap-3">
                   <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-rijksblauw-500 text-white">

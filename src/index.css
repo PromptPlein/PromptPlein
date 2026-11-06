@@ -2,6 +2,25 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Rijks Sans, het variabele huisstijlletter. Geen vrij lettertype: de bestanden
+   staan onder het voorbehoud van de Staat en mogen niet buiten de Rijksoverheid
+   worden hergebruikt. */
+@font-face {
+  font-family: 'RijksSansVF';
+  src: url('./assets/fonts/RijksSansVF.woff2') format('woff2');
+  font-weight: 200 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'RijksSansVF';
+  src: url('./assets/fonts/RijksSansVF-Italic.woff2') format('woff2');
+  font-weight: 200 800;
+  font-style: italic;
+  font-display: swap;
+}
+
 :root {
   color-scheme: light;
   --toast-bg: #ffffff;
@@ -23,15 +42,17 @@ body,
 
 body {
   margin: 0;
-  background-color: #f6f8fb;
-  color: theme('colors.rijksblauw.700');
-  font-family: 'Inter', system-ui, sans-serif;
+  background-color: theme('colors.slate.100');
+  color: theme('colors.slate.900');
+  font-family: theme('fontFamily.sans');
+  /* ss02 is de l met staart, die van een hoofdletter I te onderscheiden is. */
+  font-feature-settings: 'ss02';
   -webkit-font-smoothing: antialiased;
 }
 
 html.dark body {
-  background-color: #0b1220;
-  color: #e2e8f0;
+  background-color: theme('colors.slate.900');
+  color: theme('colors.slate.200');
 }
 
 @layer components {
@@ -68,7 +89,7 @@ html.dark body {
   }
 
   .opl-btn-primary {
-    @apply opl-btn bg-rijksblauw-500 text-white hover:bg-rijksblauw-600 focus:ring-rijksblauw-500
+    @apply opl-btn bg-rijksblauw-700 text-white hover:bg-rijksblauw-500 focus:ring-rijksblauw-500
       dark:bg-rijksblauw-600 dark:hover:bg-rijksblauw-500;
   }
 
@@ -175,41 +196,7 @@ html.dark .skeleton::after {
   }
 }
 
-/* Heldachtergrond "effen met lichtbaan" (LightSweepBackground). */
+/* Heldachtergrond "effen" (LightSweepBackground): vlak lintblauw. */
 .hero-sweep {
-  background:
-    radial-gradient(120% 90% at 15% 0%, theme('colors.rijksblauw.600') 0%, transparent 60%),
-    linear-gradient(
-      165deg,
-      theme('colors.rijksblauw.700') 0%,
-      theme('colors.rijksblauw.800') 70%,
-      theme('colors.rijksblauw.900') 100%
-    );
-}
-.hero-sweep::after {
-  content: '';
-  position: absolute;
-  inset: -50% -20%;
-  background: linear-gradient(
-    105deg,
-    transparent 42%,
-    rgba(153, 199, 221, 0.13) 50%,
-    transparent 58%
-  );
-  animation: hero-sweep 2s ease-in-out infinite;
-}
-@keyframes hero-sweep {
-  0% {
-    transform: translateX(-60%);
-  }
-  55%,
-  100% {
-    transform: translateX(60%);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .hero-sweep::after {
-    animation: none;
-    transform: translateX(-10%);
-  }
+  background-color: theme('colors.rijksblauw.700');
 }

@@ -14,6 +14,15 @@ export const accentDonker: string;
 export const accentDonkerHover: string;
 export const rijksrood: string;
 export const rijksgroen: string;
+export const hemelblauw: string;
+export const lichtblauw: string;
+export const donkergeel: string;
+export const mintgroen: string;
+export const mosgroen: string;
+export const donkergroen: string;
+export const violet: string;
+export const paars: string;
+export const bruin: string;
 
 export const brand: {
   primary: string;

@@ -113,12 +113,21 @@ database. Wordt er code van daar geport, hernummer dan de migratie.
 | Laag | Wat |
 | --- | --- |
 | Frontend | React 18 + TypeScript + Vite 6, `@/`-alias naar `src/` |
-| Styling | Tailwind (Rijkshuisstijl-palet), licht/donker via `ThemeContext` |
+| Styling | Tailwind (Rijkshuisstijl), licht/donker via `ThemeContext` |
 | Routing | react-router-dom v6, alle paden Nederlands |
 | 3D | react-three-fiber + three.js (achtergrond, organisatienetwerk) |
 | Grafieken | recharts, lazy geladen zodat het uit de hoofdbundle blijft |
 | Backend | Supabase: Postgres met RLS, Auth, Storage, Edge Functions (Deno) |
 | Hosting | Vercel, SPA-rewrite in `vercel.json`, `X-Robots-Tag: noindex` |
+
+Huisstijl: PromptPlein valt onder de Rijksoverheid en voert daarom de
+Rijkshuisstijl. Kleuren staan in `src/config/brandColors.js` (lintblauw `#154273`
+voor koppen en balken, donkerblauw `#01689B` voor interactie), de vormtaal in
+`borderRadius` van de Tailwind-config. Het lettertype Rijks Sans staat in
+`src/assets/fonts/` en is niet vrij: nooit naar een openbare repo of ander product
+kopiëren. Bron: het thema van RijksICTGilde (`hugo-theme-rijksoverheid`) en de
+tokens van `nl-design-system/rijkshuisstijl-community`. De contextmap van de skill
+`pas-rijkshuisstijl-toe` staat niet op deze machine.
 
 Iconen komen altijd uit `@/components/common/icons`, niet uit `lucide-react`.
 Dat bestand geeft de officiële functionele iconen van de Rijkshuisstijl de

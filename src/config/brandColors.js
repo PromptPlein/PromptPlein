@@ -10,25 +10,31 @@
  * Dit is bewust een .js-bestand (met JSDoc-typing) zodat zowel de Tailwind-
  * config (`tailwind.config.js`) als de TypeScript-broncode het kunnen importeren.
  *
- * Hoofdkleur  = rijksblauw (Rijkshuisstijl, #01689B)
- * Secundair   = rijksoranje (#E17000)
+ * Alle waarden komen uit het Rijkshuisstijl-palet: de designtokens van de
+ * NL Design System-community, gelijk aan die van RijksICTGilde/hugo-theme-rijksoverheid.
+ * De grijzen van de huisstijl (cool-grey) zijn exact Tailwind `slate`.
+ *
+ * Lintblauw  #154273 = hoofdkleur: koppen, kop- en voetbalk, primaire knop
+ * Donkerblauw #01689B = interactief: links, focus, accenten
+ * Oranje     #E17000 = secundair; tekst erop is donker, wit haalt 3,22:1
  */
 
 /**
- * Volledige tintschaal van de primaire kleur (rijksblauw, 500 = hoofdkleur).
+ * Eén schaal voor beide blauwen, zodat bestaande klassen blijven kloppen:
+ * 50 t/m 600 is donkerblauw, 700 t/m 900 is lintblauw.
  * @type {Record<50|100|200|300|400|500|600|700|800|900, string>}
  */
 export const rijksblauw = {
-  50: '#e6f1f6',
-  100: '#cce3ee',
-  200: '#99c7dd',
-  300: '#66abcc',
-  400: '#338fbb',
-  500: '#01689b', // Hoofd-rijksblauw (Rijkshuisstijl)
-  600: '#015580',
-  700: '#014265',
-  800: '#01304a',
-  900: '#011d2e',
+  50: '#d9e8f0',
+  100: '#b3d2e1',
+  200: '#8cbbd2',
+  300: '#66a4c3',
+  400: '#408eb4',
+  500: '#01689b', // Donkerblauw
+  600: '#01496c',
+  700: '#154273', // Lintblauw
+  800: '#162f50',
+  900: '#162945',
 };
 
 /** Secundaire merkkleur. @type {string} */
@@ -52,6 +58,15 @@ export const accentDonkerHover = '#a84a12';
 /** Overige rijkshuisstijl-accenten. */
 export const rijksrood = '#d52b1e';
 export const rijksgroen = '#39870c';
+export const hemelblauw = '#007bc7';
+export const lichtblauw = '#8fcae7';
+export const donkergeel = '#ffb612';
+export const mintgroen = '#76d2b6';
+export const mosgroen = '#777b00';
+export const donkergroen = '#275937';
+export const violet = '#a90061';
+export const paars = '#42145f';
+export const bruin = '#94710a';
 
 /**
  * Semantische aliassen — gebruik deze in plaats van losse hex-strings.
@@ -75,10 +90,10 @@ export const categoryPalette = [
   rijksoranje,
   rijksgroen,
   rijksrood,
-  rijksblauw[400],
-  rijksblauw[200],
+  hemelblauw,
+  lichtblauw,
   rijksblauw[700],
-  '#e8a33d',
+  donkergeel,
 ];
 
 /**
@@ -86,9 +101,9 @@ export const categoryPalette = [
  * @type {{ deep: string, mid: string, light: string }}
  */
 export const backgroundGradient = {
-  deep: '#013350',
-  mid: rijksblauw[500],
-  light: '#4aa3cc',
+  deep: rijksblauw[900],
+  mid: rijksblauw[700],
+  light: rijksblauw[500],
 };
 
 /**
@@ -98,10 +113,10 @@ export const backgroundGradient = {
 export const orgTypeColor = {
   government: rijksblauw[700],
   ministry: rijksblauw[500],
-  directorate_general: '#5566c4',
-  directorate: '#2f6db3',
-  agency: '#3f9d6b',
-  department: '#7a8aa8',
+  directorate_general: hemelblauw,
+  directorate: paars,
+  agency: rijksgroen,
+  department: bruin,
 };
 
 /**
@@ -110,13 +125,13 @@ export const orgTypeColor = {
  */
 export const ecosystemPalette = [
   rijksblauw[500],
-  '#2f6db3',
-  '#3f9d6b',
-  '#c0792b',
-  '#8a4fbd',
-  '#1f9aa6',
-  '#b8456b',
-  '#5a7d2a',
+  hemelblauw,
+  rijksgroen,
+  rijksoranje,
+  paars,
+  mintgroen,
+  violet,
+  mosgroen,
 ];
 
 /**

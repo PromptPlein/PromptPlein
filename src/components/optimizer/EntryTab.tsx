@@ -16,16 +16,16 @@ const ACCENT: Record<
   { activeBg: string; hoverBg: string; iconBg: string; ringActive: string; ringHover: string }
 > = {
   oranje: {
-    activeBg: 'bg-gradient-to-br from-rijksoranje/10 to-white dark:from-rijksoranje/15 dark:to-slate-800',
+    activeBg: 'bg-rijksoranje/10 dark:bg-rijksoranje/15',
     hoverBg: 'bg-slate-50/60 hover:bg-rijksoranje/5 dark:bg-slate-900/30 dark:hover:bg-rijksoranje/10',
-    iconBg: 'bg-gradient-to-br from-rijksoranje to-rijksoranje-dark',
+    iconBg: 'bg-rijksoranje',
     ringActive: 'border-rijksoranje bg-rijksoranje text-white',
     ringHover: 'border-slate-300 bg-transparent group-hover:border-rijksoranje dark:border-slate-600',
   },
   blauw: {
-    activeBg: 'bg-gradient-to-br from-rijksblauw-500/10 to-white dark:from-rijksblauw-500/15 dark:to-slate-800',
+    activeBg: 'bg-rijksblauw-500/10 dark:bg-rijksblauw-500/15',
     hoverBg: 'bg-slate-50/60 hover:bg-rijksblauw-500/5 dark:bg-slate-900/30 dark:hover:bg-rijksblauw-500/10',
-    iconBg: 'bg-gradient-to-br from-rijksblauw-500 to-rijksblauw-700',
+    iconBg: 'bg-rijksblauw-700',
     ringActive: 'border-rijksblauw-500 bg-rijksblauw-500 text-white',
     ringHover: 'border-slate-300 bg-transparent group-hover:border-rijksblauw-400 dark:border-slate-600',
   },

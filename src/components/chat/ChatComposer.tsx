@@ -532,7 +532,7 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
                 // right-3 laat de schuifbalk vrij; zonder balk oogt het als een
                 // bewuste marge in plaats van een knop tegen de rand.
                 'absolute right-3 top-2 flex h-7 w-7 items-center justify-center rounded-lg',
-                'bg-gradient-to-br from-rijksoranje to-rijksoranje-dark text-white shadow-sm',
+                'bg-rijksoranje text-white shadow-sm',
                 'transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-rijksoranje/40',
                 canOptimize && !optimizing
                   ? 'hover:shadow-md motion-safe:hover:-translate-y-px'

@@ -82,7 +82,7 @@ export default function OptimizingLoader({
     <div className="animate-fade-in overflow-hidden rounded-2xl border border-rijksblauw-200 bg-white shadow-sm dark:border-rijksblauw-500/30 dark:bg-slate-800">
       {/* Geanimeerde accentbalk bovenaan */}
       <div className="h-1 w-full overflow-hidden bg-rijksblauw-100 dark:bg-rijksblauw-500/20">
-        <div className="h-full w-1/3 animate-loading-bar bg-gradient-to-r from-rijksblauw-400 via-rijksoranje to-rijksblauw-600" />
+        <div className="h-full w-1/3 animate-loading-bar bg-rijksblauw-500" />
       </div>
       <div className="p-5 sm:p-6">
         <div className="flex items-center gap-3">

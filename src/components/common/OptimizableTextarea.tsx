@@ -113,7 +113,7 @@ const OptimizableTextarea = forwardRef<HTMLTextAreaElement, OptimizableTextareaP
             type="button"
             className={clsx(
               'absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-lg',
-              'bg-gradient-to-br from-rijksoranje to-rijksoranje-dark text-white shadow-sm',
+              'bg-rijksoranje text-white shadow-sm',
               'transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-rijksoranje/40',
               canOptimize
                 ? 'hover:shadow-md motion-safe:hover:-translate-y-px'

@@ -273,7 +273,7 @@ export default function ProjectSettingsModal({
                       // zodat het greepje bruikbaar blijft en de knop niet tegen
                       // de grijze baan van de schuifbalk aan plakt.
                       'absolute bottom-2.5 right-[22px] flex h-8 w-8 items-center justify-center rounded-lg',
-                      'bg-gradient-to-br from-rijksoranje to-rijksoranje-dark text-white',
+                      'bg-rijksoranje text-white',
                       // Een ringetje in de veldkleur licht de knop van de tekst
                       // eronder: zonder die scheiding loopt hij vast aan de regel
                       // waar hij toevallig overheen valt.

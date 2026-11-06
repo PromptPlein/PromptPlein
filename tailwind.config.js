@@ -35,7 +35,16 @@ export default {
         rijksgroen,
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        sans: ['RijksSansVF', 'Fira Sans', 'Arial', 'sans-serif'],
+      },
+      // Vormtaal van de Rijkshuisstijl: knoppen en velden 0,25rem, kaarten
+      // 0,5rem. Via het thema, zodat elke bestaande klasse meegaat.
+      borderRadius: {
+        DEFAULT: '0.25rem',
+        md: '0.25rem',
+        lg: '0.25rem',
+        xl: '0.5rem',
+        '2xl': '0.5rem',
       },
       keyframes: {
         'fade-in': {

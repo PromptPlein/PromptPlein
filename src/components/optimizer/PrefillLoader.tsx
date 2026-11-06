@@ -91,11 +91,11 @@ export default function PrefillLoader({
       <div className="h-1 w-full overflow-hidden bg-rijksblauw-100 dark:bg-rijksblauw-500/20">
         {doneCount > 0 ? (
           <div
-            className="h-full bg-gradient-to-r from-rijksblauw-400 via-rijksoranje to-rijksblauw-600 transition-all duration-500 ease-out"
+            className="h-full bg-rijksblauw-500 transition-all duration-500 ease-out"
             style={{ width: `${Math.max(pct, 8)}%` }}
           />
         ) : (
-          <div className="h-full w-1/3 animate-loading-bar bg-gradient-to-r from-rijksblauw-400 via-rijksoranje to-rijksblauw-600" />
+          <div className="h-full w-1/3 animate-loading-bar bg-rijksblauw-500" />
         )}
       </div>
 

@@ -129,7 +129,7 @@ const ACCENT_STYLES: Record<
       'border-rijksoranje/30 bg-rijksoranje/10 text-rijksoranje dark:border-rijksoranje/40 dark:bg-rijksoranje/15',
     icon: 'text-rijksoranje',
     // Volledige scheidingslijn onder de kop, in de accentkleur, vervagend.
-    rule: 'from-rijksoranje/50 via-rijksoranje/20',
+    rule: 'bg-rijksoranje/40',
     cardActive: 'border-rijksoranje bg-rijksoranje/10 ring-2 ring-rijksoranje/20 dark:bg-rijksoranje/15',
     cardName: 'text-rijksoranje dark:text-rijksoranje',
     cardCheck: 'bg-rijksoranje text-white',
@@ -140,7 +140,7 @@ const ACCENT_STYLES: Record<
     badge:
       'border-rijksblauw-500/30 bg-rijksblauw-50 text-rijksblauw-700 dark:border-rijksblauw-500/40 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200',
     icon: 'text-rijksblauw-500',
-    rule: 'from-rijksblauw-500/50 via-rijksblauw-500/20',
+    rule: 'bg-rijksblauw-500/40',
     cardActive: 'border-rijksblauw-500 bg-rijksblauw-50 ring-2 ring-rijksblauw-500/20 dark:bg-rijksblauw-500/15',
     cardName: 'text-rijksblauw-700 dark:text-rijksblauw-200',
     cardCheck: 'bg-rijksblauw-500 text-white',
@@ -189,7 +189,7 @@ function Group({
 
       {/* Volledige scheidingslijn onder de kop: markeert de grens van deze sectie. */}
       <div
-        className={clsx('mb-4 h-0.5 w-full bg-gradient-to-r to-transparent', styles.rule)}
+        className={clsx('mb-4 h-0.5 w-full', styles.rule)}
         aria-hidden="true"
       />
 
@@ -311,7 +311,7 @@ function TechniqueCard({
       {/* Vervagende onderlijn in de accentkleur van de groep (oranje bij
           frameworks, blauw bij technieken), net als onder de sectiekop. */}
       <div
-        className={clsx('mb-2.5 h-0.5 w-full bg-gradient-to-r to-transparent', styles.rule)}
+        className={clsx('mb-2.5 h-0.5 w-full', styles.rule)}
         aria-hidden="true"
       />
       {/* Korte beschrijving: altijd zichtbaar. */}

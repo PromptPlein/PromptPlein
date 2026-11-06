@@ -112,7 +112,7 @@ export default function ModelStatus({ models, winner, verb, className }: ModelSt
                 ) : delivering ? (
                   <div className="h-full w-full rounded-full bg-emerald-500" />
                 ) : (
-                  <div className="h-full w-1/3 animate-loading-bar rounded-full bg-gradient-to-r from-rijksblauw-400 to-rijksoranje" />
+                  <div className="h-full w-1/3 animate-loading-bar rounded-full bg-rijksblauw-500" />
                 )}
               </div>
             </div>

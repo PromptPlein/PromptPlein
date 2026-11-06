@@ -140,7 +140,7 @@ export default function ProjectView({
                 andere soort actie. */}
             <button
               type="button"
-              className="opl-btn !px-3 !py-1.5 !text-[13px] bg-gradient-to-br from-rijksoranje to-rijksoranje-dark text-white shadow-sm hover:brightness-110 focus:ring-rijksoranje"
+              className="opl-btn !px-3 !py-1.5 !text-[13px] bg-rijksoranje text-slate-950 shadow-sm hover:bg-rijksoranje-dark dark:hover:text-white focus:ring-rijksoranje"
               // Altijd zonder bronbestanden beginnen: de projectinstructie is
               // meestal genoeg, en wie ze tóch wil zet ze aan in de balk bóven
               // de bouwer — daar ziet hij meteen wat het doet.

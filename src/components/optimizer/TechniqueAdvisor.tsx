@@ -188,7 +188,7 @@ export default function TechniqueAdvisor({
 
   return (
     <section className="animate-fade-in scroll-mt-24 overflow-hidden rounded-2xl border border-rijksoranje/40 bg-white shadow-sm dark:border-rijksoranje/30 dark:bg-slate-800">
-      <div className="h-1 w-full bg-gradient-to-r from-rijksoranje to-rijksblauw-500" />
+      <div className="h-1 w-full bg-rijksoranje" />
       <div className="p-6">
         <div className="mb-4 flex items-start justify-between gap-3">
           <div className="flex items-start gap-3">
