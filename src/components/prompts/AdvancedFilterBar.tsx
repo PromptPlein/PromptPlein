@@ -45,7 +45,8 @@ function Chip({
 
 function toggle<T>(list: T[] | undefined, value: T): T[] {
   const set = new Set(list ?? []);
-  set.has(value) ? set.delete(value) : set.add(value);
+  if (set.has(value)) set.delete(value);
+  else set.add(value);
   return [...set];
 }
 

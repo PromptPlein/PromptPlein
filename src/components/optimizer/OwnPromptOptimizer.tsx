@@ -362,7 +362,7 @@ export default function OwnPromptOptimizer({
   }
 
   /** Zet een voorbeeldprompt direct in het invoerveld om te testen. */
-  function useExample(text: string) {
+  function applyExample(text: string) {
     setOwnPrompt(text);
     resetDownstream(); // nieuwe inhoud = oude aanbeveling/analyse vervalt
     setShowExamples(false);
@@ -930,7 +930,7 @@ export default function OwnPromptOptimizer({
                         </button>
                         <button
                           type="button"
-                          onClick={() => useExample(ex.prompt)}
+                          onClick={() => applyExample(ex.prompt)}
                           title="Gebruik dit voorbeeld in het invoerveld"
                           className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-rijksblauw-600 transition-colors hover:bg-rijksblauw-50 dark:text-rijksblauw-300 dark:hover:bg-rijksblauw-500/15"
                         >

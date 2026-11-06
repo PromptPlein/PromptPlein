@@ -42,7 +42,7 @@ export async function extractDocument(
   }
   const ext = extensionOf(file.name);
 
-  let text = '';
+  let text: string;
   if (ext === '.txt' || ext === '.md' || ext === '.markdown') {
     text = await file.text();
   } else if (ext === '.pdf') {

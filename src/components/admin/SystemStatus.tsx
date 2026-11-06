@@ -100,7 +100,7 @@ export default function SystemStatus() {
 
   useEffect(() => {
     void runChecks();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, []);
 
   const overall: Health = checks.some((c) => c.status === 'error')

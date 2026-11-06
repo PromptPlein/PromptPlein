@@ -284,7 +284,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
     const run = loadRun();
     if (run) setResumable(run);
     // Alleen bij mount uitvoeren.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, []);
 
   // Bewaar de lopende run zodra er een plan is en we het aan het uitvoeren zijn,

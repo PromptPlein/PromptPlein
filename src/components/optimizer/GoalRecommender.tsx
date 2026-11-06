@@ -76,7 +76,7 @@ export default function GoalRecommender({
   }
 
   /** Zet een voorbeelddoel direct in het invoerveld om te testen. */
-  function useExample(text: string) {
+  function applyExample(text: string) {
     onGoalChange(text);
     setShowExamples(false);
     toast.success('Voorbeeld ingevuld.');
@@ -220,7 +220,7 @@ export default function GoalRecommender({
                     </button>
                     <button
                       type="button"
-                      onClick={() => useExample(ex.goal)}
+                      onClick={() => applyExample(ex.goal)}
                       title="Gebruik dit voorbeeld in het invoerveld"
                       className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-rijksblauw-600 transition-colors hover:bg-rijksblauw-50 dark:text-rijksblauw-300 dark:hover:bg-rijksblauw-500/15"
                     >

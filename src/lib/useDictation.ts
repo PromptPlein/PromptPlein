@@ -101,13 +101,12 @@ export function useDictation(onText: (text: string) => void) {
     recorder.onstop = async () => {
       releaseMicrophone();
       recorderRef.current = null;
-      let audio: Blob | null = new Blob(chunksRef.current, {
+      const audio = new Blob(chunksRef.current, {
         type: recorder.mimeType || mimeType || 'audio/webm',
       });
       chunksRef.current = [];
       const tooShort = Date.now() - startedAtRef.current < MIN_DICTATION_MS;
       if (cancelledRef.current || tooShort || audio.size === 0) {
-        audio = null;
         setState('idle');
         return;
       }
@@ -116,8 +115,6 @@ export function useDictation(onText: (text: string) => void) {
       const controller = new AbortController();
       abortRef.current = controller;
       const result = await transcribeRecording(audio, controller.signal);
-      // Weg met de opname zodra hij is uitgeschreven.
-      audio = null;
       abortRef.current = null;
       setState('idle');
       if (cancelledRef.current) return;
