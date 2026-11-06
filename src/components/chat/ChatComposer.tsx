@@ -85,6 +85,8 @@ interface ChatComposerProps {
   onOptimize?: (text: string) => Promise<OptimizeResult>;
   /** De modelbadge, rechtsonder in de chat weergegeven. */
   badge?: ReactNode;
+  /** Korte waarschuwing die altijd bij het tekstvak hoort, links van de badge. */
+  notice?: ReactNode;
   /** Bijlagen toestaan? De Testkamer zet dit uit: daar test je de prompt zelf. */
   allowAttachments?: boolean;
   /**
@@ -163,6 +165,7 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
     onRemoveAttachment,
     onOptimize,
     badge,
+    notice,
     allowAttachments = true,
     projects,
     activeProjectId = null,
@@ -398,406 +401,419 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
   }
 
   return (
-    <div className="border-t border-slate-200 px-4 pb-3 pt-3 dark:border-slate-700 sm:px-6">
-      {/* Een routekaart programmeert de AI niet zelf: PromptPlein heeft een
-          vaste, geteste versie, en Verstuur maakt hem daarmee. */}
-      {isRoutekaart && !streaming && (
-        <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-rijksblauw-200 bg-rijksblauw-50/70 px-3 py-2 text-xs text-slate-700 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10 dark:text-slate-200">
-          <MapIcon size={15} className="shrink-0 text-rijksblauw-600 dark:text-rijksblauw-300" />
-          <span className="min-w-[12rem] flex-1">
-            Dit is een routekaart. PromptPlein maakt hem direct in de vaste rijksstijl, zonder AI:
-            altijd dezelfde opmaak en meteen klaar. Ook Verstuur maakt hem zo.
-          </span>
-          <button
-            type="button"
-            className="opl-btn-primary !px-2.5 !py-1.5 text-xs"
-            onClick={makeRoutekaart}
-            disabled={disabled}
-          >
-            <MapIcon size={14} /> Maak de routekaart
-          </button>
-        </div>
+    <div
+      className={clsx(
+        'px-4 pb-3 pt-3 sm:px-6',
+        // In een leeg gesprek staat het veld los in het midden, zonder scheidslijn.
+        !prominent && 'border-t border-slate-200 dark:border-slate-700',
       )}
-      {/* Eén omhulsel dat er als hét invoerveld uitziet: bijlagen, tekstvak en
-          knoppen zitten er samen in en de rand licht op zodra je in het tekstvak
-          staat (focus-within). Zo hoort alles zichtbaar bij elkaar, terwijl de
-          knoppen buiten het tekstvak blijven staan — daar kan de tekst dus nooit
-          onderdoor lopen. */}
-      <div
-        className={clsx(
-          'relative rounded-xl border bg-white transition-colors dark:bg-slate-800',
-          'focus-within:border-rijksblauw-500 focus-within:ring-2 focus-within:ring-rijksblauw-500/20',
-          // In een leeg gesprek springt het veld eruit: blauwe rand, zachte gloed
-          // en een schaduw, zodat meteen duidelijk is waar je typt.
-          prominent
-            ? 'border-rijksblauw-300 shadow-md ring-4 ring-rijksblauw-500/10 dark:border-rijksblauw-500/50 dark:ring-rijksblauw-500/10'
-            : 'border-slate-300 dark:border-slate-600',
-          disabled && 'opacity-60',
-        )}
-        // Klikken op de rand of de lege ruimte eromheen zet de cursor in de
-        // tekst, zoals je van één veld verwacht.
-        onMouseDown={(e) => {
-          if (e.target === e.currentTarget) {
-            e.preventDefault();
-            textareaRef.current?.focus();
-          }
-        }}
-        onDragEnter={onDragEnter}
-        onDragOver={onDragOver}
-        onDragLeave={onDragLeave}
-        onDrop={(e) => void onDrop(e)}
-      >
-        {allowAttachments && attachments.length > 0 && (
-          <div className="flex flex-wrap gap-2 px-3 pt-3">
-            {attachments.map((a, i) => (
-              <span
-                key={a.id}
-                className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700 dark:bg-slate-700 dark:text-slate-200"
-                title={`Bijlage ${i + 1}: ${a.name}, ${a.chars.toLocaleString('nl-NL')} tekens`}
-              >
-                <Paperclip size={12} className="shrink-0" />
-                <span className="truncate">{a.name}</span>
-                <span className="shrink-0 text-slate-400">
-                  {a.chars.toLocaleString('nl-NL')} tekens
-                </span>
-                {a.truncated && (
-                  <span
-                    className="inline-flex shrink-0 items-center gap-0.5 text-amber-600 dark:text-amber-400"
-                    title="De tekst is ingekort tot de bijlagelimiet"
-                  >
-                    <Scissors size={11} /> ingekort
-                  </span>
-                )}
-                <button
-                  type="button"
-                  className="shrink-0 rounded-full p-0.5 text-slate-400 hover:bg-slate-200 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300"
-                  onClick={() => onRemoveAttachment(a.id)}
-                  aria-label={`Verwijder bijlage ${a.name}`}
-                >
-                  <X size={12} />
-                </button>
-              </span>
-            ))}
-          </div>
-        )}
-
-        {/* Het tekstvak zelf: zonder eigen rand of focusring, want die zitten op
-            het omhulsel. Alleen het sterretje ligt eroverheen (rechtsboven); de
-            tekst houdt daar afstand van via de rechtermarge. */}
-        <div className="relative">
-          <textarea
-            ref={textareaRef}
-            // De chat heeft zijn eigen microfoon in de werkbalk hieronder, en
-            // groeit zelf mee tot MAX_HEIGHT.
-            data-dictation="off"
-            data-autogrow="off"
-            className={clsx(
-              // opl-scroll-slim: een slanke schuifbalk met vaste goot, zodat een
-              // langere tekst geen brede systeembalk oplevert die tegen het
-              // sterretje aan botst — en de tekst niet verspringt op het moment
-              // dat de balk verschijnt.
-              'opl-scroll-slim block w-full resize-none border-0 bg-transparent px-3.5 py-2.5',
-              'text-base leading-7 text-slate-800 placeholder:text-slate-500 focus:outline-none focus:ring-0',
-              'dark:text-slate-100 dark:placeholder:text-slate-400',
-              // Leeg gesprek: een ruimer vak, zodat het als een uitnodiging leest
-              // en niet als een smal regeltje onderaan het scherm.
-              prominent && 'min-h-[3.5rem] py-3.5',
-              // Ruimte rechtsboven voor het sterretje, zodat de tekst er niet
-              // onder doorloopt. Vast (niet afhankelijk van of de knop er staat),
-              // anders zou de tekst verspringen zodra je begint te typen.
-              onOptimize && 'pr-12',
-            )}
-            // Eén regel als startpunt; de layout-effect hierboven laat het vak
-            // daarna meegroeien met de tekst.
-            rows={1}
-            aria-label="Je bericht"
-            placeholder={
-              disabled
-                ? (disabledPlaceholder ?? 'Chat wordt geladen…')
-                : prominent
-                  ? 'Typ hier je bericht en druk op Enter'
-                  : 'Stel je vraag…'
-            }
-            value={text}
-            disabled={disabled || optimizing}
-            onChange={(e) => {
-              const value = e.target.value;
-              setText(value);
-              // Een @ als allereerste teken is een commando, geen tekst: open
-              // meteen het projectmenu. Verderop in een zin (een e-mailadres,
-              // een naam) doen we niets — dat zou het menu bij elk adres openen.
-              if (value === '@' && projectPickerAvailable && canPickProject) {
-                setProjectMenuOpen(true);
-              } else if (!value.startsWith('@')) {
-                setProjectMenuOpen(false);
-              }
-            }}
-            onKeyDown={(e) => {
-              // Enter verzendt; Shift+Enter maakt een nieuwe regel.
-              // Tijdens samenstellen van een teken bevestigt Enter dat teken.
-              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-                e.preventDefault();
-                submit();
-              }
-            }}
-          />
-          {/* Sterretje rechtsboven: verbetert in één klik wat er staat. Verschijnt
-              pas zodra er tekst is, zodat een leeg veld rustig blijft. Zelfde
-              oranje verloop als het gereedschap "Genereren" in de menubalk. */}
-          {onOptimize && (text.trim().length > 0 || optimizing) && (
+    >
+      {/* Even breed als de leeskolom in ChatMessageList, zodat je tekst en het
+          antwoord op dezelfde lijn beginnen. */}
+      <div className="mx-auto max-w-[60ch]">
+        {/* Een routekaart programmeert de AI niet zelf: PromptPlein heeft een
+            vaste, geteste versie, en Verstuur maakt hem daarmee. */}
+        {isRoutekaart && !streaming && (
+          <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-rijksblauw-200 bg-rijksblauw-50/70 px-3 py-2 text-xs text-slate-700 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10 dark:text-slate-200">
+            <MapIcon size={15} className="shrink-0 text-rijksblauw-600 dark:text-rijksblauw-300" />
+            <span className="min-w-[12rem] flex-1">
+              Dit is een routekaart. PromptPlein maakt hem direct in de vaste rijksstijl, zonder AI:
+              altijd dezelfde opmaak en meteen klaar. Ook Verstuur maakt hem zo.
+            </span>
             <button
               type="button"
-              className={clsx(
-                // right-3 laat de schuifbalk vrij; zonder balk oogt het als een
-                // bewuste marge in plaats van een knop tegen de rand.
-                'absolute right-3 top-2 flex h-7 w-7 items-center justify-center rounded-lg',
-                'bg-rijksoranje text-white shadow-sm',
-                'transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-rijksoranje/40',
-                canOptimize && !optimizing
-                  ? 'hover:shadow-md motion-safe:hover:-translate-y-px'
-                  : 'cursor-default opacity-60',
-              )}
-              onClick={() => void optimize()}
-              disabled={!canOptimize || optimizing}
-              title={
-                optimizing
-                  ? 'Bezig met verbeteren…'
-                  : 'Verbeter mijn tekst met AI; je oorspronkelijke tekst kun je daarna terughalen'
-              }
-              aria-label="Verbeter mijn tekst met AI"
+              className="opl-btn-primary !px-2.5 !py-1.5 text-xs"
+              onClick={makeRoutekaart}
+              disabled={disabled}
             >
-              {optimizing ? (
-                <Loader2 size={14} className="animate-spin" />
-              ) : (
-                <Sparkles size={14} strokeWidth={2.25} />
-              )}
+              <MapIcon size={14} /> Maak de routekaart
             </button>
+          </div>
+        )}
+        {/* Eén omhulsel dat er als hét invoerveld uitziet: bijlagen, tekstvak en
+            knoppen zitten er samen in en de rand licht op zodra je in het tekstvak
+            staat (focus-within). Zo hoort alles zichtbaar bij elkaar, terwijl de
+            knoppen buiten het tekstvak blijven staan — daar kan de tekst dus nooit
+            onderdoor lopen. */}
+        <div
+          className={clsx(
+            'relative rounded-xl border bg-white transition-colors dark:bg-slate-800',
+            'focus-within:border-rijksblauw-500 focus-within:ring-2 focus-within:ring-rijksblauw-500/20',
+            // In een leeg gesprek springt het veld eruit: blauwe rand, zachte gloed
+            // en een schaduw, zodat meteen duidelijk is waar je typt.
+            prominent
+              ? 'border-rijksblauw-300 shadow-md ring-4 ring-rijksblauw-500/10 dark:border-rijksblauw-500/50 dark:ring-rijksblauw-500/10'
+              : 'border-slate-300 dark:border-slate-600',
+            disabled && 'opacity-60',
           )}
-        </div>
-
-        {/* Werkbalk onderin hetzelfde veld: bijlage links, versturen rechts.
-            Staat onder het tekstvak in plaats van eroverheen, dus de tekst kan er
-            nooit achter verdwijnen. Een lichte scheidingslijn erboven zet de
-            knoppen los van wat je typt. */}
-        <div className="mt-1 flex items-center gap-1 border-t border-slate-100 px-2 pb-2 pt-1.5 dark:border-slate-700/60">
-          {/* Microfoon: linksonder, als eerste knop. Tijdens het opnemen wordt
-              het een balk met een geluidsmeter en de tijd. */}
-          {dictation.available && (
-            <DictationButton
-              state={dictationState}
-              seconds={dictation.seconds}
-              stream={dictation.stream}
-              onToggle={dictation.toggle}
-              disabled={disabled || streaming}
-              size="md"
-            />
-          )}
-
-          {/* @-menu: hetzelfde project kiezen als vanuit de zijbalk, maar dan
-              zonder het gesprek te verlaten. Bewust naast de paperclip: het is
-              dezelfde soort handeling — bronmateriaal aan dit gesprek hangen. */}
-          {projectPickerAvailable && (
-            <div className="relative shrink-0" ref={projectMenuRef}>
-              <button
-                type="button"
-                className={clsx(
-                  'flex h-8 items-center gap-1.5 rounded-lg px-2 transition-colors focus:outline-none focus:ring-2 focus:ring-rijksblauw-500/40 disabled:cursor-not-allowed disabled:opacity-40',
-                  activeProject
-                    ? 'bg-rijksblauw-50 text-rijksblauw-700 hover:bg-rijksblauw-100 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200'
-                    : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200',
-                )}
-                onClick={() => setProjectMenuOpen((open) => !open)}
-                disabled={disabled || streaming || !canPickProject}
-                title={
-                  canPickProject
-                    ? 'Koppel deze chat aan een project'
-                    : 'Het project ligt vast zodra de chat is begonnen. Start een nieuwe chat om te wisselen.'
-                }
-                aria-label="Kies een project voor deze chat"
-                aria-expanded={projectMenuOpen}
-              >
-                <AtSign size={16} className="shrink-0" />
-                {activeProject && (
-                  <span className="max-w-[8rem] truncate text-xs font-medium">
-                    {activeProject.name}
+          // Klikken op de rand of de lege ruimte eromheen zet de cursor in de
+          // tekst, zoals je van één veld verwacht.
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) {
+              e.preventDefault();
+              textareaRef.current?.focus();
+            }
+          }}
+          onDragEnter={onDragEnter}
+          onDragOver={onDragOver}
+          onDragLeave={onDragLeave}
+          onDrop={(e) => void onDrop(e)}
+        >
+          {allowAttachments && attachments.length > 0 && (
+            <div className="flex flex-wrap gap-2 px-3 pt-3">
+              {attachments.map((a, i) => (
+                <span
+                  key={a.id}
+                  className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700 dark:bg-slate-700 dark:text-slate-200"
+                  title={`Bijlage ${i + 1}: ${a.name}, ${a.chars.toLocaleString('nl-NL')} tekens`}
+                >
+                  <Paperclip size={12} className="shrink-0" />
+                  <span className="truncate">{a.name}</span>
+                  <span className="shrink-0 text-slate-400">
+                    {a.chars.toLocaleString('nl-NL')} tekens
                   </span>
-                )}
-              </button>
-
-              {projectMenuOpen && (
-                <div className="absolute bottom-full left-0 z-20 mb-1 max-h-64 w-60 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-700 dark:bg-slate-800">
-                  <p className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
-                    Projecten
-                  </p>
-                  {projects?.map((project) => (
-                    <button
-                      key={project.id}
-                      type="button"
-                      className={clsx(
-                        'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors',
-                        project.id === activeProjectId
-                          ? 'bg-rijksblauw-50 font-medium text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200'
-                          : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700',
-                      )}
-                      onClick={() => pickProject(project.id)}
+                  {a.truncated && (
+                    <span
+                      className="inline-flex shrink-0 items-center gap-0.5 text-amber-600 dark:text-amber-400"
+                      title="De tekst is ingekort tot de bijlagelimiet"
                     >
-                      <FolderOpen size={14} className="shrink-0 text-slate-400" />
-                      <span className="truncate">{project.name}</span>
-                    </button>
-                  ))}
-                  {activeProjectId && (
-                    <button
-                      type="button"
-                      className="mt-1 flex w-full items-center gap-2 rounded-lg border-t border-slate-100 px-2 py-1.5 text-left text-sm text-slate-500 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-700"
-                      onClick={() => pickProject(null)}
-                    >
-                      <X size={14} className="shrink-0" />
-                      Losmaken van het project
-                    </button>
+                      <Scissors size={11} /> ingekort
+                    </span>
                   )}
-                </div>
-              )}
+                  <button
+                    type="button"
+                    className="shrink-0 rounded-full p-0.5 text-slate-400 hover:bg-slate-200 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300"
+                    onClick={() => onRemoveAttachment(a.id)}
+                    aria-label={`Verwijder bijlage ${a.name}`}
+                  >
+                    <X size={12} />
+                  </button>
+                </span>
+              ))}
             </div>
           )}
 
-          {/* Denken: het model redeneert eerst en antwoordt daarna pas. Blijft
-              aan tussen beurten, want wie aan een zwaardere vraag werkt, werkt er
-              meestal een gesprek lang aan. */}
-          {onToggleThinking && (
-            <ThinkingToggle
-              value={thinking}
-              onChange={onToggleThinking}
-              disabled={disabled || streaming}
-              unavailableReason={thinkingUnavailable}
+          {/* Het tekstvak zelf: zonder eigen rand of focusring, want die zitten op
+              het omhulsel. Alleen het sterretje ligt eroverheen (rechtsboven); de
+              tekst houdt daar afstand van via de rechtermarge. */}
+          <div className="relative">
+            <textarea
+              ref={textareaRef}
+              // De chat heeft zijn eigen microfoon in de werkbalk hieronder, en
+              // groeit zelf mee tot MAX_HEIGHT.
+              data-dictation="off"
+              data-autogrow="off"
+              className={clsx(
+                // opl-scroll-slim: een slanke schuifbalk met vaste goot, zodat een
+                // langere tekst geen brede systeembalk oplevert die tegen het
+                // sterretje aan botst — en de tekst niet verspringt op het moment
+                // dat de balk verschijnt.
+                'opl-scroll-slim block w-full resize-none border-0 bg-transparent px-3.5 py-2.5',
+                'text-base leading-7 text-slate-800 placeholder:text-slate-500 focus:outline-none focus:ring-0',
+                'dark:text-slate-100 dark:placeholder:text-slate-400',
+                // Leeg gesprek: een ruimer vak, zodat het als een uitnodiging leest
+                // en niet als een smal regeltje onderaan het scherm.
+                prominent && 'min-h-[3.5rem] py-3.5',
+                // Ruimte rechtsboven voor het sterretje, zodat de tekst er niet
+                // onder doorloopt. Vast (niet afhankelijk van of de knop er staat),
+                // anders zou de tekst verspringen zodra je begint te typen.
+                onOptimize && 'pr-12',
+              )}
+              // Eén regel als startpunt; de layout-effect hierboven laat het vak
+              // daarna meegroeien met de tekst.
+              rows={1}
+              aria-label="Je bericht"
+              placeholder={
+                disabled
+                  ? (disabledPlaceholder ?? 'Chat wordt geladen…')
+                  : prominent
+                    ? 'Typ hier je bericht en druk op Enter'
+                    : 'Stel je vraag…'
+              }
+              value={text}
+              disabled={disabled || optimizing}
+              onChange={(e) => {
+                const value = e.target.value;
+                setText(value);
+                // Een @ als allereerste teken is een commando, geen tekst: open
+                // meteen het projectmenu. Verderop in een zin (een e-mailadres,
+                // een naam) doen we niets — dat zou het menu bij elk adres openen.
+                if (value === '@' && projectPickerAvailable && canPickProject) {
+                  setProjectMenuOpen(true);
+                } else if (!value.startsWith('@')) {
+                  setProjectMenuOpen(false);
+                }
+              }}
+              onKeyDown={(e) => {
+                // Enter verzendt; Shift+Enter maakt een nieuwe regel.
+                // Tijdens samenstellen van een teken bevestigt Enter dat teken.
+                if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  submit();
+                }
+              }}
             />
-          )}
-
-          {/* Zoeken op internet: de AI haalt er bronnen bij en verwijst ernaar.
-              Naast "Denken", want het is dezelfde afweging: je wacht langer voor
-              een beter onderbouwd antwoord. */}
-          {onToggleWebSearch && (
-            <WebSearchToggle
-              value={webSearch}
-              onChange={onToggleWebSearch}
-              disabled={disabled || streaming}
-            />
-          )}
-
-          {(overflowing || enlarged) && (
-            <button
-              type="button"
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-rijksblauw-500/40 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200"
-              onClick={() => setEnlarged((value) => !value)}
-              aria-pressed={enlarged}
-              aria-label="Groter tekstvak"
-              title={enlarged ? 'Kleiner tekstvak' : 'Groter tekstvak'}
-            >
-              {enlarged ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
-            </button>
-          )}
-
-          {allowAttachments && (
-            <>
+            {/* Sterretje rechtsboven: verbetert in één klik wat er staat. Verschijnt
+                pas zodra er tekst is, zodat een leeg veld rustig blijft. Zelfde
+                oranje verloop als het gereedschap "Genereren" in de menubalk. */}
+            {onOptimize && (text.trim().length > 0 || optimizing) && (
               <button
                 type="button"
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-rijksblauw-500/40 disabled:cursor-not-allowed disabled:opacity-40 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={
-                  disabled || streaming || extracting || attachments.length >= MAX_CHAT_ATTACHMENTS
-                }
+                className={clsx(
+                  // right-3 laat de schuifbalk vrij; zonder balk oogt het als een
+                  // bewuste marge in plaats van een knop tegen de rand.
+                  'absolute right-3 top-2 flex h-7 w-7 items-center justify-center rounded-lg',
+                  'bg-rijksoranje text-white shadow-sm',
+                  'transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-rijksoranje/40',
+                  canOptimize && !optimizing
+                    ? 'hover:shadow-md motion-safe:hover:-translate-y-px'
+                    : 'cursor-default opacity-60',
+                )}
+                onClick={() => void optimize()}
+                disabled={!canOptimize || optimizing}
                 title={
-                  attachments.length >= MAX_CHAT_ATTACHMENTS
-                    ? `Maximaal ${MAX_CHAT_ATTACHMENTS} bijlagen per chat`
-                    : 'Document toevoegen (PDF, Word, tekst, max. 10 MB)'
+                  optimizing
+                    ? 'Bezig met verbeteren…'
+                    : 'Verbeter mijn tekst met AI; je oorspronkelijke tekst kun je daarna terughalen'
                 }
-                aria-label="Document toevoegen"
+                aria-label="Verbeter mijn tekst met AI"
               >
-                {extracting ? (
-                  <Loader2 size={18} className="animate-spin" />
+                {optimizing ? (
+                  <Loader2 size={14} className="animate-spin" />
                 ) : (
-                  <Paperclip size={18} />
+                  <Sparkles size={14} strokeWidth={2.25} />
                 )}
               </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept={ACCEPTED_DOC_ACCEPT}
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) void onAddFile(file);
-                  e.target.value = '';
-                }}
-              />
-            </>
-          )}
+            )}
+          </div>
 
-          {streaming ? (
-            <button
-              type="button"
-              className="opl-btn-secondary ml-auto shrink-0 !rounded-lg !px-3 !py-1.5"
-              onClick={onStop}
-              aria-label="Stop het antwoord"
-            >
-              <Square size={15} /> Stop
-            </button>
-          ) : (
-            <button
-              type="button"
-              className={clsx(
-                'opl-btn-primary ml-auto shrink-0 !rounded-lg !px-3 !py-1.5',
-                !canSend && 'opacity-50',
-              )}
-              onClick={submit}
-              disabled={!canSend}
-              aria-label="Verstuur"
-            >
-              <Send size={15} /> Verstuur
-            </button>
+          {/* Werkbalk onderin hetzelfde veld: bijlage links, versturen rechts.
+              Staat onder het tekstvak in plaats van eroverheen, dus de tekst kan er
+              nooit achter verdwijnen. Een lichte scheidingslijn erboven zet de
+              knoppen los van wat je typt. */}
+          <div className="mt-1 flex items-center gap-1 border-t border-slate-100 px-2 pb-2 pt-1.5 dark:border-slate-700/60">
+            {/* Microfoon: linksonder, als eerste knop. Tijdens het opnemen wordt
+                het een balk met een geluidsmeter en de tijd. */}
+            {dictation.available && (
+              <DictationButton
+                state={dictationState}
+                seconds={dictation.seconds}
+                stream={dictation.stream}
+                onToggle={dictation.toggle}
+                disabled={disabled || streaming}
+                size="md"
+              />
+            )}
+
+            {/* @-menu: hetzelfde project kiezen als vanuit de zijbalk, maar dan
+                zonder het gesprek te verlaten. Bewust naast de paperclip: het is
+                dezelfde soort handeling — bronmateriaal aan dit gesprek hangen. */}
+            {projectPickerAvailable && (
+              <div className="relative shrink-0" ref={projectMenuRef}>
+                <button
+                  type="button"
+                  className={clsx(
+                    'flex h-8 items-center gap-1.5 rounded-lg px-2 transition-colors focus:outline-none focus:ring-2 focus:ring-rijksblauw-500/40 disabled:cursor-not-allowed disabled:opacity-40',
+                    activeProject
+                      ? 'bg-rijksblauw-50 text-rijksblauw-700 hover:bg-rijksblauw-100 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200'
+                      : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200',
+                  )}
+                  onClick={() => setProjectMenuOpen((open) => !open)}
+                  disabled={disabled || streaming || !canPickProject}
+                  title={
+                    canPickProject
+                      ? 'Koppel deze chat aan een project'
+                      : 'Het project ligt vast zodra de chat is begonnen. Start een nieuwe chat om te wisselen.'
+                  }
+                  aria-label="Kies een project voor deze chat"
+                  aria-expanded={projectMenuOpen}
+                >
+                  <AtSign size={16} className="shrink-0" />
+                  {activeProject && (
+                    <span className="max-w-[8rem] truncate text-xs font-medium">
+                      {activeProject.name}
+                    </span>
+                  )}
+                </button>
+
+                {projectMenuOpen && (
+                  <div className="absolute bottom-full left-0 z-20 mb-1 max-h-64 w-60 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-700 dark:bg-slate-800">
+                    <p className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                      Projecten
+                    </p>
+                    {projects?.map((project) => (
+                      <button
+                        key={project.id}
+                        type="button"
+                        className={clsx(
+                          'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors',
+                          project.id === activeProjectId
+                            ? 'bg-rijksblauw-50 font-medium text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200'
+                            : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700',
+                        )}
+                        onClick={() => pickProject(project.id)}
+                      >
+                        <FolderOpen size={14} className="shrink-0 text-slate-400" />
+                        <span className="truncate">{project.name}</span>
+                      </button>
+                    ))}
+                    {activeProjectId && (
+                      <button
+                        type="button"
+                        className="mt-1 flex w-full items-center gap-2 rounded-lg border-t border-slate-100 px-2 py-1.5 text-left text-sm text-slate-500 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-700"
+                        onClick={() => pickProject(null)}
+                      >
+                        <X size={14} className="shrink-0" />
+                        Losmaken van het project
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Denken: het model redeneert eerst en antwoordt daarna pas. Blijft
+                aan tussen beurten, want wie aan een zwaardere vraag werkt, werkt er
+                meestal een gesprek lang aan. */}
+            {onToggleThinking && (
+              <ThinkingToggle
+                value={thinking}
+                onChange={onToggleThinking}
+                disabled={disabled || streaming}
+                unavailableReason={thinkingUnavailable}
+              />
+            )}
+
+            {/* Zoeken op internet: de AI haalt er bronnen bij en verwijst ernaar.
+                Naast "Denken", want het is dezelfde afweging: je wacht langer voor
+                een beter onderbouwd antwoord. */}
+            {onToggleWebSearch && (
+              <WebSearchToggle
+                value={webSearch}
+                onChange={onToggleWebSearch}
+                disabled={disabled || streaming}
+              />
+            )}
+
+            {(overflowing || enlarged) && (
+              <button
+                type="button"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-rijksblauw-500/40 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+                onClick={() => setEnlarged((value) => !value)}
+                aria-pressed={enlarged}
+                aria-label="Groter tekstvak"
+                title={enlarged ? 'Kleiner tekstvak' : 'Groter tekstvak'}
+              >
+                {enlarged ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+              </button>
+            )}
+
+            {allowAttachments && (
+              <>
+                <button
+                  type="button"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-rijksblauw-500/40 disabled:cursor-not-allowed disabled:opacity-40 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={
+                    disabled || streaming || extracting || attachments.length >= MAX_CHAT_ATTACHMENTS
+                  }
+                  title={
+                    attachments.length >= MAX_CHAT_ATTACHMENTS
+                      ? `Maximaal ${MAX_CHAT_ATTACHMENTS} bijlagen per chat`
+                      : 'Document toevoegen (PDF, Word, tekst, max. 10 MB)'
+                  }
+                  aria-label="Document toevoegen"
+                >
+                  {extracting ? (
+                    <Loader2 size={18} className="animate-spin" />
+                  ) : (
+                    <Paperclip size={18} />
+                  )}
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept={ACCEPTED_DOC_ACCEPT}
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) void onAddFile(file);
+                    e.target.value = '';
+                  }}
+                />
+              </>
+            )}
+
+            {streaming ? (
+              <button
+                type="button"
+                className="opl-btn-secondary ml-auto shrink-0 !rounded-lg !px-3 !py-1.5"
+                onClick={onStop}
+                aria-label="Stop het antwoord"
+              >
+                <Square size={15} /> Stop
+              </button>
+            ) : (
+              <button
+                type="button"
+                className={clsx(
+                  'opl-btn-primary ml-auto shrink-0 !rounded-lg !px-3 !py-1.5',
+                  !canSend && 'opacity-50',
+                )}
+                onClick={submit}
+                disabled={!canSend}
+                aria-label="Verstuur"
+              >
+                <Send size={15} /> Verstuur
+              </button>
+            )}
+          </div>
+
+          {/* Sleep je bestanden over het veld, dan legt dit vlak eroverheen uit wat
+              er gebeurt als je loslaat. pointer-events-none, zodat het de drop
+              zelf niet in de weg zit. */}
+          {dragging && (
+            <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-rijksblauw-400 bg-rijksblauw-50/95 text-sm font-medium text-rijksblauw-700 dark:border-rijksblauw-500/60 dark:bg-slate-800/95 dark:text-rijksblauw-200">
+              <Paperclip size={16} />
+              Laat los om als bijlage toe te voegen
+            </div>
           )}
         </div>
 
-        {/* Sleep je bestanden over het veld, dan legt dit vlak eroverheen uit wat
-            er gebeurt als je loslaat. pointer-events-none, zodat het de drop
-            zelf niet in de weg zit. */}
-        {dragging && (
-          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-rijksblauw-400 bg-rijksblauw-50/95 text-sm font-medium text-rijksblauw-700 dark:border-rijksblauw-500/60 dark:bg-slate-800/95 dark:text-rijksblauw-200">
-            <Paperclip size={16} />
-            Laat los om als bijlage toe te voegen
+        {/* Na een verbetering: één klik terug naar de eigen tekst. Verdwijnt zodra
+            de gebruiker zelf verder typt of het bericht verstuurt. */}
+        {canUndo && (
+          <div className="mt-1.5 flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+            <Sparkles size={12} className="shrink-0 text-rijksoranje" />
+            <span className="min-w-0">Je tekst is verbeterd. Lees hem na en pas gerust aan.</span>
+            <button
+              type="button"
+              className="shrink-0 inline-flex items-center gap-1 font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
+              onClick={undoOptimize}
+            >
+              <Undo2 size={12} /> Herstel mijn tekst
+            </button>
           </div>
         )}
-      </div>
 
-      {/* Na een verbetering: één klik terug naar de eigen tekst. Verdwijnt zodra
-          de gebruiker zelf verder typt of het bericht verstuurt. */}
-      {canUndo && (
-        <div className="mt-1.5 flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
-          <Sparkles size={12} className="shrink-0 text-rijksoranje" />
-          <span className="min-w-0">Je tekst is verbeterd. Lees hem na en pas gerust aan.</span>
-          <button
-            type="button"
-            className="shrink-0 inline-flex items-center gap-1 font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
-            onClick={undoOptimize}
-          >
-            <Undo2 size={12} /> Herstel mijn tekst
-          </button>
+        {/* Sneltoetsen en de bijlagelimiet stonden hier als een regel kleine
+            grijze tekst. Die staat nu achter het infobolletje: wie het wil weten
+            vindt het, en het veld blijft rustig. */}
+        <div className="mt-1 flex items-center justify-between gap-2">
+          <InfoDot
+            label="Uitleg bij het invoerveld"
+            className="-ml-1"
+            text={
+              allowAttachments
+                ? `Enter verstuurt. Shift+Enter geeft een nieuwe regel.\nBijlagen: maximaal ${MAX_CHAT_ATTACHMENTS}, elk tot 10 MB. Sleep ze hierheen of klik op de paperclip. Ze blijven de hele chat beschikbaar.`
+                : 'Enter verstuurt. Shift+Enter geeft een nieuwe regel.'
+            }
+          />
+          {notice && (
+            <p className="min-w-0 flex-1 text-sm text-slate-700 dark:text-slate-200">{notice}</p>
+          )}
+          <span className="shrink-0">{badge}</span>
         </div>
-      )}
-
-      {/* Sneltoetsen en de bijlagelimiet stonden hier als een regel kleine
-          grijze tekst. Die staat nu achter het infobolletje: wie het wil weten
-          vindt het, en het veld blijft rustig. */}
-      <div className="mt-1 flex items-center justify-between gap-2">
-        <InfoDot
-          label="Uitleg bij het invoerveld"
-          className="-ml-1"
-          text={
-            allowAttachments
-              ? `Enter verstuurt. Shift+Enter geeft een nieuwe regel.\nBijlagen: maximaal ${MAX_CHAT_ATTACHMENTS}, elk tot 10 MB. Sleep ze hierheen of klik op de paperclip. Ze blijven de hele chat beschikbaar.`
-              : 'Enter verstuurt. Shift+Enter geeft een nieuwe regel.'
-          }
-        />
-        <span className="shrink-0">{badge}</span>
       </div>
     </div>
   );

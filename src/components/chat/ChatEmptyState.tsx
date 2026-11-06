@@ -1,11 +1,10 @@
-import { ArrowDown } from '@/components/common/icons';
 import { useAuth } from '@/context/AuthContext';
 import { greeting } from '@/lib/greeting';
 import { firstName } from '@/services/communityService';
 
 /**
- * Lege staat van een nieuw gesprek: het merkteken, één vraag en een pijl naar
- * het tekstvak eronder.
+ * Lege staat van een nieuw gesprek: het merkteken en één vraag, met het tekstvak
+ * er direct onder. ChatPage zet die twee samen in het midden van de kaart.
  *
  * Hier stonden eerder zes klikbare startsjablonen. Die trokken de aandacht weg
  * van het invoerveld: gebruikers gingen ze lezen en zagen niet meer waar ze
@@ -23,7 +22,7 @@ export default function ChatEmptyState() {
   const name = profile?.full_name?.trim() ? firstName(profile.full_name) : null;
 
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-5 px-6 py-8 text-center">
+    <div className="flex w-full flex-col items-center gap-5 px-6 pb-3 pt-8 text-center">
       {/* Het merkteken van PromptPlein in plaats van een generiek chat-icoon: dit
           is het eerste wat je ziet in een leeg gesprek. Het teken is getekend
           voor een lichte ondergrond: in donkere modus zetten we het daarom op
@@ -39,14 +38,6 @@ export default function ChatEmptyState() {
         <span className="block">{greeting(name, new Date().getHours())}</span>
         Waarmee kan ik je helpen?
       </h2>
-      {/* De pijl wijst naar het invoerveld direct hieronder; het veld zegt zelf
-          al wat je er doet. */}
-      <span
-        aria-hidden="true"
-        className="flex h-10 w-10 items-center justify-center rounded-full bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200"
-      >
-        <ArrowDown size={20} />
-      </span>
     </div>
   );
 }

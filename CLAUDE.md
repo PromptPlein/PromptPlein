@@ -224,11 +224,17 @@ aan de serverkant, om dezelfde reden als de opslagscheiding hierboven. Online
 stemmen sturen de tekst naar hun leverancier en worden daarom nooit vanzelf
 gekozen.
 
+Een lege chat is klein: begroeting en tekstvak staan samen in het midden. Na het
+eerste bericht zakt het tekstvak naar een vaste plek onderaan en vult het gesprek
+het venster. Laat de kaart niet meegroeien met de tekst: dan schuift het tekstvak
+bij elke regel van het antwoord op, en wie met vergroting werkt raakt het kwijt.
+
 De chat scrolt bewust niet mee: een nieuwe vraag gaat bovenaan staan en het
 antwoord groeit eronder, zodat je vanaf het begin in je eigen tempo leest.
 "Naar beneden" zet volgen aan, omhoog scrollen zet het weer uit. De leeskolom is
 `60ch`, wat in Rijks Sans zo'n 72 tekens per regel is (gemeten). Maak hem niet
-breder zonder opnieuw te meten.
+breder zonder opnieuw te meten. Het tekstvak heeft dezelfde breedte, zodat vraag
+en antwoord op één lijn beginnen.
 
 ## De AI-laag
 

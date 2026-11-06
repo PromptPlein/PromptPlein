@@ -1,3 +1,4 @@
+import clsx from 'clsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
@@ -48,6 +49,9 @@ import {
 import { detectPii, type GuardrailFinding } from '@/services/guardrails';
 import GuardrailDialog from '@/components/optimizer/GuardrailDialog';
 import { thinkingUnavailableReason } from '@/config/aiModels';
+
+/** Staat in de kaart, zodat hij altijd bij het typen in beeld is. */
+const PII_NOTICE = 'Niet voor verwerking van persoonsgegevens.';
 
 /** Permanente afmelding voor de bouw-een-prompt-tip (per apparaat). */
 const NUDGE_DISMISSED_KEY = 'opl.ui.chatNudgeDismissed';
@@ -474,8 +478,9 @@ function ChatPageInner() {
     /* Gesprekkenlijst en gesprek zitten in ÉÉN kaart: de lijst is geen los
        zwevend blok naast de chat maar hoort er zichtbaar bij, gescheiden door
        niet meer dan een lijn. De kaart vult altijd het hele venster
-       (useFitHeight): zo blijft de leesruimte zo groot mogelijk en verspringt
-       het tekstvak niet. Alleen de berichtenlijst scrollt. */
+       (useFitHeight): zo blijft de leesruimte zo groot mogelijk en houdt het
+       tekstvak tijdens een gesprek een vaste plek. Alleen de berichtenlijst
+       scrollt. */
     <div className="mx-auto w-full max-w-6xl px-4 py-4 sm:px-6 lg:px-8">
       <h1 className="sr-only">Chat</h1>
       <div
@@ -621,22 +626,37 @@ function ChatPageInner() {
             </div>
 
             {openProject ? (
-              <ProjectView
-                project={openProject}
-                conversations={projectConversations}
-                disabled={controller.streaming}
-                onNewChat={() => handleNewChatInProject(openProject.id)}
-                onNewPrompt={handleNewPrompt}
-                onMakeInstruction={() => setWizard({ projectId: openProject.id, isNew: false })}
-                onOpenSettings={() => setSettingsProjectId(openProject.id)}
-                onSelectConversation={handleSelectConversation}
-                onRequestDeleteConversation={setConfirmDeleteId}
-                onRequestDeleteProject={() => setConfirmDeleteProject(openProject.id)}
-              />
-            ) : (
               <>
+                <ProjectView
+                  project={openProject}
+                  conversations={projectConversations}
+                  disabled={controller.streaming}
+                  onNewChat={() => handleNewChatInProject(openProject.id)}
+                  onNewPrompt={handleNewPrompt}
+                  onMakeInstruction={() => setWizard({ projectId: openProject.id, isNew: false })}
+                  onOpenSettings={() => setSettingsProjectId(openProject.id)}
+                  onSelectConversation={handleSelectConversation}
+                  onRequestDeleteConversation={setConfirmDeleteId}
+                  onRequestDeleteProject={() => setConfirmDeleteProject(openProject.id)}
+                />
+                <p className="border-t border-slate-200 px-4 py-2 text-center text-sm text-slate-700 dark:border-slate-700 dark:text-slate-200 sm:px-6">
+                  {PII_NOTICE}
+                </p>
+              </>
+            ) : (
+              /* Leeg gesprek: begroeting en tekstvak staan samen in het midden
+                 (mt-auto en mb-auto, die laten bij een klein venster de
+                 bovenkant bereikbaar). Na het eerste bericht neemt de lijst de
+                 ruimte in en zakt het tekstvak naar zijn vaste plek. Het blijft
+                 hetzelfde element, dus de cursor raakt niet kwijt. */
+              <div
+                className={clsx(
+                  'flex min-h-0 flex-auto flex-col',
+                  messages.length === 0 && 'overflow-y-auto',
+                )}
+              >
                 {messages.length === 0 ? (
-                  <div className="flex min-h-0 flex-auto overflow-y-auto">
+                  <div className="mt-auto">
                     {/* Geen startsjablonen meer: een leeg gesprek wijst alleen
                         het invoerveld aan. */}
                     <ChatEmptyState />
@@ -681,43 +701,46 @@ function ChatPageInner() {
                   </div>
                 )}
 
-                <ChatComposer
-                  ref={composerRef}
-                  disabled={composerDisabled}
-                  disabledPlaceholder={
-                    projectNeedsLogin ? 'Log in om verder te chatten in dit project' : undefined
-                  }
-                  streaming={controller.streaming}
-                  extracting={controller.extracting}
-                  attachments={conversation?.attachments ?? []}
-                  onSend={guardedSend}
-                  onRoutekaart={(text) => void controller.addRoutekaart(text)}
-                  onStop={controller.stop}
-                  onAddFile={(file) => void controller.addAttachment(file)}
-                  onRemoveAttachment={controller.removeAttachment}
-                  // Sterretje alleen tonen als de beheerder de functie aan heeft staan.
-                  onOptimize={settings?.optimizeEnabled ? handleOptimizeInput : undefined}
-                  projects={projectList}
-                  activeProjectId={conversation?.projectId ?? null}
-                  onPickProject={controller.attachProject}
-                  thinking={thinking}
-                  onToggleThinking={setThinking}
-                  thinkingUnavailable={thinkingUnavailable}
-                  // Wereldbol alleen tonen als de beheerder zoeken aan heeft staan.
-                  webSearch={webSearch}
-                  onToggleWebSearch={settings?.webSearchEnabled ? setWebSearch : undefined}
-                  // Alleen in een nog leeg gesprek: zie ChatController.attachProject.
-                  canPickProject={messages.length === 0 && conversation?.kind !== 'execution'}
-                  // Leeg gesprek: het invoerveld is het enige aanknopingspunt op
-                  // het scherm en wordt daarom groter en blauw omrand getoond.
-                  prominent={messages.length === 0}
-                  badge={
-                    settings ? (
-                      <ChatModelBadge provider={settings.provider} model={settings.model} />
-                    ) : undefined
-                  }
-                />
-              </>
+                <div className={messages.length === 0 ? 'mb-auto' : undefined}>
+                  <ChatComposer
+                    ref={composerRef}
+                    disabled={composerDisabled}
+                    disabledPlaceholder={
+                      projectNeedsLogin ? 'Log in om verder te chatten in dit project' : undefined
+                    }
+                    streaming={controller.streaming}
+                    extracting={controller.extracting}
+                    attachments={conversation?.attachments ?? []}
+                    onSend={guardedSend}
+                    onRoutekaart={(text) => void controller.addRoutekaart(text)}
+                    onStop={controller.stop}
+                    onAddFile={(file) => void controller.addAttachment(file)}
+                    onRemoveAttachment={controller.removeAttachment}
+                    // Sterretje alleen tonen als de beheerder de functie aan heeft staan.
+                    onOptimize={settings?.optimizeEnabled ? handleOptimizeInput : undefined}
+                    projects={projectList}
+                    activeProjectId={conversation?.projectId ?? null}
+                    onPickProject={controller.attachProject}
+                    thinking={thinking}
+                    onToggleThinking={setThinking}
+                    thinkingUnavailable={thinkingUnavailable}
+                    // Wereldbol alleen tonen als de beheerder zoeken aan heeft staan.
+                    webSearch={webSearch}
+                    onToggleWebSearch={settings?.webSearchEnabled ? setWebSearch : undefined}
+                    // Alleen in een nog leeg gesprek: zie ChatController.attachProject.
+                    canPickProject={messages.length === 0 && conversation?.kind !== 'execution'}
+                    // Leeg gesprek: het invoerveld is het enige aanknopingspunt op
+                    // het scherm en wordt daarom groter en blauw omrand getoond.
+                    prominent={messages.length === 0}
+                    notice={PII_NOTICE}
+                    badge={
+                      settings ? (
+                        <ChatModelBadge provider={settings.provider} model={settings.model} />
+                      ) : undefined
+                    }
+                  />
+                </div>
+              </div>
             )}
         </div>
       </div>
@@ -771,9 +794,6 @@ function ChatPageInner() {
             if (file) void controller.importHistory(file);
           }}
         />
-        <p className="w-full text-center text-xs text-slate-600 dark:text-slate-300">
-          Niet voor verwerking van persoonsgegevens.
-        </p>
       </div>
 
       {pendingSend && aiSettings && (

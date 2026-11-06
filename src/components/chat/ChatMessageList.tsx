@@ -228,7 +228,7 @@ export default function ChatMessageList({
         role="region"
         aria-label="Gesprek"
         aria-busy={streaming}
-        className="opl-scroll-slim min-h-0 flex-auto overflow-y-auto px-4 py-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-rijksblauw-500 sm:px-6"
+        className="opl-scroll-slim min-h-0 flex-auto overflow-y-auto px-4 py-4 [scrollbar-gutter:stable_both-edges] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-rijksblauw-500 sm:px-6"
       >
         {/* Vaste leeskolom: 60ch is in Rijks Sans zo'n 72 tekens per regel (gemeten),
             en onder de 75 leest het oog het prettigst. De schuifbalk blijft wel aan
