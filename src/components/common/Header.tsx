@@ -147,8 +147,12 @@ export default function Header() {
                 )
               }
             >
-              <Icon size={22} className="text-rijksoranje-vast" />
-              {label}
+              {({ isActive }) => (
+                <>
+                  <Icon size={22} className={isActive ? 'text-rijksoranje-vast' : undefined} />
+                  {label}
+                </>
+              )}
             </NavLink>
           ))}
         </div>
