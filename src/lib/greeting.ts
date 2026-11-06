@@ -10,9 +10,9 @@
  * @param hour Het uur van de dag (0 t/m 23).
  */
 export function greeting(name: string | null | undefined, hour: number): string {
-  if (hour >= 5 && hour < 7) return 'Goedemorgen early bird';
+  if (hour >= 5 && hour < 7) return 'Goedemorgen early bird,';
   const moment =
     hour >= 7 && hour < 12 ? 'Goedemorgen' : hour >= 12 && hour < 18 ? 'Goedemiddag' : 'Goedenavond';
   const firstName = name?.trim();
-  return firstName ? `${moment} ${firstName}` : moment;
+  return firstName ? `${moment} ${firstName},` : `${moment},`;
 }

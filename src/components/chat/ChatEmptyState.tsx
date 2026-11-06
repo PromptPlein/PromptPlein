@@ -36,9 +36,7 @@ export default function ChatEmptyState() {
         className="h-16 w-16 rounded-2xl object-contain dark:bg-slate-100 dark:p-1.5 dark:ring-1 dark:ring-white/20"
       />
       <h2 className="text-2xl font-bold text-rijksblauw-700 dark:text-slate-100">
-        <span className="mb-1 block text-xl font-semibold text-rijksblauw-500 dark:text-rijksblauw-200">
-          {greeting(name, new Date().getHours())}
-        </span>
+        <span className="block">{greeting(name, new Date().getHours())}</span>
         Waarmee kan ik je helpen?
       </h2>
       {/* De pijl wijst naar het invoerveld direct hieronder; het veld zegt zelf
