@@ -128,7 +128,7 @@ export default function Header() {
         className="sticky top-0 z-40 bg-rijksblauw-700 text-white dark:border-b dark:border-slate-700"
         aria-label="Hoofdnavigatie"
       >
-        <div className="mx-auto flex max-w-7xl lg:px-8">
+        <div className="mx-auto flex max-w-7xl lg:justify-center lg:px-8">
           {items.map(({ to, label, icon: Icon, end, prefetch }) => (
             <NavLink
               key={to}
