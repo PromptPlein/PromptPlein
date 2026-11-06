@@ -1,4 +1,7 @@
 import { ArrowDown } from '@/components/common/icons';
+import { useAuth } from '@/context/AuthContext';
+import { greeting } from '@/lib/greeting';
+import { firstName } from '@/services/communityService';
 
 /**
  * Lege staat van een nieuw gesprek: het merkteken, één vraag en een pijl naar
@@ -15,6 +18,10 @@ import { ArrowDown } from '@/components/common/icons';
  * invoerveld.
  */
 export default function ChatEmptyState() {
+  const { profile } = useAuth();
+  // firstName geeft "Anoniem" bij een lege naam: dan liever helemaal geen naam.
+  const name = profile?.full_name?.trim() ? firstName(profile.full_name) : null;
+
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-5 px-6 py-8 text-center">
       {/* Het merkteken van PromptPlein in plaats van een generiek chat-icoon: dit
@@ -29,6 +36,9 @@ export default function ChatEmptyState() {
         className="h-16 w-16 rounded-2xl object-contain dark:bg-slate-100 dark:p-1.5 dark:ring-1 dark:ring-white/20"
       />
       <h2 className="text-2xl font-bold text-rijksblauw-700 dark:text-slate-100">
+        <span className="mb-1 block text-xl font-semibold text-rijksblauw-500 dark:text-rijksblauw-200">
+          {greeting(name, new Date().getHours())}
+        </span>
         Waarmee kan ik je helpen?
       </h2>
       {/* De pijl wijst naar het invoerveld direct hieronder; het veld zegt zelf
