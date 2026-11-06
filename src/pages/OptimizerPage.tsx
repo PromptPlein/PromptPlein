@@ -12,13 +12,19 @@ import useWebSearch from '@/lib/useWebSearch';
 import EntryTab from '@/components/optimizer/EntryTab';
 import OwnPromptOptimizer from '@/components/optimizer/OwnPromptOptimizer';
 import OptimizedOutput from '@/components/optimizer/OptimizedOutput';
-import ProjectContextBar from '@/components/optimizer/ProjectContextBar';
+import ProjectContextPicker, {
+  type ProjectContextSlot,
+} from '@/components/optimizer/ProjectContextPicker';
 import useChatProjects from '@/components/chat/useChatProjects';
 import { useAuth } from '@/context/AuthContext';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { getPrompt, saveOptimization } from '@/services/repository';
 import { trackEvent } from '@/services/analyticsService';
-import { buildGeneratorContext, type GeneratorContext } from '@/services/chatProjectService';
+import {
+  buildGeneratorContext,
+  type GeneratorContext,
+  type GeneratorFileSelection,
+} from '@/services/chatProjectService';
 import {
   consumeGeneratorHandoff,
   consumeProjectHandoff,
@@ -94,36 +100,46 @@ export default function OptimizerPage() {
   //
   // De context wordt HIER geladen en als platte tekst doorgegeven aan alle
   // AI-stappen in de boom. Twee ingangen: de handoff vanaf de projectpagina
-  // ("Genereer prompt") en de kiezer in de balk zelf.
+  // ("Genereer prompt") en de knop "Context" boven het tekstvak.
   const chatProjects = useChatProjects();
   const [projectContext, setProjectContext] = useState<GeneratorContext | null>(null);
   const [projectContextLoading, setProjectContextLoading] = useState(false);
-  // Het gekozen project onthouden we los van de context: de schakelaar
-  // "bronbestanden mee" moet hem opnieuw kunnen opbouwen.
+  // Het gekozen project onthouden we los van de context: hij is er al terwijl de
+  // analyse nog loopt, en een andere bronkeuze bouwt de context opnieuw op.
   const [projectContextId, setProjectContextId] = useState<string | null>(null);
+  // Een analyse duurt tientallen seconden. Wie intussen wisselt of loskoppelt,
+  // mag niet alsnog het antwoord van de vorige keuze aangehaakt krijgen.
+  const projectRequest = useRef(0);
 
-  const loadProjectContext = useCallback(async (projectId: string, includeFiles: boolean) => {
-    setProjectContextLoading(true);
-    setProjectContextId(projectId);
-    try {
-      // De AI-instellingen gaan mee omdat het aanhaken van een project nu ook
-      // een AI-stap ÍS: het project wordt eerst geanalyseerd (één keer per
-      // versie, daarna uit de cache) en pas daarna bouwt de gebruiker.
-      const ctx = await buildGeneratorContext(projectId, includeFiles, {
-        provider: settingsRef.current.provider,
-        model: settingsRef.current.model,
-      });
-      setProjectContext(ctx);
-      // Een project zonder instructie én zonder bestanden levert niets op; dan
-      // hangt er niets aan en zegt de balk dat door leeg te blijven.
-      if (!ctx) setProjectContextId(null);
-    } catch {
-      setProjectContext(null);
-      setProjectContextId(null);
-    } finally {
-      setProjectContextLoading(false);
-    }
-  }, []);
+  const loadProjectContext = useCallback(
+    async (projectId: string, selection: GeneratorFileSelection) => {
+      const request = ++projectRequest.current;
+      setProjectContextLoading(true);
+      setProjectContextId(projectId);
+      setProjectContext((current) => (current?.id === projectId ? current : null));
+      try {
+        // De AI-instellingen gaan mee omdat het aanhaken van een project nu ook
+        // een AI-stap ÍS: het project wordt eerst geanalyseerd (één keer per
+        // versie, daarna uit de cache) en pas daarna bouwt de gebruiker.
+        const ctx = await buildGeneratorContext(projectId, selection, {
+          provider: settingsRef.current.provider,
+          model: settingsRef.current.model,
+        });
+        if (request !== projectRequest.current) return;
+        setProjectContext(ctx);
+        // Een project zonder instructie én zonder bestanden levert niets op; dan
+        // hangt er niets aan en blijft de rij boven het tekstvak leeg.
+        if (!ctx) setProjectContextId(null);
+      } catch {
+        if (request !== projectRequest.current) return;
+        setProjectContext(null);
+        setProjectContextId(null);
+      } finally {
+        if (request === projectRequest.current) setProjectContextLoading(false);
+      }
+    },
+    [],
+  );
 
   // Handoff vanaf de projectpagina: één keer per bezoek consumeren.
   const projectHandoffDone = useRef(false);
@@ -132,17 +148,30 @@ export default function OptimizerPage() {
     const handoff = consumeProjectHandoff();
     if (!handoff) return;
     projectHandoffDone.current = true;
-    void loadProjectContext(handoff.projectId, handoff.includeFiles);
+    void loadProjectContext(handoff.projectId, handoff.includeFiles ? 'all' : []);
   }, [loadProjectContext]);
 
+  const pickProject = useCallback(
+    (projectId: string) => {
+      // Normaal begint een project met alleen de instructie. Zonder instructie
+      // zou dat niets opleveren en liet het project zich niet aanhaken, dus dan
+      // gaan de bronnen mee en kan de gebruiker er daarna uit weghalen.
+      const project = chatProjects.projects.find((p) => p.id === projectId);
+      void loadProjectContext(projectId, project?.instructions.trim() ? [] : 'all');
+    },
+    [chatProjects.projects, loadProjectContext],
+  );
+
   const clearProjectContext = useCallback(() => {
+    projectRequest.current += 1;
+    setProjectContextLoading(false);
     setProjectContext(null);
     setProjectContextId(null);
   }, []);
 
-  const toggleProjectFiles = useCallback(
-    (includeFiles: boolean) => {
-      if (projectContextId) void loadProjectContext(projectContextId, includeFiles);
+  const selectProjectFiles = useCallback(
+    (fileIds: string[]) => {
+      if (projectContextId) void loadProjectContext(projectContextId, fileIds);
     },
     [projectContextId, loadProjectContext],
   );
@@ -319,21 +348,7 @@ export default function OptimizerPage() {
               De tabs (header) gaan in beide flows mee in datzelfde element. */}
           {(() => {
             const tabs = (
-              // De projectbalk is de bovenste rij ván de bouwerkaart, niet een
-              // los blok erboven: beide flows renderen `header` binnen hun
-              // omrande, afgeronde blok, dus de rand loopt om de balk heen en
-              // zijn bovenhoeken worden op de kaartronding afgeknipt. Als
-              // zwevende strook erboven las hij als een melding náást de bouwer
-              // en werd hij overgeslagen.
               <>
-                <ProjectContextBar
-                  projects={chatProjects.projects}
-                  context={projectContext}
-                  loading={projectContextLoading}
-                  onPick={(id) => void loadProjectContext(id, false)}
-                  onClear={clearProjectContext}
-                  onToggleFiles={toggleProjectFiles}
-                />
                 {/* Stap 1: twee tegels. Wat elke instap doet staat achter het
                     infobolletje, niet meer als alinea op de tegel. */}
                 <div className="border-b border-slate-200 bg-white px-5 pb-4 pt-5 dark:border-slate-700 dark:bg-slate-800 sm:px-6">
@@ -387,6 +402,23 @@ export default function OptimizerPage() {
               </>
             );
 
+            // De projectcontext staat bij het tekstvak en niet in de kop: beide
+            // instappen hebben een eigen veld, dus geven ze hun tekst hier door.
+            const renderProjectContext = ({ text, stripMention, className }: ProjectContextSlot) => (
+              <ProjectContextPicker
+                projects={chatProjects.projects}
+                context={projectContext}
+                activeProjectId={projectContextId}
+                loading={projectContextLoading}
+                text={text}
+                onStripMention={stripMention}
+                onPick={pickProject}
+                onClear={clearProjectContext}
+                onSelectFiles={selectProjectFiles}
+                className={className}
+              />
+            );
+
             // Beide instappen renderen de tabs zelf als header (oranje rand om de
             // chat; het advies en de voor-ingevulde velden staan eronder). De
             // eigen-prompt-flow analyseert een geplakte prompt; de doel-flow voert
@@ -399,6 +431,7 @@ export default function OptimizerPage() {
                 header={tabs}
                 initialPrompt={initialPrompt}
                 projectContext={projectContext?.text}
+                renderProjectContext={renderProjectContext}
                 thinking={thinkingOn}
                 webSearch={webSearchOn}
               />
@@ -408,6 +441,7 @@ export default function OptimizerPage() {
                 onResult={handleResult}
                 header={tabs}
                 projectContext={projectContext?.text}
+                renderProjectContext={renderProjectContext}
                 thinking={thinkingOn}
                 webSearch={webSearchOn}
               />

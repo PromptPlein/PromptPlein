@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import type { ProjectContextSlot } from '@/components/optimizer/ProjectContextPicker';
 import {
   AlertTriangle,
   ArrowRight,
@@ -116,6 +117,8 @@ interface GoalDialogProps {
    * de AI naar achtergrond die in het project allang beschreven staat.
    */
   projectContext?: string;
+  /** De knop "Context" met zijn labels, boven het tekstvak. */
+  renderProjectContext?: (slot: ProjectContextSlot) => ReactNode;
   /**
    * Denken aan: het model redeneert eerst en schrijft de prompt daarna pas.
    * Komt van de knop boven de bouwer; geldt alleen voor de laatste stap, het
@@ -163,6 +166,7 @@ export default function GoalDialog({
   onResult,
   header,
   projectContext,
+  renderProjectContext,
   thinking,
   webSearch,
 }: GoalDialogProps) {
@@ -845,6 +849,12 @@ export default function GoalDialog({
                   </div>
                 </div>
               )}
+
+              {renderProjectContext?.({
+                text: goal,
+                stripMention: () => setGoal(goal.replace(/@$/, '')),
+                className: 'mb-2',
+              })}
 
               <textarea
                 id="goal-dialog-input"

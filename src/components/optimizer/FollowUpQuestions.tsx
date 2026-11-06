@@ -239,7 +239,7 @@ interface FollowUpQuestionsProps {
   preferredProvider?: AiProvider;
   /** Concreet AI-model voor "Vul verder aan". Optioneel; zie preferredProvider. */
   preferredModel?: string;
-  /** Context van het aangehaakte chatproject; zie ProjectContextBar. */
+  /** Context van het aangehaakte chatproject; zie ProjectContextPicker. */
   projectContext?: string;
   /**
    * Optioneel: wanneer meegegeven, sluit de laatste stap direct af met een

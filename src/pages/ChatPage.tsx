@@ -248,7 +248,7 @@ function ChatPageInner() {
     setWizard({ projectId: created.id, isNew: true });
   }, [user, requireLogin, projects]);
 
-  // Handoff vanuit de bouwer ("Project maken" in de projectbalk): daar staat de
+  // Handoff vanuit de bouwer ("Nieuw project" bij de context): daar staat de
   // knop, hier woont de handeling. De gebruiker landt dus niet op een chatpagina
   // waar hij opnieuw moet zoeken, maar in het formulier waar hij voor kwam.
   const newProjectDone = useRef(false);

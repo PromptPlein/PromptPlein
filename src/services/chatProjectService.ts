@@ -319,6 +319,28 @@ export async function loadProjectContext(projectId: string): Promise<ProjectCont
  */
 export const MAX_GENERATOR_CONTEXT_CHARS = 60_000;
 
+/**
+ * Welke bronbestanden mee naar de bouwer gaan: een eigen keuze, of `'all'` voor
+ * de knop op de projectpagina (oudste eerst, tot het budget vol is).
+ */
+export type GeneratorFileSelection = 'all' | string[];
+
+const instructionBlock = (instructions: string) => `Projectinstructie:\n${instructions}`;
+const fileHeading = (name: string) => `Bronbestand "${name}":\n`;
+
+/**
+ * Hoeveel tekens instructie en bestanden samen van het bouwerbudget gebruiken.
+ * Dezelfde telling als in {@link buildGeneratorContext}, zodat de teller in de
+ * keuzelijst precies zegt wat er straks wel of niet past.
+ */
+export function generatorCharsUsed(
+  instructions: string,
+  files: { name: string; chars: number }[],
+): number {
+  const base = instructions.trim() ? instructionBlock(instructions.trim()).length : 0;
+  return files.reduce((sum, file) => sum + fileHeading(file.name).length + file.chars, base);
+}
+
 export interface GeneratorContext {
   /**
    * De tekst die als `projectContext` naar de AI-stappen gaat. Normaal is dit de
@@ -327,22 +349,16 @@ export interface GeneratorContext {
    */
   text: string;
   /**
-   * Is `text` de analyse (true) of het ruwe materiaal (false)? De balk zegt het
-   * verschil hardop: "geanalyseerd" is een belofte die je niet mag doen als de
-   * analyse zojuist is mislukt.
+   * Is `text` de analyse (true) of het ruwe materiaal (false)? Bij een mislukte
+   * analyse gaat alleen het ruwe materiaal mee.
    */
   analyzed: boolean;
-  /** Id van het project; de projectbalk vinkt hiermee het actieve project af. */
+  /** Id van het project; de keuzelijst vinkt hiermee het actieve project af. */
   id: string;
   /** Naam van het project, voor het label in de bouwer. */
   name: string;
-  /** Er gingen bronbestanden mee (de gebruiker zette de schakelaar aan). */
-  withFiles: boolean;
-  /**
-   * Aantal bronbestanden dat mee zóú kunnen. 0 = de schakelaar in de projectbalk
-   * heeft niets te schakelen en wordt niet getoond.
-   */
-  fileCount: number;
+  /** De bronbestanden die echt zijn meegegaan; de bouwer toont ze als labels. */
+  files: { id: string; name: string }[];
   /** Bestanden die niet meer in het generator-budget pasten. */
   skipped: string[];
 }
@@ -363,9 +379,9 @@ export interface GeneratorContext {
 //    bronmateriaal.
 //
 // De sleutel is een hash van het materiaal dat erin ging. Verandert de
-// projectinstructie of gaat de schakelaar "bronbestanden mee" om, dan is dat
-// andere invoer en dus een andere sleutel: een verouderde analyse kan niet
-// stilzwijgend blijven hangen, en heen-en-weer schakelen kost niets extra's.
+// projectinstructie of de keuze aan bronnen, dan is dat andere invoer en dus een
+// andere sleutel: een verouderde analyse kan niet stilzwijgend blijven hangen,
+// en terug naar een eerdere keuze kost niets extra's.
 
 /** Analyses van deze sessie: `${projectId}:${hash}` → de analysetekst. */
 const briefCache = new Map<string, string>();
@@ -500,38 +516,62 @@ async function ensureProjectBrief(args: {
  * platte tekst in plaats van losse bronblokken: de generator-modi kennen geen
  * bijlagen, ze kennen alleen hun systeemprompt.
  *
- * De projectinstructie gaat ALTIJD mee — dat is de beschrijving van het ding
+ * De bestanden komen hier bewust rechtstreeks uit de database en niet uit
+ * {@link loadProjectContext}: die stopt bij het chatbudget op volgorde van
+ * uploaden, waardoor een bron die de gebruiker zelf koos stilletjes zou
+ * ontbreken. De volgorde blijft die van uploaden, ook als er andersom is
+ * aangevinkt: dezelfde keuze levert zo dezelfde tekst en dus dezelfde
+ * bewaarde analyse op.
+ *
+ * De projectinstructie gaat ALTIJD mee: dat is de beschrijving van het ding
  * waar de prompt over gaat, en zonder die beschrijving schrijft de bouwer een
- * algemene prompt. De bronbestanden zijn `includeFiles`-werk: voor "schrijf een
- * prompt over mijn plugin" is de instructie meestal genoeg, en tienduizenden
- * tekens spec door meerdere achtereenvolgende AI-stappen duwen is traag en duur
- * voor wat het toevoegt.
+ * algemene prompt. Bronbestanden gaan alleen mee als de gebruiker ze kiest:
+ * voor "schrijf een prompt over mijn plugin" is de instructie meestal genoeg, en
+ * tienduizenden tekens spec door meerdere achtereenvolgende AI-stappen duwen is
+ * traag en duur voor wat het toevoegt.
  *
  * Wat er daarna uitgaat is niet dat materiaal zelf maar de analyse ervan (zie
  * {@link ensureProjectBrief}). Een projectinstructie is geschreven voor een mens
- * of voor een chat — stack, mappen, tabellen — en wie daar een prompt over wil,
+ * of voor een chat (stack, mappen, tabellen) en wie daar een prompt over wil,
  * heeft daar een handvol regels van nodig. Het model kreeg voorheen alles en
  * gebruikte er niets van.
  */
 export async function buildGeneratorContext(
   projectId: string,
-  includeFiles: boolean,
+  selection: GeneratorFileSelection,
   ai?: { provider?: AiProvider; model?: string },
 ): Promise<GeneratorContext | null> {
-  const loaded = await loadProjectContext(projectId);
-  if (!loaded) return null;
-  const { context } = loaded;
+  if (!isSupabaseConfigured || !supabase) return null;
+
+  const { data: projectData, error: projectError } = await supabase
+    .from('chat_projects')
+    .select('id, name, instructions')
+    .eq('id', projectId)
+    .maybeSingle();
+  if (projectError) throw projectError;
+  if (!projectData) return null;
+  const project = projectData as Pick<ProjectRow, 'id' | 'name' | 'instructions'>;
+  const instructions = (project.instructions ?? '').trim();
 
   const parts: string[] = [];
-  if (context.instructions) {
-    parts.push(`Projectinstructie:\n${context.instructions}`);
-  }
+  if (instructions) parts.push(instructionBlock(instructions));
 
-  const skipped = [...loaded.skipped];
-  if (includeFiles) {
-    let used = parts.join('\n\n').length;
-    for (const file of context.files) {
-      const block = `Bronbestand "${file.name}":\n${file.text}`;
+  const included: { id: string; name: string }[] = [];
+  const skipped: string[] = [];
+  if (selection === 'all' || selection.length > 0) {
+    let query = supabase
+      .from('chat_project_files')
+      .select('id, name, text')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: true });
+    if (selection !== 'all') query = query.in('id', selection);
+    const { data: fileData, error: fileError } = await query;
+    if (fileError) throw fileError;
+
+    let used = generatorCharsUsed(instructions, []);
+    for (const file of (fileData ?? []) as { id: string; name: string; text: string | null }[]) {
+      if (!file.text) continue;
+      const block = `${fileHeading(file.name)}${file.text}`;
       // Niet halverwege afkappen: een half document leest als een compleet
       // document en stuurt de prompt dan de verkeerde kant op.
       if (used + block.length > MAX_GENERATOR_CONTEXT_CHARS) {
@@ -539,6 +579,7 @@ export async function buildGeneratorContext(
         continue;
       }
       parts.push(block);
+      included.push({ id: file.id, name: file.name });
       used += block.length;
     }
   }
@@ -550,7 +591,7 @@ export async function buildGeneratorContext(
 
   const brief = await ensureProjectBrief({
     projectId,
-    projectName: context.name,
+    projectName: project.name,
     material,
     ai,
   });
@@ -558,12 +599,9 @@ export async function buildGeneratorContext(
   return {
     text: brief || material,
     analyzed: Boolean(brief),
-    id: context.id,
-    name: context.name,
-    withFiles: includeFiles,
-    // `context.files` bevat alleen wat binnen het contextbudget paste — precies
-    // de bestanden die mee zóúden kunnen, en dus de juiste maat voor de knop.
-    fileCount: context.files.length,
+    id: project.id,
+    name: project.name,
+    files: included,
     skipped,
   };
 }

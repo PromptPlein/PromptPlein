@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import type { ProjectContextSlot } from '@/components/optimizer/ProjectContextPicker';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -100,6 +101,8 @@ interface OwnPromptOptimizerProps {
    * échte onderwerp gaat in plaats van over een algemeen geval.
    */
   projectContext?: string;
+  /** De knop "Context" met zijn labels, boven het tekstvak. */
+  renderProjectContext?: (slot: ProjectContextSlot) => ReactNode;
   /**
    * Denken aan: het model redeneert eerst en schrijft de prompt daarna pas.
    * Komt van de knop boven de bouwer; geldt alleen voor de laatste stap, het
@@ -192,6 +195,7 @@ export default function OwnPromptOptimizer({
   header,
   initialPrompt,
   projectContext,
+  renderProjectContext,
   thinking,
   webSearch,
 }: OwnPromptOptimizerProps) {
@@ -944,6 +948,11 @@ export default function OwnPromptOptimizer({
         {/* Het invoerveld met "Wat wil je maken?" als balk erboven en de
             schakelaar, de opzet en de zoekknop eronder: één geheel. */}
         <div className="overflow-hidden rounded-xl border border-slate-300 bg-slate-50 transition-colors focus-within:border-rijksblauw-500 focus-within:ring-2 focus-within:ring-rijksblauw-500/20 dark:border-slate-600 dark:bg-slate-900/40">
+          {renderProjectContext?.({
+            text: ownPrompt,
+            stripMention: () => setOwnPrompt(ownPrompt.replace(/@$/, '')),
+            className: 'border-b border-slate-200 bg-white px-2.5 py-2 dark:border-slate-700 dark:bg-slate-800',
+          })}
           {/* Vervolgkeuze bij Code en Dashboard: twee opties die elk een eigen
               framework aanwijzen. Zichtbaar zodra de soort gekozen is, zodat je
               ziet dát er een keuze is in plaats van hem te moeten ontdekken. */}
@@ -1095,7 +1104,7 @@ export default function OwnPromptOptimizer({
                 ? 'Plak hier je voorbereide tekst.'
                 : kindOption
                 ? (!variantOn && kindOption.placeholderOff) || kindOption.placeholder
-                : 'Plak hier de prompt of stel hier je vraag…'
+                : 'Plak hier de prompt of stel hier je vraag. Typ @ voor een project.'
             }
             onChange={(e) => {
               setOwnPrompt(e.target.value);
