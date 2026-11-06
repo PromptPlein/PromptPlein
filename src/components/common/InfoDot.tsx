@@ -25,7 +25,7 @@ export default function InfoDot({
   /** De uitleg zelf: kort, hooguit twee zinnen. Regeleindes blijven staan. */
   text: string;
   className?: string;
-  /** Staat het bolletje op een donker vlak (de kop van de startpagina)? */
+  /** Staat het bolletje op een donkere ondergrond (de startpagina)? */
   onDark?: boolean;
 }) {
   const id = useId();

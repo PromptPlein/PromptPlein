@@ -32,7 +32,6 @@ import {
 import { thinkingUnavailableReason } from '@/config/aiModels';
 import { activityIdentifier } from '@/lib/utils';
 import { usePersistentDraft } from '@/lib/usePersistentDraft';
-import type { PromptKind } from '@/lib/techniques';
 import type { OptimizeResult, Technique } from '@/types';
 
 /**
@@ -54,8 +53,6 @@ export default function OptimizerPage() {
   // framework bij aanbeveelt; het id koppelt de optimalisatie aan die prompt.
   const [sourcePromptId, setSourcePromptId] = useState<string | null>(null);
   const [initialPrompt, setInitialPrompt] = useState<string | null>(null);
-  // De soort die op de startpagina al gekozen is ("Wat wil je maken?").
-  const [initialKind, setInitialKind] = useState<PromptKind | null>(null);
   // De doel-flow (GoalDialog) beheert dit veld zelf via dezelfde 'goal'-sleutel;
   // de pagina leest het alleen nog als titel-fallback in het resultaat.
   const [goal] = usePersistentDraft('goal');
@@ -188,9 +185,8 @@ export default function OptimizerPage() {
   // Twee sessionStorage-instromen (één keer, bij mount):
   // 1. Resultaat-snapshot: wie vanuit de Testkamer ging inloggen, krijgt zijn
   //    gegenereerde prompt hier terug in plaats van een lege generator.
-  // 2. Handoff naar de generator ("Verbeter in generator" in de chat, of de
-  //    vraag op de startpagina): de tekst start als eigen prompt in de
-  //    own-prompt-flow, met de soort die er eventueel bij gekozen is.
+  // 2. Omgekeerde handoff ("Verbeter in generator" in de chat): het chatbericht
+  //    start als eigen prompt in de own-prompt-flow.
   // Niet bij een bibliotheekroute (/genereren/:promptId): die bron wint.
   const snapTechniqueIdRef = useRef<string | null>(null);
   useEffect(() => {
@@ -203,10 +199,9 @@ export default function OptimizerPage() {
       setPhase('output');
       return;
     }
-    const handoff = consumeGeneratorHandoff();
-    if (handoff) {
-      if (handoff.prompt) setInitialPrompt(handoff.prompt);
-      if (handoff.kind) setInitialKind(handoff.kind);
+    const handoffText = consumeGeneratorHandoff();
+    if (handoffText) {
+      setInitialPrompt(handoffText);
       setEntryMode('own-prompt');
     }
     // Bewust alleen bij mount: latere promptId-wijzigingen zijn navigaties
@@ -397,7 +392,6 @@ export default function OptimizerPage() {
                 onResult={handleResult}
                 header={tabs}
                 initialPrompt={initialPrompt}
-                initialKind={initialKind}
                 projectContext={projectContext?.text}
                 thinking={thinkingOn}
                 webSearch={webSearchOn}

@@ -4,47 +4,33 @@
 // lekt niet naar andere tabs. clearChatHandoffs wist deze keys bij uitloggen.
 
 import { CHAT_PREFIX } from '@/lib/chatStorage';
-import { PROMPT_KINDS, type PromptKind } from '@/lib/techniques';
 import type { OptimizeResult } from '@/types';
 
 const TTL_MS = 15 * 60 * 1000;
 
-// --- Handoff naar de generator: vanuit de chat ("Verbeter in generator") en
-// vanaf de startpagina ("Wat wil je maken?", met de gekozen soort erbij) ---
+// --- Omgekeerde handoff: chat → generator ("Verbeter in generator") ---
 
 const GENERATOR_HANDOFF_KEY = `${CHAT_PREFIX}generator-handoff`;
 
-export interface GeneratorHandoff {
-  /** De tekst voor het invoerveld; leeg als alleen een soort is gekozen. */
-  prompt: string;
-  /** De gekozen soort bij "Wat wordt het?"; null = de AI kiest. */
-  kind: PromptKind | null;
-}
-
-/** Zet een tekst (en eventueel een soort) klaar als startpunt voor de eigen-prompt-flow. */
-export function writeGeneratorHandoff(prompt: string, kind: PromptKind | null = null): void {
+/** Zet een chatbericht klaar als startpunt voor de eigen-prompt-flow. */
+export function writeGeneratorHandoff(prompt: string): void {
   try {
-    sessionStorage.setItem(
-      GENERATOR_HANDOFF_KEY,
-      JSON.stringify({ prompt, kind, createdAt: Date.now() }),
-    );
+    sessionStorage.setItem(GENERATOR_HANDOFF_KEY, JSON.stringify({ prompt, createdAt: Date.now() }));
   } catch {
     /* sessieopslag niet beschikbaar — de generator opent dan gewoon leeg */
   }
 }
 
 /** Lees en verwijder het klaargezette startpunt; verlopen of ongeldig -> null. */
-export function consumeGeneratorHandoff(): GeneratorHandoff | null {
+export function consumeGeneratorHandoff(): string | null {
   try {
     const raw = sessionStorage.getItem(GENERATOR_HANDOFF_KEY);
     if (!raw) return null;
     sessionStorage.removeItem(GENERATOR_HANDOFF_KEY);
-    const parsed = JSON.parse(raw) as { prompt?: unknown; kind?: unknown; createdAt?: unknown };
-    const prompt = typeof parsed.prompt === 'string' ? parsed.prompt.trim() : '';
-    const kind = PROMPT_KINDS.find((k) => k === parsed.kind) ?? null;
-    if (!prompt && !kind) return null;
+    const parsed = JSON.parse(raw) as { prompt?: unknown; createdAt?: unknown };
+    if (typeof parsed.prompt !== 'string' || !parsed.prompt.trim()) return null;
     if (typeof parsed.createdAt !== 'number' || Date.now() - parsed.createdAt > TTL_MS) return null;
-    return { prompt, kind };
+    return parsed.prompt;
   } catch {
     return null;
   }

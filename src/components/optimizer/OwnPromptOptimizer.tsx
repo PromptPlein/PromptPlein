@@ -4,27 +4,33 @@ import {
   AlertTriangle,
   ArrowDown,
   ArrowRight,
+  Blocks,
+  Bot,
   Check,
   ChevronDown,
   ChevronRight,
   ClipboardCopy,
+  CodeXml,
   Compass,
   Eraser,
+  FileText,
   HelpCircle,
   Info,
   Layers,
+  LayoutDashboard,
   Lightbulb,
   Loader2,
   RefreshCw,
+  Route,
   Sparkles,
   Wand2,
+  type LucideIcon,
 } from '@/components/common/icons';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import VerantwoordGebruikHint from '@/components/optimizer/VerantwoordGebruikHint';
 import StepHeading from '@/components/optimizer/StepHeading';
-import { KIND_OPTIONS } from '@/components/optimizer/kindOptions';
 import PrefillSources from '@/components/optimizer/PrefillSources';
 import SjabloonVragen from '@/components/optimizer/SjabloonVragen';
 import { PROMPT_CATEGORIES } from '@/data/promptCategories';
@@ -87,8 +93,6 @@ interface OwnPromptOptimizerProps {
    * worden overschreven.
    */
   initialPrompt?: string | null;
-  /** De soort die al gekozen is voordat de gebruiker hier kwam (startpagina). */
-  initialKind?: PromptKind | null;
   /**
    * Context van het aangehaakte chatproject (de projectinstructie van de
    * gebruiker, eventueel met zijn bronbestanden). Gaat mee in de raamwerkkeuze,
@@ -121,6 +125,61 @@ const PHASE_LABEL: Record<FrameworkSearchPhase, string> = {
 };
 
 /**
+ * De keuzes van "Wat wil je maken?" in de balk boven het invoerveld. De volgorde
+ * komt uit PROMPT_KINDS. `placeholderOff` hoort bij de schakelaar uit (bestaande
+ * code), want daar beschrijf je een verschil en geen nieuw hulpmiddel.
+ */
+const KIND_OPTIONS: Record<
+  PromptKind,
+  { label: string; icon: LucideIcon; hint: string; placeholder: string; placeholderOff?: string }
+> = {
+  text: {
+    label: 'Tekst',
+    icon: FileText,
+    hint: 'Een brief, nota, verslag of samenvatting.',
+    placeholder:
+      'Bijv. zet mijn ruwe vergaderaantekeningen om in een verslag met besluiten, actiepunten en open vragen.',
+  },
+  code: {
+    label: 'Code',
+    icon: CodeXml,
+    hint: 'Vibecoden: een tool, script of pagina laten bouwen, of bestaande code laten aanpassen.',
+    placeholder:
+      'Bijv. een webpagina die een Excel-export uit het zaaksysteem inleest en per afdeling de open zaken telt.',
+    placeholderOff:
+      'Bijv. de export in ons rapportagescherm negeert het actieve filter; alleen de gefilterde rijen moeten mee.',
+  },
+  dashboard: {
+    label: 'Dashboard',
+    icon: LayoutDashboard,
+    hint: 'Cijfers, grafieken en filters op één scherm.',
+    placeholder:
+      'Bijv. een overzicht van de doorlooptijden van Woo-verzoeken per directie, met een filter op kwartaal.',
+  },
+  agent: {
+    label: 'Agent',
+    icon: Bot,
+    hint: 'Een AI die zelfstandig een taak in stappen uitvoert.',
+    placeholder:
+      'Bijv. een agent die binnenkomende Woo-verzoeken leest, per onderwerp sorteert en een ontvangstbevestiging klaarzet.',
+  },
+  skill: {
+    label: 'Skill',
+    icon: Blocks,
+    hint: 'Een vaste werkwijze die een AI-assistent elke keer opnieuw toepast. Je bouwt hem verder in de Skill Creator.',
+    placeholder:
+      'Bijv. geef feedback op conceptbrieven aan burgers, elke keer volgens de schrijfwijzer van ons ministerie.',
+  },
+  template: {
+    label: 'Routekaart',
+    icon: Route,
+    hint: 'Een geanimeerde routekaart in rijksstijl: waar je vandaan komt, waar je nu staat en waar je naartoe wilt. Jij geeft de inhoud; de vormgeving is elke keer hetzelfde.',
+    placeholder:
+      'Bijv. een routekaart van ons opleidingstraject: vijf bijeenkomsten vanaf 3 maart, met per bijeenkomst het thema, het huiswerk en wat het oplevert. We staan nu bij de tweede.',
+  },
+};
+
+/**
  * Flow om een EIGEN prompt te optimaliseren. De gebruiker plakt zijn prompt en
  * laat de AI bepalen welk prompt framework (CARE, CRISP, …) het beste past.
  * Uit de aanbevelingen (1–3) kiest de gebruiker er één. Daarna analyseren we de
@@ -132,7 +191,6 @@ export default function OwnPromptOptimizer({
   onResult,
   header,
   initialPrompt,
-  initialKind,
   projectContext,
   thinking,
   webSearch,
@@ -278,16 +336,6 @@ export default function OwnPromptOptimizer({
     // aangeleverde tekst bepaalt of dit opnieuw moet lopen.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialPrompt]);
-
-  // Een soort die op de startpagina al gekozen is, staat hier meteen aan. Eén
-  // keer: wat de gebruiker daarna zelf kiest, blijft staan.
-  const appliedKindRef = useRef(false);
-  useEffect(() => {
-    if (!initialKind || appliedKindRef.current) return;
-    appliedKindRef.current = true;
-    setKind(initialKind);
-    setVariantOn(true);
-  }, [initialKind]);
 
   /** "Opschonen": wis de geplakte prompt (ook uit localStorage) én alle voortgang. */
   function handleClearAll() {

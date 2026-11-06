@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { rijksblauw } from '@/config/brandColors';
 
-// Heldachtergrond met regels uit promptsjablonen die traag voorbijschuiven. De
+// Paginaachtergrond met regels uit promptsjablonen die traag voorbijschuiven. De
 // invulvelden ({doelgroep}) staan in oranje. Canvas 2D, dus zonder three.js.
 // Decoratief: pointer-events staat uit en de canvas is verborgen voor schermlezers.
 
@@ -20,7 +20,9 @@ const FRAGMENTS = [
   "Formuleer drie scenario's voor {beleidsterrein}.",
 ];
 
-const ROWS = 11;
+// Vaste afstand tussen de regels: de achtergrond vult het hele venster, dus het
+// aantal regels hangt af van de hoogte.
+const ROW_PX = 40;
 const FONT_PX = 13;
 const FONT_FAMILY = 'ui-monospace, "SF Mono", Menlo, Consolas, monospace';
 const TEXT_COLOR = 'rgba(153, 199, 221, 0.24)';
@@ -30,10 +32,10 @@ const VIGNETTE_RGB = '1, 29, 46';
 type Segment = { text: string; isVariable: boolean; width: number };
 type Row = { segments: Segment[]; width: number; speed: number };
 
-function buildRows(ctx: CanvasRenderingContext2D, dpr: number): Row[] {
+function buildRows(ctx: CanvasRenderingContext2D, dpr: number, count: number): Row[] {
   ctx.font = `${FONT_PX * dpr}px ${FONT_FAMILY}`;
   const rows: Row[] = [];
-  for (let r = 0; r < ROWS; r++) {
+  for (let r = 0; r < count; r++) {
     // Elke rij krijgt een andere volgorde, zodat de regels niet onder elkaar herhalen.
     const order = FRAGMENTS.map((_, i) => FRAGMENTS[(i * 5 + r * 3) % FRAGMENTS.length]);
     const segments: Segment[] = [];
@@ -65,7 +67,7 @@ function draw(ctx: CanvasRenderingContext2D, rows: Row[], dpr: number, seconds: 
 
   ctx.font = `${FONT_PX * dpr}px ${FONT_FAMILY}`;
   ctx.textBaseline = 'middle';
-  const rowHeight = H / ROWS;
+  const rowHeight = H / rows.length;
   rows.forEach((row, i) => {
     const y = rowHeight * (i + 0.5);
     let x = -((((seconds * row.speed) % row.width) + row.width) % row.width);
@@ -99,7 +101,7 @@ export default function PromptLinesBackground({ className = '' }: { className?: 
 
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
-    const rows = buildRows(ctx, dpr);
+    let rows: Row[] = [];
     const now = () => (reduceMotion ? 12 : performance.now() / 1000);
     let visible = true;
     let frame = 0;
@@ -108,6 +110,8 @@ export default function PromptLinesBackground({ className = '' }: { className?: 
       const rect = canvas.getBoundingClientRect();
       canvas.width = Math.max(1, Math.round(rect.width * dpr));
       canvas.height = Math.max(1, Math.round(rect.height * dpr));
+      const count = Math.max(1, Math.ceil(rect.height / ROW_PX));
+      if (count !== rows.length) rows = buildRows(ctx, dpr, count);
       draw(ctx, rows, dpr, now());
     };
     const resizeObserver = new ResizeObserver(fit);
@@ -120,7 +124,7 @@ export default function PromptLinesBackground({ className = '' }: { className?: 
 
     if (!reduceMotion) {
       const loop = () => {
-        if (visible) draw(ctx, rows, dpr, now());
+        if (visible && rows.length > 0) draw(ctx, rows, dpr, now());
         frame = requestAnimationFrame(loop);
       };
       frame = requestAnimationFrame(loop);
