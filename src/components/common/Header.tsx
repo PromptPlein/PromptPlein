@@ -139,15 +139,15 @@ export default function Header() {
               onFocus={prefetch}
               className={({ isActive }) =>
                 clsx(
-                  'flex flex-1 flex-col items-center gap-1 whitespace-nowrap px-3 py-2 text-xs font-medium',
+                  'flex flex-1 flex-col items-center gap-1 whitespace-nowrap px-2 py-2 text-[13px] font-semibold',
                   'transition-colors hover:bg-white/10 focus-visible:outline focus-visible:outline-2',
                   'focus-visible:-outline-offset-2 focus-visible:outline-white',
-                  'lg:h-12 lg:flex-none lg:flex-row lg:gap-2 lg:px-4 lg:py-0 lg:text-sm',
+                  'lg:h-14 lg:flex-none lg:flex-row lg:gap-2.5 lg:px-5 lg:py-0 lg:text-lg',
                   isActive && 'shadow-[inset_0_-3px_0_0_#fff]',
                 )
               }
             >
-              <Icon size={16} />
+              <Icon size={22} />
               {label}
             </NavLink>
           ))}

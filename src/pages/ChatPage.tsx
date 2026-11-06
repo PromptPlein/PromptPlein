@@ -447,7 +447,7 @@ function ChatPageInner() {
       <div
         ref={cardRef}
         style={cardMaxHeight ? { maxHeight: cardMaxHeight } : undefined}
-        className="opl-card flex max-h-[calc(100dvh-15.5rem)] overflow-hidden lg:max-h-[calc(100dvh-14.5rem)]"
+        className="opl-card flex max-h-[calc(100dvh-16rem)] overflow-hidden lg:max-h-[calc(100dvh-15rem)]"
       >
         <ChatSidebar
           entries={looseEntries}
