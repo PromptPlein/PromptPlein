@@ -10,20 +10,14 @@ import {
   Wand2,
 } from '@/components/common/icons';
 import InfoDot from '@/components/common/InfoDot';
+import { TILE, TILE_PRIMARY, TILE_SOFT } from '@/components/chat/projectTiles';
 import { formatDate } from '@/lib/utils';
 import type { ChatIndexEntry, ChatProject } from '@/types';
 
-/** Eén actietegel op de projectpagina: icoon boven, label eronder. */
-const TILE =
-  'flex min-h-[6.5rem] flex-col justify-between gap-3 rounded-xl p-4 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:focus-visible:ring-offset-slate-800';
-const TILE_PRIMARY =
-  'bg-rijksblauw-700 text-white hover:bg-rijksblauw-800 dark:bg-rijksblauw-600 dark:hover:bg-rijksblauw-500';
 // Dezelfde gele tint als "Technieken leren" op de startpagina: de tegel die
 // naar de bouwer leidt valt op naast de twee blauwe.
 const TILE_ACCENT =
   'bg-[#ffb612]/20 text-rijksblauw-700 hover:bg-[#ffb612]/35 dark:bg-[#ffb612]/15 dark:text-white dark:hover:bg-[#ffb612]/25';
-const TILE_SOFT =
-  'bg-rijksblauw-50 text-rijksblauw-700 hover:bg-rijksblauw-100 dark:bg-rijksblauw-500/20 dark:text-white dark:hover:bg-rijksblauw-500/30';
 const SECTION_HEADING =
   'flex items-center text-base font-bold text-rijksblauw-700 dark:text-rijksblauw-200';
 
@@ -44,6 +38,7 @@ export default function ProjectView({
   conversations,
   onNewChat,
   onNewPrompt,
+  onMakeInstruction,
   onOpenSettings,
   onSelectConversation,
   onRequestDeleteConversation,
@@ -56,6 +51,8 @@ export default function ProjectView({
   onNewChat: () => void;
   /** Open de promptbouwer met dit project als context. */
   onNewPrompt: (includeFiles: boolean) => void;
+  /** Laat de AI met een paar vragen de projectinstructie maken. */
+  onMakeInstruction: () => void;
   onOpenSettings: () => void;
   onSelectConversation: (id: string) => void;
   onRequestDeleteConversation: (id: string) => void;
@@ -202,9 +199,17 @@ export default function ProjectView({
               <button
                 type="button"
                 className="font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
+                onClick={onMakeInstruction}
+              >
+                Laat de AI er een maken
+              </button>{' '}
+              of{' '}
+              <button
+                type="button"
+                className="font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
                 onClick={onOpenSettings}
               >
-                Schrijf er een
+                schrijf er zelf een
               </button>
             </p>
           )}

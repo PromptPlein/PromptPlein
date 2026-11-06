@@ -209,7 +209,7 @@ te stemmen.
 
 Eén edge function, `optimize-prompt`, ongeveer 8000 regels, met een
 `mode`-veld in de body als router. Nieuwe AI-functionaliteit wordt een nieuwe
-mode in dat bestand, niet een nieuwe function. De 33 modes, gegroepeerd:
+mode in dat bestand, niet een nieuwe function. De 35 modes, gegroepeerd:
 
 | Groep | Modes |
 | --- | --- |
@@ -218,7 +218,7 @@ mode in dat bestand, niet een nieuwe function. De 33 modes, gegroepeerd:
 | Veldhulp in de bouwer | `analyze`, `prefill`, `expand-field`, `title`, `metadata` |
 | PlanWizard | `plan`, `plan-step`, `plan-step-analyze`, `clarify`, `assumption-check` |
 | Techniekbouwers | `persona-fill`, `fewshot-example`, `fewshot-extract`, `meta-build`, `cove-scan`, `stepback-ladder`, `rubric-propose`, `skill-draft`, `skill-trigger` |
-| Chat en projecten | `chat-optimize`, `project-optimize`, `project-brief` |
+| Chat en projecten | `chat-optimize`, `project-optimize`, `project-brief`, `project-interview`, `project-prompt` |
 | Testkamer-loop | `mock-answer`, `refine`, `refine-suggest` |
 | Sjablonen | `sjabloon` |
 

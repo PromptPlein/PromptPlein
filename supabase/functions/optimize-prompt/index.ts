@@ -54,6 +54,8 @@ type Mode =
   | 'chat-optimize'
   | 'project-optimize'
   | 'project-brief'
+  | 'project-interview'
+  | 'project-prompt'
   | 'mock-answer'
   | 'refine'
   | 'refine-suggest'
@@ -101,6 +103,8 @@ interface TechniqueSummary {
   strength?: string;
   /** Concrete gebruikssituaties. */
   use_cases?: string[];
+  /** De opbouw van het framework; alleen 'project-prompt' stuurt die mee. */
+  template?: string;
   /**
    * Groepering: 'context' = compleet prompt framework (CARE, CRISP, …),
    * 'technique' = losse techniek. De framework-aanbeveling weegt uitsluitend
@@ -401,6 +405,12 @@ interface RequestBody {
    * nogmaals afgekapt op MAX_PROJECT_OPTIMIZE_CHARS.
    */
   projectInstructions?: string;
+  /** 'project-prompt': de soort taak die de vragenronde heeft vastgesteld. */
+  projectSoort?: string;
+  /** 'project-prompt': de prompt die wordt aangepast. */
+  projectPromptCurrent?: string;
+  /** 'project-prompt': wat de medewerker aan die prompt wil veranderen. */
+  projectPromptFeedback?: string;
   /** 'project-optimize': de naam van het project — context voor de rol en het onderwerp. */
   projectName?: string;
   /** 'project-optimize': de namen van de bronbestanden; alleen de namen, niet de inhoud. */
@@ -2049,6 +2059,329 @@ in plaats van overal.)
 </vorm>
 
 Geef alleen de analyse terug, zonder inleiding, afsluitende vraag of opmaak-markeringen.`;
+
+/**
+ * Plafond van de vragenronde bij "Prompt maken" in een nieuw project. Hier
+ * afgedwongen en niet alleen in de prompt: bij het plafond komt er geen
+ * modelaanroep meer en gaat de ronde door naar het voorstel.
+ */
+const PROJECT_INTERVIEW_MAX_QUESTIONS = 4;
+const PROJECT_INTERVIEW_MIN_QUESTIONS = 2;
+
+/**
+ * De vragenronde bij "Prompt maken" in een nieuw project. De volgorde van de
+ * JSON-velden is de chain of thought: het model schrijft eerst op wat het weet
+ * en pas daarna de vraag, zodat de vraag op die stappen voortbouwt.
+ */
+let PROJECT_INTERVIEW_SYSTEM_PROMPT = `Je bent prompt-ontwerper voor de Nederlandse rijksoverheid en je achterhaalt met één vraag per beurt welke terugkerende taak een medewerker door AI wil laten uitvoeren.
+
+<context>
+De medewerker maakt een project. In dat project komt één vaste prompt die de taak elke keer op dezelfde manier laat uitvoeren. Daarna zet de medewerker per keer alleen de wisselende invoer in de chat. Jij schrijft die prompt nog niet. Jij verzamelt wat ervoor nodig is.
+</context>
+
+<denkstappen>
+Werk deze stappen op volgorde af. De uitkomst van elke stap komt in het veld met dezelfde naam.
+1. taak: noem de taak in één zin, in de woorden van de medewerker.
+2. soort: kies precies één soort uit deze lijst.
+   Vaste vorm: er komt een document uit dat er elke keer hetzelfde uitziet.
+   Nakijken: een eigen tekst van de medewerker wordt gecontroleerd of verbeterd.
+   Omzetten: een bron wordt iets anders, zoals een samenvatting, een versie in eenvoudige taal of een verslag.
+   Beoordelen: iets wordt getoetst aan vaste punten.
+   Opstellen: er wordt steeds een nieuwe tekst geschreven, zoals een antwoord op een vraag.
+   Onduidelijk: uit de woorden van de medewerker blijkt niet welke taak het is.
+3. bekend: noem de punten uit <nodig> die al vaststaan in de taak en de antwoorden. Een lezer die de medewerker al noemt, zoals "mijn leidinggevende", is bekend.
+4. ontbreekt: noem de punten uit <nodig> die nog ontbreken, het punt dat de prompt het meest verandert eerst.
+5. begrip: schrijf in één zin aan de medewerker wat je tot nu toe begrijpt. Begin met "Je wilt" en spreek de medewerker aan met "je" en "jouw". Gebruik alleen wat de medewerker heeft gezegd en vul niets aan.
+6. klaar: zie <klaar>.
+7. vraag en opties: stel de vraag over het eerste punt uit ontbreekt.
+</denkstappen>
+
+<nodig>
+Vaste vorm: de vaste onderdelen op volgorde, de lezer, wat het stuk voor die lezer onbruikbaar maakt.
+Nakijken: wat er gecontroleerd wordt, wat beslist hetzelfde moet blijven, hoe het resultaat terugkomt.
+Omzetten: de lezer, wat er zeker in moet, de vorm en de omvang van het resultaat.
+Beoordelen: de vaste punten, de schaal of het soort oordeel, wat er met de uitkomst gebeurt.
+Opstellen: de lezer, de toon, wat er altijd in moet.
+Onduidelijk: de taak.
+</nodig>
+
+<onduidelijk>
+Is de soort Onduidelijk, dan staat in begrip: "Je wilt iets vaker door AI laten doen, maar ik weet nog niet wat." Vraag dan welke taak uit het werk van de medewerker steeds terugkomt. Geef als opties drie verschillende taken: een document in een vaste vorm, een eigen tekst laten nakijken en een lang stuk laten samenvatten.
+</onduidelijk>
+
+<vraagregels>
+- Stel één vraag van één zin, in gewone werktaal, gericht aan "je".
+- De toets voor elke vraag: twee verschillende antwoorden leveren een andere prompt op. Slaagt de vraag niet, kies dan een andere.
+- De vraag gaat over de taak en het resultaat, nooit over prompts, frameworks of technieken.
+- Vraag niet naar iets wat al in de taak of de antwoorden staat, ook niet in andere woorden.
+- Vraag niet naar gegevens die per keer verschillen, zoals een naam, datum, zaaknummer of de herkomst van de invoer. Die komen later in de invoer.
+- Gaat een antwoord niet over de vraag, stel dan hetzelfde punt opnieuw met een concreet geval uit het werk van de medewerker.
+- Geef drie antwoordopties die passen bij deze taak. De medewerker kan meerdere opties tegelijk aanklikken en er iets bij typen, dus elke optie is een los antwoord dat ook naast de andere kan staan. Elke optie leidt tot een andere prompt. Een optie is hoogstens één korte regel en bevat geen voorbeeldtekst of [plaatshouder].
+</vraagregels>
+
+<voorbeeld>
+Dit voorbeeld toont alleen het verschil tussen een zwakke en een sterke vraag. Neem de tekst niet over.
+Zwakke vraag: "Wat is de gewenste toon?"
+Sterke vraag: "Wat mag er in jouw tekst beslist niet veranderen?"
+</voorbeeld>
+
+<klaar>
+Zet klaar op true als ontbreekt leeg is of als alleen nog details ontbreken die de opbouw van de prompt niet veranderen. Staan er minder dan twee antwoorden in het gesprek, of is de soort Onduidelijk, zet klaar dan op false. Is alles uit <nodig> bekend bij minder dan twee antwoorden, vraag dan wat het resultaat voor de medewerker onbruikbaar zou maken. Vul vraag en opties altijd in, ook als klaar true is.
+</klaar>
+
+<schrijfwijze>
+- Schrijf natuurlijk Nederlands op B1-niveau, zonder letterlijk vertaalde uitdrukkingen: "in mijn vel" en niet "in mijn huid", "dat is logisch" en niet "dat maakt zin".
+- Gebruik nooit een gedachtestreepje (— of –) of een los streepje tussen zinsdelen. Gebruik een komma of een punt.
+</schrijfwijze>
+
+<uitvoer>
+Geef alleen dit JSON-object terug, met de velden in deze volgorde:
+{"taak":"<zin>","soort":"<soort>","bekend":"<punten>","ontbreekt":"<punten>","begrip":"<zin die begint met Je wilt>","klaar":false,"vraag":"<één vraag>","opties":["<antwoord>","<antwoord>","<antwoord>"]}
+</uitvoer>`;
+
+/** Kiest bij "Prompt maken" zelf het framework; de medewerker krijgt die keuze niet. */
+let PROJECT_FRAMEWORK_SYSTEM_PROMPT = `Je bent prompt-ontwerper voor de Nederlandse rijksoverheid en je kiest uit een lijst de ene opbouw die past bij een terugkerende taak.
+
+<denkstappen>
+Werk deze stappen op volgorde af. De uitkomst komt in het veld met dezelfde naam.
+1. kern: noem in één zin wat de vaste prompt moet bereiken.
+2. eis: noem de zwaarste eis uit het gesprek.
+3. id: loop <keuzeregels> van boven naar beneden af, neem de eerste regel die past en neem het id uit de lijst.
+4. reden: schrijf in één zin, gericht aan "je", wat deze aanpak voor de taak oplevert. Noem de naam van de opbouw niet.
+5. titel: noem de taak in twee tot vier Nederlandse woorden, in gewone werktaal, met alleen een hoofdletter aan het begin.
+</denkstappen>
+
+<keuzeregels>
+Neem de eerste regel die past. De lijst is leidend: staat een naam er niet in, ga dan naar de volgende regel.
+- Feiten, cijfers of verwijzingen in het resultaat moeten worden nagetrokken: Chain-of-Verification.
+- Het antwoord mag alleen uit aangeleverde stukken komen: Bronbinding.
+- SOORT is Vaste vorm: Template-based Output.
+- SOORT is Beoordelen: Rubric-toetsing.
+- SOORT is Nakijken: RAISE.
+- SOORT is Omzetten: CRAFT.
+- SOORT is Opstellen en toon of stijl geeft de doorslag: CO-STAR.
+- SOORT is Opstellen: CRAFT.
+- Een taak met meerdere stappen en randvoorwaarden: CRISPE.
+- Geen van deze regels past: CARE.
+</keuzeregels>
+
+<schrijfwijze>
+- Schrijf natuurlijk Nederlands op B1-niveau.
+- Gebruik nooit een gedachtestreepje (— of –) of een los streepje tussen zinsdelen. Gebruik een komma of een punt.
+</schrijfwijze>
+
+<uitvoer>
+Geef alleen dit JSON-object terug, met de velden in deze volgorde:
+{"kern":"<zin>","eis":"<zin>","id":"<id uit de lijst>","reden":"<zin>","titel":"<projectnaam>"}
+</uitvoer>`;
+
+/** Schrijft bij "Prompt maken" de vaste prompt op de gekozen opbouw. */
+let PROJECT_PROMPT_SYSTEM_PROMPT = `Je schrijft voor een medewerker van de Nederlandse rijksoverheid één vaste prompt die in een project staat en bij elk gesprek in dat project wordt meegegeven.
+
+<werking>
+De prompt staat vast. In het gesprek zet de medewerker alleen de invoer, zoals een tekst of aantekeningen. Elk bericht van de medewerker is dus de invoer van de taak. De AI voert de taak meteen uit op dat bericht.
+</werking>
+
+<opdracht>
+1. Volg het UITVOERSJABLOON in het gebruikersbericht: dezelfde kopjes, in dezelfde volgorde. Vervang elke regel met drie puntjes door de inhoud van dat kopje.
+2. De lezer van de prompt is de AI, niet de medewerker. Onder het kopje Rol staat één zin die begint met "Je bent" en die de AI beschrijft als assistent bij deze taak.
+3. Schrijf de rest in de gebiedende wijs aan de AI, zoals "Controleer" en "Schrijf". Noem bij elke stap precies wat de AI doet, wat zij verandert en wat zij laat staan.
+4. Zet onder het kopje Invoer in één zin wat de medewerker in de chat zet, en dat elk bericht de invoer is.
+5. Neem elke eis uit de taak en de antwoorden over, in de woorden van de medewerker.
+6. Beschrijf de vorm van het resultaat zo exact dat elke uitvoering er hetzelfde uitziet. Staan er vaste onderdelen in het gesprek, zet ze dan op volgorde onder elkaar.
+7. Heeft de medewerker gezegd wat niet mag veranderen, zet dat dan als harde regel in de prompt.
+8. Staat er een WERKWIJZE in het gebruikersbericht, verwerk die dan onder de kopjes en vul de plekken tussen vierkante haken in met wat de medewerker heeft verteld.
+9. Verzin geen feiten, namen of regels. Is een vast gegeven nodig dat nergens staat, zet dan tussen vierkante haken wat daar moet komen.
+10. Laat de AI bij invoer die voor de taak ontbreekt één gerichte vraag stellen, zodat zij niets invult wat de medewerker niet heeft gegeven.
+</opdracht>
+
+<schrijfwijze>
+- Schrijf de hele prompt in natuurlijk Nederlands op B1-niveau, zonder letterlijk vertaalde uitdrukkingen: "in mijn vel" en niet "in mijn huid", "dat is logisch" en niet "dat maakt zin".
+- Gebruik nooit een gedachtestreepje (— of –) of een los streepje tussen zinsdelen. Gebruik een komma, een dubbele punt of een punt. Een streepje vooraan een regel als opsommingsteken mag wel.
+- Gebruik geen sterretjes, hekjes of andere opmaaktekens. De prompt staat in een gewoon tekstvak.
+- Noem de naam van het framework niet in de prompt.
+</schrijfwijze>
+
+<uitvoer>
+Geef alleen de prompt terug, zonder inleiding en zonder toelichting.
+</uitvoer>`;
+
+/** Past bij "Prompt maken" het voorstel aan op één verzoek van de medewerker. */
+let PROJECT_PROMPT_ADJUST_SYSTEM_PROMPT = `Je past één vaste prompt van een medewerker van de Nederlandse rijksoverheid aan op één verzoek en geeft de volledige prompt terug.
+
+<regels>
+1. Verander alleen wat het verzoek raakt. Alles wat het verzoek niet raakt, neem je letterlijk over.
+2. Houd de kopjes en de volgorde aan, tenzij het verzoek daarover gaat.
+3. Verzin geen feiten, namen of regels. Staat een vast gegeven nergens, zet dan een [plaatshouder] neer.
+</regels>
+
+<schrijfwijze>
+- Schrijf natuurlijk Nederlands op B1-niveau, zonder letterlijk vertaalde uitdrukkingen: "in mijn vel" en niet "in mijn huid".
+- Gebruik nooit een gedachtestreepje (— of –) of een los streepje tussen zinsdelen. Een streepje vooraan een regel als opsommingsteken mag wel.
+- Gebruik geen sterretjes, hekjes of andere opmaaktekens. De prompt staat in een gewoon tekstvak.
+</schrijfwijze>
+
+<uitvoer>
+Geef alleen de volledige aangepaste prompt terug, zonder inleiding en zonder toelichting.
+</uitvoer>`;
+
+/** De taak en het gesprek, zoals alle stappen van "Prompt maken" ze lezen. */
+function buildProjectTaskBlock(
+  goal: string,
+  turns: { question: string; answer: string }[],
+): string {
+  const parts = [`TAAK VAN DE MEDEWERKER:\n"""\n${goal}\n"""`];
+  parts.push(
+    turns.length > 0
+      ? `GESPREK TOT NU TOE:\n${turns
+          .map((t, i) => `Vraag ${i + 1}: ${t.question}\nAntwoord ${i + 1}: ${t.answer}`)
+          .join('\n\n')}`
+      : 'GESPREK TOT NU TOE:\nNog geen antwoorden.',
+  );
+  return parts.join('\n\n');
+}
+
+/** Maakt de lijst beurten veilig: alleen complete paren, begrensd in omvang. */
+function cleanProjectTurns(
+  transcript: { question: string; answer: string }[] | undefined,
+): { question: string; answer: string }[] {
+  return (Array.isArray(transcript) ? transcript : [])
+    .filter((t) => t && typeof t.question === 'string' && typeof t.answer === 'string')
+    .map((t) => ({
+      question: t.question.trim().slice(0, 500),
+      answer: t.answer.trim().slice(0, 2000),
+    }))
+    .filter((t) => t.question && t.answer)
+    .slice(0, PROJECT_INTERVIEW_MAX_QUESTIONS);
+}
+
+interface ProjectInterviewTurn {
+  soort: string;
+  begrip: string;
+  klaar: boolean;
+  vraag: string;
+  opties: string[];
+}
+
+/**
+ * Leest één beurt van de vragenronde. Geeft null terug als er geen vraag in
+ * staat en het model ook niet klaar is: dan is er voor de medewerker niets te
+ * tonen en meldt de handler een fout met een knop om het opnieuw te proberen.
+ */
+function parseProjectInterview(raw: string): ProjectInterviewTurn | null {
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  try {
+    const parsed = JSON.parse(escapeRawControlChars(match[0])) as Record<string, unknown>;
+    const vraag = coerceFieldValue(parsed.vraag)?.trim() ?? '';
+    const klaar = parsed.klaar === true;
+    if (!vraag && !klaar) return null;
+    return {
+      soort: coerceFieldValue(parsed.soort)?.trim() ?? '',
+      begrip: coerceFieldValue(parsed.begrip)?.trim() ?? '',
+      klaar,
+      vraag,
+      opties: (Array.isArray(parsed.opties) ? parsed.opties : [])
+        .map((o) => coerceFieldValue(o)?.trim() ?? '')
+        .filter(Boolean)
+        .slice(0, 4),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Nederlandse kopjes voor de Engelse koppen van de frameworks. */
+const PROJECT_KOPJES: Record<string, string> = {
+  context: 'Context',
+  ask: 'Opdracht',
+  rules: 'Regels',
+  objective: 'Doel',
+  style: 'Stijl',
+  tone: 'Toon',
+  audience: 'Doelgroep',
+  response: 'Resultaat',
+  role: 'Rol',
+  action: 'Opdracht',
+  format: 'Vorm',
+  'target audience': 'Doelgroep',
+  instructions: 'Instructies',
+  steps: 'Stappen',
+  parameters: 'Randvoorwaarden',
+  'end goal': 'Einddoel',
+  'end result': 'Eindresultaat',
+  input: 'Invoer',
+  specifics: 'Eisen',
+};
+
+/** De kopjes voor een losse techniek: die heeft een werkwijze in plaats van koppen. */
+const PROJECT_TECHNIEK_KOPJES = ['Rol', 'Invoer', 'Opdracht', 'Werkwijze', 'Regels', 'Resultaat'];
+
+/**
+ * Zet een framework-template om in wat de schrijfstap krijgt: Nederlandse kopjes
+ * en, bij een losse techniek, de werkwijze. De ruwe template gaat niet mee: een
+ * klein model neemt daar de plekken {{zo}}, de scheidingslijn en de Engelse
+ * koppen letterlijk uit over. Rol en Invoer staan er altijd, want daar hangt de
+ * werking van een vaste projectprompt aan. Een kop voor voorbeelden vervalt: de
+ * medewerker heeft die hier niet gegeven en het model zou ze verzinnen.
+ */
+function projectFrameworkOutline(template: string): { kopjes: string[]; werkwijze: string } {
+  const headings = extractHeadings(template).filter((h) => h.toLowerCase() !== 'examples');
+  if (headings.length === 0) {
+    return {
+      kopjes: PROJECT_TECHNIEK_KOPJES,
+      werkwijze: template
+        .split(/\n-{3,}\n|Oorspronkelijke opdracht:/)[0]
+        .replace(/\{\{\s*PROMPT\s*\}\}/g, '')
+        .replace(/\{\{\s*(\w+)\s*\}\}/g, (_, naam: string) => `[${naam.replace(/_/g, ' ')}]`)
+        .trim(),
+    };
+  }
+  const kopjes = headings.map((h) => PROJECT_KOPJES[h.toLowerCase()] ?? h);
+  if (!kopjes.includes('Invoer')) kopjes.unshift('Invoer');
+  if (!kopjes.includes('Rol')) kopjes.unshift('Rol');
+  else {
+    kopjes.splice(kopjes.indexOf('Rol'), 1);
+    kopjes.unshift('Rol');
+  }
+  return { kopjes: [...new Set(kopjes)], werkwijze: '' };
+}
+
+/** Het slot van het gebruikersbericht van de schrijfstap: de vaste vorm van de uitvoer. */
+function buildProjectPromptRequest(outline: { kopjes: string[]; werkwijze: string }): string {
+  const parts: string[] = [];
+  if (outline.werkwijze) parts.push(`WERKWIJZE:\n"""\n${outline.werkwijze}\n"""`);
+  parts.push(
+    `UITVOERSJABLOON:\n${outline.kopjes.map((k) => `${k}:\n...`).join('\n\n')}`,
+    'Schrijf de vaste prompt.',
+  );
+  return parts.join('\n\n');
+}
+
+/**
+ * Leest de frameworkkeuze. Een onbekend id valt terug op RAISE, of op het eerste
+ * item: de medewerker krijgt deze keuze niet voorgelegd, dus een fout hier mag de
+ * prompt niet tegenhouden.
+ */
+function parseProjectFramework(
+  raw: string,
+  frameworks: TechniqueSummary[],
+): { framework: TechniqueSummary; reden: string; titel: string } {
+  const fallback = frameworks.find((f) => f.name === 'RAISE') ?? frameworks[0];
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) return { framework: fallback, reden: '', titel: '' };
+  try {
+    const parsed = JSON.parse(escapeRawControlChars(match[0])) as Record<string, unknown>;
+    const id = coerceFieldValue(parsed.id)?.trim() ?? '';
+    return {
+      framework: frameworks.find((f) => f.id === id || f.name === id) ?? fallback,
+      reden: coerceFieldValue(parsed.reden)?.trim() ?? '',
+      titel: coerceFieldValue(parsed.titel)?.trim().slice(0, 120) ?? '',
+    };
+  } catch {
+    return { framework: fallback, reden: '', titel: '' };
+  }
+}
 
 /** Bouwt het gebruikersbericht van de projectanalyse. */
 function buildProjectBriefUserMessage(projectName: string, material: string): string {
@@ -5562,6 +5895,10 @@ const MODE_MAX_TOKENS: Record<Mode, number> = {
   // komt gaat daarna in élke bouwstap mee, dus een uitgelopen analyse kost bij
   // elke prompt opnieuw.
   'project-brief': 1536,
+  // Project-interview: de denkvelden, één vraag en drie korte opties.
+  'project-interview': 1024,
+  // Project-prompt: één vaste prompt van een paar secties.
+  'project-prompt': 4096,
   // Refine: een herschreven prompt-template, vergelijkbaar met generate.
   refine: 4096,
   // Hoogstens 4 voorstellen van een label plus twee zinnen. Krap houden: dit
@@ -8388,6 +8725,10 @@ const PROMPT_CATALOG: PromptCatalogEntry[] = [
   { id: 'MOCK_ANSWER_SYSTEM_PROMPT', groep: "Uitvoeren, Testkamer en projecten", titel: "Testkamer: voorbeeldantwoord", uitleg: "Het fictieve antwoord in de Testkamer.", get: () => MOCK_ANSWER_SYSTEM_PROMPT, set: (v) => { MOCK_ANSWER_SYSTEM_PROMPT = v; } },
   { id: 'REFINE_SYSTEM_PROMPT', groep: "Uitvoeren, Testkamer en projecten", titel: "Testkamer: prompt verbeteren", uitleg: "Verbetert de prompt op basis van feedback.", get: () => REFINE_SYSTEM_PROMPT, set: (v) => { REFINE_SYSTEM_PROMPT = v; } },
   { id: 'REFINE_SUGGEST_SYSTEM_PROMPT', groep: "Uitvoeren, Testkamer en projecten", titel: "Testkamer: verbeterpunten voorstellen", uitleg: "Stelt verbeterpunten voor bij een testantwoord.", get: () => REFINE_SUGGEST_SYSTEM_PROMPT, set: (v) => { REFINE_SUGGEST_SYSTEM_PROMPT = v; } },
+  { id: 'PROJECT_INTERVIEW_SYSTEM_PROMPT', groep: "Uitvoeren, Testkamer en projecten", titel: "Project: vragenronde", uitleg: "Prompt maken in een nieuw project: analyseert de taak en stelt per beurt één vraag met antwoordopties.", get: () => PROJECT_INTERVIEW_SYSTEM_PROMPT, set: (v) => { PROJECT_INTERVIEW_SYSTEM_PROMPT = v; } },
+  { id: 'PROJECT_FRAMEWORK_SYSTEM_PROMPT', groep: "Uitvoeren, Testkamer en projecten", titel: "Project: framework kiezen", uitleg: "Kiest na de vragenronde zelf het framework dat bij de taak past.", get: () => PROJECT_FRAMEWORK_SYSTEM_PROMPT, set: (v) => { PROJECT_FRAMEWORK_SYSTEM_PROMPT = v; } },
+  { id: 'PROJECT_PROMPT_SYSTEM_PROMPT', groep: "Uitvoeren, Testkamer en projecten", titel: "Project: prompt schrijven", uitleg: "Schrijft op de gekozen opbouw de vaste prompt die in het project komt.", get: () => PROJECT_PROMPT_SYSTEM_PROMPT, set: (v) => { PROJECT_PROMPT_SYSTEM_PROMPT = v; } },
+  { id: 'PROJECT_PROMPT_ADJUST_SYSTEM_PROMPT', groep: "Uitvoeren, Testkamer en projecten", titel: "Project: prompt aanpassen", uitleg: "Past het voorstel aan op het verzoek van de medewerker.", get: () => PROJECT_PROMPT_ADJUST_SYSTEM_PROMPT, set: (v) => { PROJECT_PROMPT_ADJUST_SYSTEM_PROMPT = v; } },
   { id: 'PROJECT_BRIEF_SYSTEM_PROMPT', groep: "Uitvoeren, Testkamer en projecten", titel: "Projectanalyse", uitleg: "De vaste analyse van de bronbestanden van een chatproject.", get: () => PROJECT_BRIEF_SYSTEM_PROMPT, set: (v) => { PROJECT_BRIEF_SYSTEM_PROMPT = v; } },
 ];
 
@@ -8519,6 +8860,10 @@ Deno.serve(async (req: Request) => {
         ? 'project-optimize'
         : body.mode === 'project-brief'
         ? 'project-brief'
+        : body.mode === 'project-interview'
+        ? 'project-interview'
+        : body.mode === 'project-prompt'
+        ? 'project-prompt'
         : body.mode === 'recommend'
         ? 'recommend'
         : body.mode === 'recommend-framework'
@@ -9905,6 +10250,164 @@ Deno.serve(async (req: Request) => {
 
       return new Response(
         JSON.stringify({ success: true, optimized: output, provider }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    // --- Project-interview: de vragenronde van "Prompt maken" in een project ---
+    if (mode === 'project-interview') {
+      if (!isAuthenticatedRequest(req)) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Log in om een prompt voor je project te maken.' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+      const goal = (body.goal ?? '').trim().slice(0, 2000);
+      if (!goal) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'goal is verplicht' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+      const turns = cleanProjectTurns(body.transcript);
+
+      // Plafond bereikt: geen modelaanroep, door naar het voorstel.
+      if (turns.length >= PROJECT_INTERVIEW_MAX_QUESTIONS) {
+        return new Response(
+          JSON.stringify({ success: true, klaar: true, max: PROJECT_INTERVIEW_MAX_QUESTIONS }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      const userMessage = `${buildProjectTaskBlock(goal, turns)}\n\nWerk de denkstappen af en geef het JSON-object.`;
+      for (const candidate of order) {
+        try {
+          const raw = await JSON_PROVIDERS[candidate](
+            userMessage,
+            PROJECT_INTERVIEW_SYSTEM_PROMPT,
+            0.2,
+            resolveProjectModel(candidate, body.preferredProvider, body.preferredModel),
+            maxTokens,
+          );
+          const turn = parseProjectInterview(raw);
+          if (!turn) continue;
+          // Minstens twee vragen: ook een duidelijke taak heeft een kern die alleen
+          // de medewerker kent, en het model stopt anders al na één antwoord.
+          const klaar =
+            turn.klaar && (turns.length >= PROJECT_INTERVIEW_MIN_QUESTIONS || (!turn.vraag && turns.length > 0));
+          if (!klaar && !turn.vraag) continue;
+          return new Response(
+            JSON.stringify({
+              success: true,
+              klaar,
+              soort: turn.soort,
+              begrip: turn.begrip,
+              vraag: klaar ? undefined : turn.vraag,
+              opties: klaar ? undefined : turn.opties,
+              max: PROJECT_INTERVIEW_MAX_QUESTIONS,
+              provider: candidate,
+            }),
+            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          );
+        } catch (providerErr) {
+          console.error(`${candidate} (project-interview) mislukt, probeer volgende:`, providerErr);
+        }
+      }
+
+      // Honest-degrade: nooit een verzonnen vraag tonen, de client biedt opnieuw proberen.
+      return new Response(
+        JSON.stringify({ success: false, error: 'De volgende vraag kon niet worden opgehaald' }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    // --- Project-prompt: framework kiezen en de vaste prompt schrijven, of aanpassen ---
+    if (mode === 'project-prompt') {
+      if (!isAuthenticatedRequest(req)) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Log in om een prompt voor je project te maken.' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+      const goal = (body.goal ?? '').trim().slice(0, 2000);
+      const current = (body.projectPromptCurrent ?? '').trim().slice(0, MAX_PROJECT_OPTIMIZE_CHARS);
+      const feedback = (body.projectPromptFeedback ?? '').trim().slice(0, 2000);
+      const adjusting = Boolean(current && feedback);
+      const frameworks = (Array.isArray(body.techniques) ? body.techniques : []).filter(
+        (t) => t && t.id && t.name && t.template,
+      );
+      if (!adjusting && (!goal || frameworks.length === 0)) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'goal en techniques zijn verplicht' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+      const taskBlock = buildProjectTaskBlock(goal, cleanProjectTurns(body.transcript));
+      const promptTags = ['werking', 'opdracht', 'regels', 'schrijfwijze', 'uitvoer'];
+      const temperature = clampTemp(body.temperature ?? 0.2);
+
+      for (const candidate of order) {
+        try {
+          const model = resolveProjectModel(candidate, body.preferredProvider, body.preferredModel);
+          let framework: TechniqueSummary | undefined;
+          let reden = '';
+          let titel = '';
+          let raw: string;
+
+          if (adjusting) {
+            raw = await PROVIDERS[candidate](
+              `HUIDIGE PROMPT:\n"""\n${current}\n"""\n\nVERZOEK VAN DE MEDEWERKER:\n"""\n${feedback}\n"""\n\nGeef de volledige aangepaste prompt.`,
+              PROJECT_PROMPT_ADJUST_SYSTEM_PROMPT,
+              temperature,
+              model,
+              maxTokens,
+            );
+          } else {
+            const choiceRaw = await JSON_PROVIDERS[candidate](
+              `${taskBlock}\n\nSOORT: ${(body.projectSoort ?? '').trim().slice(0, 40) || 'onbekend'}\n\nLIJST MET OPBOUWEN:\n${frameworks
+                .map((f) =>
+                  [`- id: ${f.id}`, `naam: ${f.name}`, f.description ? `uitleg: ${f.description}` : '']
+                    .filter(Boolean)
+                    .join(' | '),
+                )
+                .join('\n')}\n\nWerk de denkstappen af en geef het JSON-object.`,
+              PROJECT_FRAMEWORK_SYSTEM_PROMPT,
+              0.1,
+              model,
+              512,
+            );
+            ({ framework, reden, titel } = parseProjectFramework(choiceRaw, frameworks));
+            raw = await PROVIDERS[candidate](
+              `${taskBlock}\n\n${buildProjectPromptRequest(projectFrameworkOutline(framework!.template ?? ''))}`,
+              PROJECT_PROMPT_SYSTEM_PROMPT,
+              temperature,
+              model,
+              maxTokens,
+            );
+          }
+
+          const prompt = stripMarkdownEmphasis(
+            stripSectionTags(stripWrappingQuotes(raw.trim()), promptTags),
+          ).trim();
+          if (!prompt) continue;
+          return new Response(
+            JSON.stringify({
+              success: true,
+              prompt,
+              framework: framework ? { id: framework.id, name: framework.name } : undefined,
+              reden,
+              titel,
+              provider: candidate,
+            }),
+            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          );
+        } catch (providerErr) {
+          console.error(`${candidate} (project-prompt) mislukt, probeer volgende:`, providerErr);
+        }
+      }
+
+      return new Response(
+        JSON.stringify({ success: false, error: 'De prompt kon niet worden geschreven' }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }

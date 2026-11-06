@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   Download,
   FolderOpen,
+  FolderPlus,
   LogIn,
   MessageSquare,
   Play,
@@ -22,6 +23,7 @@ import ChatEmptyState from '@/components/chat/ChatEmptyState';
 import ChatMessageList from '@/components/chat/ChatMessageList';
 import ChatModelBadge from '@/components/chat/ChatModelBadge';
 import ChatSidebar from '@/components/chat/ChatSidebar';
+import ProjectPromptWizard from '@/components/chat/ProjectPromptWizard';
 import ProjectSettingsModal from '@/components/chat/ProjectSettingsModal';
 import ProjectView from '@/components/chat/ProjectView';
 import useChatController from '@/components/chat/useChatController';
@@ -178,11 +180,13 @@ function ChatPageInner() {
   // gaat hij weer op null en neemt het gesprek het scherm over.
   const [projectPage, setProjectPage] = useState<string | null>(null);
   const [settingsProjectId, setSettingsProjectId] = useState<string | null>(null);
+  const [wizard, setWizard] = useState<{ projectId: string; isNew: boolean } | null>(null);
   const [confirmDeleteProject, setConfirmDeleteProject] = useState<string | null>(null);
 
   const projectList = projects.projects;
   const openProject = projectList.find((p) => p.id === projectPage) ?? null;
   const settingsProject = projectList.find((p) => p.id === settingsProjectId) ?? null;
+  const wizardProject = projectList.find((p) => p.id === wizard?.projectId) ?? null;
 
   const knownProjectIds = useMemo(() => new Set(projectList.map((p) => p.id)), [projectList]);
 
@@ -237,11 +241,11 @@ function ChatPageInner() {
     }
     const created = await projects.create('Nieuw project');
     if (!created) return;
-    // Meteen door naar de instellingen: een leeg project zonder instructie is
-    // nog niets — de gebruiker wil hier zijn projectinstructie kwijt.
+    // Meteen de keuze: een leeg project zonder instructie is nog niets, dus de
+    // gebruiker laat er een maken of stelt het zelf in.
     draftProjectRef.current = created.id;
     setProjectPage(created.id);
-    setSettingsProjectId(created.id);
+    setWizard({ projectId: created.id, isNew: true });
   }, [user, requireLogin, projects]);
 
   // Handoff vanuit de bouwer ("Project maken" in de projectbalk): daar staat de
@@ -266,16 +270,42 @@ function ChatPageInner() {
     [settingsProjectId, projects],
   );
 
+  // Alleen een nooit opgeslagen, nog helemaal leeg project wordt opgeruimd; alles
+  // wat de gebruiker erin heeft gezet, haalt de ref al weg.
+  const discardDraftProject = useCallback(
+    (id: string | null) => {
+      if (!id || draftProjectRef.current !== id) return;
+      draftProjectRef.current = null;
+      setProjectPage((cur) => (cur === id ? null : cur));
+      void projects.remove(id);
+    },
+    [projects],
+  );
+
+  const handleSaveWizard = useCallback(
+    async (patch: { name: string; instructions: string }) => {
+      if (!wizard) return false;
+      const ok = await projects.update(wizard.projectId, patch);
+      if (!ok) return false;
+      draftProjectRef.current = null;
+      setWizard(null);
+      toast.success('Je prompt staat in het project.');
+      return true;
+    },
+    [wizard, projects],
+  );
+
+  const handleCloseWizard = useCallback(() => {
+    const id = wizard?.projectId ?? null;
+    setWizard(null);
+    discardDraftProject(id);
+  }, [wizard, discardDraftProject]);
+
   const handleCloseSettings = useCallback(() => {
     const id = settingsProjectId;
     setSettingsProjectId(null);
-    // Alleen een nooit-opgeslagen, nog helemaal leeg project wordt opgeruimd;
-    // alles wat de gebruiker erin heeft gezet, haalt de ref al weg.
-    if (!id || draftProjectRef.current !== id) return;
-    draftProjectRef.current = null;
-    setProjectPage((cur) => (cur === id ? null : cur));
-    void projects.remove(id);
-  }, [settingsProjectId, projects]);
+    discardDraftProject(id);
+  }, [settingsProjectId, discardDraftProject]);
 
   const handleNewChatInProject = useCallback(
     (projectId: string) => {
@@ -513,6 +543,16 @@ function ChatPageInner() {
             >
               <Plus size={16} />
             </button>
+            <button
+              type="button"
+              className="opl-btn-secondary shrink-0 !px-2.5"
+              onClick={() => void handleNewProject()}
+              disabled={controller.streaming}
+              aria-label="Nieuw project"
+              title="Nieuw project"
+            >
+              <FolderPlus size={16} />
+            </button>
             {!projectPage && activeInIndex && conversation && (
               <button
                 type="button"
@@ -583,6 +623,7 @@ function ChatPageInner() {
                 disabled={controller.streaming}
                 onNewChat={() => handleNewChatInProject(openProject.id)}
                 onNewPrompt={handleNewPrompt}
+                onMakeInstruction={() => setWizard({ projectId: openProject.id, isNew: false })}
                 onOpenSettings={() => setSettingsProjectId(openProject.id)}
                 onSelectConversation={handleSelectConversation}
                 onRequestDeleteConversation={setConfirmDeleteId}
@@ -766,6 +807,20 @@ function ChatPageInner() {
         onConfirm={controller.removeAllConversations}
         onClose={() => setConfirmDeleteAll(false)}
       />
+      {wizardProject && (
+        <ProjectPromptWizard
+          key={wizardProject.id}
+          projectName={wizardProject.name}
+          isNewProject={Boolean(wizard?.isNew)}
+          settings={settings}
+          onManual={() => {
+            setWizard(null);
+            setSettingsProjectId(wizardProject.id);
+          }}
+          onClose={handleCloseWizard}
+          onSave={handleSaveWizard}
+        />
+      )}
       <ProjectSettingsModal
         open={settingsProject !== null}
         project={settingsProject}
