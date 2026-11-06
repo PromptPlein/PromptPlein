@@ -18,12 +18,15 @@ export default function InfoDot({
   label,
   text,
   className,
+  onDark = false,
 }: {
   /** Wat de knop uitlegt, voor schermlezers. Bijv. "Uitleg over categorieën". */
   label: string;
   /** De uitleg zelf: kort, hooguit twee zinnen. Regeleindes blijven staan. */
   text: string;
   className?: string;
+  /** Staat het bolletje op een donker vlak (de kop van de startpagina)? */
+  onDark?: boolean;
 }) {
   const id = useId();
   const [hover, setHover] = useState(false);
@@ -109,9 +112,13 @@ export default function InfoDot({
           className={clsx(
             'flex h-[22px] w-[22px] items-center justify-center rounded-full border-2 text-[13px] font-bold leading-none transition-colors',
             'group-focus-visible/info:ring-2 group-focus-visible/info:ring-rijksblauw-500 group-focus-visible/info:ring-offset-2 dark:group-focus-visible/info:ring-offset-slate-900',
-            open
-              ? 'border-rijksblauw-700 bg-rijksblauw-700 text-white dark:border-rijksblauw-200 dark:bg-rijksblauw-200 dark:text-slate-900'
-              : 'border-rijksblauw-500 text-rijksblauw-500 group-hover/info:border-rijksblauw-700 group-hover/info:text-rijksblauw-700 dark:border-rijksblauw-200 dark:text-rijksblauw-200',
+            onDark
+              ? open
+                ? 'border-white bg-white text-rijksblauw-700'
+                : 'border-white text-white group-hover/info:bg-white/15'
+              : open
+                ? 'border-rijksblauw-700 bg-rijksblauw-700 text-white dark:border-rijksblauw-200 dark:bg-rijksblauw-200 dark:text-slate-900'
+                : 'border-rijksblauw-500 text-rijksblauw-500 group-hover/info:border-rijksblauw-700 group-hover/info:text-rijksblauw-700 dark:border-rijksblauw-200 dark:text-rijksblauw-200',
           )}
         >
           i
@@ -125,7 +132,12 @@ export default function InfoDot({
             role="tooltip"
             // pointer-events-none: het paneel mag de muis nooit onderscheppen,
             // anders knippert het zodra je eroverheen beweegt.
-            className="pointer-events-none fixed z-50 w-max max-w-[min(18rem,calc(100vw-1rem))] whitespace-pre-line rounded bg-rijksblauw-700 px-3 py-2 text-sm font-normal leading-snug text-white shadow-lg dark:bg-slate-100 dark:text-slate-900"
+            className={clsx(
+              'pointer-events-none fixed z-50 w-max max-w-[min(18rem,calc(100vw-1rem))] whitespace-pre-line rounded px-3 py-2 text-sm font-normal leading-snug shadow-lg',
+              onDark
+                ? 'bg-white text-slate-900'
+                : 'bg-rijksblauw-700 text-white dark:bg-slate-100 dark:text-slate-900',
+            )}
             style={{ top: pos?.top ?? 0, left: pos?.left ?? 0, opacity: pos ? 1 : 0 }}
           >
             {text}
