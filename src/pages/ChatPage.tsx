@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
-  Database,
   Download,
   FolderOpen,
   LogIn,
@@ -12,6 +11,7 @@ import {
   Trash2,
   Upload,
 } from '@/components/common/icons';
+import InfoDot from '@/components/common/InfoDot';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/context/AuthContext';
@@ -676,49 +676,40 @@ function ChatPageInner() {
         </div>
       </div>
 
-      {/* Onder de kaart, en dus ook tijdens een lopend gesprek zichtbaar: wat
-          wordt waar bewaard? De scheiding tussen projecten (database) en chats
-          (dit apparaat) is de belangrijkste privacy-afspraak van deze pagina en
-          hoort niet alleen in de lege staat te staan. Eén compacte pil met twee
-          korte feiten: losse zinnen zouden over de volle breedte uitwaaieren en
-          eerder als een storingsmelding lezen dan als een geruststelling. */}
-      <div className="mt-3 flex justify-center">
-        <p className="inline-flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 rounded-full border border-slate-200 bg-white/70 px-3.5 py-1.5 text-center text-[11px] text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400">
-          <span className="inline-flex items-center gap-1.5">
-            <Database size={12} className="shrink-0 text-slate-400 dark:text-slate-500" />
-            Projecten staan in de database
-          </span>
-          <span aria-hidden="true" className="hidden text-slate-300 dark:text-slate-600 sm:inline">
-            ·
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <ShieldCheck size={12} className="shrink-0 text-slate-400 dark:text-slate-500" />
-            chats blijven in deze browser, ook na uitloggen
-          </span>
-        </p>
-      </div>
-      {/* Wie zijn chats naar een andere pc wil meenemen, of ze wil houden als de
-          browsergegevens gewist worden, bewaart ze als bestand en zet ze later
-          terug. Het bestand gaat nergens heen: opbouwen en inlezen gebeurt in
-          de browser. */}
-      <div className="mt-2 flex flex-wrap justify-center gap-2 text-xs">
+      {/* Onder de kaart, en dus ook tijdens een lopend gesprek zichtbaar: waar
+          blijven je chats? De scheiding tussen projecten (database) en chats
+          (dit apparaat) is de belangrijkste privacy-afspraak van deze pagina.
+          Eén korte belofte in beeld, de rest achter het infobolletje; ernaast
+          de twee knoppen waarmee je je chats als bestand meeneemt. Het bestand
+          gaat nergens heen: opbouwen en inlezen gebeurt in de browser. */}
+      <div className="mt-3 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm">
+        <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white py-0.5 pl-3 pr-1 font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+          <ShieldCheck size={15} className="shrink-0 text-rijksblauw-700 dark:text-rijksblauw-200" />
+          Chats blijven in deze browser
+          <InfoDot
+            label="Uitleg over waar chats en projecten staan"
+            text={
+              'Chats staan alleen in deze browser, ook zonder account en na uitloggen. Wis je de browsergegevens of wissel je van pc, dan zie je ze daar niet.\nProjecten staan bij je account in de database.\nMet Bewaren en Terugzetten neem je je chats mee als bestand.'
+            }
+          />
+        </span>
         <button
           type="button"
-          className="opl-btn-ghost !px-2.5 !py-1"
+          className="opl-btn-ghost !px-2.5 !py-1.5"
           onClick={controller.exportHistory}
           disabled={controller.streaming || controller.index.length === 0}
           title="Download al je chats als één bestand op dit apparaat"
         >
-          <Download size={13} /> Chatgeschiedenis bewaren
+          <Download size={15} /> Bewaren
         </button>
         <button
           type="button"
-          className="opl-btn-ghost !px-2.5 !py-1"
+          className="opl-btn-ghost !px-2.5 !py-1.5"
           onClick={() => restoreInputRef.current?.click()}
           disabled={controller.streaming}
           title="Zet een eerder bewaard bestand terug op dit apparaat"
         >
-          <Upload size={13} /> Terugzetten
+          <Upload size={15} /> Terugzetten
         </button>
         <input
           ref={restoreInputRef}

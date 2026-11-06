@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { FolderOpen, MessageSquare, Plus, Trash2 } from '@/components/common/icons';
 import clsx from 'clsx';
+import InfoDot from '@/components/common/InfoDot';
 import { formatDate } from '@/lib/utils';
 import type { ChatIndexEntry, ChatProject } from '@/types';
 
@@ -21,8 +22,9 @@ import type { ChatIndexEntry, ChatProject } from '@/types';
  *
  * Het kopje en de knop delen één regel zodat "Projecten" en "Chats" precies
  * dezelfde vorm hebben: label links, plus helemaal rechts. Het plusje is
- * bewust ingetogen (klein, grijs) — de grote knop bovenaan blijft de hoofdweg,
- * dit is de snelkoppeling voor wie al weet waar hij heen wil.
+ * bewust ingetogen: de grote knop bovenaan blijft de hoofdweg, dit is de
+ * snelkoppeling voor wie al weet waar hij heen wil. Wat een project is, staat
+ * achter het infobolletje naast het kopje.
  */
 function SectionHeading({
   label,
@@ -30,8 +32,11 @@ function SectionHeading({
   onAdd,
   disabled,
   className,
+  info,
 }: {
   label: string;
+  /** Korte uitleg achter een infobolletje naast het kopje. */
+  info?: string;
   /** Wat de knop doet, in gewone taal — wordt het toegankelijkheidslabel. */
   addLabel: string;
   onAdd: () => void;
@@ -39,21 +44,39 @@ function SectionHeading({
   className?: string;
 }) {
   return (
-    <div className={clsx('flex items-center gap-2 px-2 pb-1 pt-1', className)}>
-      <p className="min-w-0 flex-1 truncate text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+    <div className={clsx('flex items-center gap-0.5 px-2 pb-1 pt-1', className)}>
+      <h2 className="truncate text-sm font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
         {label}
-      </p>
+      </h2>
+      {info && <InfoDot label={`Uitleg over ${label.toLowerCase()}`} text={info} />}
       <button
         type="button"
-        className="-mr-1 shrink-0 rounded-md p-1 text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-700 disabled:pointer-events-none disabled:opacity-40 dark:text-slate-500 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+        className="-mr-1 ml-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-rijksblauw-700 transition-colors hover:bg-rijksblauw-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 disabled:pointer-events-none disabled:opacity-40 dark:text-rijksblauw-200 dark:hover:bg-rijksblauw-500/15"
         onClick={onAdd}
         disabled={disabled}
         aria-label={addLabel}
         title={addLabel}
       >
-        <Plus size={14} />
+        <Plus size={16} />
       </button>
     </div>
+  );
+}
+
+/** Rond tegeltje met het icoon van een project of chat, zoals op de startpagina. */
+function ItemIcon({ active, children }: { active: boolean; children: ReactNode }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={clsx(
+        'flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors',
+        active
+          ? 'bg-rijksblauw-700 text-white dark:bg-rijksblauw-500'
+          : 'bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200',
+      )}
+    >
+      {children}
+    </span>
   );
 }
 
@@ -162,7 +185,13 @@ export default function ChatSidebar({
             plusje staat rechts op dezelfde regel als het kopje. Daarom staan ze
             er ook als de lijst nog leeg is — anders is de knop pas te vinden
             nadat je al een project hebt. */}
-        <SectionHeading label="Projecten" addLabel="Nieuw project" onAdd={onNewProject} disabled={disabled} />
+        <SectionHeading
+          label="Projecten"
+          addLabel="Nieuw project"
+          onAdd={onNewProject}
+          disabled={disabled}
+          info="Een project bundelt een instructie, bronbestanden en chats over één onderwerp."
+        />
         {projects.length > 0 && (
           <>
             {projects.map((project) => (
@@ -170,18 +199,24 @@ export default function ChatSidebar({
                 key={project.id}
                 type="button"
                 className={clsx(
-                  'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors',
+                  'flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-sm transition-colors',
                   project.id === openProjectId
-                    ? 'bg-rijksblauw-50 font-medium text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200'
-                    : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800',
+                    ? 'bg-rijksblauw-50 font-semibold text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-100'
+                    : 'text-slate-800 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800',
                 )}
                 onClick={() => onOpenProject(project.id)}
                 disabled={disabled}
               >
-                <FolderOpen size={14} className="shrink-0 text-slate-400" />
+                <ItemIcon active={project.id === openProjectId}>
+                  <FolderOpen size={15} />
+                </ItemIcon>
                 <span className="min-w-0 flex-1 truncate">{project.name}</span>
                 {Boolean(project.fileCount) && (
-                  <span className="shrink-0 text-[11px] text-slate-400 dark:text-slate-500">
+                  <span
+                    aria-label={`${project.fileCount} bronbestanden`}
+                    title={`${project.fileCount} bronbestanden`}
+                    className="min-w-[1.5rem] shrink-0 rounded-full bg-rijksblauw-700 px-1.5 text-center text-xs font-bold leading-6 text-white dark:bg-rijksblauw-500"
+                  >
                     {project.fileCount}
                   </span>
                 )}
@@ -193,9 +228,7 @@ export default function ChatSidebar({
         <SectionHeading label="Chats" addLabel="Nieuwe chat" onAdd={onNew} disabled={disabled} className="pt-3" />
 
         {entries.length === 0 && (
-          <p className="px-2 py-4 text-xs text-slate-400 dark:text-slate-500">
-            Nog geen eerdere chats op dit apparaat.
-          </p>
+          <p className="px-2 py-3 text-sm text-slate-600 dark:text-slate-400">Nog geen chats.</p>
         )}
         {entries.map((entry) => (
           <div
@@ -209,28 +242,32 @@ export default function ChatSidebar({
           >
             <button
               type="button"
-              className="flex min-w-0 flex-1 flex-col items-start gap-0.5 px-3 py-2 text-left"
+              className="flex min-w-0 flex-1 items-center gap-2.5 px-2 py-1.5 text-left"
               onClick={() => onSelect(entry.id)}
               disabled={disabled}
             >
-              <span
-                className={clsx(
-                  'flex w-full items-center gap-1.5 text-sm',
-                  entry.id === activeId
-                    ? 'font-medium text-rijksblauw-700 dark:text-rijksblauw-200'
-                    : 'text-slate-700 dark:text-slate-300',
-                )}
-              >
-                <MessageSquare size={13} className="shrink-0" />
-                <span className="truncate">{entry.title}</span>
-              </span>
-              <span className="text-[11px] text-slate-400 dark:text-slate-500">
-                {formatDate(entry.updatedAt)}
+              <ItemIcon active={entry.id === activeId}>
+                <MessageSquare size={15} />
+              </ItemIcon>
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span
+                  className={clsx(
+                    'truncate text-sm',
+                    entry.id === activeId
+                      ? 'font-semibold text-rijksblauw-700 dark:text-rijksblauw-100'
+                      : 'text-slate-800 dark:text-slate-200',
+                  )}
+                >
+                  {entry.title}
+                </span>
+                <span className="text-xs text-slate-600 dark:text-slate-400">
+                  {formatDate(entry.updatedAt)}
+                </span>
               </span>
             </button>
             <button
               type="button"
-              className="shrink-0 rounded-md p-1.5 text-slate-400 opacity-0 transition-opacity hover:bg-slate-200 hover:text-rijksrood group-hover:opacity-100 dark:hover:bg-slate-700"
+              className="shrink-0 rounded-md p-1.5 text-slate-500 opacity-0 transition-opacity hover:bg-slate-200 hover:text-rijksrood focus:opacity-100 group-hover:opacity-100 dark:text-slate-400 dark:hover:bg-slate-700"
               onClick={() => onRequestDelete(entry.id)}
               disabled={disabled}
               aria-label={`Verwijder chat "${entry.title}"`}

@@ -132,7 +132,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
                 {onImprove && (
                   <button
                     type="button"
-                    className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-400 hover:text-rijksblauw-600 dark:text-slate-500 dark:hover:text-rijksblauw-300"
+                    className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-rijksblauw-700 dark:text-slate-300 dark:hover:text-rijksblauw-200"
                     onClick={() => onImprove(message.content)}
                     title="Maak hier in de generator een sterkere, herbruikbare prompt van"
                   >
@@ -142,7 +142,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
                 {onSaveAsPrompt && (
                   <button
                     type="button"
-                    className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-400 hover:text-rijksblauw-600 dark:text-slate-500 dark:hover:text-rijksblauw-300"
+                    className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-rijksblauw-700 dark:text-slate-300 dark:hover:text-rijksblauw-200"
                     onClick={() => onSaveAsPrompt(message.content)}
                     title="Sla dit bericht op als prompt in de bibliotheek"
                   >

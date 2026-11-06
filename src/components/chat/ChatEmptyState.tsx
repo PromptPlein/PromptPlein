@@ -1,4 +1,4 @@
-import { ArrowDown, FileText, ShieldCheck } from '@/components/common/icons';
+import { ArrowDown } from '@/components/common/icons';
 
 /**
  * Lege staat van een nieuw gesprek: het merkteken, één vraag en een pijl naar
@@ -9,6 +9,10 @@ import { ArrowDown, FileText, ShieldCheck } from '@/components/common/icons';
  * moesten typen. Een leeg gesprek wijst nu maar één ding aan, het tekstvak,
  * net als bij de bekende chatdiensten. Voorbeelden en sjablonen staan op de
  * bouwerspagina, niet in de chat.
+ *
+ * Ook de uitlegregels zijn hier weg. Waar chats bewaard worden staat onder de
+ * kaart, wat je met bijlagen kunt staat achter het infobolletje bij het
+ * invoerveld.
  */
 export default function ChatEmptyState() {
   return (
@@ -24,27 +28,17 @@ export default function ChatEmptyState() {
         aria-hidden="true"
         className="h-16 w-16 rounded-2xl object-contain dark:bg-slate-100 dark:p-1.5 dark:ring-1 dark:ring-white/20"
       />
-      <div>
-        <h2 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">
-          Waarmee kan ik je helpen?
-        </h2>
-        {/* De pijl wijst naar het invoerveld direct hieronder. */}
-        <p className="mx-auto mt-2 inline-flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-          Typ je vraag in het vak hieronder
-          <ArrowDown size={14} className="shrink-0 text-rijksblauw-500" aria-hidden="true" />
-        </p>
-      </div>
-
-      <div className="flex flex-col items-center gap-1 text-[11px] text-slate-400 dark:text-slate-500">
-        <span className="inline-flex items-center gap-1.5">
-          <ShieldCheck size={12} className="shrink-0" />
-          Chats staan alleen in deze browser, ook zonder account. Wis je de browsergegevens of wissel je van pc, dan zie je ze daar niet.
-        </span>
-        <span className="hidden items-center gap-1.5 sm:inline-flex">
-          <FileText size={12} className="shrink-0" />
-          Bijlagen blijven de hele chat beschikbaar als bronmateriaal.
-        </span>
-      </div>
+      <h2 className="text-2xl font-bold text-rijksblauw-700 dark:text-slate-100">
+        Waarmee kan ik je helpen?
+      </h2>
+      {/* De pijl wijst naar het invoerveld direct hieronder; het veld zegt zelf
+          al wat je er doet. */}
+      <span
+        aria-hidden="true"
+        className="flex h-10 w-10 items-center justify-center rounded-full bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200"
+      >
+        <ArrowDown size={20} />
+      </span>
     </div>
   );
 }

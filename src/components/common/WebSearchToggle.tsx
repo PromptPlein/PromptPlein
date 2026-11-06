@@ -13,7 +13,7 @@ interface WebSearchToggleProps {
 }
 
 /**
- * De knop "Zoeken": de AI zoekt eerst op internet en beantwoordt de vraag met
+ * De knop "Internet": de AI zoekt eerst op internet en beantwoordt de vraag met
  * wat hij vindt, met de bronnen erbij.
  *
  * Dezelfde vorm als {@link ThinkingToggle} ernaast, want het is dezelfde soort
@@ -47,14 +47,14 @@ export default function WebSearchToggle({
         disabled={disabled}
         title={
           value
-            ? 'Zoeken staat aan: je vraag gaat naar een externe zoekdienst en de AI antwoordt met wat hij vindt, met de bronnen erbij. Zet geen vertrouwelijke informatie in je vraag.'
+            ? 'Internet staat aan: je vraag gaat naar een externe zoekdienst en de AI antwoordt met wat hij vindt, met de bronnen erbij. Zet geen vertrouwelijke informatie in je vraag.'
             : 'Laat de AI eerst op internet zoeken. Handig bij iets actueels of iets wat de AI zelf niet kan weten; je vraag gaat dan wel naar een externe zoekdienst.'
         }
         aria-pressed={value}
         aria-label="Zoeken op internet aan of uit"
       >
         <Globe size={16} className="shrink-0" />
-        <span className="text-xs font-medium">Zoeken</span>
+        <span className="text-xs font-medium">Internet</span>
       </button>
 
       <ConfirmDialog

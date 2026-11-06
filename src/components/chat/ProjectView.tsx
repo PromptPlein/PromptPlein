@@ -9,8 +9,23 @@ import {
   Trash2,
   Wand2,
 } from '@/components/common/icons';
+import InfoDot from '@/components/common/InfoDot';
 import { formatDate } from '@/lib/utils';
 import type { ChatIndexEntry, ChatProject } from '@/types';
+
+/** Eén actietegel op de projectpagina: icoon boven, label eronder. */
+const TILE =
+  'flex min-h-[6.5rem] flex-col justify-between gap-3 rounded-xl p-4 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:focus-visible:ring-offset-slate-800';
+const TILE_PRIMARY =
+  'bg-rijksblauw-700 text-white hover:bg-rijksblauw-800 dark:bg-rijksblauw-600 dark:hover:bg-rijksblauw-500';
+// Dezelfde gele tint als "Technieken leren" op de startpagina: de tegel die
+// naar de bouwer leidt valt op naast de twee blauwe.
+const TILE_ACCENT =
+  'bg-[#ffb612]/20 text-rijksblauw-700 hover:bg-[#ffb612]/35 dark:bg-[#ffb612]/15 dark:text-white dark:hover:bg-[#ffb612]/25';
+const TILE_SOFT =
+  'bg-rijksblauw-50 text-rijksblauw-700 hover:bg-rijksblauw-100 dark:bg-rijksblauw-500/20 dark:text-white dark:hover:bg-rijksblauw-500/30';
+const SECTION_HEADING =
+  'flex items-center text-base font-bold text-rijksblauw-700 dark:text-rijksblauw-200';
 
 /**
  * De projectpagina: wat je ziet als je links op een project klikt.
@@ -84,80 +99,60 @@ export default function ProjectView({
   return (
     <div className="min-h-0 flex-auto overflow-y-auto px-4 py-6 sm:px-6">
       <div className="mx-auto max-w-2xl space-y-6">
-        {/* Naam links, de drie acties rechts.
+        {/* Naam met de twee aantallen als bolletjes, daaronder de drie dingen
+            die je met een project kunt doen als tegels: praten, er een prompt
+            mee bouwen, of het instellen. Tegels in plaats van een rij knoppen
+            naast de titel: zo wordt een lange projectnaam nooit afgekapt en
+            lees je de acties in één blik, net als op de startpagina. */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <h2 className="min-w-0 break-words text-2xl font-bold text-rijksblauw-700 dark:text-slate-100">
+            {project.name}
+          </h2>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-rijksblauw-50 px-2.5 py-0.5 text-sm font-semibold text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-100">
+            <FileText size={14} aria-hidden="true" />
+            <span aria-label={`${fileCount} bronbestanden`}>{fileCount}</span>
+          </span>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-rijksblauw-50 px-2.5 py-0.5 text-sm font-semibold text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-100">
+            <MessageSquare size={14} aria-hidden="true" />
+            <span aria-label={`${chatCount} chats`}>{chatCount}</span>
+          </span>
+        </div>
 
-            NIET afdwingen met flex-nowrap: dan houden de knoppen hun breedte en
-            wordt de titel afgekapt tot "Email schrij…". Alles moet leesbaar
-            blijven, dus de knoppen zijn compact gemaakt en de tellerregel is
-            ingekort tot het geheel binnen de smalste kolom past (656 px bij een
-            1024-venster: 454 px knoppen + 184 px tekst + 12 px tussenruimte).
-            Past het bij een lange projectnaam tóch niet, dan zakt de knoppenrij
-            een regel — stapelen is leesbaarder dan knijpen. */}
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h2 className="truncate text-xl font-bold text-slate-900 dark:text-slate-100">
-              {project.name}
-            </h2>
-            <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
-              {fileCount} bronbestanden · {chatCount} chats
-            </p>
-          </div>
-          {/* De drie dingen die je met een project kunt doen, op één rij:
-              instellen, praten, of er een prompt mee bouwen. Compacter dan de
-              standaardknop (13px, krappere padding): dat is wat de rij naast de
-              titel laat passen, en als werkbalk boven een pagina leest het
-              rustiger dan drie knoppen op volle sterkte. */}
-          <div className="flex shrink-0 flex-wrap gap-2">
-            <button
-              type="button"
-              className="opl-btn-secondary !px-3 !py-1.5 !text-[13px]"
-              onClick={onOpenSettings}
-              disabled={disabled}
-              // "Instellingen" volstaat: je staat al op de projectpagina, dus
-              // waarvan het de instellingen zijn is uit de context duidelijk.
-              // "Projectinstellingen" kostte 48 px extra en dat is precies de
-              // ruimte die de titel nodig heeft.
-              title="Projectinstellingen"
-            >
-              <Settings2 size={14} /> Instellingen
-            </button>
-            <button
-              type="button"
-              className="opl-btn-primary !px-3 !py-1.5 !text-[13px]"
-              onClick={onNewChat}
-              disabled={disabled}
-            >
-              <Plus size={14} /> Nieuwe chat
-            </button>
-            {/* Wand2 is het icoon dat de promptbouwer voor zichzelf gebruikt (de
-                instap-tab op /genereren). Dáár zit de herkenning: je ziet vooraf
-                hetzelfde teken als op de plek waar je terechtkomt.
-
-                Hetzelfde oranje verloop als "Genereren" in de menubalk
-                (accentChip.oranje in components/common/Header.tsx): deze knop
-                leidt naar dezelfde plek, dus hij hoort er ook zo uit te zien.
-                Naast de neutrale en de blauwe knop is het in één oogopslag de
-                andere soort actie. */}
-            <button
-              type="button"
-              className="opl-btn !px-3 !py-1.5 !text-[13px] bg-rijksoranje text-slate-950 shadow-sm hover:bg-rijksoranje-dark dark:hover:text-white focus:ring-rijksoranje"
-              // Altijd zonder bronbestanden beginnen: de projectinstructie is
-              // meestal genoeg, en wie ze tóch wil zet ze aan in de balk bóven
-              // de bouwer — daar ziet hij meteen wat het doet.
-              onClick={() => onNewPrompt(false)}
-              disabled={disabled}
-              title="De promptbouwer krijgt de projectinstructie mee, zodat de prompt over jouw onderwerp gaat en er niet naar gevraagd wordt."
-            >
-              <Wand2 size={14} /> Genereer prompt
-            </button>
-          </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <button type="button" className={`${TILE} ${TILE_PRIMARY}`} onClick={onNewChat} disabled={disabled}>
+            <Plus size={28} />
+            <span className="text-base font-bold leading-tight">Nieuwe chat</span>
+          </button>
+          {/* Wand2 is het icoon dat de promptbouwer voor zichzelf gebruikt (de
+              instap op /genereren): je ziet vooraf hetzelfde teken als op de
+              plek waar je terechtkomt. Altijd zonder bronbestanden beginnen: de
+              projectinstructie is meestal genoeg, en wie ze toch wil zet ze aan
+              in de balk boven de bouwer. */}
+          <button
+            type="button"
+            className={`${TILE} ${TILE_ACCENT}`}
+            onClick={() => onNewPrompt(false)}
+            disabled={disabled}
+            title="De promptbouwer krijgt de projectinstructie mee, zodat de prompt over jouw onderwerp gaat."
+          >
+            <Wand2 size={28} strokeWidth={1.5} />
+            <span className="text-base font-bold leading-tight">Prompt maken</span>
+          </button>
+          <button type="button" className={`${TILE} ${TILE_SOFT}`} onClick={onOpenSettings} disabled={disabled}>
+            <Settings2 size={28} />
+            <span className="text-base font-bold leading-tight">Instellingen</span>
+          </button>
         </div>
 
         {/* De instructie: het eerste wat je wilt weten als je een project opent.
             Staat er niets, dan is dat geen fout maar een uitnodiging. */}
         <section className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-900/40">
-          <h3 className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            <Settings2 size={13} /> Projectinstructie
+          <h3 className={`${SECTION_HEADING} mb-1.5`}>
+            Projectinstructie
+            <InfoDot
+              label="Uitleg over de projectinstructie"
+              text="Elke chat in dit project volgt deze instructie. Je past hem aan bij Instellingen."
+            />
           </h3>
           {instructions ? (
             <>
@@ -202,7 +197,7 @@ export default function ProjectView({
               )}
             </>
           ) : (
-            <p className="text-sm text-slate-400 dark:text-slate-500">
+            <p className="text-sm text-slate-600 dark:text-slate-400">
               Nog geen instructie.{' '}
               <button
                 type="button"
@@ -216,42 +211,39 @@ export default function ProjectView({
         </section>
 
         <section>
-          <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            <FileText size={13} /> Bronbestanden
+          <h3 className={`${SECTION_HEADING} mb-1`}>
+            Bronbestanden
+            <span
+              aria-label={`${fileCount} bronbestanden`}
+              className="ml-1.5 min-w-[1.5rem] rounded-full bg-rijksblauw-700 px-1.5 text-center text-xs font-bold leading-6 text-white dark:bg-rijksblauw-500"
+            >
+              {fileCount}
+            </span>
+            <InfoDot
+              label="Uitleg over bronbestanden"
+              text="Documenten waar de chats in dit project uit putten. Je beheert ze bij Instellingen."
+            />
           </h3>
-          {fileCount > 0 ? (
-            <p className="text-sm text-slate-600 dark:text-slate-300">
-              Bronbestanden: {fileCount}.{' '}
-              <button
-                type="button"
-                className="font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
-                onClick={onOpenSettings}
-              >
-                Beheer ze
-              </button>
-            </p>
-          ) : (
-            <p className="text-sm text-slate-400 dark:text-slate-500">
-              Nog geen bronbestanden.{' '}
-              <button
-                type="button"
-                className="font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
-                onClick={onOpenSettings}
-              >
-                Upload er een
-              </button>
-            </p>
-          )}
+          <button
+            type="button"
+            className="text-sm font-semibold text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
+            onClick={onOpenSettings}
+          >
+            {fileCount > 0 ? 'Beheren' : 'Upload er een'}
+          </button>
         </section>
 
         <section>
-          <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            <MessageSquare size={13} /> Chats in dit project
+          <h3 className={`${SECTION_HEADING} mb-1`}>
+            Chats in dit project
+            <InfoDot
+              label="Uitleg over chats in dit project"
+              text="Een chat hier draait meteen op de instructie en de bronbestanden van dit project."
+            />
           </h3>
           {conversations.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-400 dark:border-slate-600 dark:text-slate-500">
-              Nog geen chats. Begin er een; die draait meteen op de instructie en de bronnen
-              van dit project.
+            <p className="rounded-lg border border-dashed border-slate-300 px-4 py-5 text-center text-sm text-slate-600 dark:border-slate-600 dark:text-slate-400">
+              Nog geen chats.
             </p>
           ) : (
             <ul className="space-y-1">
@@ -262,21 +254,28 @@ export default function ProjectView({
                 >
                   <button
                     type="button"
-                    className="flex min-w-0 flex-1 flex-col items-start gap-0.5 px-3 py-2 text-left"
+                    className="flex min-w-0 flex-1 items-center gap-2.5 px-2 py-1.5 text-left"
                     onClick={() => onSelectConversation(entry.id)}
                     disabled={disabled}
                   >
-                    <span className="flex w-full items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300">
-                      <MessageSquare size={13} className="shrink-0" />
-                      <span className="truncate">{entry.title}</span>
+                    <span
+                      aria-hidden="true"
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200"
+                    >
+                      <MessageSquare size={15} />
                     </span>
-                    <span className="text-[11px] text-slate-400 dark:text-slate-500">
-                      {formatDate(entry.updatedAt)}
+                    <span className="flex min-w-0 flex-1 flex-col">
+                      <span className="truncate text-sm text-slate-800 dark:text-slate-200">
+                        {entry.title}
+                      </span>
+                      <span className="text-xs text-slate-600 dark:text-slate-400">
+                        {formatDate(entry.updatedAt)}
+                      </span>
                     </span>
                   </button>
                   <button
                     type="button"
-                    className="mr-1 shrink-0 rounded-md p-1.5 text-slate-400 opacity-0 transition-opacity hover:bg-slate-200 hover:text-rijksrood group-hover:opacity-100 dark:hover:bg-slate-700"
+                    className="mr-1 shrink-0 rounded-md p-1.5 text-slate-500 opacity-0 transition-opacity hover:bg-slate-200 hover:text-rijksrood focus:opacity-100 group-hover:opacity-100 dark:text-slate-400 dark:hover:bg-slate-700"
                     onClick={() => onRequestDeleteConversation(entry.id)}
                     disabled={disabled}
                     aria-label={`Verwijder chat "${entry.title}"`}

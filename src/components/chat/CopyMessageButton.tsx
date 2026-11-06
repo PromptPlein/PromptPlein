@@ -48,10 +48,10 @@ export default function CopyMessageButton({
       aria-label={label ? undefined : copied ? 'Gekopieerd' : 'Bericht kopiëren'}
       title={copied ? 'Gekopieerd' : 'Kopieer deze tekst'}
       className={clsx(
-        'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium transition-colors',
+        'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium transition-colors',
         copied
           ? 'text-emerald-600 dark:text-emerald-400'
-          : 'text-slate-400 hover:bg-slate-100 hover:text-rijksblauw-600 dark:text-slate-500 dark:hover:bg-slate-700 dark:hover:text-rijksblauw-300',
+          : 'text-slate-600 hover:bg-slate-100 hover:text-rijksblauw-700 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-rijksblauw-200',
         className,
       )}
     >

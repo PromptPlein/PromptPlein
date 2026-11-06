@@ -22,6 +22,7 @@ import {
   X,
 } from '@/components/common/icons';
 import clsx from 'clsx';
+import InfoDot from '@/components/common/InfoDot';
 import DictationButton from '@/components/common/DictationButton';
 import ThinkingToggle from '@/components/common/ThinkingToggle';
 import WebSearchToggle from '@/components/common/WebSearchToggle';
@@ -752,17 +753,19 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
         </div>
       )}
 
-      <div className="mt-1.5 flex items-center justify-between gap-2">
-        <p className="min-w-0 text-[11px] text-slate-400 dark:text-slate-500">
-          <span className="hidden sm:inline">Enter = verzenden · Shift+Enter = nieuwe regel</span>
-          {allowAttachments && (
-            <>
-              <span className="hidden sm:inline"> · </span>
-              max. {MAX_CHAT_ATTACHMENTS} bijlagen, 10&nbsp;MB
-              <span className="hidden sm:inline"> per stuk · sleep ze hierheen of klik op de paperclip</span>
-            </>
-          )}
-        </p>
+      {/* Sneltoetsen en de bijlagelimiet stonden hier als een regel kleine
+          grijze tekst. Die staat nu achter het infobolletje: wie het wil weten
+          vindt het, en het veld blijft rustig. */}
+      <div className="mt-1 flex items-center justify-between gap-2">
+        <InfoDot
+          label="Uitleg bij het invoerveld"
+          className="-ml-1"
+          text={
+            allowAttachments
+              ? `Enter verstuurt. Shift+Enter geeft een nieuwe regel.\nBijlagen: maximaal ${MAX_CHAT_ATTACHMENTS}, elk tot 10 MB. Sleep ze hierheen of klik op de paperclip. Ze blijven de hele chat beschikbaar.`
+              : 'Enter verstuurt. Shift+Enter geeft een nieuwe regel.'
+          }
+        />
         <span className="shrink-0">{badge}</span>
       </div>
     </div>
