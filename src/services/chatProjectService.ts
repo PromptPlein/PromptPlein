@@ -251,16 +251,94 @@ export interface ProjectContextResult {
   context: ChatProjectContext;
   /** Namen van bestanden die niet meer in het budget pasten. */
   skipped: string[];
+  /**
+   * true als de context is opgebouwd uit de stukken die bij de vraag passen
+   * (search_project_chunks) in plaats van uit hele bestanden. `skipped` is
+   * dan leeg: niets viel buiten het budget, de rest van de tekst was gewoon
+   * niet aan de orde.
+   */
+  searched: boolean;
+}
+
+/** Eén rij uit de RPC search_project_chunks (migratie 0046). */
+interface ChunkRow {
+  file_id: string;
+  seq: number;
+  text: string;
+}
+
+/**
+ * Haalt de tekststukken op die bij de vraag passen, via de Nederlandse
+ * tekstzoeker uit migratie 0046. Geeft null terug als er niets matcht of als
+ * de functie faalt, zodat de aanroeper op hele bestanden kan terugvallen.
+ */
+async function searchProjectChunks(
+  projectId: string,
+  query: string,
+  nameOf: Map<string, string>,
+): Promise<{ name: string; text: string }[] | null> {
+  const client = requireClient();
+  const { data, error } = await client.rpc('search_project_chunks', {
+    p_project: projectId,
+    p_query: query,
+  });
+  if (error) return null;
+
+  // Groepeer de stukken per bestand. De RPC levert op trefferscore, dus de
+  // volgorde van eerste verschijning is de volgorde van beste treffer.
+  const perFile = new Map<string, { name: string; bySeq: Map<number, string> }>();
+  for (const row of (data as ChunkRow[]) ?? []) {
+    const name = nameOf.get(row.file_id);
+    if (!name || typeof row.text !== 'string' || !row.text) continue;
+    let group = perFile.get(row.file_id);
+    if (!group) {
+      group = { name, bySeq: new Map() };
+      perFile.set(row.file_id, group);
+    }
+    if (!group.bySeq.has(row.seq)) group.bySeq.set(row.seq, row.text);
+  }
+  if (perFile.size === 0) return null;
+
+  // Binnen een bestand volgen de stukken hun plek in het document; tussen de
+  // bestanden geldt de trefferscore. Het scheidingsteken laat zien dat er
+  // tekst tussen twee stukken ontbreekt.
+  const separator = '\n\n…\n\n';
+  const files: { name: string; text: string }[] = [];
+  let used = 0;
+  for (const group of perFile.values()) {
+    const ordered = [...group.bySeq.entries()].sort((a, b) => a[0] - b[0]).map(([, t]) => t);
+    const parts: string[] = [];
+    let size = 0;
+    for (const text of ordered) {
+      const extra = text.length + (parts.length ? separator.length : 0);
+      if (used + size + extra > MAX_PROJECT_CONTEXT_CHARS) break;
+      size += extra;
+      parts.push(text);
+    }
+    if (!parts.length) break;
+    files.push({ name: group.name, text: parts.join(separator) });
+    used += size;
+  }
+  return files.length ? files : null;
 }
 
 /**
  * Stel de bron van een project samen: projectinstructie plus bestandsteksten,
  * tot aan {@link MAX_PROJECT_CONTEXT_CHARS}. Bestaat het project niet (meer),
  * dan komt er null terug en draait het gesprek als gewone chat.
+ *
+ * Past niet alles in het budget en is `query` gegeven (de vraag van deze
+ * beurt), dan stuurt alleen de stukken tekst mee die bij die vraag passen:
+ * de Nederlands doorzoekbare stukken uit migratie 0046. Zonder query, of als
+ * de zoekfunctie niets vindt, vallen we terug op hele bestanden op volgorde
+ * van toevoegen.
  */
-export async function loadProjectContext(projectId: string): Promise<ProjectContextResult | null> {
+export async function loadProjectContext(
+  projectId: string,
+  query?: string,
+): Promise<ProjectContextResult | null> {
   const cached = contextCache.get(projectId);
-  if (cached) return { context: cached, skipped: [] };
+  if (cached) return { context: cached, skipped: [], searched: false };
   if (!isSupabaseConfigured || !supabase) return null;
 
   const { data: projectData, error: projectError } = await supabase
@@ -295,16 +373,47 @@ export async function loadProjectContext(projectId: string): Promise<ProjectCont
   }
 
   const row = projectData as ProjectRow;
-  const context: ChatProjectContext = {
-    id: row.id,
-    name: row.name,
-    instructions: (row.instructions ?? '').trim(),
-    files,
-  };
   // Alleen een VOLLEDIGE context cachen: bij overgeslagen bestanden wil de
-  // volgende beurt dezelfde melding kunnen tonen.
-  if (skipped.length === 0) contextCache.set(projectId, context);
-  return { context, skipped };
+  // volgende beurt dezelfde melding kunnen tonen, en een zoekresultaat hoort
+  // bij één vraag en mag niet voor een volgende dienen.
+  if (skipped.length === 0) {
+    const context: ChatProjectContext = {
+      id: row.id,
+      name: row.name,
+      instructions: (row.instructions ?? '').trim(),
+      files,
+    };
+    contextCache.set(projectId, context);
+    return { context, skipped, searched: false };
+  }
+
+  if (query?.trim()) {
+    const nameOf = new Map(((fileData as FileRow[]) ?? []).map((f) => [f.id, f.name]));
+    const searched = await searchProjectChunks(projectId, query.trim(), nameOf);
+    if (searched) {
+      return {
+        context: {
+          id: row.id,
+          name: row.name,
+          instructions: (row.instructions ?? '').trim(),
+          files: searched,
+        },
+        skipped: [],
+        searched: true,
+      };
+    }
+  }
+
+  return {
+    context: {
+      id: row.id,
+      name: row.name,
+      instructions: (row.instructions ?? '').trim(),
+      files,
+    },
+    skipped,
+    searched: false,
+  };
 }
 
 // --- De brug naar de promptbouwer ---

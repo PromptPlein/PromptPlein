@@ -261,9 +261,17 @@ export default function useChatController(
       let project: ChatProjectContext | null = null;
       if (conv.projectId) {
         try {
-          const result = await loadProjectContext(conv.projectId);
+          // De vraag van deze beurt kiest in een te groot project welke stukken
+          // van de bronbestanden er meegaan (search_project_chunks).
+          const asking = [...history].reverse().find((m) => m.role === 'user')?.content;
+          const result = await loadProjectContext(conv.projectId, asking);
           project = result?.context ?? null;
-          if (result?.skipped.length && !startText) {
+          if (result?.searched && !startText) {
+            toast(
+              'Groot project: alleen de stukken die bij je vraag passen gaan mee in dit antwoord.',
+              { icon: '🔍' },
+            );
+          } else if (result?.skipped.length && !startText) {
             // Stil afkappen zou de gebruiker laten denken dat het model alles
             // gelezen heeft; daarom benoemen we wat er buiten het budget viel.
             toast(
