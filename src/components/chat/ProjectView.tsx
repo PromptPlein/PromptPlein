@@ -7,6 +7,7 @@ import {
   Plus,
   Settings2,
   Trash2,
+  Upload,
   Wand2,
 } from '@/components/common/icons';
 import InfoDot from '@/components/common/InfoDot';
@@ -231,10 +232,12 @@ export default function ProjectView({
           </h3>
           <button
             type="button"
-            className="text-sm font-semibold text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
+            className="mt-1 flex min-h-[4rem] w-full items-center justify-center gap-3 rounded-xl border-2 border-dashed border-rijksblauw-300 px-4 py-3 text-base font-bold text-rijksblauw-700 transition-colors hover:border-rijksblauw-500 hover:bg-rijksblauw-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-rijksblauw-500 dark:text-white dark:hover:bg-rijksblauw-500/15"
             onClick={onOpenSettings}
+            disabled={disabled}
           >
-            {fileCount > 0 ? 'Beheren' : 'Upload er een'}
+            <Upload size={24} aria-hidden="true" />
+            {fileCount > 0 ? 'Bestanden beheren' : 'Bestanden toevoegen'}
           </button>
         </section>
 

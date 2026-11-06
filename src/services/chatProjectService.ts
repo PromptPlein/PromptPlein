@@ -19,7 +19,10 @@ import type { AiProvider } from '@/config/aiModels';
 import type { ChatProject, ChatProjectContext, ChatProjectFile } from '@/types';
 
 /** Maximum aantal bronbestanden per project. */
-export const MAX_PROJECT_FILES = 10;
+export const MAX_PROJECT_FILES = 50;
+
+/** Maximale grootte van een bronbestand op schijf; de tekst eruit is veel kleiner. */
+export const MAX_PROJECT_FILE_BYTES = 50 * 1024 * 1024;
 
 /**
  * Maximale tekstomvang per bronbestand. Spiegel van de CHECK-constraint
@@ -30,7 +33,7 @@ export const MAX_PROJECT_FILE_CHARS = 100_000;
 
 /**
  * Totaal tekenbudget dat per beurt als bron meegaat naar het model. Bewust een
- * eigen, lagere grens dan 10 × 100.000: die zou bij elke beurt een half miljoen
+ * eigen, lagere grens dan 50 × 100.000: die zou bij elke beurt vijf miljoen
  * tekens de context in duwen (traag, duur, en bij de meeste modellen te groot).
  * Wordt het budget bereikt, dan gaan de OUDSTE bestanden mee tot het vol is en
  * meldt de UI wat er buiten viel — stil afkappen zou de gebruiker laten denken

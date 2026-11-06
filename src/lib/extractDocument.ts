@@ -33,9 +33,12 @@ function extensionOf(name: string): string {
  * (Nederlandse) melding bij een niet-ondersteund type, een te groot bestand of
  * een leesfout.
  */
-export async function extractDocument(file: File): Promise<ExtractedDocument> {
-  if (file.size > MAX_DOC_BYTES) {
-    throw new Error(`"${file.name}" is te groot (max. 10 MB).`);
+export async function extractDocument(
+  file: File,
+  maxBytes: number = MAX_DOC_BYTES,
+): Promise<ExtractedDocument> {
+  if (file.size > maxBytes) {
+    throw new Error(`"${file.name}" is te groot (max. ${maxBytes / (1024 * 1024)} MB).`);
   }
   const ext = extensionOf(file.name);
 

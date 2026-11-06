@@ -12,6 +12,7 @@ import {
   deleteProjectFile,
   listProjectFiles,
   MAX_PROJECT_FILES,
+  MAX_PROJECT_FILE_BYTES,
   MAX_PROJECT_FILE_CHARS,
   MAX_PROJECT_INSTRUCTIONS_CHARS,
   MAX_PROJECT_NAME_CHARS,
@@ -63,7 +64,8 @@ export default function ProjectSettingsModal({
   );
   const [files, setFiles] = useState<ChatProjectFile[]>([]);
   const [loadingFiles, setLoadingFiles] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  const [uploading, setUploading] = useState<{ current: number; total: number } | null>(null);
+  const [dragging, setDragging] = useState(false);
   const [confirmDeleteFile, setConfirmDeleteFile] = useState<ChatProjectFile | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -165,39 +167,51 @@ export default function ProjectSettingsModal({
     }
   }
 
-  async function upload(file: File) {
-    if (!projectId || uploading) return;
-    if (files.length >= MAX_PROJECT_FILES) {
+  /** Voegt bestanden één voor één toe, zodat één fout de rest niet tegenhoudt. */
+  async function upload(list: File[]) {
+    if (!projectId || uploading || list.length === 0) return;
+    const room = MAX_PROJECT_FILES - files.length;
+    if (room <= 0) {
       toast.error(`Maximaal ${MAX_PROJECT_FILES} bestanden per project.`);
       return;
     }
-    setUploading(true);
-    try {
-      // Dynamische import: pdfjs/mammoth blijven buiten de startbundel.
-      const { extractDocument } = await import('@/lib/extractDocument');
-      const doc = await extractDocument(file);
-      const truncated = doc.text.length > MAX_PROJECT_FILE_CHARS;
-      const added = await addProjectFile({
-        projectId,
-        name: doc.name,
-        text: doc.text,
-        truncated,
-      });
-      setFiles((cur) => [...cur, added]);
-      onFilesChanged();
-      if (truncated) {
-        toast(
-          `"${doc.name}" was te groot en is afgekapt op ${num(MAX_PROJECT_FILE_CHARS)} tekens.`,
-          { icon: '✂️' },
-        );
-      } else {
-        toast.success(`"${doc.name}" toegevoegd (${num(added.chars)} tekens).`);
-      }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Het bestand kon niet worden toegevoegd.');
-    } finally {
-      setUploading(false);
+    if (list.length > room) {
+      toast.error(`Er passen nog ${room} bestanden in dit project.`);
     }
+    const batch = list.slice(0, room);
+    let done = 0;
+    setUploading({ current: 1, total: batch.length });
+    // Dynamische import: pdfjs/mammoth blijven buiten de startbundel.
+    const { extractDocument } = await import('@/lib/extractDocument');
+    for (const [index, file] of batch.entries()) {
+      setUploading({ current: index + 1, total: batch.length });
+      try {
+        const doc = await extractDocument(file, MAX_PROJECT_FILE_BYTES);
+        const truncated = doc.text.length > MAX_PROJECT_FILE_CHARS;
+        const added = await addProjectFile({
+          projectId,
+          name: doc.name,
+          text: doc.text,
+          truncated,
+        });
+        setFiles((cur) => [...cur, added]);
+        done += 1;
+        // Meteen na het eerste bestand: vanaf dan is dit geen leeg project meer
+        // en mag het bij annuleren niet worden opgeruimd.
+        if (done === 1) onFilesChanged();
+        if (truncated) {
+          toast(
+            `"${doc.name}" was te groot en is afgekapt op ${num(MAX_PROJECT_FILE_CHARS)} tekens.`,
+            { icon: '✂️' },
+          );
+        }
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : `"${file.name}" kon niet worden toegevoegd.`);
+      }
+    }
+    setUploading(null);
+    if (done > 1) onFilesChanged();
+    if (done > 0) toast.success(done === 1 ? 'Bestand toegevoegd.' : `${done} bestanden toegevoegd.`);
   }
 
   async function removeFile(file: ChatProjectFile) {
@@ -319,46 +333,63 @@ export default function ProjectSettingsModal({
           </div>
 
           <div>
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <div>
-                <h3 className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                  Bronbestanden
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Maximaal {MAX_PROJECT_FILES} bestanden (.txt, .md, .pdf, .docx). De assistent leest
-                  ze in elke chat van dit project mee.
-                </p>
-              </div>
-              <button
-                type="button"
-                className="opl-btn-secondary shrink-0"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploading || files.length >= MAX_PROJECT_FILES}
-              >
-                {uploading ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
-                Bestand toevoegen
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept={ACCEPTED_DOC_ACCEPT}
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) void upload(file);
-                  e.target.value = '';
-                }}
-              />
+            <div className="mb-2">
+              <h3 className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                Bronbestanden
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Tot {MAX_PROJECT_FILES} bestanden van elk {MAX_PROJECT_FILE_BYTES / (1024 * 1024)} MB
+                (.txt, .md, .pdf, .docx).
+              </p>
             </div>
+            <button
+              type="button"
+              className={clsx(
+                'mb-2 flex min-h-[4.5rem] w-full items-center justify-center gap-3 rounded-xl border-2 border-dashed px-4 py-3 text-base font-bold text-rijksblauw-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 disabled:cursor-not-allowed disabled:opacity-60 dark:text-white',
+                dragging
+                  ? 'border-rijksblauw-700 bg-rijksblauw-50 dark:bg-rijksblauw-500/15'
+                  : 'border-rijksblauw-300 hover:border-rijksblauw-500 hover:bg-rijksblauw-50 dark:border-rijksblauw-500 dark:hover:bg-rijksblauw-500/15',
+              )}
+              onClick={() => fileInputRef.current?.click()}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragging(true);
+              }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragging(false);
+                void upload(Array.from(e.dataTransfer.files));
+              }}
+              disabled={Boolean(uploading) || files.length >= MAX_PROJECT_FILES}
+            >
+              {uploading ? (
+                <>
+                  <Loader2 size={24} className="animate-spin" />
+                  Bestand {uploading.current} van {uploading.total}
+                </>
+              ) : (
+                <>
+                  <Upload size={24} /> Bestanden toevoegen of hierheen slepen
+                </>
+              )}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept={ACCEPTED_DOC_ACCEPT}
+              className="hidden"
+              aria-label="Kies bestanden"
+              onChange={(e) => {
+                void upload(Array.from(e.target.files ?? []));
+                e.target.value = '';
+              }}
+            />
 
             {loadingFiles ? (
               <p className="py-4 text-center text-xs text-slate-400">Bestanden laden…</p>
-            ) : files.length === 0 ? (
-              <p className="rounded-lg border border-dashed border-slate-300 px-4 py-6 text-center text-xs text-slate-400 dark:border-slate-600 dark:text-slate-500">
-                Nog geen bronbestanden. Upload er een om de assistent er in elke chat uit te laten
-                putten.
-              </p>
-            ) : (
+            ) : files.length === 0 ? null : (
               <ul className="space-y-1">
                 {files.map((file) => (
                   <li

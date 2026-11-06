@@ -2650,10 +2650,10 @@ function sanitizeChatTurns(raw: RequestBody['messages']): ChatTurn[] {
  *
  * Spiegel van MAX_PROJECT_FILES / MAX_PROJECT_FILE_CHARS / MAX_PROJECT_CONTEXT_CHARS
  * in src/services/chatProjectService.ts. Het totaalbudget is de echte grens:
- * tien bestanden van elk 100.000 tekens zou anders een miljoen tekens per beurt
- * betekenen.
+ * vijftig bestanden van elk 100.000 tekens zou anders vijf miljoen tekens per
+ * beurt betekenen.
  */
-const MAX_PROJECT_ATTACHMENTS = 13; // 10 projectbronnen + 3 losse bijlagen
+const MAX_PROJECT_ATTACHMENTS = 53; // 50 projectbronnen + 3 losse bijlagen
 const MAX_PROJECT_ATTACHMENT_CHARS = 100_000;
 const MAX_PROJECT_TOTAL_CHARS = 200_000;
 
