@@ -279,13 +279,18 @@ function PersonaCard({
       </div>
 
       {/* De persona-vragen zoals gedefinieerd bij de techniek. */}
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,18rem),1fr))] gap-x-4 gap-y-3">
+      {/* Label en tekstvak delen hun rijen met het veld ernaast (subgrid), zodat de
+          vakken op één lijn staan als een vraag over twee regels loopt. */}
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,18rem),1fr))] gap-x-4">
         {questions.map((q) => {
           const isAi = aiFields?.has(q.id);
           return (
-            <div key={q.id} className="min-w-0">
-              <div className="mb-0.5 flex min-h-8 flex-wrap items-center gap-1">
-                <label className="opl-label mb-0" htmlFor={`persona-${persona.id}-${q.id}`}>
+            <div key={q.id} className="row-span-2 grid min-w-0 grid-cols-1 grid-rows-subgrid pb-3">
+              <div className="mb-0.5 flex min-h-8 items-start gap-1">
+                <label
+                  className="opl-label mb-0 min-w-0 pt-1"
+                  htmlFor={`persona-${persona.id}-${q.id}`}
+                >
                   {q.label}
                 </label>
                 {q.why && <InfoDot label={`Uitleg bij: ${q.label}`} text={q.why} />}
@@ -297,7 +302,7 @@ function PersonaCard({
               <textarea
                 id={`persona-${persona.id}-${q.id}`}
                 rows={3}
-                className="opl-input resize-y text-sm"
+                className="opl-input resize-y self-stretch text-sm"
                 value={persona.fields[q.id] ?? ''}
                 placeholder={q.placeholder}
                 onChange={(e) => onFieldChange(q.id, e.target.value)}

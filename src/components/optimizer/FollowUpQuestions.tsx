@@ -51,6 +51,11 @@ interface FieldBlockProps {
  * er tekst in, dan komt "Vul verder aan" erbij. Zodra de AI aan een veld werkt,
  * kleurt het hele blok op en neemt het de volle breedte, zodat het voorstel
  * leesbaar is en zichtbaar blijft bij welk veld het hoort.
+ *
+ * Elk veld bestaat uit vijf rijen (naam, status, tekstvak, notitie, voorstel) die
+ * het via subgrid deelt met het veld ernaast. Zo staan tekstvakken en labels op één
+ * lijn, ook als één titel over twee regels loopt. Een rij die in geen enkel veld
+ * iets toont, heeft geen hoogte.
  */
 function FieldBlock({
   question,
@@ -76,22 +81,23 @@ function FieldBlock({
   const filled = value.trim() !== '';
   const { name, instruction } = compactFieldLabel(question.label);
   const uitleg = [instruction, question.why].filter(Boolean).join('\n');
+  const badge = Boolean(meta && filled);
   return (
     <div
       className={clsx(
-        'min-w-0 rounded-xl border p-2 transition-all duration-200',
+        'row-span-5 grid min-w-0 grid-cols-1 grid-rows-subgrid rounded-xl border p-2 transition-all duration-200',
         (active || aanvulling) && 'col-span-full',
         active
           ? 'border-rijksblauw-300 bg-rijksblauw-50/60 ring-4 ring-rijksblauw-500/10 dark:border-rijksblauw-500/50 dark:bg-rijksblauw-500/10 dark:ring-rijksblauw-500/15'
           : 'border-transparent',
       )}
     >
-      <div className="flex min-h-8 flex-wrap items-center gap-x-1.5">
+      <div className="flex min-h-8 items-start gap-x-1.5">
         {marker && (
           <span
             aria-hidden="true"
             className={clsx(
-              'flex h-6 w-6 shrink-0 items-center justify-center rounded text-xs font-bold transition-colors',
+              'mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded text-xs font-bold transition-colors',
               filled
                 ? 'bg-rijksblauw-500 text-white'
                 : 'bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/20 dark:text-rijksblauw-200',
@@ -101,46 +107,56 @@ function FieldBlock({
           </span>
         )}
         <label
-          className="text-[15px] font-semibold text-slate-800 dark:text-slate-100"
+          className="min-w-0 pt-1 text-[15px] font-semibold leading-snug text-slate-800 dark:text-slate-100"
           htmlFor={fieldId}
         >
           {name}
         </label>
         {uitleg && <InfoDot label={`Uitleg bij ${name}`} text={uitleg} />}
-        {meta && filled && <PrefillBadge source={meta.source} note={meta.note} />}
-        {active && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-rijksblauw-500/10 px-2 py-0.5 text-[11px] font-semibold text-rijksblauw-700 dark:bg-rijksblauw-500/20 dark:text-rijksblauw-100">
-            <Wand2 size={11} /> {expanding ? 'AI vult dit veld aan' : 'Voorstel voor dit veld'}
-          </span>
-        )}
-        {filled && (
-          <button
-            type="button"
-            onClick={onExpand}
-            disabled={busy}
-            title="Laat AI dit veld verder aanvullen"
-            aria-label={`Laat AI ${name} verder aanvullen`}
-            className="ml-auto inline-flex items-center gap-1 text-xs font-semibold text-rijksblauw-500 transition-colors hover:underline disabled:cursor-not-allowed disabled:opacity-40 dark:text-rijksblauw-200"
-          >
-            {expanding ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
-            {expanding ? 'Bezig met aanvullen…' : 'Vul verder aan'}
-          </button>
+      </div>
+      {/* Status en actie op een eigen rij, zodat ze de titel niet laten verspringen. */}
+      <div>
+        {(badge || active || filled) && (
+          <div className="flex min-h-7 flex-wrap items-center gap-x-2 gap-y-1 pb-1">
+            {meta && filled && <PrefillBadge source={meta.source} note={meta.note} />}
+            {active && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-rijksblauw-500/10 px-2 py-0.5 text-[11px] font-semibold text-rijksblauw-700 dark:bg-rijksblauw-500/20 dark:text-rijksblauw-100">
+                <Wand2 size={11} /> {expanding ? 'AI vult dit veld aan' : 'Voorstel voor dit veld'}
+              </span>
+            )}
+            {filled && (
+              <button
+                type="button"
+                onClick={onExpand}
+                disabled={busy}
+                title="Laat AI dit veld verder aanvullen"
+                aria-label={`Laat AI ${name} verder aanvullen`}
+                className="ml-auto inline-flex items-center gap-1 text-xs font-semibold text-rijksblauw-500 transition-colors hover:underline disabled:cursor-not-allowed disabled:opacity-40 dark:text-rijksblauw-200"
+              >
+                {expanding ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
+                {expanding ? 'Bezig met aanvullen…' : 'Vul verder aan'}
+              </button>
+            )}
+          </div>
         )}
       </div>
       <textarea
         id={fieldId}
         autoFocus={autoFocus}
         rows={tall ? 6 : 3}
-        className="opl-input mt-1 resize-y text-[15px]"
+        className="opl-input resize-y self-stretch text-[15px]"
         value={value}
         placeholder={question.placeholder}
         onChange={(e) => onChange(e.target.value)}
       />
-      {meta?.note && filled && (
-        <p className="mt-1 flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
-          <Sparkles size={12} /> {meta.note}
-        </p>
-      )}
+      <div>
+        {meta?.note && filled && (
+          <p className="mt-1 flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+            <Sparkles size={12} className="shrink-0" /> {meta.note}
+          </p>
+        )}
+      </div>
+      <div className="min-w-0">
       {proposal && (
         <ExpandProposal
           fieldLabel={name}
@@ -163,6 +179,7 @@ function FieldBlock({
           onReject={onAanvullingVerwerpen}
         />
       )}
+      </div>
     </div>
   );
 }
@@ -416,7 +433,7 @@ export default function FollowUpQuestions({
           </div>
           <FieldLayoutToggle layout={layout} onChange={setLayout} />
         </div>
-        <div className="-mx-2 grid grid-cols-[repeat(auto-fit,minmax(min(100%,18rem),1fr))] gap-x-2 gap-y-1">
+        <div className="-mx-2 grid grid-cols-[repeat(auto-fit,minmax(min(100%,18rem),1fr))] gap-x-2">
           {questions.map((q, i) => (
             <FieldBlock
               key={q.id}
