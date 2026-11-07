@@ -7,8 +7,10 @@ import {
   type AnswerDone,
   type TextScale,
 } from '@/context/AccessibilityContext';
+import { useAuth } from '@/context/AuthContext';
 import {
   listDutchVoices,
+  NATURAL_VOICE,
   speak,
   speechSupported,
   stopSpeaking,
@@ -82,6 +84,7 @@ function CheckField({
  */
 export default function AccessibilitySettings() {
   const { settings, update, reset, speechOn } = useAccessibility();
+  const { isAuthenticated } = useAuth();
   const [voices, setVoices] = useState<SpeechVoiceOption[]>(() => listDutchVoices());
   const canSpeak = speechSupported();
 
@@ -95,6 +98,11 @@ export default function AccessibilitySettings() {
 
   const hasLocalVoice = voices.some((voice) => voice.local);
   const chosenVoice = voices.find((voice) => voice.uri === settings.speechVoice);
+  // De natuurlijke stem vraagt om een account. Uitgelogd blijft de keuze bewaard
+  // voor de volgende keer, maar leest de stem van het apparaat voor.
+  const naturalChosen = isAuthenticated && settings.speechVoice === NATURAL_VOICE;
+  const selectedVoice =
+    settings.speechVoice === NATURAL_VOICE && !isAuthenticated ? '' : (settings.speechVoice ?? '');
 
   function tryVoice() {
     const result = speak('voorbeeld', SAMPLE, {
@@ -214,10 +222,13 @@ export default function AccessibilitySettings() {
                   <select
                     id="ta-stem"
                     className="opl-input"
-                    value={settings.speechVoice ?? ''}
+                    value={selectedVoice}
                     onChange={(e) => update({ speechVoice: e.target.value || null })}
                   >
                     <option value="">Eerste Nederlandse stem op dit apparaat</option>
+                    {isAuthenticated && (
+                      <option value={NATURAL_VOICE}>Lotte, natuurlijke stem (via Mistral)</option>
+                    )}
                     {voices.map((voice) => (
                       <option key={voice.uri} value={voice.uri}>
                         {voice.name} ({voice.lang}){voice.local ? '' : ', online'}
@@ -230,7 +241,7 @@ export default function AccessibilitySettings() {
                       van die stem.
                     </p>
                   )}
-                  {!hasLocalVoice && (
+                  {!hasLocalVoice && !naturalChosen && (
                     <p className="mt-1 text-sm text-slate-700 dark:text-slate-200">
                       Er staat geen Nederlandse stem op dit apparaat. Voeg er een toe in de
                       taalinstellingen van je systeem, of kies een online stem.

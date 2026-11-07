@@ -1,16 +1,21 @@
 import { useSyncExternalStore } from 'react';
+import toast from 'react-hot-toast';
 import { splitAnswer } from '@/lib/chatFiles';
+import { SpeechLoginRequiredError, synthesizeSpeech } from '@/services/speechService';
 
 /**
- * Voorlezen met de spraakstem van de browser (Web Speech API). Bewust geen
- * spraakdienst aan de serverkant: de privacybelofte van de chat is dat gesprekken
- * op het apparaat blijven, en een stem op het apparaat houdt zich daaraan.
+ * Voorlezen. Standaard met de spraakstem van de browser (Web Speech API): die
+ * blijft op het apparaat. Wie zelf {@link NATURAL_VOICE} kiest, krijgt de
+ * natuurlijke stem van Mistral. Daar gaat de tekst heen, maar die komt al van
+ * Mistral, dus er komt geen nieuwe partij bij. De audio wordt nergens bewaard.
  *
- * Niet elke stem werkt zo. Browsers bieden ook online stemmen aan die de tekst
- * naar hun leverancier sturen (`localService === false`). Die kiezen we daarom
- * nooit vanzelf; alleen wie er in de instellingen zelf een uitkiest, gebruikt er
- * een.
+ * Browsers bieden ook online stemmen aan die de tekst naar hun eigen leverancier
+ * sturen (`localService === false`). Die kiezen we nooit vanzelf; alleen wie er
+ * in de instellingen zelf een uitkiest, gebruikt er een.
  */
+
+/** Waarde van `speechVoice` voor de natuurlijke stem (Lotte, via Mistral). */
+export const NATURAL_VOICE = 'mistral-lotte';
 
 export interface SpeechVoiceOption {
   uri: string;
@@ -24,6 +29,20 @@ export type SpeakResult = 'gestart' | 'geen-stem' | 'niet-ondersteund';
 
 /** Chrome breekt lange uitingen af, dus lezen we in stukken van hooguit dit formaat. */
 const MAX_CHUNK = 220;
+
+/**
+ * Stukken voor de natuurlijke stem. De audio komt pas als het hele stuk is
+ * ingesproken, dus een kleiner stuk betekent minder wachten op de eerste zin.
+ * Moet onder MAX_SPEECH_CHARS van de edge function blijven.
+ */
+const NATURAL_CHUNK = 400;
+
+/**
+ * Een fractie stilte. Safari staat geluid alleen toe vanuit een klik, en de echte
+ * audio is er pas later. Dit ontgrendelt het element tijdens de klik.
+ */
+const SILENCE =
+  'data:audio/wav;base64,UklGRiYAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQIAAACAgA==';
 
 export function speechSupported(): boolean {
   return typeof window !== 'undefined' && 'speechSynthesis' in window;
@@ -97,7 +116,7 @@ export function toSpeakableText(answer: string): string {
 }
 
 /** Knipt tekst op zinnen, en een te lange zin op woorden. */
-export function splitForSpeech(text: string): string[] {
+export function splitForSpeech(text: string, maxChunk = MAX_CHUNK): string[] {
   const sentences = text.match(/[^.!?\n]+[.!?]*\s*|[.!?\n]+/g) ?? [];
   const chunks: string[] = [];
   let current = '';
@@ -108,13 +127,13 @@ export function splitForSpeech(text: string): string[] {
   };
 
   for (const sentence of sentences) {
-    if (current.length + sentence.length > MAX_CHUNK) push();
-    if (sentence.length <= MAX_CHUNK) {
+    if (current.length + sentence.length > maxChunk) push();
+    if (sentence.length <= maxChunk) {
       current += sentence;
       continue;
     }
     for (const word of sentence.split(/\s+/)) {
-      if (current.length + word.length + 1 > MAX_CHUNK) push();
+      if (current.length + word.length + 1 > maxChunk) push();
       current += `${word} `;
     }
   }
@@ -127,7 +146,11 @@ export function splitForSpeech(text: string): string[] {
 let speakingId: string | null = null;
 let run = 0;
 // Chrome ruimt een uiting anders soms op voordat `onend` afgaat.
-const held: { utterance: SpeechSynthesisUtterance | null } = { utterance: null };
+const held: {
+  utterance: SpeechSynthesisUtterance | null;
+  /** Stopt de lopende natuurlijke stem: het afspelen en de aanvragen. */
+  stopNatural: (() => void) | null;
+} = { utterance: null, stopNatural: null };
 const listeners = new Set<() => void>();
 
 function setSpeakingId(id: string | null) {
@@ -138,12 +161,108 @@ function setSpeakingId(id: string | null) {
 export function stopSpeaking(): void {
   run += 1;
   held.utterance = null;
+  held.stopNatural?.();
+  held.stopNatural = null;
   if (speechSupported()) window.speechSynthesis.cancel();
   if (speakingId !== null) setSpeakingId(null);
 }
 
+/** Speelt één stuk af op het gedeelde element en wacht tot het klaar of gestopt is. */
+function playChunk(audio: HTMLAudioElement, blob: Blob, rate: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(blob);
+    const release = () => {
+      audio.onended = null;
+      audio.onerror = null;
+      audio.onpause = null;
+      URL.revokeObjectURL(url);
+    };
+    audio.onended = () => {
+      release();
+      resolve();
+    };
+    audio.onerror = () => {
+      release();
+      reject(new Error('Audio niet af te spelen'));
+    };
+    audio.src = url;
+    // Na `src` opnieuw zetten: laden zet de snelheid terug op de standaard.
+    audio.playbackRate = rate;
+    audio.play().then(
+      () => {
+        // Stoppen pauzeert het element; pas nu kan dat niet meer door `src` komen.
+        audio.onpause = () => {
+          if (audio.ended) return;
+          release();
+          resolve();
+        };
+      },
+      (err) => {
+        release();
+        reject(err);
+      },
+    );
+  });
+}
+
+/** Leest stukken voor met de natuurlijke stem; bij een fout neemt de browserstem over. */
+async function speakNatural(id: string, chunks: string[], audio: HTMLAudioElement, rate: number) {
+  const thisRun = run;
+  const controller = new AbortController();
+  held.stopNatural = () => {
+    controller.abort();
+    audio.pause();
+  };
+  const load = (index: number) => {
+    const pending = synthesizeSpeech(chunks[index], controller.signal);
+    // Het volgende stuk wordt alvast opgehaald en pas later afgewacht.
+    pending.catch(() => undefined);
+    return pending;
+  };
+
+  let index = 0;
+  try {
+    let pending = load(0);
+    while (index < chunks.length) {
+      const blob = await pending;
+      if (thisRun !== run) return;
+      if (index + 1 < chunks.length) pending = load(index + 1);
+      await playChunk(audio, blob, rate);
+      if (thisRun !== run) return;
+      index += 1;
+    }
+    held.stopNatural = null;
+    setSpeakingId(null);
+  } catch (err) {
+    if (thisRun !== run) return;
+    const result = speakWithBrowser(id, chunks.slice(index).join(' '), { voice: null, rate });
+    if (result !== 'gestart') {
+      toast.error('Voorlezen lukte niet.');
+    } else if (!(err instanceof SpeechLoginRequiredError)) {
+      toast.error('De stem Lotte werkt nu niet. De stem van je apparaat leest verder.');
+    }
+  }
+}
+
 /** Leest `text` voor; een lopende voorlezing stopt eerst. */
 export function speak(
+  id: string,
+  text: string,
+  options: { voice: string | null; rate: number },
+): SpeakResult {
+  if (options.voice !== NATURAL_VOICE) return speakWithBrowser(id, text, options);
+
+  stopSpeaking();
+  const chunks = splitForSpeech(text, NATURAL_CHUNK);
+  if (chunks.length === 0) return 'gestart';
+  const audio = new Audio(SILENCE);
+  audio.play().catch(() => undefined);
+  setSpeakingId(id);
+  void speakNatural(id, chunks, audio, options.rate);
+  return 'gestart';
+}
+
+function speakWithBrowser(
   id: string,
   text: string,
   options: { voice: string | null; rate: number },

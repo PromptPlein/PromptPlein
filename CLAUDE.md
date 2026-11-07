@@ -240,10 +240,12 @@ per bericht, en een aparte `role="status"` in `ChatMessageList`. Zet de
 berichtenlijst nooit zelf in een live-regio: een schermlezer pikt dan elk woord
 van een streamend antwoord op.
 
-Voorlezen (`src/lib/speech.ts`) gebruikt de stem van de browser en geen dienst
-aan de serverkant, om dezelfde reden als de opslagscheiding hierboven. Online
-stemmen sturen de tekst naar hun leverancier en worden daarom nooit vanzelf
-gekozen.
+Voorlezen (`src/lib/speech.ts`) gebruikt standaard de stem van de browser. Wie
+ingelogd is, kan zelf Lotte kiezen, de natuurlijke stem van Mistral (mode `speech`
+in de edge function, Voxtral TTS, model en stem staan daar vast). De tekst komt al
+van Mistral, dus er komt geen nieuwe partij bij, en de audio wordt nergens bewaard.
+Lukt het niet, dan leest de browserstem verder. Andere online stemmen sturen de
+tekst naar hun eigen leverancier; ook die worden nooit vanzelf gekozen.
 
 Een lege chat is klein: begroeting en tekstvak staan samen in het midden, met de
 cursor al in het vak. Na het

@@ -3395,6 +3395,49 @@ async function transcribeAudio(base64: string, mimeType: string): Promise<string
   return typeof result.text === 'string' ? result.text.trim() : '';
 }
 
+// --- Voorlezen ------------------------------------------------------------
+//
+// De natuurlijke stem in de chat. Dezelfde gedachte als bij dicteren hierboven:
+// de tekst van het antwoord komt al van Mistral, dus er komt geen nieuwe partij
+// bij, en hier wordt niets bewaard of gelogd. De client stuurt alleen de tekst:
+// model en stem staan hier vast, zodat dit geen algemene spraakdienst is.
+
+/** Het voorleesmodel van Mistral. Er is geen -latest-alias. */
+const SPEECH_MODEL = 'voxtral-mini-tts-3-0';
+
+/** Lotte, de Nederlandse standaardstem van Mistral. */
+const SPEECH_VOICE = 'voice_3145';
+
+/** Grootste stuk tekst per aanroep; de client knipt een antwoord in kleinere stukken. */
+const MAX_SPEECH_CHARS = 1000;
+
+/** Geeft de audio als base64 (mp3) terug. */
+async function synthesizeSpeech(input: string): Promise<string> {
+  const apiKey = Deno.env.get('MISTRAL_API_KEY');
+  if (!apiKey) throw new Error('MISTRAL_API_KEY ontbreekt');
+
+  const response = await fetch('https://api.mistral.ai/v1/audio/speech', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: SPEECH_MODEL,
+      voice_id: SPEECH_VOICE,
+      input,
+      response_format: 'mp3',
+    }),
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!response.ok) {
+    const detail = (await response.text()).slice(0, 300);
+    throw new Error(`Mistral spraak gaf status ${response.status}: ${detail}`);
+  }
+  const result = (await response.json()) as { audio_data?: unknown };
+  if (typeof result.audio_data !== 'string' || !result.audio_data) {
+    throw new Error('Mistral spraak gaf geen audio terug');
+  }
+  return result.audio_data;
+}
+
 async function isAdminRequest(req: Request): Promise<boolean> {
   if (!isAuthenticatedRequest(req)) return false;
   const url = Deno.env.get('SUPABASE_URL');
@@ -8822,6 +8865,31 @@ Deno.serve(async (req: Request) => {
       } catch (err) {
         console.error('Transcriptie mislukt:', err instanceof Error ? err.message : err);
         return json(502, { success: false, error: 'Uitschrijven lukte niet' });
+      }
+    }
+
+    // Voorlezen: alleen voor ingelogde gebruikers, om dezelfde reden als dicteren.
+    if ((body as { mode?: string }).mode === 'speech') {
+      const json = (status: number, payload: Record<string, unknown>) =>
+        new Response(JSON.stringify(payload), {
+          status,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      if (!isAuthenticatedRequest(req)) {
+        return json(401, { success: false, error: 'Log in om deze stem te gebruiken' });
+      }
+      const { text } = body as { text?: unknown };
+      if (typeof text !== 'string' || !text.trim()) {
+        return json(400, { success: false, error: 'Geen tekst ontvangen' });
+      }
+      if (text.length > MAX_SPEECH_CHARS) {
+        return json(413, { success: false, error: 'De tekst is te lang' });
+      }
+      try {
+        return json(200, { success: true, audio: await synthesizeSpeech(text.trim()) });
+      } catch (err) {
+        console.error('Voorlezen mislukt:', err instanceof Error ? err.message : err);
+        return json(502, { success: false, error: 'Voorlezen lukte niet' });
       }
     }
 
