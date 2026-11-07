@@ -2,8 +2,7 @@
 //
 // Dit is de enige chatinstelling die op de server staat, in
 // `user_chat_preferences` (migratie 0047). Gesprekken blijven op het apparaat;
-// zie src/lib/chatStorage.ts. Daarom vereist de instructie een account en zegt de
-// instellingenpagina erbij waar hij staat.
+// zie src/lib/chatStorage.ts. Daarom vereist de instructie een account.
 //
 // RLS is de poort: alleen de eigenaar leest en schrijft. Zonder backend staat de
 // tekst in localStorage, net als de rest van de lokale modus.

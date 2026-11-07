@@ -1,8 +1,9 @@
 import { useEffect, useId, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { AlertTriangle, Server } from '@/components/common/icons';
+import { AlertTriangle } from '@/components/common/icons';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
+import InfoDot from '@/components/common/InfoDot';
 import { useAuth } from '@/context/AuthContext';
 import { detectPii } from '@/services/guardrails';
 import {
@@ -15,10 +16,9 @@ const SECTION_CLASS = 'opl-card p-5 sm:p-6';
 const TITLE_CLASS = 'text-lg font-semibold text-rijksblauw-700 dark:text-rijksblauw-200';
 
 /**
- * Eigen instructie voor de chat. Dit is de enige chatinstelling die op de server
- * staat, en daarom is ingelogd zijn een eis. Dat de tekst daar staat, staat
- * zichtbaar boven het veld en niet achter een infobolletje: gesprekken blijven
- * juist op het apparaat, dus de gebruiker mag dat verschil niet missen.
+ * Eigen instructie voor de chat. Staat op de server, en daarom is ingelogd zijn
+ * een eis. De pagina meldt dat bewust niet: op verzoek van de eigenaar blijft de
+ * tekst hier kort.
  */
 export default function ChatInstructionSettings() {
   const { configured, loading: authLoading, isAuthenticated } = useAuth();
@@ -30,7 +30,6 @@ export default function ChatInstructionSettings() {
   const [status, setStatus] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const fieldId = useId();
-  const hintId = useId();
 
   const canEdit = !configured || isAuthenticated;
 
@@ -85,8 +84,7 @@ export default function ChatInstructionSettings() {
           Eigen instructie
         </h2>
         <p className="mt-2 text-slate-700 dark:text-slate-200">
-          Geef de chat vaste wensen mee, zoals je functie of de vorm van je antwoorden. Daarvoor heb
-          je een account nodig, want de instructie wordt op de server opgeslagen.
+          Log in om de chat vaste wensen mee te geven.
         </p>
         <Link
           to="/auth/login"
@@ -101,35 +99,15 @@ export default function ChatInstructionSettings() {
 
   return (
     <section className={SECTION_CLASS} aria-labelledby="chat-instructie">
-      <h2 id="chat-instructie" className={TITLE_CLASS}>
-        Eigen instructie
-      </h2>
-      <p className="mt-2 text-slate-700 dark:text-slate-200">
-        Vaste wensen voor elk antwoord in een gewone chat. De huisregels van PromptPlein blijven
-        gelden. In een project telt de projectinstructie en bij het uitvoeren van een prompt de
-        prompt zelf.
-      </p>
-
-      {configured ? (
-        <div
-          id={hintId}
-          className="mt-4 flex gap-3 rounded-lg border border-rijksblauw-200 bg-rijksblauw-50/70 p-3 text-sm text-slate-800 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10 dark:text-slate-100"
-        >
-          <Server size={18} aria-hidden="true" className="mt-0.5 shrink-0 text-rijksblauw-700 dark:text-rijksblauw-200" />
-          <div className="space-y-1">
-            <p className="font-semibold">Deze instructie wordt op de server opgeslagen</p>
-            <p>
-              Hij staat bij je account, zodat hij op elk apparaat werkt. In PromptPlein kun alleen
-              jij hem lezen. Hij gaat bij elke vraag mee naar het AI-model, dus zet er geen
-              persoonsgegevens in. Je gesprekken blijven gewoon op dit apparaat.
-            </p>
-          </div>
-        </div>
-      ) : (
-        <p id={hintId} className="mt-4 text-sm text-slate-700 dark:text-slate-200">
-          Er is geen server gekoppeld, dus de instructie blijft in deze browser.
-        </p>
-      )}
+      <div className="flex items-center gap-1">
+        <h2 id="chat-instructie" className={TITLE_CLASS}>
+          Eigen instructie
+        </h2>
+        <InfoDot
+          label="Uitleg over de eigen instructie"
+          text="Komt bij de huisregels van PromptPlein en geldt in gewone chats, niet in projecten of bij het uitvoeren van een prompt."
+        />
+      </div>
 
       {loadFailed ? (
         <p role="alert" className="mt-4 text-slate-800 dark:text-slate-100">
@@ -143,21 +121,22 @@ export default function ChatInstructionSettings() {
           <textarea
             id={fieldId}
             className="opl-input min-h-[180px] resize-y"
-            aria-describedby={hintId}
             aria-busy={loading}
             disabled={loading}
             value={draft}
             maxLength={MAX_PERSONAL_INSTRUCTION_CHARS}
-            placeholder="Bijvoorbeeld: Ik ben beleidsadviseur. Begin elk antwoord met de kern en geef daarna hoogstens vijf punten."
+            placeholder="Bijvoorbeeld: Begin met de kern en geef hoogstens vijf punten."
             onChange={(e) => {
               setDraft(e.target.value);
               setStatus('');
             }}
           />
-          <p className="mt-1 text-right text-sm text-slate-600 dark:text-slate-300">
-            {draft.trim().length.toLocaleString('nl-NL')} van{' '}
-            {MAX_PERSONAL_INSTRUCTION_CHARS.toLocaleString('nl-NL')} tekens
-          </p>
+          {draft.length >= MAX_PERSONAL_INSTRUCTION_CHARS * 0.9 && (
+            <p className="mt-1 text-right text-sm text-slate-600 dark:text-slate-300">
+              {draft.trim().length.toLocaleString('nl-NL')} van{' '}
+              {MAX_PERSONAL_INSTRUCTION_CHARS.toLocaleString('nl-NL')} tekens
+            </p>
+          )}
 
           {findings.length > 0 && (
             <p
@@ -166,8 +145,7 @@ export default function ChatInstructionSettings() {
             >
               <AlertTriangle size={16} aria-hidden="true" className="mt-0.5 shrink-0 text-rijksrood dark:text-red-400" />
               <span>
-                Dit lijkt op een persoonsgegeven: {findings.map((f) => f.label).join(', ')}. Haal
-                het weg voordat je opslaat.
+                Dit lijkt op een persoonsgegeven: {findings.map((f) => f.label).join(', ')}.
               </span>
             </p>
           )}
@@ -201,11 +179,7 @@ export default function ChatInstructionSettings() {
       <ConfirmDialog
         open={confirmDelete}
         title="Instructie verwijderen?"
-        message={
-          configured
-            ? 'De instructie wordt van de server gewist. Nieuwe vragen gaan daarna zonder jouw wensen naar de chat.'
-            : 'De instructie wordt uit deze browser gewist.'
-        }
+        message="Dit kan niet ongedaan worden gemaakt."
         confirmLabel="Verwijderen"
         destructive
         onClose={() => setConfirmDelete(false)}

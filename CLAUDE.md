@@ -215,8 +215,9 @@ nodig heeft, moet die niet in een menu hoeven zoeken.
 
 De eigen instructie onder Chat vraagt om in te loggen, want hij staat op de server
 (`user_chat_preferences`, RLS strikt eigenaar-alleen). Bewust een eigen tabel en
-geen kolom op `profiles`: die mag een collega uit dezelfde organisatie lezen. De
-pagina zegt zichtbaar dat de tekst op de server staat. Verwijderen wist de rij.
+geen kolom op `profiles`: die mag een collega uit dezelfde organisatie lezen.
+Verwijderen wist de rij. De pagina noemt de server bewust niet: de eigenaar wil
+daar zo min mogelijk tekst.
 
 De instructie vervangt de systeemprompt van de beheerder niet, maar komt eronder
 (`composeChatSystemPrompt`), met de tekst uit Beheer, AI-instellingen. Botst een

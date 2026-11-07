@@ -11,9 +11,8 @@
 -- WAAROM DIT WEL OP DE SERVER STAAT
 -- Gesprekken blijven op het apparaat (src/lib/chatStorage.ts). Een instructie is
 -- een instelling die de gebruiker op elk apparaat terugverwacht en bevat geen
--- gesprek. Daarom vereist hij een account en meldt de interface dat hij op de
--- server staat. Verwijderen wist de rij echt: een lege instructie wordt niet
--- bewaard.
+-- gesprek. Daarom vereist hij een account. Verwijderen wist de rij echt: een lege
+-- instructie wordt niet bewaard.
 
 CREATE TABLE IF NOT EXISTS user_chat_preferences (
   -- Eén rij per gebruiker. ON DELETE CASCADE: een verwijderd account laat niets na.
