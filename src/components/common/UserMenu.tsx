@@ -108,7 +108,7 @@ export default function UserMenu() {
       </button>
 
       {open && (
-        <div className="absolute right-0 z-20 mt-2 w-56 rounded-xl border border-slate-100 bg-white p-1.5 shadow-lg dark:border-slate-700 dark:bg-slate-800">
+        <div className="absolute right-0 z-50 mt-2 w-56 rounded-xl border border-slate-100 bg-white p-1.5 shadow-lg dark:border-slate-700 dark:bg-slate-800">
           <div className="px-3 py-2">
             <p className="truncate text-sm font-medium text-slate-800 dark:text-slate-100">{label}</p>
             {user?.email && <p className="truncate text-xs text-slate-400 dark:text-slate-500">{user.email}</p>}

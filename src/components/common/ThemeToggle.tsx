@@ -35,7 +35,7 @@ export default function ThemeToggle() {
       </button>
 
       {open && (
-        <div className="absolute right-0 z-30 mt-2 w-44 rounded-xl border border-slate-100 bg-white p-1.5 shadow-lg dark:border-slate-700 dark:bg-slate-800">
+        <div className="absolute right-0 z-50 mt-2 w-44 rounded-xl border border-slate-100 bg-white p-1.5 shadow-lg dark:border-slate-700 dark:bg-slate-800">
           {OPTIONS.map(({ value, label, icon: Icon }) => (
             <button
               key={value}
