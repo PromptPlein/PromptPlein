@@ -144,6 +144,15 @@ Env-variabelen (alle vier `VITE_`-prefixed, dus client-side):
 Scripts: `npm run dev`, `npm run build` (= `tsc -b && vite build`),
 `npm run preview`, `npm run lint`.
 
+## E-mail
+
+De mails naar gebruikers staan in Brevo, in het gedeelde account van Awaren (ook MoonMix),
+niet in deze repo. Basis voor nieuwe mails is template 58, "PromptPlein basis
+(Rijkshuisstijl)": dupliceer die in Brevo. De merkset van dat account is van Awaren: niet
+wijzigen. Plaatjes staan in `public/email/` en gaan als `https://www.promptplein.app/email/...`
+mee; hernoem ze niet, want verstuurde mails blijven ernaar wijzen. Geen Rijks Sans in Brevo:
+het lettertype is niet vrij en werkt in e-mail toch niet, dus Arial.
+
 ## Twee draaimodi
 
 `src/lib/supabase.ts` exporteert `isSupabaseConfigured`. Ontbreken de
