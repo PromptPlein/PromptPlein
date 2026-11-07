@@ -16,6 +16,8 @@ import {
   type RubricData,
   type RubricScale,
 } from '@/lib/rubric';
+import BuilderIntro from './BuilderIntro';
+import InfoDot from '@/components/common/InfoDot';
 
 interface RubricBuilderProps {
   settings: AiSettings;
@@ -139,14 +141,11 @@ export default function RubricBuilder({ settings, context, onSerialized }: Rubri
 
   return (
     <div className="space-y-5">
-      <div className="flex items-start gap-2 rounded-xl border border-rijksblauw-200 bg-rijksblauw-50/40 p-3 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10">
-        <Ruler size={18} className="mt-0.5 shrink-0 text-rijksblauw-500" />
-        <p className="text-sm text-slate-600 dark:text-slate-300">
-          Een lijst criteria levert nog geen navolgbaar oordeel op. Dat ontstaat pas als vóór het
-          beoordelen vastligt wanneer iets &quot;voldoet&quot; en wanneer &quot;voldoet deels&quot;.
-          Daar draait dit scherm om; de rest is invulwerk.
-        </p>
-      </div>
+      <BuilderIntro
+        icon={<Ruler size={18} />}
+        title="Bouw je toetsingskader"
+        text="Leg vooraf vast wanneer iets voldoet. Dan is het oordeel navolgbaar."
+      />
 
       {/* Stap 1: wat en waarvoor. */}
       <div className="grid gap-3 sm:grid-cols-2">
@@ -217,11 +216,10 @@ export default function RubricBuilder({ settings, context, onSerialized }: Rubri
 
       {/* Stap 4: de criteria met hun niveaubeschrijvingen. */}
       <div>
-        <p className="opl-label mb-0.5">4. Welke criteria staan in het kader?</p>
-        <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
-          Vul per criterium in wat het meet, en klap het open om per schaalpunt vast te leggen wanneer
-          het die score krijgt.
-        </p>
+        <div className="mb-0.5 flex items-center gap-1">
+          <p className="opl-label mb-0">4. Welke criteria staan in het kader?</p>
+          <InfoDot label="Uitleg bij dit veld" text="Vul per criterium in wat het meet, en klap het open om per schaalpunt vast te leggen wanneer het die score krijgt." />
+        </div>
 
         <div className="space-y-2">
           {data.criteria.map((c, i) => {
@@ -399,9 +397,10 @@ export default function RubricBuilder({ settings, context, onSerialized }: Rubri
       {/* Stap 5: drempel en bewijsregel. */}
       <div className="space-y-3">
         <div>
-          <label className="opl-label mb-0.5 block" htmlFor="rb-drempel">
-            5. Wanneer is het geheel voldoende?
-          </label>
+          <div className="mb-0.5 flex items-center gap-1">
+            <label className="opl-label mb-0" htmlFor="rb-drempel">5. Wanneer is het geheel voldoende?</label>
+            <InfoDot label="Uitleg bij dit veld" text="Leg dit vóór het beoordelen vast, anders wordt het eindoordeel achteraf naar het gevoel toe gerekend." />
+          </div>
           <input
             id="rb-drempel"
             className="opl-input text-sm"
@@ -409,10 +408,6 @@ export default function RubricBuilder({ settings, context, onSerialized }: Rubri
             placeholder="Bijv. geen enkel criterium op 'voldoet niet' en minstens drie op 'voldoet'"
             onChange={(e) => setData((d) => ({ ...d, drempel: e.target.value }))}
           />
-          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-            Leg dit vóór het beoordelen vast, anders wordt het eindoordeel achteraf naar het gevoel
-            toe gerekend.
-          </p>
         </div>
         <label className="flex cursor-pointer items-start gap-2.5">
           <input

@@ -26,6 +26,7 @@ import {
   type FewShotFeature,
   type FewShotPair,
 } from '@/lib/fewshot';
+import BuilderIntro from './BuilderIntro';
 
 /** De stappen van de few-shot-bouwer. */
 type Phase = 'context' | 'pairs' | 'analysis';
@@ -299,11 +300,10 @@ export default function FewShotBuilder({ settings, onSerialized, initialContext 
 function ContextPhase({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
     <div className="space-y-2">
-      <p className="text-sm text-slate-600 dark:text-slate-300">
-        Beschrijf de situatie waarin de prompt straks werkt: wat komt er binnen, van wie, en wat moet
-        ermee gebeuren? Schrijf het in een paar steekwoorden en laat het sterretje er een heldere context
-        van maken.
-      </p>
+      <BuilderIntro
+        title="Beschrijf de situatie"
+        text="Wat komt er binnen, van wie, en wat moet ermee gebeuren? Steekwoorden mogen; het sterretje maakt er een heldere context van."
+      />
       <OptimizableTextarea
         rows={5}
         value={value}
@@ -336,10 +336,10 @@ function PairsPhase({
 }) {
   return (
     <div className="space-y-3">
-      <p className="text-sm text-slate-600 dark:text-slate-300">
-        Leg per situatie vast wat de AI herkent (de input) en hoe hij dan reageert (de output). Met het
-        plusje voeg je de volgende situatie toe. Weet je er even geen? Laat de AI er een voorstellen.
-      </p>
+      <BuilderIntro
+        title="Geef voorbeelden"
+        text="Leg per situatie vast wat de AI herkent en hoe hij dan reageert. Weet je er geen? Laat de AI er een voorstellen."
+      />
       {pairs.map((p, idx) => (
         <div
           key={p.id}

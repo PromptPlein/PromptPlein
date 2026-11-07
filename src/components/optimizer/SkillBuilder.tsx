@@ -28,6 +28,8 @@ import {
   type SkillTestVerzoek,
   type SkillVeldId,
 } from '@/lib/skill';
+import BuilderIntro from './BuilderIntro';
+import InfoDot from '@/components/common/InfoDot';
 
 interface SkillBuilderProps {
   settings: AiSettings;
@@ -235,15 +237,11 @@ export default function SkillBuilder({ settings, context, onSerialized, onChange
 
   return (
     <div className="space-y-5">
-      <div className="flex items-start gap-2 rounded-xl border border-rijksblauw-200 bg-rijksblauw-50/40 p-3 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10">
-        <Wand2 size={18} className="mt-0.5 shrink-0 text-rijksblauw-500" />
-        <p className="text-sm text-slate-600 dark:text-slate-300">
-          Een skill is één vaste instructie die je in je eigen AI-omgeving plakt, zoals een
-          Mistral-agent of een projectinstructie. Daarna geef je alleen nog je invoer, en de AI pakt
-          het elke keer op dezelfde manier aan. De waarde zit in wat de AI zonder skill niet weet:
-          jullie afspraken, valkuilen en grenzen.
-        </p>
-      </div>
+      <BuilderIntro
+        icon={<Wand2 size={18} />}
+        title="Bouw je skill"
+        text="Eén vaste instructie voor je eigen AI-omgeving. De waarde zit in wat de AI zonder skill niet weet: jullie afspraken, valkuilen en grenzen."
+      />
 
       {/* Stap 1: begin. */}
       <div className="space-y-3">
@@ -261,9 +259,10 @@ export default function SkillBuilder({ settings, context, onSerialized, onChange
           />
         </div>
         <div>
-          <label className="opl-label mb-0.5 block" htmlFor="sk-verzoeken">
-            2. Welke verzoeken typ je dan? Geef er drie, zoals je ze echt zou intikken.
-          </label>
+          <div className="mb-0.5 flex items-center gap-1">
+            <label className="opl-label mb-0" htmlFor="sk-verzoeken">2. Welke verzoeken typ je dan? Geef er drie, zoals je ze echt zou intikken.</label>
+            <InfoDot label="Uitleg bij dit veld" text="Echte formuleringen helpen het meest: daaruit volgt wanneer de skill moet aanslaan." />
+          </div>
           <textarea
             id="sk-verzoeken"
             rows={3}
@@ -272,9 +271,6 @@ export default function SkillBuilder({ settings, context, onSerialized, onChange
             placeholder={'Bijv.\nkun je even naar deze brief kijken?\nis dit begrijpelijk voor een burger?\ncheck deze reactie op de bezwaarbrief'}
             onChange={(e) => setData((d) => ({ ...d, verzoeken: e.target.value }))}
           />
-          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-            Echte formuleringen helpen het meest: daaruit volgt wanneer de skill moet aanslaan.
-          </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <button

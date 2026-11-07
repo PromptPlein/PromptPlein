@@ -12,6 +12,8 @@ import {
   type UnverifiableRule,
   type VerificationData,
 } from '@/lib/verification';
+import BuilderIntro from './BuilderIntro';
+import InfoDot from '@/components/common/InfoDot';
 
 interface VerificationBuilderProps {
   settings: AiSettings;
@@ -89,24 +91,18 @@ export default function VerificationBuilder({
 
   return (
     <div className="space-y-5">
-      <div className="flex items-start gap-2 rounded-xl border border-rijksblauw-200 bg-rijksblauw-50/40 p-3 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10">
-        <ShieldCheck size={18} className="mt-0.5 shrink-0 text-rijksblauw-500" />
-        <p className="text-sm text-slate-600 dark:text-slate-300">
-          Een AI die zijn eigen tekst herleest, keurt hem goed. Deze techniek koppelt de controle
-          daarom los: eerst de beweringen eruit, dan per bewering één losse vraag, en die vragen
-          worden apart beantwoord, zonder het concept ernaast.
-        </p>
-      </div>
+      <BuilderIntro
+        icon={<ShieldCheck size={18} />}
+        title="Laat de AI zichzelf controleren"
+        text="Eerst de beweringen eruit, dan per bewering één vraag. Die vragen worden los van het concept beantwoord."
+      />
 
       {/* Stap 1: het concept. */}
       <div>
-        <label className="opl-label mb-0.5 block" htmlFor="cove-tekst">
-          1. Welke tekst moet gecontroleerd worden?
-        </label>
-        <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
-          Plak het concept hier. Heb je het nog niet, beschrijf dan om wat voor stuk het gaat; de
-          prompt krijgt dan een plaatshouder waar je het later inplakt.
-        </p>
+        <div className="mb-0.5 flex items-center gap-1">
+          <label className="opl-label mb-0" htmlFor="cove-tekst">1. Welke tekst moet gecontroleerd worden?</label>
+          <InfoDot label="Uitleg bij dit veld" text="Plak het concept hier. Heb je het nog niet, beschrijf dan om wat voor stuk het gaat; de prompt krijgt dan een plaatshouder waar je het later inplakt." />
+        </div>
         <textarea
           id="cove-tekst"
           className="opl-input min-h-[120px] resize-y text-sm"
@@ -139,12 +135,17 @@ export default function VerificationBuilder({
 
       {/* Stap 2: welke soorten beweringen meetellen. */}
       <div>
-        <p className="opl-label mb-0.5">2. Wat moet er gecontroleerd worden?</p>
-        <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
-          {data.gescand
-            ? 'De AI heeft aangevinkt wat hij in je tekst tegenkwam. Vink bij of af; jij kent het dossier.'
-            : 'Vink aan welke soorten beweringen in dit stuk fout kunnen gaan. Zonder deze lijst controleert de AI wat hem toevallig opvalt.'}
-        </p>
+        <div className="mb-0.5 flex items-center gap-1">
+          <p className="opl-label mb-0">2. Wat moet er gecontroleerd worden?</p>
+          <InfoDot
+            label="Uitleg bij dit veld"
+            text={
+              data.gescand
+                ? 'De AI heeft aangevinkt wat hij in je tekst tegenkwam. Vink bij of af; jij kent het dossier.'
+                : 'Vink aan welke soorten beweringen in dit stuk fout kunnen gaan. Zonder deze lijst controleert de AI wat hem toevallig opvalt.'
+            }
+          />
+        </div>
         <div className="space-y-1.5">
           {data.claims.map((c) => (
             <label
@@ -192,11 +193,10 @@ export default function VerificationBuilder({
 
       {/* Stap 3: de bronafbakening: waartegen mag "klopt" gemeten worden? */}
       <div>
-        <p className="opl-label mb-0.5">3. Waartegen mag geverifieerd worden?</p>
-        <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
-          Dit is de scherpste knop. Zonder afbakening betekent &quot;klopt&quot; alleen dat het model
-          het herkent, en dat is precies de fout die je zocht.
-        </p>
+        <div className="mb-0.5 flex items-center gap-1">
+          <p className="opl-label mb-0">3. Waartegen mag geverifieerd worden?</p>
+          <InfoDot label="Uitleg bij dit veld" text={"Dit is de scherpste knop. Zonder afbakening betekent \"klopt\" alleen dat het model het herkent, en dat is precies de fout die je zocht."} />
+        </div>
         <div className="space-y-1.5">
           {SOURCE_REGIMES.map((r) => (
             <label
@@ -233,11 +233,10 @@ export default function VerificationBuilder({
 
       {/* Stap 4: wat er met onverifieerbare beweringen gebeurt. */}
       <div>
-        <p className="opl-label mb-0.5">4. En als iets niet te verifiëren blijkt?</p>
-        <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
-          Wat je hier kiest geldt in de tekst. Onverifieerbare beweringen komen daarnaast altijd op
-          de lijst &quot;nog te verifiëren door een mens&quot;.
-        </p>
+        <div className="mb-0.5 flex items-center gap-1">
+          <p className="opl-label mb-0">4. En als iets niet te verifiëren blijkt?</p>
+          <InfoDot label="Uitleg bij dit veld" text={"Wat je hier kiest geldt in de tekst. Onverifieerbare beweringen komen daarnaast altijd op de lijst \"nog te verifiëren door een mens\"."} />
+        </div>
         <div className="flex flex-wrap gap-2">
           {UNVERIFIABLE_RULES.map((r) => (
             <button
@@ -262,9 +261,10 @@ export default function VerificationBuilder({
 
       {/* Stap 5: prioriteit. */}
       <div>
-        <label className="opl-label mb-0.5 block" htmlFor="cove-risico">
-          5. Welke fout is hier het duurst? <span className="font-normal">(optioneel)</span>
-        </label>
+        <div className="mb-0.5 flex items-center gap-1">
+          <label className="opl-label mb-0" htmlFor="cove-risico">5. Welke fout is hier het duurst? <span className="font-normal">(optioneel)</span></label>
+          <InfoDot label="Uitleg bij dit veld" text="Bepaalt welke beweringen als eerste worden nagetrokken." />
+        </div>
         <input
           id="cove-risico"
           className="opl-input text-sm"
@@ -272,9 +272,6 @@ export default function VerificationBuilder({
           placeholder="Bijv. een toezegging die de bewindspersoon nooit heeft gedaan"
           onChange={(e) => setData((d) => ({ ...d, duursteFout: e.target.value }))}
         />
-        <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-          Bepaalt welke beweringen als eerste worden nagetrokken.
-        </p>
       </div>
     </div>
   );

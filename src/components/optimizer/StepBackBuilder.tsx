@@ -10,6 +10,8 @@ import {
   type Constraint,
   type StepBackData,
 } from '@/lib/stepback';
+import BuilderIntro from './BuilderIntro';
+import InfoDot from '@/components/common/InfoDot';
 
 interface StepBackBuilderProps {
   settings: AiSettings;
@@ -99,14 +101,11 @@ export default function StepBackBuilder({ settings, context, onSerialized }: Ste
 
   return (
     <div className="space-y-5">
-      <div className="flex items-start gap-2 rounded-xl border border-rijksblauw-200 bg-rijksblauw-50/40 p-3 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10">
-        <ArrowUpNarrowWide size={18} className="mt-0.5 shrink-0 text-rijksblauw-500" />
-        <p className="text-sm text-slate-600 dark:text-slate-300">
-          Opdrachten komen vaak al versmald binnen: de oplossing zit er al in verwerkt. Deze techniek
-          zet één trede terug, naar het vraagstuk erachter, en komt pas daarna terug bij jouw vraag.
-          Jij bepaalt hoe ver terug, en wat daarbij onaantastbaar is.
-        </p>
-      </div>
+      <BuilderIntro
+        icon={<ArrowUpNarrowWide size={18} />}
+        title="Zet een stap terug"
+        text="Eerst naar het vraagstuk achter je opdracht, dan terug naar je vraag. Jij bepaalt hoe ver terug."
+      />
 
       {/* Stap 1: de opdracht zoals hij binnenkwam. */}
       <div>
@@ -124,12 +123,10 @@ export default function StepBackBuilder({ settings, context, onSerialized }: Ste
 
       {/* Stap 2: de oplossing die er al ligt. */}
       <div>
-        <label className="opl-label mb-0.5 block" htmlFor="sb-tafel">
-          2. Welke oplossing of richting ligt er al op tafel?
-        </label>
-        <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
-          Juist dit maakt de stap terug zinvol: wat er al besloten lijkt, is vaak nooit besloten.
-        </p>
+        <div className="mb-0.5 flex items-center gap-1">
+          <label className="opl-label mb-0" htmlFor="sb-tafel">2. Welke oplossing of richting ligt er al op tafel?</label>
+          <InfoDot label="Uitleg bij dit veld" text="Juist dit maakt de stap terug zinvol: wat er al besloten lijkt, is vaak nooit besloten." />
+        </div>
         <textarea
           id="sb-tafel"
           className="opl-input min-h-[60px] resize-y text-sm"
@@ -151,11 +148,10 @@ export default function StepBackBuilder({ settings, context, onSerialized }: Ste
       {/* Stap 3: de ladder. Dit is het mechanisme van de techniek. */}
       {data.ladder.length > 0 && (
         <div>
-          <p className="opl-label mb-0.5">3. Hoe ver zet je de stap terug?</p>
-          <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
-            Eén trede omhoog levert een bruikbaar antwoord op. Drie treden omhoog levert een essay op.
-            Kies de hoogte waarop het antwoord nog over jouw dossier gaat.
-          </p>
+          <div className="mb-0.5 flex items-center gap-1">
+            <p className="opl-label mb-0">3. Hoe ver zet je de stap terug?</p>
+            <InfoDot label="Uitleg bij dit veld" text="Eén trede omhoog levert een bruikbaar antwoord op. Drie treden omhoog levert een essay op. Kies de hoogte waarop het antwoord nog over jouw dossier gaat." />
+          </div>
           <div className="space-y-2">
             {data.ladder.map((rung) => {
               const meta = LADDER_LEVELS.find((l) => l.niveau === rung.niveau);
@@ -231,11 +227,10 @@ export default function StepBackBuilder({ settings, context, onSerialized }: Ste
           ongehoorzaam of tandeloos. */}
       {data.randvoorwaarden.length > 0 && (
         <div>
-          <p className="opl-label mb-0.5">4. Wat staat vast, en wat is alleen aangenomen?</p>
-          <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
-            Vaststaand = ergens besloten; daar tornt de AI niet aan. Aanname = nooit besloten, alleen
-            overgenomen; daar gaat de stap terug juist over. Klik om te wisselen.
-          </p>
+          <div className="mb-0.5 flex items-center gap-1">
+            <p className="opl-label mb-0">4. Wat staat vast, en wat is alleen aangenomen?</p>
+            <InfoDot label="Uitleg bij dit veld" text="Vaststaand = ergens besloten; daar tornt de AI niet aan. Aanname = nooit besloten, alleen overgenomen; daar gaat de stap terug juist over. Klik om te wisselen." />
+          </div>
           <div className="space-y-1.5">
             {data.randvoorwaarden.map((c) => (
               <div
@@ -308,10 +303,10 @@ export default function StepBackBuilder({ settings, context, onSerialized }: Ste
 
       {/* Stap 5: kaders op het algemenere niveau. */}
       <div>
-        <label className="opl-label mb-0.5 block" htmlFor="sb-kaders">
-          {data.ladder.length > 0 ? '5.' : '3.'} Welke kaders gelden hier hoe dan ook?{' '}
-          <span className="font-normal">(optioneel)</span>
-        </label>
+        <div className="mb-0.5 flex items-center gap-1">
+          <label className="opl-label mb-0" htmlFor="sb-kaders">{data.ladder.length > 0 ? '5.' : '3.'} Welke kaders gelden hier hoe dan ook?{' '} <span className="font-normal">(optioneel)</span></label>
+          <InfoDot label="Uitleg bij dit veld" text="Deze gelden ook op het algemenere niveau; ze houden het antwoord binnen de werkelijkheid." />
+        </div>
         <input
           id="sb-kaders"
           className="opl-input text-sm"
@@ -319,9 +314,6 @@ export default function StepBackBuilder({ settings, context, onSerialized }: Ste
           placeholder="Bijv. uitvoerbaarheid bij gemeenten, regeldruk, bestaande wetgeving"
           onChange={(e) => setData((d) => ({ ...d, kaders: e.target.value }))}
         />
-        <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-          Deze gelden ook op het algemenere niveau; ze houden het antwoord binnen de werkelijkheid.
-        </p>
       </div>
     </div>
   );

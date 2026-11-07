@@ -13,6 +13,8 @@ import {
   type PersonaFieldKey,
   type PersonaQuestion,
 } from '@/lib/persona';
+import BuilderIntro from './BuilderIntro';
+import InfoDot from '@/components/common/InfoDot';
 
 /** Client-side unieke id voor een nieuwe persona-kaart. */
 function newId(): string {
@@ -158,11 +160,10 @@ export default function PersonaBuilder({
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-slate-600 dark:text-slate-300">
-        Beschrijf {multi ? 'de persona’s' : 'de persona'} vanuit wie of voor wie de AI schrijft. Hoe
-        scherper, hoe beter het resultaat. Weet je iets niet? Geef een korte aanduiding en laat de AI
-        de velden invullen; je kunt alles daarna aanpassen.
-      </p>
+      <BuilderIntro
+        title={multi ? 'Beschrijf de persona’s' : 'Beschrijf de persona'}
+        text="Vanuit wie of voor wie schrijft de AI? Hoe scherper, hoe beter het resultaat."
+      />
 
       {personas.map((persona, idx) => (
         <PersonaCard
@@ -246,13 +247,17 @@ function PersonaCard({
       </div>
 
       {/* Korte aanduiding + AI-invulhulp. */}
-      <div className="mb-4 rounded-lg border border-rijksblauw-300 bg-rijksblauw-100 p-3 dark:border-rijksblauw-500/50 dark:bg-rijksblauw-500/20">
-        <label
-          className="opl-label mb-1 block text-rijksblauw-800 dark:text-rijksblauw-100"
-          htmlFor={`persona-hint-${persona.id}`}
-        >
-          Korte aanduiding <span className="font-normal text-rijksblauw-600 dark:text-rijksblauw-300">(optioneel)</span>
-        </label>
+      <div className="mb-4 rounded-lg bg-rijksblauw-50/60 p-3 dark:bg-rijksblauw-500/10">
+        <div className="mb-1 flex items-center gap-1">
+          <label className="opl-label mb-0" htmlFor={`persona-hint-${persona.id}`}>
+            Korte aanduiding
+          </label>
+          <span className="text-sm text-slate-500 dark:text-slate-400">Mag leeg blijven</span>
+          <InfoDot
+            label="Uitleg bij korte aanduiding"
+            text="Weet je de details niet? Geef een korte aanduiding en laat de AI de velden invullen."
+          />
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <input
             id={`persona-hint-${persona.id}`}
@@ -271,37 +276,32 @@ function PersonaCard({
             {busy ? 'Invullen…' : 'Vul aan met AI'}
           </button>
         </div>
-        <p className="mt-1 text-xs text-rijksblauw-700 dark:text-rijksblauw-200">
-          Weet je de details niet? Geef een korte aanduiding en laat de AI de velden hieronder invullen.
-        </p>
       </div>
 
       {/* De persona-vragen zoals gedefinieerd bij de techniek. */}
-      <div className="space-y-3">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,18rem),1fr))] gap-x-4 gap-y-3">
         {questions.map((q) => {
           const isAi = aiFields?.has(q.id);
           return (
-            <div key={q.id}>
-              <label
-                className="opl-label mb-0.5 flex flex-wrap items-center gap-2"
-                htmlFor={`persona-${persona.id}-${q.id}`}
-              >
-                <span>{q.label}</span>
+            <div key={q.id} className="min-w-0">
+              <div className="mb-0.5 flex min-h-8 flex-wrap items-center gap-1">
+                <label className="opl-label mb-0" htmlFor={`persona-${persona.id}-${q.id}`}>
+                  {q.label}
+                </label>
+                {q.why && <InfoDot label={`Uitleg bij: ${q.label}`} text={q.why} />}
                 {isAi && <PrefillBadge source="ai" />}
-              </label>
+              </div>
               {/* Door de AI ingevulde velden krijgen alleen een badge, geen eigen
                   achtergrond: de tekst is gewoon bewerkbare invoer en moet als
                   normaal veld lezen. */}
               <textarea
                 id={`persona-${persona.id}-${q.id}`}
-                className="opl-input min-h-[52px] resize-y text-sm"
+                rows={3}
+                className="opl-input resize-y text-sm"
                 value={persona.fields[q.id] ?? ''}
                 placeholder={q.placeholder}
                 onChange={(e) => onFieldChange(q.id, e.target.value)}
               />
-              {q.why && (
-                <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">{q.why}</p>
-              )}
             </div>
           );
         })}

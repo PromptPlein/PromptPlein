@@ -439,7 +439,9 @@ als de laatste. De adviseur daarachter stelt alleen technieken voor, geen framew
 De invulvelden (`FollowUpQuestions`) staan overal in een compact raster: naam, uitleg
 achter het infobolletje, "Vul verder aan" pas als er tekst staat. Bij frameworks is de
 veldnaam de Nederlandse naam uit het label (`compactFieldLabel`) met de letter ervoor,
-zodat de band met bijvoorbeeld C-O-S-T-A-R blijft.
+zodat de band met bijvoorbeeld C-O-S-T-A-R blijft. De techniekbouwers volgen dezelfde
+regel: een nieuwe bouwer begint met `BuilderIntro` en zet uitleg achter een `InfoDot`,
+niet als alinea boven of onder een veld.
 
 **Sjablonen** (soort "Routekaart" bij "Wat wil je maken?", migratie 0039) zijn
 frameworks met `modality = 'template'`. De template is een vaste opdracht met

@@ -4,6 +4,8 @@ import toast from 'react-hot-toast';
 import { buildMetaPrompt } from '@/services/optimizeService';
 import type { AiSettings } from '@/services/settingsService';
 import RichText from './RichText';
+import BuilderIntro from './BuilderIntro';
+import InfoDot from '@/components/common/InfoDot';
 
 interface MetaBuilderProps {
   settings: AiSettings;
@@ -77,20 +79,18 @@ export default function MetaBuilder({ settings, goal, onSerialized }: MetaBuilde
   return (
     <div className="space-y-4">
       {/* Uitleg over wat meta-prompting doet. */}
-      <div className="flex items-start gap-2 rounded-xl border border-rijksblauw-200 bg-rijksblauw-50/40 p-3 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10">
-        <Brain size={18} className="mt-0.5 shrink-0 text-rijksblauw-500" />
-        <p className="text-sm text-slate-600 dark:text-slate-300">
-          Bij meta-prompting bouwt de AI <span className="font-medium">een prompt</span>, geen antwoord.
-          Beschrijf wat je nodig hebt; de AI maakt er een uitvoerbare instructie van die je daarna in je
-          eigen chat kunt gebruiken.
-        </p>
-      </div>
+      <BuilderIntro
+        icon={<Brain size={18} />}
+        title="Bouw een prompt"
+        text="De AI bouwt een prompt, geen antwoord. Die gebruik je daarna in je eigen chat."
+      />
 
       {/* Het ruwe verzoek. */}
       <div>
-        <label className="opl-label mb-0.5 block" htmlFor="meta-request">
-          Wat wil je dat de (andere) AI straks doet?
-        </label>
+        <div className="mb-0.5 flex items-center gap-1">
+          <label className="opl-label mb-0" htmlFor="meta-request">Wat wil je dat de (andere) AI straks doet?</label>
+          <InfoDot label="Uitleg bij dit veld" text="De AI beantwoordt dit niet zelf; hij bouwt de prompt waarmee dit optimaal gemaakt wordt." />
+        </div>
         <textarea
           id="meta-request"
           className="opl-input min-h-[80px] resize-y text-sm"
@@ -99,9 +99,6 @@ export default function MetaBuilder({ settings, goal, onSerialized }: MetaBuilde
           disabled={busy}
           onChange={(e) => setRequest(e.target.value)}
         />
-        <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-          De AI beantwoordt dit niet zelf; hij bouwt de prompt waarmee dit optimaal gemaakt wordt.
-        </p>
       </div>
 
       {!prompt ? (
