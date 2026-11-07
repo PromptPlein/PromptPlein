@@ -43,3 +43,17 @@ export function splitFieldLabel(label: string): FieldLabelParts {
     code: isFrameworkPart ? head.charAt(0) : null,
   };
 }
+
+/**
+ * Dezelfde splitsing voor het compacte veld: een korte naam plus de uitleg voor
+ * het infobolletje. Begint de uitleg met een korte Nederlandse naam ("OBJECTIVE,
+ * communicatiedoel. Beschrijf wat..."), dan wordt dat de veldnaam: de letter
+ * houdt de band met het framework vast, de naam zegt wat er in moet.
+ */
+export function compactFieldLabel(label: string): FieldLabelParts {
+  const parts = splitFieldLabel(label);
+  if (!parts.code || !parts.instruction) return parts;
+  const zin = /^([^.?!]+)\.\s+(.+)$/su.exec(parts.instruction);
+  if (!zin || zin[1].trim().split(/\s+/).length > 3) return parts;
+  return { ...parts, name: zin[1].trim(), instruction: zin[2].trim() };
+}

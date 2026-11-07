@@ -2,15 +2,15 @@ import { useCallback, useEffect, useState } from 'react';
 
 /**
  * Hoe de gebruiker de invulvelden van een techniek wil zien:
- *  - 'wizard'  → stap voor stap, één vraag per scherm met "Volgende" (default).
- *  - 'stacked' → alle velden in één keer onder elkaar.
+ *  - 'stacked' → alle velden tegelijk in een compact raster (default).
+ *  - 'wizard'  → stap voor stap, één vraag per scherm met "Volgende".
  * De keuze wordt persoonlijk bewaard in localStorage, zodat het de volgende keer
  * weer op dezelfde manier verschijnt.
  */
 export type FieldLayout = 'wizard' | 'stacked';
 
 const STORAGE_KEY = 'opl.fieldLayout';
-const DEFAULT_LAYOUT: FieldLayout = 'wizard';
+const DEFAULT_LAYOUT: FieldLayout = 'stacked';
 
 function readStored(): FieldLayout {
   try {

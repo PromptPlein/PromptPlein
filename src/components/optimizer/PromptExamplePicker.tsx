@@ -8,11 +8,8 @@ import { PROMPT_EXAMPLES, type PromptExample } from '@/data/promptExamples';
 /**
  * Voorbeeldprompts kiezen als startpunt voor het contextveld van een framework.
  *
- * Waarom als eigen blok en niet als tekstlink: bij het invullen van de context
- * is "ik weet niet wat ik hier moet zetten" de normale toestand. Een voorbeeld
- * pakken hoort dus een zichtbare optie te zijn naast zelf typen, niet iets wat
- * je pas vindt als je ernaar zoekt. Vandaar een aanklikbare balk met een icoon,
- * een uitleg en het aantal voorbeelden, die uitklapt naar de hele lijst.
+ * Eén smalle regel boven het veld: wie een voorbeeld zoekt ziet hem meteen, wie
+ * zelf typt heeft er geen last van. Hij klapt uit naar de hele lijst.
  *
  * Het kaartje toont de prompt zelf niet (dan wordt de lijst onleesbaar lang):
  * wie hem vooraf wil lezen, houdt de muis erboven, en verder staat hij na het
@@ -37,42 +34,27 @@ export default function PromptExamplePicker({
   }
 
   return (
-    <div className="mb-3 overflow-hidden rounded-lg border border-rijksblauw-200 bg-rijksblauw-50/60 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10">
+    <div className="mb-2">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-controls="techniek-voorbeelden"
-        className="flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-rijksblauw-100/60 dark:hover:bg-rijksblauw-500/15"
+        title={`${PROMPT_EXAMPLES.length} prompts uit het rijkswerk. Je past ze daarna aan naar je eigen dossier.`}
+        className="inline-flex min-h-8 items-center gap-1.5 text-sm font-medium text-rijksblauw-500 transition-colors hover:underline dark:text-rijksblauw-200"
       >
-        {/* Oranje vlak met wit lampje: het accent van de huisstijl, zodat deze
-            balk opvalt tussen het blauw van de rest van het invulblok. */}
-        <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-rijksoranje text-white">
-          <Lightbulb size={18} />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-sm font-semibold text-slate-800 dark:text-slate-100">
-            {picked ? `Voorbeeld gekozen: ${picked}` : 'Begin met een voorbeeldprompt'}
-          </span>
-          <span className="block text-xs text-slate-500 dark:text-slate-400">
-            {picked
-              ? 'Staat in het veld hieronder. Pas hem aan naar je eigen dossier, of kies een ander voorbeeld.'
-              : `${PROMPT_EXAMPLES.length} prompts uit het rijkswerk om de context mee te vullen. Je past ze daarna aan naar je eigen dossier.`}
-          </span>
-        </span>
+        <Lightbulb size={16} className="shrink-0 text-rijksoranje" />
+        {picked ? `Voorbeeld gekozen: ${picked}` : 'Begin met een voorbeeld'}
         <ChevronDown
-          size={18}
-          className={clsx(
-            'shrink-0 text-rijksblauw-600 transition-transform dark:text-rijksblauw-300',
-            open && 'rotate-180',
-          )}
+          size={14}
+          className={clsx('shrink-0 transition-transform', open && 'rotate-180')}
         />
       </button>
 
       {open && (
         <div
           id="techniek-voorbeelden"
-          className="animate-fade-in border-t border-rijksblauw-200 p-3 dark:border-rijksblauw-500/30"
+          className="animate-fade-in mt-1 rounded-lg border border-slate-200 p-3 dark:border-slate-700"
         >
           {/* Vaste hoogte met eigen schuifbalk: de lijst is bewust lang (er is
               veel verschillend werk), maar mag de rest van het invulblok niet

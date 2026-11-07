@@ -27,6 +27,7 @@ import InterviewFlow from '@/components/optimizer/InterviewFlow';
 import SjabloonVragen from '@/components/optimizer/SjabloonVragen';
 import InfoDot from '@/components/common/InfoDot';
 import OptimizableTextarea from '@/components/common/OptimizableTextarea';
+import StepHeading from '@/components/optimizer/StepHeading';
 import OptimizingLoader from '@/components/optimizer/OptimizingLoader';
 import ThinkingToggle from '@/components/common/ThinkingToggle';
 import WebSearchToggle from '@/components/common/WebSearchToggle';
@@ -68,28 +69,6 @@ import { activityIdentifier, stripMarkdown } from '@/lib/utils';
 import type { SkillData } from '@/lib/skill';
 import { defaultModelFor, isEnabledProvider, thinkingUnavailableReason } from '@/config/aiModels';
 import type { OptimizeResult, Technique } from '@/types';
-
-/**
- * Vult deze techniek zich via de gewone vragenlijst (FollowUpQuestions)? Alle
- * andere formats hebben een eigen bouwer of een interview. Bepaalt waar de
- * bouw-knop staat: in de balk van de vragenlijst, of los onder het invulblok.
- */
-function usesQuestionnaire(t: Technique): boolean {
-  const fmt = structureFormat(t);
-  return (
-    t.follow_up_questions.length > 0 &&
-    fmt !== 'persona' &&
-    fmt !== 'multi-persona' &&
-    fmt !== 'few-shot' &&
-    fmt !== 'meta' &&
-    fmt !== 'chain-of-verification' &&
-    fmt !== 'step-back' &&
-    fmt !== 'rubric' &&
-    fmt !== 'skill' &&
-    fmt !== 'chain-of-thought' &&
-    fmt !== 'socratic'
-  );
-}
 
 /**
  * Werken mét de prompttechnieken zelf: de volledige lijst frameworks en losse
@@ -654,11 +633,11 @@ export default function TechniquesPage() {
         <section
           ref={builderRef}
           aria-label="Je keuze"
-          className="mb-4 flex scroll-mt-24 flex-wrap items-center gap-3 rounded-xl border border-rijksblauw-700 bg-rijksblauw-50 px-4 py-3 shadow-[inset_0_-3px_0_0_theme(colors.rijksoranje.vast)] dark:border-rijksblauw-200 dark:bg-rijksblauw-500/15"
+          className="mb-4 flex scroll-mt-24 flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 pb-3 pt-4 shadow-[inset_0_4px_0_0_theme(colors.rijksoranje.vast)] dark:border-slate-700 dark:bg-slate-800"
         >
           <span
             aria-hidden="true"
-            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-rijksblauw-700 text-rijksoranje-vast"
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/20 dark:text-rijksblauw-200"
           >
             {ChosenIcon && <ChosenIcon size={24} />}
           </span>
@@ -730,17 +709,19 @@ export default function TechniquesPage() {
               opent. De adviseur hoort erbij, voor wie er zelf niet uitkomt. */}
           {(!technique || chooserOpen) && (
             <div className="space-y-6">
-              <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
-                {technique ? (
-                  <h2 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
-                    Wat wil je bereiken?
-                  </h2>
-                ) : (
-                  <h1 className="text-3xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
-                    Wat wil je bereiken?
-                  </h1>
-                )}
-                <div className="flex flex-wrap items-center gap-2">
+              {/* Hetzelfde raster als de tegels eronder: de knop is even breed als de
+                  laatste tegel. */}
+              <div className="grid grid-cols-1 items-center gap-3 lg:grid-cols-5">
+                <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 lg:col-span-4">
+                  {technique ? (
+                    <h2 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
+                      Wat wil je bereiken?
+                    </h2>
+                  ) : (
+                    <h1 className="text-3xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
+                      Wat wil je bereiken?
+                    </h1>
+                  )}
                   {!technique && hasContent && (
                     <button
                       type="button"
@@ -751,21 +732,21 @@ export default function TechniquesPage() {
                       <Eraser size={15} /> Opschonen
                     </button>
                   )}
-                  {!advisorOpen && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAdvisorOpen(true);
-                        requestAnimationFrame(() => {
-                          advisorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                        });
-                      }}
-                      className="inline-flex min-h-11 items-center gap-2 font-semibold text-rijksblauw-500 transition-colors hover:underline dark:text-rijksblauw-200"
-                    >
-                      <Compass size={18} className="text-rijksoranje" /> Help mij kiezen
-                    </button>
-                  )}
                 </div>
+                {!advisorOpen && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAdvisorOpen(true);
+                      requestAnimationFrame(() => {
+                        advisorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      });
+                    }}
+                    className="opl-btn-primary min-h-12 w-full justify-center px-3 text-base sm:w-auto sm:justify-self-start lg:w-full"
+                  >
+                    <Compass size={20} className="text-rijksoranje-vast" /> Help mij kiezen
+                  </button>
+                )}
               </div>
               {advisorOpen && (
                 <div ref={advisorRef} className="scroll-mt-24">
@@ -784,18 +765,14 @@ export default function TechniquesPage() {
 
           {/* Het invulblok van de gekozen techniek. */}
           {technique && (
-            <section
-              key={technique.id}
-              className="animate-fade-in overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800"
-            >
-              <div className="p-6">
+            <div key={technique.id} className="animate-fade-in space-y-4">
                 {/* Het oordeel van de voor-invulling hoort bovenaan het blok, waar
                     de blik na het kiezen van een techniek al is: onder de knop
                     "Bouw prompt" viel het pas op na scrollen. */}
                 {unclearReason && (
                   <div
                     role="alert"
-                    className="animate-fade-in mb-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-200"
+                    className="animate-fade-in flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-200"
                   >
                     <AlertTriangle size={18} className="mt-0.5 shrink-0" />
                     <div>
@@ -815,7 +792,7 @@ export default function TechniquesPage() {
                   const starter = techniqueStarter(technique);
                   if (!starter) return null;
                   return (
-                    <div className="mb-4 rounded-lg border border-rijksblauw-200 bg-rijksblauw-50/60 p-3 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10">
+                    <div className="rounded-lg border border-rijksblauw-200 bg-rijksblauw-50/60 p-3 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10">
                       <p className="flex items-center gap-1.5 text-sm font-semibold text-rijksblauw-700 dark:text-rijksblauw-200">
                         <Compass size={15} className="shrink-0" /> Zo begin je
                       </p>
@@ -869,28 +846,27 @@ export default function TechniquesPage() {
                       sjabloonAntwoorden[q.id]?.trim(),
                     ).length;
                     return (
-                      <div className="mb-6 rounded-xl border border-dashed border-rijksblauw-300 bg-rijksblauw-50/40 p-4 dark:border-rijksblauw-500/40 dark:bg-rijksblauw-500/5">
+                      <section className="opl-card p-5">
                         {editingContext ? (
                           <>
-                            <p className="opl-label">Eerst de context</p>
-                            <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
-                              Sta bij elke vraag even stil en schrijf op wat je al weet. Klik daarna
-                              op Klaar: de AI zet je antwoorden in de velden, laat open wat je niet
-                              gaf en vraagt daar naar. Daarna kun je alles nog aanpassen.
-                            </p>
+                            <StepHeading
+                              step={1}
+                              title="Eerst de context"
+                              info="Schrijf bij elke vraag op wat je al weet. Na Klaar zet de AI je antwoorden in de velden en vraagt naar wat ontbreekt."
+                            />
                             {/* Voorbereid materiaal bovenaan: wie in een andere chat al
                                 iets heeft uitgewerkt, plakt het hier en laat de vragen
                                 eronder daaruit invullen. */}
                             <div className="mb-5 rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-800">
-                              <label htmlFor="techniek-context" className="opl-label">
-                                Heb je al iets voorbereid? (optioneel)
-                              </label>
-                              <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
-                                Plak hier wat je al hebt, bijvoorbeeld een uitwerking uit een andere
-                                chat, een planning of aantekeningen. De AI haalt eruit wat bij de
-                                vragen hoort en vult aan; per vraag zie je wat uit je tekst komt en
-                                wat de AI heeft bedacht.
-                              </p>
+                              <div className="mb-1 flex items-center gap-1">
+                                <label htmlFor="techniek-context" className="opl-label mb-0">
+                                  Heb je al iets voorbereid?
+                                </label>
+                                <InfoDot
+                                  label="Uitleg over voorbereide tekst"
+                                  text="Plak wat je al hebt, zoals aantekeningen of een planning. Per vraag zie je wat uit je tekst komt en wat de AI heeft bedacht."
+                                />
+                              </div>
                               <OptimizableTextarea
                                 id="techniek-context"
                                 ref={contextRef}
@@ -972,33 +948,31 @@ export default function TechniquesPage() {
                             </button>
                           </div>
                         )}
-                      </div>
+                      </section>
                     );
                   }
-                  // Gestippelde rand: dit vak hoort niet bij de velden van de
-                  // techniek eronder, het vult ze alleen voor.
                   return (
-                    <div className="mb-6 rounded-xl border border-dashed border-rijksblauw-300 bg-rijksblauw-50/40 p-4 dark:border-rijksblauw-500/40 dark:bg-rijksblauw-500/5">
-                      {editingContext ? (
+                    <section className="opl-card p-5">
+                      {/* Bij een vragenlijst blijft dit veld open; bij een gesprek klapt
+                          het dicht zodra het gesprek begint. */}
+                      {editingContext || usesQuestionnaire ? (
                         <>
-                          <div className="mb-1 flex items-center gap-1">
-                            <label htmlFor="techniek-context" className="opl-label mb-0">
-                              Waar gaat het over?
-                            </label>
+                          <StepHeading
+                            step={1}
+                            title="Waar gaat het over?"
+                            htmlFor="techniek-context"
+                            info={
+                              usesQuestionnaire
+                                ? 'Vul je hier iets in, dan kan de AI de velden alvast voor je invullen.'
+                                : isInterview
+                                  ? 'Vul je hier iets in, dan begint het gesprek bij jouw onderwerp.'
+                                  : 'Vul je hier iets in, dan begint deze techniek met jouw onderwerp.'
+                            }
+                          >
                             <span className="text-sm text-slate-500 dark:text-slate-400">
                               Mag leeg blijven
                             </span>
-                            <InfoDot
-                              label="Uitleg over dit veld"
-                              text={
-                                usesQuestionnaire
-                                  ? 'Vul je hier iets in, dan kan de AI de velden alvast voor je invullen.'
-                                  : isInterview
-                                    ? 'Vul je hier iets in, dan begint het gesprek bij jouw onderwerp.'
-                                    : 'Vul je hier iets in, dan begint deze techniek met jouw onderwerp.'
-                              }
-                            />
-                          </div>
+                          </StepHeading>
                           {/* Voorbeeldprompts als startpunt, alleen bij de
                               frameworks: daar is de context een opdracht in
                               gewone taal, precies wat deze voorbeelden zijn.
@@ -1018,51 +992,43 @@ export default function TechniquesPage() {
                               }}
                             />
                           )}
-                          {/* Ruim bemeten en op leestekstgrootte: hier komt een
-                              hele opdracht in te staan, geen zoekterm. Een veld
-                              van drie regels dwong tot scrollen in een tekst
-                              die je juist wilt nalezen voordat je hem gebruikt.
-
-                              Met het oranje sterretje uit de chat erbij: wat de
-                              gebruiker in steekwoorden neerzet, staat op deze
-                              plek vaak nog niet uitgeschreven, en juist hier
-                              bepaalt die tekst wat de AI van de techniek maakt. */}
+                          {/* Met het oranje sterretje uit de chat erbij: wat de gebruiker in
+                              steekwoorden neerzet, staat hier vaak nog niet uitgeschreven,
+                              en juist deze tekst bepaalt wat de AI van de techniek maakt. */}
                           <OptimizableTextarea
                             id="techniek-context"
                             ref={contextRef}
-                            rows={6}
+                            rows={3}
                             value={context}
                             onValueChange={setContext}
                             placeholder={contextExample(technique)}
-                            className="opl-input min-h-[9rem] resize-y px-4 py-3 text-[15px] leading-relaxed"
+                            className="opl-input min-h-[5.5rem] resize-y px-4 py-3 text-[15px] leading-relaxed"
                             optimizeTitle="Schrijf mijn context uit met AI; je oorspronkelijke tekst kun je daarna terughalen"
                           />
                           <div className="mt-2 flex flex-wrap justify-end gap-2">
-                            <button
-                              type="button"
-                              className={isInterview ? 'opl-btn-primary' : 'opl-btn-secondary'}
-                              onClick={() => setEditingContext(false)}
-                            >
-                              {isInterview ? 'Start het gesprek' : 'Klaar'}
-                            </button>
-                            {usesQuestionnaire && context.trim() && (
+                            {usesQuestionnaire ? (
                               <button
                                 type="button"
-                                className="opl-btn-primary"
+                                className="opl-btn-secondary"
                                 title="Vervangt de huidige antwoorden door een voorstel van de AI"
                                 // Zolang er een voor-invulling loopt geen tweede starten: elke
                                 // klik was een extra aanroep, en de laatste die klaar was
                                 // overschreef de velden, ook als die niets opleverde.
-                                disabled={prefilling}
-                                onClick={() => {
-                                  setEditingContext(false);
-                                  void runPrefill(technique, context.trim());
-                                }}
+                                disabled={prefilling || !context.trim()}
+                                onClick={() => void runPrefill(technique, context.trim())}
                               >
                                 <Sparkles size={16} />{' '}
                                 {Object.keys(answers).length > 0
                                   ? 'Velden opnieuw voorinvullen'
                                   : 'Velden voorinvullen'}
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                className={isInterview ? 'opl-btn-primary' : 'opl-btn-secondary'}
+                                onClick={() => setEditingContext(false)}
+                              >
+                                {isInterview ? 'Start het gesprek' : 'Klaar'}
                               </button>
                             )}
                           </div>
@@ -1090,13 +1056,14 @@ export default function TechniquesPage() {
                           </button>
                         </div>
                       )}
-                    </div>
+                    </section>
                   );
                 })()}
 
                 {/* Gespecialiseerde bouwers per techniek; anders de vragenlijst.
                     De bouwer levert geserialiseerde input die bij het bouwen
                     van de prompt wordt meegewogen. */}
+                <section className="opl-card p-5">
                 {(() => {
                   const fmt = structureFormat(technique);
                   const s = settingsRef.current;
@@ -1154,30 +1121,35 @@ export default function TechniquesPage() {
                   // start pas als het contextveld dicht is — anders stelt de AI
                   // zijn eerste vraag terwijl de gebruiker nog context typt.
                   if (fmt === 'chain-of-thought' || fmt === 'socratic') {
-                    if (editingContext) {
-                      return (
-                        <p className="rounded-lg border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-600 dark:text-slate-400">
-                          Het gesprek begint zodra je hierboven op &quot;Start het gesprek&quot;
-                          klikt.
-                        </p>
-                      );
-                    }
                     return (
-                      <InterviewFlow
-                        technique={technique}
-                        settings={s}
-                        goal={context}
-                        onComplete={setBuilderText}
-                      />
+                      <>
+                        <StepHeading step={2} title="Het gesprek" />
+                        {editingContext ? (
+                          <p className="rounded-lg border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-600 dark:text-slate-400">
+                            Het gesprek begint zodra je hierboven op &quot;Start het gesprek&quot;
+                            klikt.
+                          </p>
+                        ) : (
+                          <InterviewFlow
+                            technique={technique}
+                            settings={s}
+                            goal={context}
+                            onComplete={setBuilderText}
+                          />
+                        )}
+                      </>
                     );
                   }
                   // Sjabloon: de velden pas na de contextstap, zodat de gebruiker
                   // niet meteen in het eerste veld begint.
                   if (sjabloonMode && editingContext) {
                     return (
-                      <p className="rounded-lg border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-600 dark:text-slate-400">
-                        De velden van het sjabloon verschijnen zodra je hierboven op Klaar klikt.
-                      </p>
+                      <>
+                        <StepHeading step={2} title="Vul de velden in" />
+                        <p className="rounded-lg border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-600 dark:text-slate-400">
+                          De velden van het sjabloon verschijnen zodra je hierboven op Klaar klikt.
+                        </p>
+                      </>
                     );
                   }
                   // Template-based: upload-zone (document → velden voor-invullen)
@@ -1221,27 +1193,28 @@ export default function TechniquesPage() {
                         prefilling={prefilling}
                         preferredProvider={settingsRef.current.provider}
                         preferredModel={settingsRef.current.model}
-                        onBuild={optimizing ? undefined : handleGenerate}
+                        heading={<StepHeading step={2} title="Vul de velden in" />}
                       />
                     </div>
                   );
                 })()}
-              </div>
-            </section>
+                </section>
+            </div>
           )}
 
-          {/* Denken en zoeken voor het bouwen, net als op /genereren. */}
+          {/* Denken, zoeken en bouwen op één regel, voor elke techniek. */}
           {!optimizing && technique && (
             <div className="flex flex-wrap items-center justify-end gap-2">
-              <span className="text-xs text-slate-500 dark:text-slate-400">
-                Lastige opdracht? Laat het model eerst nadenken.
-              </span>
               <ThinkingToggle
                 value={thinking}
                 onChange={setThinking}
                 unavailableReason={thinkingUnavailable}
               />
               {searchAvailable && <WebSearchToggle value={webSearch} onChange={setWebSearch} />}
+              <button className="opl-btn-primary px-6 py-2.5" onClick={handleGenerate}>
+                <Sparkles size={18} />{' '}
+                {structureFormat(technique) === 'skill' ? 'Bouw skill' : 'Bouw prompt'}
+              </button>
             </div>
           )}
 
@@ -1254,25 +1227,6 @@ export default function TechniquesPage() {
                 models={genProgress.models}
                 winner={genProgress.provider ?? null}
               />
-            </div>
-          )}
-
-          {/* De vragenlijst zet de bouw-knop zelf in zijn knoppenbalk, naast
-              "Volgende". Alleen de andere bouwers houden hem hier onder het
-              blok, want die hebben geen eigen balk. */}
-          {!optimizing && technique && !usesQuestionnaire(technique) && (
-            <div className="flex flex-wrap items-center justify-end gap-3">
-              <button className="opl-btn-primary px-6 py-2.5" onClick={handleGenerate}>
-                {optimizing ? (
-                  <>
-                    <Loader2 size={18} className="animate-spin" /> Prompt bouwen…
-                  </>
-                ) : (
-                  <>
-                    <Sparkles size={18} /> {structureFormat(technique) === 'skill' ? 'Bouw skill' : 'Bouw prompt'}
-                  </>
-                )}
-              </button>
             </div>
           )}
         </div>

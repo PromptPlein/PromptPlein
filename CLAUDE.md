@@ -430,6 +430,17 @@ hoort daar ook te worden aangepast. Een onbekende naam blijft zichtbaar en valt
 terug op zijn eigen omschrijving. Na het kiezen klapt de kiezer dicht; "Andere
 kiezen" opent hem boven het invulblok, zonder de invoer te wissen.
 
+De doelen zijn tabbladen: de gekozen tegel loopt zonder lijn over in het vlak
+eronder, met een oranje streep bovenaan. Dezelfde streep staat op de balk met je
+keuze. "Help mij kiezen" staat op hetzelfde raster als de tegels en is even breed
+als de laatste. De adviseur daarachter stelt alleen technieken voor, geen frameworks
+(`TechniqueAdvisor`).
+
+De invulvelden (`FollowUpQuestions`) staan overal in een compact raster: naam, uitleg
+achter het infobolletje, "Vul verder aan" pas als er tekst staat. Bij frameworks is de
+veldnaam de Nederlandse naam uit het label (`compactFieldLabel`) met de letter ervoor,
+zodat de band met bijvoorbeeld C-O-S-T-A-R blijft.
+
 **Sjablonen** (soort "Routekaart" bij "Wat wil je maken?", migratie 0039) zijn
 frameworks met `modality = 'template'`. De template is een vaste opdracht met
 één plek `{{INHOUD:<naam>}}`; alleen die plek schrijft de AI (mode `sjabloon`,

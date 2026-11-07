@@ -9,7 +9,7 @@ interface FieldLayoutToggleProps {
 
 /**
  * Kleine icoon-schakelaar waarmee de gebruiker kiest hoe de invulvelden
- * verschijnen: stap voor stap (wizard) of alle velden tegelijk onder elkaar
+ * verschijnen: stap voor stap (wizard) of alle velden tegelijk in een raster
  * (stacked). De keuze wordt persoonlijk bewaard via useFieldLayout.
  */
 export default function FieldLayoutToggle({ layout, onChange }: FieldLayoutToggleProps) {
@@ -38,7 +38,7 @@ export default function FieldLayoutToggle({ layout, onChange }: FieldLayoutToggl
         type="button"
         onClick={() => onChange('stacked')}
         aria-pressed={layout === 'stacked'}
-        title="Alles onder elkaar: alle velden tegelijk"
+        title="Alle velden tegelijk"
         className={clsx(
           'inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors',
           layout === 'stacked'

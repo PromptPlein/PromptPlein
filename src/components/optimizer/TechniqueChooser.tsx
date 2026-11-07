@@ -9,8 +9,10 @@ import type { Technique } from '@/types';
 
 /**
  * Kiezen op doel: eerst wat je wilt bereiken, dan de frameworks en technieken die
- * daarbij passen. Oranje staat hier alleen op lijnen en iconen, net als in het
- * hoofdmenu: als tekst op wit haalt het de contrasteis niet.
+ * daarbij passen. De doelen zijn tabbladen: de gekozen tegel loopt zonder lijn over
+ * in het vlak eronder. Dat kan alleen als ze op één rij staan, dus pas vanaf lg.
+ * Oranje staat alleen op de streep bovenaan en op kleine iconen: als tekst op wit
+ * haalt het de contrasteis niet.
  */
 export default function TechniqueChooser({
   selectedId,
@@ -47,7 +49,7 @@ export default function TechniqueChooser({
   const lijst = perDoel.get(actief.id) ?? [];
 
   return (
-    <div className="space-y-6">
+    <div>
       <div
         role="group"
         aria-label="Kies je doel"
@@ -63,12 +65,13 @@ export default function TechniqueChooser({
               aria-pressed={aan}
               onClick={() => setKeuze(d.id)}
               className={clsx(
-                'flex min-h-[9.25rem] flex-col items-center gap-2 rounded-xl border px-3 py-4 text-center transition-colors',
+                'relative mb-3 flex min-h-[9.25rem] flex-col items-center gap-2 rounded-xl border px-3 py-4 text-center transition-colors',
                 'focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500/50',
                 aan
-                  ? // De oranje streep onderaan is dezelfde als bij het hoofdmenu.
-                    'border-rijksblauw-700 bg-rijksblauw-50 shadow-[inset_0_-3px_0_0_theme(colors.rijksoranje.vast)] ring-1 ring-rijksblauw-700 dark:border-rijksblauw-200 dark:bg-rijksblauw-500/15 dark:ring-rijksblauw-200'
-                  : 'border-slate-200 bg-white hover:border-rijksoranje/60 dark:border-slate-700 dark:bg-slate-800',
+                  ? // z-10 en -mb-px: de tegel legt zich over de bovenrand van het
+                    // vlak heen, zodat er geen lijn tussen beide loopt.
+                    'z-10 border-slate-200 bg-white shadow-[inset_0_4px_0_0_theme(colors.rijksoranje.vast)] lg:-mb-px lg:rounded-b-none lg:border-b-white dark:border-slate-700 dark:bg-slate-800 lg:dark:border-b-slate-800'
+                  : 'border-slate-200 bg-[#e6edf3] hover:border-rijksblauw-700 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-rijksblauw-200',
               )}
             >
               <span
@@ -76,8 +79,8 @@ export default function TechniqueChooser({
                 className={clsx(
                   'flex h-14 w-14 shrink-0 items-center justify-center rounded-full',
                   aan
-                    ? 'bg-rijksblauw-700 text-rijksoranje-vast'
-                    : 'bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/20 dark:text-rijksblauw-200',
+                    ? 'bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/20 dark:text-rijksblauw-200'
+                    : 'bg-white text-rijksblauw-700 dark:bg-slate-800 dark:text-rijksblauw-200',
                 )}
               >
                 <Icon size={26} />
@@ -91,7 +94,10 @@ export default function TechniqueChooser({
         })}
       </div>
 
-      <section aria-labelledby="techniek-keuzes">
+      <section
+        aria-labelledby="techniek-keuzes"
+        className="rounded-xl border border-slate-200 bg-white p-4 lg:rounded-t-none dark:border-slate-700 dark:bg-slate-800"
+      >
         <div className="mb-3 flex flex-wrap items-center justify-between gap-x-6 gap-y-1">
           <h2
             id="techniek-keuzes"
@@ -153,9 +159,9 @@ function TechniqueRow({
         onClick={onSelect}
         aria-pressed={active}
         className={clsx(
-          'group/rij flex h-full min-h-[5.25rem] w-full items-center gap-3 rounded-xl border bg-white py-3 pl-3.5 pr-20 text-left transition-all',
-          'hover:border-rijksoranje/60 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500/50',
-          'dark:bg-slate-800',
+          'group/rij flex h-full min-h-[5.25rem] w-full items-center gap-3 rounded-xl border bg-slate-50 py-3 pl-3.5 pr-20 text-left transition-all',
+          'hover:border-rijksblauw-700 hover:bg-white hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500/50',
+          'dark:bg-slate-900/40 dark:hover:border-rijksblauw-200 dark:hover:bg-slate-900',
           active
             ? 'border-rijksblauw-700 ring-1 ring-rijksblauw-700 dark:border-rijksblauw-200 dark:ring-rijksblauw-200'
             : 'border-slate-200 dark:border-slate-700',

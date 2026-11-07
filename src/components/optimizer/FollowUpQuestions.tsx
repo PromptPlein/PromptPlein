@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { ArrowLeft, ArrowRight, Check, Loader2, Pencil, Sparkles, Wand2 } from '@/components/common/icons';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
+import InfoDot from '@/components/common/InfoDot';
 import PrefillBadge from './PrefillBadge';
 import PrefillLoader from './PrefillLoader';
 import FieldLayoutToggle from './FieldLayoutToggle';
@@ -10,7 +11,7 @@ import { useFieldLayout } from '@/lib/useFieldLayout';
 import { expandField, type PrefillPhase } from '@/services/optimizeService';
 import { getAiSettings, DEFAULT_AI_SETTINGS, type AiSettings } from '@/services/settingsService';
 import { structureFormat } from '@/lib/techniques';
-import { splitFieldLabel } from '@/lib/fieldLabel';
+import { compactFieldLabel } from '@/lib/fieldLabel';
 import type { AiProvider } from '@/config/aiModels';
 import type { FollowUpQuestion, PrefilledField, PrefillSource, Technique } from '@/types';
 
@@ -26,16 +27,8 @@ interface FieldBlockProps {
   autoFocus?: boolean;
   /** Hoger tekstvak; de stapsgewijze indeling toont er maar één tegelijk. */
   tall?: boolean;
-  /**
-   * Letter (C van CONTEXT) of volgnummer vóór de naam. Weggelaten in de
-   * letterrail, die de letter zelf al naast het veld toont.
-   */
+  /** Letter van het framework-onderdeel (de C van CONTEXT), of leeg. */
   marker?: string;
-  /**
-   * Het veld staat in de letterrail: geen eigen kaart, want de rail verbindt de
-   * velden al tot één geheel. Alleen als de AI eraan werkt kleurt het blok op.
-   */
-  rail?: boolean;
   onChange: (value: string) => void;
   /** Start "Vul verder aan" voor dit veld. */
   onExpand: () => void;
@@ -54,10 +47,10 @@ interface FieldBlockProps {
 }
 
 /**
- * Eén veld met alles wat erbij hoort: de vraag, het tekstvak, de toelichting, de
- * AI-actie en het eventuele voorstel. Bewust één omkaderd blok: zodra de AI aan
- * een veld werkt kleurt dat hele blok op, zodat zichtbaar blijft welk veld
- * verbeterd wordt in plaats van een los voorstel onder een los tekstvak.
+ * Eén veld, compact: naam, uitleg achter het infobolletje en het tekstvak. Staat
+ * er tekst in, dan komt "Vul verder aan" erbij. Zodra de AI aan een veld werkt,
+ * kleurt het hele blok op en neemt het de volle breedte, zodat het voorstel
+ * leesbaar is en zichtbaar blijft bij welk veld het hoort.
  */
 function FieldBlock({
   question,
@@ -67,7 +60,6 @@ function FieldBlock({
   autoFocus,
   tall,
   marker,
-  rail = false,
   onChange,
   onExpand,
   expanding,
@@ -82,100 +74,73 @@ function FieldBlock({
   const fieldId = `${idPrefix}-${question.id}`;
   const active = expanding || proposal !== null;
   const filled = value.trim() !== '';
-  const { name, instruction } = splitFieldLabel(question.label);
+  const { name, instruction } = compactFieldLabel(question.label);
+  const uitleg = [instruction, question.why].filter(Boolean).join('\n');
   return (
     <div
       className={clsx(
-        'transition-all duration-200',
-        rail
-          ? // In de rail: geen kaart, alleen een tint zolang de AI aan dit veld werkt.
-            clsx(
-              'rounded-xl border p-3',
-              active
-                ? 'border-rijksblauw-300 bg-rijksblauw-50/60 ring-4 ring-rijksblauw-500/10 dark:border-rijksblauw-500/50 dark:bg-rijksblauw-500/10 dark:ring-rijksblauw-500/15'
-                : 'border-transparent',
-            )
-          : // Een stevige rand met een zachte schaduw: het veld, de toelichting en
-            // "Vul verder aan" horen zichtbaar bij elkaar. De rand volgt waar je
-            // bent: rustig grijs, blauw zodra je in het veld typt, en vol blauw met
-            // een lichte gloed zodra de AI aan dit veld werkt.
-            clsx(
-              'rounded-2xl border-2 p-4 shadow-sm',
-              active
-                ? 'border-rijksblauw-400 bg-rijksblauw-50/50 shadow-md shadow-rijksblauw-500/10 ring-4 ring-rijksblauw-500/10 dark:border-rijksblauw-500/70 dark:bg-rijksblauw-500/10 dark:ring-rijksblauw-500/15'
-                : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md focus-within:border-rijksblauw-300 focus-within:shadow-md dark:border-slate-700 dark:bg-slate-800/40 dark:hover:border-slate-600 dark:focus-within:border-rijksblauw-500/50',
-            ),
+        'min-w-0 rounded-xl border p-2 transition-all duration-200',
+        (active || aanvulling) && 'col-span-full',
+        active
+          ? 'border-rijksblauw-300 bg-rijksblauw-50/60 ring-4 ring-rijksblauw-500/10 dark:border-rijksblauw-500/50 dark:bg-rijksblauw-500/10 dark:ring-rijksblauw-500/15'
+          : 'border-transparent',
       )}
     >
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex min-h-8 flex-wrap items-center gap-x-1.5">
+        {marker && (
+          <span
+            aria-hidden="true"
+            className={clsx(
+              'flex h-6 w-6 shrink-0 items-center justify-center rounded text-xs font-bold transition-colors',
+              filled
+                ? 'bg-rijksblauw-500 text-white'
+                : 'bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/20 dark:text-rijksblauw-200',
+            )}
+          >
+            {marker}
+          </span>
+        )}
         <label
-          className="flex items-center gap-2 text-[15px] font-semibold text-slate-800 dark:text-slate-100"
+          className="text-[15px] font-semibold text-slate-800 dark:text-slate-100"
           htmlFor={fieldId}
         >
-          {marker && (
-            <span
-              aria-hidden="true"
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-rijksblauw-500 text-sm font-bold text-white"
-            >
-              {marker}
-            </span>
-          )}
           {name}
         </label>
+        {uitleg && <InfoDot label={`Uitleg bij ${name}`} text={uitleg} />}
         {meta && filled && <PrefillBadge source={meta.source} note={meta.note} />}
         {active && (
           <span className="inline-flex items-center gap-1 rounded-full bg-rijksblauw-500/10 px-2 py-0.5 text-[11px] font-semibold text-rijksblauw-700 dark:bg-rijksblauw-500/20 dark:text-rijksblauw-100">
             <Wand2 size={11} /> {expanding ? 'AI vult dit veld aan' : 'Voorstel voor dit veld'}
           </span>
         )}
+        {filled && (
+          <button
+            type="button"
+            onClick={onExpand}
+            disabled={busy}
+            title="Laat AI dit veld verder aanvullen"
+            aria-label={`Laat AI ${name} verder aanvullen`}
+            className="ml-auto inline-flex items-center gap-1 text-xs font-semibold text-rijksblauw-500 transition-colors hover:underline disabled:cursor-not-allowed disabled:opacity-40 dark:text-rijksblauw-200"
+          >
+            {expanding ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
+            {expanding ? 'Bezig met aanvullen…' : 'Vul verder aan'}
+          </button>
+        )}
       </div>
-      {/* De uitleg uit het label staat los onder de naam, boven het veld. */}
-      {instruction && (
-        <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">{instruction}</p>
-      )}
       <textarea
         id={fieldId}
         autoFocus={autoFocus}
-        className={clsx('opl-input mt-2 resize-y', tall ? 'min-h-[120px]' : 'min-h-[100px]')}
+        rows={tall ? 6 : 3}
+        className="opl-input mt-1 resize-y text-[15px]"
         value={value}
         placeholder={question.placeholder}
         onChange={(e) => onChange(e.target.value)}
       />
-      {/* Toelichting uit de techniek-definitie: waarom deze vraag ertoe doet. */}
-      {question.why && <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">{question.why}</p>}
-      {meta?.note && filled ? (
-        <p className="mt-1 flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
+      {meta?.note && filled && (
+        <p className="mt-1 flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
           <Sparkles size={12} /> {meta.note}
         </p>
-      ) : (
-        <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-          Optioneel. Wat je leeg laat, wordt een invulbare plaatshouder in de prompt.
-        </p>
       )}
-      {/* Voetregel van hetzelfde blok: een haarlijn scheidt de actie van het
-          veld, maar houdt hem er zichtbaar binnen. In de rail is er geen kaart,
-          dus ook geen haarlijn nodig. */}
-      <div
-        className={clsx(
-          'flex',
-          rail ? 'mt-2' : 'mt-3 border-t pt-3',
-          active
-            ? 'border-rijksblauw-200 dark:border-rijksblauw-500/30'
-            : 'border-slate-100 dark:border-slate-700/70',
-        )}
-      >
-        <button
-          type="button"
-          onClick={onExpand}
-          disabled={busy || !filled}
-          title="Laat AI dit veld verder aanvullen"
-          aria-label="Laat AI dit veld verder aanvullen"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-rijksblauw-300 bg-rijksblauw-50 px-3 py-1.5 text-xs font-semibold text-rijksblauw-700 shadow-sm transition-colors hover:border-rijksblauw-400 hover:bg-rijksblauw-100 hover:shadow disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none dark:border-rijksblauw-500/40 dark:bg-rijksblauw-500/10 dark:text-rijksblauw-100 dark:hover:bg-rijksblauw-500/20"
-        >
-          {expanding ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
-          {expanding ? 'Bezig met aanvullen…' : 'Vul verder aan'}
-        </button>
-      </div>
       {proposal && (
         <ExpandProposal
           fieldLabel={name}
@@ -267,6 +232,8 @@ interface FollowUpQuestionsProps {
    */
   aanvullingen?: Record<string, string>;
   onAanvulling?: (id: string, toevoegen: boolean) => void;
+  /** Kop boven de velden, links van de indelingsknop (bijv. een StepHeading). */
+  heading?: ReactNode;
 }
 
 /**
@@ -292,14 +259,16 @@ export default function FollowUpQuestions({
   buildLabel = 'Bouw prompt',
   aanvullingen,
   onAanvulling,
+  heading,
 }: FollowUpQuestionsProps) {
   const questions = technique.follow_up_questions;
   const total = questions.length;
   // Frameworks (CARE, CO-STAR) krijgen per veld hun letter; technieken met
-  // gewone vragen een volgnummer.
-  const labelParts = questions.map((q) => splitFieldLabel(q.label));
+  // gewone vragen geen, die hebben aan hun vraag genoeg.
+  const labelParts = questions.map((q) => compactFieldLabel(q.label));
   const lettered = labelParts.length > 0 && labelParts.every((p) => p.code);
   const markers = labelParts.map((p, i) => (lettered && p.code ? p.code : String(i + 1)));
+  const fieldMarker = (i: number) => (lettered ? markers[i] : undefined);
   const [step, setStep] = useState(0);
   const [reviewing, setReviewing] = useState(false);
   // Persoonlijke voorkeur: stap voor stap (default) of alle velden tegelijk.
@@ -432,69 +401,43 @@ export default function FollowUpQuestions({
 
   const answeredCount = questions.filter((q) => (answers[q.id] ?? '').trim()).length;
 
-  // --- Indeling "alles tegelijk": de velden langs een letterrail ---
-  // De letters (C, A, R, E) staan onder elkaar naast de velden, verbonden door
-  // een lijn, zodat het framework leest als één geheel met losse onderdelen en
-  // niet als een voortzetting van het contextvak erboven. Een gevulde letter
-  // betekent dat het veld is ingevuld.
+  // --- Indeling "alles tegelijk": alle velden in een raster ---
+  // Het raster kijkt naar de ruimte die er is en niet naar het scherm: in een
+  // smal venster of bij grote letters vallen de velden vanzelf onder elkaar.
   if (layout === 'stacked') {
     return (
-      <div className="space-y-4">
+      <div className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            {lettered && (
-              <span className="text-base font-bold tracking-[0.14em] text-rijksblauw-800 dark:text-rijksblauw-100">
-                {markers.join(' · ')}
-              </span>
-            )}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 [&>div]:mb-0">
+            {heading}
             <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-              {answeredCount} van {total} ingevuld
+              {answeredCount} van {total} ingevuld, leeg laten mag
             </span>
-          </p>
+          </div>
           <FieldLayoutToggle layout={layout} onChange={setLayout} />
         </div>
-        <ol>
-          {questions.map((q, i) => {
-            const filled = (answers[q.id] ?? '').trim() !== '';
-            const last = i === total - 1;
-            return (
-              <li key={q.id} className="grid grid-cols-[2.75rem_minmax(0,1fr)] gap-x-2">
-                <div className="flex flex-col items-center" aria-hidden="true">
-                  <span
-                    className={clsx(
-                      'mt-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border-2 text-lg font-bold transition-colors',
-                      filled
-                        ? 'border-rijksblauw-500 bg-rijksblauw-500 text-white'
-                        : 'border-rijksblauw-500 bg-white text-rijksblauw-600 dark:border-rijksblauw-400 dark:bg-slate-800 dark:text-rijksblauw-200',
-                    )}
-                  >
-                    {markers[i]}
-                  </span>
-                  {!last && <span className="my-1 w-0.5 flex-1 bg-rijksblauw-200 dark:bg-rijksblauw-500/40" />}
-                </div>
-                <div className={clsx(!last && 'pb-3')}>
-                  <FieldBlock
-                    question={q}
-                    value={answers[q.id] ?? ''}
-                    meta={fieldMeta?.[q.id]}
-                    idPrefix="fu-stacked"
-                    rail
-                    onChange={(v) => editField(q.id, v)}
-                    onExpand={() => handleExpand(q)}
-                    expanding={expandingId === q.id}
-                    busy={expandingId !== null}
-                    proposal={proposal?.fieldId === q.id ? proposal : null}
-                    onAccept={acceptProposal}
-                    onReject={rejectProposal}
-                    aanvulling={aanvullingen?.[q.id] ?? null}
-                    onAanvullingToevoegen={onAanvulling && (() => onAanvulling(q.id, true))}
-                    onAanvullingVerwerpen={onAanvulling && (() => onAanvulling(q.id, false))}
-                  />
-                </div>
-              </li>
-            );
-          })}
-        </ol>
+        <div className="-mx-2 grid grid-cols-[repeat(auto-fit,minmax(min(100%,18rem),1fr))] gap-x-2 gap-y-1">
+          {questions.map((q, i) => (
+            <FieldBlock
+              key={q.id}
+              question={q}
+              value={answers[q.id] ?? ''}
+              meta={fieldMeta?.[q.id]}
+              idPrefix="fu-stacked"
+              marker={fieldMarker(i)}
+              onChange={(v) => editField(q.id, v)}
+              onExpand={() => handleExpand(q)}
+              expanding={expandingId === q.id}
+              busy={expandingId !== null}
+              proposal={proposal?.fieldId === q.id ? proposal : null}
+              onAccept={acceptProposal}
+              onReject={rejectProposal}
+              aanvulling={aanvullingen?.[q.id] ?? null}
+              onAanvullingToevoegen={onAanvulling && (() => onAanvulling(q.id, true))}
+              onAanvullingVerwerpen={onAanvulling && (() => onAanvulling(q.id, false))}
+            />
+          ))}
+        </div>
         {/* Alles staat al in beeld, dus er valt hier niets meer te navigeren:
             alleen de bouw-knop, rechts onderaan. */}
         {buildButton && <div className="flex justify-end pt-1">{buildButton}</div>}
@@ -603,7 +546,8 @@ export default function FollowUpQuestions({
   // --- Stapsgewijze vraagweergave ---
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-end">
+      <div className="flex flex-wrap items-center justify-between gap-2 [&>div:first-child]:mb-0">
+        {heading ?? <span />}
         <FieldLayoutToggle layout={layout} onChange={setLayout} />
       </div>
       {/* Voortgang */}
@@ -643,7 +587,7 @@ export default function FollowUpQuestions({
           idPrefix="fu"
           autoFocus
           tall
-          marker={markers[step]}
+          marker={fieldMarker(step)}
           onChange={update}
           onExpand={() => handleExpand(current)}
           expanding={expandingId === current.id}
