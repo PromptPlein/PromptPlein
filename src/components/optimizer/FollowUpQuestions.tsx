@@ -85,7 +85,9 @@ function FieldBlock({
   return (
     <div
       className={clsx(
-        'row-span-5 grid min-w-0 grid-cols-1 grid-rows-subgrid rounded-xl border p-2 transition-all duration-200',
+        'min-w-0 rounded-xl border p-2 transition-all duration-200',
+        // Alleen in het raster: stap voor stap staat er één veld, zonder buren.
+        !tall && 'row-span-5 grid grid-cols-1 grid-rows-subgrid',
         (active || aanvulling) && 'col-span-full',
         active
           ? 'border-rijksblauw-300 bg-rijksblauw-50/60 ring-4 ring-rijksblauw-500/10 dark:border-rijksblauw-500/50 dark:bg-rijksblauw-500/10 dark:ring-rijksblauw-500/15'
@@ -144,7 +146,7 @@ function FieldBlock({
         id={fieldId}
         autoFocus={autoFocus}
         rows={tall ? 6 : 3}
-        className="opl-input resize-y self-stretch text-[15px]"
+        className="opl-input block resize-y self-stretch text-[15px]"
         value={value}
         placeholder={question.placeholder}
         onChange={(e) => onChange(e.target.value)}
