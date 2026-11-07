@@ -159,7 +159,8 @@ Daarom ook geen uitschrijflink. De templates in Brevo zijn 69 (goedkeuring wacht
 (ingediend), 71 (goedgekeurd) en 72 (afgewezen); de nummers staan in de edge function
 `brevo-event`. De database-triggers uit migratie 0048 roepen die functie aan. Beoordelaars zijn
 de moderatoren van het ministerie, of de beheerders als die er niet zijn en voor Rijksoverheid,
-categorieën en functies. Een nieuw soort aanvraag krijgt dus een eigen trigger. In de mail staan
+categorieën en functies. De indiener krijgt altijd een besluitmail, ook als die zijn eigen
+aanvraag afhandelt (0050). Een nieuw soort aanvraag krijgt dus een eigen trigger. In de mail staan
 de gegevens als `params.voornaam`, `soort`, `titel`, `bereik`, `aanvrager`, `toelichting` en `link`.
 
 ## Twee draaimodi
