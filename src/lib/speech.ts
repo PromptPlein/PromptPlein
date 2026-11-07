@@ -1,21 +1,20 @@
 import { useSyncExternalStore } from 'react';
 import toast from 'react-hot-toast';
+import { NATURAL_VOICE } from '@/context/AccessibilityContext';
 import { splitAnswer } from '@/lib/chatFiles';
 import { SpeechLoginRequiredError, synthesizeSpeech } from '@/services/speechService';
 
 /**
- * Voorlezen. Standaard met de spraakstem van de browser (Web Speech API): die
- * blijft op het apparaat. Wie zelf {@link NATURAL_VOICE} kiest, krijgt de
- * natuurlijke stem van Mistral. Daar gaat de tekst heen, maar die komt al van
- * Mistral, dus er komt geen nieuwe partij bij. De audio wordt nergens bewaard.
+ * Voorlezen. Standaard met de natuurlijke stem van Mistral voor wie ingelogd is;
+ * zie useSpeechVoice. De tekst komt al van Mistral, dus er komt geen nieuwe partij
+ * bij, en de audio wordt nergens bewaard. Zonder account, of als de gebruiker dat
+ * kiest, leest de spraakstem van de browser voor (Web Speech API): die blijft op
+ * het apparaat.
  *
  * Browsers bieden ook online stemmen aan die de tekst naar hun eigen leverancier
  * sturen (`localService === false`). Die kiezen we nooit vanzelf; alleen wie er
  * in de instellingen zelf een uitkiest, gebruikt er een.
  */
-
-/** Waarde van `speechVoice` voor de natuurlijke stem (Lotte, via Mistral). */
-export const NATURAL_VOICE = 'mistral-lotte';
 
 export interface SpeechVoiceOption {
   uri: string;

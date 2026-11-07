@@ -16,7 +16,11 @@ import {
 } from '@/components/common/icons';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
-import { prefersReducedMotion, useAccessibility } from '@/context/AccessibilityContext';
+import {
+  prefersReducedMotion,
+  useAccessibility,
+  useSpeechVoice,
+} from '@/context/AccessibilityContext';
 import { speak, stopSpeaking, toSpeakableText, useSpeakingId } from '@/lib/speech';
 import ChatAnswer from './ChatAnswer';
 import CopyMessageButton from './CopyMessageButton';
@@ -79,6 +83,7 @@ export default function ChatMessageList({
   const [showJump, setShowJump] = useState(false);
   const [status, setStatus] = useState('');
   const { settings } = useAccessibility();
+  const speechVoice = useSpeechVoice();
 
   // De knop "Naar beneden" zet volgen aan; omhoog scrollen zet het weer uit.
   const followRef = useRef(false);
@@ -197,7 +202,7 @@ export default function ChatMessageList({
     setStatus('Het antwoord is klaar.');
     if (settings.answerDone === 'voorlezen') {
       const result = speak(lastMessage.id, spoken, {
-        voice: settings.speechVoice,
+        voice: speechVoice,
         rate: settings.speechRate,
       });
       if (result === 'geen-stem') toast.error(NO_VOICE_MESSAGE);
@@ -280,6 +285,7 @@ const NO_VOICE_MESSAGE =
 /** Knop onder een antwoord; alleen zichtbaar als voorlezen in de instellingen aanstaat. */
 function SpeakButton({ messageId, text }: { messageId: string; text: string }) {
   const { settings } = useAccessibility();
+  const speechVoice = useSpeechVoice();
   const speakingId = useSpeakingId();
   const active = speakingId === messageId;
 
@@ -289,7 +295,7 @@ function SpeakButton({ messageId, text }: { messageId: string; text: string }) {
       return;
     }
     const result = speak(messageId, toSpeakableText(text), {
-      voice: settings.speechVoice,
+      voice: speechVoice,
       rate: settings.speechRate,
     });
     if (result === 'geen-stem') toast.error(NO_VOICE_MESSAGE);

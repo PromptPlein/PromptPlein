@@ -7,11 +7,18 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { useAuth } from '@/context/AuthContext';
 
 export type TextScale = 'normaal' | 'groot' | 'extra-groot';
 
 /** Wat er gebeurt zodra de AI klaar is met schrijven. */
 export type AnswerDone = 'niets' | 'schermlezer' | 'voorlezen';
+
+/** Waarde van `speechVoice` voor de natuurlijke stem (Lotte, via Mistral). */
+export const NATURAL_VOICE = 'mistral-lotte';
+
+/** Waarde van `speechVoice` voor wie bewust de eerste stem op het apparaat wil. */
+export const DEVICE_VOICE = 'apparaat';
 
 export interface AccessibilitySettings {
   textScale: TextScale;
@@ -22,7 +29,10 @@ export interface AccessibilitySettings {
   /** Knop "Voorlezen" onder elk antwoord. */
   speechButton: boolean;
   answerDone: AnswerDone;
-  /** voiceURI van de gekozen stem; null = de eerste Nederlandse stem op dit apparaat. */
+  /**
+   * De gekozen stem: {@link NATURAL_VOICE}, {@link DEVICE_VOICE} of een voiceURI.
+   * null = geen keuze gemaakt, dus de standaard; zie {@link useSpeechVoice}.
+   */
   speechVoice: string | null;
   speechRate: number;
 }
@@ -151,4 +161,21 @@ export function useAccessibility(): AccessibilityContextValue {
   const ctx = useContext(AccessibilityContext);
   if (!ctx) throw new Error('useAccessibility moet binnen <AccessibilityProvider> gebruikt worden.');
   return ctx;
+}
+
+/**
+ * De stem die echt voorleest. Standaard is dat Lotte, maar die vraagt om een
+ * account: zonder account leest de eerste Nederlandse stem op het apparaat voor
+ * (`null`). Een eerder bewaarde keuze voor Lotte blijft dan staan voor de volgende
+ * keer dat iemand inlogt.
+ */
+export function useSpeechVoice(): string | null {
+  const { settings } = useAccessibility();
+  const { isAuthenticated } = useAuth();
+  const { speechVoice } = settings;
+  if (speechVoice === DEVICE_VOICE) return null;
+  if (speechVoice === null || speechVoice === NATURAL_VOICE) {
+    return isAuthenticated ? NATURAL_VOICE : null;
+  }
+  return speechVoice;
 }
