@@ -43,7 +43,7 @@ export default function AccessibilityHelp() {
     <div className="space-y-5">
       <p className="text-slate-700 dark:text-slate-200">
         Hier lees je hoe je PromptPlein gebruikt met je stem, je toetsenbord of een schermlezer.
-        Alles bij Toegankelijkheid staat uit tot je het zelf aanzet.
+        Alles staat uit tot je het zelf aanzet bij Instellen.
       </p>
 
       <Section id="hulp-sneltoetsen" title="Sneltoetsen">
@@ -88,7 +88,7 @@ export default function AccessibilityHelp() {
         <p>
           Ga naar{' '}
           <Link to="/instellingen/toegankelijkheid" className={LINK_CLASS}>
-            Toegankelijkheid
+            Instellen
           </Link>
           . Daar kies je de tekstgrootte, hoog contrast en minder beweging. Dit werkt ook zonder
           account en blijft bewaard in deze browser.
@@ -96,7 +96,7 @@ export default function AccessibilityHelp() {
       </Section>
 
       <Section id="hulp-voorlezen" title="Antwoorden laten voorlezen">
-        <p>Voorlezen staat uit. Bij Toegankelijkheid zet je het op een van deze manieren aan:</p>
+        <p>Voorlezen staat uit. Bij Instellen zet je het op een van deze manieren aan:</p>
         <ul className="list-disc space-y-1 pl-5">
           <li>
             Zet de knop Voorlezen onder elk antwoord aan. Dan kies je zelf welk antwoord je hoort.
@@ -109,7 +109,7 @@ export default function AccessibilityHelp() {
         </p>
         <p>
           Ben je ingelogd, dan leest de stem Lotte voor. Zonder account leest de stem van je
-          apparaat voor. Bij Toegankelijkheid kun je een andere stem en snelheid kiezen.
+          apparaat voor. Bij Instellen kun je een andere stem en snelheid kiezen.
         </p>
       </Section>
 
@@ -126,8 +126,8 @@ export default function AccessibilityHelp() {
           </li>
         </ol>
         <p>
-          Je leest de tekst na en verstuurt hem zelf. Wil je meteen versturen? Zet dan bij
-          Toegankelijkheid Versturen met je stem aan, en eindig met het woord verstuur.
+          Je leest de tekst na en verstuurt hem zelf. Wil je meteen versturen? Zet dan bij Instellen
+          Versturen met je stem aan, en eindig met het woord verstuur.
         </p>
       </Section>
 
@@ -137,7 +137,7 @@ export default function AccessibilityHelp() {
           ingelogd zijn.
         </p>
         <ol className="list-decimal space-y-1 pl-5">
-          <li>Zet bij Toegankelijkheid Gesprek zonder handen aan. Dit hoef je maar één keer te doen.</li>
+          <li>Zet bij Instellen Gesprek zonder handen aan. Dit hoef je maar één keer te doen.</li>
           <li>
             Druk in de chat op <Keys shortcut={SHORTCUTS.gesprek} />, of gebruik de knop Gesprek.
           </li>
@@ -169,8 +169,8 @@ export default function AccessibilityHelp() {
             om door een gesprek te gaan.
           </li>
           <li>
-            Wil je dat je schermlezer elk antwoord voorleest? Kies dat bij Toegankelijkheid, onder Als
-            een antwoord in de chat klaar is.
+            Wil je dat je schermlezer elk antwoord voorleest? Kies dat bij Instellen, onder Als een
+            antwoord in de chat klaar is.
           </li>
           <li>De eerste link van elke pagina brengt je meteen naar de inhoud.</li>
         </ul>

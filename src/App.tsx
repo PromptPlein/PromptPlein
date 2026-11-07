@@ -6,6 +6,7 @@ import Header from '@/components/common/Header';
 import Footer from '@/components/common/Footer';
 import DictationLayer from '@/components/common/DictationLayer';
 import HelpShortcut from '@/components/common/HelpShortcut';
+import { HELP_PATH } from '@/lib/shortcuts';
 import HomePage from '@/pages/HomePage';
 import SearchPage from '@/pages/SearchPage';
 import OptimizerPage from '@/pages/OptimizerPage';
@@ -70,7 +71,7 @@ export default function App() {
         <a href="#inhoud" className="opl-skip-link">
           Naar de inhoud
         </a>
-        <Link to="/instellingen/hulp" className="opl-skip-link">
+        <Link to={HELP_PATH} className="opl-skip-link">
           Hulp bij toegankelijkheid
         </Link>
         <Header />
@@ -115,7 +116,7 @@ export default function App() {
               {/* Openbaar, net als de chat: toegankelijkheid moet ook zonder
                   account in te stellen zijn. Alleen de eigen instructie voor de
                   chat vraagt om in te loggen, dat regelt dat onderdeel zelf. */}
-              <Route path="/instellingen/:onderdeel?" element={<PersonalSettingsPage />} />
+              <Route path="/instellingen/:onderdeel?/:sub?" element={<PersonalSettingsPage />} />
               <Route
                 path="/toegankelijkheid"
                 element={<Navigate to="/instellingen/toegankelijkheid" replace />}

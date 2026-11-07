@@ -7,6 +7,9 @@
  * al bezet door de browser. We kijken naar `e.code`, de fysieke toets, want op een
  * Mac maakt Option + Shift + D een ander teken.
  */
+/** Het adres van de hulppagina. */
+export const HELP_PATH = '/instellingen/toegankelijkheid/hulp';
+
 export interface Shortcut {
   /** De fysieke toets, zoals `KeyboardEvent.code` hem noemt. */
   code: string;

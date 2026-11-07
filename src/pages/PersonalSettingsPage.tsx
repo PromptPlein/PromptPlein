@@ -1,14 +1,19 @@
 import { Navigate, NavLink, useParams } from 'react-router-dom';
 import clsx from 'clsx';
-import { Accessibility, HelpCircle, MessageSquare, Settings2 } from '@/components/common/icons';
+import { Accessibility, MessageSquare, Settings2 } from '@/components/common/icons';
 import AccessibilityHelp from '@/components/settings/AccessibilityHelp';
 import AccessibilitySettings from '@/components/settings/AccessibilitySettings';
 import ChatInstructionSettings from '@/components/settings/ChatInstructionSettings';
+import { HELP_PATH } from '@/lib/shortcuts';
 
 const PARTS = [
   { slug: 'chat', label: 'Chat', icon: MessageSquare },
   { slug: 'toegankelijkheid', label: 'Toegankelijkheid', icon: Accessibility },
-  { slug: 'hulp', label: 'Hulp', icon: HelpCircle },
+] as const;
+
+const ACCESSIBILITY_PARTS = [
+  { to: '/instellingen/toegankelijkheid', label: 'Instellen' },
+  { to: HELP_PATH, label: 'Hulp' },
 ] as const;
 
 /**
@@ -17,9 +22,15 @@ const PARTS = [
  * uit gewone links, zodat toetsenbord en schermlezer ze vanzelf begrijpen.
  */
 export default function PersonalSettingsPage() {
-  const { onderdeel } = useParams();
+  const { onderdeel, sub } = useParams();
+  // Het oude adres van de hulppagina, van voordat die onder Toegankelijkheid viel.
+  if (onderdeel === 'hulp') return <Navigate to={HELP_PATH} replace />;
   if (!PARTS.some((part) => part.slug === onderdeel)) {
     return <Navigate to="/instellingen/chat" replace />;
+  }
+  const accessibility = onderdeel === 'toegankelijkheid';
+  if (sub && !(accessibility && sub === 'hulp')) {
+    return <Navigate to={`/instellingen/${onderdeel}`} replace />;
   }
 
   return (
@@ -53,9 +64,35 @@ export default function PersonalSettingsPage() {
         </ul>
       </nav>
 
+      {accessibility && (
+        <nav aria-label="Onderdelen van Toegankelijkheid">
+          <ul className="flex gap-2">
+            {ACCESSIBILITY_PARTS.map(({ to, label }) => (
+              <li key={to}>
+                <NavLink
+                  to={to}
+                  end
+                  className={({ isActive }) =>
+                    clsx(
+                      'block rounded-lg px-3 py-1.5 font-medium transition-colors',
+                      'focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500',
+                      isActive
+                        ? 'bg-rijksblauw-700 text-white dark:bg-rijksblauw-500'
+                        : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800',
+                    )
+                  }
+                >
+                  {label}
+                </NavLink>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      )}
+
       {onderdeel === 'chat' && <ChatInstructionSettings />}
-      {onderdeel === 'toegankelijkheid' && <AccessibilitySettings />}
-      {onderdeel === 'hulp' && <AccessibilityHelp />}
+      {accessibility && !sub && <AccessibilitySettings />}
+      {accessibility && sub === 'hulp' && <AccessibilityHelp />}
     </div>
   );
 }

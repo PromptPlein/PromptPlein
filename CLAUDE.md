@@ -208,7 +208,8 @@ te stemmen.
 
 ## Persoonlijke instellingen
 
-`/instellingen` is openbaar en heeft twee onderdelen: Chat en Toegankelijkheid. Je
+`/instellingen` is openbaar en heeft twee onderdelen: Chat en Toegankelijkheid. Bij
+Toegankelijkheid staan Instellen en Hulp. Je
 komt er via het gebruikersmenu, de knop onder in de chatzijbalk en het
 toegankelijkheidsicoon in de kop. Dat icoon blijft staan: wie grotere letters
 nodig heeft, moet die niet in een menu hoeven zoeken.
@@ -246,7 +247,7 @@ van een streamend antwoord op.
 
 Sneltoetsen staan op één plek (`src/lib/shortcuts.ts`), altijd Alt + Shift plus een
 letter en nooit één losse toets (WCAG 2.1.4). De hulppagina
-(`/instellingen/hulp`, `AccessibilityHelp`) leest die lijst. Voeg je iets toe wat je
+(`/instellingen/toegankelijkheid/hulp`, `AccessibilityHelp`) leest die lijst. Voeg je iets toe wat je
 met stem of toetsenbord bedient, zet het daar dan ook bij: die pagina is de
 handleiding voor wie slecht ziet. Schrijf er korte zinnen en noem knoppen bij hun
 naam, nooit bij hun plek op het scherm.

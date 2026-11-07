@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { Volume2 } from '@/components/common/icons';
 import toast from 'react-hot-toast';
 import {
@@ -118,14 +117,7 @@ export default function AccessibilitySettings() {
   return (
     <div className="space-y-5">
       <p className="text-slate-600 dark:text-slate-300">
-        Wijzigingen gelden meteen en blijven bewaard in deze browser. Bij{' '}
-        <Link
-          to="/instellingen/hulp"
-          className="font-medium text-rijksblauw-700 underline dark:text-rijksblauw-200"
-        >
-          Hulp
-        </Link>{' '}
-        lees je alles wat je kunt doen, met de sneltoetsen.
+        Wijzigingen gelden meteen en blijven bewaard in deze browser.
       </p>
 
       <section className={sectionClass} aria-labelledby="ta-lezen">
