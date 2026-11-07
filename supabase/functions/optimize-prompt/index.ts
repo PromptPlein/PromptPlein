@@ -3439,10 +3439,15 @@ function withKennisbankBlock(system: string, instruction: string, hits: SearchHi
  * voor iedereen, net als de bouwer.
  */
 function isAuthenticatedRequest(req: Request): boolean {
+  return authenticatedUserId(req) !== null;
+}
+
+/** Het gebruikers-id uit het token, of null bij een anoniem of verlopen token. */
+function authenticatedUserId(req: Request): string | null {
   const auth = req.headers.get('authorization') ?? '';
   const token = auth.replace(/^Bearer\s+/i, '').trim();
   const parts = token.split('.');
-  if (parts.length !== 3) return false;
+  if (parts.length !== 3) return null;
   try {
     const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
     const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
@@ -3451,27 +3456,17 @@ function isAuthenticatedRequest(req: Request): boolean {
       sub?: unknown;
       exp?: unknown;
     };
-    if (payload.role !== 'authenticated') return false;
-    if (typeof payload.sub !== 'string' || payload.sub.length === 0) return false;
+    if (payload.role !== 'authenticated') return null;
+    if (typeof payload.sub !== 'string' || payload.sub.length === 0) return null;
     if (typeof payload.exp === 'number' && payload.exp <= Math.floor(Date.now() / 1000)) {
-      return false;
+      return null;
     }
-    return true;
+    return payload.sub;
   } catch {
-    return false;
+    return null;
   }
 }
 
-/**
- * Is de aanroeper een beheerder? Voor modi die alleen beheerders mogen
- * gebruiken. Die keuze mag niet van de browser afhangen: een knop verbergen
- * houdt niemand tegen die het verzoek zelf opstelt. Daarom vragen we het de
- * database, met het token van de gebruiker, via dezelfde `is_admin()` waar ook
- * de RLS-policies op leunen.
- *
- * Gooit nooit: lukt de controle niet, dan is het antwoord nee en loopt de
- * optimalisatie door zonder te zoeken.
- */
 // --- Transcribe-modus: spraak uit de microfoon wordt tekst in een invulveld ---
 // De opname komt als base64 binnen, gaat in hetzelfde verzoek door naar Mistral
 // en bestaat daarna nergens meer. Bewust niet via de Files-API van Mistral
@@ -3595,23 +3590,39 @@ async function synthesizeSpeech(input: string): Promise<string> {
   return result.audio_data;
 }
 
+/**
+ * Is de aanroeper een beheerder? Voor modi die alleen beheerders mogen
+ * gebruiken. Die keuze mag niet van de browser afhangen: een knop verbergen
+ * houdt niemand tegen die het verzoek zelf opstelt. Daarom vragen we het de
+ * database, met het token van de gebruiker, dat PostgREST zelf controleert.
+ *
+ * Bewust de eigen rij uit `profiles` en geen RPC: `is_admin()` staat sinds
+ * migratie 0008 in het schema `private`, dat niet via REST bereikbaar is. De
+ * rollen hieronder zijn dezelfde als in `private.is_admin()`.
+ *
+ * Gooit nooit: lukt de controle niet, dan is het antwoord nee.
+ */
 async function isAdminRequest(req: Request): Promise<boolean> {
-  if (!isAuthenticatedRequest(req)) return false;
+  const userId = authenticatedUserId(req);
+  if (!userId) return false;
   const url = Deno.env.get('SUPABASE_URL');
   const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
   if (!url || !anonKey) return false;
   try {
-    const response = await fetch(`${url.replace(/\/+$/, '')}/rest/v1/rpc/is_admin`, {
-      method: 'POST',
+    const query = `id=eq.${encodeURIComponent(userId)}&select=role`;
+    const response = await fetch(`${url.replace(/\/+$/, '')}/rest/v1/profiles?${query}`, {
       headers: {
-        'Content-Type': 'application/json',
         apikey: anonKey,
         Authorization: req.headers.get('authorization') ?? '',
       },
-      body: '{}',
     });
-    if (!response.ok) return false;
-    return (await response.json()) === true;
+    if (!response.ok) {
+      console.error('Controle op beheerdersrol mislukt: status', response.status);
+      return false;
+    }
+    const rows = (await response.json()) as Array<{ role?: unknown }>;
+    const role = Array.isArray(rows) ? rows[0]?.role : undefined;
+    return role === 'admin' || role === 'super_admin';
   } catch (err) {
     console.error('Controle op beheerdersrol mislukt:', err);
     return false;
