@@ -14,12 +14,15 @@ export function usePromptCommunity(prompts: Prompt[]): {
   enriched: Prompt[];
   /** Auteursprofiel per user-id, voor het auteurslabel op de kaart. */
   authors: Record<string, PublicProfile>;
+  /** De likes van precies deze lijst zijn binnen (of het ophalen is mislukt). */
+  likesReady: boolean;
 } {
   const { user } = useAuth();
   const [likes, setLikes] = useState<Record<string, { like_count: number; liked_by_me: boolean }>>(
     {},
   );
   const [authors, setAuthors] = useState<Record<string, PublicProfile>>({});
+  const [likesKey, setLikesKey] = useState('');
 
   // Stabiele sleutel zodat we niet bij elke render opnieuw fetchen.
   const idKey = prompts.map((p) => p.id).join(',');
@@ -30,11 +33,13 @@ export function usePromptCommunity(prompts: Prompt[]): {
     const ids = prompts.map((p) => p.id);
     if (ids.length === 0) {
       setLikes({});
+      setLikesKey('');
       return;
     }
     getLikeInfo(ids, user?.id)
       .then((info) => active && setLikes(info))
-      .catch(() => active && setLikes({}));
+      .catch(() => active && setLikes({}))
+      .finally(() => active && setLikesKey(idKey));
     return () => {
       active = false;
     };
@@ -62,5 +67,5 @@ export function usePromptCommunity(prompts: Prompt[]): {
     return info ? { ...p, like_count: info.like_count, liked_by_me: info.liked_by_me } : p;
   });
 
-  return { enriched, authors };
+  return { enriched, authors, likesReady: likesKey === idKey };
 }

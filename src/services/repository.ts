@@ -175,18 +175,7 @@ export async function searchPrompts(filters: AdvancedPromptFilters = {}): Promis
 
   const { data, error } = await query;
   if (error) throw error;
-  let prompts = (data ?? []) as Prompt[];
-
-  if (filters.technique_ids?.length) {
-    const { data: opts, error: optErr } = await supabase!
-      .from('optimizations')
-      .select('prompt_id')
-      .in('technique_id', filters.technique_ids);
-    if (optErr) throw optErr;
-    const ids = new Set((opts ?? []).map((o: { prompt_id: string }) => o.prompt_id));
-    prompts = prompts.filter((p) => ids.has(p.id));
-  }
-  return prompts;
+  return (data ?? []) as Prompt[];
 }
 
 export async function getPrompt(id: string): Promise<Prompt | null> {

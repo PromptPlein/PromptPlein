@@ -122,6 +122,14 @@ export function activityIdentifier(
   );
 }
 
+/** Haal een waarde uit de lijst of zet hem erin. */
+export function toggled<T>(list: T[] | undefined, value: T): T[] {
+  const set = new Set(list ?? []);
+  if (set.has(value)) set.delete(value);
+  else set.add(value);
+  return [...set];
+}
+
 export function formatDate(iso: string): string {
   try {
     return new Date(iso).toLocaleDateString('nl-NL', {

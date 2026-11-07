@@ -79,3 +79,37 @@ export function buildOrgOptions(organizations: Organization[]): OrgOption[] {
 export function orgOptionToSearchable(o: OrgOption): { id: string; label: string; hint?: string } {
   return { id: o.id, label: o.label, hint: o.path || undefined };
 }
+
+/**
+ * Het ministerie waar een organisatie onder valt, de organisatie zelf als dat
+ * een ministerie is. De Rijksoverheid-wortel valt onder geen ministerie.
+ */
+export function ministryOf(
+  orgId: string,
+  organizations: Organization[],
+): Organization | null {
+  const byId = new Map(organizations.map((o) => [o.id, o]));
+  let current = byId.get(orgId);
+  // Begrens de diepte zodat een (kapotte) cyclus nooit oneindig loopt.
+  for (let i = 0; i < 12 && current; i++) {
+    if (current.organization_type === 'ministry') return current;
+    current = current.parent_id ? byId.get(current.parent_id) : undefined;
+  }
+  return null;
+}
+
+/** Een organisatie met alles wat eronder hangt, voor filteren op een ministerie. */
+export function orgSubtreeIds(rootId: string, organizations: Organization[]): string[] {
+  const ids = new Set([rootId]);
+  // Elke ronde pakt één laag dieper; stopt zodra er niets meer bijkomt.
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const org of organizations) {
+      if (org.parent_id && ids.has(org.parent_id) && !ids.has(org.id)) {
+        ids.add(org.id);
+        grew = true;
+      }
+    }
+  }
+  return [...ids];
+}

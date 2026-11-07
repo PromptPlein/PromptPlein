@@ -156,7 +156,8 @@ export interface NewPromptInput {
   created_by: string;
 }
 
-export type SortOption = 'newest' | 'oldest' | 'title' | 'most_shared';
+/** 'popular' sorteert de client: likes staan niet op de prompt-rij. */
+export type SortOption = 'newest' | 'oldest' | 'title' | 'popular';
 
 /** Filters voor de (basis) zoekpagina + favorieten. */
 export interface PromptFilters {
@@ -175,7 +176,6 @@ export interface AdvancedPromptFilters {
   role_ids?: string[];
   organization_ids?: string[];
   sharing_levels?: SharingLevel[];
-  technique_ids?: string[];
   date_from?: string | null;
   date_to?: string | null;
   favorites_only?: boolean;

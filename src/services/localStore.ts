@@ -242,28 +242,14 @@ export const localStore = {
           p.content.toLowerCase().includes(q),
       );
     }
-    if (filters.technique_ids?.length) {
-      const opts = read<Optimization[]>(OPTIMIZATIONS_KEY, []);
-      const promptIds = new Set(
-        opts.filter((o) => filters.technique_ids!.includes(o.technique_id)).map((o) => o.prompt_id),
-      );
-      prompts = prompts.filter((p) => promptIds.has(p.id));
-    }
 
     // Sortering
-    const shares = read<EmailShare[]>(SHARES_KEY, []);
-    const shareCount = (id: string) =>
-      shares.filter((s) => s.prompt_id === id).reduce((n, s) => n + 1 + s.view_count, 0);
-
     switch (filters.sort) {
       case 'oldest':
         prompts.sort((a, b) => a.created_at.localeCompare(b.created_at));
         break;
       case 'title':
         prompts.sort((a, b) => a.title.localeCompare(b.title));
-        break;
-      case 'most_shared':
-        prompts.sort((a, b) => shareCount(b.id) - shareCount(a.id));
         break;
       case 'newest':
       default:

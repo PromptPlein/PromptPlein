@@ -442,6 +442,24 @@ bestandskaart.
 Vanuit de bouwer kun je een prompt met "Uitvoeren in chat" doorzetten naar
 `/chat`, en vanuit de chat weer terug (`handoffService`).
 
+## Ontdekken
+
+`/zoeken` heet in het menu Ontdekken en heeft twee standen op één pagina
+(`SearchPage`). Zonder zoekvraag of filter staan er rijen om in te bladeren,
+anders de resultaten. Het zoekvak en de categorieën blijven in beide standen op
+dezelfde plek, zodat er niets verspringt zodra iemand begint te typen.
+
+De filters staan in de URL en nergens anders: de links zijn deelbaar en de
+terugknop van de browser werkt. Bestaande links (`?category=`, `?org=`) blijven
+daardoor gewoon werken. De keuzes zitten in `FilterPanel` en gelden meteen, dus
+dat paneel sluit ook met Escape of een klik ernaast, anders dan `Modal`. Filteren
+op een ministerie neemt alles mee wat eronder hangt (`orgSubtreeIds`).
+
+In de rijen doen privéprompts niet mee. Populair toont alleen prompts met een
+like, anders is die rij gelijk aan Nieuw. Een lege rij verdwijnt. Populairste
+eerst sorteert de client, want likes staan niet op de prompt-rij. Technieken staan
+bewust niet bij de filters: dat zegt een gebruiker niets over wat een prompt doet.
+
 ## Plus, Projecten en Context prompt in de chat
 
 De balk van het tekstvak toont alleen wat er aanstaat. De rest zit achter de plus
