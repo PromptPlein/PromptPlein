@@ -295,6 +295,12 @@ export default function AccessibilitySettings() {
           checked={settings.sendByVoice}
           onChange={(sendByVoice) => update({ sendByVoice })}
         />
+        <CheckField
+          label="Gesprek zonder handen"
+          hint="Zet de knop Gesprek in de chat aan: je praat, hoort het antwoord en praat weer verder."
+          checked={settings.conversationMode}
+          onChange={(conversationMode) => update({ conversationMode })}
+        />
       </section>
 
       <button type="button" className="opl-btn-ghost" onClick={reset}>

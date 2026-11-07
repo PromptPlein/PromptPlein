@@ -37,8 +37,14 @@ export interface AccessibilitySettings {
   speechRate: number;
   /** Eindigt een dictaat in de chat op "verstuur", dan gaat het bericht meteen weg. */
   sendByVoice: boolean;
+  /** De knop Gesprek in de chat, en de sneltoets daarvoor. */
+  conversationMode: boolean;
 }
 
+/**
+ * Alles staat uit tot iemand het zelf aanzet. Een functie die mensen niet gevraagd
+ * hebben, hoort niet in beeld te komen. Dat geldt ook voor de sneltoetsen ervan.
+ */
 export const DEFAULT_ACCESSIBILITY: AccessibilitySettings = {
   textScale: 'normaal',
   highContrast: false,
@@ -49,6 +55,7 @@ export const DEFAULT_ACCESSIBILITY: AccessibilitySettings = {
   speechVoice: null,
   speechRate: 1,
   sendByVoice: false,
+  conversationMode: false,
 };
 
 export const SPEECH_RATES = [0.75, 1, 1.25, 1.5];
@@ -91,6 +98,7 @@ function sanitize(raw: unknown): AccessibilitySettings {
       ? (value.speechRate as number)
       : d.speechRate,
     sendByVoice: value.sendByVoice === true,
+    conversationMode: value.conversationMode === true,
   };
 }
 

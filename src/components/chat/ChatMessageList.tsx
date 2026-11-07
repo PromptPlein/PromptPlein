@@ -84,7 +84,7 @@ export default function ChatMessageList({
   const contentRef = useRef<HTMLDivElement>(null);
   const [showJump, setShowJump] = useState(false);
   const [status, setStatus] = useState('');
-  const { settings } = useAccessibility();
+  const { settings, speechOn } = useAccessibility();
   const speechVoice = useSpeechVoice();
 
   // De knop "Naar beneden" zet volgen aan; omhoog scrollen zet het weer uit.
@@ -217,8 +217,8 @@ export default function ChatMessageList({
   }, [streaming]);
 
   // Voor de sneltoets: die luistert één keer en moet de actuele stand kennen.
-  const readLatest = useRef({ messages, speechVoice, rate: settings.speechRate });
-  readLatest.current = { messages, speechVoice, rate: settings.speechRate };
+  const readLatest = useRef({ messages, speechOn, speechVoice, rate: settings.speechRate });
+  readLatest.current = { messages, speechOn, speechVoice, rate: settings.speechRate };
 
   // Voorlezen stopt met Escape en stopt ook als je deze pagina verlaat.
   useEffect(() => {
@@ -230,7 +230,11 @@ export default function ChatMessageList({
         stopSpeaking();
         return;
       }
-      const { messages: all, speechVoice: voice, rate } = readLatest.current;
+      const { messages: all, speechOn: allowed, speechVoice: voice, rate } = readLatest.current;
+      if (!allowed) {
+        toast('Zet voorlezen eerst aan bij Toegankelijkheid.');
+        return;
+      }
       const answer = [...all].reverse().find((m) => m.role === 'assistant' && m.content.trim());
       if (!answer) {
         setStatus('Er is nog geen antwoord om voor te lezen.');

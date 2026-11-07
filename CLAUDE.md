@@ -235,6 +235,10 @@ De keuzes staan per browser in localStorage (`AccessibilityContext`, sleutel
 `data-motion` en `data-actions` met de regels in `index.css`. Code die zelf
 animeert vraagt `prefersReducedMotion()`, dat ook de systeeminstelling meeneemt.
 
+Alles bij Toegankelijkheid staat uit tot iemand het zelf aanzet, ook de sneltoetsen
+die erbij horen. Een nieuwe instelling krijgt dus de standaardwaarde uit en zijn knop
+verschijnt pas als hij aanstaat.
+
 Basistoegankelijkheid is geen instelling en staat altijd aan: skiplink, koppen
 per bericht, en een aparte `role="status"` in `ChatMessageList`. Zet de
 berichtenlijst nooit zelf in een live-regio: een schermlezer pikt dan elk woord

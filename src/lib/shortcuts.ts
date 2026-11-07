@@ -29,13 +29,13 @@ export const SHORTCUTS = {
     code: 'KeyV',
     key: 'V',
     label: 'Het laatste antwoord voorlezen of stoppen',
-    where: 'In de chat',
+    where: 'In de chat, als voorlezen aan staat',
   },
   gesprek: {
     code: 'KeyG',
     key: 'G',
     label: 'Gesprek starten of stoppen',
-    where: 'In de chat',
+    where: 'In de chat, als Gesprek zonder handen aan staat',
   },
   hulp: {
     code: 'KeyH',

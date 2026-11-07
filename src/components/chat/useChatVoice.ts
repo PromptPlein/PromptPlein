@@ -69,6 +69,7 @@ export function useChatVoice({ textareaRef, disabled, streaming, onSubmit }: Cha
     streaming,
     onSubmit,
     sendByVoice: settings.sendByVoice,
+    conversationMode: settings.conversationMode,
     voice: speechVoice,
     rate: settings.speechRate,
   };
@@ -137,6 +138,10 @@ export function useChatVoice({ textareaRef, disabled, streaming, onSubmit }: Cha
   const toggleConversation = useCallback(() => {
     if (conversationRef.current) {
       stopConversation('Het gesprek is gestopt.');
+      return;
+    }
+    if (!latest.current.conversationMode) {
+      toast('Zet Gesprek zonder handen eerst aan bij Toegankelijkheid.');
       return;
     }
     if (!dictationRef.current.available) {

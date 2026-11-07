@@ -43,6 +43,7 @@ export default function AccessibilityHelp() {
     <div className="space-y-5">
       <p className="text-slate-700 dark:text-slate-200">
         Hier lees je hoe je PromptPlein gebruikt met je stem, je toetsenbord of een schermlezer.
+        Alles bij Toegankelijkheid staat uit tot je het zelf aanzet.
       </p>
 
       <Section id="hulp-sneltoetsen" title="Sneltoetsen">
@@ -95,20 +96,17 @@ export default function AccessibilityHelp() {
       </Section>
 
       <Section id="hulp-voorlezen" title="Antwoorden laten voorlezen">
-        <p>Er zijn drie manieren:</p>
+        <p>Voorlezen staat uit. Bij Toegankelijkheid zet je het op een van deze manieren aan:</p>
         <ul className="list-disc space-y-1 pl-5">
           <li>
-            Druk op <Keys shortcut={SHORTCUTS.voorlezen} />. Dan hoor je het laatste antwoord.
+            Zet de knop Voorlezen onder elk antwoord aan. Dan kies je zelf welk antwoord je hoort.
           </li>
-          <li>
-            Zet bij Toegankelijkheid de knop Voorlezen onder elk antwoord aan. Dan kies je zelf welk
-            antwoord je hoort.
-          </li>
-          <li>
-            Kies bij Toegankelijkheid dat PromptPlein elk antwoord hardop voorleest zodra het klaar
-            is.
-          </li>
+          <li>Kies dat PromptPlein elk antwoord hardop voorleest zodra het klaar is.</li>
         </ul>
+        <p>
+          Staat voorlezen aan, dan hoor je het laatste antwoord met{' '}
+          <Keys shortcut={SHORTCUTS.voorlezen} />.
+        </p>
         <p>
           Ben je ingelogd, dan leest de stem Lotte voor. Zonder account leest de stem van je
           apparaat voor. Bij Toegankelijkheid kun je een andere stem en snelheid kiezen.
@@ -139,6 +137,7 @@ export default function AccessibilityHelp() {
           ingelogd zijn.
         </p>
         <ol className="list-decimal space-y-1 pl-5">
+          <li>Zet bij Toegankelijkheid Gesprek zonder handen aan. Dit hoef je maar één keer te doen.</li>
           <li>
             Druk in de chat op <Keys shortcut={SHORTCUTS.gesprek} />, of gebruik de knop Gesprek.
           </li>
