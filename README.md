@@ -56,7 +56,7 @@ De hele interface is Nederlands.
 Je hebt Node.js (actuele LTS) nodig.
 
 ```bash
-git clone https://github.com/RoyvSichem/PromptPlein.git
+git clone https://github.com/PromptPlein/PromptPlein.git
 cd PromptPlein
 npm install
 npm run dev
