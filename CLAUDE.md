@@ -224,7 +224,8 @@ aan de serverkant, om dezelfde reden als de opslagscheiding hierboven. Online
 stemmen sturen de tekst naar hun leverancier en worden daarom nooit vanzelf
 gekozen.
 
-Een lege chat is klein: begroeting en tekstvak staan samen in het midden. Na het
+Een lege chat is klein: begroeting en tekstvak staan samen in het midden, met de
+cursor al in het vak. Na het
 eerste bericht zakt het tekstvak naar een vaste plek onderaan en vult het gesprek
 het venster. Laat de kaart niet meegroeien met de tekst: dan schuift het tekstvak
 bij elke regel van het antwoord op, en wie met vergroting werkt raakt het kwijt.

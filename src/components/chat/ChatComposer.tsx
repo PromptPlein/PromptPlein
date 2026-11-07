@@ -59,6 +59,8 @@ export interface OptimizeResult {
 export interface ChatComposerHandle {
   /** Zet `text` in het veld, geeft focus en zet de cursor achter de tekst. */
   fill: (text: string) => void;
+  /** Zet de cursor achter de tekst, tenzij hij al in het veld staat. */
+  focus: () => void;
 }
 
 interface ChatComposerProps {
@@ -252,6 +254,12 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
         setText(value);
         setBeforeOptimize(null);
         focusAfterFill.current = true;
+      },
+      focus() {
+        const el = textareaRef.current;
+        if (!el || document.activeElement === el) return;
+        el.focus();
+        el.setSelectionRange(el.value.length, el.value.length);
       },
     }),
     [setText],

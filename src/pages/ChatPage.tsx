@@ -333,6 +333,9 @@ function ChatPageInner() {
   const handleNewConversation = useCallback(() => {
     setProjectPage(null);
     controller.newConversation();
+    // Stond je al in een lege chat, dan verandert er verder niets en doet het
+    // effect bij composerDisabled niets.
+    composerRef.current?.focus();
   }, [controller]);
 
   const handleDeleteProject = useCallback(async () => {
@@ -448,6 +451,16 @@ function ChatPageInner() {
 
   const composerDisabled =
     !configured || !settings || settings.enabled === false || projectNeedsLogin;
+
+  // In een lege chat is typen het enige wat er te doen is: de cursor staat dan
+  // meteen in het tekstvak, ook voor wie met het toetsenbord werkt. Dat wacht tot
+  // het vak aan staat, en een open venster houdt de focus zelf.
+  const emptyChatReady = messages.length === 0 && !openProject && !composerDisabled;
+  useEffect(() => {
+    if (!emptyChatReady) return;
+    if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return;
+    composerRef.current?.focus();
+  }, [emptyChatReady, conversationId]);
 
   // Chat uitgezet door de beheerder of geen backend: nette melding.
   if (!configured || (settings && !settings.enabled)) {
