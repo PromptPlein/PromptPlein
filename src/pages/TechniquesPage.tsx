@@ -6,12 +6,12 @@ import {
   Check,
   Compass,
   Eraser,
-  Layers,
   Loader2,
   Sparkles,
 } from '@/components/common/icons';
+import clsx from 'clsx';
 import toast from 'react-hot-toast';
-import TechniqueSelector from '@/components/optimizer/TechniqueSelector';
+import TechniqueChooser from '@/components/optimizer/TechniqueChooser';
 import TechniqueAdvisor from '@/components/optimizer/TechniqueAdvisor';
 import FollowUpQuestions, { type FieldMeta } from '@/components/optimizer/FollowUpQuestions';
 import PersonaBuilder from '@/components/optimizer/PersonaBuilder';
@@ -25,6 +25,7 @@ import SkillBuilder from '@/components/optimizer/SkillBuilder';
 import DocumentUpload from '@/components/optimizer/DocumentUpload';
 import InterviewFlow from '@/components/optimizer/InterviewFlow';
 import SjabloonVragen from '@/components/optimizer/SjabloonVragen';
+import InfoDot from '@/components/common/InfoDot';
 import OptimizableTextarea from '@/components/common/OptimizableTextarea';
 import OptimizingLoader from '@/components/optimizer/OptimizingLoader';
 import ThinkingToggle from '@/components/common/ThinkingToggle';
@@ -62,6 +63,7 @@ import {
   structureFormat,
   techniqueStarter,
 } from '@/lib/techniques';
+import { techniekKaart } from '@/lib/techniekDoelen';
 import { activityIdentifier, stripMarkdown } from '@/lib/utils';
 import type { SkillData } from '@/lib/skill';
 import { defaultModelFor, isEnabledProvider, thinkingUnavailableReason } from '@/config/aiModels';
@@ -150,6 +152,10 @@ export default function TechniquesPage() {
   // Staat de techniek-adviseur open? Die kiest niet voor je, maar vraagt door
   // tot duidelijk is welke techniek past — voor wie de lijst niet overziet.
   const [advisorOpen, setAdvisorOpen] = useState(false);
+  // Staat de kiezer open terwijl er al een techniek gekozen is? Na het kiezen gaat
+  // hij dicht, zodat alleen het invulblok overblijft. "Andere kiezen" opent hem
+  // weer; het invulblok blijft eronder staan, zodat half werk niet verdwijnt.
+  const [chooserOpen, setChooserOpen] = useState(false);
 
   const [optimizing, setOptimizing] = useState(false);
   const [streamText, setStreamText] = useState('');
@@ -189,6 +195,7 @@ export default function TechniquesPage() {
 
   const technique = techniques.find((t) => t.id === techniqueId) ?? null;
   const sjabloonMode = Boolean(technique && isSjabloon(technique));
+  const ChosenIcon = technique ? techniekKaart(technique).icon : null;
   // De context zoals hij naar het voor-invullen en het bouwen gaat. Bij een
   // sjabloon: de antwoorden op de vragen, elk onder zijn vraag, plus het losse vak.
   const contextText =
@@ -205,6 +212,7 @@ export default function TechniquesPage() {
     // Opnieuw op de actieve techniek klikken mag geen werk weggooien. Komt de
     // keuze van de adviseur, dan is er wél iets nieuws (de context uit het
     // gesprek), dus die mag de techniek opnieuw zetten.
+    setChooserOpen(false);
     if (id === techniqueId && contextOverride === undefined) return;
     setTechniqueId(id);
     setAnswers({});
@@ -217,8 +225,7 @@ export default function TechniquesPage() {
     setUnclearReason(null);
     // Nieuwe techniek = het contextveld weer open (zie setEditingContext hierboven).
     setEditingContext(true);
-    // Het invulblok staat bóven de lijst; scroll er naartoe zodat de gekozen
-    // techniek meteen in beeld staat in plaats van boven de vouw te verschijnen.
+    // De kiezer klapt dicht, dus het invulblok schuift omhoog: breng het in beeld.
     requestAnimationFrame(() => {
       builderRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
@@ -635,28 +642,60 @@ export default function TechniquesPage() {
     Object.keys(answers).length > 0;
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
-            <Layers className="text-rijksoranje" /> Werken met Prompt Engineering
-          </h1>
-          <p className="mt-1 max-w-3xl text-sm text-slate-500 dark:text-slate-400">
-            Prompt engineering is je opdracht zo opschrijven dat de AI hem ook echt uitvoert zoals
-            jij bedoelt.
-          </p>
-        </div>
-        {phase === 'input' && hasContent && (
-          <button
-            type="button"
-            onClick={handleClearAll}
-            title="Wis je invoer en begin opnieuw"
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:border-rijksoranje/40 hover:bg-rijksoranje/5 hover:text-rijksoranje dark:border-slate-700 dark:text-slate-200 dark:hover:border-rijksoranje/40 dark:hover:bg-rijksoranje/10"
+    <div
+      className={clsx(
+        'mx-auto px-4 py-8 sm:px-6 lg:px-8',
+        technique ? 'max-w-4xl' : 'max-w-5xl',
+      )}
+    >
+      {/* Je keuze staat bovenaan, ook bij het resultaat: zo blijft zichtbaar waar
+          je mee werkt en is de weg terug naar de kiezer één klik. */}
+      {technique && (
+        <section
+          ref={builderRef}
+          aria-label="Je keuze"
+          className="mb-4 flex scroll-mt-24 flex-wrap items-center gap-3 rounded-xl border border-rijksblauw-700 bg-rijksblauw-50 px-4 py-3 shadow-[inset_0_-3px_0_0_theme(colors.rijksoranje.vast)] dark:border-rijksblauw-200 dark:bg-rijksblauw-500/15"
+        >
+          <span
+            aria-hidden="true"
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-rijksblauw-700 text-rijksoranje-vast"
           >
-            <Eraser size={15} /> Opschonen
-          </button>
-        )}
-      </div>
+            {ChosenIcon && <ChosenIcon size={24} />}
+          </span>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
+              {isContextPrompt(technique) ? 'Framework gekozen' : 'Techniek gekozen'}
+            </p>
+            <h1 className="text-2xl font-bold leading-tight text-rijksblauw-700 dark:text-rijksblauw-200">
+              {technique.name}
+            </h1>
+          </div>
+          <InfoDot label={`Uitleg over ${technique.name}`} text={chosenInfo(technique)} />
+          {phase === 'input' && (
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleClearAll}
+                title="Wis je invoer en begin opnieuw"
+                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-rijksblauw-700 transition-colors hover:text-rijksoranje dark:text-rijksblauw-200"
+              >
+                <Eraser size={15} /> Opschonen
+              </button>
+              <button
+                type="button"
+                className="opl-btn-secondary"
+                aria-expanded={chooserOpen}
+                onClick={() => {
+                  setChooserOpen((open) => !open);
+                  setAdvisorOpen(false);
+                }}
+              >
+                {chooserOpen ? 'Sluiten' : 'Andere kiezen'}
+              </button>
+            </div>
+          )}
+        </section>
+      )}
 
       {phase === 'output' && result ? (
         <div className="opl-card p-6">
@@ -687,107 +726,69 @@ export default function TechniquesPage() {
             phase === 'transition' ? 'pointer-events-none opacity-0' : 'opacity-100'
           }`}
         >
-          {/* Startsituatie: er is nog niets gekozen. Deze plek is gereserveerd
-              voor het invulblok van de techniek — tot die keuze er is, staat
-              hier de opdracht die naar de lijst eronder wijst. */}
-          {!technique && !advisorOpen && (
-            <section className="rounded-2xl border-2 border-dashed border-rijksblauw-200 bg-white/60 px-6 py-6 text-center dark:border-rijksblauw-500/30 dark:bg-slate-800/40">
-              <p className="text-lg font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
-                Klik hieronder voor je prompttechniek of framework.
-              </p>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                De invulvelden verschijnen daarna hier, op deze plek.
-              </p>
-              {/* Twintig technieken zijn er twintig te veel als je er nog geen
-                  één kent. Deze weg eromheen staat daarom in hetzelfde blok als
-                  de opdracht om te kiezen: precies waar je vastloopt. */}
-              <div className="mx-auto mt-6 max-w-md border-t border-slate-200 pt-6 dark:border-slate-700">
-                <p className="font-semibold text-slate-700 dark:text-slate-200">
-                  Weet je niet welk framework?
-                </p>
-                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                  Laten we je helpen om de beste techniek erbij te pakken.
-                </p>
-                <button
-                  type="button"
-                  className="opl-btn-primary mt-4"
-                  onClick={() => setAdvisorOpen(true)}
-                >
-                  <Compass size={17} /> Start het onderzoek
-                </button>
+          {/* De kiezer: het eerste scherm zonder techniek, en wat "Andere kiezen"
+              opent. De adviseur hoort erbij, voor wie er zelf niet uitkomt. */}
+          {(!technique || chooserOpen) && (
+            <div className="space-y-6">
+              <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
+                {technique ? (
+                  <h2 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
+                    Wat wil je bereiken?
+                  </h2>
+                ) : (
+                  <h1 className="text-3xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
+                    Wat wil je bereiken?
+                  </h1>
+                )}
+                <div className="flex flex-wrap items-center gap-2">
+                  {!technique && hasContent && (
+                    <button
+                      type="button"
+                      onClick={handleClearAll}
+                      title="Wis je invoer en begin opnieuw"
+                      className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-rijksblauw-700 transition-colors hover:text-rijksoranje dark:text-rijksblauw-200"
+                    >
+                      <Eraser size={15} /> Opschonen
+                    </button>
+                  )}
+                  {!advisorOpen && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAdvisorOpen(true);
+                        requestAnimationFrame(() => {
+                          advisorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        });
+                      }}
+                      className="inline-flex min-h-11 items-center gap-2 font-semibold text-rijksblauw-500 transition-colors hover:underline dark:text-rijksblauw-200"
+                    >
+                      <Compass size={18} className="text-rijksoranje" /> Help mij kiezen
+                    </button>
+                  )}
+                </div>
               </div>
-
-              {/* Het pijltje hoort onderaan, ná de adviseur: het wijst naar de
-                  lijst hieronder. Stond het boven de adviseurknop, dan leek het
-                  díé aan te wijzen — terwijl dat juist de omweg is voor wie het
-                  niet weet, en de lijst de gewone weg voor wie het wel weet. */}
-              <ArrowDown
-                size={22}
-                className="mx-auto mt-6 animate-bounce text-rijksoranje"
-                aria-hidden
-              />
-            </section>
-          )}
-
-          {/* De adviseur neemt dezelfde plek in als het invulblok. Staat er al
-              een techniek open, dan komt hij eróver: het advies kiezen mag geen
-              half ingevuld formulier onaangekondigd weggooien. */}
-          {advisorOpen && (
-            <div ref={advisorRef} className="scroll-mt-24">
-              <TechniqueAdvisor
-                techniques={techniques}
-                settings={settingsRef.current}
-                start={context}
-                onChoose={applyAdvice}
-                onClose={() => setAdvisorOpen(false)}
-              />
+              {advisorOpen && (
+                <div ref={advisorRef} className="scroll-mt-24">
+                  <TechniqueAdvisor
+                    techniques={techniques}
+                    settings={settingsRef.current}
+                    start={context}
+                    onChoose={applyAdvice}
+                    onClose={() => setAdvisorOpen(false)}
+                  />
+                </div>
+              )}
+              <TechniqueChooser selectedId={techniqueId} onSelect={handleSelectTechnique} />
             </div>
           )}
 
-          {/* Het invulblok van de gekozen techniek — op dezelfde plek als het
-              startpunt-veld, dus bovenaan: kiezen in de lijst eronder vult dit
-              blok, in beeld, in plaats van iets onder de lijst te openen. */}
+          {/* Het invulblok van de gekozen techniek. */}
           {technique && (
             <section
               key={technique.id}
-              ref={builderRef}
-              className="animate-fade-in scroll-mt-24 overflow-hidden rounded-2xl border border-rijksblauw-200 bg-white shadow-sm dark:border-rijksblauw-500/30 dark:bg-slate-800"
+              className="animate-fade-in overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800"
             >
-              <div className="h-1 w-full bg-rijksblauw-700" />
               <div className="p-6">
-                <div className="mb-4 flex items-start gap-3">
-                  <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-rijksblauw-500 text-white">
-                    <Check size={14} />
-                  </span>
-                  <div>
-                    <h2 className="font-semibold text-slate-800 dark:text-slate-100">
-                      {structureFormat(technique) === 'skill' ? 'Bouw je skill' : 'Bouw je prompt'}
-                    </h2>
-                    {(() => {
-                      const fmt = structureFormat(technique);
-                      const intro =
-                        fmt === 'chain-of-thought'
-                          ? 'De AI denkt hier stap voor stap met je mee en vraagt door tot het beeld compleet is. Je antwoorden worden meteen uitgewerkt tot een kant-en-klare prompt.'
-                          : fmt === 'socratic'
-                            ? 'De AI vraagt hier socratisch door om je aannames bloot te leggen. Je inzichten worden meteen uitgewerkt tot een kant-en-klare prompt.'
-                            : fmt === 'skill'
-                              ? 'Beantwoord de vragen; de AI maakt er één vaste instructie van die je in je eigen AI-omgeving plakt of als SKILL.md downloadt.'
-                              : sjabloonMode
-                                ? 'Vertel eerst in je eigen woorden waar het over gaat; de vragen hieronder helpen je daarbij. Daarna zet de AI het in de velden van het sjabloon en scherp jij ze aan. De vormgeving ligt vast.'
-                                : 'Vul de velden met je eigen gegevens; zo ontstaat een herbruikbare prompt. Kopieer hem, of laat hem direct uitvoeren.';
-                      return (
-                        <p className="text-sm text-slate-500 dark:text-slate-400">
-                          Voor{' '}
-                          <span className="font-medium text-rijksblauw-700 dark:text-rijksblauw-200">
-                            {technique.name}
-                          </span>
-                          : {intro}
-                        </p>
-                      );
-                    })()}
-                  </div>
-                </div>
-
                 {/* Het oordeel van de voor-invulling hoort bovenaan het blok, waar
                     de blik na het kiezen van een techniek al is: onder de knop
                     "Bouw prompt" viel het pas op na scrollen. */}
@@ -980,16 +981,24 @@ export default function TechniquesPage() {
                     <div className="mb-6 rounded-xl border border-dashed border-rijksblauw-300 bg-rijksblauw-50/40 p-4 dark:border-rijksblauw-500/40 dark:bg-rijksblauw-500/5">
                       {editingContext ? (
                         <>
-                          <label htmlFor="techniek-context" className="opl-label">
-                            Geef wat context mee (optioneel)
-                          </label>
-                          <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
-                            {usesQuestionnaire
-                              ? 'Vul je hier iets in, dan kan de AI de velden van deze techniek alvast voor je invullen; je past ze daarna zelf aan. Leeg laten mag.'
-                              : isInterview
-                                ? 'Vul je hier iets in, dan begint het gesprek bij jouw onderwerp in plaats van bij nul. Leeg laten mag; de AI vraagt er dan zelf naar.'
-                                : 'Vul je hier iets in, dan begint deze techniek met jouw onderwerp in plaats van bij nul. Leeg laten mag.'}
-                          </p>
+                          <div className="mb-1 flex items-center gap-1">
+                            <label htmlFor="techniek-context" className="opl-label mb-0">
+                              Waar gaat het over?
+                            </label>
+                            <span className="text-sm text-slate-500 dark:text-slate-400">
+                              Mag leeg blijven
+                            </span>
+                            <InfoDot
+                              label="Uitleg over dit veld"
+                              text={
+                                usesQuestionnaire
+                                  ? 'Vul je hier iets in, dan kan de AI de velden alvast voor je invullen.'
+                                  : isInterview
+                                    ? 'Vul je hier iets in, dan begint het gesprek bij jouw onderwerp.'
+                                    : 'Vul je hier iets in, dan begint deze techniek met jouw onderwerp.'
+                              }
+                            />
+                          </div>
                           {/* Voorbeeldprompts als startpunt, alleen bij de
                               frameworks: daar is de context een opdracht in
                               gewone taal, precies wat deze voorbeelden zijn.
@@ -1069,7 +1078,7 @@ export default function TechniquesPage() {
                                 {context.trim()}
                               </>
                             ) : (
-                              'Geef wat context mee (optioneel)'
+                              'Waar gaat het over? Mag leeg blijven.'
                             )}
                           </p>
                           <button
@@ -1266,36 +1275,6 @@ export default function TechniquesPage() {
               </button>
             </div>
           )}
-
-          {/* De volledige lijst: frameworks links, losse technieken rechts. Blijft
-              onder het invulblok staan, zodat je zonder omweg een andere techniek
-              kunt pakken — die vult dan opnieuw het blok bovenaan. */}
-          <section className="opl-card p-6">
-            <div className="mb-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-              <p className="text-sm text-slate-600 dark:text-slate-300">
-                {technique
-                  ? 'Een andere techniek proberen? Klik erop; je vult hem hierboven in.'
-                  : 'Kies een prompt framework of techniek. Klik erop en je vult hem hierboven in.'}
-              </p>
-              {/* Ook hier bereikbaar: wie de lijst doorleest en er niet uitkomt,
-                  zit op dit moment onderaan de pagina en niet bij het startblok. */}
-              {!advisorOpen && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAdvisorOpen(true);
-                    requestAnimationFrame(() => {
-                      advisorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    });
-                  }}
-                  className="inline-flex shrink-0 items-center gap-1.5 text-sm font-medium text-rijksblauw-600 transition-colors hover:text-rijksoranje hover:underline dark:text-rijksblauw-300"
-                >
-                  <Compass size={15} /> Weet je niet welke?
-                </button>
-              )}
-            </div>
-            <TechniqueSelector selectedId={techniqueId} onSelect={handleSelectTechnique} />
-          </section>
         </div>
       )}
 
@@ -1309,6 +1288,23 @@ export default function TechniquesPage() {
       )}
     </div>
   );
+}
+
+/**
+ * De uitleg achter het bolletje bij je keuze: wat de techniek doet en, waar hij
+ * anders loopt dan velden invullen, wat je kunt verwachten.
+ */
+function chosenInfo(t: Technique): string {
+  const fmt = structureFormat(t);
+  const verloop =
+    fmt === 'chain-of-thought' || fmt === 'socratic'
+      ? 'Je antwoorden worden meteen uitgewerkt tot een prompt.'
+      : fmt === 'skill'
+        ? 'Plak het resultaat in je eigen AI-omgeving of download het als SKILL.md.'
+        : isSjabloon(t)
+          ? 'De vormgeving ligt vast; de AI vult de inhoud.'
+          : '';
+  return [techniekKaart(t).info, verloop].filter(Boolean).join('\n');
 }
 
 /**

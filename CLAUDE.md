@@ -422,6 +422,14 @@ Merk het voorbeeld daarom onmiskenbaar als voorbeeld, of laat het weg.
   kiest en de velden invult. Bouw geen handmatige techniekkiezer in
   `/genereren`: dat is precies de scheiding tussen die twee pagina's.
 
+Op `/technieken` kies je op doel (`TechniqueChooser`): eerst Schrijven, Uitdenken,
+Controleren, Bouwen of Vaste vorm, dan de frameworks en technieken daarbij. De
+indeling, de korte tekst en het icoon per techniek staan op naam in
+`src/lib/techniekDoelen.ts`, dus een techniek die in Beheer een nieuwe naam krijgt,
+hoort daar ook te worden aangepast. Een onbekende naam blijft zichtbaar en valt
+terug op zijn eigen omschrijving. Na het kiezen klapt de kiezer dicht; "Andere
+kiezen" opent hem boven het invulblok, zonder de invoer te wissen.
+
 **Sjablonen** (soort "Routekaart" bij "Wat wil je maken?", migratie 0039) zijn
 frameworks met `modality = 'template'`. De template is een vaste opdracht met
 één plek `{{INHOUD:<naam>}}`; alleen die plek schrijft de AI (mode `sjabloon`,
