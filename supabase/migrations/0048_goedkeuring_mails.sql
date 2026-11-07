@@ -5,9 +5,9 @@
 -- Geldt voor prompts op ministerie- of Rijksoverheid-niveau (prompt_visibility)
 -- en voor aanvragen van categorieën en functies.
 --
--- De triggers sturen een gebeurtenis naar de edge function `brevo-event`; in
--- Brevo verstuurt per gebeurtenis een automation de mail. Een storing bij Brevo
--- mag een aanvraag of besluit nooit tegenhouden, vandaar de exception-tak.
+-- De triggers sturen een gebeurtenis naar de edge function `brevo-event`, die de
+-- transactionele mail in Brevo verstuurt. Een storing bij Brevo mag een aanvraag
+-- of besluit nooit tegenhouden, vandaar de exception-tak.
 --
 -- Gebruikt de bestaande Vault-secrets uit 0025: brevo_function_url,
 -- brevo_webhook_secret en project_anon_key.

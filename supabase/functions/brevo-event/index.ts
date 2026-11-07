@@ -1,8 +1,11 @@
 // Supabase Edge Function: brevo-event
 //
-// Geeft gebeurtenissen uit de goedkeuringsstroom door aan Brevo, waar per
-// gebeurtenis een automation de mail verstuurt. Wordt aangeroepen door de
-// database-triggers uit migratie 0048 (via pg_net), dus niet vanuit de browser.
+// Verstuurt de mails uit de goedkeuringsstroom via de transactionele mail van
+// Brevo. Bewust geen automation: dat is voor Brevo marketing, dus wie zich ergens
+// in dit gedeelde account uitschrijft zou deze meldingen missen. Dit zijn berichten
+// over een eigen aanvraag of een taak als beoordelaar, dus zonder uitschrijflink.
+// Wordt aangeroepen door de database-triggers uit migratie 0048 (via pg_net), niet
+// vanuit de browser.
 //
 // Beveiliging: de trigger stuurt hetzelfde gedeelde geheim mee als
 // register-brevo-contact, in de header `x-webhook-secret`.
@@ -21,12 +24,15 @@ interface RequestBody {
   properties?: Record<string, string | null>;
 }
 
-const ALLOWED_EVENTS = new Set([
-  'promptplein_aanvraag_ingediend',
-  'promptplein_goedkeuring_wacht',
-  'promptplein_aanvraag_goedgekeurd',
-  'promptplein_aanvraag_afgewezen',
-]);
+/** Gebeurtenis uit de database naar de transactionele template in Brevo. */
+const TEMPLATES: Record<string, number> = {
+  promptplein_goedkeuring_wacht: 69,
+  promptplein_aanvraag_ingediend: 70,
+  promptplein_aanvraag_goedgekeurd: 71,
+  promptplein_aanvraag_afgewezen: 72,
+};
+
+const SENDER = { name: 'PromptPlein', email: 'roy@awaren.nl' };
 
 function json(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), {
@@ -68,16 +74,17 @@ Deno.serve(async (req: Request) => {
   }
 
   const event = body.event ?? '';
-  if (!ALLOWED_EVENTS.has(event)) return json({ error: 'Onbekende gebeurtenis' }, 400);
+  const templateId = TEMPLATES[event];
+  if (!templateId) return json({ error: 'Onbekende gebeurtenis' }, 400);
 
   const properties = cleanProperties(body.properties);
   const recipients = (body.recipients ?? []).filter((r) => r.email && isEmail(r.email));
 
-  // Docs: https://developers.brevo.com/reference/createevent
+  // Docs: https://developers.brevo.com/reference/sendtransacemail
   const results = await Promise.all(
     recipients.map(async (recipient) => {
       const voornaam = recipient.voornaam?.trim();
-      const res = await fetch('https://api.brevo.com/v3/events', {
+      const res = await fetch('https://api.brevo.com/v3/smtp/email', {
         method: 'POST',
         headers: {
           'api-key': apiKey,
@@ -85,10 +92,10 @@ Deno.serve(async (req: Request) => {
           accept: 'application/json',
         },
         body: JSON.stringify({
-          event_name: event,
-          identifiers: { email_id: recipient.email!.toLowerCase() },
-          ...(voornaam ? { contact_properties: { FIRSTNAME: voornaam } } : {}),
-          event_properties: properties,
+          templateId,
+          sender: SENDER,
+          to: [{ email: recipient.email!.toLowerCase() }],
+          params: { ...properties, ...(voornaam ? { voornaam } : {}) },
         }),
       });
       if (!res.ok) console.error('Brevo-fout', event, res.status, await res.text());
