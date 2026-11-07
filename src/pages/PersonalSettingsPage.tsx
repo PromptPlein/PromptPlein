@@ -1,12 +1,14 @@
 import { Navigate, NavLink, useParams } from 'react-router-dom';
 import clsx from 'clsx';
-import { Accessibility, MessageSquare, Settings2 } from '@/components/common/icons';
+import { Accessibility, HelpCircle, MessageSquare, Settings2 } from '@/components/common/icons';
+import AccessibilityHelp from '@/components/settings/AccessibilityHelp';
 import AccessibilitySettings from '@/components/settings/AccessibilitySettings';
 import ChatInstructionSettings from '@/components/settings/ChatInstructionSettings';
 
 const PARTS = [
   { slug: 'chat', label: 'Chat', icon: MessageSquare },
   { slug: 'toegankelijkheid', label: 'Toegankelijkheid', icon: Accessibility },
+  { slug: 'hulp', label: 'Hulp', icon: HelpCircle },
 ] as const;
 
 /**
@@ -51,7 +53,9 @@ export default function PersonalSettingsPage() {
         </ul>
       </nav>
 
-      {onderdeel === 'chat' ? <ChatInstructionSettings /> : <AccessibilitySettings />}
+      {onderdeel === 'chat' && <ChatInstructionSettings />}
+      {onderdeel === 'toegankelijkheid' && <AccessibilitySettings />}
+      {onderdeel === 'hulp' && <AccessibilityHelp />}
     </div>
   );
 }

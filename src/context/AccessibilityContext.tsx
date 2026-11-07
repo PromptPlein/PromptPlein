@@ -35,6 +35,8 @@ export interface AccessibilitySettings {
    */
   speechVoice: string | null;
   speechRate: number;
+  /** Eindigt een dictaat in de chat op "verstuur", dan gaat het bericht meteen weg. */
+  sendByVoice: boolean;
 }
 
 export const DEFAULT_ACCESSIBILITY: AccessibilitySettings = {
@@ -46,6 +48,7 @@ export const DEFAULT_ACCESSIBILITY: AccessibilitySettings = {
   answerDone: 'niets',
   speechVoice: null,
   speechRate: 1,
+  sendByVoice: false,
 };
 
 export const SPEECH_RATES = [0.75, 1, 1.25, 1.5];
@@ -87,6 +90,7 @@ function sanitize(raw: unknown): AccessibilitySettings {
     speechRate: SPEECH_RATES.includes(value.speechRate as number)
       ? (value.speechRate as number)
       : d.speechRate,
+    sendByVoice: value.sendByVoice === true,
   };
 }
 

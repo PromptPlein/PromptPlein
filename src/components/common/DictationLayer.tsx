@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
 import DictationButton from './DictationButton';
+import { CUE_MS, playCue } from '@/lib/audioCue';
+import { matchesShortcut, SHORTCUTS } from '@/lib/shortcuts';
 import { insertDictatedText, useDictation } from '@/lib/useDictation';
 
 /**
@@ -68,7 +70,7 @@ export default function DictationLayer() {
       toast('Het veld is er niet meer. De tekst staat op je klembord.');
     }
   });
-  const { available, state, cancel } = dictation;
+  const { available, state, cancel, start, toggle } = dictation;
   const stateRef = useRef(state);
   stateRef.current = state;
 
@@ -174,6 +176,41 @@ export default function DictationLayer() {
     document.addEventListener('keydown', onKeyDown, true);
     return () => document.removeEventListener('keydown', onKeyDown, true);
   }, [state, cancel]);
+
+  // De sneltoets in elk tekstvak. Staat de cursor in de chat, dan regelt de chat
+  // het zelf (useChatVoice).
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (!matchesShortcut(e, SHORTCUTS.dicteren)) return;
+      if (state !== 'idle') {
+        e.preventDefault();
+        playCue('stop');
+        toggle();
+        return;
+      }
+      const field = document.activeElement;
+      if (!isDictationField(field)) {
+        if (document.querySelector('[data-dictation="off"]')) return;
+        e.preventDefault();
+        toast('Ga eerst met de cursor naar een tekstvak.');
+        return;
+      }
+      e.preventDefault();
+      if (!available) {
+        toast.error('Log in om te kunnen dicteren.');
+        return;
+      }
+      setLocked(field);
+      playCue('start');
+      window.setTimeout(() => {
+        void start().then((started) => {
+          if (!started) setLocked(null);
+        });
+      }, CUE_MS);
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [available, start, state, toggle]);
 
   if (!available || !target || !placement) return null;
 

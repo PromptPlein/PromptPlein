@@ -240,6 +240,21 @@ per bericht, en een aparte `role="status"` in `ChatMessageList`. Zet de
 berichtenlijst nooit zelf in een live-regio: een schermlezer pikt dan elk woord
 van een streamend antwoord op.
 
+Sneltoetsen staan op één plek (`src/lib/shortcuts.ts`), altijd Alt + Shift plus een
+letter en nooit één losse toets (WCAG 2.1.4). De hulppagina
+(`/instellingen/hulp`, `AccessibilityHelp`) leest die lijst. Voeg je iets toe wat je
+met stem of toetsenbord bedient, zet het daar dan ook bij: die pagina is de
+handleiding voor wie slecht ziet. Schrijf er korte zinnen en noem knoppen bij hun
+naam, nooit bij hun plek op het scherm.
+
+De gespreksmodus (`useChatVoice`) is een lus: luisteren, bij stilte versturen,
+voorlezen, weer luisteren. De microfoon gaat alleen aan als de gebruiker het gesprek
+zelf start en stopt na 30 seconden stilte. Een microfoon die altijd luistert is
+bewust niet gebouwd: alles wat iemand op kantoor zegt, zou dan naar Mistral gaan.
+Elk gesproken bericht loopt gewoon door de controle op persoonsgegevens. Meld de
+stand van het gesprek niet in een live-regio: een schermlezer spreekt die uit terwijl
+de microfoon opengaat. Daarvoor zijn de twee tonen in `audioCue.ts`.
+
 Voorlezen (`src/lib/speech.ts`) gebruikt voor wie ingelogd is standaard Lotte, de
 natuurlijke stem van Mistral (mode `speech` in de edge function, Voxtral TTS, model
 en stem staan daar vast). De tekst komt al van Mistral, dus er komt geen nieuwe

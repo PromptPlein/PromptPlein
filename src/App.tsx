@@ -1,10 +1,11 @@
 import { lazy, Suspense } from 'react';
-import { Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom';
+import { Link, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom';
 import { ReferenceDataProvider } from '@/context/ReferenceDataContext';
 import ErrorBoundary from '@/components/common/ErrorBoundary';
 import Header from '@/components/common/Header';
 import Footer from '@/components/common/Footer';
 import DictationLayer from '@/components/common/DictationLayer';
+import HelpShortcut from '@/components/common/HelpShortcut';
 import HomePage from '@/pages/HomePage';
 import SearchPage from '@/pages/SearchPage';
 import OptimizerPage from '@/pages/OptimizerPage';
@@ -69,6 +70,9 @@ export default function App() {
         <a href="#inhoud" className="opl-skip-link">
           Naar de inhoud
         </a>
+        <Link to="/instellingen/hulp" className="opl-skip-link">
+          Hulp bij toegankelijkheid
+        </Link>
         <Header />
         <main id="inhoud" tabIndex={-1} className="flex-1 focus:outline-none">
           <ErrorBoundary>
@@ -169,6 +173,7 @@ export default function App() {
         {pathname !== '/chat' && <Footer />}
         {/* Microfoontje rechtsonder in elk tekstvak: inspreken in plaats van typen. */}
         <DictationLayer />
+        <HelpShortcut />
       </div>
     </ReferenceDataProvider>
   );

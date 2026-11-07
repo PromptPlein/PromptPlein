@@ -310,6 +310,11 @@ function subscribe(listener: () => void) {
   };
 }
 
+/** Leest er nu iets voor? Voor code die buiten React moet wachten op de stem. */
+export function isSpeaking(): boolean {
+  return speakingId !== null;
+}
+
 /** Het id van wat er nu wordt voorgelezen, of null. */
 export function useSpeakingId(): string | null {
   return useSyncExternalStore(subscribe, () => speakingId);

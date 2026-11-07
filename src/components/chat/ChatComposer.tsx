@@ -28,10 +28,11 @@ import DictationButton from '@/components/common/DictationButton';
 import ThinkingToggle from '@/components/common/ThinkingToggle';
 import WebSearchToggle from '@/components/common/WebSearchToggle';
 import { ACCEPTED_DOC_ACCEPT } from '@/lib/extractDocument';
-import { insertDictatedText, useDictation } from '@/lib/useDictation';
 import { usePersistentDraft } from '@/lib/usePersistentDraft';
 import { parseRoutekaart } from '@/lib/routekaart';
 import ComposerPlusMenu from './ComposerPlusMenu';
+import ConversationToggle from './ConversationToggle';
+import { useChatVoice } from './useChatVoice';
 import { MAX_CHAT_ATTACHMENTS } from './useChatController';
 import type { ChatAttachment } from '@/types';
 
@@ -217,8 +218,16 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
 
   // Inspreken: de uitgeschreven tekst komt op de plek van de cursor, en
   // versturen blijft een eigen handeling, zodat je eerst kunt nalezen.
-  const dictation = useDictation((spoken) => {
-    if (textareaRef.current) insertDictatedText(textareaRef.current, spoken);
+  const dictation = useChatVoice({
+    textareaRef,
+    disabled,
+    streaming,
+    onSubmit: (value) => {
+      clearText();
+      setBeforeOptimize(null);
+      setEnlarged(false);
+      onSend(value);
+    },
   });
   const { cancel: cancelDictation, state: dictationState } = dictation;
 
@@ -612,6 +621,14 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
               onToggleWebSearch={onToggleWebSearch}
               onDictate={dictation.available ? dictation.toggle : undefined}
             />
+            {dictation.available && (
+              <ConversationToggle
+                active={dictation.conversation.active}
+                phase={dictation.conversation.phase}
+                announcement={dictation.conversation.announcement}
+                onToggle={dictation.conversation.toggle}
+              />
+            )}
 
             {/* Context: project met bronbestanden, en van daaruit een prompt laten
                 maken. Staat los van de plus, want dit is de snelste weg naar een

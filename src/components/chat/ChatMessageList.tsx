@@ -21,7 +21,9 @@ import {
   useAccessibility,
   useSpeechVoice,
 } from '@/context/AccessibilityContext';
-import { speak, stopSpeaking, toSpeakableText, useSpeakingId } from '@/lib/speech';
+import { isConversationActive } from '@/lib/conversationMode';
+import { matchesShortcut, SHORTCUTS } from '@/lib/shortcuts';
+import { isSpeaking, speak, stopSpeaking, toSpeakableText, useSpeakingId } from '@/lib/speech';
 import ChatAnswer from './ChatAnswer';
 import CopyMessageButton from './CopyMessageButton';
 import type { ChatMessage } from '@/types';
@@ -195,12 +197,15 @@ export default function ChatMessageList({
       return;
     }
     const spoken = toSpeakableText(lastMessage.content);
-    if (settings.answerDone === 'schermlezer') {
+    // In een gesprek leest de chat altijd voor: daarvoor heb je hem aangezet. De
+    // meldingen blijven dan weg, anders neemt de microfoon de schermlezer op.
+    const conversation = isConversationActive();
+    if (settings.answerDone === 'schermlezer' && !conversation) {
       setStatus(`Antwoord: ${spoken}`);
       return;
     }
-    setStatus('Het antwoord is klaar.');
-    if (settings.answerDone === 'voorlezen') {
+    if (!conversation) setStatus('Het antwoord is klaar.');
+    if (settings.answerDone === 'voorlezen' || conversation) {
       const result = speak(lastMessage.id, spoken, {
         voice: speechVoice,
         rate: settings.speechRate,
@@ -211,10 +216,29 @@ export default function ChatMessageList({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [streaming]);
 
+  // Voor de sneltoets: die luistert één keer en moet de actuele stand kennen.
+  const readLatest = useRef({ messages, speechVoice, rate: settings.speechRate });
+  readLatest.current = { messages, speechVoice, rate: settings.speechRate };
+
   // Voorlezen stopt met Escape en stopt ook als je deze pagina verlaat.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') stopSpeaking();
+      if (!matchesShortcut(e, SHORTCUTS.voorlezen)) return;
+      e.preventDefault();
+      if (isSpeaking()) {
+        stopSpeaking();
+        return;
+      }
+      const { messages: all, speechVoice: voice, rate } = readLatest.current;
+      const answer = [...all].reverse().find((m) => m.role === 'assistant' && m.content.trim());
+      if (!answer) {
+        setStatus('Er is nog geen antwoord om voor te lezen.');
+        return;
+      }
+      const result = speak(answer.id, toSpeakableText(answer.content), { voice, rate });
+      if (result === 'geen-stem') toast.error(NO_VOICE_MESSAGE);
+      if (result === 'niet-ondersteund') toast.error('Deze browser kan niet voorlezen.');
     };
     document.addEventListener('keydown', onKeyDown);
     return () => {

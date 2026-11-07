@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/context/AuthContext';
+import { watchForSilence } from '@/lib/silenceWatch';
+import { stopSpeaking } from '@/lib/speech';
 import { isTranscribeAvailable, transcribeRecording } from '@/services/transcribeService';
 
 /** Langer dan dit stopt de opname vanzelf en wordt hij uitgeschreven. */
@@ -17,13 +19,19 @@ function pickMimeType(): string | undefined {
 
 export type DictationState = 'idle' | 'recording' | 'transcribing';
 
+/** Waarom een opname zonder tekst eindigde. Alleen gemeld bij `autoStop`. */
+export type DictationEnd = 'leeg' | 'geen-spraak' | 'fout';
+
 /**
  * Opnemen met de microfoon en de opname laten uitschrijven. De audio leeft
  * alleen in het geheugen van deze hook: na het uitschrijven (of afbreken) gaan
  * de stukken weg en gaat de microfoon uit. Er komt geen bestand, geen
  * object-URL en geen kopie in de opslag van de browser.
  */
-export function useDictation(onText: (text: string) => void) {
+export function useDictation(
+  onText: (text: string) => void,
+  options?: { onEnd?: (reason: DictationEnd) => void },
+) {
   const { user } = useAuth();
   const [state, setState] = useState<DictationState>('idle');
   const [seconds, setSeconds] = useState(0);
@@ -32,6 +40,11 @@ export function useDictation(onText: (text: string) => void) {
 
   const onTextRef = useRef(onText);
   onTextRef.current = onText;
+  const onEndRef = useRef(options?.onEnd);
+  onEndRef.current = options?.onEnd;
+  // Stopt het meeluisteren; alleen gezet bij `autoStop`.
+  const stopWatchRef = useRef<(() => void) | null>(null);
+  const noSpeechRef = useRef(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -67,9 +80,15 @@ export function useDictation(onText: (text: string) => void) {
     }
   }, [releaseMicrophone]);
 
-  /** Zet de microfoon aan. Geeft false terug als dat niet lukte. */
-  const start = useCallback(async (): Promise<boolean> => {
+  /**
+   * Zet de microfoon aan. Geeft false terug als dat niet lukte. Met `autoStop`
+   * stopt de opname vanzelf bij stilte en meldt `onEnd` wat er misging, in plaats
+   * van een melding op het scherm: dat past bij een gesprek zonder handen.
+   */
+  const start = useCallback(async ({ autoStop = false } = {}): Promise<boolean> => {
     if (!available || state !== 'idle') return false;
+    // De stem mag niet in de opname terechtkomen.
+    stopSpeaking();
     let media: MediaStream;
     try {
       media = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -93,12 +112,15 @@ export function useDictation(onText: (text: string) => void) {
     recorderRef.current = recorder;
     chunksRef.current = [];
     cancelledRef.current = false;
+    noSpeechRef.current = false;
     startedAtRef.current = Date.now();
 
     recorder.ondataavailable = (e) => {
       if (e.data.size > 0) chunksRef.current.push(e.data);
     };
     recorder.onstop = async () => {
+      stopWatchRef.current?.();
+      stopWatchRef.current = null;
       releaseMicrophone();
       recorderRef.current = null;
       const audio = new Blob(chunksRef.current, {
@@ -108,6 +130,8 @@ export function useDictation(onText: (text: string) => void) {
       const tooShort = Date.now() - startedAtRef.current < MIN_DICTATION_MS;
       if (cancelledRef.current || tooShort || audio.size === 0) {
         setState('idle');
+        if (noSpeechRef.current) onEndRef.current?.('geen-spraak');
+        else if (autoStop && !cancelledRef.current) onEndRef.current?.('leeg');
         return;
       }
 
@@ -118,12 +142,31 @@ export function useDictation(onText: (text: string) => void) {
       abortRef.current = null;
       setState('idle');
       if (cancelledRef.current) return;
-      if (result.error) toast.error(result.error);
-      else if (!result.text) toast('Er was niets te verstaan. Probeer het nog eens.');
-      else onTextRef.current(result.text);
+      if (result.error) {
+        toast.error(result.error);
+        if (autoStop) onEndRef.current?.('fout');
+      } else if (result.text) {
+        onTextRef.current(result.text);
+      } else if (autoStop) {
+        onEndRef.current?.('leeg');
+      } else {
+        toast('Er was niets te verstaan. Probeer het nog eens.');
+      }
     };
 
     recorder.start(1000);
+    if (autoStop) {
+      stopWatchRef.current = watchForSilence(media, {
+        onSilence: () => {
+          if (recorder.state === 'recording') recorder.stop();
+        },
+        onNoSpeech: () => {
+          noSpeechRef.current = true;
+          cancelledRef.current = true;
+          if (recorder.state === 'recording') recorder.stop();
+        },
+      });
+    }
     setSeconds(0);
     setState('recording');
     return true;
@@ -145,6 +188,8 @@ export function useDictation(onText: (text: string) => void) {
     () => () => {
       cancelledRef.current = true;
       abortRef.current?.abort();
+      stopWatchRef.current?.();
+      stopWatchRef.current = null;
       if (recorderRef.current?.state === 'recording') recorderRef.current.stop();
       streamRef.current?.getTracks().forEach((track) => track.stop());
     },
