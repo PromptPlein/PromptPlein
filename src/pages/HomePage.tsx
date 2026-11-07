@@ -65,13 +65,13 @@ export default function HomePage() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-      {/* Wat ga je doen? Vier grote tegels, elk één taak. */}
+      {/* Wat wil je doen? Vier grote tegels, elk één taak. */}
       <section className="mb-10" aria-labelledby="home-taken">
         <h1
           id="home-taken"
           className="mb-4 text-3xl font-bold text-rijksblauw-700 dark:text-rijksblauw-100"
         >
-          Wat ga je doen?
+          Wat wil je doen?
         </h1>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <TaskTile
