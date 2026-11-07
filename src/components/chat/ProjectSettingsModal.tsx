@@ -10,6 +10,7 @@ import type { ChatSettings } from '@/services/settingsService';
 import {
   addProjectFile,
   deleteProjectFile,
+  indexProject,
   listProjectFiles,
   MAX_PROJECT_FILES,
   MAX_PROJECT_FILE_BYTES,
@@ -65,6 +66,8 @@ export default function ProjectSettingsModal({
   const [files, setFiles] = useState<ChatProjectFile[]>([]);
   const [loadingFiles, setLoadingFiles] = useState(false);
   const [uploading, setUploading] = useState<{ current: number; total: number } | null>(null);
+  /** Stukken die nog doorzoekbaar moeten worden; 0 is klaar. */
+  const [indexRemaining, setIndexRemaining] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [confirmDeleteFile, setConfirmDeleteFile] = useState<ChatProjectFile | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -107,6 +110,11 @@ export default function ProjectSettingsModal({
     if (!open || !projectId) return;
     return loadFiles();
   }, [open, projectId, loadFiles]);
+
+  // Ook bij openen: een eerdere verwerking kan zijn afgebroken.
+  useEffect(() => {
+    if (open && projectId) void indexProject(projectId, setIndexRemaining);
+  }, [open, projectId]);
 
   // --- Het oranje sterretje: van ruwe instructie naar systeemprompt ---
   // Bewust een zwaardere slag dan het sterretje in de chat: daar wordt één
@@ -212,6 +220,7 @@ export default function ProjectSettingsModal({
     setUploading(null);
     if (done > 1) onFilesChanged();
     if (done > 0) toast.success(done === 1 ? 'Bestand toegevoegd.' : `${done} bestanden toegevoegd.`);
+    if (done > 0) await indexProject(projectId, setIndexRemaining);
   }
 
   async function removeFile(file: ChatProjectFile) {
@@ -427,6 +436,16 @@ export default function ProjectSettingsModal({
             {files.length > 0 && (
               <p className="mt-2 text-[0.6875rem] text-slate-400 dark:text-slate-500">
                 Samen {num(totalChars)} tekens bronmateriaal.
+              </p>
+            )}
+
+            {indexRemaining > 0 && (
+              <p
+                role="status"
+                className="mt-1 flex items-center gap-1.5 text-[0.6875rem] text-slate-400 dark:text-slate-500"
+              >
+                <Loader2 size={12} className="animate-spin" />
+                Bestanden doorzoekbaar maken
               </p>
             )}
           </div>

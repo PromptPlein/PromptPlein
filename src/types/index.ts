@@ -726,6 +726,12 @@ export interface ChatMessage {
    * een herlaadbeurt nog staat.
    */
   sources?: ChatSource[];
+  /**
+   * De bronbestanden waaruit stukken zijn meegegeven. Alleen gevuld in een
+   * project dat te groot is om heel mee te sturen: daar kiest de zoekstap wat het
+   * model te lezen krijgt, en dat moet de lezer kunnen nagaan.
+   */
+  projectSources?: string[];
 }
 
 /** Eén internetbron die de AI voor een antwoord heeft geraadpleegd. */

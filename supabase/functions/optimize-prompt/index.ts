@@ -3590,6 +3590,147 @@ async function synthesizeSpeech(input: string): Promise<string> {
   return result.audio_data;
 }
 
+// --- Zoeken op betekenis in de bronbestanden van een project ---
+// mistral-embed zet tekst om in een vector; pgvector vergelijkt die in de database
+// (migratie 0049). Alles naar de database loopt met het token van de gebruiker,
+// dus RLS bepaalt welke stukken deze functie te zien krijgt en mag schrijven. De
+// tekst komt daarom hier uit de database en niet uit het verzoek.
+
+/** Wissel je dit model, gooi dan de vectoren weg: twee modellen zijn niet vergelijkbaar. */
+const EMBED_MODEL = 'mistral-embed';
+
+/**
+ * Stukken per aanroep van 'project-index'. Een stuk is hoogstens 1600 tekens (0046).
+ * Mistral noemt geen limiet per portie; is een portie toch te groot, dan halveert
+ * {@link embedTexts} hem.
+ */
+const EMBED_BATCH_CHUNKS = 16;
+
+/** Langste zoekvraag die we omzetten. */
+const MAX_EMBED_QUERY_CHARS = 8000;
+
+/** Stukken die per vraag naar het model gaan. Maximaal 48.000 tekens. */
+const PROJECT_SEARCH_CHUNKS = 30;
+
+class EmbedRequestError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+  }
+}
+
+/** Zet teksten om in vectoren, in dezelfde volgorde. */
+async function embedTexts(inputs: string[]): Promise<number[][]> {
+  const apiKey = Deno.env.get('MISTRAL_API_KEY');
+  if (!apiKey) throw new Error('MISTRAL_API_KEY ontbreekt');
+
+  const response = await fetch('https://api.mistral.ai/v1/embeddings', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: EMBED_MODEL, input: inputs }),
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!response.ok) {
+    const detail = (await response.text()).slice(0, 300);
+    // Te veel tokens in één portie: in twee helften opnieuw.
+    if (response.status === 400 && inputs.length > 1) {
+      const half = Math.ceil(inputs.length / 2);
+      return [
+        ...(await embedTexts(inputs.slice(0, half))),
+        ...(await embedTexts(inputs.slice(half))),
+      ];
+    }
+    throw new EmbedRequestError(`Mistral embeddings gaf status ${response.status}: ${detail}`, response.status);
+  }
+  const result = (await response.json()) as {
+    data?: Array<{ index?: number; embedding?: number[] }>;
+  };
+  const rows = [...(result.data ?? [])].sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+  if (rows.length !== inputs.length || rows.some((r) => !Array.isArray(r.embedding))) {
+    throw new Error('Mistral embeddings gaf een onvolledig antwoord');
+  }
+  return rows.map((r) => r.embedding as number[]);
+}
+
+/** Roept de database aan met het token van de gebruiker. */
+function databaseRequest(req: Request, path: string, init: RequestInit = {}): Promise<Response> {
+  const url = Deno.env.get('SUPABASE_URL');
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
+  if (!url || !anonKey) throw new Error('SUPABASE_URL of SUPABASE_ANON_KEY ontbreekt');
+  return fetch(`${url.replace(/\/+$/, '')}/rest/v1/${path}`, {
+    ...init,
+    headers: {
+      apikey: anonKey,
+      Authorization: req.headers.get('authorization') ?? '',
+      'Content-Type': 'application/json',
+      ...(init.headers ?? {}),
+    },
+  });
+}
+
+/**
+ * Maakt vectoren voor de volgende portie stukken zonder vector. De client roept
+ * dit aan tot `remaining` 0 is; zo past een groot bestand binnen de looptijd van
+ * de functie en gaat een onderbroken verwerking later gewoon verder.
+ */
+async function indexProjectChunks(req: Request, projectId: string): Promise<number> {
+  const query =
+    `project_id=eq.${encodeURIComponent(projectId)}&embedding=is.null` +
+    `&select=id,text&order=id.asc&limit=${EMBED_BATCH_CHUNKS}`;
+  const listed = await databaseRequest(req, `chat_project_file_chunks?${query}`, {
+    headers: { Prefer: 'count=exact' },
+  });
+  if (!listed.ok) {
+    throw new Error(`Stukken ophalen gaf status ${listed.status}: ${(await listed.text()).slice(0, 300)}`);
+  }
+  const rows = (await listed.json()) as Array<{ id: number; text: string }>;
+  const total = Number(listed.headers.get('content-range')?.split('/')[1] ?? rows.length);
+  if (rows.length === 0) return 0;
+
+  const vectors = await embedTexts(rows.map((r) => r.text));
+  const saved = await databaseRequest(req, 'rpc/save_chunk_embeddings', {
+    method: 'POST',
+    body: JSON.stringify({
+      p_items: rows.map((r, i) => ({ id: r.id, embedding: vectors[i] })),
+    }),
+  });
+  if (!saved.ok) {
+    throw new Error(`Vectoren opslaan gaf status ${saved.status}: ${(await saved.text()).slice(0, 300)}`);
+  }
+  return Math.max(total - rows.length, 0);
+}
+
+/**
+ * De stukken die bij de vraag passen. Lukt de vector van de vraag niet, dan zoekt
+ * de database alleen op woorden: een storing bij Mistral kost de gebruiker zo
+ * geen bronnen.
+ */
+async function searchProjectChunks(
+  req: Request,
+  projectId: string,
+  question: string,
+): Promise<Array<{ file_id: string; seq: number; text: string }>> {
+  let embedding: string | null = null;
+  try {
+    const [vector] = await embedTexts([question.slice(-MAX_EMBED_QUERY_CHARS)]);
+    embedding = JSON.stringify(vector);
+  } catch (err) {
+    console.warn('Zoekvraag zonder vector:', err instanceof Error ? err.message : err);
+  }
+  const found = await databaseRequest(req, 'rpc/match_project_chunks', {
+    method: 'POST',
+    body: JSON.stringify({
+      p_project: projectId,
+      p_query: question,
+      p_embedding: embedding,
+      p_limit: PROJECT_SEARCH_CHUNKS,
+    }),
+  });
+  if (!found.ok) {
+    throw new Error(`Zoeken gaf status ${found.status}: ${(await found.text()).slice(0, 300)}`);
+  }
+  return (await found.json()) as Array<{ file_id: string; seq: number; text: string }>;
+}
+
 /**
  * Is de aanroeper een beheerder? Voor modi die alleen beheerders mogen
  * gebruiken. Die keuze mag niet van de browser afhangen: een knop verbergen
@@ -9064,6 +9205,45 @@ Deno.serve(async (req: Request) => {
       } catch (err) {
         console.error('Voorlezen mislukt:', err instanceof Error ? err.message : err);
         return json(502, { success: false, error: 'Voorlezen lukte niet' });
+      }
+    }
+
+    // Projectbronnen doorzoekbaar maken en doorzoeken. Alleen voor ingelogde
+    // gebruikers en alleen in hun eigen stukken: RLS doet de controle.
+    if (
+      (body as { mode?: string }).mode === 'project-index' ||
+      (body as { mode?: string }).mode === 'project-search'
+    ) {
+      const json = (status: number, payload: Record<string, unknown>) =>
+        new Response(JSON.stringify(payload), {
+          status,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      if (!isAuthenticatedRequest(req)) {
+        return json(401, { success: false, error: 'Log in om projecten te gebruiken' });
+      }
+      const { mode, projectId, query } = body as {
+        mode: string;
+        projectId?: unknown;
+        query?: unknown;
+      };
+      if (typeof projectId !== 'string' || !/^[0-9a-f-]{36}$/i.test(projectId)) {
+        return json(400, { success: false, error: 'Geen geldig project' });
+      }
+      try {
+        if (mode === 'project-index') {
+          return json(200, { success: true, remaining: await indexProjectChunks(req, projectId) });
+        }
+        if (typeof query !== 'string' || !query.trim()) {
+          return json(400, { success: false, error: 'Geen zoekvraag ontvangen' });
+        }
+        return json(200, {
+          success: true,
+          chunks: await searchProjectChunks(req, projectId, query.trim()),
+        });
+      } catch (err) {
+        console.error(`${mode} mislukt:`, err instanceof Error ? err.message : err);
+        return json(502, { success: false, error: 'Bronbestanden doorzoeken lukte niet' });
       }
     }
 

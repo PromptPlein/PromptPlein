@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   ArrowDown,
   ArrowRight,
+  FileText,
   Globe,
   Lightbulb,
   Pencil,
@@ -631,6 +632,22 @@ const ChatMessageRow = memo(function ChatMessageRow({
               </li>
             ))}
           </ol>
+        </div>
+      )}
+
+      {!isStreaming && message.projectSources && message.projectSources.length > 0 && (
+        <div className="mt-1 w-full">
+          <p className="mb-1 flex items-center gap-1.5 text-[0.6875rem] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+            <FileText size={12} className="shrink-0" />
+            Stukken uit je bestanden
+          </p>
+          <ul className="space-y-0.5">
+            {message.projectSources.map((name) => (
+              <li key={name} className="truncate text-xs text-slate-600 dark:text-slate-300">
+                {name}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

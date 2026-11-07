@@ -204,7 +204,8 @@ ministeries (`orgTree.ts`, migraties 0020/0021/0024).
 ## Opslagscheiding: dit is een bewuste keuze
 
 - **Postgres**: prompts, gebruikers, organisaties, technieken, categorieën,
-  rollen, analytics, audit log, meldingen, chat*projecten* (0030), de persoonlijke
+  rollen, analytics, audit log, meldingen, chat*projecten* (0030) met hun bronstukken
+  en vectoren (0046, 0049), de persoonlijke
   chatinstructie (`user_chat_preferences`, 0047).
 - **localStorage, nooit de database**: de chat*gesprekken* zelf
   (`src/lib/chatStorage.ts`, één bak per browser, met eviction). Ze horen bij
@@ -348,7 +349,7 @@ en antwoord op één lijn beginnen.
 
 Eén edge function, `optimize-prompt`, ongeveer 8000 regels, met een
 `mode`-veld in de body als router. Nieuwe AI-functionaliteit wordt een nieuwe
-mode in dat bestand, niet een nieuwe function. De 37 modes, gegroepeerd:
+mode in dat bestand, niet een nieuwe function. De 39 modes, gegroepeerd:
 
 | Groep | Modes |
 | --- | --- |
@@ -360,6 +361,7 @@ mode in dat bestand, niet een nieuwe function. De 37 modes, gegroepeerd:
 | Chat en projecten | `chat-optimize`, `project-optimize`, `project-brief`, `project-interview`, `project-prompt`, `context-interview`, `context-prompt` |
 | Testkamer-loop | `mock-answer`, `refine`, `refine-suggest` |
 | Sjablonen | `sjabloon` |
+| Projectbronnen | `project-index`, `project-search` |
 
 ### Providers en modellen
 
@@ -436,6 +438,35 @@ De keuze voor SearXNG is een privacykeuze: het enige wat de chat naar buiten
 stuurt is de zoekvraag zelf, en met een eigen server ziet geen derde partij die.
 Verplaats het zoeken niet terug naar een externe dienst zonder dat met de
 gebruiker af te stemmen.
+
+### Zoeken in de bronbestanden van een project
+
+Past een project binnen de 200.000 tekens per beurt, dan gaan de hele bestanden mee
+en draait er geen zoekstap. Is het groter, dan gaan alleen de 30 stukken mee die het
+best bij de vraag passen. De vorige vraag telt daarbij mee, want een vervolgvraag zegt
+op zichzelf te weinig.
+
+Elk bestand wordt bij het toevoegen opgeknipt in stukken van hoogstens 1600 tekens
+(`chat_project_file_chunks`, 0046) en elk stuk krijgt een vector van `mistral-embed`
+(pgvector, 0049). `match_project_chunks` voegt zoeken op betekenis en de Nederlandse
+woordzoeker samen op plek in de ranglijst: exacte termen zoals zaaknummers vindt de
+woordzoeker juist beter.
+
+Bewust geen HNSW-index: die zoekt over alle projecten en filtert daarna pas, zodat
+treffers binnen één project wegvallen. Per project exact vergelijken is snel genoeg.
+
+Vectoren maken gebeurt in porties (`project-index`, `indexProject` in
+`chatProjectService`), bij het toevoegen en bij het openen van de projectinstellingen,
+zodat een onderbroken verwerking vanzelf verdergaat. Alles loopt met het token van de
+gebruiker, dus RLS bewaakt ook dit pad, en van de stukken is alleen `embedding`
+wijzigbaar. Een stuk zonder vector blijft vindbaar met de woordzoeker en een storing
+bij Mistral kost niemand zijn bronnen: `project-search` zoekt dan op woorden en daarna
+valt de client terug op `search_project_chunks`.
+
+Let op de privacy: door de vectoren gaat elk bestand bij het toevoegen in zijn geheel
+naar Mistral, ook de delen waar nooit iets over wordt gevraagd. Wissel je van
+embeddingmodel, gooi dan alle vectoren weg: die van twee modellen zijn niet te
+vergelijken.
 
 ### Systeemprompts staan in de database, niet in de code
 

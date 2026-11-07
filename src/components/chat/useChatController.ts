@@ -271,13 +271,20 @@ export default function useChatController(
       // gewoon door als gewone chat. Een mislukte projectophaling mag een
       // gebruiker nooit zijn bericht kosten.
       let project: ChatProjectContext | null = null;
+      let projectSources: string[] | undefined;
       if (conv.projectId) {
         try {
-          // De vraag van deze beurt kiest in een te groot project welke stukken
-          // van de bronbestanden er meegaan (search_project_chunks).
-          const asking = [...history].reverse().find((m) => m.role === 'user')?.content;
+          // De vraag kiest in een te groot project welke stukken van de
+          // bronbestanden er meegaan. De vraag ervoor gaat mee, want een
+          // vervolgvraag als "en bij punt 3?" zegt op zichzelf te weinig.
+          const asking = history
+            .filter((m) => m.role === 'user')
+            .slice(-2)
+            .map((m) => m.content)
+            .join('\n');
           const result = await loadProjectContext(conv.projectId, asking);
           project = result?.context ?? null;
+          if (result?.searched) projectSources = result.context.files.map((f) => f.name);
           if (result?.searched && !startText) {
             toast(
               'Groot project: alleen de stukken die bij je vraag passen gaan mee in dit antwoord.',
@@ -386,7 +393,13 @@ export default function useChatController(
         // Lege bronnenlijst = er is gezocht maar niets gevonden; dan hoort er
         // ook geen kopje "Bronnen" onder het antwoord te staan.
         if (!continuing && res.sources?.length) sources = res.sources;
-        const fixed = { content: full, provider, model, ...(sources ? { sources } : {}) };
+        const fixed = {
+          content: full,
+          provider,
+          model,
+          ...(sources ? { sources } : {}),
+          ...(projectSources ? { projectSources } : {}),
+        };
 
         if (res.aborted) {
           commit({ ...fixed, stopped: true }, true);

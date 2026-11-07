@@ -13,7 +13,7 @@
 // gebruiker (migratie 0030). De filters hier zijn dus geen beveiliging maar
 // alleen bedoeld om minder data op te halen.
 
-import { isSupabaseConfigured, supabase } from '@/lib/supabase';
+import { getAnonKey, getFunctionUrl, isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { analyzeProjectContext } from '@/services/optimizeService';
 import type { AiProvider } from '@/config/aiModels';
 import type { ChatProject, ChatProjectContext, ChatProjectFile } from '@/types';
@@ -253,7 +253,7 @@ export interface ProjectContextResult {
   skipped: string[];
   /**
    * true als de context is opgebouwd uit de stukken die bij de vraag passen
-   * (search_project_chunks) in plaats van uit hele bestanden. `skipped` is
+   * (match_project_chunks) in plaats van uit hele bestanden. `skipped` is
    * dan leeg: niets viel buiten het budget, de rest van de tekst was gewoon
    * niet aan de orde.
    */
@@ -267,27 +267,100 @@ interface ChunkRow {
   text: string;
 }
 
+/** Roept de edge function aan met het token van de gebruiker. Gooit bij een fout. */
+async function callProjectFunction<T>(body: Record<string, unknown>): Promise<T> {
+  const client = requireClient();
+  const functionUrl = getFunctionUrl('optimize-prompt');
+  const { data } = await client.auth.getSession();
+  const token = data.session?.access_token;
+  if (!functionUrl || !token) throw new Error('Geen sessie');
+  const anonKey = getAnonKey();
+  const response = await fetch(functionUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      ...(anonKey ? { apikey: anonKey } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+  const result = (await response.json().catch(() => ({}))) as T & {
+    success?: boolean;
+    error?: string;
+  };
+  if (!response.ok || !result.success) throw new Error(result.error ?? 'Geen antwoord');
+  return result;
+}
+
+const indexing = new Map<string, Promise<void>>();
+
 /**
- * Haalt de tekststukken op die bij de vraag passen, via de Nederlandse
- * tekstzoeker uit migratie 0046. Geeft null terug als er niets matcht of als
- * de functie faalt, zodat de aanroeper op hele bestanden kan terugvallen.
+ * Maakt de stukken van een project doorzoekbaar op betekenis: de edge function
+ * verwerkt per aanroep een portie, tot er niets meer overblijft. `onProgress`
+ * krijgt het aantal stukken dat nog moet. Loopt voor een project maar één keer
+ * tegelijk en gaat na een onderbreking verder waar hij was.
+ *
+ * Gooit nooit. Stukken zonder vector zijn gewoon vindbaar met de woordzoeker,
+ * dus een storing hier mag niemand een upload kosten.
+ */
+export function indexProject(
+  projectId: string,
+  onProgress?: (remaining: number) => void,
+): Promise<void> {
+  const running = indexing.get(projectId);
+  if (running) return running;
+  const run = (async () => {
+    try {
+      for (;;) {
+        const { remaining } = await callProjectFunction<{ remaining: number }>({
+          mode: 'project-index',
+          projectId,
+        });
+        onProgress?.(remaining);
+        if (remaining <= 0) return;
+      }
+    } catch {
+      onProgress?.(0);
+    } finally {
+      indexing.delete(projectId);
+    }
+  })();
+  indexing.set(projectId, run);
+  return run;
+}
+
+/**
+ * Haalt de tekststukken op die bij de vraag passen: eerst op betekenis en woorden
+ * samen (edge function, migratie 0049), en lukt dat niet met alleen de Nederlandse
+ * tekstzoeker uit 0046. Geeft null terug als er niets matcht of als allebei
+ * falen, zodat de aanroeper op hele bestanden kan terugvallen.
  */
 async function searchProjectChunks(
   projectId: string,
   query: string,
   nameOf: Map<string, string>,
 ): Promise<{ name: string; text: string }[] | null> {
-  const client = requireClient();
-  const { data, error } = await client.rpc('search_project_chunks', {
-    p_project: projectId,
-    p_query: query,
-  });
-  if (error) return null;
+  let rows: ChunkRow[];
+  try {
+    const { chunks } = await callProjectFunction<{ chunks: ChunkRow[] }>({
+      mode: 'project-search',
+      projectId,
+      query,
+    });
+    rows = chunks;
+  } catch {
+    const { data, error } = await requireClient().rpc('search_project_chunks', {
+      p_project: projectId,
+      p_query: query,
+    });
+    if (error) return null;
+    rows = (data as ChunkRow[]) ?? [];
+  }
 
   // Groepeer de stukken per bestand. De RPC levert op trefferscore, dus de
   // volgorde van eerste verschijning is de volgorde van beste treffer.
   const perFile = new Map<string, { name: string; bySeq: Map<number, string> }>();
-  for (const row of (data as ChunkRow[]) ?? []) {
+  for (const row of rows) {
     const name = nameOf.get(row.file_id);
     if (!name || typeof row.text !== 'string' || !row.text) continue;
     let group = perFile.get(row.file_id);
@@ -349,6 +422,35 @@ export async function loadProjectContext(
   if (projectError) throw projectError;
   if (!projectData) return null;
 
+  // Eerst alleen de namen en maten: in een groot project hoeft de volledige tekst
+  // dan niet bij elke beurt door de browser.
+  const { data: metaData, error: metaError } = await supabase
+    .from('chat_project_files')
+    .select('id, name, chars')
+    .eq('project_id', projectId);
+  if (metaError) throw metaError;
+  const meta = (metaData as { id: string; name: string; chars: number }[]) ?? [];
+  const row = projectData as ProjectRow;
+
+  if (query?.trim() && meta.reduce((sum, f) => sum + f.chars, 0) > MAX_PROJECT_CONTEXT_CHARS) {
+    // Halverwege afgebroken verwerking pakt hij hier weer op, op de achtergrond.
+    void indexProject(projectId);
+    const nameOf = new Map(meta.map((f) => [f.id, f.name]));
+    const searched = await searchProjectChunks(projectId, query.trim(), nameOf);
+    if (searched) {
+      return {
+        context: {
+          id: row.id,
+          name: row.name,
+          instructions: (row.instructions ?? '').trim(),
+          files: searched,
+        },
+        skipped: [],
+        searched: true,
+      };
+    }
+  }
+
   const { data: fileData, error: fileError } = await supabase
     .from('chat_project_files')
     .select('id, project_id, name, chars, truncated, created_at, text')
@@ -372,7 +474,6 @@ export async function loadProjectContext(
     used += text.length;
   }
 
-  const row = projectData as ProjectRow;
   // Alleen een VOLLEDIGE context cachen: bij overgeslagen bestanden wil de
   // volgende beurt dezelfde melding kunnen tonen, en een zoekresultaat hoort
   // bij één vraag en mag niet voor een volgende dienen.
@@ -385,23 +486,6 @@ export async function loadProjectContext(
     };
     contextCache.set(projectId, context);
     return { context, skipped, searched: false };
-  }
-
-  if (query?.trim()) {
-    const nameOf = new Map(((fileData as FileRow[]) ?? []).map((f) => [f.id, f.name]));
-    const searched = await searchProjectChunks(projectId, query.trim(), nameOf);
-    if (searched) {
-      return {
-        context: {
-          id: row.id,
-          name: row.name,
-          instructions: (row.instructions ?? '').trim(),
-          files: searched,
-        },
-        skipped: [],
-        searched: true,
-      };
-    }
   }
 
   return {
