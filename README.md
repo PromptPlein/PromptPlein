@@ -127,4 +127,4 @@ Nieuwe AI-functionaliteit komt als extra `mode` in de edge function `optimize-pr
 
 PromptPlein is open source onder de European Union Public Licence v. 1.2 (EUPL-1.2). Je mag de code gebruiken, aanpassen en verspreiden onder de voorwaarden in [LICENSE](LICENSE). Verspreid je een aangepaste versie of bied je die aan als dienst, dan valt die ook onder de EUPL.
 
-Het lettertype Rijks Sans en het beeldmerk van de Rijksoverheid zijn niet vrij te gebruiken en mogen niet worden overgenomen in andere producten.
+Het lettertype Rijks Sans en het beeldmerk van de Rijksoverheid staan met toestemming in deze repository, omdat PromptPlein van de Rijksoverheid is. Ze vallen niet onder de EUPL-1.2. Die licentie geldt dus niet voor `src/assets/fonts/` en `public/logo-rijksoverheid.*`, en deze bestanden mogen niet worden overgenomen in andere producten.
