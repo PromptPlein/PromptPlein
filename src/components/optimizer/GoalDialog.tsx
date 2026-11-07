@@ -2,21 +2,19 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { ProjectContextSlot } from '@/components/optimizer/ProjectContextPicker';
 import {
   AlertTriangle,
-  ArrowRight,
   Check,
-  ChevronDown,
   ClipboardCopy,
   Eraser,
-  Info,
-  Loader2,
+  Lightbulb,
   MessageCircleQuestion,
-  Package,
   RotateCw,
   Sparkles,
   Wand2,
 } from '@/components/common/icons';
-import clsx from 'clsx';
 import StepHeading from '@/components/optimizer/StepHeading';
+import AanpakKaart, { type AanpakOptie } from '@/components/optimizer/AanpakKaart';
+import MakeProgress from '@/components/optimizer/MakeProgress';
+import { compactFieldLabel } from '@/lib/fieldLabel';
 import toast from 'react-hot-toast';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import {
@@ -110,6 +108,8 @@ interface GoalDialogProps {
   onResult: (result: OptimizeResult, technique: Technique) => void;
   /** De instap-tabs; vallen bovenin het omrande generator-blok. */
   header?: ReactNode;
+  /** De knoppen Denken en Internet, naast de actieknop. */
+  toggles?: ReactNode;
   /**
    * Context van het aangehaakte chatproject (de projectinstructie van de
    * gebruiker, eventueel met zijn bronbestanden). Gaat mee in élke AI-stap van
@@ -165,6 +165,7 @@ export default function GoalDialog({
   settings,
   onResult,
   header,
+  toggles,
   projectContext,
   renderProjectContext,
   thinking,
@@ -214,7 +215,6 @@ export default function GoalDialog({
   // De techniek die de AI nu volgt + waarom, zoals getoond boven de vraag. Blijft
   // staan als een beurt die meta-regels niet meestuurt; hij wordt alleen
   // overschreven door een nieuwe analyse.
-  const [analysis, setAnalysis] = useState<{ technique?: string; text?: string } | null>(null);
   // Als ref erbij: `turn()` draait door in dezelfde tick waarin de analyse wordt
   // gezet, en leest de state-waarde dan nog niet.
   const analysisRef = useRef<{ technique?: string; text?: string } | null>(null);
@@ -228,7 +228,6 @@ export default function GoalDialog({
 
   // Frameworkkeuze: de aanbevelingen, of we ze nog ophalen, en het bouwen zelf.
   const [frameworkFits, setFrameworkFits] = useState<TechniqueRecommendation[]>([]);
-  const [fitting, setFitting] = useState(false);
 
   // Het gekozen framework en zijn voor-ingevulde velden. Dezelfde stap als in
   // "optimaliseer je eigen prompt": de AI verdeelt de opbrengst van het gesprek
@@ -308,14 +307,12 @@ export default function GoalDialog({
     setResumable(null);
     setPhase('goal');
     setQuestion(null);
-    setAnalysis(null);
     setStep(null);
     analysisRef.current = null;
     setTranscript([]);
     setAnswer('');
     setBrief(null);
     setFrameworkFits([]);
-    setFitting(false);
     resetFields();
     setError(null);
     setUnclearReason(null);
@@ -377,7 +374,6 @@ export default function GoalDialog({
     setError(null);
     setTranscript([]);
     setQuestion(null);
-    setAnalysis(null);
     setStep(null);
     analysisRef.current = null;
     setAnswer('');
@@ -433,7 +429,6 @@ export default function GoalDialog({
         if (res.technique || res.analysis) {
           const next = { technique: res.technique, text: res.analysis };
           analysisRef.current = next;
-          setAnalysis(next);
         }
         clearRunDraft();
         log('interview_finished', { metadata: { turns: turns.length, forced: forceFinish } });
@@ -515,9 +510,10 @@ export default function GoalDialog({
   }
 
   /**
-   * Na het gesprek: laat de AI op basis van de opdrachtbeschrijving bepalen welk
-   * framework het best past. Mislukt dat, dan toont de picker gewoon de volledige
-   * lijst — de gebruiker kan altijd zelf kiezen.
+   * Na het gesprek: de AI bepaalt op basis van de opdrachtbeschrijving welk
+   * framework het best past en vult het meteen in. De gebruiker kiest hier niets;
+   * de alternatieven blijven achter "Andere aanpak". Mislukt de analyse, dan gaan
+   * we door met het eerste framework: het gesprek is te veel werk om te laten vallen.
    */
   async function offerFramework(briefText: string, turns: TranscriptTurn[]) {
     // Sjablonen niet: die kies je zelf bij "Wat wil je maken?", een gesprek weegt ze niet.
@@ -528,11 +524,11 @@ export default function GoalDialog({
       return;
     }
     setPhase('framework');
-    setFitting(true);
     setFrameworkFits([]);
     log('framework_fit_run', {
       metadata: { candidates: frameworks.length, answered: turns.length },
     });
+    let keuze = frameworks[0].id;
     try {
       const fit = await recommendFramework({
         // De opdrachtbeschrijving is de basis; het gesprek gaat mee als
@@ -545,26 +541,25 @@ export default function GoalDialog({
         projectContext,
       });
       setFrameworkFits(fit.recommendations);
+      keuze = fit.recommendations[0]?.id ?? keuze;
     } catch {
       setFrameworkFits([]);
-    } finally {
-      setFitting(false);
     }
+    void chooseFramework(keuze, briefText);
   }
 
   /**
-   * De gebruiker koos een framework. Nog niet meteen bouwen: eerst de velden van
-   * dat raamwerk voor-invullen uit het gesprek — precies zoals "optimaliseer je
-   * eigen prompt" dat met een eigen prompt doet. Zo ziet de gebruiker wat er in
-   * elk veld terechtkomt en kan die het bijstellen vóórdat de prompt ontstaat,
-   * in plaats van achteraf een blok tekst te moeten herschrijven.
+   * Het framework staat vast (de keuze van de AI, of "Andere aanpak"). Nog niet
+   * meteen bouwen: eerst de velden van dat raamwerk voor-invullen uit het gesprek,
+   * precies zoals de eigen-prompt-flow dat doet. Zo ziet de gebruiker wat er in elk
+   * veld terechtkomt en kan die het bijstellen vóórdat de prompt ontstaat.
    *
    * De opdrachtbeschrijving én het gesprek gaan als bron mee: het gesprek bevat
    * de details, de beschrijving de rode draad.
    */
-  async function chooseFramework(id: string) {
+  async function chooseFramework(id: string, briefText: string | null = brief) {
     const framework = techniqueById(id);
-    if (!framework || !brief) return;
+    if (!framework || !briefText) return;
     resetFields();
     setFrameworkId(id);
     setPhase('fields');
@@ -588,7 +583,7 @@ export default function GoalDialog({
         // Alleen de opdrachtbeschrijving: die vat het gesprek al samen. Het ruwe
         // transcript er nog eens bij duwde het model over zijn uitvoerlimiet,
         // waardoor de laatste velden leeg bleven.
-        ownPrompt: brief,
+        ownPrompt: briefText,
         technique: framework,
         thinking,
         webSearch,
@@ -736,26 +731,48 @@ export default function GoalDialog({
   }
 
   const showConversation = phase !== 'goal';
+  // Na het gesprek klapt het invulvlak in: de keuze van de AI en de velden gaan voor.
+  const afterDialogue =
+    phase === 'framework' || phase === 'fields' || phase === 'composing' || phase === 'done';
+  const chosenFit = frameworkFits.find((f) => f.id === frameworkId);
+  // Andere aanpak: de alternatieven die de AI al gaf, dus geen extra aanroep.
+  const aanpakOpties: AanpakOptie[] = frameworkFits
+    .filter((f) => f.id !== frameworkId)
+    .flatMap((f) => {
+      const fw = techniqueById(f.id);
+      return fw ? [{ id: fw.id, naam: fw.name, waarom: stripMarkdown(f.reason) }] : [];
+    });
   const chosenFramework = frameworkId ? techniqueById(frameworkId) : null;
 
   return (
-    <div className="space-y-5">
-      {/* Blauwe rand: deze doel-flow hoort bij de blauwe instap-tab. */}
-      <div className="overflow-hidden rounded-2xl border border-rijksblauw-500/60 shadow-sm dark:border-rijksblauw-500/50">
-        <div
-          className={clsx(
-            'overflow-hidden',
-            showConversation && 'border-b border-slate-200 dark:border-slate-700',
-          )}
+    <div className="space-y-4">
+      {afterDialogue ? (
+        <section
+          aria-label="Jouw idee"
+          className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-1.5 dark:border-slate-700 dark:bg-slate-800"
         >
+          <p className="min-w-0 flex-1 truncate text-slate-600 dark:text-slate-300">
+            <strong className="font-semibold text-slate-900 dark:text-slate-100">Jouw idee: </strong>
+            {goal}
+          </p>
+          <button
+            type="button"
+            onClick={handleClear}
+            disabled={phase === 'framework' || prefilling}
+            className="min-h-11 shrink-0 font-semibold text-rijksblauw-500 transition-colors hover:underline disabled:opacity-50 dark:text-rijksblauw-200"
+          >
+            Opnieuw beginnen
+          </button>
+        </section>
+      ) : (
+        <div>
           {header}
-          <div className="space-y-5 bg-white p-5 dark:bg-slate-800 sm:p-6">
+          <section className="space-y-5 rounded-xl border border-slate-200 bg-white p-5 sm:rounded-t-none dark:border-slate-700 dark:bg-slate-800">
             <div>
               <StepHeading
-                step={2}
                 title="Wat wil je bereiken?"
                 htmlFor="goal-dialog-input"
-                info="We stellen eerst een paar vragen. Daarna kiezen we het framework en bouwen we je prompt."
+                info="We stellen eerst een paar vragen. Daarna kiest de AI de aanpak en vult de velden voor je in."
               >
                 <button
                   type="button"
@@ -763,14 +780,9 @@ export default function GoalDialog({
                   aria-expanded={showExamples}
                   aria-controls="goal-dialog-examples"
                   title="Bekijk voorbeelden"
-                  className={clsx(
-                    'inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-medium transition-colors',
-                    showExamples
-                      ? 'text-rijksblauw-700 dark:text-rijksblauw-200'
-                      : 'text-slate-500 hover:text-rijksblauw-600 dark:text-slate-400 dark:hover:text-rijksblauw-300',
-                  )}
+                  className="inline-flex items-center gap-1.5 rounded-full px-1.5 py-0.5 text-sm font-medium text-rijksblauw-500 transition-colors hover:underline dark:text-rijksblauw-200"
                 >
-                  <Info size={15} />
+                  <Lightbulb size={16} className="text-rijksoranje" />
                   <span>Voorbeelden</span>
                 </button>
                 {goal.trim() && (
@@ -778,7 +790,7 @@ export default function GoalDialog({
                     type="button"
                     onClick={handleClear}
                     title="Wis je doel en begin opnieuw"
-                    className="ml-auto inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-rose-50 hover:text-rose-600 dark:text-slate-200 dark:hover:bg-rose-500/10 dark:hover:text-rose-400"
+                    className="ml-auto inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-sm font-medium text-slate-700 transition-colors hover:underline dark:text-slate-200"
                   >
                     <Eraser size={15} />
                     <span>Opschonen</span>
@@ -889,33 +901,28 @@ export default function GoalDialog({
             </div>
 
             {phase === 'goal' && (
-              <button
-                type="button"
-                className="opl-btn-primary"
-                onClick={handleStart}
-                disabled={!goal.trim()}
-              >
-                <MessageCircleQuestion size={18} /> Start het gesprek
-              </button>
+              <div className="flex flex-wrap items-center justify-end gap-1.5">
+                {toggles}
+                <button
+                  type="button"
+                  className="opl-btn-primary min-h-12 px-5 text-base"
+                  onClick={handleStart}
+                  disabled={!goal.trim()}
+                >
+                  <MessageCircleQuestion size={20} className="text-rijksoranje-vast" /> Start het
+                  gesprek
+                </button>
+              </div>
             )}
-          </div>
+          </section>
         </div>
+      )}
 
-        {/* Het gesprek, de frameworkkeuze of het bouwen. */}
+        {/* Het gesprek, de keuze van de AI of het bouwen. */}
         {showConversation && (
-          <div className="space-y-5 bg-white p-5 dark:bg-slate-800 sm:p-6">
-            {/* Zodra de vragenronde klaar is: eerst laten zien wat we hebben
-                opgehaald. De gebruiker heeft er een reeks vragen voor beantwoord
-                en moet kunnen nalezen (en bewaren) wat daaruit kwam, vóórdat het
-                framework en de prompt eroverheen komen. */}
-            {brief && phase !== 'dialogue' && (
-              <BriefSummary
-                brief={brief}
-                goal={goal}
-                technique={analysis?.technique}
-                why={analysis?.text}
-              />
-            )}
+          <div className="space-y-4">
+            {/* Wat we uit het gesprek haalden, om na te lezen en te bewaren. */}
+            {brief && phase !== 'dialogue' && <BriefSummary brief={brief} goal={goal} />}
 
             {phase === 'error' ? (
               <div className="flex flex-col gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 sm:flex-row sm:items-center sm:justify-between dark:border-rose-500/30 dark:bg-rose-500/15 dark:text-rose-200">
@@ -945,16 +952,23 @@ export default function GoalDialog({
                 </button>
               </div>
             ) : phase === 'fields' ? (
-              <div ref={fieldsRef} className="scroll-mt-24">
+              <div ref={fieldsRef} className="scroll-mt-24 space-y-4">
                 {prefilling ? (
+                  <>
+                  <MakeProgress
+                    stage="invullen"
+                    bron="Het gesprek"
+                    aanpak={chosenFramework?.name}
+                  />
                   /* De AI verdeelt de opbrengst van het gesprek over de velden;
                      die lopen één voor één vol terwijl de modellen werken. */
                   <PrefillLoader
+                    plain
                     techniqueName={chosenFramework?.name}
                     source="wat je in het gesprek hebt verteld"
                     fields={chosenFramework?.follow_up_questions.map((q) => ({
                       id: q.id,
-                      label: q.label,
+                      label: compactFieldLabel(q.label).name,
                     }))}
                     filled={prefillProgress.fields}
                     models={prefillProgress.models}
@@ -965,13 +979,17 @@ export default function GoalDialog({
                     sources={prefillProgress.sources}
                     queries={prefillProgress.queries}
                   />
+                  </>
                 ) : chosenFramework ? (
                   <div className="animate-fade-in space-y-4">
+                    <AanpakKaart
+                      technique={chosenFramework}
+                      reden={stripMarkdown(chosenFit?.value || chosenFit?.reason || '')}
+                      opties={aanpakOpties}
+                      onKies={(id) => void chooseFramework(id)}
+                      disabled={prefilling}
+                    />
                     <div>
-                      <p className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
-                        <Package size={16} className="text-rijksblauw-500" />
-                        {chosenFramework.name}: controleer de velden
-                      </p>
                       {/* Kwam er niets terug (AI-dienst druk of niet bereikbaar), dan
                           zeggen we dat in plaats van te melden dat alles is ingevuld
                           terwijl het formulier leeg is. */}
@@ -998,26 +1016,11 @@ export default function GoalDialog({
                           </div>
                         </div>
                       ) : (
-                        <>
-                          <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
-                            {stripMarkdown(prefill?.summary ?? '') ||
-                              'We hebben de velden alvast ingevuld met wat je in het gesprek hebt verteld.'}
-                          </p>
-                          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                            Pas aan waar nodig, vooral de AI-suggesties met het oranje label{' '}
-                            <span className="font-medium">Controleren</span>. Wat je leeg laat, blijft
-                            een plaatshouder in je prompt.
-                          </p>
-                          {prefill && (
-                            <div className="mt-2">
-                              <PrefillSources prefill={prefill} />
-                            </div>
-                          )}
-                        </>
+                        prefill && <PrefillSources prefill={prefill} />
                       )}
                     </div>
 
-                    <div className="rounded-xl border border-rijksblauw-200 bg-rijksblauw-50/40 p-4 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10">
+                    <section className="opl-card p-5">
                       <FollowUpQuestions
                         projectContext={projectContext}
                         technique={chosenFramework}
@@ -1036,40 +1039,30 @@ export default function GoalDialog({
                           })
                         }
                         onFinish={() => void compose(chosenFramework.id)}
-                        finishLabel="Bouw mijn prompt"
+                        finishLabel="Bouw prompt"
+                        heading={<StepHeading title="Kijk na en vul aan" />}
+                        showLetters={false}
+                        askIfEmpty={Boolean(prefill && prefill.fields.length > 0)}
                       />
-                    </div>
+                    </section>
 
-                    <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex flex-wrap items-center justify-end gap-1.5">
+                      {toggles}
                       <button
                         type="button"
-                        className="text-sm font-medium text-slate-500 transition-colors hover:text-rijksblauw-600 dark:text-slate-400 dark:hover:text-rijksblauw-300"
-                        onClick={() => {
-                          resetFields();
-                          setPhase('framework');
-                        }}
-                      >
-                        Toch een ander framework kiezen
-                      </button>
-                      <button
-                        type="button"
-                        className="opl-btn-primary px-6 py-2.5"
+                        className="opl-btn-primary min-h-12 px-6 text-base"
                         onClick={() => void compose(chosenFramework.id)}
                       >
-                        <Sparkles size={18} /> Bouw mijn prompt <ArrowRight size={16} />
+                        <Sparkles size={20} className="text-rijksoranje-vast" /> Bouw prompt
                       </button>
                     </div>
                   </div>
                 ) : null}
               </div>
             ) : phase === 'framework' ? (
-              <FrameworkChoice
-                fits={frameworkFits}
-                fitting={fitting}
-                frameworks={techniques.filter((tq) => isContextPrompt(tq) && !isSjabloon(tq))}
-                onChoose={(id) => void chooseFramework(id)}
-              />
+              <MakeProgress stage="kiezen" bron="Het gesprek" />
             ) : (
+              <section className="opl-card p-5">
               <InterviewPanel
                 socratic={false}
                 step={step}
@@ -1085,10 +1078,10 @@ export default function GoalDialog({
                 onSubmit={submitAnswer}
                 onFinish={finishDialogue}
               />
+              </section>
             )}
           </div>
         )}
-      </div>
 
       {unclearReason && (
         <div
@@ -1123,189 +1116,3 @@ export default function GoalDialog({
   );
 }
 
-/**
- * De frameworkkeuze ná het gesprek. De AI analyseert de opdrachtbeschrijving —
- * inclusief hoe de prompt gebruikt wordt en welke uitkomst die moet krijgen —
- * en zet de best passende raamwerken bovenaan; de eerste is voorgeselecteerd.
- * Wie liever zelf kiest, klapt de volledige lijst uit. Mislukt de analyse, dan
- * blijft de lijst over: de gebruiker komt nooit vast te zitten.
- */
-function FrameworkChoice({
-  fits,
-  fitting,
-  frameworks,
-  onChoose,
-}: {
-  fits: TechniqueRecommendation[];
-  fitting: boolean;
-  frameworks: Technique[];
-  onChoose: (frameworkId: string) => void;
-}) {
-  const byId = new Map(frameworks.map((f) => [f.id, f]));
-  // Toon maximaal 3 aanbevelingen; de eerste is de aanbevolen keuze.
-  const options = fits.filter((f) => byId.has(f.id)).slice(0, 3);
-  const [selected, setSelected] = useState<string | null>(null);
-  const [showAll, setShowAll] = useState(false);
-
-  // De voorselectie volgt de aanbeveling zodra die binnen is (de analyse loopt
-  // nog wanneer dit paneel voor het eerst rendert).
-  useEffect(() => {
-    setSelected((prev) => prev ?? options[0]?.id ?? null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [options[0]?.id]);
-
-  if (fitting) {
-    return (
-      <div className="flex items-center gap-2 rounded-xl border border-rijksblauw-200 bg-white p-3 text-sm text-rijksblauw-600 dark:border-rijksblauw-500/30 dark:bg-slate-800 dark:text-rijksblauw-300">
-        <Loader2 size={16} className="animate-spin" />
-        We analyseren je antwoorden en zoeken het best passende framework…
-      </div>
-    );
-  }
-
-  // Zonder aanbevelingen is de volledige lijst de enige route: meteen open.
-  const listOpen = showAll || options.length === 0;
-  const rest = frameworks.filter((f) => !options.some((o) => o.id === f.id));
-
-  return (
-    <div className="space-y-4">
-      <div>
-        <p className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
-          <Package size={16} className="text-rijksblauw-500" />
-          Het best passende framework
-        </p>
-        <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
-          {options.length > 0
-            ? 'Op basis van je antwoorden (wat je wilt bereiken, hoe je de prompt straks gebruikt en welke uitkomst je zoekt) past dit framework het beste. Je kunt ook zelf een ander kiezen.'
-            : 'Kies zelf het framework waarin je prompt wordt opgebouwd.'}
-        </p>
-      </div>
-
-      {options.length > 0 && (
-        <ul className="space-y-3">
-          {options.map((f, idx) => {
-            const tech = byId.get(f.id);
-            if (!tech) return null;
-            const isSel = selected === f.id;
-            const reason = (f.value ?? f.reason ?? '').trim();
-            return (
-              <li key={f.id}>
-                <button
-                  type="button"
-                  onClick={() => setSelected(f.id)}
-                  aria-pressed={isSel}
-                  className={clsx(
-                    'flex w-full items-start gap-3 rounded-xl border p-4 text-left shadow-sm transition-colors',
-                    isSel
-                      ? 'border-rijksblauw-400 bg-rijksblauw-50/50 dark:border-rijksblauw-500/50 dark:bg-rijksblauw-500/10'
-                      : 'border-slate-200 bg-white hover:border-rijksblauw-300 dark:border-slate-700 dark:bg-slate-800',
-                  )}
-                >
-                  <span
-                    className={clsx(
-                      'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2',
-                      isSel
-                        ? 'border-rijksblauw-500 bg-rijksblauw-500 text-white'
-                        : 'border-slate-300 dark:border-slate-600',
-                    )}
-                  >
-                    {isSel && <Check size={12} />}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-semibold text-slate-800 dark:text-slate-100">
-                        {tech.name}
-                      </span>
-                      {idx === 0 && (
-                        <span className="opl-badge bg-rijksblauw-500/15 text-rijksblauw-700 dark:text-rijksblauw-200">
-                          aanbevolen
-                        </span>
-                      )}
-                    </div>
-                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                      {stripMarkdown(reason || 'Past goed bij de opbouw van je prompt.')}
-                    </p>
-                  </div>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-
-      {/* Zelf kiezen: alle overige frameworks, ingeklapt achter één regel. */}
-      {rest.length > 0 && (
-        <div>
-          {options.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setShowAll((v) => !v)}
-              aria-expanded={listOpen}
-              className="flex items-center gap-1.5 text-sm font-medium text-slate-500 transition-colors hover:text-rijksblauw-600 dark:text-slate-400 dark:hover:text-rijksblauw-300"
-            >
-              <ChevronDown
-                size={16}
-                className={clsx('transition-transform', listOpen && 'rotate-180')}
-              />
-              Zelf een ander framework kiezen
-            </button>
-          )}
-          {listOpen && (
-            <ul className="animate-fade-in mt-3 grid gap-2 sm:grid-cols-2">
-              {rest.map((f) => {
-                const isSel = selected === f.id;
-                return (
-                  <li key={f.id}>
-                    <button
-                      type="button"
-                      onClick={() => setSelected(f.id)}
-                      aria-pressed={isSel}
-                      className={clsx(
-                        'flex w-full items-start gap-2 rounded-lg border p-3 text-left text-sm transition-colors',
-                        isSel
-                          ? 'border-rijksblauw-400 bg-rijksblauw-50/50 dark:border-rijksblauw-500/50 dark:bg-rijksblauw-500/10'
-                          : 'border-slate-200 bg-white hover:border-rijksblauw-300 dark:border-slate-700 dark:bg-slate-800',
-                      )}
-                    >
-                      <span
-                        className={clsx(
-                          'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2',
-                          isSel
-                            ? 'border-rijksblauw-500 bg-rijksblauw-500 text-white'
-                            : 'border-slate-300 dark:border-slate-600',
-                        )}
-                      >
-                        {isSel && <Check size={10} />}
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block font-medium text-slate-800 dark:text-slate-100">
-                          {f.name}
-                        </span>
-                        {f.strength && (
-                          <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
-                            {stripMarkdown(f.strength)}
-                          </span>
-                        )}
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
-      )}
-
-      <div className="flex justify-end pt-1">
-        <button
-          type="button"
-          className="opl-btn-primary px-6 py-2.5"
-          onClick={() => selected && onChoose(selected)}
-          disabled={!selected}
-        >
-          <Sparkles size={18} /> Bouw mijn prompt <ArrowRight size={16} />
-        </button>
-      </div>
-    </div>
-  );
-}

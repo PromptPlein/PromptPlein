@@ -18,8 +18,8 @@ function fileNameFor(goal: string): string {
 }
 
 /**
- * De oogst van de vragenronde: wat de AI uit het gesprek heeft opgetekend,
- * voordat er een framework aan te pas komt.
+ * De oogst van de vragenronde: wat de AI uit het gesprek heeft opgetekend. De
+ * framework-keuze en de velden komen hieruit.
  *
  * Waarom zichtbaar: tot nu toe verdween deze beschrijving rechtstreeks in de
  * volgende stap. Wie acht vragen heeft beantwoord wil eerst zien wat daar uit
@@ -43,7 +43,8 @@ export default function BriefSummary({
   /** Eén zin waarom die techniek past, gekoppeld aan wat de gebruiker vertelde. */
   why?: string;
 }) {
-  const [open, setOpen] = useState(true);
+  // Dicht: de ingevulde velden gaan voor. Wie wil nalezen, klapt hem open.
+  const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
   // De regels TECHNIEK: en WAAROM DEZE TECHNIEK: tonen we apart bovenaan; hier
@@ -78,7 +79,7 @@ export default function BriefSummary({
   }
 
   return (
-    <div className="animate-fade-in rounded-xl border border-rijksblauw-200 bg-rijksblauw-50/50 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10">
+    <div className="animate-fade-in rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
       <div className="flex flex-wrap items-center gap-2 px-4 py-3">
         <ListChecks size={18} className="shrink-0 text-rijksblauw-500" />
         <div className="min-w-0 flex-1">
@@ -86,7 +87,7 @@ export default function BriefSummary({
             Dit hebben we uit het gesprek gehaald
           </p>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Hiermee bepalen we het framework en bouwen we je prompt.
+            Hieruit heeft de AI je velden ingevuld.
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1">

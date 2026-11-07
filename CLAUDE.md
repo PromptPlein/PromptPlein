@@ -414,10 +414,15 @@ Merk het voorbeeld daarom onmiskenbaar als voorbeeld, of laat het weg.
 
 ## De bouwer: twee ingangen
 
-- **`/genereren`** is de gewone weg. De AI analyseert wat de gebruiker wil en
-  kiest zelf de techniek. Hier zit ook de PlanWizard (plan met stappen,
-  interview in de tool, socratische aannamecontrole) en de Testkamer, de
-  gesloten lus bouwen, testen, verbeteren met versies.
+- **`/genereren`** is de gewone weg. De AI analyseert wat de gebruiker wil, kiest
+  zelf het framework en vult de velden in; niemand kiest hier een framework. De
+  gebruiker kijkt na, vult aan en bouwt. De naam van de aanpak blijft zichtbaar
+  (`AanpakKaart`) en "Andere aanpak" toont de alternatieven die de AI al gaf, zonder
+  extra aanroep. Bij te weinig tekst vraagt de AI bij het tekstvak om meer, nooit
+  via een lijst. Geldt voor beide tabbladen: na het gesprek bij "Ik heb een idee"
+  kiest de AI op dezelfde manier. Hier zit ook de PlanWizard (plan met stappen,
+  interview in de tool, socratische aannamecontrole) en de Testkamer, de gesloten
+  lus bouwen, testen, verbeteren met versies.
 - **`/technieken`** is de trainingspagina waar de gebruiker zélf een techniek
   kiest en de velden invult. Bouw geen handmatige techniekkiezer in
   `/genereren`: dat is precies de scheiding tussen die twee pagina's.

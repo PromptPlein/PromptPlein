@@ -54,6 +54,16 @@ export function compactFieldLabel(label: string): FieldLabelParts {
   const parts = splitFieldLabel(label);
   if (!parts.code || !parts.instruction) return parts;
   const zin = /^([^.?!]+)\.\s+(.+)$/su.exec(parts.instruction);
-  if (!zin || zin[1].trim().split(/\s+/).length > 3) return parts;
+  if (!zin || zin[1].trim().split(/\s+/).length > 3) {
+    return { ...parts, name: NEDERLANDSE_NAAM[parts.name] ?? parts.name };
+  }
   return { ...parts, name: zin[1].trim(), instruction: zin[2].trim() };
 }
+
+/** CARE heeft geen korte Nederlandse naam in zijn labels; de letters blijven wel kloppen. */
+const NEDERLANDSE_NAAM: Record<string, string> = {
+  Context: 'Situatie',
+  Ask: 'Opdracht',
+  Rules: 'Regels',
+  Examples: 'Voorbeelden',
+};

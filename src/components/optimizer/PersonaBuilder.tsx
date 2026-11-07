@@ -281,7 +281,7 @@ function PersonaCard({
       {/* De persona-vragen zoals gedefinieerd bij de techniek. */}
       {/* Label en tekstvak delen hun rijen met het veld ernaast (subgrid), zodat de
           vakken op één lijn staan als een vraag over twee regels loopt. */}
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,18rem),1fr))] gap-x-4">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,22rem),1fr))] gap-x-4">
         {questions.map((q) => {
           const isAi = aiFields?.has(q.id);
           return (
@@ -302,7 +302,7 @@ function PersonaCard({
               <textarea
                 id={`persona-${persona.id}-${q.id}`}
                 rows={3}
-                className="opl-input resize-y self-stretch text-sm"
+                className="opl-input min-h-full resize-y self-stretch text-sm"
                 value={persona.fields[q.id] ?? ''}
                 placeholder={q.placeholder}
                 onChange={(e) => onFieldChange(q.id, e.target.value)}

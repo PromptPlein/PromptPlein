@@ -7,17 +7,11 @@ import {
   ArrowRight,
   Blocks,
   Bot,
-  Check,
-  ChevronDown,
-  ChevronRight,
   ClipboardCopy,
   CodeXml,
-  Compass,
   Eraser,
   FileText,
   HelpCircle,
-  Info,
-  Layers,
   LayoutDashboard,
   Lightbulb,
   Loader2,
@@ -32,6 +26,10 @@ import toast from 'react-hot-toast';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import VerantwoordGebruikHint from '@/components/optimizer/VerantwoordGebruikHint';
 import StepHeading from '@/components/optimizer/StepHeading';
+import AanpakKaart, { type AanpakOptie } from '@/components/optimizer/AanpakKaart';
+import MakeProgress from '@/components/optimizer/MakeProgress';
+import { compactFieldLabel } from '@/lib/fieldLabel';
+import { techniekKaart } from '@/lib/techniekDoelen';
 import PrefillSources from '@/components/optimizer/PrefillSources';
 import SjabloonVragen from '@/components/optimizer/SjabloonVragen';
 import { PROMPT_CATEGORIES } from '@/data/promptCategories';
@@ -49,7 +47,6 @@ import {
 import { usePersistentDraft } from '@/lib/usePersistentDraft';
 import { stripMarkdown } from '@/lib/utils';
 import {
-  explainFrameworkFit,
   generatePrompt,
   prefillFields,
   recommendFramework,
@@ -66,7 +63,6 @@ import FollowUpQuestions, { type FieldMeta } from './FollowUpQuestions';
 import { overheidsContext, type AiSettings } from '@/services/settingsService';
 import type { StreamStatus } from '@/lib/ndjsonStream';
 import type {
-  FrameworkFit,
   OptimizeResult,
   PrefilledField,
   PrefillResult,
@@ -80,13 +76,11 @@ interface OwnPromptOptimizerProps {
   /** Aangeroepen met het geoptimaliseerde resultaat + de gekozen techniek. */
   onResult: (result: OptimizeResult, technique: Technique) => void;
   /**
-   * Optionele header (de instap-tabs) die boven de chat valt. De chat (prompt
-   * plakken + zoekknop) wordt samen met deze header in één oranje-omrand element
-   * getoond, zodat de oranje rand alléén om de chat valt. Alles daarna
-   * (aanbevelingen, frameworklijst, voor-invullen, genereren) staat als losse
-   * kaarten eronder, buiten het oranje element.
+   * De tabbladen (Ik heb al een prompt, Ik heb een idee) boven het invulvlak.
    */
   header?: ReactNode;
+  /** De knoppen Denken en Internet, naast de actieknop. */
+  toggles?: ReactNode;
   /**
    * Optionele startwaarde voor het invoerveld: de inhoud van een bibliotheek-
    * prompt waarmee de gebruiker via /genereren/:promptId binnenkomt. Wordt één
@@ -121,12 +115,6 @@ interface OwnPromptOptimizerProps {
  * Wat de knop toont terwijl de AI zoekt. Een spinner die 10 seconden stilstaat
  * voelt kapot; benoemen wát er gebeurt maakt dezelfde wachttijd draaglijk.
  */
-const PHASE_LABEL: Record<FrameworkSearchPhase, string> = {
-  analyzing: 'Je prompt analyseren…',
-  weighing: 'Frameworks tegen je vraagstuk wegen…',
-  writing: 'Motivatie schrijven…',
-};
-
 /**
  * De keuzes van "Wat wil je maken?" in de balk boven het invoerveld. De volgorde
  * komt uit PROMPT_KINDS. `placeholderOff` hoort bij de schakelaar uit (bestaande
@@ -183,11 +171,10 @@ const KIND_OPTIONS: Record<
 };
 
 /**
- * Flow om een EIGEN prompt te optimaliseren. De gebruiker plakt zijn prompt en
- * laat de AI bepalen welk prompt framework (CARE, CRISP, …) het beste past.
- * Uit de aanbevelingen (1–3) kiest de gebruiker er één. Daarna analyseren we de
- * prompt tegen de eisen van dat raamwerk, tonen we wat nog ontbreekt als extra
- * invulvelden, en genereren we de volledig geoptimaliseerde prompt.
+ * Flow om een EIGEN prompt te optimaliseren. De gebruiker plakt zijn prompt; de AI
+ * kiest het best passende framework en vult de velden alvast in. Daarna kijkt de
+ * gebruiker na, vult aan wat ontbreekt en bouwt de prompt. Zelf een framework kiezen
+ * hoeft hier niet: dat kan op /technieken, en "Andere aanpak" vangt een misser op.
  */
 export default function OwnPromptOptimizer({
   settings,
@@ -198,6 +185,7 @@ export default function OwnPromptOptimizer({
   renderProjectContext,
   thinking,
   webSearch,
+  toggles,
 }: OwnPromptOptimizerProps) {
   const { techniques, techniqueById } = useReferenceData();
   const navigate = useNavigate();
@@ -223,9 +211,6 @@ export default function OwnPromptOptimizer({
       : kind && kind !== 'skill' && candidates.length === 1
         ? candidates[0]
         : null;
-  // "Kies een ander framework" en het fit-oordeel gaan over gewone frameworks;
-  // een sjabloon kies je bij "Wat wil je maken?".
-  const generalFrameworks = frameworks.filter((t) => !isSjabloon(t));
   // De aanbeveling kwam uit de soortkeuze, niet uit een AI-afweging.
   const [pickedByKind, setPickedByKind] = useState(false);
 
@@ -243,27 +228,16 @@ export default function OwnPromptOptimizer({
     ? sjabloonContextTekst(sjabloon, sjabloonAntwoorden, ownPrompt)
     : ownPrompt.trim();
   const [showExamples, setShowExamples] = useState(false);
-  // Vraagstuk-specifiek fit-oordeel per framework (past het, waarom (niet), en
-  // wat er nog bij moet), voor de "kies een ander framework"-lijst. Per
-  // framework-id. Wordt opgehaald zodra de gebruiker die lijst uitklapt (één
-  // AI-call die ALLE frameworks tegen het vraagstuk beoordeelt).
-  const [frameworkFits, setFrameworkFits] = useState<Record<string, FrameworkFit>>({});
-  const [fitLoading, setFitLoading] = useState(false);
-  const fitFetchedRef = useRef(false);
   const [recommending, setRecommending] = useState(false);
   const [recommendations, setRecommendations] = useState<TechniqueRecommendation[] | null>(null);
-  const [recommendSummary, setRecommendSummary] = useState('');
   // Waar de zoekactie mee bezig is; voedt de voortgangstekst op de knop.
   const [searchPhase, setSearchPhase] = useState<FrameworkSearchPhase>('analyzing');
-  // De getoonde lijst is (nog) de lokale trefwoord-gok, niet het AI-oordeel.
-  // Zo staat er meteen iets op het scherm zonder dat het zich voordoet als advies.
-  const [provisional, setProvisional] = useState(false);
-  // De gebruiker klapte "kies een ander framework" uit terwijl de aanbeveling nog
-  // liep: het fit-oordeel wachten we dan af tot die klaar is (twee zware calls
-  // tegelijk vechten om dezelfde provider-ratelimit en vertragen elkaar).
-  const [fitsRequested, setFitsRequested] = useState(false);
-  // Het uitklapblok zelf, zodat we de echte open-stand kunnen uitlezen.
-  const chooseRef = useRef<HTMLDetailsElement>(null);
+  // Staat het invulvlak open? Na "Maak mijn prompt" klapt het in tot één regel, zodat
+  // de ingevulde velden meteen in beeld staan. "Aanpassen" opent het weer; de velden
+  // blijven eronder staan tot de tekst echt verandert.
+  const [composerOpen, setComposerOpen] = useState(true);
+  // Staat de toelichting voor een nieuwe invulronde open?
+  const [clarifyOpen, setClarifyOpen] = useState(false);
   // Toelichting die de gebruiker typt om, ná het kiezen van een framework, de
   // velden aan te vullen die voor DIT raamwerk nog ontbraken. Voedt een nieuwe
   // voor-invulronde (chain-of-thought): menselijke input maakt de template scherper.
@@ -303,6 +277,7 @@ export default function OwnPromptOptimizer({
   const [unclearReason, setUnclearReason] = useState<string | null>(null);
   // Anker voor het voor-invul-/laadblok zodat we er na een keuze naartoe scrollen.
   const analysisRef = useRef<HTMLDivElement>(null);
+  const topRef = useRef<HTMLDivElement>(null);
 
   const technique = frameworks.find((t) => t.id === techniqueId) ?? null;
 
@@ -310,9 +285,7 @@ export default function OwnPromptOptimizer({
   function resetDownstream() {
     setRecommendations(null);
     setPickedByKind(false);
-    setProvisional(false);
-    setFitsRequested(false);
-    setRecommendSummary('');
+    setClarifyOpen(false);
     setClarification('');
     setTechniqueId(null);
     setPrefill(null);
@@ -320,9 +293,6 @@ export default function OwnPromptOptimizer({
     setFieldMeta({});
     setAanvullingen({});
     setUnclearReason(null);
-    // Oude fit-oordelen vervallen; opnieuw ophalen bij uitklappen.
-    setFrameworkFits({});
-    fitFetchedRef.current = false;
   }
 
   // Komt de gebruiker binnen via /genereren/:promptId, dan zetten we die prompt
@@ -347,6 +317,7 @@ export default function OwnPromptOptimizer({
     clearSjabloonDraft();
     setVraagHerkomst({});
     resetDownstream();
+    setComposerOpen(true);
     setShowExamples(false);
     toast.success('Alles opgeschoond. Je begint met een schone lei.');
   }
@@ -447,7 +418,19 @@ export default function OwnPromptOptimizer({
     navigate('/technieken', { state: { skillContext: ownPrompt.trim() } });
   }
 
-  /** Stap 1: laat de AI op basis van de geplakte prompt het beste framework kiezen. */
+  /** Klap het invulvlak in en breng de voortgang in beeld. */
+  function closeComposer() {
+    setComposerOpen(false);
+    requestAnimationFrame(() => {
+      topRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+
+  /**
+   * "Maak mijn prompt": de AI kiest het best passende framework en gaat meteen door
+   * met invullen. De gebruiker kiest hier niets; de alternatieven blijven achter
+   * "Andere aanpak" beschikbaar voor als de keuze ernaast zit.
+   */
   async function handleRecommend() {
     if (!promptText) {
       toast.error(sjabloon ? 'Beantwoord eerst een paar vragen.' : 'Plak eerst je eigen prompt.');
@@ -462,37 +445,16 @@ export default function OwnPromptOptimizer({
       resetDownstream();
       setRecommendations([{ id: directFramework.id, reason: '', value: '' }]);
       setPickedByKind(true);
+      closeComposer();
       void handleSelectFramework(directFramework.id);
       return;
     }
+    resetDownstream();
     setRecommending(true);
     setSearchPhase('analyzing');
-    // Een nieuwe zoekopdracht maakt de vorige keuze en voor-invulling ongeldig.
-    setTechniqueId(null);
-    setPrefill(null);
-    setAnswers({});
-    setFieldMeta({});
-    setUnclearReason(null);
-    setClarification('');
-    setRecommendSummary('');
-    // Oude fit-oordelen vervallen; opnieuw ophalen bij uitklappen. Staat het blok
-    // op dit moment open, dan volgt dat vanzelf zodra deze zoekactie klaar is.
-    setFrameworkFits({});
-    fitFetchedRef.current = false;
-    setFitsRequested(chooseRef.current?.open ?? false);
+    closeComposer();
 
-    // Meteen een voorlopige suggestie op basis van trefwoorden, zodat er iets
-    // staat terwijl de AI nog werkt. Levert dat niets op, dan blijft het blok
-    // leeg — een willekeurig framework tonen zou misleidend zijn.
-    const guess = localFrameworkGuess(ownPrompt, candidates);
-    setProvisional(guess.length > 0);
-    setRecommendations(
-      guess.length > 0 ? guess.map((t) => ({ id: t.id, reason: '', value: '' })) : null,
-    );
-
-    // De aanbevelingen die de stream tot nu toe heeft opgeleverd. Bewust een
-    // gewone array naast de state: de callback kan zo idempotent ontdubbelen.
-    const streamed: TechniqueRecommendation[] = [];
+    let keuze: string | undefined;
     try {
       const res = await recommendFramework({
         ownPrompt: ownPrompt.trim(),
@@ -501,77 +463,25 @@ export default function OwnPromptOptimizer({
         preferredModel: settings.model,
         projectContext,
         onPhase: setSearchPhase,
-        onSummary: setRecommendSummary,
-        onRecommendation: (rec) => {
-          if (streamed.some((r) => r.id === rec.id)) return;
-          streamed.push(rec);
-          // De eerste échte aanbeveling vervangt de voorlopige gok.
-          setProvisional(false);
-          setRecommendations([...streamed]);
-        },
       });
       setRecommendations(res.recommendations);
-      setProvisional(false);
-      setRecommendSummary(res.summary);
       if (res.error) toast(res.error, { icon: '⚠️' });
-      if (res.recommendations.length === 0) {
-        toast('Geen duidelijke match. Kies hieronder zelf een framework.', { icon: 'ℹ️' });
-      }
+      // Geen duidelijke match: geen lijst tonen, maar de trefwoorden laten beslissen.
+      // Is de tekst echt onduidelijk, dan zegt het invullen dat hierna zelf.
+      keuze =
+        res.recommendations[0]?.id ??
+        localFrameworkGuess(ownPrompt, candidates)[0]?.id ??
+        candidates[0]?.id;
     } catch {
-      // Alleen de voorlopige gok laten staan is misleidend als de AI faalde:
-      // dan hoort de gebruiker te weten dat dit geen advies is.
-      setRecommendations(streamed.length > 0 ? streamed : null);
-      setProvisional(false);
-      toast.error('Aanbeveling mislukt. Probeer het opnieuw.');
+      toast.error('De AI kon je tekst niet verwerken. Probeer het opnieuw.');
+      setComposerOpen(true);
     } finally {
       setRecommending(false);
     }
+    if (keuze) void handleSelectFramework(keuze);
   }
 
-  /**
-   * Haal, zodra de "kies een ander framework"-lijst wordt uitgeklapt, voor ELK
-   * framework een vraagstuk-specifiek fit-oordeel op: past het bij dít vraagstuk,
-   * waarom (wel of niet), en zo niet — wat er nog bij zou moeten om het wél te
-   * laten matchen. Eén AI-call die alle frameworks tegen de eigen prompt weegt.
-   * Best-effort: lukt het niet, dan blijft de kaart terugvallen op de beschrijving.
-   */
-  async function fetchFrameworkFits() {
-    if (fitFetchedRef.current || fitLoading) return;
-    if (generalFrameworks.length === 0) return;
-    // Nooit gelijktijdig met de framework-aanbeveling: twee zware AI-calls op
-    // dezelfde provider vertragen elkaar. Het effect wordt afgehandeld zodra
-    // `recommending` weer false is.
-    if (recommending) return;
-    fitFetchedRef.current = true;
-    setFitLoading(true);
-    try {
-      const res = await explainFrameworkFit({
-        ownPrompt: ownPrompt.trim(),
-        frameworks: generalFrameworks,
-        preferredProvider: settings.provider,
-        preferredModel: settings.model,
-      });
-      const map: Record<string, FrameworkFit> = {};
-      for (const f of res.fits) map[f.id] = f;
-      setFrameworkFits(map);
-    } catch {
-      // Best-effort; bij een fout blijft de lijst gewoon zonder fit-uitleg.
-      fitFetchedRef.current = false;
-    } finally {
-      setFitLoading(false);
-    }
-  }
-
-  // Uitgesteld fit-oordeel: is de lijst uitgeklapt terwijl de aanbeveling nog
-  // liep, dan halen we het alsnog op zodra die klaar is.
-  useEffect(() => {
-    if (fitsRequested && !recommending) void fetchFrameworkFits();
-    // fetchFrameworkFits is stabiel binnen deze component; alleen de vraag en de
-    // loopstatus bepalen of dit opnieuw moet lopen.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fitsRequested, recommending]);
-
-  /** Stap 2: gebruiker kiest één aanbevolen framework → velden alvast voor-invullen. */
+  /** Vul de velden van dit framework voor: de keuze van de AI, of "Andere aanpak". */
   async function handleSelectFramework(id: string) {
     setTechniqueId(id);
     setPrefill(null);
@@ -580,6 +490,7 @@ export default function OwnPromptOptimizer({
     setUnclearReason(null);
     // Nieuw framework = een nieuwe "wat mist nog"-lus; oude toelichting vervalt.
     setClarification('');
+    setClarifyOpen(false);
     const chosen = frameworks.find((t) => t.id === id);
     if (!chosen) return;
     setAanvullingen({});
@@ -704,10 +615,14 @@ export default function OwnPromptOptimizer({
       // De prompt was onzin → toon de terugkoppeling i.p.v. velden voor te vullen.
       if (res.unclear) {
         setPrefill(null);
+        setTechniqueId(null);
+        setRecommendations(null);
         setUnclearReason(
           res.reason?.trim() ||
             'Je prompt is nog niet duidelijk genoeg om de velden voor te vullen. Beschrijf concreet wat je wilt bereiken.',
         );
+        // De melding en het tekstvak horen bij elkaar: hier vul je aan.
+        setComposerOpen(true);
         return;
       }
       setPrefill(res);
@@ -718,6 +633,7 @@ export default function OwnPromptOptimizer({
       if (res.error) toast(res.error, { icon: 'ℹ️' });
     } catch {
       toast.error('Voor-invullen mislukt. Probeer het opnieuw.');
+      setComposerOpen(true);
     } finally {
       setPrefilling(false);
     }
@@ -783,36 +699,68 @@ export default function OwnPromptOptimizer({
     );
   }
 
-  // Zodra er een framework is gezocht (aanbevelingen aanwezig), groeit de oranje
-  // omranding mee om de héle flow — chat + aanbevelingen + frameworklijst — zodat
-  // het als één geheel oogt. Daarvóór valt de rand alléén om de chat.
-  const expanded = Boolean(recommendations);
+  // De melding bij onduidelijke invoer staat bij het tekstvak als dat open is, anders
+  // onder de velden (dan kwam ze van het bouwen zelf).
+  const unclearBlock = unclearReason && (
+    <div
+      role="alert"
+      className="animate-fade-in flex items-start gap-3 rounded-xl bg-rijksoranje/10 px-4 py-3 text-sm text-slate-700 dark:text-slate-200"
+    >
+      <HelpCircle size={18} className="mt-0.5 shrink-0 text-rijksoranje" />
+      <div>
+        <p className="font-semibold text-slate-900 dark:text-slate-100">
+          Je tekst is nog niet duidelijk genoeg
+        </p>
+        <p className="mt-0.5">{stripMarkdown(unclearReason)}</p>
+      </div>
+    </div>
+  );
+
+  const chosenRec = recommendations?.find((r) => r.id === techniqueId);
+  // Andere aanpak: de alternatieven die de AI al gaf, dus geen extra aanroep. Gaf hij
+  // er geen, dan de andere frameworks die bij de gekozen soort passen.
+  const andereRecs = (recommendations ?? []).filter((r) => r.id !== techniqueId);
+  const aanpakOpties: AanpakOptie[] =
+    pickedByKind || !technique
+      ? []
+      : andereRecs.length > 0
+        ? andereRecs.flatMap((r) => {
+            const fw = techniqueById(r.id);
+            return fw ? [{ id: fw.id, naam: fw.name, waarom: stripMarkdown(r.reason) }] : [];
+          })
+        : candidates
+            .filter((t) => t.id !== technique.id)
+            .slice(0, 4)
+            .map((t) => ({ id: t.id, naam: t.name, waarom: techniekKaart(t).kort }));
 
   return (
-    <div className="space-y-5">
-      {/* Generator-blok = het advies vanuit de prompt generator: de chat + de
-          aanbevelingen + (na een keuze) de voor-ingevulde velden en genereer-knop.
-          De oranje rand omsluit dit hele blok zodra er een advies is (expanded);
-          de handmatige frameworklijst valt er bewust buiten (zie onder). */}
-      <div className="overflow-hidden rounded-2xl border-2 border-rijksoranje/60 shadow-sm dark:border-rijksoranje/50">
-        {/* Chatdeel: de tabs (header) + het promptveld + de zoekknop. Bij een
-            advies krijgt dit een scheidingslijn onder zich binnen hetzelfde blok. */}
-        <div
-          className={clsx(
-            'overflow-hidden',
-            expanded && 'border-b border-slate-200 dark:border-slate-700',
-          )}
+    <div ref={topRef} className="scroll-mt-24 space-y-4">
+      {!composerOpen ? (
+        <section
+          aria-label="Jouw tekst"
+          className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-1.5 dark:border-slate-700 dark:bg-slate-800"
         >
-          {header}
-          <div className="space-y-5 bg-white p-5 dark:bg-slate-800 sm:p-6">
-          {/* Stap 2 en 3: soort kiezen en de eigen prompt plakken */}
+          <p className="min-w-0 flex-1 truncate text-slate-600 dark:text-slate-300">
+            <strong className="font-semibold text-slate-900 dark:text-slate-100">Jouw tekst: </strong>
+            {promptText}
+          </p>
+          <button
+            type="button"
+            onClick={() => setComposerOpen(true)}
+            disabled={recommending || prefilling || generating}
+            className="min-h-11 shrink-0 font-semibold text-rijksblauw-500 transition-colors hover:underline disabled:opacity-50 dark:text-rijksblauw-200"
+          >
+            Aanpassen
+          </button>
+        </section>
+      ) : (
+      <div>
+        {header}
+        <section className="space-y-5 rounded-xl border border-slate-200 bg-white p-5 sm:rounded-t-none dark:border-slate-700 dark:bg-slate-800">
+          {unclearBlock}
           <div>
-            {/* Stap 2: wat wil je maken? Kies je niets, dan bepaalt de AI het
-                zelf; die stand heeft een eigen tegel ("AI kiest"). Een gekozen
-                soort zet je ook uit door er nog eens op te klikken. Daarom
-                knoppen die aan of uit staan en geen radiogroep. */}
             <StepHeading
-              step={2}
+              step={1}
               title="Wat wordt het?"
               info={
                 kindOption
@@ -840,11 +788,11 @@ export default function OwnPromptOptimizer({
                     }}
                     disabled={recommending || prefilling}
                     className={clsx(
-                      'flex min-h-[5.5rem] flex-col items-center justify-center gap-2 rounded-xl border-2 px-2 py-3 text-sm font-semibold transition-colors',
+                      'flex min-h-[5.25rem] flex-col items-center justify-center gap-1.5 rounded-xl border px-2 py-2.5 text-[15px] font-semibold transition-colors',
                       'focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed dark:focus-visible:ring-offset-slate-800',
                       active
-                        ? 'border-rijksblauw-700 bg-rijksblauw-50 text-rijksblauw-700 dark:border-rijksblauw-300 dark:bg-rijksblauw-500/15 dark:text-white'
-                        : 'border-slate-200 bg-white text-rijksblauw-700 hover:border-rijksblauw-500 dark:border-slate-600 dark:bg-slate-800 dark:text-rijksblauw-200 dark:hover:border-rijksblauw-300',
+                        ? 'border-rijksblauw-700 bg-rijksblauw-50 text-rijksblauw-700 ring-1 ring-rijksblauw-700 dark:border-rijksblauw-200 dark:bg-rijksblauw-500/15 dark:text-white dark:ring-rijksblauw-200'
+                        : 'border-slate-200 bg-slate-50 text-rijksblauw-700 hover:border-rijksblauw-700 dark:border-slate-700 dark:bg-slate-900/40 dark:text-rijksblauw-200 dark:hover:border-rijksblauw-200',
                     )}
                   >
                     <Icon size={26} strokeWidth={1.5} />
@@ -854,7 +802,7 @@ export default function OwnPromptOptimizer({
               })}
             </div>
 
-            <StepHeading step={3} title="Jouw tekst" htmlFor="own-prompt-input">
+            <StepHeading step={2} title="Jouw tekst" htmlFor="own-prompt-input">
           <button
             type="button"
             onClick={() => setShowExamples((v) => !v)}
@@ -862,13 +810,10 @@ export default function OwnPromptOptimizer({
             aria-controls="prompt-examples"
             title="Bekijk voorbeeldprompts"
             className={clsx(
-              'inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-medium transition-colors',
-              showExamples
-                ? 'text-rijksblauw-700 dark:text-rijksblauw-200'
-                : 'text-slate-600 hover:text-rijksblauw-600 dark:text-slate-300 dark:hover:text-rijksblauw-300',
+              'inline-flex items-center gap-1.5 rounded-full px-1.5 py-0.5 text-sm font-medium text-rijksblauw-500 transition-colors hover:underline dark:text-rijksblauw-200',
             )}
           >
-            <Info size={15} />
+            <Lightbulb size={16} className="text-rijksoranje" />
             <span>Voorbeelden</span>
           </button>
           {/* Opschonen: alleen tonen als er iets te wissen valt. */}
@@ -877,7 +822,7 @@ export default function OwnPromptOptimizer({
               type="button"
               onClick={handleClearAll}
               title="Wis je prompt en begin opnieuw"
-              className="ml-auto inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-semibold text-slate-700 transition-colors hover:text-rijksoranje dark:text-slate-200 dark:hover:text-rijksoranje"
+              className="ml-auto inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-sm font-medium text-slate-700 transition-colors hover:underline dark:text-slate-200"
             >
               <Eraser size={15} />
               <span>Opschonen</span>
@@ -1097,7 +1042,7 @@ export default function OwnPromptOptimizer({
 
           <textarea
             id="own-prompt-input"
-            className="block min-h-[120px] w-full resize-y border-0 bg-white px-3.5 py-3 font-mono text-[13px] text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-0 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
+            className="block min-h-[6.5rem] w-full resize-y border-0 bg-white px-3.5 py-3 text-[15px] leading-relaxed text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-0 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
             value={ownPrompt}
             placeholder={
               sjabloon
@@ -1162,355 +1107,65 @@ export default function OwnPromptOptimizer({
             </div>
           )}
 
-          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5 border-t border-slate-200 px-3 py-2.5 dark:border-slate-700">
-            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-slate-500 dark:text-slate-400">
-              <span className="inline-flex min-w-0 items-center gap-1.5">
-                Opzet:
-                <span className="rounded-md bg-rijksblauw-50 px-2 py-0.5 font-mono text-[11px] text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">
-                  {kind === 'skill'
-                    ? 'Skill Creator'
-                    : kind === 'template' && !sjabloon
-                    ? 'nog geen sjabloon beschikbaar'
-                    : directFramework
-                    ? directFramework.name
-                    : `de AI kiest uit ${candidates.length} frameworks`}
-                </span>
-              </span>
-            </div>
-
-            {/* 2. Beste framework laten zoeken op basis van de prompt */}
+        </div>
+        <VerantwoordGebruikHint text={promptText} />
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5">
+          <span className="text-sm text-slate-600 dark:text-slate-300">
+            {kind === 'skill'
+              ? 'Opzet: Skill Creator'
+              : kind === 'template' && !sjabloon
+                ? 'Nog geen sjabloon beschikbaar'
+                : directFramework
+                  ? `Opzet: ${directFramework.name}`
+                  : `De AI kiest uit ${candidates.length} frameworks`}
+          </span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {toggles}
             <button
               type="button"
-              className="opl-btn-primary"
+              className="opl-btn-primary min-h-12 px-5 text-base"
               onClick={() => void handleRecommend()}
               disabled={recommending || prefilling || !promptText || (kind === 'template' && !sjabloon)}
             >
-              {recommending ? (
-                <>
-                  <Loader2 size={18} className="animate-spin" /> {PHASE_LABEL[searchPhase]}
-                </>
-              ) : kind === 'skill' ? (
+              {kind === 'skill' ? (
                 <>
                   Verder in de Skill Creator <ArrowRight size={18} />
                 </>
-              ) : directFramework ? (
-                <>
-                  <Wand2 size={18} /> Velden invullen
-                </>
               ) : (
                 <>
-                  <Compass size={18} /> Zoek het beste prompt framework
+                  <Sparkles size={20} className="text-rijksoranje-vast" />
+                  {kind === 'template' ? 'Velden invullen' : 'Maak mijn prompt'}
                 </>
               )}
             </button>
           </div>
         </div>
-        <VerantwoordGebruikHint text={promptText} />
       </div>
-        </div>
+        </section>
       </div>
-
-      {/* Adviesdeel binnen het generator-blok: de aanbevelingen en — na een keuze —
-          de voor-ingevulde velden en genereer-knop. Zodra er een advies is, krijgt
-          dit een witte achtergrond met padding, zodat het naadloos onder de chat
-          binnen dezelfde oranje rand valt. De handmatige frameworklijst staat
-          bewust apart, ná dit hele blok. */}
-      <div className={clsx(expanded ? 'space-y-5 bg-white p-5 dark:bg-slate-800 sm:p-6' : 'space-y-5')}>
-        {/* 3. Aanbevolen frameworks — kies er één om toe te passen */}
-      {recommendations && recommendations.length > 0 && (
-        /* Zolang de zoekactie loopt is deze lijst een TUSSENSTAND, geen advies:
-           de voorlopige trefwoord-gok en de eerste binnengekomen aanbeveling zien
-           er anders exact zo uit als het eindresultaat. Bij een trage verbinding
-           lijkt het dan klaar terwijl de AI nog weegt — en een klik zou een keuze
-           vastleggen op een lijst die nog verandert. Daarom tijdens het zoeken:
-           een duidelijk gemarkeerd voorbeeldvlak, niet klikbaar, met wat er nog
-           komt in beeld. Pas als de analyse klaar is worden de kaarten volwaardig
-           en aanklikbaar. */
-        <div
-          className={clsx(
-            'space-y-3',
-            recommending &&
-              'rounded-2xl border border-dashed border-rijksblauw-300 bg-rijksblauw-50/40 p-4 dark:border-rijksblauw-500/40 dark:bg-rijksblauw-500/10',
-          )}
-          aria-busy={recommending}
-        >
-          {recommending && (
-            <div className="flex items-start gap-2.5">
-              <Loader2 size={16} className="mt-0.5 shrink-0 animate-spin text-rijksblauw-500" />
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-                  Voorbeeld: {PHASE_LABEL[searchPhase]}
-                </p>
-                <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-300">
-                  {provisional
-                    ? 'Dit is nog een eerste gok op basis van trefwoorden, geen advies. De AI weegt de frameworks nu tegen je vraagstuk.'
-                    : 'De AI vult deze lijst nog aan; de volgorde en de onderbouwing kunnen nog veranderen.'}{' '}
-                  Kiezen kan zodra de analyse klaar is.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {recommendSummary && (
-            <div className="rounded-xl border border-l-4 border-rijksoranje/30 border-l-rijksoranje bg-rijksoranje/5 p-3.5 text-sm font-medium leading-relaxed text-slate-700 dark:border-rijksoranje/25 dark:border-l-rijksoranje dark:bg-rijksoranje/10 dark:text-slate-200">
-              {stripMarkdown(recommendSummary)}
-            </div>
-          )}
-
-          {!recommending && (
-            <p className="text-sm text-slate-600 dark:text-slate-300">
-              {pickedByKind && kind === 'template'
-                ? 'Je vult dit sjabloon in. De velden worden alvast voor je ingevuld:'
-                : pickedByKind
-                ? 'Bij wat je wilt maken hoort dit framework. De velden worden alvast voor je ingevuld:'
-                : recommendations.length === 1
-                ? 'Dit framework past het beste bij jouw prompt. Kies het om verder te gaan:'
-                : 'Deze frameworks passen het beste bij jouw prompt. Kies welke je wilt toepassen:'}
-            </p>
-          )}
-
-          {recommendations.map((rec, idx) => {
-            const fw = techniqueById(rec.id);
-            if (!fw) return null;
-            const active = fw.id === techniqueId;
-            return (
-              <button
-                key={rec.id}
-                type="button"
-                onClick={() => void handleSelectFramework(fw.id)}
-                aria-pressed={active}
-                // Tijdens het zoeken bewust onklikbaar: de lijst is nog niet af.
-                // Tijdens het voor-invullen ook: een tweede keuze start een tweede
-                // aanroep, en de laatste die klaar is overschrijft de velden.
-                disabled={recommending || prefilling}
-                className={clsx(
-                  'flex w-full flex-col rounded-xl border p-4 text-left transition-all duration-150',
-                  prefilling && !recommending && 'cursor-not-allowed opacity-60',
-                  recommending
-                    ? 'cursor-default border-dashed border-slate-300 bg-white/70 dark:border-slate-600 dark:bg-slate-800/60'
-                    : [
-                        'shadow-sm hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:shadow-sm',
-                        'focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500/40',
-                        active
-                          ? 'border-rijksblauw-500 bg-rijksblauw-50 ring-2 ring-rijksblauw-500/20 dark:bg-rijksblauw-500/15'
-                          : 'border-slate-200 bg-white hover:border-rijksblauw-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-800',
-                      ],
-                )}
-              >
-                <div className="mb-1 flex items-center justify-between gap-2">
-                  <span className="flex items-center gap-2 font-semibold text-rijksblauw-700 dark:text-rijksblauw-200">
-                    {idx === 0 && !recommending && (
-                      <Sparkles size={15} className="text-rijksoranje" />
-                    )}
-                    {fw.name}
-                    {/* "Beste match" pas claimen als het AI-oordeel binnen is; de
-                        voorlopige gok is trefwoord-overlap, geen rangschikking. */}
-                    {idx === 0 && !recommending && recommendations.length > 1 && (
-                      <span className="opl-badge bg-rijksoranje/15 text-rijksoranje">
-                        Beste match
-                      </span>
-                    )}
-                    {recommending && (
-                      <span className="opl-badge bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300">
-                        wordt nog geanalyseerd
-                      </span>
-                    )}
-                  </span>
-                  {active && !recommending && (
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-rijksblauw-500 text-white">
-                      <Check size={14} />
-                    </span>
-                  )}
-                </div>
-                {rec.reason ? (
-                  <span className="text-sm text-slate-600 dark:text-slate-300">
-                    {stripMarkdown(rec.reason)}
-                  </span>
-                ) : (
-                  // Onderbouwing nog onderweg: laat zien dát er nog tekst komt,
-                  // in plaats van een kaart die af lijkt maar leeg is.
-                  recommending && (
-                    <span className="mt-1 block space-y-1.5">
-                      <span className="skeleton block h-3 w-full rounded" />
-                      <span className="skeleton block h-3 w-4/5 rounded" />
-                    </span>
-                  )
-                )}
-                {rec.value && (
-                  <span className="mt-2 rounded-lg border border-rijksoranje/30 bg-rijksoranje/5 p-2.5 text-xs leading-relaxed text-slate-600 dark:border-rijksoranje/20 dark:bg-rijksoranje/10 dark:text-slate-300">
-                    <span className="font-semibold text-rijksoranje">Waarom voor jouw vraagstuk: </span>
-                    {stripMarkdown(rec.value)}
-                  </span>
-                )}
-                {fw.strength && (
-                  <span className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                    <span className="font-medium text-slate-600 dark:text-slate-300">Doel: </span>
-                    {fw.strength}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-
-          {/* Plaatshouder voor wat er nog kan komen: de AI levert 1–3 opties, dus
-              een lege plek maakt zichtbaar dat de lijst nog niet af is. */}
-          {recommending && (
-            <div className="rounded-xl border border-dashed border-slate-300 p-4 dark:border-slate-600">
-              <div className="skeleton h-3.5 w-1/4 rounded" />
-              <div className="mt-2.5 space-y-1.5">
-                <div className="skeleton h-3 w-full rounded" />
-                <div className="skeleton h-3 w-2/3 rounded" />
-              </div>
-              <p className="mt-2.5 text-xs text-slate-400 dark:text-slate-500">
-                Mogelijk komt hier nog een suggestie bij…
-              </p>
-            </div>
-          )}
-        </div>
       )}
 
-      {/* "Kies een ander framework": het AI-advies toont maar 1–3 opties, maar soms
-          wil de gebruiker bewust een ander framework. Deze nadrukkelijke, oranje
-          uitklapknop toont ALLE frameworks, elk met een vraagstuk-specifieke uitleg
-          ("Waarom voor jouw vraagstuk") — of, als het niet past, waaróm niet én wat
-          er nog bij zou moeten om het wél te laten matchen. De aanbevolen frameworks
-          krijgen een groen "Aanbevolen" label; de overige staan er zonder label bij.
-          Een keuze loopt via dezelfde handleSelectFramework, dus de velden worden óók
-          automatisch voor-ingevuld. De fit-uitleg halen we op bij het uitklappen. */}
-      {recommendations && generalFrameworks.length > 0 && !isSjabloon(technique ?? {}) && (
-        <details
-          className="group/choose"
-          ref={chooseRef}
-          onToggle={(e) => {
-            // Alleen de open-stand registreren: loopt de aanbeveling nog, dan
-            // haalt het effect het fit-oordeel op zodra die klaar is.
-            setFitsRequested((e.currentTarget as HTMLDetailsElement).open);
-          }}
-        >
-          {/* Uitklap-knop, nadrukkelijk als oranje knop vormgegeven zodat meteen
-              duidelijk is dat hij aanklikbaar is: oranje rand + getinte vulling,
-              oranje tekst en een gevulde oranje pijl-cirkel die meedraait bij openen. */}
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-xl border-2 border-rijksoranje/60 bg-rijksoranje/10 px-4 py-3 text-sm font-semibold text-rijksoranje shadow-sm transition-all hover:border-rijksoranje hover:bg-rijksoranje/15 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rijksoranje/40 dark:border-rijksoranje/50 dark:bg-rijksoranje/15 dark:hover:bg-rijksoranje/20">
-            <span className="flex items-center gap-2">
-              <Layers size={18} className="text-rijksoranje" />
-              Kies een ander framework
-            </span>
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-rijksoranje text-white shadow-sm transition-transform group-open/choose:rotate-180">
-              <ChevronDown size={16} />
-            </span>
-          </summary>
-
-          <div className="mt-3">
-            <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
-              Per framework zie je waarom het (wel of niet) past bij jouw vraagstuk. Klik op een
-              framework om het toe te passen; we vullen de velden dan automatisch voor.
-            </p>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {generalFrameworks.map((fw) => {
-                const active = fw.id === techniqueId;
-                const rec = recommendations.find((r) => r.id === fw.id);
-                const isRecommended = Boolean(rec);
-                const fit = frameworkFits[fw.id];
-                // "Waarom voor jouw vraagstuk"-zin: bij de aanbevolen frameworks
-                // gebruiken we de vraagstuk-specifieke waarde uit de eerste analyse
-                // (rec.value); voor de rest het fit-oordeel (fetchFrameworkFits).
-                const whyForCase =
-                  (rec?.value ? stripMarkdown(rec.value) : fit?.value ? stripMarkdown(fit.value) : '') ?? '';
-                // Een framework "past niet" alleen als het niet aanbevolen is én de
-                // fit-analyse fits=false teruggaf (met wat er nog bij zou moeten).
-                const doesNotFit = !isRecommended && fit && !fit.fits;
-                const missing = fit?.missing ? stripMarkdown(fit.missing) : '';
-                const stillLoading = !isRecommended && !fit && fitLoading;
-                return (
-                  <button
-                    key={fw.id}
-                    type="button"
-                    onClick={() => void handleSelectFramework(fw.id)}
-                    aria-pressed={active}
-                    disabled={prefilling || generating}
-                    className={clsx(
-                      'group/other flex flex-col rounded-lg border p-3 text-left transition-all disabled:cursor-not-allowed disabled:opacity-60',
-                      active
-                        ? 'border-rijksblauw-500 bg-rijksblauw-50 ring-2 ring-rijksblauw-500/20 dark:bg-rijksblauw-500/15'
-                        : 'border-slate-200 bg-white hover:border-rijksoranje/50 hover:bg-rijksoranje/5 dark:border-slate-700 dark:bg-slate-800/40 dark:hover:border-rijksoranje/40 dark:hover:bg-slate-800',
-                    )}
-                  >
-                    <span className="flex items-center justify-between gap-2">
-                      <span className="font-semibold text-rijksblauw-700 dark:text-rijksblauw-200">
-                        {fw.name}
-                      </span>
-                      {active ? (
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-rijksblauw-500 text-white">
-                          <Check size={13} />
-                        </span>
-                      ) : (
-                        // Alleen aanbevolen frameworks krijgen een label (groen
-                        // "Aanbevolen"). De overige frameworks blijven wél in de
-                        // lijst staan, maar zonder label.
-                        isRecommended && (
-                          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-rijksgroen/15 px-2 py-0.5 text-xs font-semibold text-rijksgroen dark:bg-rijksgroen/20">
-                            <Sparkles size={11} />
-                            Aanbevolen
-                          </span>
-                        )
-                      )}
-                    </span>
-
-                    {/* Vraagstuk-specifieke uitleg. Tijdens het ophalen een spinner;
-                        daarna "Waarom voor jouw vraagstuk" (past) of "Past minder
-                        goed" + wat er nog bij moet (past niet). */}
-                    <span className="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
-                      {stillLoading ? (
-                        <span className="inline-flex items-center gap-1.5 text-slate-400 dark:text-slate-500">
-                          <Loader2 size={12} className="animate-spin" /> We bekijken of dit ook past…
-                        </span>
-                      ) : whyForCase ? (
-                        <>
-                          <span className="font-semibold text-rijksoranje">
-                            {doesNotFit ? 'Past minder goed: ' : 'Waarom voor jouw vraagstuk: '}
-                          </span>
-                          {whyForCase}
-                        </>
-                      ) : (
-                        fw.strength || fw.description
-                      )}
-                    </span>
-
-                    {/* Alleen als het niet past: wat er nog bij zou moeten om het
-                        raamwerk wél zinvol te maken voor dit vraagstuk. */}
-                    {doesNotFit && missing && (
-                      <span className="mt-1.5 rounded-md bg-amber-50 px-2 py-1 text-xs leading-relaxed text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
-                        <span className="font-semibold">Nodig om te matchen: </span>
-                        {missing}
-                      </span>
-                    )}
-
-                    {!active && (
-                      <span className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-rijksoranje">
-                        Toepassen
-                        <ChevronRight
-                          size={13}
-                          className="transition-transform group-hover/other:translate-x-0.5"
-                        />
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </details>
+      {/* De AI kiest en vult in: de stappen, en de velden die vollopen. */}
+      {(recommending || prefilling) && (
+        <MakeProgress
+          stage={recommending ? (searchPhase === 'analyzing' ? 'lezen' : 'kiezen') : 'invullen'}
+          aanpak={technique?.name}
+        />
       )}
 
       {/* Anker voor het laad-/voor-invulblok; hier scrollen we na een keuze naartoe. */}
-      <div ref={analysisRef} className="scroll-mt-24">
+      <div ref={analysisRef} className="scroll-mt-24 space-y-4">
         {/* 4. Mooi laadscherm: de AI ontleedt de prompt en vult de velden voor.
             De velden lopen één voor één vol terwijl de modellen werken. */}
         {prefilling && (
           <PrefillLoader
+            plain
             techniqueName={technique?.name}
             source="je prompt"
-            fields={technique?.follow_up_questions.map((q) => ({ id: q.id, label: q.label }))}
+            fields={technique?.follow_up_questions.map((q) => ({
+              id: q.id,
+              label: compactFieldLabel(q.label).name,
+            }))}
             filled={prefillProgress.fields}
             models={prefillProgress.models}
             winner={prefillProgress.winner}
@@ -1533,14 +1188,26 @@ export default function OwnPromptOptimizer({
           />
         )}
 
-        {/* 5. Voor-ingevulde velden — controleer en pas aan. Indeling (stap voor
-            stap of alles tegelijk) is een persoonlijke voorkeur in FollowUpQuestions. */}
+        {/* De ingevulde velden: kijk na en vul aan. */}
         {prefill && !prefilling && !generating && technique && (
-          <div className="animate-fade-in space-y-4 rounded-xl border border-rijksblauw-200 bg-rijksblauw-50/40 p-4 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10">
+          <div className="animate-fade-in space-y-4">
+            <AanpakKaart
+              technique={technique}
+              titel={
+                isSjabloon(technique)
+                  ? 'Je antwoorden staan in de velden'
+                  : 'De AI heeft je prompt alvast ingevuld'
+              }
+              reden={stripMarkdown(chosenRec?.value || chosenRec?.reason || '')}
+              opties={aanpakOpties}
+              onKies={(id) => void handleSelectFramework(id)}
+              disabled={prefilling || generating}
+            />
+
             {/* Kwam er niets terug (AI-dienst druk of niet bereikbaar), dan zeggen
                 we dat, met een knop om het opnieuw te proberen. Een leeg formulier
                 onder de tekst "we hebben alles ingevuld" is misleidend. */}
-            {prefill.fields.length === 0 ? (
+            {prefill.fields.length === 0 && (
               <div
                 role="alert"
                 className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-200"
@@ -1562,190 +1229,107 @@ export default function OwnPromptOptimizer({
                   </button>
                 </div>
               </div>
-            ) : (
-              <>
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                  {stripMarkdown(prefill.summary) ||
-                    'We hebben de velden alvast voor je ingevuld op basis van je prompt.'}
-                </p>
-                {isSjabloon(technique) ? (
-                  <p className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300">
-                    {aanvullingen === null && (
-                      <Loader2 size={15} className="mt-0.5 shrink-0 animate-spin text-rijksblauw-500" />
-                    )}
-                    {aanvullingen === null
-                      ? 'De AI kijkt nog of er per veld iets aan te vullen is.'
-                      : Object.keys(aanvullingen).length > 0
-                        ? `De AI stelt bij ${Object.keys(aanvullingen).length} ${
-                            Object.keys(aanvullingen).length === 1 ? 'veld' : 'velden'
-                          } een aanvulling voor; die staat oranje onder het veld. Voeg toe wat klopt, de rest verwerp je.`
-                        : 'De AI had niets aan te vullen. Wat je leeg laat, blijft een plaatshouder in de prompt.'}
-                  </p>
-                ) : (
-                  <p className="text-sm text-slate-600 dark:text-slate-300">
-                    Controleer en pas aan waar nodig, vooral de AI-suggesties met het oranje label{' '}
-                    <span className="font-medium">Controleren</span>. Wat je leeg laat, blijft een
-                    plaatshouder in de uiteindelijke prompt.
-                  </p>
-                )}
-                <PrefillSources prefill={prefill} />
-              </>
             )}
-            <FollowUpQuestions
-              projectContext={projectContext}
-              technique={technique}
-              answers={answers}
-              onChange={setAnswers}
-              aanvullingen={isSjabloon(technique) ? (aanvullingen ?? undefined) : undefined}
-              onAanvulling={isSjabloon(technique) ? handleAanvulling : undefined}
-              fieldMeta={fieldMeta}
-              onUserEdit={(id) =>
-                setFieldMeta((prev) => {
-                  if (!prev[id]) return prev;
-                  const next = { ...prev };
-                  delete next[id];
-                  return next;
-                })
-              }
-              onFinish={handleGenerate}
-            />
 
-            {/* Chain-of-thought-lus voor DIT framework: de velden die de AI zelf
-                moest invullen (source 'ai') zijn precies wat je prompt nog niet gaf
-                voor dit raamwerk. We tonen die als "wat mist nog", laten de gebruiker
-                toelichten, en vullen dan opnieuw voor (runPrefill) zodat die velden
-                concreet worden. Herhaalbaar; genereren kan altijd al. */}
-            {/* Bij de routekaart niet: daar zou een nieuwe ronde de velden opnieuw
-                door de AI laten schrijven. De aanvullingen per veld doen dat werk. */}
-            {!isSjabloon(technique) && (() => {
-              // Velden die de AI heeft moeten gokken (niet uit de prompt afgeleid):
-              // dat is wat dit framework nog mist. Koppel elk aan zijn veld-label.
-              // Bij een sjabloon staat in de note een concrete vraag naar het
-              // ontbrekende gegeven (datum, naam, onderdeel); die is scherper dan
-              // het veldlabel.
-              const sjabloonMode = isSjabloon(technique);
-              const missingForFramework = prefill.fields
-                .filter((f) => f.source === 'ai')
-                .map((f) => {
-                  const note = f.note?.trim();
-                  if (sjabloonMode && note?.endsWith('?')) return note;
-                  return technique.follow_up_questions.find((q) => q.id === f.id)?.label;
-                })
-                .filter((label): label is string => Boolean(label));
-              return (
-                <div className="rounded-xl border border-rijksblauw-200 bg-white/70 p-4 dark:border-rijksblauw-500/30 dark:bg-slate-800/60">
-                  <div className="flex items-start gap-2">
-                    <Lightbulb size={18} className="mt-0.5 shrink-0 text-rijksblauw-500" />
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-                        Maak de prompt scherper voor {technique.name}
-                      </p>
-                      <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-300">
-                        {missingForFramework.length > 0 && sjabloonMode
-                          ? 'Deze gegevens ontbreken nog. De AI heeft ze niet verzonnen maar opengelaten of als voorstel ingevuld. Beantwoord ze hieronder, dan komen ze kloppend op het sjabloon:'
-                          : missingForFramework.length > 0
-                          ? `Voor ${technique.name} heeft je prompt deze onderdelen nog niet aangeleverd; de AI heeft ze nu ingeschat. Licht ze toe voor een scherpere prompt:`
-                          : 'Wil je nog iets verduidelijken? Vul het aan en we vullen de velden opnieuw voor.'}
-                      </p>
+            <PrefillSources prefill={prefill} />
+
+            {isSjabloon(technique) && (
+              <p className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300">
+                {aanvullingen === null && (
+                  <Loader2 size={15} className="mt-0.5 shrink-0 animate-spin text-rijksblauw-500" />
+                )}
+                {aanvullingen === null
+                  ? 'De AI kijkt nog of er per veld iets aan te vullen is.'
+                  : Object.keys(aanvullingen).length > 0
+                    ? `De AI stelt bij ${Object.keys(aanvullingen).length} ${
+                        Object.keys(aanvullingen).length === 1 ? 'veld' : 'velden'
+                      } een aanvulling voor; die staat oranje onder het veld. Voeg toe wat klopt, de rest verwerp je.`
+                    : 'De AI had niets aan te vullen. Wat je leeg laat, blijft een plaatshouder in de prompt.'}
+              </p>
+            )}
+
+            <section className="opl-card p-5">
+              <FollowUpQuestions
+                projectContext={projectContext}
+                technique={technique}
+                answers={answers}
+                onChange={setAnswers}
+                aanvullingen={isSjabloon(technique) ? (aanvullingen ?? undefined) : undefined}
+                onAanvulling={isSjabloon(technique) ? handleAanvulling : undefined}
+                fieldMeta={fieldMeta}
+                onUserEdit={(id) =>
+                  setFieldMeta((prev) => {
+                    if (!prev[id]) return prev;
+                    const next = { ...prev };
+                    delete next[id];
+                    return next;
+                  })
+                }
+                onFinish={handleGenerate}
+                finishLabel="Bouw prompt"
+                heading={<StepHeading title="Kijk na en vul aan" />}
+                showLetters={false}
+                askIfEmpty={prefill.fields.length > 0}
+              />
+
+              {/* Een nieuwe invulronde met extra uitleg: handig als de AI op het
+                  verkeerde spoor zit. Bij de routekaart niet, daar zou een nieuwe
+                  ronde de velden opnieuw laten schrijven. */}
+              {!isSjabloon(technique) && (
+                <div className="mt-3 border-t border-slate-200 pt-3 dark:border-slate-700">
+                  <button
+                    type="button"
+                    aria-expanded={clarifyOpen}
+                    onClick={() => setClarifyOpen((v) => !v)}
+                    className="inline-flex min-h-8 items-center gap-1.5 text-sm font-medium text-rijksblauw-500 transition-colors hover:underline dark:text-rijksblauw-200"
+                  >
+                    <RefreshCw size={15} /> Opnieuw laten invullen met een toelichting
+                  </button>
+                  {clarifyOpen && (
+                    <div className="animate-fade-in mt-2">
+                      <label className="opl-label" htmlFor="prefill-clarify-input">
+                        Jouw toelichting
+                      </label>
+                      <textarea
+                        id="prefill-clarify-input"
+                        className="opl-input min-h-[5rem] resize-y text-[15px]"
+                        value={clarification}
+                        placeholder="Bijv. de doelgroep is nieuwe medewerkers, de toon is informeel"
+                        onChange={(e) => setClarification(e.target.value)}
+                        disabled={prefilling}
+                      />
+                      <button
+                        type="button"
+                        className="opl-btn-secondary mt-2"
+                        onClick={() => void runPrefill(technique, clarification)}
+                        disabled={prefilling || generating || !clarification.trim()}
+                      >
+                        <RefreshCw size={16} /> Velden opnieuw invullen
+                      </button>
                     </div>
-                  </div>
-
-                  {/* De ontbrekende onderdelen van dit framework als concrete vragen. */}
-                  {missingForFramework.length > 0 && (
-                    <ul className="mt-2.5 space-y-1.5 pl-1">
-                      {missingForFramework.map((label, i) => (
-                        <li
-                          key={i}
-                          className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200"
-                        >
-                          <HelpCircle size={15} className="mt-0.5 shrink-0 text-rijksblauw-500" />
-                          <span>{label}</span>
-                        </li>
-                      ))}
-                    </ul>
                   )}
-
-                  {/* Toelichtingsveld: aanvullende context voor dit framework. */}
-                  <label className="opl-label mb-1 mt-3 block" htmlFor="prefill-clarify-input">
-                    Jouw toelichting
-                  </label>
-                  <textarea
-                    id="prefill-clarify-input"
-                    className="opl-input min-h-[80px] resize-y text-sm"
-                    value={clarification}
-                    placeholder="Bijv. de doelgroep is nieuwe medewerkers, de tekst mag max. 200 woorden zijn, toon informeel…"
-                    onChange={(e) => setClarification(e.target.value)}
-                    disabled={prefilling}
-                  />
-
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      className="opl-btn-primary"
-                      onClick={() => void runPrefill(technique, clarification)}
-                      disabled={prefilling || generating || !clarification.trim()}
-                    >
-                      {prefilling ? (
-                        <>
-                          <Loader2 size={16} className="animate-spin" /> Opnieuw invullen…
-                        </>
-                      ) : (
-                        <>
-                          <RefreshCw size={16} /> Velden opnieuw invullen met mijn toelichting
-                        </>
-                      )}
-                    </button>
-                    <span className="text-xs text-slate-500 dark:text-slate-400">
-                      Of genereer hieronder direct.
-                    </span>
-                  </div>
                 </div>
-              );
-            })()}
+              )}
+            </section>
           </div>
         )}
       </div>
 
-      {/* Onduidelijke-invoer-melding: de AI nam de input serieus en kon er geen
-          zinvolle prompt van maken. Geen verzonnen casus, wél uitleg. */}
-      {unclearReason && (
-        <div
-          role="alert"
-          className="animate-fade-in flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-200"
-        >
-          <AlertTriangle size={18} className="mt-0.5 shrink-0" />
-          <div>
-            <p className="font-medium">Je invoer is nog niet duidelijk genoeg</p>
-            <p className="mt-0.5 text-amber-700 dark:text-amber-300/90">{stripMarkdown(unclearReason)}</p>
-          </div>
-        </div>
-      )}
+      {!composerOpen && unclearBlock}
 
-      {/* 6. Genereren — pas zichtbaar nadat de velden zijn voor-ingevuld
-          (verborgen tijdens het genereren; dan toont OptimizingLoader de status) */}
+      {/* Denken, Internet en bouwen op één regel, net als op Technieken. */}
       {prefill && !prefilling && !generating && (
-        <div className="flex justify-end">
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
+          {toggles}
           <button
             type="button"
-            className="opl-btn-primary px-6 py-2.5"
+            className="opl-btn-primary min-h-12 px-6 text-base"
             onClick={handleGenerate}
-            disabled={generating}
           >
-            {generating ? (
-              <>
-                <Loader2 size={18} className="animate-spin" /> Optimaliseren…
-              </>
-            ) : (
-              <>
-                <Sparkles size={18} /> Genereren en optimaliseren prompt
-              </>
-            )}
+            <Sparkles size={20} className="text-rijksoranje-vast" /> Bouw prompt
           </button>
         </div>
       )}
-        </div>
-      </div>
-
     </div>
   );
 }

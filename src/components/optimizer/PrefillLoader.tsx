@@ -6,6 +6,8 @@ import type { PrefillPhase } from '@/services/optimizeService';
 import type { PrefilledField } from '@/types';
 
 interface PrefillLoaderProps {
+  /** Alleen de velden: de kop en de stappen staan al in MakeProgress. */
+  plain?: boolean;
   /** Naam van het raamwerk waarvan de velden worden ingevuld. */
   techniqueName?: string;
   /** Waar de inhoud vandaan komt, bijv. "je prompt" of "het gesprek". */
@@ -57,6 +59,7 @@ function stepsFor(webSearch: boolean, thinking: boolean): { phase: PrefillPhase;
  * loopt echt, in tegenstelling tot een onbepaalde spinner.
  */
 export default function PrefillLoader({
+  plain = false,
   techniqueName,
   source = 'je prompt',
   fields = [],
@@ -100,6 +103,8 @@ export default function PrefillLoader({
       </div>
 
       <div className="p-5 sm:p-6">
+        {!plain && (
+          <>
         <div className="flex items-center gap-3">
           <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-rijksblauw-50 text-rijksblauw-600 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rijksblauw-400/30" />
@@ -122,6 +127,8 @@ export default function PrefillLoader({
 
         {/* Stappenspoor: welke fase loopt er nu. */}
         <PhaseSteps steps={STEPS.map((s) => s.label)} activeIndex={stepIndex} className="mt-4" />
+          </>
+        )}
 
         {/* Zoeken en denken in beeld: wat er gebeurt en dat het tijd kost. */}
         {(webSearch || thinking) && (

@@ -29,6 +29,8 @@ interface FieldBlockProps {
   tall?: boolean;
   /** Letter van het framework-onderdeel (de C van CONTEXT), of leeg. */
   marker?: string;
+  /** Is dit veld leeg, dan vragen we erom: label en oranje rand. */
+  askIfEmpty?: boolean;
   onChange: (value: string) => void;
   /** Start "Vul verder aan" voor dit veld. */
   onExpand: () => void;
@@ -65,6 +67,7 @@ function FieldBlock({
   autoFocus,
   tall,
   marker,
+  askIfEmpty,
   onChange,
   onExpand,
   expanding,
@@ -82,6 +85,7 @@ function FieldBlock({
   const { name, instruction } = compactFieldLabel(question.label);
   const uitleg = [instruction, question.why].filter(Boolean).join('\n');
   const badge = Boolean(meta && filled);
+  const vraag = Boolean(askIfEmpty && !filled);
   return (
     <div
       className={clsx(
@@ -118,9 +122,14 @@ function FieldBlock({
       </div>
       {/* Status en actie op een eigen rij, zodat ze de titel niet laten verspringen. */}
       <div>
-        {(badge || active || filled) && (
+        {(badge || active || filled || vraag) && (
           <div className="flex min-h-7 flex-wrap items-center gap-x-2 gap-y-1 pb-1">
             {meta && filled && <PrefillBadge source={meta.source} note={meta.note} />}
+            {vraag && (
+              <span className="inline-flex items-center rounded-full bg-rijksoranje/15 px-2 py-0.5 text-[11px] font-semibold text-slate-800 dark:text-slate-100">
+                Vul dit nog in
+              </span>
+            )}
             {active && (
               <span className="inline-flex items-center gap-1 rounded-full bg-rijksblauw-500/10 px-2 py-0.5 text-[11px] font-semibold text-rijksblauw-700 dark:bg-rijksblauw-500/20 dark:text-rijksblauw-100">
                 <Wand2 size={11} /> {expanding ? 'AI vult dit veld aan' : 'Voorstel voor dit veld'}
@@ -146,7 +155,10 @@ function FieldBlock({
         id={fieldId}
         autoFocus={autoFocus}
         rows={tall ? 6 : 3}
-        className="opl-input block resize-y self-stretch text-[15px]"
+        className={clsx(
+          'opl-input block min-h-full resize-y self-stretch text-[15px]',
+          vraag && 'border-2 border-rijksoranje',
+        )}
         value={value}
         placeholder={question.placeholder}
         onChange={(e) => onChange(e.target.value)}
@@ -253,6 +265,10 @@ interface FollowUpQuestionsProps {
   onAanvulling?: (id: string, toevoegen: boolean) => void;
   /** Kop boven de velden, links van de indelingsknop (bijv. een StepHeading). */
   heading?: ReactNode;
+  /** Toon de letter van het framework bij elk veld; uit op Prompt maken. */
+  showLetters?: boolean;
+  /** Vraag om lege velden (na het voor-invullen door de AI). */
+  askIfEmpty?: boolean;
 }
 
 /**
@@ -279,6 +295,8 @@ export default function FollowUpQuestions({
   aanvullingen,
   onAanvulling,
   heading,
+  showLetters = true,
+  askIfEmpty = false,
 }: FollowUpQuestionsProps) {
   const questions = technique.follow_up_questions;
   const total = questions.length;
@@ -287,7 +305,7 @@ export default function FollowUpQuestions({
   const labelParts = questions.map((q) => compactFieldLabel(q.label));
   const lettered = labelParts.length > 0 && labelParts.every((p) => p.code);
   const markers = labelParts.map((p, i) => (lettered && p.code ? p.code : String(i + 1)));
-  const fieldMarker = (i: number) => (lettered ? markers[i] : undefined);
+  const fieldMarker = (i: number) => (lettered && showLetters ? markers[i] : undefined);
   const [step, setStep] = useState(0);
   const [reviewing, setReviewing] = useState(false);
   // Persoonlijke voorkeur: stap voor stap (default) of alle velden tegelijk.
@@ -435,7 +453,7 @@ export default function FollowUpQuestions({
           </div>
           <FieldLayoutToggle layout={layout} onChange={setLayout} />
         </div>
-        <div className="-mx-2 grid grid-cols-[repeat(auto-fit,minmax(min(100%,18rem),1fr))] gap-x-2">
+        <div className="-mx-2 grid grid-cols-[repeat(auto-fit,minmax(min(100%,22rem),1fr))] gap-x-2">
           {questions.map((q, i) => (
             <FieldBlock
               key={q.id}
@@ -444,6 +462,7 @@ export default function FollowUpQuestions({
               meta={fieldMeta?.[q.id]}
               idPrefix="fu-stacked"
               marker={fieldMarker(i)}
+              askIfEmpty={askIfEmpty}
               onChange={(v) => editField(q.id, v)}
               onExpand={() => handleExpand(q)}
               expanding={expandingId === q.id}
@@ -607,6 +626,7 @@ export default function FollowUpQuestions({
           autoFocus
           tall
           marker={fieldMarker(step)}
+          askIfEmpty={askIfEmpty}
           onChange={update}
           onExpand={() => handleExpand(current)}
           expanding={expandingId === current.id}

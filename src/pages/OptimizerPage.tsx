@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Sparkles, Compass, Wand2 } from '@/components/common/icons';
+import { Compass, Wand2 } from '@/components/common/icons';
 import GoalDialog from '@/components/optimizer/GoalDialog';
 import DailyBackground from '@/components/common/DailyBackground';
 import InfoDot from '@/components/common/InfoDot';
-import StepHeading from '@/components/optimizer/StepHeading';
 import ThinkingToggle from '@/components/common/ThinkingToggle';
 import WebSearchToggle from '@/components/common/WebSearchToggle';
 import useThinking from '@/lib/useThinking';
@@ -315,12 +314,14 @@ export default function OptimizerPage() {
       <DailyBackground />
       <div className="rounded-2xl bg-slate-100 p-4 shadow-lg sm:p-6 dark:bg-slate-900">
       <div className="mb-5 flex items-center gap-1">
-        <h1 className="flex items-center gap-2 text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
-          <Sparkles className="text-rijksoranje" /> Prompt maken
+        <h1 className="text-3xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
+          Prompt maken
         </h1>
         <InfoDot
           label="Uitleg over prompt maken"
-          text="Je maakt een herbruikbare prompt. Kopieer hem naar je eigen chat, zo vaak als je wilt."
+          text={
+            'Je maakt een herbruikbare prompt. De AI kiest de aanpak en vult alvast in; jij vult aan.\nHeb je nog geen tekst? Bij Ik heb een idee denken we eerst met je mee.'
+          }
         />
       </div>
 
@@ -342,63 +343,41 @@ export default function OptimizerPage() {
             phase === 'transition' ? 'pointer-events-none opacity-0' : 'opacity-100'
           }`}
         >
-          {/* Segmented control: kies eerst je instap (twee gescheiden knoppen),
-              daarna verschijnt de bijbehorende chat naadloos binnen hetzelfde
-              oranje-omrande element — zo valt de oranje rand alléén om de chat.
-              De tabs (header) gaan in beide flows mee in datzelfde element. */}
+          {/* Twee tabbladen boven het invulvlak. Denken en Internet staan bij de
+              knop waarmee je start: ze gelden voor het invullen én het bouwen. */}
           {(() => {
             const tabs = (
+              <div role="tablist" aria-label="Hoe begin je?" className="grid grid-cols-1 gap-x-3 sm:grid-cols-2">
+                <EntryTab
+                  active={ownActive}
+                  onClick={() => setEntryMode('own-prompt')}
+                  icon={<Wand2 size={22} />}
+                  title="Ik heb al een prompt"
+                />
+                <EntryTab
+                  active={!ownActive}
+                  onClick={() => setEntryMode('goal')}
+                  icon={<Compass size={22} />}
+                  title="Ik heb een idee"
+                />
+              </div>
+            );
+            const toggles = (
               <>
-                {/* Stap 1: twee tegels. Wat elke instap doet staat achter het
-                    infobolletje, niet meer als alinea op de tegel. */}
-                <div className="border-b border-slate-200 bg-white px-5 pb-4 pt-5 dark:border-slate-700 dark:bg-slate-800 sm:px-6">
-                  <StepHeading
-                    step={1}
-                    title="Hoe begin je?"
-                    info={
-                      'Prompt: wij zoeken het passende framework en vullen aan wat ontbreekt.\nIdee: we denken eerst stap voor stap met je mee.'
-                    }
-                  />
-                  <div
-                    role="tablist"
-                    aria-label="Kies hoe je wilt starten"
-                    className="grid grid-cols-1 gap-3 sm:grid-cols-2"
-                  >
-                    <EntryTab
-                      active={ownActive}
-                      onClick={() => setEntryMode('own-prompt')}
-                      icon={<Wand2 size={20} />}
-                      title="Ik heb al een prompt"
-                    />
-                    <EntryTab
-                      active={!ownActive}
-                      accent="blauw"
-                      onClick={() => setEntryMode('goal')}
-                      icon={<Compass size={20} />}
-                      title="Ik heb een idee"
-                    />
-                  </div>
-                </div>
-                {/* Denken: geldt voor het schrijven van de prompt aan het eind
-                    van beide instappen. Staat hier en niet bij de knop zelf,
-                    omdat de doel-flow vanzelf doorloopt naar het schrijven; wie
-                    het pas daar mag kiezen, is te laat. */}
-                <div className="flex items-center justify-end gap-1 border-b border-slate-200 px-3 py-1.5 dark:border-slate-700">
-                  <ThinkingToggle
-                    value={thinking}
-                    onChange={setThinking}
-                    unavailableReason={thinkingUnavailable}
-                  />
-                  {searchAvailable && <WebSearchToggle value={webSearch} onChange={setWebSearch} />}
-                  <InfoDot
-                    label="Uitleg over denken en internet"
-                    text={
-                      searchAvailable
-                        ? 'Denken: grondiger, wel trager. Alleen bij een lastige opdracht.\nInternet: de AI zoekt eerst op internet en noemt de bronnen.'
-                        : 'Denken: grondiger, wel trager. Alleen bij een lastige opdracht.'
-                    }
-                  />
-                </div>
+                <ThinkingToggle
+                  value={thinking}
+                  onChange={setThinking}
+                  unavailableReason={thinkingUnavailable}
+                />
+                {searchAvailable && <WebSearchToggle value={webSearch} onChange={setWebSearch} />}
+                <InfoDot
+                  label="Uitleg over denken en internet"
+                  text={
+                    searchAvailable
+                      ? 'Denken: grondiger, wel trager. Alleen bij een lastige opdracht.\nInternet: de AI zoekt eerst op internet en noemt de bronnen.'
+                      : 'Denken: grondiger, wel trager. Alleen bij een lastige opdracht.'
+                  }
+                />
               </>
             );
 
@@ -419,16 +398,16 @@ export default function OptimizerPage() {
               />
             );
 
-            // Beide instappen renderen de tabs zelf als header (oranje rand om de
-            // chat; het advies en de voor-ingevulde velden staan eronder). De
-            // eigen-prompt-flow analyseert een geplakte prompt; de doel-flow voert
-            // eerst een gesprek. In beide gevallen kiest de AI het framework en
-            // vult zij de velden voor — handmatig vanaf nul bouwen kan niet meer.
+            // Beide instappen renderen de tabs zelf, boven hun eigen vlak. De
+            // eigen-prompt-flow leest een geplakte prompt; de doel-flow voert eerst
+            // een gesprek. In beide gevallen kiest de AI het framework en vult zij
+            // de velden voor. Niemand kiest hier zelf; dat kan op /technieken.
             return ownActive ? (
               <OwnPromptOptimizer
                 settings={settingsRef.current}
                 onResult={handleResult}
                 header={tabs}
+                toggles={toggles}
                 initialPrompt={initialPrompt}
                 projectContext={projectContext?.text}
                 renderProjectContext={renderProjectContext}
@@ -440,6 +419,7 @@ export default function OptimizerPage() {
                 settings={settingsRef.current}
                 onResult={handleResult}
                 header={tabs}
+                toggles={toggles}
                 projectContext={projectContext?.text}
                 renderProjectContext={renderProjectContext}
                 thinking={thinkingOn}

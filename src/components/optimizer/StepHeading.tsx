@@ -13,7 +13,8 @@ export default function StepHeading({
   info,
   children,
 }: {
-  step: number;
+  /** Nummer in het bolletje; zonder nummer is het een gewone kop. */
+  step?: number;
   title: string;
   /** Hoort de kop bij één invoerveld, dan is hij ook het label van dat veld. */
   htmlFor?: string;
@@ -23,12 +24,14 @@ export default function StepHeading({
 }) {
   return (
     <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
-      <span
-        aria-hidden="true"
-        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-rijksblauw-700 text-sm font-bold text-white dark:bg-rijksblauw-500"
-      >
-        {step}
-      </span>
+      {step !== undefined && (
+        <span
+          aria-hidden="true"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-rijksblauw-700 text-sm font-bold text-white dark:bg-rijksblauw-500"
+        >
+          {step}
+        </span>
+      )}
       <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
         {htmlFor ? <label htmlFor={htmlFor}>{title}</label> : title}
       </h2>
