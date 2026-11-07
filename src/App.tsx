@@ -22,7 +22,7 @@ const NetworkPage = lazy(() => import('@/pages/NetworkPage'));
 const CommunityPage = lazy(() => import('@/pages/CommunityPage'));
 const PublicProfilePage = lazy(() => import('@/pages/PublicProfilePage'));
 const ChatPage = lazy(() => import('@/pages/ChatPage'));
-const AccessibilityPage = lazy(() => import('@/pages/AccessibilityPage'));
+const PersonalSettingsPage = lazy(() => import('@/pages/PersonalSettingsPage'));
 // De techniekenlijst met invulvelden (training): eigen instap naast /genereren.
 const TechniquesPage = lazy(() => import('@/pages/TechniquesPage'));
 
@@ -108,8 +108,14 @@ export default function App() {
                   apparaat; projecten (Postgres) vragen wel een account. */}
               <Route path="/chat" element={<ChatPage />} />
 
-              {/* Openbaar, net als de chat: ook zonder account in te stellen. */}
-              <Route path="/toegankelijkheid" element={<AccessibilityPage />} />
+              {/* Openbaar, net als de chat: toegankelijkheid moet ook zonder
+                  account in te stellen zijn. Alleen de eigen instructie voor de
+                  chat vraagt om in te loggen, dat regelt dat onderdeel zelf. */}
+              <Route path="/instellingen/:onderdeel?" element={<PersonalSettingsPage />} />
+              <Route
+                path="/toegankelijkheid"
+                element={<Navigate to="/instellingen/toegankelijkheid" replace />}
+              />
 
               {/* Vereist een ingelogde gebruiker */}
               <Route element={<RequireAuth />}>

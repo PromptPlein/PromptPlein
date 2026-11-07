@@ -385,11 +385,18 @@ export interface ChatSettings {
   /** Het concrete API-model binnen de gekozen provider. */
   model: string;
   /**
-   * DE systeemprompt van de chat: de enige instructie die de assistent krijgt.
-   * Wat hier staat gaat één-op-één naar het model; er komt nergens nog een
-   * regel bij. Leeg = de ingebouwde {@link DEFAULT_CHAT_SYSTEM_PROMPT}.
+   * DE systeemprompt van de chat. Wat hier staat gaat één-op-één naar het model.
+   * Er komt alleen nog iets onder als de gebruiker zelf een persoonlijke
+   * instructie heeft ingesteld; zie {@link personalInstructionPrompt}.
+   * Leeg = de ingebouwde {@link DEFAULT_CHAT_SYSTEM_PROMPT}.
    */
   systemPrompt: string;
+  /**
+   * Tekst waarmee de persoonlijke instructie van de gebruiker onder de
+   * systeemprompt komt, met {{instructie}} als invulplek. Staat hier zodat de
+   * beheerder kan lezen wat er bij het model aankomt. Leeg = ingebouwde default.
+   */
+  personalInstructionPrompt: string;
   /**
    * Systeemprompt voor UITVOERgesprekken: een gegenereerde prompt draait in de
    * chat (Testkamer of "Kopiëren in chat"). Bewust los van `systemPrompt`,
@@ -832,12 +839,25 @@ Bronnen
 [1] Titel van de bron, https://voorbeeld.nl/pagina
 [2] Titel van de andere bron, https://voorbeeld.nl/andere-pagina`;
 
+/**
+ * Hiermee komt de persoonlijke instructie onder de systeemprompt. Dezelfde vorm
+ * als DEFAULT_CHAT_SYSTEM_PROMPT: een kop met bulletregels en geen XML-tag, want
+ * de chat haalt een meegeëchode tag er niet uit. De voorrangsregel staat erin
+ * omdat een wens van de gebruiker kan botsen met de huisregels.
+ */
+export const DEFAULT_PERSONAL_INSTRUCTION_PROMPT = `Persoonlijke wensen van deze gebruiker
+• Volg deze wensen in elk antwoord.
+• Botst een wens met de regels hierboven, dan gelden de regels hierboven.
+
+{{instructie}}`;
+
 export const DEFAULT_CHAT_SETTINGS: ChatSettings = {
   enabled: true,
   // Mistral is de afgesproken basis voor de chat (Europees, snel en goedkoop).
   provider: 'mistral',
   model: 'mistral-small-latest',
   systemPrompt: DEFAULT_CHAT_SYSTEM_PROMPT,
+  personalInstructionPrompt: DEFAULT_PERSONAL_INSTRUCTION_PROMPT,
   executionSystemPrompt: DEFAULT_EXECUTION_SYSTEM_PROMPT,
   temperature: 0.5,
   optimizeEnabled: true,
@@ -853,12 +873,23 @@ export const DEFAULT_CHAT_SETTINGS: ChatSettings = {
 };
 
 /**
- * De systeeminstructie van de chat. Bewust niets meer dan de prompt zelf: geen
- * tweede laag, geen aanvullende zinnen. Wat de beheerder in het portaal ziet
- * staan, is precies wat het model krijgt.
+ * De systeeminstructie van de chat: de prompt uit het portaal en verder niets,
+ * tenzij de gebruiker zelf een persoonlijke instructie heeft ingesteld. Die komt
+ * eronder, met de tekst die de beheerder in het portaal ziet staan.
  */
-export function composeChatSystemPrompt(settings: ChatSettings): string {
-  return settings.systemPrompt.trim() || DEFAULT_CHAT_SYSTEM_PROMPT;
+export function composeChatSystemPrompt(
+  settings: ChatSettings,
+  personalInstruction = '',
+): string {
+  const base = settings.systemPrompt.trim() || DEFAULT_CHAT_SYSTEM_PROMPT;
+  const personal = personalInstruction.trim();
+  if (!personal) return base;
+  const template = settings.personalInstructionPrompt.trim() || DEFAULT_PERSONAL_INSTRUCTION_PROMPT;
+  // Een functie als vervanger: de tekst van de gebruiker mag $-tekens bevatten.
+  const block = template.includes('{{instructie}}')
+    ? template.replace('{{instructie}}', () => personal)
+    : `${template}\n\n${personal}`;
+  return `${base}\n\n${block}`;
 }
 
 /**
@@ -932,6 +963,10 @@ function normalizeChat(raw: Partial<ChatSettings> | null | undefined): ChatSetti
     provider,
     model,
     systemPrompt: typeof raw.systemPrompt === 'string' ? raw.systemPrompt : d.systemPrompt,
+    personalInstructionPrompt:
+      typeof raw.personalInstructionPrompt === 'string'
+        ? raw.personalInstructionPrompt
+        : d.personalInstructionPrompt,
     executionSystemPrompt:
       typeof raw.executionSystemPrompt === 'string'
         ? raw.executionSystemPrompt

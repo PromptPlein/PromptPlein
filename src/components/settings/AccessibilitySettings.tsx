@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Accessibility, Volume2 } from '@/components/common/icons';
+import { Volume2 } from '@/components/common/icons';
 import toast from 'react-hot-toast';
 import {
   SPEECH_RATES,
@@ -80,7 +80,7 @@ function CheckField({
  * Alles is met gewone formuliervelden gebouwd: die werken vanzelf met het
  * toetsenbord en met schermlezers.
  */
-export default function AccessibilityPage() {
+export default function AccessibilitySettings() {
   const { settings, update, reset, speechOn } = useAccessibility();
   const [voices, setVoices] = useState<SpeechVoiceOption[]>(() => listDutchVoices());
   const canSpeak = speechSupported();
@@ -109,16 +109,10 @@ export default function AccessibilityPage() {
   const legendClass = 'mb-1 font-medium text-slate-900 dark:text-slate-100';
 
   return (
-    <div className="mx-auto max-w-2xl space-y-5 px-4 py-8 sm:px-6">
-      <div>
-        <h1 className="flex items-center gap-2 text-2xl font-semibold text-rijksblauw-700 dark:text-rijksblauw-200">
-          <Accessibility size={24} aria-hidden="true" />
-          Toegankelijkheid
-        </h1>
-        <p className="mt-1 text-slate-600 dark:text-slate-300">
-          Wijzigingen gelden meteen en blijven bewaard in deze browser.
-        </p>
-      </div>
+    <div className="space-y-5">
+      <p className="text-slate-600 dark:text-slate-300">
+        Wijzigingen gelden meteen en blijven bewaard in deze browser.
+      </p>
 
       <section className={sectionClass} aria-labelledby="ta-lezen">
         <h2 id="ta-lezen" className={titleClass}>

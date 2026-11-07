@@ -119,7 +119,7 @@ export default function Header() {
               <ShieldCheck size={18} />
             </NavLink>
             <NavLink
-              to="/toegankelijkheid"
+              to="/instellingen/toegankelijkheid"
               className={({ isActive }) =>
                 clsx(
                   'rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-800',

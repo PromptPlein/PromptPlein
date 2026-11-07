@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { UserCircle2, LogOut, ShieldCheck, ChevronDown, User, Sun, Moon, Monitor, Mail } from '@/components/common/icons';
+import { UserCircle2, LogOut, ShieldCheck, ChevronDown, User, Sun, Moon, Monitor, Mail, Settings2 } from '@/components/common/icons';
 import clsx from 'clsx';
 import { useTheme, type ThemeChoice } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
@@ -120,6 +120,13 @@ export default function UserMenu() {
             className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700"
           >
             <User size={16} className="text-rijksblauw-500" /> Mijn profiel
+          </Link>
+          <Link
+            to="/instellingen"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700"
+          >
+            <Settings2 size={16} className="text-rijksblauw-500" /> Instellingen
           </Link>
           {isAdmin && (
             <Link

@@ -193,7 +193,8 @@ ministeries (`orgTree.ts`, migraties 0020/0021/0024).
 ## Opslagscheiding: dit is een bewuste keuze
 
 - **Postgres**: prompts, gebruikers, organisaties, technieken, categorieën,
-  rollen, analytics, audit log, meldingen, chat*projecten* (0030).
+  rollen, analytics, audit log, meldingen, chat*projecten* (0030), de persoonlijke
+  chatinstructie (`user_chat_preferences`, 0047).
 - **localStorage, nooit de database**: de chat*gesprekken* zelf
   (`src/lib/chatStorage.ts`, één bak per browser, met eviction). Ze horen bij
   het apparaat en niet bij het account: ingelogd of niet zie je dezelfde chats,
@@ -205,9 +206,28 @@ Chatgesprekken staan bewust niet op de server: dat is de privacybelofte van de
 chat. Verplaats ze niet naar Postgres zonder dat expliciet met de gebruiker af
 te stemmen.
 
+## Persoonlijke instellingen
+
+`/instellingen` is openbaar en heeft twee onderdelen: Chat en Toegankelijkheid. Je
+komt er via het gebruikersmenu, de knop onder in de chatzijbalk en het
+toegankelijkheidsicoon in de kop. Dat icoon blijft staan: wie grotere letters
+nodig heeft, moet die niet in een menu hoeven zoeken.
+
+De eigen instructie onder Chat vraagt om in te loggen, want hij staat op de server
+(`user_chat_preferences`, RLS strikt eigenaar-alleen). Bewust een eigen tabel en
+geen kolom op `profiles`: die mag een collega uit dezelfde organisatie lezen. De
+pagina zegt zichtbaar dat de tekst op de server staat. Verwijderen wist de rij.
+
+De instructie vervangt de systeemprompt van de beheerder niet, maar komt eronder
+(`composeChatSystemPrompt`), met de tekst uit Beheer, AI-instellingen. Botst een
+wens met de huisregels, dan gelden de huisregels. Hij geldt alleen in een gewone
+chat: een uitvoergesprek test de prompt zelf en in een project is de
+projectinstructie al de instructie van de gebruiker.
+
 ## Toegankelijkheid en leesgemak in de chat
 
-`/toegankelijkheid` is bewust openbaar, omdat de chat ook zonder account werkt.
+De keuzes staan op `/instellingen/toegankelijkheid` (`/toegankelijkheid` verwijst
+daarheen). Die pagina is bewust openbaar, omdat de chat ook zonder account werkt.
 De keuzes staan per browser in localStorage (`AccessibilityContext`, sleutel
 `opl-toegankelijkheid`) en gelden via `<html>`: tekstgrootte als `font-size`
 (alles staat in rem, dus reken ook marges in rem), de rest als `data-contrast`,

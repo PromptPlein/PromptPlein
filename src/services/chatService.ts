@@ -21,6 +21,7 @@ import {
   MAX_PROJECT_OPTIMIZE_CHARS,
   type ChatSettings,
 } from '@/services/settingsService';
+import { getPersonalInstructionForChat } from '@/services/personalInstructionService';
 import type { ChatProjectContext, ChatSource } from '@/types';
 
 /**
@@ -117,6 +118,10 @@ export async function sendChatMessage(args: {
   // allebei iets klaar, dan wint de uitvoering (dat is een expliciete handoff).
   const isExecution = kind === 'execution';
   const isProject = !isExecution && Boolean(project);
+  // Alleen in een gewoon gesprek. Een uitvoergesprek test de prompt zelf en in een
+  // project is de projectinstructie al de instructie van de gebruiker.
+  const personalInstruction =
+    isExecution || isProject ? '' : await getPersonalInstructionForChat();
 
   const functionUrl = getFunctionUrl('optimize-prompt');
   if (!isSupabaseConfigured || !supabase || !functionUrl) {
@@ -170,14 +175,15 @@ export async function sendChatMessage(args: {
               webSearchInstruction: composeWebSearchInstruction(settings),
             }
           : {}),
-        // De systeemprompt van de beheerder, ongewijzigd; bij een uitvoergesprek
-        // de neutrale uitvoerinstructie en in een project de projectinstructie
-        // van de gebruiker zelf. De server voegt er niets aan toe.
+        // De systeemprompt van de beheerder, in een gewoon gesprek met daaronder
+        // de persoonlijke instructie van de gebruiker; bij een uitvoergesprek de
+        // neutrale uitvoerinstructie en in een project de projectinstructie van
+        // de gebruiker zelf. De server voegt er niets aan toe.
         systemPrompt: isExecution
           ? composeExecutionSystemPrompt(settings)
           : isProject && project
             ? composeProjectSystemPrompt(project.instructions)
-            : composeChatSystemPrompt(settings),
+            : composeChatSystemPrompt(settings, personalInstruction),
       },
       onChunk,
       signal,

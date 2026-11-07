@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { FolderOpen, MessageSquare, Plus, Trash2 } from '@/components/common/icons';
+import { useNavigate } from 'react-router-dom';
+import { FolderOpen, MessageSquare, Plus, Settings2, Trash2 } from '@/components/common/icons';
 import clsx from 'clsx';
 import InfoDot from '@/components/common/InfoDot';
 import { formatDate } from '@/lib/utils';
@@ -115,6 +116,7 @@ export default function ChatSidebar({
   onRequestDelete: (id: string) => void;
   onRequestDeleteAll: () => void;
 }) {
+  const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -288,6 +290,16 @@ export default function ChatSidebar({
           <Trash2 size={14} /> Alles verwijderen
         </button>
       )}
+      {/* Uit tijdens het streamen, net als wisselen van chat: wegklikken zou het
+          lopende antwoord afbreken. */}
+      <button
+        type="button"
+        className="opl-btn-ghost mt-2 w-full"
+        onClick={() => navigate('/instellingen/chat')}
+        disabled={disabled}
+      >
+        <Settings2 size={14} /> Instellingen
+      </button>
     </aside>
   );
 }

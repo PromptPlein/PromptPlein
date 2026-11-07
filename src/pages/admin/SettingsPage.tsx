@@ -40,6 +40,7 @@ import {
   DEFAULT_CHAT_SETTINGS,
   DEFAULT_CHAT_OPTIMIZE_PROMPT,
   DEFAULT_CHAT_SYSTEM_PROMPT,
+  DEFAULT_PERSONAL_INSTRUCTION_PROMPT,
   DEFAULT_EXECUTION_SYSTEM_PROMPT,
   DEFAULT_GENERATOR_WEB_SEARCH_INSTRUCTION,
   DEFAULT_KADER_INSTRUCTION,
@@ -580,15 +581,46 @@ export default function SettingsPage() {
               <span>
                 Gaat mee bij <strong>elk</strong> bericht van <strong>iedere</strong> gebruiker en
                 bepaalt taal, toon en opmaak van de antwoorden. Laat leeg om de ingebouwde standaard
-                te gebruiken. Dit is de <strong>enige</strong> instructie die de chat krijgt: er komt
-                verderop geen regel meer bij en het antwoord wordt daarna niet meer bijgeschaafd.
-                Wat hier staat, is wat de assistent doet.
+                te gebruiken. Er komt alleen nog iets onder als de gebruiker zelf een eigen
+                instructie heeft ingesteld (zie hieronder). Het antwoord wordt daarna niet meer
+                bijgeschaafd.
               </span>
               {chat.systemPrompt.trim() !== DEFAULT_CHAT_SYSTEM_PROMPT && (
                 <button
                   type="button"
                   className="shrink-0 font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
                   onClick={() => patchChat({ systemPrompt: DEFAULT_CHAT_SYSTEM_PROMPT })}
+                >
+                  Herstel standaard
+                </button>
+              )}
+            </p>
+          </div>
+
+          <div>
+            <label className="opl-label" htmlFor="chatPersonalInstructionPrompt">
+              Tekst rond de eigen instructie van een gebruiker
+            </label>
+            <textarea
+              id="chatPersonalInstructionPrompt"
+              className="opl-input min-h-[120px] resize-y font-mono text-[13px]"
+              value={chat.personalInstructionPrompt}
+              onChange={(e) => patchChat({ personalInstructionPrompt: e.target.value })}
+            />
+            <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400 dark:text-slate-500">
+              <span>
+                Komt onder de systeemprompt als een ingelogde gebruiker bij Instellingen een eigen
+                instructie heeft ingesteld. Op de plek van <code>{'{{instructie}}'}</code> komt die
+                tekst. Geldt alleen voor gewone chats, niet in projecten en niet bij het uitvoeren
+                van een prompt. Wat een gebruiker invult, kun je hier niet lezen.
+              </span>
+              {chat.personalInstructionPrompt.trim() !== DEFAULT_PERSONAL_INSTRUCTION_PROMPT && (
+                <button
+                  type="button"
+                  className="shrink-0 font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
+                  onClick={() =>
+                    patchChat({ personalInstructionPrompt: DEFAULT_PERSONAL_INSTRUCTION_PROMPT })
+                  }
                 >
                   Herstel standaard
                 </button>
