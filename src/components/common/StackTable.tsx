@@ -41,7 +41,8 @@ export default function StackTable({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <div ref={ref} className="opl-stapel">
+    // Schuifbaar, dus ook met het toetsenbord te bereiken.
+    <div ref={ref} className="opl-stapel" tabIndex={0} role="region" aria-label="Tabel">
       {children}
     </div>
   );

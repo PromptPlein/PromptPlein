@@ -294,7 +294,7 @@ export default function ChatMessageList({
         <button
           type="button"
           onClick={jumpToEnd}
-          className="absolute bottom-3 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-rijksblauw-700 shadow-md hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-rijksblauw-500 dark:border-slate-600 dark:bg-slate-800 dark:text-rijksblauw-200 dark:hover:bg-slate-700"
+          className="absolute bottom-3 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 whitespace-nowrap rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-rijksblauw-700 shadow-md hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-rijksblauw-500 dark:border-slate-600 dark:bg-slate-800 dark:text-rijksblauw-200 dark:hover:bg-slate-700"
         >
           <ArrowDown size={15} /> Naar beneden
         </button>

@@ -97,15 +97,21 @@ export default function PromptsPage() {
 
   if (loadError) {
     return (
-      <div className="opl-card p-6 text-sm text-red-700 dark:text-red-300">
-        De prompts konden niet worden geladen: {loadError}
+      <div className="space-y-4">
+        <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">Prompts</h1>
+        <div className="opl-card p-6 text-sm text-red-700 dark:text-red-300">
+          De prompts konden niet worden geladen: {loadError}
+        </div>
       </div>
     );
   }
   if (!catalog) {
     return (
-      <div className="flex items-center gap-2 text-sm text-slate-500">
-        <Loader2 size={16} className="animate-spin" /> Prompts laden…
+      <div className="space-y-4">
+        <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">Prompts</h1>
+        <div className="flex items-center gap-2 text-sm text-slate-500">
+          <Loader2 size={16} className="animate-spin" /> Prompts laden…
+        </div>
       </div>
     );
   }
@@ -148,7 +154,7 @@ export default function PromptsPage() {
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <div className="relative min-w-[16rem] flex-1">
+        <div className="relative min-w-0 flex-1 basis-64">
           <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             className="opl-input pl-9 text-sm"

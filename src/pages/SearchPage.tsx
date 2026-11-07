@@ -186,13 +186,13 @@ export default function SearchPage() {
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Zoek op titel of inhoud"
             aria-label="Zoek prompts"
-            className="opl-input h-16 rounded-xl pl-[3.375rem] pr-36 text-lg max-sm:pl-11 max-sm:pr-16"
+            className="opl-input h-16 rounded-xl pl-[3.375rem] pr-36 text-lg max-sm:pl-[44px] max-sm:pr-[64px]"
           />
           <button
             type="button"
             onClick={() => setPanelOpen(true)}
             aria-haspopup="dialog"
-            className="absolute bottom-2 right-2 top-2 inline-flex items-center gap-2 rounded bg-rijksblauw-50 px-3.5 text-sm font-semibold text-rijksblauw-700 transition-colors hover:bg-rijksblauw-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200 dark:hover:bg-rijksblauw-500/25"
+            className="absolute bottom-2 right-2 top-2 inline-flex items-center gap-2 rounded bg-rijksblauw-50 px-3.5 max-sm:px-[14px] text-sm font-semibold text-rijksblauw-700 transition-colors hover:bg-rijksblauw-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200 dark:hover:bg-rijksblauw-500/25"
           >
             <SlidersHorizontal size={18} />
             {/* Op de telefoon alleen het icoon: het zoekvak heeft de breedte nodig. */}
@@ -206,7 +206,7 @@ export default function SearchPage() {
           </button>
         </div>
 
-        <div className="grid w-full grid-cols-3 gap-1 min-[22rem]:grid-cols-4 lg:grid-cols-8">
+        <div className="grid w-full grid-cols-3 gap-1 min-[352px]:grid-cols-4 lg:grid-cols-8">
           {categories.map((c) => {
             const Icon = categoryIcon(c.icon);
             const active = filters.category_ids?.includes(c.id) ?? false;

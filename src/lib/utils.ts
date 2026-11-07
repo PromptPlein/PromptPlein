@@ -203,16 +203,27 @@ export function tidyPromptMarkup(input: string): string {
 
 export async function copyToClipboard(text: string): Promise<void> {
   if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch {
+      // Safari op de iPhone weigert dit zodra er na de tik eerst iets anders is
+      // gebeurd, zoals een deellink aanmaken. De omweg hieronder lukt dan vaak nog.
+    }
   }
-  // Fallback voor oudere browsers.
+  const previous = document.activeElement as HTMLElement | null;
   const el = document.createElement('textarea');
   el.value = text;
+  el.readOnly = true;
   el.style.position = 'fixed';
   el.style.opacity = '0';
+  // Onder 16 pixels zoomt iOS in op het veld, ook als je het niet ziet.
+  el.style.fontSize = '16px';
   document.body.appendChild(el);
   el.select();
-  document.execCommand('copy');
+  el.setSelectionRange(0, text.length);
+  const copied = document.execCommand('copy');
   document.body.removeChild(el);
+  previous?.focus({ preventScroll: true });
+  if (!copied) throw new Error('Kopiëren is niet gelukt.');
 }

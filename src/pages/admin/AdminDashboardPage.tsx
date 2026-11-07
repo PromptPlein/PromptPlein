@@ -34,13 +34,13 @@ function StatCard({
   value: number | string;
 }) {
   return (
-    <div className="opl-card flex items-center gap-4 p-5">
-      <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-rijksblauw-50 text-rijksblauw-500 dark:bg-rijksblauw-500/15">
+    <div className="opl-card flex flex-col items-start gap-2 p-4 sm:flex-row sm:items-center sm:gap-4 sm:p-5">
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-rijksblauw-50 text-rijksblauw-500 dark:bg-rijksblauw-500/15">
         {icon}
       </span>
-      <div>
+      <div className="min-w-0 max-w-full">
         <p className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">{value}</p>
-        <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
+        <p className="text-xs text-slate-500 [overflow-wrap:anywhere] dark:text-slate-400">{label}</p>
       </div>
     </div>
   );

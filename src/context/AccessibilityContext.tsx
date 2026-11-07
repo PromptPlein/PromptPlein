@@ -60,6 +60,32 @@ export const DEFAULT_ACCESSIBILITY: AccessibilitySettings = {
 
 export const SPEECH_RATES = [0.75, 1, 1.25, 1.5];
 
+/** De grootte van `-apple-system-body` bij de standaardinstelling van iOS. */
+const IOS_BODY_SIZE = 17;
+/** Daarboven is er op een telefoon geen zinnige opmaak meer te maken. */
+const MAX_SYSTEM_FACTOR = 2;
+
+/**
+ * Safari op de iPhone negeert de tekstgrootte uit Instellingen voor websites, tenzij
+ * je erom vraagt. Wie daar grotere tekst heeft gekozen, verwacht die ook hier.
+ * Android regelt dit zelf: zie de meta text-scale in index.html.
+ */
+function systemTextFactor(): number {
+  const touchApple =
+    /iPhone|iPad|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (!touchApple || !document.body || !CSS.supports('font', '-apple-system-body')) return 1;
+  const probe = document.createElement('span');
+  probe.style.font = '-apple-system-body';
+  probe.style.position = 'absolute';
+  probe.style.visibility = 'hidden';
+  document.body.appendChild(probe);
+  const size = parseFloat(getComputedStyle(probe).fontSize);
+  probe.remove();
+  if (!size) return 1;
+  return Math.min(MAX_SYSTEM_FACTOR, Math.max(1, size / IOS_BODY_SIZE));
+}
+
 const TEXT_SCALE_PERCENT: Record<TextScale, string> = {
   normaal: '100%',
   groot: '125%',
@@ -115,7 +141,8 @@ function readStored(): AccessibilitySettings {
 function applyToDocument(settings: AccessibilitySettings) {
   const root = document.documentElement;
   // Tailwind rekent in rem, dus zo groeit de hele interface mee.
-  root.style.fontSize = TEXT_SCALE_PERCENT[settings.textScale];
+  // Bovenop de keuze hier telt de tekstgrootte van de iPhone zelf.
+  root.style.fontSize = `calc(${TEXT_SCALE_PERCENT[settings.textScale]} * ${systemTextFactor()})`;
   const toggle = (name: string, on: boolean, value: string) => {
     if (on) root.dataset[name] = value;
     else delete root.dataset[name];
@@ -143,11 +170,17 @@ export function AccessibilityProvider({ children }: { children: ReactNode }) {
   // Layout-effect: de lettergrootte staat zo goed voordat er iets getekend is.
   useLayoutEffect(() => {
     applyToDocument(settings);
+    // De tekstgrootte verander je in Instellingen, dus buiten de app om.
+    const reapply = () => {
+      if (document.visibilityState === 'visible') applyToDocument(settings);
+    };
+    document.addEventListener('visibilitychange', reapply);
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
     } catch {
       /* localStorage niet beschikbaar: de keuze geldt dan alleen deze sessie */
     }
+    return () => document.removeEventListener('visibilitychange', reapply);
   }, [settings]);
 
   const update = useCallback((patch: Partial<AccessibilitySettings>) => {

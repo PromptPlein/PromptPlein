@@ -274,7 +274,7 @@ export default function ChatContextWizard({
               onKeyDown={submitOnEnter(() => goal.trim() && interview.start())}
             />
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] gap-2">
             {RICHTINGEN.map(({ label, tekst, icon: Icon }) => (
               <button
                 key={label}

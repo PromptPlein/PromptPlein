@@ -601,7 +601,7 @@ export default function OrgChart({ orgs }: { orgs: Organization[] }) {
       </svg>
 
       {/* Zoekbalk linksboven */}
-      <div className="absolute left-4 top-4 w-64">
+      <div className="absolute left-4 top-4 w-64 max-w-[calc(100%-2rem)]">
         <div className="relative">
           <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
@@ -609,6 +609,7 @@ export default function OrgChart({ orgs }: { orgs: Organization[] }) {
             onChange={(e) => setSearch(e.target.value)}
             onPointerDown={(e) => e.stopPropagation()}
             placeholder="Zoek ministerie of afdeling…"
+            aria-label="Zoek ministerie of afdeling"
             className="w-full rounded-lg border border-slate-200 bg-white/95 py-2 pl-9 pr-8 text-sm text-slate-700 shadow-sm outline-none backdrop-blur placeholder:text-slate-400 focus:border-rijksblauw-400 focus:ring-2 focus:ring-rijksblauw-500/20 dark:border-slate-700 dark:bg-slate-800/95 dark:text-slate-100 dark:placeholder:text-slate-500"
           />
           {search && (
@@ -664,7 +665,7 @@ export default function OrgChart({ orgs }: { orgs: Organization[] }) {
       {/* Detailpaneel bij selectie */}
       {selected && (
         <div
-          className="absolute right-4 top-4 w-72 rounded-xl border border-slate-200 bg-white/95 p-4 shadow-lg backdrop-blur dark:border-slate-700 dark:bg-slate-800/95"
+          className="absolute right-4 top-4 w-72 max-w-[calc(100%-2rem)] rounded-xl border border-slate-200 bg-white/95 p-4 shadow-lg backdrop-blur dark:border-slate-700 dark:bg-slate-800/95"
           onPointerDown={(e) => e.stopPropagation()}
         >
           <div className="flex items-center gap-3">

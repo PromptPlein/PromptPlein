@@ -13,10 +13,20 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          three: ['three', '@react-three/fiber', '@react-three/drei'],
-          react: ['react', 'react-dom', 'react-router-dom'],
-          charts: ['recharts'],
+        // Rollup trekt alles wat three en recharts importeren mee hun chunk in,
+        // ook kleine hulpjes als clsx die de hele app gebruikt. Dan laadt elke
+        // pagina die twee chunks, op een telefoon 1,3 MB voor niets. Een eigen
+        // chunk voor die hulpjes houdt ze erbuiten.
+        manualChunks(id) {
+          if (id.includes('vite/preload-helper')) return 'gedeeld';
+          if (!id.includes('/node_modules/')) return undefined;
+          if (/\/node_modules\/(clsx|@babel\/runtime)\//.test(id)) return 'gedeeld';
+          if (/\/node_modules\/(three|@react-three|three-stdlib|troika-[^/]*)\//.test(id)) return 'three';
+          if (/\/node_modules\/(recharts|d3-[^/]*|victory-vendor|internmap)\//.test(id)) return 'charts';
+          if (/\/node_modules\/(react|react-dom|react-router|react-router-dom|scheduler)\//.test(id)) {
+            return 'react';
+          }
+          return undefined;
         },
       },
     },

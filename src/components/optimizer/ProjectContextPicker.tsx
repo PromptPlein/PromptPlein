@@ -200,10 +200,10 @@ export default function ProjectContextPicker({
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') close();
     }
-    document.addEventListener('mousedown', onPointer);
+    document.addEventListener('pointerdown', onPointer);
     document.addEventListener('keydown', onKey);
     return () => {
-      document.removeEventListener('mousedown', onPointer);
+      document.removeEventListener('pointerdown', onPointer);
       document.removeEventListener('keydown', onKey);
     };
     // close leest de actuele draft en tekst, dus deze effect moet die volgen.

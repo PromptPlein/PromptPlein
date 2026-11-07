@@ -576,11 +576,11 @@ function ChatPageInner() {
        (useFitHeight): zo blijft de leesruimte zo groot mogelijk en houdt het
        tekstvak tijdens een gesprek een vaste plek. Alleen de berichtenlijst
        scrollt. Op de telefoon vervalt de kaart en loopt de chat tot de rand. */
-    <div className="mx-auto w-full max-w-6xl sm:px-6 sm:py-4 lg:px-8 laag:py-0">
+    <div className="mx-auto w-full max-w-6xl sm:px-6 sm:py-4 lg:px-8 laag:!py-0">
       <div
         ref={cardRef}
         style={cardMaxHeight ? { height: cardMaxHeight } : undefined}
-        className="opl-card flex h-[calc(100dvh-14rem)] overflow-hidden max-sm:rounded-none max-sm:border-0 max-sm:shadow-none"
+        className="opl-card opl-chat-kaart flex h-[calc(100dvh-14rem)] overflow-hidden max-sm:rounded-none max-sm:border-0 max-sm:shadow-none"
       >
         <ChatSidebar
           {...sidebarProps}
@@ -593,7 +593,7 @@ function ChatPageInner() {
         />
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-            <div className="flex items-center gap-2 border-b border-slate-200 px-2 py-1 dark:border-slate-700 sm:px-6 sm:py-3 lg:px-6">
+            <div className="opl-chat-titel flex items-center gap-2 border-b border-slate-200 px-2 py-1 dark:border-slate-700 sm:px-6 sm:py-3 lg:px-6 laag:!py-0">
               {/* Zonder zijbalk: de lijst met chats en projecten schuift in. */}
               <button
                 type="button"

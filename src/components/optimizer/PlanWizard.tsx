@@ -1673,7 +1673,7 @@ function ReviewStepRow({
               className="group inline-flex items-center gap-1 font-semibold text-slate-800 hover:text-rijksblauw-700 dark:text-slate-100 dark:hover:text-rijksblauw-200"
             >
               {step.title}
-              <Pencil size={12} className="opacity-0 transition-opacity group-hover:opacity-60" />
+              <Pencil size={12} className="opacity-0 transition-opacity group-hover:opacity-60 opl-geen-muis:opacity-60" />
             </button>
           )}
           {techniqueName && (

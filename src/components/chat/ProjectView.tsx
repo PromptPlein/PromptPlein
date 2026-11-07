@@ -283,7 +283,7 @@ export default function ProjectView({
                   </button>
                   <button
                     type="button"
-                    className="mr-1 shrink-0 rounded-md p-1.5 text-slate-500 opacity-0 transition-opacity hover:bg-slate-200 hover:text-rijksrood focus:opacity-100 group-hover:opacity-100 dark:text-slate-400 dark:hover:bg-slate-700"
+                    className="mr-1 shrink-0 rounded-md p-1.5 text-slate-500 opacity-0 transition-opacity opl-geen-muis:opacity-100 hover:bg-slate-200 hover:text-rijksrood focus:opacity-100 group-hover:opacity-100 dark:text-slate-400 dark:hover:bg-slate-700"
                     onClick={() => onRequestDeleteConversation(entry.id)}
                     disabled={disabled}
                     aria-label={`Verwijder chat "${entry.title}"`}

@@ -9,18 +9,20 @@ import HelpShortcut from '@/components/common/HelpShortcut';
 import RouteFocus from '@/components/common/RouteFocus';
 import { HELP_PATH } from '@/lib/shortcuts';
 import HomePage from '@/pages/HomePage';
-import SearchPage from '@/pages/SearchPage';
-import OptimizerPage from '@/pages/OptimizerPage';
-import MyLibraryPage from '@/pages/MyLibraryPage';
-import PromptDetailPage from '@/pages/PromptDetailPage';
-import SharePreviewPage from '@/pages/SharePreviewPage';
 import RequireAuth from '@/components/auth/RequireAuth';
 import LoginPage from '@/pages/auth/LoginPage';
 import SignupPage from '@/pages/auth/SignupPage';
 import PasswordResetPage from '@/pages/auth/PasswordResetPage';
 import UpdatePasswordPage from '@/pages/auth/UpdatePasswordPage';
-import ProfilePage from '@/pages/ProfilePage';
-import ContactPage from '@/pages/ContactPage';
+// De bouwer is groot en je komt er vaak niet eens: wie op de telefoon alleen de
+// chat of de start opent, hoeft hem niet te laden.
+const OptimizerPage = lazy(() => import('@/pages/OptimizerPage'));
+const SearchPage = lazy(() => import('@/pages/SearchPage'));
+const MyLibraryPage = lazy(() => import('@/pages/MyLibraryPage'));
+const PromptDetailPage = lazy(() => import('@/pages/PromptDetailPage'));
+const SharePreviewPage = lazy(() => import('@/pages/SharePreviewPage'));
+const ProfilePage = lazy(() => import('@/pages/ProfilePage'));
+const ContactPage = lazy(() => import('@/pages/ContactPage'));
 const NetworkPage = lazy(() => import('@/pages/NetworkPage'));
 const CommunityPage = lazy(() => import('@/pages/CommunityPage'));
 const PublicProfilePage = lazy(() => import('@/pages/PublicProfilePage'));
@@ -68,8 +70,9 @@ export default function App() {
 
   return (
     <ReferenceDataProvider>
-      {/* Eerst min-h-screen als terugval, dan de hoogte zonder de balken van de browser. */}
-      <div id="app-shell" className="opl-app flex min-h-screen min-h-dvh flex-col">
+      {/* min-h-full en geen min-h-dvh: naast de zwevende balk van Safari is dvh
+          hoger dan wat je ziet, en dan kan een pagina die precies past toch schuiven. */}
+      <div id="app-shell" className="opl-app flex min-h-full flex-col">
         <RouteFocus />
         <a href="#inhoud" className="opl-skip-link">
           Naar de inhoud

@@ -132,7 +132,7 @@ export default function PromptCard({ prompt, author, onChanged }: PromptCardProp
     // De titel is de link; zijn klikvlak (after:inset-0) beslaat de hele kaart.
     // De knoppen liggen er met z-10 bovenop en blijven dus gewone knoppen.
     <article className="opl-card group relative flex h-full flex-col gap-3 p-4 transition-shadow duration-200 hover:shadow-md">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center justify-between gap-2 flex-wrap gap-y-1">
         <span className="inline-flex min-w-0 items-center gap-2 text-sm font-semibold text-rijksblauw-700 dark:text-rijksblauw-200">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-rijksblauw-50 dark:bg-rijksblauw-500/15">
             <CategoryIcon size={16} />

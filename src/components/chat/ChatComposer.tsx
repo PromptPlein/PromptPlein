@@ -156,6 +156,10 @@ interface ChatComposerProps {
  * rechtsboven het oranje sterretje: één klik en de AI herschrijft wat er staat
  * tot een scherpere vraag. De oorspronkelijke tekst blijft daarna één klik weg.
  */
+/** Aanraakscherm zonder toetsenbord erbij: Enter betekent daar iets anders. */
+const touchKeyboard =
+  typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
+
 const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function ChatComposer(
   {
     disabled,
@@ -330,9 +334,12 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
     clearText();
     setBeforeOptimize(null);
     setEnlarged(false);
+    // Het antwoord komt er nu aan: het toetsenbord gaat weg, anders lees je het
+    // door een kiergat van een paar regels.
+    if (touchKeyboard) textareaRef.current?.blur();
     onSend(value);
     // Na een klik op Verstuur stond de focus op een knop die nu uitgaat.
-    textareaRef.current?.focus();
+    if (!touchKeyboard) textareaRef.current?.focus();
   }
 
   async function optimize() {
@@ -412,10 +419,14 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
     onRoutekaart(value);
   }
 
+  const enterHint = touchKeyboard
+    ? 'Verstuur met de knop Verstuur. De returntoets geeft een nieuwe regel.'
+    : 'Enter verstuurt. Shift+Enter geeft een nieuwe regel.';
+
   return (
     <div
       className={clsx(
-        'px-4 pb-3 pt-3 sm:px-6',
+        'px-4 pb-3 pt-3 sm:px-6 laag:!pb-1 laag:!pt-1',
         // In een leeg gesprek staat het veld los in het midden, zonder scheidslijn.
         !prominent && 'border-t border-slate-200 dark:border-slate-700',
       )}
@@ -428,7 +439,7 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
         {isRoutekaart && !streaming && (
           <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-rijksblauw-200 bg-rijksblauw-50/70 px-3 py-2 text-xs text-slate-700 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10 dark:text-slate-200">
             <MapIcon size={15} className="shrink-0 text-rijksblauw-600 dark:text-rijksblauw-300" />
-            <span className="min-w-[12rem] flex-1">
+            <span className="min-w-0 flex-1 basis-48">
               Dit is een routekaart. PromptPlein maakt hem direct in de vaste rijksstijl, zonder AI:
               altijd dezelfde opmaak en meteen klaar. Ook Verstuur maakt hem zo.
             </span>
@@ -539,7 +550,9 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
                 disabled
                   ? (disabledPlaceholder ?? 'Chat wordt geladen…')
                   : prominent
-                    ? 'Typ hier je bericht en druk op Enter'
+                    ? touchKeyboard
+                      ? 'Typ hier je bericht'
+                      : 'Typ hier je bericht en druk op Enter'
                     : 'Stel je vraag…'
               }
               value={text}
@@ -558,7 +571,9 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
               onKeyDown={(e) => {
                 // Enter verzendt; Shift+Enter maakt een nieuwe regel.
                 // Tijdens samenstellen van een teken bevestigt Enter dat teken.
-                if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                // Op het schermtoetsenbord blijft de returntoets een nieuwe regel, zoals
+                // in elke berichtenapp: versturen doe je met de knop Verstuur.
+                if (e.key === 'Enter' && !touchKeyboard && !e.shiftKey && !e.nativeEvent.isComposing) {
                   e.preventDefault();
                   submit();
                 }
@@ -602,7 +617,7 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
               Staat onder het tekstvak in plaats van eroverheen, dus de tekst kan er
               nooit achter verdwijnen. Een lichte scheidingslijn erboven zet de
               knoppen los van wat je typt. */}
-          <div className="mt-1 flex items-center gap-1 border-t border-slate-100 px-2 pb-2 pt-1.5 dark:border-slate-700/60">
+          <div className="opl-chat-balk mt-1 flex items-center gap-1 border-t border-slate-100 px-2 pb-2 pt-1.5 dark:border-slate-700/60">
             {/* De plusknop houdt alles bij elkaar wat je kunt toevoegen of aanzetten.
                 De balk laat daarnaast alleen zien wat er nu aanstaat. */}
             <ComposerPlusMenu
@@ -653,7 +668,7 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
                 aria-label={activeProjectName ? `Project: ${activeProjectName}` : 'Projecten'}
               >
                 <FolderOpen size={16} className="shrink-0" />
-                <span className="max-w-[9rem] truncate text-xs font-medium">
+                <span className="opl-balk-optioneel max-w-[9rem] truncate text-xs font-medium">
                   {activeProjectName ?? 'Projecten'}
                 </span>
               </button>
@@ -728,7 +743,7 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
                 onClick={onStop}
                 aria-label="Stop het antwoord"
               >
-                <Square size={15} /> Stop
+                <Square size={15} /> <span className="opl-balk-kort">Stop</span>
               </button>
             ) : (
               <button
@@ -742,7 +757,7 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
                 disabled={!canSend}
                 aria-label="Verstuur"
               >
-                <Send size={15} /> Verstuur
+                <Send size={15} /> <span className="opl-balk-kort">Verstuur</span>
               </button>
             )}
           </div>
@@ -804,14 +819,14 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
         {/* Sneltoetsen en de bijlagelimiet stonden hier als een regel kleine
             grijze tekst. Die staat nu achter het infobolletje: wie het wil weten
             vindt het, en het veld blijft rustig. */}
-        <div className="mt-1 flex items-center justify-between gap-2">
+        <div className="opl-chat-notitie mt-1 flex items-center justify-between gap-2">
           <InfoDot
             label="Uitleg bij het invoerveld"
             className="-ml-1"
             text={
               allowAttachments
-                ? `Enter verstuurt. Shift+Enter geeft een nieuwe regel.\nBijlagen: maximaal ${MAX_CHAT_ATTACHMENTS}, elk tot 10 MB. Sleep ze hierheen of klik op de paperclip. Ze blijven de hele chat beschikbaar.`
-                : 'Enter verstuurt. Shift+Enter geeft een nieuwe regel.'
+                ? `${enterHint}\nBijlagen: maximaal ${MAX_CHAT_ATTACHMENTS}, elk tot 10 MB. Sleep ze hierheen of kies Bestand achter de plus. Ze blijven de hele chat beschikbaar.`
+                : enterHint
             }
           />
           {notice && (

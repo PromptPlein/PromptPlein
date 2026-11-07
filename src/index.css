@@ -43,6 +43,9 @@ body,
 }
 
 html {
+  /* Wat de focus krijgt, verdwijnt niet achter de vaste balk boven of onder (WCAG 2.4.11). */
+  scroll-padding-top: 4.5rem;
+  scroll-padding-bottom: calc(var(--onderbalk) + 1rem);
   /* Liggend vergroot iOS anders vanzelf de tekst. 100% en niet none: met none
      werkt de tekstgrootte uit de browser niet meer. */
   -webkit-text-size-adjust: 100%;
@@ -180,6 +183,17 @@ html.dark body {
  * tekstgrootte uit Toegankelijkheid.
  */
 @media (pointer: coarse), (max-width: 39.99rem) {
+  /* Een lange knoptekst breekt af in plaats van over de rand te lopen. */
+  .opl-btn,
+  .opl-btn-primary,
+  .opl-btn-accent,
+  .opl-btn-secondary,
+  .opl-btn-ghost {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
   .opl-btn,
   .opl-btn-primary,
   .opl-btn-accent,
@@ -187,7 +201,7 @@ html.dark body {
   .opl-btn-ghost,
   .opl-input:not(textarea),
   select,
-  input[type='range'] {
+  input:not([type='checkbox'], [type='radio'], [type='file'], [type='hidden']) {
     min-height: 44px;
   }
 
@@ -291,8 +305,21 @@ summary {
   }
 }
 
-html[data-toetsenbord='open'] .opl-onderbalk {
+html[data-toetsenbord='open'] .opl-onderbalk,
+html[data-toetsenbord='open'] .opl-chat-kop {
   display: none;
+}
+
+/* De kop hield de ruimte onder de statusbalk vrij. Valt hij weg, dan doet de pagina dat. */
+html[data-toetsenbord='open'] .opl-app:has(.opl-chat-kop) {
+  padding-top: env(safe-area-inset-top);
+}
+
+/* Liggend met toetsenbord blijven alleen het gesprek en het tekstvak over. */
+@media (max-height: 31.25rem) {
+  html[data-toetsenbord='open'] .opl-chat-titel {
+    display: none;
+  }
 }
 
 .opl-app {
@@ -303,6 +330,11 @@ html[data-toetsenbord='open'] .opl-onderbalk {
  * Tabel als rijtje kaarten (zie StackTable). De kop blijft bestaan voor de
  * schermlezer, maar is onzichtbaar: de kolomnaam staat bij elke waarde.
  */
+/* Vanaf sm blijft het een tabel. Past hij niet, dan schuift hij zijwaarts. */
+.opl-stapel {
+  overflow-x: auto;
+}
+
 @media (max-width: 39.99rem) {
   .opl-stapel table,
   .opl-stapel tbody,
@@ -333,6 +365,7 @@ html[data-toetsenbord='open'] .opl-onderbalk {
     padding: 0.25rem 0;
     white-space: normal;
     text-align: right;
+    overflow-wrap: anywhere;
   }
 
   .opl-stapel tbody td[data-label]::before {
@@ -358,6 +391,40 @@ html[data-toetsenbord='open'] .opl-onderbalk {
   .opl-stapel tbody td[colspan] {
     justify-content: center;
     text-align: center;
+  }
+}
+
+/*
+ * De chat reageert op de ruimte in rem, en dus op de tekstgrootte: bij 200% op een
+ * telefoon is er evenveel ruimte als bij 100% op een heel klein scherm. Een media
+ * query ziet dat niet, die rekent met de standaardgrootte van de browser.
+ */
+.opl-chat-kaart {
+  container: kaart / size;
+}
+
+.opl-chat-balk {
+  container: balk / inline-size;
+}
+
+/* Laag venster: het gesprek gaat voor. De controle op persoonsgegevens bij versturen
+   blijft gewoon werken. */
+@container kaart (max-height: 20rem) {
+  .opl-chat-notitie {
+    display: none;
+  }
+}
+
+/* De knoppen hebben hun naam als aria-label, dus alleen het oog mist de tekst. */
+@container balk (max-width: 20rem) {
+  .opl-balk-optioneel {
+    display: none;
+  }
+}
+
+@container balk (max-width: 14rem) {
+  .opl-balk-kort {
+    display: none;
   }
 }
 

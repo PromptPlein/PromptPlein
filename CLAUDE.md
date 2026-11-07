@@ -226,6 +226,53 @@ wens met de huisregels, dan gelden de huisregels. Hij geldt alleen in een gewone
 chat: een uitvoergesprek test de prompt zelf en in een project is de
 projectinstructie al de instructie van de gebruiker.
 
+## Telefoon en aanraakscherm
+
+De hele app werkt op de telefoon, ook het beheer. Testen doe je op 320 pixels breed
+met tekstgrootte Extra groot: wat daar past, past overal. Staat er iets nieuws, kijk
+dan ook liggend en met het toetsenbord open.
+
+- **Menu**: op de telefoon staat het hoofdmenu onderaan (`--onderbalk`, 60 pixels plus
+  de thuisbalk), vanaf `sm` plakt het bovenaan. Wat vast onderaan staat, houdt daar
+  rekening mee met `bottom: var(--onderbalk)`. De kop heeft naast het lint plek voor
+  drie knoppen: Toegankelijkheid, meldingen en het accountmenu. De rest zit op de
+  telefoon in dat menu.
+- **Raakvlakken**: de regels in `index.css` maken alles 44 bij 44 pixels op een
+  aanraakscherm of smal venster. In pixels, want een vinger groeit niet mee met de
+  tekstgrootte. Een losse tekstlink buiten een zin krijgt `opl-raak`. Kop en onderbalk
+  staan om dezelfde reden in pixels, en niet in rem.
+- **Icoonknoppen** krijgen altijd een `aria-label`: daar hangt ook het centreren aan.
+- **Invoer**: alles op minstens 16 pixels, anders zoomt iOS bij elk veld in.
+- **Toetsenbord**: `viewportWatch` meet de zichtbare hoogte (`--zichtbaar`) en zet
+  `data-toetsenbord` op `<html>`. Gebruik daar `100dvh` niet voor: die ziet het
+  toetsenbord niet, en is naast de zwevende balk van Safari hoger dan wat je ziet.
+  De chat volgt dit via `useFitHeight`. Op een aanraakscherm geeft de returntoets een
+  nieuwe regel en sluit Verstuur het toetsenbord, zodat je het antwoord kunt lezen.
+- **Tekstgrootte van het toestel** telt mee: Android via de meta `text-scale`, iOS via
+  `systemTextFactor` (`-apple-system-body`). Alles in rem groeit dus mee, tot 200%, en
+  dat is een stand die mensen echt gebruiken. Test hem ook.
+- **Aanraken is geen muis**: wat bij aanwijzen verschijnt, krijgt `opl-geen-muis:` zodat
+  het er op een aanraakscherm gewoon staat. Hover-kleuren werken alleen waar hover
+  bestaat (`hoverOnlyWhenSupported`). Geen automatische focus op een veld op een
+  aanraakscherm als dat het toetsenbord over de inhoud legt.
+- **Vensters** lopen via `Modal` of `Drawer`, of gebruiken zelf `useDialogFocus`: de
+  focus gaat naar binnen en weer terug, en de pagina eronder wordt `inert`, zodat
+  VoiceOver er met vegen niet achter komt. Nieuwe vaste panelen dus ook via een portal
+  op `document.body`.
+- **Tabellen** in `StackTable` worden op de telefoon kaarten en houden hun rollen.
+- **Tekenen** (organogram, 3D) vangt elke veeg op. Daarom vult dat nooit het hele
+  scherm en heeft het netwerk een gewone lijst, op de telefoon de standaard.
+- **Paginawissel**: `RouteFocus` zet de titel uit `pageTitles.ts`, gaat naar boven en
+  zet de focus op de zichtbare `h1`. Zichtbaar, want tijdens het laden van een lazy
+  pagina staat de kop van de vorige pagina verborgen in de DOM. Elke pagina heeft dus
+  precies één `h1`, ook in de laad- en foutstand, en een nieuwe route hoort in die lijst.
+- **Grijze tekst**: `text-slate-400` en `-500` zijn tokens die in beide modi 4,5:1
+  halen. Randen en vlakken houden de echte tint.
+- **Bundel**: `manualChunks` in `vite.config.ts` houdt three en recharts uit de eerste
+  lading. Rollup trekt alles wat die pakketten importeren mee hun chunk in, dus een
+  gedeeld hulpje dat daar belandt laadt ze weer op elke pagina. Controleer na een
+  nieuwe dependency in `dist/index.html` dat ze niet in de preload staan.
+
 ## Toegankelijkheid en leesgemak in de chat
 
 De keuzes staan op `/instellingen/toegankelijkheid` (`/toegankelijkheid` verwijst

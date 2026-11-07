@@ -7,7 +7,7 @@ import HoverPreview from '@/components/common/HoverPreview';
 import { GOAL_EXAMPLES, categoryOf } from '@/data/goalExamples';
 import { recommendTechniques } from '@/services/optimizeService';
 import { isContextPrompt, isSkillCreator } from '@/lib/techniques';
-import { stripMarkdown } from '@/lib/utils';
+import { stripMarkdown, copyToClipboard } from '@/lib/utils';
 import type { TechniqueRecommendation } from '@/types';
 
 // De voorbeelddoelen staan in data/goalExamples.ts, gedeeld met de doel-instap
@@ -68,7 +68,7 @@ export default function GoalRecommender({
   /** Kopieer een voorbeelddoel naar het klembord. */
   async function copyExample(text: string) {
     try {
-      await navigator.clipboard.writeText(text);
+      await copyToClipboard(text);
       toast.success('Voorbeeld gekopieerd.');
     } catch {
       toast.error('Kopiëren mislukt.');

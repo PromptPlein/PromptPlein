@@ -60,7 +60,7 @@ export default function ReportsPage() {
           <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Bestuurlijke rapportage</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">Overzicht van prompts, organisaties en goedkeuringen.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button className="opl-btn-secondary" onClick={() => reportToCsv(data, catName)}>
             <Download size={16} /> CSV
           </button>

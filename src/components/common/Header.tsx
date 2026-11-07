@@ -73,7 +73,7 @@ export default function Header() {
       <header
         className={clsx(
           'bg-white pt-[env(safe-area-inset-top)] dark:bg-slate-900',
-          pathname === '/chat' && 'laag:hidden',
+          pathname === '/chat' && 'opl-chat-kop laag:hidden',
         )}
       >
         <div className="relative mx-auto flex h-[64px] max-w-7xl items-center justify-between pl-4 pr-1 sm:h-[80px] sm:px-6 lg:px-8">

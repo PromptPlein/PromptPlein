@@ -45,7 +45,7 @@ import {
   type PromptKind,
 } from '@/lib/techniques';
 import { usePersistentDraft } from '@/lib/usePersistentDraft';
-import { stripMarkdown } from '@/lib/utils';
+import { stripMarkdown, copyToClipboard } from '@/lib/utils';
 import {
   generatePrompt,
   prefillFields,
@@ -325,7 +325,7 @@ export default function OwnPromptOptimizer({
   /** Kopieer een voorbeeldprompt naar het klembord. */
   async function copyExample(text: string) {
     try {
-      await navigator.clipboard.writeText(text);
+      await copyToClipboard(text);
       toast.success('Voorbeeld gekopieerd.');
     } catch {
       toast.error('Kopiëren mislukt.');

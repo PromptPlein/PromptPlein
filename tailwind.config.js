@@ -17,6 +17,8 @@ const rgbTriplet = (hex) => {
 
 /** @type {import('tailwindcss').Config} */
 export default {
+  // Na een tik blijft een hover-kleur anders plakken tot je ergens anders tikt.
+  future: { hoverOnlyWhenSupported: true },
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   darkMode: 'class',
   theme: {

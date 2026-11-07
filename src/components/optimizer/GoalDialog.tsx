@@ -26,7 +26,7 @@ import {
   type PrefillPhase,
 } from '@/services/optimizeService';
 import { isContextPrompt, isSjabloon } from '@/lib/techniques';
-import { activityIdentifier, stripMarkdown } from '@/lib/utils';
+import { activityIdentifier, stripMarkdown, copyToClipboard } from '@/lib/utils';
 import { usePersistentDraft } from '@/lib/usePersistentDraft';
 import { detectPii, detectBlockedTopics, type GuardrailFinding } from '@/services/guardrails';
 import { logBehavior, newBehaviorSession, type BehaviorSession } from '@/services/behaviorService';
@@ -290,7 +290,7 @@ export default function GoalDialog({
   /** Kopieer een voorbeelddoel naar het klembord. */
   async function copyExample(text: string) {
     try {
-      await navigator.clipboard.writeText(text);
+      await copyToClipboard(text);
       toast.success('Voorbeeld gekopieerd.');
     } catch {
       toast.error('Kopiëren mislukt.');

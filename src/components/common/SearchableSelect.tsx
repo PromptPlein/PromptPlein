@@ -73,14 +73,17 @@ export default function SearchableSelect({
     function onClick(e: MouseEvent) {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
     }
-    document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
+    document.addEventListener('pointerdown', onClick);
+    return () => document.removeEventListener('pointerdown', onClick);
   }, [open]);
 
   // Focus het zoekveld zodra de lijst opent en wis de vorige zoekterm.
   useEffect(() => {
     if (open) {
       setQuery('');
+      // Op een aanraakscherm zou het toetsenbord nu meteen over de lijst schuiven.
+      // Zoeken blijft er, maar pas als iemand erop tikt.
+      if (window.matchMedia('(pointer: coarse)').matches) return;
       // Wacht één frame zodat het input-element gemonteerd is.
       requestAnimationFrame(() => inputRef.current?.focus());
     }
@@ -99,7 +102,6 @@ export default function SearchableSelect({
         disabled={disabled}
         onClick={() => setOpen((v) => !v)}
         className="opl-input flex items-center justify-between gap-2 text-left disabled:cursor-not-allowed disabled:opacity-60"
-        aria-haspopup="listbox"
         aria-expanded={open}
       >
         <span className={selected ? '' : 'text-slate-400 dark:text-slate-500'}>
@@ -118,8 +120,11 @@ export default function SearchableSelect({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={searchPlaceholder}
+              aria-label={searchPlaceholder}
               onKeyDown={(e) => {
-                if (e.key === 'Escape') setOpen(false);
+                if (e.key !== 'Escape') return;
+                setOpen(false);
+                rootRef.current?.querySelector('button')?.focus();
               }}
             />
             {query && (
@@ -134,12 +139,14 @@ export default function SearchableSelect({
             )}
           </div>
 
-          <ul className="max-h-60 overflow-auto py-1" role="listbox">
+          {/* Een gewone lijst met knoppen: dat leest en bedient elke schermlezer goed. */}
+          <ul className="max-h-60 overflow-auto overscroll-contain py-1">
             {clearLabel && (
               <li>
                 <button
                   type="button"
                   onClick={() => choose(null)}
+                  aria-current={value === null ? 'true' : undefined}
                   className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm text-slate-500 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-700/60"
                 >
                   {clearLabel}
@@ -154,8 +161,7 @@ export default function SearchableSelect({
                   type="button"
                   onClick={() => choose(o.id)}
                   className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm text-slate-800 hover:bg-slate-50 dark:text-slate-100 dark:hover:bg-slate-700/60"
-                  role="option"
-                  aria-selected={o.id === value}
+                  aria-current={o.id === value ? 'true' : undefined}
                 >
                   <span>
                     {o.label}

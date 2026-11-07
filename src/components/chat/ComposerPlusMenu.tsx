@@ -142,10 +142,10 @@ export default function ComposerPlusMenu({
     function onResize() {
       setOpen(false);
     }
-    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('pointerdown', onPointerDown);
     window.addEventListener('resize', onResize);
     return () => {
-      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('pointerdown', onPointerDown);
       window.removeEventListener('resize', onResize);
     };
   }, [open]);

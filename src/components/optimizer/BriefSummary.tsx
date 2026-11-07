@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Check, ChevronDown, ClipboardCopy, Download, ListChecks, Sparkles } from '@/components/common/icons';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
-import { stripMarkdown } from '@/lib/utils';
+import { stripMarkdown, copyToClipboard } from '@/lib/utils';
 
 /**
  * Herkent de kopjes waarmee de opdrachtbeschrijving is opgebouwd (DOEL:,
@@ -56,7 +56,7 @@ export default function BriefSummary({
 
   async function copy() {
     try {
-      await navigator.clipboard.writeText(brief.trim());
+      await copyToClipboard(brief.trim());
       setCopied(true);
       toast.success('Samenvatting gekopieerd.');
       window.setTimeout(() => setCopied(false), 2000);

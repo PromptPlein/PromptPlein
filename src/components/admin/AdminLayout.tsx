@@ -112,7 +112,7 @@ export default function AdminLayout() {
             <ChevronDown size={16} className={clsx('shrink-0 transition-transform', menuOpen && 'rotate-180')} />
           </button>
           {menuOpen && (
-            <nav id="beheer-onderdelen" aria-label="Beheer" className="opl-card mt-2 grid grid-cols-1 gap-1 p-2 min-[26rem]:grid-cols-2">
+            <nav id="beheer-onderdelen" aria-label="Beheer" className="opl-card mt-2 grid grid-cols-1 gap-1 p-2 min-[416px]:grid-cols-2">
               {adminNav.map(({ to, label, icon: Icon, end }) => (
                 <NavLink
                   key={to}

@@ -2,9 +2,9 @@ import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { isKeyboardOpen, VIEWPORT_EVENT, visibleHeight } from '@/lib/viewportWatch';
 
 /** Ondergrens: hieronder wordt de chat onbruikbaar klein. */
-const MIN_HEIGHT = 260;
+const MIN_HEIGHT = 220;
 /** Met het schermtoetsenbord open is er minder over, en dat moet ook passen. */
-const MIN_HEIGHT_KEYBOARD = 140;
+const MIN_HEIGHT_KEYBOARD = 100;
 /**
  * Ruimte die onder het element vrij blijft, in rem: de onderste paginamarge
  * (`py-4`). In rem omdat de tekstgrootte uit Toegankelijkheid die marge meeschaalt.
@@ -52,7 +52,9 @@ export default function useFitHeight<T extends HTMLElement>(): [RefObject<T>, nu
       const shell = document.getElementById('app-shell');
       const bar = shell ? parseFloat(getComputedStyle(shell).paddingBottom) : 0;
       // Op de telefoon loopt de chat tot de rand door, zonder marge eronder.
-      const edge = window.matchMedia('(max-width: 39.99rem)').matches ? 0 : BOTTOM_GAP_REM * rem;
+      const edge = window.matchMedia('(max-width: 39.99rem), (max-height: 31.25rem)').matches
+        ? 0
+        : BOTTOM_GAP_REM * rem;
       const keyboard = isKeyboardOpen();
       const available = visibleHeight() - top - footerHeight - belowHeight - bar - edge;
       setMaxHeight(Math.round(Math.max(keyboard ? MIN_HEIGHT_KEYBOARD : MIN_HEIGHT, available)));

@@ -473,7 +473,7 @@ export default function SettingsPage() {
               patch({ kennisbank: { ...settings.kennisbank, enabled: e.target.checked } })
             }
           />
-          <span className="text-sm text-slate-700 dark:text-slate-200">
+          <span className="min-w-0 text-sm text-slate-700 [overflow-wrap:anywhere] dark:text-slate-200">
             Kennisbank van developer.overheid.nl gebruiken bij digitale opdrachten
           </span>
         </label>
@@ -973,9 +973,9 @@ export default function SettingsPage() {
           voordat het optimaliseren doorgaat.
         </SectionHeader>
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <input
-            className="opl-input"
+            className="opl-input min-w-0 flex-1 basis-48"
             value={topicDraft}
             onChange={(e) => setTopicDraft(e.target.value)}
             onKeyDown={(e) => {
@@ -996,7 +996,7 @@ export default function SettingsPage() {
             {settings.blockedTopics.map((topic) => (
               <span
                 key={topic}
-                className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 py-1 pl-3 pr-1.5 text-sm text-slate-700 dark:border-slate-600 dark:bg-slate-900/40 dark:text-slate-200"
+                className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 py-1 pl-3 pr-1.5 text-sm [overflow-wrap:anywhere] text-slate-700 dark:border-slate-600 dark:bg-slate-900/40 dark:text-slate-200"
               >
                 {topic}
                 <button
@@ -1022,7 +1022,7 @@ export default function SettingsPage() {
         style={{ bottom: 'var(--onderbalk)' }}
         className="fixed inset-x-0 z-10 border-t border-slate-200 bg-white/90 backdrop-blur dark:border-slate-700 dark:bg-slate-900/90"
       >
-        <div className="mx-auto flex max-w-7xl items-center justify-end gap-3 px-4 py-3 sm:px-6 lg:px-8">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-end gap-3 px-4 py-3 sm:px-6 lg:px-8">
           {dirty && (
             <span className="text-sm text-slate-500 dark:text-slate-400">Niet-opgeslagen wijzigingen</span>
           )}
