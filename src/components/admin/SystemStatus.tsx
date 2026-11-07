@@ -121,7 +121,7 @@ export default function SystemStatus() {
   return (
     <div className="opl-card p-5">
       <div className="mb-4 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className={`inline-block h-2.5 w-2.5 rounded-full ${STATUS_META[overall].ring}`} />
           <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">
             Systeemstatus: {overallText[overall]}
@@ -130,7 +130,7 @@ export default function SystemStatus() {
         <button
           onClick={runChecks}
           disabled={running}
-          className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-60 dark:text-slate-300 dark:hover:bg-slate-800"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-60 dark:text-slate-300 dark:hover:bg-slate-800"
         >
           <RefreshCw size={13} className={running ? 'animate-spin' : ''} /> Vernieuwen
         </button>

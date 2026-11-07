@@ -150,6 +150,8 @@ function applyToDocument(settings: AccessibilitySettings) {
   toggle('contrast', settings.highContrast, 'high');
   toggle('motion', settings.reduceMotion, 'reduce');
   toggle('actions', settings.alwaysShowActions, 'always');
+  // De tekstgrootte bepaalt of de opmaak moet versmallen (viewportWatch).
+  window.dispatchEvent(new Event('resize'));
 }
 
 /**

@@ -107,7 +107,7 @@ export default function AdminLayout() {
           >
             <span className="flex min-w-0 items-center gap-2">
               <CurrentIcon size={16} className="shrink-0 text-rijksblauw-500" />
-              <span className="truncate">Beheer: {current.label}</span>
+              <span className="min-w-0 text-left">Beheer: {current.label}</span>
             </span>
             <ChevronDown size={16} className={clsx('shrink-0 transition-transform', menuOpen && 'rotate-180')} />
           </button>

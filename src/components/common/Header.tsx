@@ -175,7 +175,7 @@ export default function Header() {
                 clsx(
                   // De balk heeft een vaste plek, dus de labels groeien niet
                   // onbeperkt mee met de tekstgrootte (net als de tabbalk van iOS).
-                  'flex min-h-[60px] min-w-[48px] flex-auto flex-col items-center justify-center gap-1 whitespace-nowrap px-1 py-1.5',
+                  'flex min-h-[60px] min-w-[48px] flex-auto flex-col items-center justify-center gap-[4px] whitespace-nowrap px-[2px] py-[6px]',
                   'text-[min(0.8125rem,15px)] font-semibold leading-none sm:px-2 sm:py-2',
                   'transition-colors hover:bg-white/10 focus-visible:outline focus-visible:outline-2',
                   'focus-visible:-outline-offset-2 focus-visible:outline-white',

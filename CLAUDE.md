@@ -250,7 +250,10 @@ dan ook liggend en met het toetsenbord open.
   nieuwe regel en sluit Verstuur het toetsenbord, zodat je het antwoord kunt lezen.
 - **Tekstgrootte van het toestel** telt mee: Android via de meta `text-scale`, iOS via
   `systemTextFactor` (`-apple-system-body`). Alles in rem groeit dus mee, tot 200%, en
-  dat is een stand die mensen echt gebruiken. Test hem ook.
+  dat is een stand die mensen echt gebruiken. Test hem ook. Is het scherm smaller dan
+  15 rem, dan zet `viewportWatch` `data-krap` op `<html>`: alles gaat in één kolom, met
+  krappe marges. De chat reageert met container queries in rem. Media queries rekenen
+  met de standaardgrootte van de browser en zien de tekstgrootte dus niet.
 - **Aanraken is geen muis**: wat bij aanwijzen verschijnt, krijgt `opl-geen-muis:` zodat
   het er op een aanraakscherm gewoon staat. Hover-kleuren werken alleen waar hover
   bestaat (`hoverOnlyWhenSupported`). Geen automatische focus op een veld op een

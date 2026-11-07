@@ -260,6 +260,12 @@ html.dark body {
     height: 24px;
   }
 
+  /* De tekst naast een schakelaar of vinkje krimpt mee en breekt af. */
+  label > span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
   /* Onder 16 pixels zoomt iOS bij elk tekstvak in, en zoomt daarna niet terug. */
   input:not([type='checkbox'], [type='radio'], [type='range'], [type='file']),
   textarea,
@@ -287,6 +293,13 @@ summary {
 @media (max-width: 39.99rem) {
   :root {
     --onderbalk: calc(60px + env(safe-area-inset-bottom));
+  }
+
+  /* Een flex-item krimpt standaard niet onder zijn langste woord. Met grote tekst
+     duwt dat de pagina breder dan het scherm. :where houdt de specificiteit op nul,
+     zodat elke eigen min-w-klasse gewoon voorgaat. */
+  :where(#inhoud *) {
+    min-width: 0;
   }
 
   /* Lange Nederlandse woorden breken netjes af in plaats van over de rand te lopen. */
@@ -392,6 +405,24 @@ html[data-toetsenbord='open'] .opl-app:has(.opl-chat-kop) {
     justify-content: center;
     text-align: center;
   }
+}
+
+/*
+ * Heel grote tekst op een telefoon (data-krap, zie viewportWatch). Kolommen en royale
+ * marges laten dan letters over per regel, dus alles gaat onder elkaar.
+ */
+html[data-krap] #inhoud .grid {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+html[data-krap] #inhoud :is(.p-3, .p-4, .p-5, .p-6, .px-3, .px-4, .px-5, .px-6) {
+  padding-left: 12px !important;
+  padding-right: 12px !important;
+}
+
+html[data-krap] #inhoud [role='tab'],
+html[data-krap] #inhoud .opl-card.flex {
+  flex-wrap: wrap;
 }
 
 /*

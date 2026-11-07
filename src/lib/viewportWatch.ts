@@ -10,6 +10,13 @@
  * staat op `open` zolang er een toetsenbord in beeld is.
  */
 
+/**
+ * Smaller dan dit, gemeten in rem, is het scherm te krap voor kolommen: heel grote
+ * tekst op een telefoon. Een media query ziet dat niet, die rekent met de
+ * standaardgrootte van de browser.
+ */
+const NARROW_REM = 15;
+
 /** Boven deze hoogte is het geen adresbalk die inklapt, maar een toetsenbord. */
 const KEYBOARD_MIN_HEIGHT = 120;
 
@@ -55,6 +62,9 @@ export function installViewportWatch(): void {
   const update = () => {
     const height = visibleHeight();
     root.style.setProperty('--zichtbaar', `${Math.round(height)}px`);
+    const rem = parseFloat(getComputedStyle(root).fontSize);
+    if (root.clientWidth / rem < NARROW_REM) root.dataset.krap = 'ja';
+    else delete root.dataset.krap;
     const portrait = portraitQuery.matches;
     const stand = portrait ? 'portrait' : 'landscape';
     // Valt het zichtbare deel samen met het venster, dan ligt er niets overheen.

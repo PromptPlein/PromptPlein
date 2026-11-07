@@ -52,11 +52,11 @@ function OrgNode({
       <Link
         to={`/zoeken?org=${org.id}`}
         style={{ paddingLeft: `${depth * 16}px` }}
-        className="flex min-h-11 min-w-0 items-center gap-2 rounded-md py-1.5 pr-2 text-slate-700 sm:min-h-0 transition-colors hover:bg-slate-50 hover:text-rijksblauw-700 dark:text-slate-200 dark:hover:bg-slate-800/60 dark:hover:text-rijksblauw-200"
+        className="flex min-h-11 min-w-0 flex-wrap items-center gap-x-2 rounded-md py-1.5 pr-2 text-slate-700 sm:min-h-0 transition-colors hover:bg-slate-50 hover:text-rijksblauw-700 dark:text-slate-200 dark:hover:bg-slate-800/60 dark:hover:text-rijksblauw-200"
         title="Bekijk prompts van deze organisatie"
       >
         <Building2 size={14} className="shrink-0 text-slate-400 dark:text-slate-500" />
-        <span className="truncate font-medium">{org.name}</span>
+        <span className="min-w-0 font-medium">{org.name}</span>
         <span className="ml-auto shrink-0 text-[0.6875rem] text-slate-400 dark:text-slate-500">
           {ORG_TYPE_LABELS[org.organization_type]}
         </span>

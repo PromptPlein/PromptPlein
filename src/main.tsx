@@ -27,6 +27,7 @@ createRoot(document.getElementById('root')!).render(
             containerStyle={{ bottom: 'calc(var(--onderbalk) + 1rem)' }}
             toastOptions={{
               style: {
+                maxWidth: 'calc(100vw - 2rem)',
                 borderRadius: '10px',
                 fontSize: '0.875rem',
                 background: 'var(--toast-bg)',

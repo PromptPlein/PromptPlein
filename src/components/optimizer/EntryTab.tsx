@@ -44,7 +44,7 @@ export default function EntryTab({
       >
         {icon}
       </span>
-      <span className="text-lg font-bold leading-tight text-rijksblauw-700 dark:text-rijksblauw-200">
+      <span className="min-w-0 text-lg font-bold leading-tight text-rijksblauw-700 dark:text-rijksblauw-200">
         {title}
       </span>
     </button>
