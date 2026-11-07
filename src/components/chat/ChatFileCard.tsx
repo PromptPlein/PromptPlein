@@ -159,7 +159,7 @@ export default function ChatFileCard({
                     {p.line ? <span className="font-medium">Regel {p.line}: </span> : null}
                     {p.message}
                     {p.snippet && (
-                      <code className="mt-0.5 block truncate rounded bg-red-50 px-1.5 py-0.5 font-mono text-[11px] text-slate-700 dark:bg-red-500/10 dark:text-slate-200">
+                      <code className="mt-0.5 block truncate rounded bg-red-50 px-1.5 py-0.5 font-mono text-[0.6875rem] text-slate-700 dark:bg-red-500/10 dark:text-slate-200">
                         {p.snippet}
                       </code>
                     )}
@@ -184,7 +184,7 @@ export default function ChatFileCard({
           bestand groeit. De hoogte staat vast, dus de chat springt niet mee. */}
       {writing && (
         <pre
-          className="h-56 overflow-hidden whitespace-pre-wrap break-all border-t border-slate-200 bg-slate-950 px-3.5 py-2.5 font-mono text-[11px] leading-relaxed text-slate-300 dark:border-slate-700"
+          className="h-56 overflow-hidden whitespace-pre-wrap break-all border-t border-slate-200 bg-slate-950 px-3.5 py-2.5 font-mono text-[0.6875rem] leading-relaxed text-slate-300 dark:border-slate-700"
           aria-hidden="true"
         >
           {tail}
@@ -193,7 +193,7 @@ export default function ChatFileCard({
 
       {!writing && preview && (
         <div className="border-t border-slate-200 dark:border-slate-700">
-          <div className="flex items-center justify-between gap-2 bg-slate-50 px-3.5 py-1.5 text-[11px] text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
+          <div className="flex items-center justify-between gap-2 bg-slate-50 px-3.5 py-1.5 text-[0.6875rem] text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
             <span>Voorbeeld. Scripts draaien afgeschermd van PromptPlein.</span>
             <button
               type="button"
@@ -219,7 +219,7 @@ export default function ChatFileCard({
         <div className="flex items-center gap-3 border-t border-slate-200 px-3.5 py-1.5 dark:border-slate-700">
           <button
             type="button"
-            className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-slate-400 hover:bg-slate-100 hover:text-rijksblauw-600 dark:text-slate-500 dark:hover:bg-slate-700 dark:hover:text-rijksblauw-300"
+            className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[0.6875rem] font-medium text-slate-400 hover:bg-slate-100 hover:text-rijksblauw-600 dark:text-slate-500 dark:hover:bg-slate-700 dark:hover:text-rijksblauw-300"
             onClick={() => setShowCode((v) => !v)}
             aria-expanded={showCode}
           >
@@ -229,7 +229,7 @@ export default function ChatFileCard({
         </div>
       )}
       {!writing && showCode && (
-        <pre className="max-h-96 overflow-auto border-t border-slate-200 bg-slate-950 px-3.5 py-2.5 font-mono text-[11px] leading-relaxed text-slate-300 dark:border-slate-700">
+        <pre tabIndex={0} className="max-h-96 overflow-auto border-t border-slate-200 bg-slate-950 px-3.5 py-2.5 font-mono text-[0.6875rem] leading-relaxed text-slate-300 dark:border-slate-700">
           {code}
         </pre>
       )}

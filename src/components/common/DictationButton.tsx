@@ -60,7 +60,7 @@ export default function DictationButton({
           <span className="h-2.5 w-2.5 rounded-[3px] bg-current" />
         </button>
         <VoiceLevelMeter stream={stream} />
-        <span className="flex items-center gap-1.5 text-[11px] font-medium tabular-nums text-slate-500 dark:text-slate-400">
+        <span className="flex items-center gap-1.5 text-[0.6875rem] font-medium tabular-nums text-slate-500 dark:text-slate-400">
           <span className="h-1.5 w-1.5 rounded-full bg-red-400 motion-safe:animate-pulse" />
           {formatDictationTime(seconds)}
         </span>
@@ -73,7 +73,7 @@ export default function DictationButton({
     return (
       <div className={clsx(PANEL, 'pl-2', className)} style={style} role="status">
         <Loader2 size={14} className="animate-spin text-rijksblauw-500 dark:text-rijksblauw-300" />
-        <span className="text-[11px] font-medium text-slate-600 dark:text-slate-300">
+        <span className="text-[0.6875rem] font-medium text-slate-600 dark:text-slate-300">
           Uitschrijven…
         </span>
       </div>

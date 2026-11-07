@@ -55,11 +55,11 @@ export default function ChatAnswer({
             key={i}
             className="my-2 overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700"
           >
-            <div className="flex items-center justify-between bg-slate-50 px-3 py-1 text-[11px] text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
+            <div className="flex items-center justify-between bg-slate-50 px-3 py-1 text-[0.6875rem] text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
               <span>{segment.lang || 'code'}</span>
               {segment.closed && <CopyMessageButton text={segment.code} label="Kopieer" />}
             </div>
-            <pre className="max-h-96 overflow-auto bg-slate-950 px-3 py-2.5 font-mono text-[13px] leading-relaxed text-slate-200">
+            <pre tabIndex={0} className="max-h-96 overflow-auto bg-slate-950 px-3 py-2.5 font-mono text-[0.8125rem] leading-relaxed text-slate-200">
               {segment.code}
             </pre>
             {segment.closed && <CodeCheck lang={segment.lang} code={segment.code} />}
@@ -88,8 +88,8 @@ function CodeCheck({ lang, code }: { lang: string; code: string }) {
     <p
       className={
         result.ok
-          ? 'flex items-center gap-1.5 bg-slate-50 px-3 py-1 text-[11px] text-emerald-700 dark:bg-slate-800/60 dark:text-emerald-400'
-          : 'flex items-center gap-1.5 bg-red-50 px-3 py-1 text-[11px] text-rijksrood dark:bg-red-500/10 dark:text-red-400'
+          ? 'flex items-center gap-1.5 bg-slate-50 px-3 py-1 text-[0.6875rem] text-emerald-700 dark:bg-slate-800/60 dark:text-emerald-400'
+          : 'flex items-center gap-1.5 bg-red-50 px-3 py-1 text-[0.6875rem] text-rijksrood dark:bg-red-500/10 dark:text-red-400'
       }
     >
       {result.ok ? <ShieldCheck size={12} /> : <AlertTriangle size={12} />}

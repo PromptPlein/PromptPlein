@@ -76,7 +76,7 @@ export default function ModelStatus({ models, winner, verb, className }: ModelSt
                 </span>
                 <span
                   className={clsx(
-                    'flex shrink-0 items-center gap-1 text-[11px]',
+                    'flex shrink-0 items-center gap-1 text-[0.6875rem]',
                     delivering
                       ? 'text-emerald-600 dark:text-emerald-400'
                       : 'text-slate-400 dark:text-slate-500',

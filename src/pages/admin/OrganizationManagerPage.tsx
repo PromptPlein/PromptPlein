@@ -16,6 +16,7 @@ import {
 } from '@/services/orgService';
 import { logAdminAction } from '@/services/adminService';
 import type { Organization, OrganizationType } from '@/types';
+import StackTable from '@/components/common/StackTable';
 
 const TYPES: OrganizationType[] = [
   'government',
@@ -198,6 +199,7 @@ export default function OrganizationManagerPage() {
         {loading ? (
           <div className="skeleton h-48 w-full" />
         ) : (
+          <StackTable>
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
               <tr>
@@ -272,6 +274,7 @@ export default function OrganizationManagerPage() {
               )}
             </tbody>
           </table>
+          </StackTable>
         )}
       </div>
 
@@ -336,7 +339,7 @@ export default function OrganizationManagerPage() {
                 >
                   <div className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-600 dark:bg-slate-900">
                     {savingLogo ? (
-                      <span className="text-[10px] text-slate-400">Uploaden…</span>
+                      <span className="text-[0.625rem] text-slate-400">Uploaden…</span>
                     ) : editor.logo_url?.trim() ? (
                       <img src={editor.logo_url.trim()} alt="" className="h-full w-full object-contain" />
                     ) : (

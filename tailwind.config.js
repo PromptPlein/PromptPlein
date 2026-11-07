@@ -40,6 +40,21 @@ export default {
       fontFamily: {
         sans: ['RijksSansVF', 'Fira Sans', 'Arial', 'sans-serif'],
       },
+      // Zwakke tekst haalt in beide modi 4,5:1 op elk vlak. De gewone slate-400
+      // en slate-500 halen dat niet: 2,6:1 op wit en 3,8:1 op donker. Alleen de
+      // tekstkleur volgt deze token; randen en vlakken houden de echte tint.
+      textColor: {
+        slate: {
+          400: 'rgb(var(--tekst-400) / <alpha-value>)',
+          500: 'rgb(var(--tekst-500) / <alpha-value>)',
+        },
+      },
+      placeholderColor: {
+        slate: {
+          400: 'rgb(var(--tekst-400) / <alpha-value>)',
+          500: 'rgb(var(--tekst-500) / <alpha-value>)',
+        },
+      },
       // Vormtaal van de Rijkshuisstijl: knoppen en velden 0,25rem, kaarten
       // 0,5rem. Via het thema, zodat elke bestaande klasse meegaat.
       borderRadius: {
@@ -76,15 +91,26 @@ export default {
     },
   },
   plugins: [
-    plugin(({ addBase }) => {
+    plugin(({ addBase, addVariant }) => {
+      // Via addVariant en niet in `screens`: een object in `screens` zet alle
+      // max-*-varianten uit, en de telefoonopmaak leunt daarop.
+      // Liggende telefoon: breed genoeg voor de desktopopmaak, te laag voor een hoge kop.
+      addVariant('laag', '@media (max-height: 31.25rem)');
+      // Aanraakscherm: wat bij de muis pas bij aanwijzen verschijnt, staat er hier
+      // gewoon. Aanwijzen bestaat niet met een vinger.
+      addVariant('opl-geen-muis', '@media (hover: none)');
       addBase({
         ':root': {
           '--accent': rgbTriplet(rijksoranje),
           '--accent-hover': rgbTriplet(rijksoranjeDonker),
+          '--tekst-400': rgbTriplet('#566377'),
+          '--tekst-500': rgbTriplet('#526075'),
         },
         'html.dark': {
           '--accent': rgbTriplet(accentDonker),
           '--accent-hover': rgbTriplet(accentDonkerHover),
+          '--tekst-400': rgbTriplet('#afbccd'),
+          '--tekst-500': rgbTriplet('#a3b1c5'),
         },
       });
     }),

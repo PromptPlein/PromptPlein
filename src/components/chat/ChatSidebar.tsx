@@ -94,6 +94,8 @@ export default function ChatSidebar({
   onOpenProject,
   onRequestDelete,
   onRequestDeleteAll,
+  inDrawer = false,
+  footer,
 }: {
   /** Alleen de LOSSE gesprekken; projectgesprekken staan in hun project. */
   entries: ChatIndexEntry[];
@@ -115,6 +117,9 @@ export default function ChatSidebar({
   onOpenProject: (id: string) => void;
   onRequestDelete: (id: string) => void;
   onRequestDeleteAll: () => void;
+  /** In het inschuifpaneel van de telefoon, in plaats van naast het gesprek. */
+  inDrawer?: boolean;
+  footer?: ReactNode;
 }) {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -122,16 +127,16 @@ export default function ChatSidebar({
 
   useEffect(() => {
     if (!menuOpen) return;
-    function onPointerDown(e: MouseEvent) {
+    function onPointerDown(e: PointerEvent) {
       if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
     }
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape') setMenuOpen(false);
     }
-    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('pointerdown', onPointerDown);
     document.addEventListener('keydown', onKeyDown);
     return () => {
-      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('pointerdown', onPointerDown);
       document.removeEventListener('keydown', onKeyDown);
     };
   }, [menuOpen]);
@@ -140,7 +145,14 @@ export default function ChatSidebar({
     /* Zit binnen dezelfde kaart als het gesprek: geen eigen rand of schaduw,
        alleen een scheidingslijn en een iets rustiger vlak. Zo lezen de lijst en
        het gesprek als één omgeving in plaats van twee losse blokken. */
-    <aside className="hidden w-64 shrink-0 flex-col border-r border-slate-200 bg-slate-50/70 p-3 lg:flex dark:border-slate-700 dark:bg-slate-900/40">
+    <aside
+      className={clsx(
+        'flex-col p-3',
+        inDrawer
+          ? 'flex h-full'
+          : 'hidden w-64 shrink-0 border-r border-slate-200 bg-slate-50/70 lg:flex dark:border-slate-700 dark:bg-slate-900/40',
+      )}
+    >
       {/* Eén knop met een klein menu erachter: nieuw gesprek is de gewone daad,
           nieuw project de zeldzame. Twee even grote knoppen zouden suggereren
           dat je elke keer moet kiezen. */}
@@ -269,7 +281,7 @@ export default function ChatSidebar({
             </button>
             <button
               type="button"
-              className="shrink-0 rounded-md p-1.5 text-slate-500 opacity-0 transition-opacity hover:bg-slate-200 hover:text-rijksrood focus:opacity-100 group-hover:opacity-100 dark:text-slate-400 dark:hover:bg-slate-700"
+              className="shrink-0 rounded-md p-1.5 text-slate-500 opacity-0 transition-opacity hover:bg-slate-200 hover:text-rijksrood focus:opacity-100 group-hover:opacity-100 opl-geen-muis:opacity-100 dark:text-slate-400 dark:hover:bg-slate-700"
               onClick={() => onRequestDelete(entry.id)}
               disabled={disabled}
               aria-label={`Verwijder chat "${entry.title}"`}
@@ -292,6 +304,7 @@ export default function ChatSidebar({
       )}
       {/* Uit tijdens het streamen, net als wisselen van chat: wegklikken zou het
           lopende antwoord afbreken. */}
+      {footer}
       <button
         type="button"
         className="opl-btn-ghost mt-2 w-full"

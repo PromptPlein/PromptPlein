@@ -215,7 +215,7 @@ export default function FewShotBuilder({ settings, onSerialized, initialContext 
           <span key={p} className="flex items-center gap-2">
             <span
               className={clsx(
-                'flex h-5 w-5 items-center justify-center rounded-full text-[11px]',
+                'flex h-5 w-5 items-center justify-center rounded-full text-[0.6875rem]',
                 i < phaseIndex
                   ? 'bg-emerald-500 text-white'
                   : i === phaseIndex
@@ -309,7 +309,7 @@ function ContextPhase({ value, onChange }: { value: string; onChange: (v: string
         value={value}
         onValueChange={onChange}
         placeholder="Bijv. Ik krijg elke dag e-mails van burgers over hun aanvraag. Ik wil dat de AI elke mail beoordeelt en er passend op reageert."
-        className="opl-input min-h-[8rem] resize-y px-4 py-3 text-[15px] leading-relaxed"
+        className="opl-input min-h-[8rem] resize-y px-4 py-3 text-[0.9375rem] leading-relaxed"
         optimizeTitle="Verduidelijk mijn context met AI; je oorspronkelijke tekst kun je daarna terughalen"
       />
     </div>

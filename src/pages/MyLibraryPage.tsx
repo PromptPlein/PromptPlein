@@ -94,7 +94,7 @@ export default function MyLibraryPage() {
       </div>
 
       {/* Tabbladen */}
-      <div className="mb-6 flex gap-1 border-b border-slate-200 dark:border-slate-700">
+      <div className="mb-6 flex flex-wrap gap-1 border-b border-slate-200 dark:border-slate-700">
         <TabButton
           active={tab === 'mine'}
           onClick={() => setTab('mine')}

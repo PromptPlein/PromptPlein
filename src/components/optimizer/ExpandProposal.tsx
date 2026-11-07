@@ -59,7 +59,7 @@ export default function ExpandProposal({
 
       {improvements.length > 0 && (
         <div className="border-t border-slate-100 bg-slate-50/60 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-900/30">
-          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+          <p className="mb-1.5 text-[0.6875rem] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
             Wat is verbeterd
           </p>
           <ul className="space-y-1">

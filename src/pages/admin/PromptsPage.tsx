@@ -187,7 +187,7 @@ export default function PromptsPage() {
                       <span className="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-800 dark:text-slate-100">
                         {p.titel}
                         {aangepast && (
-                          <span className="rounded-full bg-rijksoranje/15 px-1.5 py-0.5 text-[10px] font-semibold text-rijksoranje-dark dark:text-rijksoranje">
+                          <span className="rounded-full bg-rijksoranje/15 px-1.5 py-0.5 text-[0.625rem] font-semibold text-rijksoranje-dark dark:text-rijksoranje">
                             aangepast
                           </span>
                         )}
@@ -198,7 +198,7 @@ export default function PromptsPage() {
                   {isOpen && (
                     <div className="space-y-2 px-5 pb-4">
                       <textarea
-                        className="opl-input min-h-[320px] resize-y font-mono text-[12.5px] leading-relaxed"
+                        className="opl-input min-h-[320px] resize-y font-mono text-[0.78125rem] leading-relaxed"
                         value={drafts[p.id] ?? ''}
                         onChange={(e) => setDrafts((d) => ({ ...d, [p.id]: e.target.value }))}
                         aria-label={p.titel}

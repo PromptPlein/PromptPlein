@@ -42,6 +42,7 @@ import { logAdminAction } from '@/services/adminService';
 import { fillTemplate } from '@/services/optimizeService';
 import { selfDirectedBuilder } from '@/lib/techniques';
 import type { FollowUpQuestion, Technique, TechniqueFamily } from '@/types';
+import StackTable from '@/components/common/StackTable';
 
 interface EditorState {
   id?: string;
@@ -461,6 +462,7 @@ export default function TechniqueManagerPage() {
             collisionDetection={closestCenter}
             onDragEnd={handleDragEnd}
           >
+            <StackTable>
             <table className="w-full text-sm">
               <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
                 <tr>
@@ -491,6 +493,7 @@ export default function TechniqueManagerPage() {
                 </SortableContext>
               </tbody>
             </table>
+            </StackTable>
           </DndContext>
         )}
       </div>
@@ -719,7 +722,7 @@ export default function TechniqueManagerPage() {
 
             <div>
               <label className="opl-label">Preview gegenereerde output</label>
-              <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 p-3 font-mono text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+              <pre tabIndex={0} className="max-h-48 overflow-auto whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 p-3 font-mono text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
                 {preview}
               </pre>
             </div>

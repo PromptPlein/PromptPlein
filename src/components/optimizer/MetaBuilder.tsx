@@ -116,8 +116,8 @@ export default function MetaBuilder({ settings, goal, onSerialized }: MetaBuilde
             <span
               className={
                 cot
-                  ? 'inline-flex items-center gap-1 rounded-full bg-rijksblauw-100 px-2 py-0.5 text-[11px] font-medium text-rijksblauw-800 dark:bg-rijksblauw-500/20 dark:text-rijksblauw-200'
-                  : 'inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300'
+                  ? 'inline-flex items-center gap-1 rounded-full bg-rijksblauw-100 px-2 py-0.5 text-[0.6875rem] font-medium text-rijksblauw-800 dark:bg-rijksblauw-500/20 dark:text-rijksblauw-200'
+                  : 'inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[0.6875rem] font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300'
               }
             >
               {cot ? <Check size={11} /> : <X size={11} />}
@@ -126,7 +126,7 @@ export default function MetaBuilder({ settings, goal, onSerialized }: MetaBuilde
           </div>
 
           {/* De gebouwde prompt. */}
-          <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-lg border border-slate-200 bg-white p-3 font-mono text-[13px] leading-relaxed text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+          <pre tabIndex={0} className="max-h-72 overflow-auto whitespace-pre-wrap rounded-lg border border-slate-200 bg-white p-3 font-mono text-[0.8125rem] leading-relaxed text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
             {prompt}
           </pre>
 

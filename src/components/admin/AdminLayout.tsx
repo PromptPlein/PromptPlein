@@ -1,4 +1,5 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   Sparkles,
@@ -7,6 +8,7 @@ import {
   ScrollText,
   LogOut,
   ShieldCheck,
+  ChevronDown,
   BarChart3,
   Building2,
   UserCog,
@@ -42,6 +44,12 @@ const adminNav = [
 export default function AdminLayout() {
   const { signOut } = useAuth();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const current =
+    adminNav.find((item) => (item.end ? pathname === item.to : pathname.startsWith(item.to))) ??
+    adminNav[0];
+  const CurrentIcon = current.icon;
 
   return (
     <div className="mx-auto flex max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:px-8">
@@ -83,30 +91,49 @@ export default function AdminLayout() {
           </div>
         </div>
 
-        {/* Mobiele tab-balk */}
       </aside>
 
       <div className="min-w-0 flex-1">
-        {/* Mobiele admin-navigatie */}
-        <nav className="mb-4 flex gap-1 overflow-x-auto md:hidden">
-          {adminNav.map(({ to, label, icon: Icon, end }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={end}
-              className={({ isActive }) =>
-                clsx(
-                  'flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium',
-                  isActive
-                    ? 'bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200'
-                    : 'bg-white text-slate-600 dark:bg-slate-900 dark:text-slate-300',
-                )
-              }
-            >
-              <Icon size={14} /> {label}
-            </NavLink>
-          ))}
-        </nav>
+        {/* Telefoon: vijftien onderdelen passen niet naast elkaar, en een rij die
+            zijwaarts schuift verbergt de helft. Daarom een knop met het huidige
+            onderdeel, die de volledige lijst openklapt. */}
+        <div className="mb-4 md:hidden">
+          <button
+            type="button"
+            className="opl-btn-secondary w-full !justify-between"
+            aria-expanded={menuOpen}
+            aria-controls="beheer-onderdelen"
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            <span className="flex min-w-0 items-center gap-2">
+              <CurrentIcon size={16} className="shrink-0 text-rijksblauw-500" />
+              <span className="truncate">Beheer: {current.label}</span>
+            </span>
+            <ChevronDown size={16} className={clsx('shrink-0 transition-transform', menuOpen && 'rotate-180')} />
+          </button>
+          {menuOpen && (
+            <nav id="beheer-onderdelen" aria-label="Beheer" className="opl-card mt-2 grid grid-cols-1 gap-1 p-2 min-[26rem]:grid-cols-2">
+              {adminNav.map(({ to, label, icon: Icon, end }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  end={end}
+                  onClick={() => setMenuOpen(false)}
+                  className={({ isActive }) =>
+                    clsx(
+                      'flex min-h-11 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium',
+                      isActive
+                        ? 'bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200'
+                        : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800',
+                    )
+                  }
+                >
+                  <Icon size={16} className="shrink-0" /> {label}
+                </NavLink>
+              ))}
+            </nav>
+          )}
+        </div>
         <Outlet />
       </div>
     </div>

@@ -272,7 +272,7 @@ export default function ProjectContextPicker({
                   aria-pressed={active}
                   onClick={() => pickProject(project.id)}
                   className={clsx(
-                    'flex min-h-11 w-full items-center gap-2 rounded px-2.5 text-left text-[15px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500',
+                    'flex min-h-11 w-full items-center gap-2 rounded px-2.5 text-left text-[0.9375rem] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500',
                     active
                       ? 'bg-rijksblauw-50 font-semibold text-slate-900 dark:bg-rijksblauw-500/15 dark:text-white'
                       : 'text-slate-800 hover:bg-slate-100 dark:text-slate-100 dark:hover:bg-slate-700',
@@ -336,7 +336,7 @@ export default function ProjectContextPicker({
         {activeProjectId && files.length > 0 && (
           <p
             className={clsx(
-              'px-2.5 pb-1.5 pt-1 text-[13px] font-medium',
+              'px-2.5 pb-1.5 pt-1 text-[0.8125rem] font-medium',
               over ? 'text-amber-800 dark:text-amber-400' : 'text-slate-600 dark:text-slate-300',
             )}
           >
@@ -448,7 +448,7 @@ export default function ProjectContextPicker({
         )}
 
         {loading && (
-          <span className="text-[13px] text-slate-600 dark:text-slate-300">
+          <span className="text-[0.8125rem] text-slate-600 dark:text-slate-300">
             Je project wordt geanalyseerd…
           </span>
         )}
@@ -484,7 +484,7 @@ export default function ProjectContextPicker({
       </div>
 
       {context && context.skipped.length > 0 && (
-        <p className="mt-1.5 text-[13px] font-medium text-amber-800 dark:text-amber-400">
+        <p className="mt-1.5 text-[0.8125rem] font-medium text-amber-800 dark:text-amber-400">
           Past niet meer, weggelaten: {context.skipped.join(', ')}. Haal een bron weg.
         </p>
       )}

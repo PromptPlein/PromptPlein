@@ -244,7 +244,7 @@ export default function PromptDetailPage() {
                   ? 'inline-flex items-center gap-1.5 rounded-md px-2.5 py-2 text-sm font-medium text-rijksblauw-600 dark:text-rijksblauw-300'
                   : 'inline-flex items-center gap-1.5 rounded-md px-2.5 py-2 text-sm text-slate-400 hover:bg-rijksblauw-50 hover:text-rijksblauw-600 dark:text-slate-500 dark:hover:bg-rijksblauw-500/10 dark:hover:text-rijksblauw-300'
               }
-              aria-label={liked ? 'Like intrekken' : 'Prompt liken'}
+              aria-label={`${liked ? 'Like intrekken' : 'Prompt liken'}, ${likeCount}`}
               aria-pressed={liked}
               title={liked ? 'Like intrekken' : 'Vind ik goed'}
             >
@@ -300,13 +300,13 @@ export default function PromptDetailPage() {
         </div>
         {editing ? (
           <textarea
-            className="mb-5 min-h-[280px] w-full resize-y rounded-xl border border-rijksblauw-300 bg-white p-4 font-mono text-[13px] leading-relaxed text-slate-800 focus:outline-none focus:ring-2 focus:ring-rijksblauw-500/30 dark:border-rijksblauw-500/40 dark:bg-slate-900 dark:text-slate-200"
+            className="mb-5 min-h-[280px] w-full resize-y rounded-xl border border-rijksblauw-300 bg-white p-4 font-mono text-[0.8125rem] leading-relaxed text-slate-800 focus:outline-none focus:ring-2 focus:ring-rijksblauw-500/30 dark:border-rijksblauw-500/40 dark:bg-slate-900 dark:text-slate-200"
             value={draftContent}
             onChange={(e) => setDraftContent(e.target.value)}
             aria-label="Prompt-inhoud"
           />
         ) : (
-          <pre className="mb-5 max-h-[360px] overflow-auto whitespace-pre-wrap rounded-xl border border-slate-200 bg-slate-50 p-4 font-mono text-[13px] leading-relaxed text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+          <pre tabIndex={0} className="mb-5 max-h-[360px] overflow-auto whitespace-pre-wrap rounded-xl border border-slate-200 bg-slate-50 p-4 font-mono text-[0.8125rem] leading-relaxed text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
             {prompt.content}
           </pre>
         )}
@@ -353,7 +353,7 @@ export default function PromptDetailPage() {
           {prompt.created_by_user ? (
             <Link
               to={`/community/${prompt.created_by_user}`}
-              className="font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
+              className="opl-raak font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
             >
               {author?.full_name ? firstName(author.full_name) : prompt.created_by || 'onbekend'}
             </Link>
@@ -397,7 +397,7 @@ export default function PromptDetailPage() {
                       <Copy size={15} />
                     </button>
                   </div>
-                  <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-3 font-mono text-xs text-slate-700 dark:bg-slate-900 dark:text-slate-200">
+                  <pre tabIndex={0} className="max-h-48 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-3 font-mono text-xs text-slate-700 dark:bg-slate-900 dark:text-slate-200">
                     {opt.optimized_content}
                   </pre>
                   <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">{formatDate(opt.created_at)}</p>

@@ -19,11 +19,11 @@ import {
 
 function Kpi({ icon: Icon, value, label }: { icon: typeof FileText; value: number; label: string }) {
   return (
-    <div className="opl-card flex items-center gap-3 p-4">
-      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-rijksblauw-50 text-rijksblauw-600 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-300">
+    <div className="opl-card flex flex-col items-start gap-2 p-4 sm:flex-row sm:items-center sm:gap-3">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rijksblauw-50 text-rijksblauw-600 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-300">
         <Icon size={20} />
       </span>
-      <div>
+      <div className="min-w-0 max-w-full">
         <div className="text-xl font-bold text-slate-800 dark:text-slate-100">{value}</div>
         <div className="text-xs text-slate-500 dark:text-slate-400">{label}</div>
       </div>

@@ -68,7 +68,7 @@ export default function VisibilityPicker({
           <span className="min-w-0">
             <span className="flex flex-wrap items-center gap-2">
               <span className="font-medium text-slate-800 dark:text-slate-100">Privé</span>
-              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[0.6875rem] font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300">
                 Altijd voor jou
               </span>
             </span>
@@ -120,7 +120,7 @@ export default function VisibilityPicker({
                   <span className="font-medium text-slate-800 dark:text-slate-100">{lvl.label}</span>
                   <span
                     className={clsx(
-                      'rounded-full px-2 py-0.5 text-[11px] font-medium',
+                      'rounded-full px-2 py-0.5 text-[0.6875rem] font-medium',
                       lvl.autoApproved
                         ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
                         : 'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300',

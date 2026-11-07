@@ -1,6 +1,7 @@
 import { Fragment, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { shortcutKeys, SHORTCUTS, type Shortcut } from '@/lib/shortcuts';
+import StackTable from '@/components/common/StackTable';
 
 const SECTION_CLASS = 'opl-card p-5 sm:p-6';
 const TITLE_CLASS = 'text-lg font-semibold text-rijksblauw-700 dark:text-rijksblauw-200';
@@ -8,10 +9,10 @@ const LINK_CLASS = 'font-medium text-rijksblauw-700 underline dark:text-rijksbla
 
 function Keys({ shortcut }: { shortcut: Shortcut }) {
   return (
-    <span className="whitespace-nowrap">
+    <span className="inline-flex flex-wrap items-center gap-x-1 gap-y-1">
       {shortcutKeys(shortcut).map((key, index) => (
         <Fragment key={key}>
-          {index > 0 && ' + '}
+          {index > 0 && <span>+</span>}
           <kbd className="rounded border border-slate-300 bg-slate-50 px-1.5 py-0.5 font-sans text-sm font-semibold text-slate-900 dark:border-slate-500 dark:bg-slate-700 dark:text-slate-100">
             {key}
           </kbd>
@@ -46,8 +47,23 @@ export default function AccessibilityHelp() {
         Alles staat uit tot je het zelf aanzet bij Instellen.
       </p>
 
+      <Section id="hulp-telefoon" title="Op de telefoon">
+        <ul className="list-disc space-y-1 pl-5">
+          <li>Het hoofdmenu staat onderaan het scherm.</li>
+          <li>Instellingen, thema en inloggen vind je achter de knop Menu of Accountmenu.</li>
+          <li>Inzoomen met twee vingers werkt op elke pagina.</li>
+          <li>De chat werkt met VoiceOver op een iPhone en met TalkBack op Android.</li>
+          <li>
+            Veeg naar rechts voor het volgende onderdeel. Tik twee keer om te kiezen. Bij een open
+            venster blijft de schermlezer in dat venster.
+          </li>
+          <li>Typen hoeft niet: de microfoon in elk tekstvak zet wat je zegt om in tekst.</li>
+        </ul>
+      </Section>
+
       <Section id="hulp-sneltoetsen" title="Sneltoetsen">
-        <div className="overflow-x-auto">
+        <div className="sm:overflow-x-auto">
+          <StackTable>
           <table className="w-full text-left">
             <caption className="sr-only">Alle sneltoetsen van PromptPlein</caption>
             <thead>
@@ -77,6 +93,7 @@ export default function AccessibilityHelp() {
               ))}
             </tbody>
           </table>
+          </StackTable>
         </div>
         <p>
           Met <kbd className="font-sans font-semibold">Escape</kbd> stop je inspreken, voorlezen of

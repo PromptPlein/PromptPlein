@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { NavLink, Link } from 'react-router-dom';
+import { NavLink, Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   Sparkles,
@@ -50,7 +50,8 @@ const navItems: NavItem[] = [
 ];
 
 export default function Header() {
-  const { isAdmin, isModerator } = useAuth();
+  const { isAdmin, isModerator, configured } = useAuth();
+  const { pathname } = useLocation();
   const [chatEnabled, setChatEnabled] = useState(true);
 
   useEffect(() => {
@@ -67,14 +68,20 @@ export default function Header() {
   return (
     <>
       {/* De kop scrolt weg, de navigatiebalk blijft staan. Zo houden lange
-          pagina's en de chat hun hoogte, ondanks het lint van 80 pixels. */}
-      <header className="bg-white dark:bg-slate-900">
-        <div className="relative mx-auto flex max-w-7xl flex-wrap items-center justify-between sm:h-20 sm:flex-nowrap sm:px-6 lg:px-8">
-          <Link to="/" className="flex h-16 items-center pl-4 sm:h-auto sm:pl-0">
+          pagina's en de chat hun hoogte, ondanks het lint van 80 pixels. Op een
+          liggende telefoon is er zo weinig hoogte dat de chat de kop laat vallen. */}
+      <header
+        className={clsx(
+          'bg-white pt-[env(safe-area-inset-top)] dark:bg-slate-900',
+          pathname === '/chat' && 'laag:hidden',
+        )}
+      >
+        <div className="relative mx-auto flex h-[64px] max-w-7xl items-center justify-between pl-4 pr-1 sm:h-[80px] sm:px-6 lg:px-8">
+          <Link to="/" className="flex items-center">
             <img
               src="/promptplein-logo.png"
               alt="PromptPlein"
-              className="h-11 w-auto shrink-0 object-contain dark:rounded dark:bg-white dark:p-1"
+              className="h-[44px] w-auto shrink-0 object-contain dark:rounded dark:bg-white dark:p-1"
             />
           </Link>
 
@@ -84,18 +91,19 @@ export default function Header() {
             alt="Logo Rijksoverheid"
             width={40}
             height={80}
-            className="absolute left-1/2 top-0 h-16 w-8 -translate-x-1/2 sm:h-20 sm:w-10"
+            className="absolute left-1/2 top-0 h-[64px] w-[32px] -translate-x-1/2 sm:h-[80px] sm:w-[40px]"
           />
 
-          {/* Op een smalle telefoon passen de knoppen niet naast het lint en
-              krijgen ze een eigen regel. */}
-          <div className="flex w-full items-center justify-end gap-1 border-t border-slate-200 px-2 py-1 dark:border-slate-700 sm:w-auto sm:border-0 sm:p-0">
+          {/* Naast het lint is op een smalle telefoon plek voor drie knoppen.
+              Toegankelijkheid blijft altijd staan; de rest zit op de telefoon in
+              het accountmenu. */}
+          <div className="flex items-center gap-0.5 sm:gap-1">
             {(isModerator || isAdmin) && (
               <NavLink
                 to="/goedkeuringen"
                 className={({ isActive }) =>
                   clsx(
-                    'rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-800',
+                    'hidden rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-800 sm:block',
                     isActive ? 'text-rijksblauw-700 dark:text-rijksblauw-200' : 'text-slate-500 dark:text-slate-400',
                   )
                 }
@@ -109,7 +117,7 @@ export default function Header() {
               to="/admin"
               className={({ isActive }) =>
                 clsx(
-                  'rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-800',
+                  'hidden rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-800 sm:block',
                   isActive ? 'text-rijksblauw-700 dark:text-rijksblauw-200' : 'text-slate-500 dark:text-slate-400',
                 )
               }
@@ -122,24 +130,36 @@ export default function Header() {
               to="/instellingen/toegankelijkheid"
               className={({ isActive }) =>
                 clsx(
-                  'rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-800',
+                  'flex h-[44px] w-[44px] items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 sm:h-auto sm:w-auto sm:p-2',
                   isActive ? 'text-rijksblauw-700 dark:text-rijksblauw-200' : 'text-slate-500 dark:text-slate-400',
                 )
               }
               title="Toegankelijkheid"
               aria-label="Toegankelijkheid"
             >
-              <Accessibility size={18} />
+              <Accessibility size={20} className="sm:h-[18px] sm:w-[18px]" />
             </NavLink>
-            <ThemeToggle />
+            {/* Op de telefoon zit het thema in het accountmenu. Zonder backend is
+                er geen accountmenu, dan blijft de knop staan. */}
+            <div className={configured ? 'hidden sm:block' : undefined}>
+              <ThemeToggle />
+            </div>
             <NotificationBell />
             <UserMenu />
           </div>
         </div>
       </header>
 
+      {/* Telefoon: vast onderaan, binnen bereik van de duim. Vanaf sm plakt hij
+          bovenaan. In de broncode blijft hij direct na de kop staan, dus ook
+          toetsenbord en schermlezer komen hem eerst tegen. */}
       <nav
-        className="sticky top-0 z-40 bg-rijksblauw-700 text-white dark:border-b dark:border-slate-700"
+        className={clsx(
+          'opl-onderbalk z-40 bg-rijksblauw-700 text-white dark:border-slate-700',
+          'max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:border-t max-sm:border-rijksblauw-500',
+          'max-sm:pb-[env(safe-area-inset-bottom)] max-sm:pl-[env(safe-area-inset-left)] max-sm:pr-[env(safe-area-inset-right)]',
+          'sm:sticky sm:top-0 dark:sm:border-b',
+        )}
         aria-label="Hoofdnavigatie"
       >
         <div className="mx-auto flex max-w-7xl lg:justify-center lg:px-8">
@@ -153,10 +173,14 @@ export default function Header() {
               onFocus={prefetch}
               className={({ isActive }) =>
                 clsx(
-                  'flex flex-1 flex-col items-center gap-1 whitespace-nowrap px-2 py-2 text-[13px] font-semibold',
+                  // De balk heeft een vaste plek, dus de labels groeien niet
+                  // onbeperkt mee met de tekstgrootte (net als de tabbalk van iOS).
+                  'flex min-h-[60px] min-w-[48px] flex-auto flex-col items-center justify-center gap-1 whitespace-nowrap px-1 py-1.5',
+                  'text-[min(0.8125rem,15px)] font-semibold leading-none sm:px-2 sm:py-2',
                   'transition-colors hover:bg-white/10 focus-visible:outline focus-visible:outline-2',
                   'focus-visible:-outline-offset-2 focus-visible:outline-white',
-                  'lg:h-14 lg:flex-none lg:flex-row lg:gap-2.5 lg:px-5 lg:py-0 lg:text-lg',
+                  'laag:min-h-[44px] laag:flex-row laag:gap-2 laag:py-2',
+                  'lg:h-14 lg:min-h-0 lg:flex-none lg:flex-row lg:gap-2.5 lg:px-5 lg:py-0 lg:text-lg',
                   isActive && 'shadow-[inset_0_-3px_0_0_theme(colors.rijksoranje.vast)]',
                 )
               }

@@ -788,7 +788,7 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
         {/* Na een verbetering: één klik terug naar de eigen tekst. Verdwijnt zodra
             de gebruiker zelf verder typt of het bericht verstuurt. */}
         {canUndo && (
-          <div className="mt-1.5 flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+          <div className="mt-1.5 flex items-center gap-2 text-[0.6875rem] text-slate-500 dark:text-slate-400">
             <Sparkles size={12} className="shrink-0 text-rijksoranje" />
             <span className="min-w-0">Je tekst is verbeterd. Lees hem na en pas gerust aan.</span>
             <button
@@ -817,7 +817,8 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
           {notice && (
             <p className="min-w-0 flex-1 text-sm text-slate-700 dark:text-slate-200">{notice}</p>
           )}
-          <span className="shrink-0">{badge}</span>
+          {/* Op de telefoon telt elke regel; de melding over persoonsgegevens gaat voor. */}
+          <span className="hidden shrink-0 sm:inline">{badge}</span>
         </div>
       </div>
     </div>

@@ -172,7 +172,7 @@ export default function SharePreviewPage() {
             {copied ? <Check size={14} /> : <Copy size={14} />} Kopiëren
           </button>
         </div>
-        <pre className="max-h-[400px] overflow-auto whitespace-pre-wrap rounded-xl border border-slate-200 bg-slate-50 p-4 font-mono text-[13px] leading-relaxed text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+        <pre tabIndex={0} className="max-h-[400px] overflow-auto whitespace-pre-wrap rounded-xl border border-slate-200 bg-slate-50 p-4 font-mono text-[0.8125rem] leading-relaxed text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
           {prompt.content}
         </pre>
 

@@ -183,15 +183,15 @@ function TechniqueRow({
             {t.name}
           </span>
           {kaart.kort && (
-            <span className="line-clamp-2 text-[15px] leading-snug text-slate-600 dark:text-slate-300">
+            <span className="line-clamp-2 text-[0.9375rem] leading-snug text-slate-600 dark:text-slate-300">
               {kaart.kort}
             </span>
           )}
-          <span className="block text-[13px] font-medium text-slate-500 dark:text-slate-400">
+          <span className="block text-[0.8125rem] font-medium text-slate-500 dark:text-slate-400">
             {framework ? 'Framework' : 'Techniek'}
           </span>
         </span>
-        <span className="absolute bottom-3 right-3.5 inline-flex items-center gap-1 text-[15px] font-semibold text-rijksblauw-500 dark:text-rijksblauw-200">
+        <span className="absolute bottom-3 right-3.5 inline-flex items-center gap-1 text-[0.9375rem] font-semibold text-rijksblauw-500 dark:text-rijksblauw-200">
           {active ? (
             <>
               Gekozen <Check size={16} className="text-rijksoranje" />

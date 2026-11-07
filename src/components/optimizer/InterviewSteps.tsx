@@ -79,7 +79,7 @@ export default function InterviewSteps({
             <li key={step.id} className="flex items-center gap-1">
               <span
                 className={clsx(
-                  'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] transition-colors duration-500',
+                  'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.6875rem] transition-colors duration-500',
                   done && 'text-slate-500 dark:text-slate-400',
                   active &&
                     'bg-rijksblauw-50 font-semibold text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200',

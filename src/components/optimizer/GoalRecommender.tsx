@@ -200,7 +200,7 @@ export default function GoalRecommender({
               <div className="group rounded-lg border border-slate-200 bg-white p-2.5 transition-colors hover:border-rijksblauw-300 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-rijksblauw-500/40">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-rijksblauw-600 dark:text-rijksblauw-300">
+                    <span className="inline-flex items-center gap-1 text-[0.6875rem] font-medium text-rijksblauw-600 dark:text-rijksblauw-300">
                       <CategoryIcon size={12} className="shrink-0" />
                       {categoryOf(ex).label}
                     </span>

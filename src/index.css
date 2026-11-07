@@ -26,6 +26,8 @@
   --toast-bg: #ffffff;
   /* theme() leest de waarde uit tailwind.config.js → src/config/brandColors.js */
   --toast-fg: theme('colors.rijksblauw.700');
+  /* Hoogte van de onderbalk op de telefoon; elders nul (zie onder). */
+  --onderbalk: 0px;
 }
 
 html.dark {
@@ -40,14 +42,25 @@ body,
   height: 100%;
 }
 
+html {
+  /* Liggend vergroot iOS anders vanzelf de tekst. 100% en niet none: met none
+     werkt de tekstgrootte uit de browser niet meer. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   margin: 0;
+  /* De inkeping van de telefoon, in liggende stand links of rechts. */
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
   background-color: theme('colors.slate.100');
   color: theme('colors.slate.900');
   font-family: theme('fontFamily.sans');
   /* ss02 is de l met staart, die van een hoofdletter I te onderscheiden is. */
   font-feature-settings: 'ss02';
   -webkit-font-smoothing: antialiased;
+  overflow-wrap: break-word;
 }
 
 html.dark body {
@@ -157,6 +170,194 @@ html.dark body {
 
   html.dark .opl-scroll-slim:hover::-webkit-scrollbar-thumb {
     background-color: theme('colors.slate.500');
+  }
+}
+
+/*
+ * Telefoon en aanraakscherm. Alles wat je aanraakt is minstens 44 bij 44 pixels,
+ * ook als het er kleiner uitziet: dat is de maat van een vingertop, en WCAG 2.5.5
+ * vraagt hem op niveau AAA. In pixels: een vinger groeit niet mee met de
+ * tekstgrootte uit Toegankelijkheid.
+ */
+@media (pointer: coarse), (max-width: 39.99rem) {
+  .opl-btn,
+  .opl-btn-primary,
+  .opl-btn-accent,
+  .opl-btn-secondary,
+  .opl-btn-ghost,
+  .opl-input:not(textarea),
+  select,
+  input[type='range'] {
+    min-height: 44px;
+  }
+
+  /* Knoppen: de schakelaars tekenen hun eigen vorm en krijgen hieronder een
+     onzichtbaar groter raakvlak. */
+  button:not([role='switch'], [data-klein]),
+  [role='tab'],
+  summary,
+  a.opl-raak {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  a.opl-raak {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  /* Alleen een icoon: blijft in het midden van het grotere vlak staan. Via de
+     marge en niet met display, dat zou `hidden` op de knop overrulen. Met
+     [aria-label], want :only-child telt losse tekst naast het icoon niet mee. */
+  button[aria-label] > svg:only-child,
+  a[aria-label] > svg:only-child {
+    margin: auto;
+  }
+
+  /* Links die eruitzien als knop of regel. Links midden in een zin blijven zoals
+     ze zijn: die mogen van WCAG kleiner. */
+  a[aria-label],
+  #inhoud a.flex,
+  #inhoud a.inline-flex {
+    min-height: 44px;
+  }
+
+  a[aria-label] {
+    min-width: 44px;
+  }
+
+  button[role='switch'] {
+    position: relative;
+  }
+
+  button[role='switch']::after {
+    position: absolute;
+    inset: 50% auto auto 50%;
+    width: max(100%, 44px);
+    height: 44px;
+    transform: translate(-50%, -50%);
+    content: '';
+  }
+
+  input[type='checkbox'],
+  input[type='radio'] {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+  }
+
+  /* Onder 16 pixels zoomt iOS bij elk tekstvak in, en zoomt daarna niet terug. */
+  input:not([type='checkbox'], [type='radio'], [type='range'], [type='file']),
+  textarea,
+  select {
+    font-size: max(1rem, 16px) !important;
+  }
+}
+
+/* Geen vertraging en geen dubbeltik-zoom op knoppen; inzoomen met twee vingers
+   blijft gewoon werken. */
+a,
+button,
+input,
+select,
+textarea,
+label,
+summary {
+  touch-action: manipulation;
+}
+
+/*
+ * Op de telefoon staat het menu onderaan, binnen bereik van de duim. De pagina
+ * houdt daar ruimte voor vrij, ook voor de thuisbalk.
+ */
+@media (max-width: 39.99rem) {
+  :root {
+    --onderbalk: calc(60px + env(safe-area-inset-bottom));
+  }
+
+  /* Lange Nederlandse woorden breken netjes af in plaats van over de rand te lopen. */
+  h1,
+  h2,
+  h3,
+  p,
+  li {
+    -webkit-hyphens: auto;
+    hyphens: auto;
+  }
+
+  /* Het schermtoetsenbord schuift over de onderbalk heen: dan telt hij niet mee. */
+  html[data-toetsenbord='open'] {
+    --onderbalk: 0px;
+  }
+}
+
+html[data-toetsenbord='open'] .opl-onderbalk {
+  display: none;
+}
+
+.opl-app {
+  padding-bottom: var(--onderbalk);
+}
+
+/*
+ * Tabel als rijtje kaarten (zie StackTable). De kop blijft bestaan voor de
+ * schermlezer, maar is onzichtbaar: de kolomnaam staat bij elke waarde.
+ */
+@media (max-width: 39.99rem) {
+  .opl-stapel table,
+  .opl-stapel tbody,
+  .opl-stapel tr,
+  .opl-stapel td {
+    display: block;
+    width: 100%;
+  }
+
+  .opl-stapel thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .opl-stapel tbody tr {
+    padding: 0.5rem 1rem;
+  }
+
+  .opl-stapel tbody td {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.25rem 0.75rem;
+    padding: 0.25rem 0;
+    white-space: normal;
+    text-align: right;
+  }
+
+  .opl-stapel tbody td[data-label]::before {
+    content: attr(data-label);
+    color: theme('colors.slate.500');
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-align: left;
+    text-transform: none;
+  }
+
+  /* De eerste kolom is de naam van de rij: die is de kop van de kaart. */
+  .opl-stapel tbody td:first-child {
+    justify-content: flex-start;
+    text-align: left;
+    font-weight: 600;
+  }
+
+  .opl-stapel tbody td:first-child::before {
+    display: none;
+  }
+
+  .opl-stapel tbody td[colspan] {
+    justify-content: center;
+    text-align: center;
   }
 }
 

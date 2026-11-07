@@ -1002,7 +1002,7 @@ export default function TechniquesPage() {
                             value={context}
                             onValueChange={setContext}
                             placeholder={contextExample(technique)}
-                            className="opl-input min-h-[5.5rem] resize-y px-4 py-3 text-[15px] leading-relaxed"
+                            className="opl-input min-h-[5.5rem] resize-y px-4 py-3 text-[0.9375rem] leading-relaxed"
                             optimizeTitle="Schrijf mijn context uit met AI; je oorspronkelijke tekst kun je daarna terughalen"
                           />
                           <div className="mt-2 flex flex-wrap justify-end gap-2">

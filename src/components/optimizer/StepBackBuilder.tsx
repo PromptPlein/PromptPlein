@@ -170,7 +170,7 @@ export default function StepBackBuilder({ settings, context, onSerialized }: Ste
                   }`}
                 >
                   <span className="flex items-center gap-2">
-                    <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-rijksblauw-500 text-[11px] font-bold text-white">
+                    <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-rijksblauw-500 text-[0.6875rem] font-bold text-white">
                       {rung.niveau}
                     </span>
                     <span className="text-xs font-semibold uppercase tracking-wide text-rijksblauw-600 dark:text-rijksblauw-300">
@@ -249,7 +249,7 @@ export default function StepBackBuilder({ settings, context, onSerialized }: Ste
                       : 'Aanname; klik om als vaststaand te markeren'
                   }
                   onClick={() => setStatus(c.id, c.status === 'vast' ? 'aanname' : 'vast')}
-                  className={`mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold transition-colors ${
+                  className={`mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[0.6875rem] font-semibold transition-colors ${
                     c.status === 'vast'
                       ? 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200'
                       : 'bg-rijksoranje/20 text-rijksoranje-dark dark:text-rijksoranje'

@@ -21,6 +21,7 @@ import {
 import { downloadText } from '@/lib/download';
 import { formatDate } from '@/lib/utils';
 import type { AnalyticsEvent, BehaviorLog } from '@/types';
+import StackTable from '@/components/common/StackTable';
 
 const EVENT_LABELS: Record<string, string> = {
   prompt_created: 'Prompt aangemaakt',
@@ -175,6 +176,7 @@ export default function AdminAnalyticsPage() {
                 Recente gedragsregels
               </h3>
               <div className="max-h-96 overflow-auto rounded-lg border border-slate-200 dark:border-slate-700">
+                <StackTable>
                 <table className="w-full text-left text-xs">
                   <thead className="sticky top-0 bg-slate-50 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
                     <tr>
@@ -200,7 +202,7 @@ export default function AdminAnalyticsPage() {
                         <td className="px-3 py-1.5 text-slate-500 dark:text-slate-400">
                           {l.step_index == null ? '—' : l.step_index + 1}
                         </td>
-                        <td className="px-3 py-1.5 font-mono text-[11px] text-slate-400 dark:text-slate-500">
+                        <td className="px-3 py-1.5 font-mono text-[0.6875rem] text-slate-400 dark:text-slate-500">
                           {l.metadata && Object.keys(l.metadata).length > 0
                             ? JSON.stringify(l.metadata)
                             : '—'}
@@ -209,6 +211,7 @@ export default function AdminAnalyticsPage() {
                     ))}
                   </tbody>
                 </table>
+                </StackTable>
               </div>
               {logs.length > 200 && (
                 <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
@@ -229,7 +232,7 @@ function StatTile({ label, value, hint }: { label: string; value: string; hint?:
     <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-800">
       <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{label}</p>
       <p className="mt-0.5 text-xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">{value}</p>
-      {hint && <p className="text-[11px] text-slate-400 dark:text-slate-500">{hint}</p>}
+      {hint && <p className="text-[0.6875rem] text-slate-400 dark:text-slate-500">{hint}</p>}
     </div>
   );
 }

@@ -295,8 +295,8 @@ export default function RubricBuilder({ settings, context, onSerialized }: Rubri
                       <span
                         className={
                           heeftNiveaus
-                            ? 'rounded-full bg-rijksgroen/15 px-1.5 py-0.5 text-[10px] font-semibold text-rijksgroen'
-                            : 'rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/20 dark:text-amber-300'
+                            ? 'rounded-full bg-rijksgroen/15 px-1.5 py-0.5 text-[0.625rem] font-semibold text-rijksgroen'
+                            : 'rounded-full bg-amber-100 px-1.5 py-0.5 text-[0.625rem] font-semibold text-amber-700 dark:bg-amber-500/20 dark:text-amber-300'
                         }
                       >
                         {heeftNiveaus ? 'ingevuld' : 'nog leeg'}

@@ -359,7 +359,11 @@ function renderBlock(block: Block, key: number, chat: boolean, trailing: ReactNo
       return (
         <div
           key={key}
-          className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700"
+          // Past hij niet, dan schuift de tabel. Dat moet ook met het toetsenbord kunnen.
+          tabIndex={0}
+          role="region"
+          aria-label="Tabel"
+          className="overflow-x-auto rounded-lg border border-slate-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 dark:border-slate-700"
         >
           <table className="w-full border-collapse text-left text-[0.95em]">
             <thead className="bg-slate-50 dark:bg-slate-800/60">

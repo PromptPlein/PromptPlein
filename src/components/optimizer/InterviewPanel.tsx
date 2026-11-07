@@ -156,7 +156,7 @@ export function InterviewPanel({
                 <Dices size={13} />
               )}
               {inventing ? 'Antwoord verzinnen…' : 'Verzin een testantwoord'}
-              <span className="rounded bg-rijksoranje/15 px-1 py-px text-[10px] uppercase tracking-wide">
+              <span className="rounded bg-rijksoranje/15 px-1 py-px text-[0.625rem] uppercase tracking-wide">
                 admin
               </span>
             </button>
@@ -314,7 +314,7 @@ export default function InterviewFlow({
         <p className="flex items-center gap-2 text-sm font-semibold text-emerald-800 dark:text-emerald-300">
           <Check size={15} /> {socratic ? 'Samenvatting van je inzichten' : 'Conclusie van het gesprek'}
         </p>
-        <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-lg border border-emerald-200 bg-white p-3 text-xs leading-relaxed text-slate-700 dark:border-emerald-500/20 dark:bg-slate-900 dark:text-slate-200">
+        <pre tabIndex={0} className="max-h-64 overflow-auto whitespace-pre-wrap rounded-lg border border-emerald-200 bg-white p-3 text-xs leading-relaxed text-slate-700 dark:border-emerald-500/20 dark:bg-slate-900 dark:text-slate-200">
           {done}
         </pre>
         <p className="text-xs text-emerald-700/80 dark:text-emerald-300/70">

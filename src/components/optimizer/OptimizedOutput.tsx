@@ -209,7 +209,7 @@ export default function OptimizedOutput({
       {/* Wat er tijdens het bouwen gebeurde: zo zie je dat denken en zoeken
           echt zijn gebruikt, en waar de extra tijd heen ging. */}
       {result.trace && (result.trace.thought || result.trace.searched || result.trace.reviewed) && (
-        <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+        <div className="flex flex-wrap items-center gap-1.5 text-[0.6875rem]">
           {result.trace.thought && (
             <span className="inline-flex items-center gap-1 rounded-full bg-rijksblauw-50 px-2 py-0.5 font-medium text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">
               <Brain size={11} /> Nagedacht
@@ -232,7 +232,7 @@ export default function OptimizedOutput({
         </div>
       )}
 
-      <pre className="max-h-[420px] overflow-auto whitespace-pre-wrap rounded-xl border border-slate-200 bg-slate-50 p-4 font-mono text-[13px] leading-relaxed text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+      <pre tabIndex={0} className="max-h-[420px] overflow-auto whitespace-pre-wrap rounded-xl border border-slate-200 bg-slate-50 p-4 font-mono text-[0.8125rem] leading-relaxed text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
         {result.optimized_content}
       </pre>
 
@@ -256,7 +256,7 @@ export default function OptimizedOutput({
 
       {result.sources && result.sources.length > 0 && (
         <div className="mt-3">
-          <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+          <p className="mb-1 flex items-center gap-1.5 text-[0.6875rem] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
             <Globe size={12} className="shrink-0" />
             {sourcesLabel(result.sources)}
           </p>
@@ -277,7 +277,7 @@ export default function OptimizedOutput({
                 </a>
                 {used?.has(source.url) && (
                   <span
-                    className="inline-flex shrink-0 items-center gap-0.5 text-[11px] text-rijksgroen"
+                    className="inline-flex shrink-0 items-center gap-0.5 text-[0.6875rem] text-rijksgroen"
                     title="Deze bron staat met zijn URL in de prompt"
                   >
                     <Check size={11} /> verwerkt
@@ -447,7 +447,7 @@ function DialogueSummary({ dialogue }: { dialogue: PromptDialogue }) {
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
               Opdrachtbeschrijving uit het gesprek
             </p>
-            <pre className="mt-1 max-h-64 overflow-auto whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-relaxed text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+            <pre tabIndex={0} className="mt-1 max-h-64 overflow-auto whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-relaxed text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
               {dialogue.brief}
             </pre>
           </div>

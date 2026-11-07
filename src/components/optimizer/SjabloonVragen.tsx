@@ -90,7 +90,7 @@ export default function SjabloonVragen({
                       {name}
                     </span>
                     {bron && (
-                      <span className={clsx('rounded-full px-2 py-0.5 text-[11px] font-medium', bron.className)}>
+                      <span className={clsx('rounded-full px-2 py-0.5 text-[0.6875rem] font-medium', bron.className)}>
                         {bron.tekst}
                       </span>
                     )}

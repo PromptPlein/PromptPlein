@@ -28,7 +28,7 @@ export default function AuthLayout({
 
       <Link
         to="/"
-        className="mt-6 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100"
+        className="mt-6 inline-flex items-center gap-1 max-sm:mt-3 text-sm text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100"
       >
         <ArrowLeft size={14} /> Terug naar de app
       </Link>

@@ -175,7 +175,7 @@ export default function VerificationBuilder({
                 </span>
                 <span className="block text-xs text-slate-500 dark:text-slate-400">{c.hint}</span>
                 {c.voorbeeld && (
-                  <span className="mt-1 block truncate rounded bg-white/70 px-1.5 py-0.5 font-mono text-[11px] text-rijksblauw-700 dark:bg-slate-900/60 dark:text-rijksblauw-200">
+                  <span className="mt-1 block truncate rounded bg-white/70 px-1.5 py-0.5 font-mono text-[0.6875rem] text-rijksblauw-700 dark:bg-slate-900/60 dark:text-rijksblauw-200">
                     gezien: {c.voorbeeld}
                   </span>
                 )}

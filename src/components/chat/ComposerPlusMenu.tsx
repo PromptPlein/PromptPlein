@@ -105,14 +105,21 @@ export default function ComposerPlusMenu({
   onDictate?: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState<{ left: number; bottom: number } | null>(null);
+  const [pos, setPos] = useState<{ left: number; bottom: number; maxHeight: number } | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
     if (!open || !buttonRef.current) return;
     const rect = buttonRef.current.getBoundingClientRect();
-    setPos({ left: rect.left, bottom: window.innerHeight - rect.top + GAP });
+    // Past altijd in beeld: ook liggend, met grote tekst of naast het toetsenbord.
+    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+    const width = Math.min(MENU_WIDTH_REM * rem, window.innerWidth - GAP * 2);
+    setPos({
+      left: Math.max(GAP, Math.min(rect.left, window.innerWidth - width - GAP)),
+      bottom: window.innerHeight - rect.top + GAP,
+      maxHeight: rect.top - GAP * 2,
+    });
   }, [open]);
 
   // De eerste regel krijgt de focus, zodat het menu met de pijltjes werkt.
@@ -213,8 +220,13 @@ export default function ComposerPlusMenu({
             role="menu"
             aria-label="Toevoegen en opties"
             onKeyDown={onKeyDown}
-            style={{ left: pos.left, bottom: pos.bottom, width: `${MENU_WIDTH_REM}rem` }}
-            className="fixed z-40 max-h-[70vh] animate-fade-in overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg dark:border-slate-700 dark:bg-slate-800"
+            style={{
+              left: pos.left,
+              bottom: pos.bottom,
+              width: `min(${MENU_WIDTH_REM}rem, calc(100vw - ${GAP * 2}px))`,
+              maxHeight: pos.maxHeight,
+            }}
+            className="fixed z-40 animate-fade-in overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg dark:border-slate-700 dark:bg-slate-800"
           >
             <MenuGroup label="Toevoegen">
               <MenuItem

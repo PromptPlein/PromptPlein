@@ -41,14 +41,14 @@ export default function PersonalSettingsPage() {
       </h1>
 
       <nav aria-label="Onderdelen van de instellingen">
-        <ul className="flex gap-1 border-b border-slate-200 dark:border-slate-700">
+        <ul className="flex flex-wrap gap-1 border-b border-slate-200 dark:border-slate-700">
           {PARTS.map(({ slug, label, icon: Icon }) => (
             <li key={slug}>
               <NavLink
                 to={`/instellingen/${slug}`}
                 className={({ isActive }) =>
                   clsx(
-                    '-mb-px flex items-center gap-2 border-b-2 px-3 py-2 font-medium transition-colors',
+                    '-mb-px flex min-h-11 items-center gap-2 border-b-2 px-3 py-2 font-medium transition-colors',
                     'focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500',
                     isActive
                       ? 'border-rijksblauw-700 text-rijksblauw-700 dark:border-rijksblauw-200 dark:text-rijksblauw-200'
@@ -66,7 +66,7 @@ export default function PersonalSettingsPage() {
 
       {accessibility && (
         <nav aria-label="Onderdelen van Toegankelijkheid">
-          <ul className="flex gap-2">
+          <ul className="flex flex-wrap gap-2">
             {ACCESSIBILITY_PARTS.map(({ to, label }) => (
               <li key={to}>
                 <NavLink
@@ -74,7 +74,7 @@ export default function PersonalSettingsPage() {
                   end
                   className={({ isActive }) =>
                     clsx(
-                      'block rounded-lg px-3 py-1.5 font-medium transition-colors',
+                      'flex min-h-11 items-center rounded-lg px-3 py-1.5 font-medium transition-colors sm:block sm:min-h-0',
                       'focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500',
                       isActive
                         ? 'bg-rijksblauw-700 text-white dark:bg-rijksblauw-500'

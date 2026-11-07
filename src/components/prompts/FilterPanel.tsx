@@ -1,9 +1,11 @@
 import { useEffect, useRef, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import clsx from 'clsx';
 import { X } from '@/components/common/icons';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { categoryIcon } from '@/lib/categoryIcons';
 import { SHARING_LEVELS, toggled } from '@/lib/utils';
+import useDialogFocus from '@/lib/useDialogFocus';
 import type { AdvancedPromptFilters, SharingLevel } from '@/types';
 
 interface FilterPanelProps {
@@ -14,8 +16,6 @@ interface FilterPanelProps {
   /** Aantal resultaten met deze filters; null zolang er gezocht wordt. */
   resultCount: number | null;
 }
-
-const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled])';
 
 /**
  * Het filterpaneel van Ontdekken. Een keuze werkt meteen door in de resultaten,
@@ -36,40 +36,15 @@ export default function FilterPanel({
 }: FilterPanelProps) {
   const { categories, organizations, roles } = useReferenceData();
   const panelRef = useRef<HTMLElement>(null);
-  const closeRef = useRef<HTMLButtonElement>(null);
+
+  useDialogFocus(open, panelRef, onClose);
 
   useEffect(() => {
     if (!open) return;
-    const previous = document.activeElement as HTMLElement | null;
     document.body.style.overflow = 'hidden';
-    closeRef.current?.focus();
-
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') {
-        onClose();
-        return;
-      }
-      if (e.key !== 'Tab' || !panelRef.current) return;
-      // De focus blijft in het paneel: de pagina erachter is afgedekt.
-      const items = [...panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE)];
-      const first = items[0];
-      const last = items[items.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last?.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first?.focus();
-      }
-    }
-
-    document.addEventListener('keydown', onKeyDown);
     return () => {
-      document.removeEventListener('keydown', onKeyDown);
       document.body.style.overflow = '';
-      previous?.focus();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   if (!open) return null;
@@ -78,7 +53,7 @@ export default function FilterPanel({
     (o) => o.organization_type === 'ministry' || o.organization_type === 'government',
   );
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50">
       <div
         aria-hidden="true"
@@ -87,10 +62,11 @@ export default function FilterPanel({
       />
       <aside
         ref={panelRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="filter-kop"
-        className="absolute inset-y-0 right-0 flex w-full max-w-md animate-fade-in flex-col border-l border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800"
+        className="absolute inset-y-0 right-0 flex w-full max-w-md animate-fade-in flex-col pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] focus:outline-none border-l border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800"
       >
         <div className="flex shrink-0 items-center justify-between border-b border-slate-200 py-3 pl-5 pr-3 dark:border-slate-700">
           <h2
@@ -100,7 +76,6 @@ export default function FilterPanel({
             Filters
           </h2>
           <button
-            ref={closeRef}
             type="button"
             onClick={onClose}
             aria-label="Sluit filters"
@@ -244,7 +219,8 @@ export default function FilterPanel({
           </button>
         </div>
       </aside>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

@@ -116,7 +116,7 @@ export default function PromptUploadForm({ onCreated, onCancel }: PromptUploadFo
         </label>
         <textarea
           id="up-content"
-          className="opl-input min-h-[140px] resize-y font-mono text-[13px]"
+          className="opl-input min-h-[140px] resize-y font-mono text-[0.8125rem]"
           value={content}
           onChange={(e) => setContent(e.target.value)}
           placeholder="De oorspronkelijke prompt…"

@@ -170,7 +170,7 @@ export default function PromptCard({ prompt, author, onChanged }: PromptCardProp
           {authorId ? (
             <Link
               to={`/community/${authorId}`}
-              className="relative z-10 truncate font-medium hover:underline focus:outline-none focus-visible:underline"
+              className="opl-raak relative z-10 truncate font-medium hover:underline focus:outline-none focus-visible:underline"
             >
               {authorName}
             </Link>
@@ -184,7 +184,7 @@ export default function PromptCard({ prompt, author, onChanged }: PromptCardProp
             onClick={handleLike}
             disabled={likeBusy}
             className={ACTION}
-            aria-label={liked ? 'Like intrekken' : 'Prompt liken'}
+            aria-label={`${liked ? 'Like intrekken' : 'Prompt liken'}, ${likeCount}`}
             aria-pressed={liked}
             title={liked ? 'Like intrekken' : 'Vind ik goed'}
           >

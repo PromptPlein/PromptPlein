@@ -51,7 +51,7 @@ export default function AanpakKaart({
           <p className="text-lg font-bold leading-tight text-rijksblauw-700 dark:text-rijksblauw-200">
             {titel}
           </p>
-          <p className="flex flex-wrap items-center gap-x-1 text-[15px] text-slate-600 dark:text-slate-300">
+          <p className="flex flex-wrap items-center gap-x-1 text-[0.9375rem] text-slate-600 dark:text-slate-300">
             <span>
               Aanpak: <span className="font-semibold">{technique.name}</span>
               {reden ? `. ${reden}` : ''}
@@ -90,7 +90,7 @@ export default function AanpakKaart({
               >
                 <span className="font-bold text-rijksblauw-700 dark:text-rijksblauw-200">{o.naam}</span>
                 {o.waarom && (
-                  <span className="text-[15px] leading-snug text-slate-600 dark:text-slate-300">
+                  <span className="text-[0.9375rem] leading-snug text-slate-600 dark:text-slate-300">
                     {o.waarom}
                   </span>
                 )}

@@ -62,13 +62,14 @@ export default function ProfilePage() {
 
       <div className="opl-card space-y-4 p-5">
         <div>
-          <label className="opl-label">E-mailadres</label>
-          <input className="opl-input bg-slate-50 text-slate-500 dark:bg-slate-800/60 dark:text-slate-400" value={user?.email ?? ''} disabled />
+          <label className="opl-label" htmlFor="profile-email">E-mailadres</label>
+          <input id="profile-email" className="opl-input bg-slate-50 text-slate-500 dark:bg-slate-800/60 dark:text-slate-400" value={user?.email ?? ''} disabled />
         </div>
 
         <div>
-          <label className="opl-label">Rol</label>
+          <label className="opl-label" htmlFor="profile-role">Rol</label>
           <input
+            id="profile-role"
             className="opl-input bg-slate-50 text-slate-500 dark:bg-slate-800/60 dark:text-slate-400"
             value={profile ? APP_ROLE_LABELS[profile.role] : ''}
             disabled

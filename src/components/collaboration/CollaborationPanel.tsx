@@ -174,7 +174,7 @@ export default function CollaborationPanel({
               {openVersion === v.id && (
                 <div className="mt-2">
                   <p className="mb-1 text-xs font-medium text-slate-500 dark:text-slate-400">{v.title}</p>
-                  <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-3 font-mono text-xs text-slate-700 dark:bg-slate-900 dark:text-slate-200">
+                  <pre tabIndex={0} className="max-h-48 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-3 font-mono text-xs text-slate-700 dark:bg-slate-900 dark:text-slate-200">
                     {v.content}
                   </pre>
                 </div>

@@ -318,7 +318,7 @@ export default function ProjectSettingsModal({
               {canUndoOptimize ? (
                 <button
                   type="button"
-                  className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-500 hover:text-rijksblauw-600 hover:underline dark:text-slate-400 dark:hover:text-rijksblauw-300"
+                  className="inline-flex items-center gap-1 text-[0.6875rem] font-medium text-slate-500 hover:text-rijksblauw-600 hover:underline dark:text-slate-400 dark:hover:text-rijksblauw-300"
                   onClick={undoOptimize}
                 >
                   <RotateCcw size={12} /> Herstel mijn eigen tekst
@@ -326,7 +326,7 @@ export default function ProjectSettingsModal({
               ) : (
                 <span />
               )}
-              <p className="text-[11px] text-slate-400 dark:text-slate-500">
+              <p className="text-[0.6875rem] text-slate-400 dark:text-slate-500">
                 {num(instructions.length)} van {num(MAX_PROJECT_INSTRUCTIONS_CHARS)} tekens
               </p>
             </div>
@@ -402,13 +402,13 @@ export default function ProjectSettingsModal({
                     </span>
                     {file.truncated && (
                       <span
-                        className="inline-flex shrink-0 items-center gap-0.5 text-[11px] text-amber-600 dark:text-amber-400"
+                        className="inline-flex shrink-0 items-center gap-0.5 text-[0.6875rem] text-amber-600 dark:text-amber-400"
                         title="Dit bestand was te groot en is afgekapt."
                       >
                         <Scissors size={11} /> ingekort
                       </span>
                     )}
-                    <span className="shrink-0 text-[11px] text-slate-400 dark:text-slate-500">
+                    <span className="shrink-0 text-[0.6875rem] text-slate-400 dark:text-slate-500">
                       {num(file.chars)} tekens
                     </span>
                     <button
@@ -425,7 +425,7 @@ export default function ProjectSettingsModal({
             )}
 
             {files.length > 0 && (
-              <p className="mt-2 text-[11px] text-slate-400 dark:text-slate-500">
+              <p className="mt-2 text-[0.6875rem] text-slate-400 dark:text-slate-500">
                 Samen {num(totalChars)} tekens bronmateriaal.
               </p>
             )}

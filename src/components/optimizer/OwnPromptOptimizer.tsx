@@ -788,7 +788,7 @@ export default function OwnPromptOptimizer({
                     }}
                     disabled={recommending || prefilling}
                     className={clsx(
-                      'flex min-h-[5.25rem] flex-col items-center justify-center gap-1.5 rounded-xl border px-2 py-2.5 text-[15px] font-semibold transition-colors',
+                      'flex min-h-[5.25rem] flex-col items-center justify-center gap-1.5 rounded-xl border px-2 py-2.5 text-[0.9375rem] font-semibold transition-colors',
                       'focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed dark:focus-visible:ring-offset-slate-800',
                       active
                         ? 'border-rijksblauw-700 bg-rijksblauw-50 text-rijksblauw-700 ring-1 ring-rijksblauw-700 dark:border-rijksblauw-200 dark:bg-rijksblauw-500/15 dark:text-white dark:ring-rijksblauw-200'
@@ -855,7 +855,7 @@ export default function OwnPromptOptimizer({
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-rijksblauw-600 dark:text-rijksblauw-300">
+                        <span className="inline-flex items-center gap-1 text-[0.6875rem] font-medium text-rijksblauw-600 dark:text-rijksblauw-300">
                           <category.icon size={12} className="shrink-0" />
                           {category.label}
                         </span>
@@ -1042,7 +1042,7 @@ export default function OwnPromptOptimizer({
 
           <textarea
             id="own-prompt-input"
-            className="block min-h-[6.5rem] w-full resize-y border-0 bg-white px-3.5 py-3 text-[15px] leading-relaxed text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-0 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
+            className="block min-h-[6.5rem] w-full resize-y border-0 bg-white px-3.5 py-3 text-[0.9375rem] leading-relaxed text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-0 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
             value={ownPrompt}
             placeholder={
               sjabloon
@@ -1292,7 +1292,7 @@ export default function OwnPromptOptimizer({
                       </label>
                       <textarea
                         id="prefill-clarify-input"
-                        className="opl-input min-h-[5rem] resize-y text-[15px]"
+                        className="opl-input min-h-[5rem] resize-y text-[0.9375rem]"
                         value={clarification}
                         placeholder="Bijv. de doelgroep is nieuwe medewerkers, de toon is informeel"
                         onChange={(e) => setClarification(e.target.value)}

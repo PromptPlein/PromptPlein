@@ -233,10 +233,10 @@ export default function SettingsPage() {
         </div>
         <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
           De sleutel zelf zet je niet hier, maar als secret op de server:{' '}
-          <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[11px] dark:bg-slate-700">
+          <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[0.6875rem] dark:bg-slate-700">
             supabase secrets set DEEPSEEK_API_KEY=…
           </code>{' '}
-          (idem <code className="font-mono text-[11px]">MISTRAL_API_KEY</code>). PromptPlein gebruikt
+          (idem <code className="font-mono text-[0.6875rem]">MISTRAL_API_KEY</code>). PromptPlein gebruikt
           alleen deze twee diensten; Claude en OpenAI staan uit.
         </p>
 
@@ -315,7 +315,7 @@ export default function SettingsPage() {
         </label>
         <textarea
           id="systemPrompt"
-          className="opl-input min-h-[180px] resize-y font-mono text-[13px]"
+          className="opl-input min-h-[180px] resize-y font-mono text-[0.8125rem]"
           value={settings.systemPrompt}
           onChange={(e) => patch({ systemPrompt: e.target.value })}
           placeholder="Bijv. Je bent een expert in prompt-engineering…"
@@ -378,7 +378,7 @@ export default function SettingsPage() {
           </label>
           <textarea
             id="generatorWebSearchInstruction"
-            className="opl-input min-h-[180px] resize-y font-mono text-[13px]"
+            className="opl-input min-h-[180px] resize-y font-mono text-[0.8125rem]"
             value={settings.webSearchInstruction}
             onChange={(e) => patch({ webSearchInstruction: e.target.value })}
             placeholder="Bijv. Gebruik de bronnen om de feiten in de prompt actueel te maken…"
@@ -435,7 +435,7 @@ export default function SettingsPage() {
           <textarea
             id="kaderInstruction"
             aria-label="Overheidskaders"
-            className="opl-input min-h-[220px] resize-y font-mono text-[13px]"
+            className="opl-input min-h-[220px] resize-y font-mono text-[0.8125rem]"
             value={settings.kaders.instruction}
             onChange={(e) =>
               patch({ kaders: { ...settings.kaders, instruction: e.target.value } })
@@ -483,7 +483,7 @@ export default function SettingsPage() {
           <textarea
             id="kennisbankInstruction"
             aria-label="Instructie bij de kennisbank"
-            className="opl-input min-h-[180px] resize-y font-mono text-[13px]"
+            className="opl-input min-h-[180px] resize-y font-mono text-[0.8125rem]"
             value={settings.kennisbank.instruction}
             onChange={(e) =>
               patch({ kennisbank: { ...settings.kennisbank, instruction: e.target.value } })
@@ -572,7 +572,7 @@ export default function SettingsPage() {
             </label>
             <textarea
               id="chatSystemPrompt"
-              className="opl-input min-h-[220px] resize-y font-mono text-[13px]"
+              className="opl-input min-h-[220px] resize-y font-mono text-[0.8125rem]"
               value={chat.systemPrompt}
               onChange={(e) => patchChat({ systemPrompt: e.target.value })}
               placeholder="Bijv. Je bent een behulpzame AI-assistent…"
@@ -603,7 +603,7 @@ export default function SettingsPage() {
             </label>
             <textarea
               id="chatPersonalInstructionPrompt"
-              className="opl-input min-h-[120px] resize-y font-mono text-[13px]"
+              className="opl-input min-h-[120px] resize-y font-mono text-[0.8125rem]"
               value={chat.personalInstructionPrompt}
               onChange={(e) => patchChat({ personalInstructionPrompt: e.target.value })}
             />
@@ -634,7 +634,7 @@ export default function SettingsPage() {
             </label>
             <textarea
               id="chatExecutionPrompt"
-              className="opl-input min-h-[160px] resize-y font-mono text-[13px]"
+              className="opl-input min-h-[160px] resize-y font-mono text-[0.8125rem]"
               value={chat.executionSystemPrompt}
               onChange={(e) => patchChat({ executionSystemPrompt: e.target.value })}
               placeholder="Bijv. Voer de prompt-instructie van de gebruiker letterlijk uit…"
@@ -694,7 +694,7 @@ export default function SettingsPage() {
               </label>
               <textarea
                 id="chatOptimizePrompt"
-                className="opl-input min-h-[200px] resize-y font-mono text-[13px]"
+                className="opl-input min-h-[200px] resize-y font-mono text-[0.8125rem]"
                 value={chat.optimizeSystemPrompt}
                 onChange={(e) => patchChat({ optimizeSystemPrompt: e.target.value })}
                 placeholder="Bijv. Herschrijf de tekst van de gebruiker tot een duidelijkere vraag…"
@@ -771,7 +771,7 @@ export default function SettingsPage() {
               </label>
               <textarea
                 id="projectOptimizePrompt"
-                className="opl-input min-h-[200px] resize-y font-mono text-[13px]"
+                className="opl-input min-h-[200px] resize-y font-mono text-[0.8125rem]"
                 value={chat.projectOptimizeSystemPrompt}
                 onChange={(e) => patchChat({ projectOptimizeSystemPrompt: e.target.value })}
                 placeholder="Bijv. Herschrijf de ruwe projectinstructie tot een volwaardige systeemprompt…"
@@ -823,7 +823,7 @@ export default function SettingsPage() {
               Hier aanzetten is niet genoeg: er moet ook een zoekdienst achter zitten. Die staat in
               de secrets van de edge function, niet in dit scherm, want een zoekadres dat de browser
               mag kiezen is een adres dat iedereen mag kiezen. Zet er één van deze twee klaar met{' '}
-              <code className="rounded bg-slate-200 px-1 py-0.5 text-[12px] dark:bg-slate-700">
+              <code className="rounded bg-slate-200 px-1 py-0.5 text-[0.75rem] dark:bg-slate-700">
                 supabase secrets set
               </code>
               :{' '}
@@ -875,7 +875,7 @@ export default function SettingsPage() {
               </label>
               <textarea
                 id="webSearchInstruction"
-                className="opl-input min-h-[200px] resize-y font-mono text-[13px]"
+                className="opl-input min-h-[200px] resize-y font-mono text-[0.8125rem]"
                 value={chat.webSearchInstruction}
                 onChange={(e) => patchChat({ webSearchInstruction: e.target.value })}
                 placeholder="Bijv. Beantwoord de vraag met wat er in de bronnen staat en verwijs met [1]…"
@@ -1018,7 +1018,10 @@ export default function SettingsPage() {
       </section>
 
       {/* Sticky opslaan-balk */}
-      <div className="fixed inset-x-0 bottom-0 z-10 border-t border-slate-200 bg-white/90 backdrop-blur dark:border-slate-700 dark:bg-slate-900/90">
+      <div
+        style={{ bottom: 'var(--onderbalk)' }}
+        className="fixed inset-x-0 z-10 border-t border-slate-200 bg-white/90 backdrop-blur dark:border-slate-700 dark:bg-slate-900/90"
+      >
         <div className="mx-auto flex max-w-7xl items-center justify-end gap-3 px-4 py-3 sm:px-6 lg:px-8">
           {dirty && (
             <span className="text-sm text-slate-500 dark:text-slate-400">Niet-opgeslagen wijzigingen</span>

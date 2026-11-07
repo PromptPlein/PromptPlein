@@ -12,6 +12,7 @@ import {
 } from '@/services/orgService';
 import { logAdminAction } from '@/services/adminService';
 import type { AppRole, Organization, Profile } from '@/types';
+import StackTable from '@/components/common/StackTable';
 
 const ROLES: AppRole[] = ['user', 'admin', 'super_admin'];
 
@@ -143,6 +144,7 @@ export default function UserManagerPage() {
         {loading ? (
           <div className="skeleton h-48 w-full" />
         ) : (
+          <StackTable>
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
               <tr>
@@ -219,6 +221,7 @@ export default function UserManagerPage() {
               )}
             </tbody>
           </table>
+          </StackTable>
         )}
       </div>
 

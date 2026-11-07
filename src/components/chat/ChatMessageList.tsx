@@ -462,13 +462,13 @@ function UserMessage({
           zodat het gesprek rustig blijft. In de instellingen kun je ze altijd
           tonen; onzichtbaar zijn ze alleen voor het oog, niet voor de tabvolgorde. */}
       {message.content.trim() && !editing && (
-        <div className="opl-msg-actions mt-1 flex items-center gap-3">
+        <div className="opl-msg-actions mt-1 flex flex-wrap items-center justify-end gap-x-3">
           <CopyMessageButton text={message.content} label="" />
           {onEdit && (
             <button
               ref={editButtonRef}
               type="button"
-              className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-rijksblauw-700 dark:text-slate-300 dark:hover:text-rijksblauw-200"
+              className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-medium text-slate-600 hover:text-rijksblauw-700 dark:text-slate-300 dark:hover:text-rijksblauw-200"
               onClick={startEdit}
             >
               <Pencil size={12} /> Bewerk
@@ -477,7 +477,7 @@ function UserMessage({
           {onImprove && (
             <button
               type="button"
-              className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-rijksblauw-700 dark:text-slate-300 dark:hover:text-rijksblauw-200"
+              className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-medium text-slate-600 hover:text-rijksblauw-700 dark:text-slate-300 dark:hover:text-rijksblauw-200"
               onClick={() => onImprove(message.content)}
               title="Maak hier in de generator een sterkere, herbruikbare prompt van"
             >
@@ -487,7 +487,7 @@ function UserMessage({
           {onSaveAsPrompt && (
             <button
               type="button"
-              className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-rijksblauw-700 dark:text-slate-300 dark:hover:text-rijksblauw-200"
+              className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-medium text-slate-600 hover:text-rijksblauw-700 dark:text-slate-300 dark:hover:text-rijksblauw-200"
               onClick={() => onSaveAsPrompt(message.content)}
               title="Sla dit bericht op als prompt in de bibliotheek"
             >
@@ -501,9 +501,9 @@ function UserMessage({
           structuur (zie looksLikeMessyPrompt). Subtiel, en definitief weg te
           klikken. */}
       {showNudge && onImprove && (
-        <div className="mt-1.5 flex max-w-[85%] items-center gap-2 rounded-lg border border-rijksblauw-200 bg-rijksblauw-50/60 px-3 py-2 text-xs text-slate-600 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10 dark:text-slate-300">
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 rounded-lg border border-rijksblauw-200 bg-rijksblauw-50/60 px-3 py-2 text-xs text-slate-600 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10 dark:text-slate-300">
           <Lightbulb size={14} className="shrink-0 text-rijksoranje" />
-          <span>
+          <span className="min-w-0 flex-1 basis-48">
             Tip: dit lijkt op een opdracht. In de generator bouw je er een sterkere, herbruikbare
             prompt van.
           </span>
@@ -609,7 +609,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
           loopt gelijk met de [1]-verwijzingen in het antwoord. */}
       {!isStreaming && message.sources && message.sources.length > 0 && (
         <div className="mt-1 w-full">
-          <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+          <p className="mb-1 flex items-center gap-1.5 text-[0.6875rem] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
             <Globe size={12} className="shrink-0" />
             Bronnen van internet
           </p>
@@ -658,13 +658,13 @@ const ChatMessageRow = memo(function ChatMessageRow({
       {/* Een lang antwoord gaat in meerdere rondes; tussen twee rondes is het
           even stil en zonder uitleg lijkt het dan of de chat is gestopt. */}
       {isStreaming && phase === 'continuing' && message.content && (
-        <p className="text-[11px] text-slate-400 dark:text-slate-500">
+        <p className="text-[0.6875rem] text-slate-400 dark:text-slate-500">
           Lang antwoord, de AI schrijft verder…
         </p>
       )}
 
       {message.stopped && (
-        <p className="text-[11px] text-slate-400 dark:text-slate-500">Gestopt door jou.</p>
+        <p className="text-[0.6875rem] text-slate-400 dark:text-slate-500">Gestopt door jou.</p>
       )}
 
       {/* Niet af: gestopt, of ook na het automatisch verderschrijven nog niet

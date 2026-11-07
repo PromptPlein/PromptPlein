@@ -140,7 +140,7 @@ const OptimizableTextarea = forwardRef<HTMLTextAreaElement, OptimizableTextareaP
         {/* Na een verbetering: één klik terug naar de eigen tekst. Verdwijnt
             zodra de gebruiker zelf verder typt. */}
         {canUndo && (
-          <div className="mt-1.5 flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+          <div className="mt-1.5 flex items-center gap-2 text-[0.6875rem] text-slate-500 dark:text-slate-400">
             <Sparkles size={12} className="shrink-0 text-rijksoranje" />
             <span className="min-w-0">Je tekst is verbeterd. Lees hem na en pas gerust aan.</span>
             <button

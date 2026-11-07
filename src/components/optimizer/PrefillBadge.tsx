@@ -21,7 +21,7 @@ export default function PrefillBadge({ source, note }: PrefillBadgeProps) {
   if (source === 'bron') {
     return (
       <span
-        className="inline-flex items-center gap-1 rounded-full bg-rijksblauw-50 px-2 py-0.5 text-[11px] font-medium text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200"
+        className="inline-flex items-center gap-1 rounded-full bg-rijksblauw-50 px-2 py-0.5 text-[0.6875rem] font-medium text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200"
         title={note || 'Aangevuld met een feit uit een internetbron; de URL staat in het veld'}
       >
         <Globe size={11} />
@@ -32,7 +32,7 @@ export default function PrefillBadge({ source, note }: PrefillBadgeProps) {
   return (
     <span
       className={clsx(
-        'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
+        'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.6875rem] font-medium',
         fromPrompt
           ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
           // Donkeroranje met witte letters; semibold houdt die kleine witte

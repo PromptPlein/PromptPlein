@@ -309,7 +309,7 @@ export default function SkillBuilder({ settings, context, onSerialized, onChange
                     {i + 3}. {veld.vraag}
                   </label>
                   {voorstel[veld.id] && (
-                    <span className="rounded-full bg-rijksblauw-100 px-1.5 py-0.5 text-[10px] font-semibold text-rijksblauw-700 dark:bg-rijksblauw-500/20 dark:text-rijksblauw-200">
+                    <span className="rounded-full bg-rijksblauw-100 px-1.5 py-0.5 text-[0.625rem] font-semibold text-rijksblauw-700 dark:bg-rijksblauw-500/20 dark:text-rijksblauw-200">
                       voorstel van de AI
                     </span>
                   )}

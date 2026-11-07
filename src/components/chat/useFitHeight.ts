@@ -1,7 +1,10 @@
 import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { isKeyboardOpen, VIEWPORT_EVENT, visibleHeight } from '@/lib/viewportWatch';
 
 /** Ondergrens: hieronder wordt de chat onbruikbaar klein. */
 const MIN_HEIGHT = 260;
+/** Met het schermtoetsenbord open is er minder over, en dat moet ook passen. */
+const MIN_HEIGHT_KEYBOARD = 140;
 /**
  * Ruimte die onder het element vrij blijft, in rem: de onderste paginamarge
  * (`py-4`). In rem omdat de tekstgrootte uit Toegankelijkheid die marge meeschaalt.
@@ -23,6 +26,9 @@ const BELOW_MARGIN_REM = 0.75;
  *
  * Een element met `data-fit-below` staat onder de kaart en telt mee als ruimte
  * die vrij moet blijven, zodat de pagina zelf nooit scrollt.
+ *
+ * Op de telefoon telt de zichtbare hoogte en niet die van het venster: anders
+ * valt de kaart met het tekstvak weg onder het schermtoetsenbord (`viewportWatch`).
  */
 export default function useFitHeight<T extends HTMLElement>(): [RefObject<T>, number | undefined] {
   const ref = useRef<T>(null);
@@ -40,10 +46,19 @@ export default function useFitHeight<T extends HTMLElement>(): [RefObject<T>, nu
       const footerHeight = footer?.getBoundingClientRect().height ?? 0;
       const below = document.querySelector<HTMLElement>('[data-fit-below]');
       const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
-      const belowHeight = below ? below.getBoundingClientRect().height + BELOW_MARGIN_REM * rem : 0;
-      const available =
-        window.innerHeight - top - footerHeight - belowHeight - BOTTOM_GAP_REM * rem;
-      setMaxHeight(Math.round(Math.max(MIN_HEIGHT, available)));
+      const belowBox = below?.getBoundingClientRect().height ?? 0;
+      const belowHeight = belowBox > 0 ? belowBox + BELOW_MARGIN_REM * rem : 0;
+      // De onderbalk van de telefoon: de pagina houdt daar ruimte voor vrij.
+      const shell = document.getElementById('app-shell');
+      const bar = shell ? parseFloat(getComputedStyle(shell).paddingBottom) : 0;
+      // Op de telefoon loopt de chat tot de rand door, zonder marge eronder.
+      const edge = window.matchMedia('(max-width: 39.99rem)').matches ? 0 : BOTTOM_GAP_REM * rem;
+      const keyboard = isKeyboardOpen();
+      const available = visibleHeight() - top - footerHeight - belowHeight - bar - edge;
+      setMaxHeight(Math.round(Math.max(keyboard ? MIN_HEIGHT_KEYBOARD : MIN_HEIGHT, available)));
+      // iOS schuift de pagina omhoog om het tekstvak te tonen. Dat is nu niet
+      // meer nodig en zou de bovenkant van de chat uit beeld duwen.
+      if (keyboard && window.scrollY > 0) window.scrollTo(0, 0);
     };
 
     measure();
@@ -52,6 +67,7 @@ export default function useFitHeight<T extends HTMLElement>(): [RefObject<T>, nu
     // van hoogte verandert (bijv. een extra regel bij een smaller scherm).
     window.addEventListener('resize', measure);
     window.addEventListener('orientationchange', measure);
+    window.addEventListener(VIEWPORT_EVENT, measure);
     const observer = new ResizeObserver(measure);
     document
       .querySelectorAll('header, footer, [data-fit-below]')
@@ -60,6 +76,7 @@ export default function useFitHeight<T extends HTMLElement>(): [RefObject<T>, nu
     return () => {
       window.removeEventListener('resize', measure);
       window.removeEventListener('orientationchange', measure);
+      window.removeEventListener(VIEWPORT_EVENT, measure);
       observer.disconnect();
     };
   }, []);

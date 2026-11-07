@@ -113,7 +113,7 @@ function FieldBlock({
           </span>
         )}
         <label
-          className="min-w-0 pt-1 text-[15px] font-semibold leading-snug text-slate-800 dark:text-slate-100"
+          className="min-w-0 pt-1 text-[0.9375rem] font-semibold leading-snug text-slate-800 dark:text-slate-100"
           htmlFor={fieldId}
         >
           {name}
@@ -126,12 +126,12 @@ function FieldBlock({
           <div className="flex min-h-7 flex-wrap items-center gap-x-2 gap-y-1 pb-1">
             {meta && filled && <PrefillBadge source={meta.source} note={meta.note} />}
             {vraag && (
-              <span className="inline-flex items-center rounded-full bg-rijksoranje/15 px-2 py-0.5 text-[11px] font-semibold text-slate-800 dark:text-slate-100">
+              <span className="inline-flex items-center rounded-full bg-rijksoranje/15 px-2 py-0.5 text-[0.6875rem] font-semibold text-slate-800 dark:text-slate-100">
                 Vul dit nog in
               </span>
             )}
             {active && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-rijksblauw-500/10 px-2 py-0.5 text-[11px] font-semibold text-rijksblauw-700 dark:bg-rijksblauw-500/20 dark:text-rijksblauw-100">
+              <span className="inline-flex items-center gap-1 rounded-full bg-rijksblauw-500/10 px-2 py-0.5 text-[0.6875rem] font-semibold text-rijksblauw-700 dark:bg-rijksblauw-500/20 dark:text-rijksblauw-100">
                 <Wand2 size={11} /> {expanding ? 'AI vult dit veld aan' : 'Voorstel voor dit veld'}
               </span>
             )}
@@ -156,7 +156,7 @@ function FieldBlock({
         autoFocus={autoFocus}
         rows={tall ? 6 : 3}
         className={clsx(
-          'opl-input block min-h-full resize-y self-stretch text-[15px]',
+          'opl-input block min-h-full resize-y self-stretch text-[0.9375rem]',
           vraag && 'border-2 border-rijksoranje',
         )}
         value={value}

@@ -84,7 +84,7 @@ export default function HoverPreview({
               opacity: pos ? 1 : 0,
             }}
           >
-            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-rijksblauw-600 dark:text-rijksblauw-300">
+            <p className="mb-1.5 text-[0.625rem] font-semibold uppercase tracking-wide text-rijksblauw-600 dark:text-rijksblauw-300">
               {label}
             </p>
             <p className="whitespace-pre-line text-xs leading-relaxed text-slate-600 dark:text-slate-300">

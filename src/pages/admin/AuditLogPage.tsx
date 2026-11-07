@@ -3,6 +3,7 @@ import { ScrollText } from '@/components/common/icons';
 import { listAuditEntries } from '@/services/adminService';
 import { formatDate } from '@/lib/utils';
 import type { AuditLogEntry } from '@/types';
+import StackTable from '@/components/common/StackTable';
 
 export default function AuditLogPage() {
   const [entries, setEntries] = useState<AuditLogEntry[]>([]);
@@ -29,6 +30,7 @@ export default function AuditLogPage() {
         ) : entries.length === 0 ? (
           <p className="p-8 text-center text-sm text-slate-400 dark:text-slate-500">Nog geen admin-acties geregistreerd.</p>
         ) : (
+          <StackTable>
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
               <tr>
@@ -53,6 +55,7 @@ export default function AuditLogPage() {
               ))}
             </tbody>
           </table>
+          </StackTable>
         )}
       </div>
     </div>

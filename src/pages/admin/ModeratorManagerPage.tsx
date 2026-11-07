@@ -12,6 +12,7 @@ import {
 } from '@/services/orgService';
 import { logAdminAction } from '@/services/adminService';
 import type { Organization, OrganizationModerator, Profile } from '@/types';
+import StackTable from '@/components/common/StackTable';
 
 /**
  * Adminscherm: wijs gebruikers aan als moderator van een ministerie. Een
@@ -165,6 +166,7 @@ export default function ModeratorManagerPage() {
         {loading ? (
           <div className="skeleton h-48 w-full" />
         ) : (
+          <StackTable>
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
               <tr>
@@ -225,6 +227,7 @@ export default function ModeratorManagerPage() {
               )}
             </tbody>
           </table>
+          </StackTable>
         )}
       </div>
 

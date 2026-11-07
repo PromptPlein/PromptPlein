@@ -85,7 +85,7 @@ export default function ApprovalQueuePage() {
                       <h2 className="font-semibold text-slate-800 dark:text-slate-100">
                         {p?.title ?? 'Onbekende prompt'}
                       </h2>
-                      <span className="rounded-full bg-rijksblauw-50 px-2 py-0.5 text-[11px] font-medium text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">
+                      <span className="rounded-full bg-rijksblauw-50 px-2 py-0.5 text-[0.6875rem] font-medium text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">
                         Niveau: {meta?.label ?? row.level}
                       </span>
                       <span className={clsx('opl-badge', statusMeta.classes)}>{statusMeta.label}</span>
@@ -111,7 +111,7 @@ export default function ApprovalQueuePage() {
                 </div>
 
                 {p?.content && (
-                  <pre className="mt-3 max-h-32 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-3 font-mono text-xs text-slate-700 dark:bg-slate-900 dark:text-slate-200">
+                  <pre tabIndex={0} className="mt-3 max-h-32 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-3 font-mono text-xs text-slate-700 dark:bg-slate-900 dark:text-slate-200">
                     {p.content}
                   </pre>
                 )}

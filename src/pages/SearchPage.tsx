@@ -178,7 +178,7 @@ export default function SearchPage() {
         <div role="search" className="relative w-full">
           <Search
             size={22}
-            className="pointer-events-none absolute left-[1.125rem] top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-400"
+            className="pointer-events-none absolute left-[1.125rem] top-1/2 -translate-y-1/2 text-slate-500 max-sm:left-3 dark:text-slate-400"
           />
           <input
             type="search"
@@ -186,7 +186,7 @@ export default function SearchPage() {
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Zoek op titel of inhoud"
             aria-label="Zoek prompts"
-            className="opl-input h-16 rounded-xl pl-[3.375rem] pr-36 text-lg"
+            className="opl-input h-16 rounded-xl pl-[3.375rem] pr-36 text-lg max-sm:pl-11 max-sm:pr-16"
           />
           <button
             type="button"
@@ -195,7 +195,8 @@ export default function SearchPage() {
             className="absolute bottom-2 right-2 top-2 inline-flex items-center gap-2 rounded bg-rijksblauw-50 px-3.5 text-sm font-semibold text-rijksblauw-700 transition-colors hover:bg-rijksblauw-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200 dark:hover:bg-rijksblauw-500/25"
           >
             <SlidersHorizontal size={18} />
-            Filters
+            {/* Op de telefoon alleen het icoon: het zoekvak heeft de breedte nodig. */}
+            <span className="max-sm:sr-only">Filters</span>
             {activeCount > 0 && (
               <span className="min-w-[1.375rem] rounded-full bg-rijksblauw-700 px-1.5 text-center text-xs font-bold leading-[1.375rem] text-white dark:bg-rijksblauw-600">
                 {activeCount}
@@ -205,7 +206,7 @@ export default function SearchPage() {
           </button>
         </div>
 
-        <div className="grid w-full grid-cols-4 gap-1 lg:grid-cols-8">
+        <div className="grid w-full grid-cols-3 gap-1 min-[22rem]:grid-cols-4 lg:grid-cols-8">
           {categories.map((c) => {
             const Icon = categoryIcon(c.icon);
             const active = filters.category_ids?.includes(c.id) ?? false;
@@ -230,7 +231,7 @@ export default function SearchPage() {
                 </span>
                 <span
                   className={clsx(
-                    'text-[0.8125rem] leading-tight text-slate-900 dark:text-slate-100',
+                    'max-w-full text-[0.8125rem] leading-tight text-slate-900 [hyphens:auto] [overflow-wrap:anywhere] dark:text-slate-100',
                     active ? 'font-bold' : 'font-medium',
                   )}
                 >

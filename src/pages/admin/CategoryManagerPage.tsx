@@ -12,6 +12,7 @@ import {
 } from '@/services/repository';
 import { logAdminAction } from '@/services/adminService';
 import type { Category } from '@/types';
+import StackTable from '@/components/common/StackTable';
 
 interface Editor {
   id?: string;
@@ -112,12 +113,12 @@ export default function CategoryManagerPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Categorieën beheren</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">{categories.length} categorieën</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button className="opl-btn-secondary" onClick={() => setCsvOpen(true)}>
             <Upload size={16} /> CSV import
           </button>
@@ -134,6 +135,7 @@ export default function CategoryManagerPage() {
         {loading ? (
           <div className="skeleton h-48 w-full" />
         ) : (
+          <StackTable>
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
               <tr>
@@ -171,6 +173,7 @@ export default function CategoryManagerPage() {
               ))}
             </tbody>
           </table>
+          </StackTable>
         )}
       </div>
 

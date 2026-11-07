@@ -4,13 +4,12 @@ import {
   AlertTriangle,
   Download,
   FolderOpen,
-  FolderPlus,
   LogIn,
+  Menu,
   MessageSquare,
   Play,
   Plus,
   ShieldCheck,
-  Trash2,
   Upload,
 } from '@/components/common/icons';
 import InfoDot from '@/components/common/InfoDot';
@@ -19,6 +18,7 @@ import toast from 'react-hot-toast';
 import { useAuth } from '@/context/AuthContext';
 import { AuthLoading } from '@/components/auth/RequireAuth';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
+import Drawer from '@/components/common/Drawer';
 import ChatComposer, { type ChatComposerHandle } from '@/components/chat/ChatComposer';
 import ChatEmptyState from '@/components/chat/ChatEmptyState';
 import ChatMessageList from '@/components/chat/ChatMessageList';
@@ -92,6 +92,8 @@ function ChatPageInner() {
   const projects = useChatProjects();
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
+  // De lijst met chats en projecten op schermen zonder zijbalk.
+  const [listOpen, setListOpen] = useState(false);
   const restoreInputRef = useRef<HTMLInputElement>(null);
   const handoffDone = useRef(false);
   // Hoogteplafond van de chatkaart: precies wat het venster overlaat.
@@ -493,6 +495,9 @@ function ChatPageInner() {
   useEffect(() => {
     if (!emptyChatReady) return;
     if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return;
+    // Op een aanraakscherm zou dit meteen het toetsenbord over de pagina leggen,
+    // nog voor je iets gelezen hebt, en de schermlezer van zijn plek halen.
+    if (window.matchMedia('(pointer: coarse)').matches) return;
     composerRef.current?.focus();
   }, [emptyChatReady, conversationId]);
 
@@ -517,9 +522,52 @@ function ChatPageInner() {
     );
   }
 
-  const activeInIndex = conversation
-    ? controller.index.some((e) => e.id === conversation.id)
-    : false;
+  /* Waar blijven je chats? De scheiding tussen projecten (database) en chats (dit
+     apparaat) is de belangrijkste privacy-afspraak van deze pagina. Eén korte
+     belofte in beeld, de rest achter het infobolletje; ernaast de twee knoppen
+     waarmee je je chats als bestand meeneemt. Het bestand gaat nergens heen:
+     opbouwen en inlezen gebeurt in de browser. */
+  const storagePromise = (
+    <>
+      <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white py-0.5 pl-3 pr-1 font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+        <ShieldCheck size={15} className="shrink-0 text-rijksblauw-700 dark:text-rijksblauw-200" />
+        Chats blijven in deze browser
+        <InfoDot
+          label="Uitleg over waar chats en projecten staan"
+          text={
+            'Chats staan alleen in deze browser, ook zonder account en na uitloggen. Wis je de browsergegevens of wissel je van pc, dan zie je ze daar niet.\nProjecten staan bij je account in de database.\nMet Bewaren en Terugzetten neem je je chats mee als bestand.'
+          }
+        />
+      </span>
+      <button
+        type="button"
+        className="opl-btn-ghost !px-2.5 !py-1.5"
+        onClick={controller.exportHistory}
+        disabled={controller.streaming || controller.index.length === 0}
+        title="Download al je chats als één bestand op dit apparaat"
+      >
+        <Download size={15} /> Bewaren
+      </button>
+      <button
+        type="button"
+        className="opl-btn-ghost !px-2.5 !py-1.5"
+        onClick={() => restoreInputRef.current?.click()}
+        disabled={controller.streaming}
+        title="Zet een eerder bewaard bestand terug op dit apparaat"
+      >
+        <Upload size={15} /> Terugzetten
+      </button>
+    </>
+  );
+
+  const sidebarProps = {
+    entries: looseEntries,
+    totalConversations: controller.index.length,
+    projects: projectList,
+    activeId: projectPage ? null : (conversation?.id ?? null),
+    openProjectId: projectPage,
+    disabled: controller.streaming,
+  };
 
   return (
     /* Gesprekkenlijst en gesprek zitten in ÉÉN kaart: de lijst is geen los
@@ -527,21 +575,15 @@ function ChatPageInner() {
        niet meer dan een lijn. De kaart vult altijd het hele venster
        (useFitHeight): zo blijft de leesruimte zo groot mogelijk en houdt het
        tekstvak tijdens een gesprek een vaste plek. Alleen de berichtenlijst
-       scrollt. */
-    <div className="mx-auto w-full max-w-6xl px-4 py-4 sm:px-6 lg:px-8">
-      <h1 className="sr-only">Chat</h1>
+       scrollt. Op de telefoon vervalt de kaart en loopt de chat tot de rand. */
+    <div className="mx-auto w-full max-w-6xl sm:px-6 sm:py-4 lg:px-8 laag:py-0">
       <div
         ref={cardRef}
         style={cardMaxHeight ? { height: cardMaxHeight } : undefined}
-        className="opl-card flex h-[calc(100dvh-14rem)] overflow-hidden"
+        className="opl-card flex h-[calc(100dvh-14rem)] overflow-hidden max-sm:rounded-none max-sm:border-0 max-sm:shadow-none"
       >
         <ChatSidebar
-          entries={looseEntries}
-          totalConversations={controller.index.length}
-          projects={projectList}
-          activeId={projectPage ? null : (conversation?.id ?? null)}
-          openProjectId={projectPage}
-          disabled={controller.streaming}
+          {...sidebarProps}
           onSelect={handleSelectConversation}
           onNew={handleNewConversation}
           onNewProject={() => void handleNewProject()}
@@ -551,84 +593,23 @@ function ChatPageInner() {
         />
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          {/* Mobiel: projectkeuze + gesprekswissel + nieuw/verwijderen boven de
-              berichtenlijst. Zonder projecten blijft dit precies zoals het was. */}
-          <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3 lg:hidden dark:border-slate-700">
-            {projectList.length > 0 && (
-              <select
-                className="opl-input w-32 shrink-0"
-                value={projectPage ?? (conversation?.projectId ?? '')}
-                disabled={controller.streaming}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  if (value) handleOpenProject(value);
-                  else setProjectPage(null);
-                }}
-                aria-label="Kies een project"
-              >
-                <option value="">Geen project</option>
-                {projectList.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
-              </select>
-            )}
-            <select
-              className="opl-input min-w-0 flex-1"
-              value={projectPage ? '' : (conversation?.id ?? '')}
-              disabled={controller.streaming}
-              onChange={(e) => handleSelectConversation(e.target.value)}
-              aria-label="Kies een chat"
-            >
-              {(projectPage || (conversation && !activeInIndex)) && (
-                <option value={conversation?.id ?? ''}>Nieuwe chat</option>
-              )}
-              {controller.index.map((entry) => (
-                <option key={entry.id} value={entry.id}>
-                  {entry.title}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              className="opl-btn-secondary shrink-0 !px-2.5"
-              onClick={handleNewConversation}
-              disabled={controller.streaming}
-              aria-label="Nieuwe chat"
-            >
-              <Plus size={16} />
-            </button>
-            <button
-              type="button"
-              className="opl-btn-secondary shrink-0 !px-2.5"
-              onClick={() => void handleNewProject()}
-              disabled={controller.streaming}
-              aria-label="Nieuw project"
-              title="Nieuw project"
-            >
-              <FolderPlus size={16} />
-            </button>
-            {!projectPage && activeInIndex && conversation && (
+            <div className="flex items-center gap-2 border-b border-slate-200 px-2 py-1 dark:border-slate-700 sm:px-6 sm:py-3 lg:px-6">
+              {/* Zonder zijbalk: de lijst met chats en projecten schuift in. */}
               <button
                 type="button"
-                className="opl-btn-secondary shrink-0 !px-2.5 text-rijksrood dark:text-red-400"
-                onClick={() => setConfirmDeleteId(conversation.id)}
+                className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-rijksblauw-700 hover:bg-slate-100 disabled:opacity-40 dark:text-rijksblauw-200 dark:hover:bg-slate-700 lg:hidden"
+                onClick={() => setListOpen(true)}
                 disabled={controller.streaming}
-                aria-label="Verwijder deze chat"
+                aria-label="Chats en projecten"
               >
-                <Trash2 size={16} />
+                <Menu size={20} />
               </button>
-            )}
-          </div>
-
-            <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3 dark:border-slate-700 sm:px-6">
               {openProject ? (
-                <FolderOpen size={18} className="text-rijksblauw-500" />
+                <FolderOpen size={18} className="hidden text-rijksblauw-500 lg:block" />
               ) : (
-                <MessageSquare size={18} className="text-rijksblauw-500" />
+                <MessageSquare size={18} className="hidden text-rijksblauw-500 lg:block" />
               )}
-              <h1 className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+              <h1 className="min-w-0 truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
                 {openProject
                   ? openProject.name
                   : conversation && messages.length > 0
@@ -670,6 +651,19 @@ function ChatPageInner() {
                   <Download size={16} />
                 </button>
               )}
+              <button
+                type="button"
+                className={clsx(
+                  'flex h-9 shrink-0 items-center justify-center rounded-lg px-2 text-rijksblauw-700 hover:bg-slate-100 disabled:opacity-40 dark:text-rijksblauw-200 dark:hover:bg-slate-700 lg:hidden',
+                  !(!openProject && conversation && messages.length > 0) && 'ml-auto',
+                )}
+                onClick={handleNewConversation}
+                disabled={controller.streaming}
+                aria-label="Nieuwe chat"
+                title="Nieuwe chat"
+              >
+                <Plus size={20} />
+              </button>
             </div>
 
             {openProject ? (
@@ -797,56 +791,55 @@ function ChatPageInner() {
         </div>
       </div>
 
-      {/* Onder de kaart, en dus ook tijdens een lopend gesprek zichtbaar: waar
-          blijven je chats? De scheiding tussen projecten (database) en chats
-          (dit apparaat) is de belangrijkste privacy-afspraak van deze pagina.
-          Eén korte belofte in beeld, de rest achter het infobolletje; ernaast
-          de twee knoppen waarmee je je chats als bestand meeneemt. Het bestand
-          gaat nergens heen: opbouwen en inlezen gebeurt in de browser. */}
+      {/* Onder de kaart, en dus ook tijdens een lopend gesprek zichtbaar. Op de
+          telefoon telt elke regel: daar staat dit in de lijst met chats. */}
       <div
         data-fit-below
-        className="mt-3 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm"
+        className="mt-3 hidden flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm sm:flex laag:hidden"
       >
-        <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white py-0.5 pl-3 pr-1 font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
-          <ShieldCheck size={15} className="shrink-0 text-rijksblauw-700 dark:text-rijksblauw-200" />
-          Chats blijven in deze browser
-          <InfoDot
-            label="Uitleg over waar chats en projecten staan"
-            text={
-              'Chats staan alleen in deze browser, ook zonder account en na uitloggen. Wis je de browsergegevens of wissel je van pc, dan zie je ze daar niet.\nProjecten staan bij je account in de database.\nMet Bewaren en Terugzetten neem je je chats mee als bestand.'
-            }
-          />
-        </span>
-        <button
-          type="button"
-          className="opl-btn-ghost !px-2.5 !py-1.5"
-          onClick={controller.exportHistory}
-          disabled={controller.streaming || controller.index.length === 0}
-          title="Download al je chats als één bestand op dit apparaat"
-        >
-          <Download size={15} /> Bewaren
-        </button>
-        <button
-          type="button"
-          className="opl-btn-ghost !px-2.5 !py-1.5"
-          onClick={() => restoreInputRef.current?.click()}
-          disabled={controller.streaming}
-          title="Zet een eerder bewaard bestand terug op dit apparaat"
-        >
-          <Upload size={15} /> Terugzetten
-        </button>
-        <input
-          ref={restoreInputRef}
-          type="file"
-          accept="application/json,.json"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            e.target.value = '';
-            if (file) void controller.importHistory(file);
-          }}
-        />
+        {storagePromise}
       </div>
+      <input
+        ref={restoreInputRef}
+        type="file"
+        accept="application/json,.json"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = '';
+          if (file) void controller.importHistory(file);
+        }}
+      />
+
+      <Drawer open={listOpen} onClose={() => setListOpen(false)} title="Chats en projecten">
+        <ChatSidebar
+          {...sidebarProps}
+          inDrawer
+          onSelect={(id) => {
+            setListOpen(false);
+            handleSelectConversation(id);
+          }}
+          onNew={() => {
+            setListOpen(false);
+            handleNewConversation();
+          }}
+          onNewProject={() => {
+            setListOpen(false);
+            void handleNewProject();
+          }}
+          onOpenProject={(id) => {
+            setListOpen(false);
+            handleOpenProject(id);
+          }}
+          onRequestDelete={setConfirmDeleteId}
+          onRequestDeleteAll={() => setConfirmDeleteAll(true)}
+          footer={
+            <div className="mt-3 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 border-t border-slate-200 pt-3 text-sm dark:border-slate-700">
+              {storagePromise}
+            </div>
+          }
+        />
+      </Drawer>
 
       {pendingSend && aiSettings && (
         <GuardrailDialog
