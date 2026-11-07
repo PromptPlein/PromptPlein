@@ -191,6 +191,11 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
   const [enlarged, setEnlarged] = useState(false);
   const [overflowing, setOverflowing] = useState(false);
   useEffect(() => onEnlargedChange?.(enlarged), [enlarged, onEnlargedChange]);
+  // Een leeg vak hoeft niet groot te zijn: de begroeting van een lege chat komt
+  // dan ook weer terug.
+  useEffect(() => {
+    if (!text) setEnlarged(false);
+  }, [text]);
   // Een routekaart herken je aan het inhoudsblok: een regel KOP, haltes en FINISH.
   const isRoutekaart = useMemo(
     () => Boolean(onRoutekaart) && /^\s*KOP\s*$/m.test(text) && parseRoutekaart(text) !== null,
