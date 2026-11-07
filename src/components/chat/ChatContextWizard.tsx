@@ -37,7 +37,7 @@ import { submitOnEnter, usePromptInterview } from './usePromptInterview';
 type Step = 'context' | 'taak' | 'vragen' | 'schrijven';
 
 const STAPPEN: Step[] = ['context', 'taak', 'vragen', 'schrijven'];
-const STAP_LABELS = ['Context', 'Taak', 'Vragen', 'Prompt'];
+const STAP_LABELS = ['Project', 'Taak', 'Vragen', 'Prompt'];
 
 /** Zoveel tekst uit de bijlagen van deze chat leest de vragenronde mee. */
 const MAX_ATTACHMENT_EXCERPT = 6_000;
@@ -62,8 +62,8 @@ export interface ContextPrompt {
 }
 
 /**
- * De knop Context: kies een project met zijn bronbestanden en laat er een prompt
- * bij maken. De AI vraagt door tot duidelijk is wat de medewerker wil bereiken,
+ * De knop Projecten in de chat: kies een project met zijn bronbestanden en maak
+ * er een context prompt bij. De AI vraagt door tot duidelijk is wat de medewerker wil bereiken,
  * kiest zelf een framework en zet de prompt in het tekstvak van de chat.
  *
  * Er is bewust geen voorstelscherm zoals bij "Prompt maken" in een project: het
@@ -201,7 +201,7 @@ export default function ChatContextWizard({
   );
 
   return (
-    <Modal open onClose={requestClose} title={step === 'context' ? 'Context' : 'Prompt maken'}>
+    <Modal open onClose={requestClose} title={step === 'context' ? 'Projecten' : 'Context prompt'}>
       <WizardSteps labels={STAP_LABELS} current={STAPPEN.indexOf(step)} />
 
       {step === 'context' && (
@@ -297,7 +297,7 @@ export default function ChatContextWizard({
               </button>
             )}
             <button type="button" className="opl-btn-primary" onClick={() => setStep('taak')}>
-              <Wand2 size={16} /> Prompt maken
+              <Wand2 size={16} /> Context prompt
             </button>
           </div>
         </div>

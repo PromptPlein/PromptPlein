@@ -4,7 +4,7 @@ import clsx from 'clsx';
 import type { ProjectInterviewStep } from '@/services/projectPromptService';
 import { submitOnEnter } from './usePromptInterview';
 
-/** De balk met stappen boven in "Prompt maken" en het contextvenster. */
+/** De balk met stappen boven in "Prompt maken" en het projectvenster. */
 export function WizardSteps({ labels, current }: { labels: string[]; current: number }) {
   return (
     <ol

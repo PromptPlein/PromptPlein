@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import {
-  Layers,
+  FolderOpen,
   Loader2,
   Map as MapIcon,
   Maximize2,
@@ -104,11 +104,11 @@ interface ChatComposerProps {
   /** Bijlagen toestaan? De Testkamer zet dit uit: daar test je de prompt zelf. */
   allowAttachments?: boolean;
   /**
-   * Opent het contextvenster: project en bronnen kiezen, of meteen een prompt
-   * laten maken. Afwezig = geen knop Context en geen plusregels daarvoor.
+   * Opent het projectvenster: project en bronnen kiezen, of meteen een context
+   * prompt maken. Afwezig = geen knop Projecten en geen plusregels daarvoor.
    */
   onContext?: (start: 'context' | 'taak') => void;
-  /** De naam van het project van dit gesprek; staat dan op de knop Context. */
+  /** De naam van het project van dit gesprek; staat dan op de knop Projecten. */
   activeProjectName?: string;
   /**
    * Staat de denkstand aan? Afwezige {@link onToggleThinking} = geen knop, net
@@ -635,9 +635,9 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
               />
             )}
 
-            {/* Context: project met bronbestanden, en van daaruit een prompt laten
-                maken. Staat los van de plus, want dit is de snelste weg naar een
-                goed antwoord. Hoort de chat bij een project, dan staat dat erop. */}
+            {/* Projecten: project met bronbestanden, en van daaruit een context prompt.
+                Staat los van de plus, want dit is de snelste weg naar een goed
+                antwoord. Hoort de chat bij een project, dan staat dat erop. */}
             {onContext && (
               <button
                 type="button"
@@ -649,12 +649,12 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
                 )}
                 onClick={() => onContext('context')}
                 disabled={disabled || streaming}
-                title="Kies een project met bronbestanden of laat een prompt maken"
-                aria-label={activeProjectName ? `Context: ${activeProjectName}` : 'Context'}
+                title="Kies een project met bronbestanden of maak een context prompt"
+                aria-label={activeProjectName ? `Project: ${activeProjectName}` : 'Projecten'}
               >
-                <Layers size={16} className="shrink-0" />
+                <FolderOpen size={16} className="shrink-0" />
                 <span className="max-w-[9rem] truncate text-xs font-medium">
-                  {activeProjectName ?? 'Context'}
+                  {activeProjectName ?? 'Projecten'}
                 </span>
               </button>
             )}

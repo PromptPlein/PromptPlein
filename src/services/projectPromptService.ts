@@ -1,5 +1,5 @@
-// "Prompt maken" in een project en de knop Context in de chat: de vragenronde en
-// de prompt.
+// "Prompt maken" in een project en de context prompt in de chat: de vragenronde
+// en de prompt.
 //
 // Alleen AI-aanroepen; opslaan loopt via chatProjectService, want het resultaat
 // is gewoon de projectinstructie. Er is geen lokale tak: projecten vragen een
@@ -50,7 +50,7 @@ async function post<T extends { success?: boolean; error?: string }>(
   body: Record<string, unknown>,
   settings: ChatSettings | null,
   signal?: AbortSignal,
-  /** De knop Context in de chat werkt net als de chat zelf ook zonder account. */
+  /** De context prompt werkt net als de chat zelf ook zonder account. */
   openForGuests = false,
 ): Promise<T> {
   const functionUrl = getFunctionUrl('optimize-prompt');
@@ -135,7 +135,7 @@ export function adjustProjectPrompt(args: {
   );
 }
 
-/** De volgende vraag bij de knop Context: hier gaat het om de taak van nu. */
+/** De volgende vraag bij een context prompt: hier gaat het om de taak van nu. */
 export function nextContextQuestion(args: {
   goal: string;
   turns: ProjectTurn[];

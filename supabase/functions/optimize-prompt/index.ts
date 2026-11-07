@@ -2228,7 +2228,7 @@ Geef alleen de volledige aangepaste prompt terug, zonder inleiding en zonder toe
 </uitvoer>`;
 
 /**
- * De knop Context in de chat: dezelfde drie stappen als "Prompt maken", maar voor
+ * De context prompt in de chat: dezelfde drie stappen als "Prompt maken", maar voor
  * één taak van nu in plaats van een vaste prompt voor een project. Daarom eigen
  * teksten: hier hoort juist wel wat per keer verschilt in de prompt, en er komt
  * geen los bericht met invoer achteraan.
@@ -2303,7 +2303,7 @@ Geef alleen dit JSON-object terug, met de velden in deze volgorde:
 {"taak":"<zin>","soort":"<soort>","bekend":"<punten>","ontbreekt":"<punten>","begrip":"<zin die begint met Je wilt>","klaar":false,"vraag":"<één vraag>","opties":["<antwoord>","<antwoord>","<antwoord>"]}
 </uitvoer>`;
 
-/** Kiest bij de knop Context zelf het framework voor de taak van nu. */
+/** Kiest bij een context prompt zelf het framework voor de taak van nu. */
 let CONTEXT_FRAMEWORK_SYSTEM_PROMPT = `Je bent prompt-ontwerper voor de Nederlandse rijksoverheid en je kiest uit een lijst de ene opbouw die past bij één taak die een medewerker nu laat uitvoeren.
 
 <denkstappen>
@@ -2339,7 +2339,7 @@ Geef alleen dit JSON-object terug, met de velden in deze volgorde:
 {"kern":"<zin>","eis":"<zin>","id":"<id uit de lijst>","reden":"<zin>","titel":"<titel>"}
 </uitvoer>`;
 
-/** Schrijft bij de knop Context de prompt die in het tekstvak van de chat komt. */
+/** Schrijft de context prompt die in het tekstvak van de chat komt. */
 let CONTEXT_PROMPT_SYSTEM_PROMPT = `Je schrijft voor een medewerker van de Nederlandse rijksoverheid één prompt die de medewerker meteen in de chat verstuurt en die één taak in één keer laat uitvoeren.
 
 <werking>
@@ -2370,10 +2370,10 @@ De medewerker verstuurt deze prompt als bericht. De AI voert de taak meteen uit 
 Geef alleen de prompt terug, zonder inleiding en zonder toelichting.
 </uitvoer>`;
 
-/** Zoveel bronmateriaal leest de knop Context hoogstens mee. */
+/** Zoveel bronmateriaal leest een context prompt hoogstens mee. */
 const MAX_CONTEXT_MATERIAL_CHARS = 20_000;
 
-/** Het bronmateriaal bij de knop Context, of niets als er geen is. */
+/** Het bronmateriaal bij een context prompt, of niets als er geen is. */
 function buildContextMaterialBlock(material: string | undefined): string {
   const clean = material?.trim().slice(0, MAX_CONTEXT_MATERIAL_CHARS);
   return clean ? `BRONMATERIAAL:\n"""\n${clean}\n"""\n\n` : '';
@@ -8931,9 +8931,9 @@ const PROMPT_CATALOG: PromptCatalogEntry[] = [
   { id: 'PROJECT_INTERVIEW_SYSTEM_PROMPT', groep: "Uitvoeren, Testkamer en projecten", titel: "Project: vragenronde", uitleg: "Prompt maken in een nieuw project: analyseert de taak en stelt per beurt één vraag met antwoordopties.", get: () => PROJECT_INTERVIEW_SYSTEM_PROMPT, set: (v) => { PROJECT_INTERVIEW_SYSTEM_PROMPT = v; } },
   { id: 'PROJECT_FRAMEWORK_SYSTEM_PROMPT', groep: "Uitvoeren, Testkamer en projecten", titel: "Project: framework kiezen", uitleg: "Kiest na de vragenronde zelf het framework dat bij de taak past.", get: () => PROJECT_FRAMEWORK_SYSTEM_PROMPT, set: (v) => { PROJECT_FRAMEWORK_SYSTEM_PROMPT = v; } },
   { id: 'PROJECT_PROMPT_SYSTEM_PROMPT', groep: "Uitvoeren, Testkamer en projecten", titel: "Project: prompt schrijven", uitleg: "Schrijft op de gekozen opbouw de vaste prompt die in het project komt.", get: () => PROJECT_PROMPT_SYSTEM_PROMPT, set: (v) => { PROJECT_PROMPT_SYSTEM_PROMPT = v; } },
-  { id: 'CONTEXT_INTERVIEW_SYSTEM_PROMPT', groep: "Uitvoeren, Testkamer en projecten", titel: "Context in de chat: vragenronde", uitleg: "De knop Context in de chat: achterhaalt per beurt met één vraag wat de medewerker nu wil bereiken.", get: () => CONTEXT_INTERVIEW_SYSTEM_PROMPT, set: (v) => { CONTEXT_INTERVIEW_SYSTEM_PROMPT = v; } },
-  { id: 'CONTEXT_FRAMEWORK_SYSTEM_PROMPT', groep: "Uitvoeren, Testkamer en projecten", titel: "Context in de chat: framework kiezen", uitleg: "Kiest zelf de opbouw die past bij de taak van nu.", get: () => CONTEXT_FRAMEWORK_SYSTEM_PROMPT, set: (v) => { CONTEXT_FRAMEWORK_SYSTEM_PROMPT = v; } },
-  { id: 'CONTEXT_PROMPT_SYSTEM_PROMPT', groep: "Uitvoeren, Testkamer en projecten", titel: "Context in de chat: prompt schrijven", uitleg: "Schrijft op de gekozen opbouw de prompt die in het tekstvak van de chat komt.", get: () => CONTEXT_PROMPT_SYSTEM_PROMPT, set: (v) => { CONTEXT_PROMPT_SYSTEM_PROMPT = v; } },
+  { id: 'CONTEXT_INTERVIEW_SYSTEM_PROMPT', groep: "Uitvoeren, Testkamer en projecten", titel: "Context prompt: vragenronde", uitleg: "Context prompt in de chat: achterhaalt per beurt met één vraag wat de medewerker nu wil bereiken.", get: () => CONTEXT_INTERVIEW_SYSTEM_PROMPT, set: (v) => { CONTEXT_INTERVIEW_SYSTEM_PROMPT = v; } },
+  { id: 'CONTEXT_FRAMEWORK_SYSTEM_PROMPT', groep: "Uitvoeren, Testkamer en projecten", titel: "Context prompt: framework kiezen", uitleg: "Kiest zelf de opbouw die past bij de taak van nu.", get: () => CONTEXT_FRAMEWORK_SYSTEM_PROMPT, set: (v) => { CONTEXT_FRAMEWORK_SYSTEM_PROMPT = v; } },
+  { id: 'CONTEXT_PROMPT_SYSTEM_PROMPT', groep: "Uitvoeren, Testkamer en projecten", titel: "Context prompt: prompt schrijven", uitleg: "Schrijft op de gekozen opbouw de prompt die in het tekstvak van de chat komt.", get: () => CONTEXT_PROMPT_SYSTEM_PROMPT, set: (v) => { CONTEXT_PROMPT_SYSTEM_PROMPT = v; } },
   { id: 'PROJECT_PROMPT_ADJUST_SYSTEM_PROMPT', groep: "Uitvoeren, Testkamer en projecten", titel: "Project: prompt aanpassen", uitleg: "Past het voorstel aan op het verzoek van de medewerker.", get: () => PROJECT_PROMPT_ADJUST_SYSTEM_PROMPT, set: (v) => { PROJECT_PROMPT_ADJUST_SYSTEM_PROMPT = v; } },
   { id: 'PROJECT_BRIEF_SYSTEM_PROMPT', groep: "Uitvoeren, Testkamer en projecten", titel: "Projectanalyse", uitleg: "De vaste analyse van de bronbestanden van een chatproject.", get: () => PROJECT_BRIEF_SYSTEM_PROMPT, set: (v) => { PROJECT_BRIEF_SYSTEM_PROMPT = v; } },
 ];
@@ -10490,7 +10490,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // --- Project-interview: de vragenronde van "Prompt maken" in een project ---
-    // De knop Context in de chat loopt mee met deze twee handlers. Die is net als
+    // De context prompt in de chat loopt mee met deze twee handlers. Die is net als
     // de chat open zonder account; een project vraagt wel om in te loggen.
     if (mode === 'project-interview' || mode === 'context-interview') {
       const forChat = mode === 'context-interview';

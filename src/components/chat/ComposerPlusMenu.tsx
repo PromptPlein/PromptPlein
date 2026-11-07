@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  Layers,
+  FolderOpen,
   Loader2,
   Mic,
   Paperclip,
@@ -225,14 +225,14 @@ export default function ComposerPlusMenu({
                 onClick={() => choose(onAddFile)}
               />
               <MenuItem
-                icon={Layers}
-                label="Context"
+                icon={FolderOpen}
+                label="Projecten"
                 hint="Project met bronbestanden"
                 onClick={() => choose(onContext)}
               />
               <MenuItem
                 icon={Wand2}
-                label="Prompt maken"
+                label="Context prompt"
                 hint="De AI stelt een paar vragen"
                 onClick={() => choose(onMakePrompt)}
               />

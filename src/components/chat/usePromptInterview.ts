@@ -22,7 +22,7 @@ const toTurns = (steps: AnsweredStep[]): ProjectTurn[] =>
   steps.map(({ question, answer }) => ({ question, answer }));
 
 /**
- * De vragenronde van "Prompt maken" en van de knop Context: één vraag per beurt
+ * De vragenronde van "Prompt maken" en van de context prompt: één vraag per beurt
  * met antwoordopties, tot de AI genoeg weet. Wat er daarna met de prompt gebeurt,
  * bepaalt de aanroeper in `write`.
  */

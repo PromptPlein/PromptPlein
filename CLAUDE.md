@@ -437,21 +437,24 @@ bestandskaart.
 Vanuit de bouwer kun je een prompt met "Uitvoeren in chat" doorzetten naar
 `/chat`, en vanuit de chat weer terug (`handoffService`).
 
-## Plus en Context in de chat
+## Plus, Projecten en Context prompt in de chat
 
 De balk van het tekstvak toont alleen wat er aanstaat. De rest zit achter de plus
-(`ComposerPlusMenu`): bestand, context, prompt maken, denken, internet en
+(`ComposerPlusMenu`): bestand, projecten, context prompt, denken, internet en
 inspreken. De microfoon blijft ook los staan, want inspreken moet zonder menu
 kunnen. De bevestigingen van Denken en Internet staan op één plek, in
 `ThinkingToggle` en `WebSearchToggle`, die daarom ook een menuvorm hebben.
 
-Context (`ChatContextWizard`, ook te openen door `@` als eerste teken te typen)
-kiest een project met bronbestanden en maakt desgewenst een prompt: taak, vragen,
-prompt. Dezelfde vragenronde als "Prompt maken" in een project
-(`usePromptInterview`), maar met eigen modes en systeemprompts, want dat is een
-vaste prompt voor een terugkerende taak en dit is één taak van nu. Hier hoort wat
-per keer verschilt juist wel in de prompt. Context werkt ook zonder account, net
-als de chat; alleen projecten vragen om in te loggen.
+De knop Projecten (`ChatContextWizard`, ook te openen door `@` als eerste teken te
+typen) kiest een project met bronbestanden en maakt desgewenst een context prompt:
+taak, vragen, prompt. De namen komen van de gebruiker: Projecten omdat de knop
+daarnaar verwijst, Context prompt voor het maken van de prompt.
+
+Dezelfde vragenronde als "Prompt maken" in een project (`usePromptInterview`), maar
+met eigen modes en systeemprompts, want dat is een vaste prompt voor een
+terugkerende taak en dit is één taak van nu. Hier hoort wat
+per keer verschilt juist wel in de prompt. De context prompt werkt ook zonder
+account, net als de chat; alleen projecten vragen om in te loggen.
 
 Er is bewust geen voorstelscherm: de prompt komt in het tekstvak en daar lees je
 hem. Versturen blijft een eigen handeling, inclusief de controle op
