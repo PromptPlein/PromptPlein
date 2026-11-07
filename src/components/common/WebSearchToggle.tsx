@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Globe } from '@/components/common/icons';
 import clsx from 'clsx';
 import ConfirmDialog from './ConfirmDialog';
+import MenuSwitchRow from './MenuSwitchRow';
 
 interface WebSearchToggleProps {
   /** Staat zoeken op internet aan? */
@@ -10,6 +11,8 @@ interface WebSearchToggleProps {
   disabled?: boolean;
   /** Extra klassen, zodat de knop in de werkbalk past waar hij staat. */
   className?: string;
+  /** 'menu' is een regel in het plusmenu van de chat, met dezelfde bevestiging. */
+  variant?: 'bar' | 'menu';
 }
 
 /**
@@ -30,32 +33,44 @@ export default function WebSearchToggle({
   onChange,
   disabled = false,
   className,
+  variant = 'bar',
 }: WebSearchToggleProps) {
   const [confirming, setConfirming] = useState(false);
   return (
     <>
-      <button
-        type="button"
-        className={clsx(
-          'flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 transition-colors focus:outline-none focus:ring-2 focus:ring-rijksblauw-500/40 disabled:cursor-not-allowed disabled:opacity-40',
-          value
-            ? 'bg-rijksblauw-50 text-rijksblauw-700 hover:bg-rijksblauw-100 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200'
-            : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200',
-          className,
-        )}
-        onClick={() => (value ? onChange(false) : setConfirming(true))}
-        disabled={disabled}
-        title={
-          value
-            ? 'Internet staat aan: je vraag gaat naar een externe zoekdienst en de AI antwoordt met wat hij vindt, met de bronnen erbij. Zet geen vertrouwelijke informatie in je vraag.'
-            : 'Laat de AI eerst op internet zoeken. Handig bij iets actueels of iets wat de AI zelf niet kan weten; je vraag gaat dan wel naar een externe zoekdienst.'
-        }
-        aria-pressed={value}
-        aria-label="Zoeken op internet aan of uit"
-      >
-        <Globe size={16} className="shrink-0" />
-        <span className="text-xs font-medium">Internet</span>
-      </button>
+      {variant === 'menu' ? (
+        <MenuSwitchRow
+          icon={Globe}
+          label="Internet"
+          hint="Zoek actuele bronnen"
+          on={value}
+          disabled={disabled}
+          onClick={() => (value ? onChange(false) : setConfirming(true))}
+        />
+      ) : (
+        <button
+          type="button"
+          className={clsx(
+            'flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 transition-colors focus:outline-none focus:ring-2 focus:ring-rijksblauw-500/40 disabled:cursor-not-allowed disabled:opacity-40',
+            value
+              ? 'bg-rijksblauw-50 text-rijksblauw-700 hover:bg-rijksblauw-100 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200'
+              : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200',
+            className,
+          )}
+          onClick={() => (value ? onChange(false) : setConfirming(true))}
+          disabled={disabled}
+          title={
+            value
+              ? 'Internet staat aan: je vraag gaat naar een externe zoekdienst en de AI antwoordt met wat hij vindt, met de bronnen erbij. Zet geen vertrouwelijke informatie in je vraag.'
+              : 'Laat de AI eerst op internet zoeken. Handig bij iets actueels of iets wat de AI zelf niet kan weten; je vraag gaat dan wel naar een externe zoekdienst.'
+          }
+          aria-pressed={value}
+          aria-label="Zoeken op internet aan of uit"
+        >
+          <Globe size={16} className="shrink-0" />
+          <span className="text-xs font-medium">Internet</span>
+        </button>
+      )}
 
       <ConfirmDialog
         open={confirming}

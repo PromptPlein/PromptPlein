@@ -24,6 +24,7 @@ import ChatEmptyState from '@/components/chat/ChatEmptyState';
 import ChatMessageList from '@/components/chat/ChatMessageList';
 import ChatModelBadge from '@/components/chat/ChatModelBadge';
 import ChatSidebar from '@/components/chat/ChatSidebar';
+import ChatContextWizard, { type ContextPrompt } from '@/components/chat/ChatContextWizard';
 import ProjectPromptWizard from '@/components/chat/ProjectPromptWizard';
 import ProjectSettingsModal from '@/components/chat/ProjectSettingsModal';
 import ProjectView from '@/components/chat/ProjectView';
@@ -287,6 +288,39 @@ function ChatPageInner() {
       void projects.remove(id);
     },
     [projects],
+  );
+
+  const [composerEnlarged, setComposerEnlarged] = useState(false);
+
+  // Het contextvenster: `goal` is wat er al in het tekstvak stond.
+  const [contextWizard, setContextWizard] = useState<{
+    startAt: 'context' | 'taak';
+    goal: string;
+  } | null>(null);
+
+  const handleOpenContext = useCallback((startAt: 'context' | 'taak') => {
+    setContextWizard({ startAt, goal: composerRef.current?.getText().trim() ?? '' });
+  }, []);
+
+  const handleApplyContext = useCallback(
+    (projectId: string | null) => {
+      setContextWizard(null);
+      controller.applyContext(projectId, false);
+      composerRef.current?.focus();
+    },
+    [controller],
+  );
+
+  const handleContextPrompt = useCallback(
+    ({ draft, projectId }: ContextPrompt) => {
+      setContextWizard(null);
+      controller.applyContext(projectId, true);
+      composerRef.current?.fillPrompt(draft.prompt, {
+        framework: draft.framework?.name,
+        reden: draft.reden,
+      });
+    },
+    [controller],
   );
 
   const handleSaveWizard = useCallback(
@@ -669,11 +703,14 @@ function ChatPageInner() {
                 )}
               >
                 {messages.length === 0 ? (
-                  <div className="mt-auto">
-                    {/* Geen startsjablonen meer: een leeg gesprek wijst alleen
-                        het invoerveld aan. */}
-                    <ChatEmptyState />
-                  </div>
+                  // Een vergroot tekstvak vraagt de hele ruimte: dan geen begroeting.
+                  !composerEnlarged && (
+                    <div className="mt-auto">
+                      {/* Geen startsjablonen meer: een leeg gesprek wijst alleen
+                          het invoerveld aan. */}
+                      <ChatEmptyState />
+                    </div>
+                  )
                 ) : (
                   <ChatMessageList
                     messages={messages}
@@ -714,7 +751,11 @@ function ChatPageInner() {
                   </div>
                 )}
 
-                <div className={messages.length === 0 ? 'mb-auto' : undefined}>
+                <div
+                  className={
+                    messages.length > 0 ? undefined : composerEnlarged ? 'my-auto' : 'mb-auto'
+                  }
+                >
                   <ChatComposer
                     ref={composerRef}
                     disabled={composerDisabled}
@@ -731,21 +772,19 @@ function ChatPageInner() {
                     onRemoveAttachment={controller.removeAttachment}
                     // Sterretje alleen tonen als de beheerder de functie aan heeft staan.
                     onOptimize={settings?.optimizeEnabled ? handleOptimizeInput : undefined}
-                    projects={projectList}
-                    activeProjectId={conversation?.projectId ?? null}
-                    onPickProject={controller.attachProject}
+                    onContext={handleOpenContext}
+                    activeProjectName={activeProject?.name}
                     thinking={thinking}
                     onToggleThinking={setThinking}
                     thinkingUnavailable={thinkingUnavailable}
                     // Wereldbol alleen tonen als de beheerder zoeken aan heeft staan.
                     webSearch={webSearch}
                     onToggleWebSearch={settings?.webSearchEnabled ? setWebSearch : undefined}
-                    // Alleen in een nog leeg gesprek: zie ChatController.attachProject.
-                    canPickProject={messages.length === 0 && conversation?.kind !== 'execution'}
                     // Leeg gesprek: het invoerveld is het enige aanknopingspunt op
                     // het scherm en wordt daarom groter en blauw omrand getoond.
                     prominent={messages.length === 0}
                     notice={PII_NOTICE}
+                    onEnlargedChange={setComposerEnlarged}
                     badge={
                       settings ? (
                         <ChatModelBadge provider={settings.provider} model={settings.model} />
@@ -855,6 +894,29 @@ function ChatPageInner() {
         onConfirm={controller.removeAllConversations}
         onClose={() => setConfirmDeleteAll(false)}
       />
+      {contextWizard && (
+        <ChatContextWizard
+          startAt={contextWizard.startAt}
+          initialGoal={contextWizard.goal}
+          projects={projectList}
+          activeProjectId={conversation?.projectId ?? null}
+          chatStarted={messages.length > 0}
+          attachments={conversation?.attachments ?? []}
+          settings={settings}
+          isLoggedIn={Boolean(user)}
+          onLogin={() => {
+            setContextWizard(null);
+            requireLogin('Log in om je projecten te gebruiken.');
+          }}
+          onNewProject={() => {
+            setContextWizard(null);
+            void handleNewProject();
+          }}
+          onApplyProject={handleApplyContext}
+          onPrompt={handleContextPrompt}
+          onClose={() => setContextWizard(null)}
+        />
+      )}
       {wizardProject && (
         <ProjectPromptWizard
           key={wizardProject.id}

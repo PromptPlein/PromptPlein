@@ -124,12 +124,13 @@ export interface ChatController {
    */
   newConversationInProject: (projectId: string) => void;
   /**
-   * Koppel het HUIDIGE gesprek alsnog aan een project (het @-menu in het
-   * invoerveld). Alleen zinvol zolang er nog niets is gezegd: de instructie
-   * halverwege wisselen zou eerdere beurten onverklaarbaar maken, dus dat
-   * weigert deze functie.
+   * Zet de keuze uit het contextvenster door. Staan er al berichten, dan wordt
+   * een ander project een nieuwe chat: de projectinstructie geldt voor het hele
+   * gesprek, en halverwege wisselen zou eerdere beurten onverklaarbaar maken. Is `forPrompt` aan, dan wordt een lege chat
+   * zonder project een uitvoergesprek: de prompt draait dan onder de neutrale
+   * systeemprompt, net als "Uitvoeren in chat". Bijlagen blijven staan.
    */
-  attachProject: (projectId: string | null) => void;
+  applyContext: (projectId: string | null, forPrompt: boolean) => void;
   selectConversation: (id: string) => void;
   removeConversation: (id: string) => void;
   removeAllConversations: () => void;
@@ -598,16 +599,24 @@ export default function useChatController(
     [update],
   );
 
-  const attachProject = useCallback(
-    (projectId: string | null) => {
+  const applyContext = useCallback(
+    (projectId: string | null, forPrompt: boolean) => {
+      if (streamingRef.current) return;
       const cur = conversationRef.current;
-      // Alleen in een nog leeg gesprek: de projectinstructie geldt voor het HELE
-      // gesprek, dus hem na een paar beurten omzetten zou betekenen dat de
-      // eerdere antwoorden onder andere regels tot stand kwamen.
-      if (!cur || streamingRef.current || cur.messages.length > 0) return;
+      if (!cur || cur.messages.length > 0) {
+        if ((cur?.projectId ?? null) !== projectId || !cur) {
+          update(createConversation(undefined, projectId ?? undefined));
+        }
+        return;
+      }
       const next: ChatConversation = { ...cur };
-      if (projectId) next.projectId = projectId;
-      else delete next.projectId;
+      delete next.projectId;
+      if (projectId) {
+        next.projectId = projectId;
+        delete next.kind;
+      } else if (forPrompt) {
+        next.kind = 'execution';
+      }
       update(next);
     },
     [update],
@@ -792,7 +801,7 @@ export default function useChatController(
     editMessage,
     newConversation,
     newConversationInProject,
-    attachProject,
+    applyContext,
     selectConversation,
     removeConversation,
     removeAllConversations,

@@ -9,8 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import {
-  AtSign,
-  FolderOpen,
+  Layers,
   Loader2,
   Map as MapIcon,
   Maximize2,
@@ -32,8 +31,9 @@ import { ACCEPTED_DOC_ACCEPT } from '@/lib/extractDocument';
 import { insertDictatedText, useDictation } from '@/lib/useDictation';
 import { usePersistentDraft } from '@/lib/usePersistentDraft';
 import { parseRoutekaart } from '@/lib/routekaart';
+import ComposerPlusMenu from './ComposerPlusMenu';
 import { MAX_CHAT_ATTACHMENTS } from './useChatController';
-import type { ChatAttachment, ChatProject } from '@/types';
+import type { ChatAttachment } from '@/types';
 
 /**
  * Bovengrens van het tekstvak. Daarboven groeit het niet verder mee en scrollt
@@ -41,6 +41,11 @@ import type { ChatAttachment, ChatProject } from '@/types';
  * wegdrukken.
  */
 const MAX_HEIGHT = 240;
+/**
+ * Een invulplek tussen haken. `[ontbreekt]` hoort daar niet bij: dat is een woord
+ * dat de AI zelf gebruikt als iets niet in de bronnen staat.
+ */
+const SLOT = /\[(?!ontbreekt\])[^\]\n]+\]/;
 /** Het vergrote tekstvak: dit deel van de vensterhoogte. */
 const ENLARGED_SHARE = 0.55;
 
@@ -59,6 +64,10 @@ export interface OptimizeResult {
 export interface ChatComposerHandle {
   /** Zet `text` in het veld, geeft focus en zet de cursor achter de tekst. */
   fill: (text: string) => void;
+  /** Zet een gemaakte prompt in het veld, ruim in beeld en met een korte uitleg. */
+  fillPrompt: (text: string, made: { framework?: string; reden?: string }) => void;
+  /** Wat er nu in het veld staat. */
+  getText: () => string;
   /** Zet de cursor achter de tekst, tenzij hij al in het veld staat. */
   focus: () => void;
 }
@@ -89,25 +98,17 @@ interface ChatComposerProps {
   badge?: ReactNode;
   /** Korte waarschuwing die altijd bij het tekstvak hoort, links van de badge. */
   notice?: ReactNode;
+  /** Het vak is vergroot: een lege chat maakt dan plaats voor de tekst. */
+  onEnlargedChange?: (enlarged: boolean) => void;
   /** Bijlagen toestaan? De Testkamer zet dit uit: daar test je de prompt zelf. */
   allowAttachments?: boolean;
   /**
-   * De projecten van de gebruiker, voor het @-menu. Afwezig = geen @-knop (de
-   * Testkamer bijvoorbeeld: daar test je één prompt, geen project).
+   * Opent het contextvenster: project en bronnen kiezen, of meteen een prompt
+   * laten maken. Afwezig = geen knop Context en geen plusregels daarvoor.
    */
-  projects?: ChatProject[];
-  /** Het project waar dit gesprek nu onder valt. */
-  activeProjectId?: string | null;
-  /** Koppel het gesprek aan een project (of ontkoppel met null). */
-  onPickProject?: (projectId: string | null) => void;
-  /**
-   * Mag er nog gekozen worden? Zodra er een bericht staat niet meer: de
-   * projectinstructie geldt voor het hele gesprek, dus halverwege wisselen zou
-   * betekenen dat eerdere antwoorden onder andere regels tot stand kwamen. Het
-   * @-menu blijft dan wel zichtbaar (met uitleg), zodat het niet lijkt of de
-   * knop verdwenen is.
-   */
-  canPickProject?: boolean;
+  onContext?: (start: 'context' | 'taak') => void;
+  /** De naam van het project van dit gesprek; staat dan op de knop Context. */
+  activeProjectName?: string;
   /**
    * Staat de denkstand aan? Afwezige {@link onToggleThinking} = geen knop, net
    * als bij het sterretje.
@@ -168,11 +169,10 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
     onOptimize,
     badge,
     notice,
+    onEnlargedChange,
     allowAttachments = true,
-    projects,
-    activeProjectId = null,
-    onPickProject,
-    canPickProject = false,
+    onContext,
+    activeProjectName,
     thinking = false,
     onToggleThinking,
     thinkingUnavailable,
@@ -189,13 +189,12 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
   // niet meer past.
   const [enlarged, setEnlarged] = useState(false);
   const [overflowing, setOverflowing] = useState(false);
+  useEffect(() => onEnlargedChange?.(enlarged), [enlarged, onEnlargedChange]);
   // Een routekaart herken je aan het inhoudsblok: een regel KOP, haltes en FINISH.
   const isRoutekaart = useMemo(
     () => Boolean(onRoutekaart) && /^\s*KOP\s*$/m.test(text) && parseRoutekaart(text) !== null,
     [onRoutekaart, text],
   );
-  const [projectMenuOpen, setProjectMenuOpen] = useState(false);
-  const projectMenuRef = useRef<HTMLDivElement>(null);
   const [optimizing, setOptimizing] = useState(false);
   // Sleept de gebruiker op dit moment bestanden boven het veld?
   const [dragging, setDragging] = useState(false);
@@ -205,6 +204,14 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
   const [beforeOptimize, setBeforeOptimize] = useState<{ before: string; after: string } | null>(
     null,
   );
+  // Een gemaakte prompt die net is binnengekomen. Zolang hij ongewijzigd in het
+  // veld staat, zegt de regel eronder waar hij vandaan komt.
+  const [madePrompt, setMadePrompt] = useState<{
+    text: string;
+    before: string;
+    framework?: string;
+    reden?: string;
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -246,15 +253,24 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
   // Van buitenaf tekst klaarzetten (startsjablonen). Focussen doen we pas nadat
   // React de nieuwe waarde in het veld heeft gezet — anders zou de cursor nog op
   // de oude, lege tekst worden gezet.
-  const focusAfterFill = useRef(false);
+  // Waar de cursor na het invullen komt. Een prompt lees je vanaf het begin.
+  const focusAfterFill = useRef<'start' | 'end' | null>(null);
   useImperativeHandle(
     ref,
     () => ({
       fill(value: string) {
         setText(value);
         setBeforeOptimize(null);
-        focusAfterFill.current = true;
+        focusAfterFill.current = 'end';
       },
+      fillPrompt(value: string, made: { framework?: string; reden?: string }) {
+        setMadePrompt({ text: value, before: textareaRef.current?.value ?? '', ...made });
+        setBeforeOptimize(null);
+        setText(value);
+        setEnlarged(true);
+        focusAfterFill.current = 'start';
+      },
+      getText: () => textareaRef.current?.value ?? '',
       focus() {
         const el = textareaRef.current;
         if (!el || document.activeElement === el) return;
@@ -265,47 +281,21 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
     [setText],
   );
   useLayoutEffect(() => {
-    if (!focusAfterFill.current) return;
-    focusAfterFill.current = false;
+    const place = focusAfterFill.current;
+    if (!place) return;
+    focusAfterFill.current = null;
     const el = textareaRef.current;
     if (!el) return;
     el.focus();
     // Staat er een invulplek tussen [haken], selecteer dan de eerste: je typt er
     // meteen overheen. Zo niet, dan de cursor achter de tekst.
-    const slot = /\[[^\]\n]+\]/.exec(el.value);
+    const slot = SLOT.exec(el.value);
     if (slot) el.setSelectionRange(slot.index, slot.index + slot[0].length);
-    else el.setSelectionRange(el.value.length, el.value.length);
+    else if (place === 'start') {
+      el.setSelectionRange(0, 0);
+      el.scrollTop = 0;
+    } else el.setSelectionRange(el.value.length, el.value.length);
   }, [text]);
-
-  // --- Het @-menu: koppel dit gesprek aan een project ---
-  const projectPickerAvailable = Boolean(onPickProject && projects && projects.length > 0);
-  const activeProject = projects?.find((p) => p.id === activeProjectId) ?? null;
-
-  // Buiten het menu klikken of Escape sluit het weer.
-  useEffect(() => {
-    if (!projectMenuOpen) return;
-    function onPointerDown(e: MouseEvent) {
-      if (!projectMenuRef.current?.contains(e.target as Node)) setProjectMenuOpen(false);
-    }
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') setProjectMenuOpen(false);
-    }
-    document.addEventListener('mousedown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('mousedown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [projectMenuOpen]);
-
-  function pickProject(projectId: string | null) {
-    setProjectMenuOpen(false);
-    onPickProject?.(projectId);
-    // Heeft de gebruiker het menu met een getypte @ geopend, haal die dan weer
-    // weg: het is een commando geweest, geen tekst die hij wil versturen.
-    if (text === '@') clearText();
-    textareaRef.current?.focus();
-  }
 
   const canSend = !disabled && !streaming && !optimizing && text.trim().length > 0;
   const canOptimize = Boolean(onOptimize) && !disabled && !streaming && text.trim().length > 0;
@@ -543,13 +533,12 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
               onChange={(e) => {
                 const value = e.target.value;
                 setText(value);
-                // Een @ als allereerste teken is een commando, geen tekst: open
-                // meteen het projectmenu. Verderop in een zin (een e-mailadres,
-                // een naam) doen we niets — dat zou het menu bij elk adres openen.
-                if (value === '@' && projectPickerAvailable && canPickProject) {
-                  setProjectMenuOpen(true);
-                } else if (!value.startsWith('@')) {
-                  setProjectMenuOpen(false);
+                // Een @ als allereerste teken is een commando, geen tekst: dat opent
+                // de context. Verderop in een zin (een e-mailadres, een naam) doen
+                // we niets, anders zou hij bij elk adres opengaan.
+                if (value === '@' && onContext) {
+                  clearText();
+                  onContext('context');
                 }
               }}
               onKeyDown={(e) => {
@@ -600,90 +589,56 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
               nooit achter verdwijnen. Een lichte scheidingslijn erboven zet de
               knoppen los van wat je typt. */}
           <div className="mt-1 flex items-center gap-1 border-t border-slate-100 px-2 pb-2 pt-1.5 dark:border-slate-700/60">
-            {/* Microfoon: linksonder, als eerste knop. Tijdens het opnemen wordt
-                het een balk met een geluidsmeter en de tijd. */}
-            {dictation.available && (
-              <DictationButton
-                state={dictationState}
-                seconds={dictation.seconds}
-                stream={dictation.stream}
-                onToggle={dictation.toggle}
-                disabled={disabled || streaming}
-                size="md"
-              />
-            )}
+            {/* De plusknop houdt alles bij elkaar wat je kunt toevoegen of aanzetten.
+                De balk laat daarnaast alleen zien wat er nu aanstaat. */}
+            <ComposerPlusMenu
+              disabled={disabled || streaming}
+              busy={extracting}
+              canAddFile={
+                allowAttachments && !extracting && attachments.length < MAX_CHAT_ATTACHMENTS
+              }
+              addFileHint={
+                attachments.length >= MAX_CHAT_ATTACHMENTS
+                  ? `Maximaal ${MAX_CHAT_ATTACHMENTS} per chat`
+                  : 'PDF, Word of tekst, tot 10 MB'
+              }
+              onAddFile={() => fileInputRef.current?.click()}
+              onContext={() => onContext?.('context')}
+              onMakePrompt={() => onContext?.('taak')}
+              thinking={thinking}
+              onToggleThinking={onToggleThinking}
+              thinkingUnavailable={thinkingUnavailable}
+              webSearch={webSearch}
+              onToggleWebSearch={onToggleWebSearch}
+              onDictate={dictation.available ? dictation.toggle : undefined}
+            />
 
-            {/* @-menu: hetzelfde project kiezen als vanuit de zijbalk, maar dan
-                zonder het gesprek te verlaten. Bewust naast de paperclip: het is
-                dezelfde soort handeling — bronmateriaal aan dit gesprek hangen. */}
-            {projectPickerAvailable && (
-              <div className="relative shrink-0" ref={projectMenuRef}>
-                <button
-                  type="button"
-                  className={clsx(
-                    'flex h-8 items-center gap-1.5 rounded-lg px-2 transition-colors focus:outline-none focus:ring-2 focus:ring-rijksblauw-500/40 disabled:cursor-not-allowed disabled:opacity-40',
-                    activeProject
-                      ? 'bg-rijksblauw-50 text-rijksblauw-700 hover:bg-rijksblauw-100 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200'
-                      : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200',
-                  )}
-                  onClick={() => setProjectMenuOpen((open) => !open)}
-                  disabled={disabled || streaming || !canPickProject}
-                  title={
-                    canPickProject
-                      ? 'Koppel deze chat aan een project'
-                      : 'Het project ligt vast zodra de chat is begonnen. Start een nieuwe chat om te wisselen.'
-                  }
-                  aria-label="Kies een project voor deze chat"
-                  aria-expanded={projectMenuOpen}
-                >
-                  <AtSign size={16} className="shrink-0" />
-                  {activeProject && (
-                    <span className="max-w-[8rem] truncate text-xs font-medium">
-                      {activeProject.name}
-                    </span>
-                  )}
-                </button>
-
-                {projectMenuOpen && (
-                  <div className="absolute bottom-full left-0 z-20 mb-1 max-h-64 w-60 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-700 dark:bg-slate-800">
-                    <p className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
-                      Projecten
-                    </p>
-                    {projects?.map((project) => (
-                      <button
-                        key={project.id}
-                        type="button"
-                        className={clsx(
-                          'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors',
-                          project.id === activeProjectId
-                            ? 'bg-rijksblauw-50 font-medium text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200'
-                            : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700',
-                        )}
-                        onClick={() => pickProject(project.id)}
-                      >
-                        <FolderOpen size={14} className="shrink-0 text-slate-400" />
-                        <span className="truncate">{project.name}</span>
-                      </button>
-                    ))}
-                    {activeProjectId && (
-                      <button
-                        type="button"
-                        className="mt-1 flex w-full items-center gap-2 rounded-lg border-t border-slate-100 px-2 py-1.5 text-left text-sm text-slate-500 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-700"
-                        onClick={() => pickProject(null)}
-                      >
-                        <X size={14} className="shrink-0" />
-                        Losmaken van het project
-                      </button>
-                    )}
-                  </div>
+            {/* Context: project met bronbestanden, en van daaruit een prompt laten
+                maken. Staat los van de plus, want dit is de snelste weg naar een
+                goed antwoord. Hoort de chat bij een project, dan staat dat erop. */}
+            {onContext && (
+              <button
+                type="button"
+                className={clsx(
+                  'flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 transition-colors focus:outline-none focus:ring-2 focus:ring-rijksblauw-500/40 disabled:cursor-not-allowed disabled:opacity-40',
+                  activeProjectName
+                    ? 'bg-rijksblauw-50 text-rijksblauw-700 hover:bg-rijksblauw-100 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-slate-100',
                 )}
-              </div>
+                onClick={() => onContext('context')}
+                disabled={disabled || streaming}
+                title="Kies een project met bronbestanden of laat een prompt maken"
+                aria-label={activeProjectName ? `Context: ${activeProjectName}` : 'Context'}
+              >
+                <Layers size={16} className="shrink-0" />
+                <span className="max-w-[9rem] truncate text-xs font-medium">
+                  {activeProjectName ?? 'Context'}
+                </span>
+              </button>
             )}
 
-            {/* Denken: het model redeneert eerst en antwoordt daarna pas. Blijft
-                aan tussen beurten, want wie aan een zwaardere vraag werkt, werkt er
-                meestal een gesprek lang aan. */}
-            {onToggleThinking && (
+            {/* Alleen wat aanstaat: één klik zet het weer uit. */}
+            {onToggleThinking && thinking && !thinkingUnavailable && (
               <ThinkingToggle
                 value={thinking}
                 onChange={onToggleThinking}
@@ -691,11 +646,7 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
                 unavailableReason={thinkingUnavailable}
               />
             )}
-
-            {/* Zoeken op internet: de AI haalt er bronnen bij en verwijst ernaar.
-                Naast "Denken", want het is dezelfde afweging: je wacht langer voor
-                een beter onderbouwd antwoord. */}
-            {onToggleWebSearch && (
+            {onToggleWebSearch && webSearch && (
               <WebSearchToggle
                 value={webSearch}
                 onChange={onToggleWebSearch}
@@ -717,45 +668,41 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
             )}
 
             {allowAttachments && (
-              <>
-                <button
-                  type="button"
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-rijksblauw-500/40 disabled:cursor-not-allowed disabled:opacity-40 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={
-                    disabled || streaming || extracting || attachments.length >= MAX_CHAT_ATTACHMENTS
-                  }
-                  title={
-                    attachments.length >= MAX_CHAT_ATTACHMENTS
-                      ? `Maximaal ${MAX_CHAT_ATTACHMENTS} bijlagen per chat`
-                      : 'Document toevoegen (PDF, Word, tekst, max. 10 MB)'
-                  }
-                  aria-label="Document toevoegen"
-                >
-                  {extracting ? (
-                    <Loader2 size={18} className="animate-spin" />
-                  ) : (
-                    <Paperclip size={18} />
-                  )}
-                </button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept={ACCEPTED_DOC_ACCEPT}
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) void onAddFile(file);
-                    e.target.value = '';
-                  }}
-                />
-              </>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={ACCEPTED_DOC_ACCEPT}
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void onAddFile(file);
+                  e.target.value = '';
+                }}
+              />
+            )}
+
+            {/* De microfoon rechts naast Verstuur: inspreken is een manier om te
+                schrijven en moet zonder menu bereikbaar blijven. Tijdens het
+                opnemen wordt het een balk met een geluidsmeter en de tijd. */}
+            {dictation.available && (
+              <DictationButton
+                state={dictationState}
+                seconds={dictation.seconds}
+                stream={dictation.stream}
+                onToggle={dictation.toggle}
+                disabled={disabled || streaming}
+                size="md"
+                className="ml-auto"
+              />
             )}
 
             {streaming ? (
               <button
                 type="button"
-                className="opl-btn-secondary ml-auto shrink-0 !rounded-lg !px-3 !py-1.5"
+                className={clsx(
+                  'opl-btn-secondary shrink-0 !rounded-lg !px-3 !py-1.5',
+                  !dictation.available && 'ml-auto',
+                )}
                 onClick={onStop}
                 aria-label="Stop het antwoord"
               >
@@ -765,7 +712,8 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
               <button
                 type="button"
                 className={clsx(
-                  'opl-btn-primary ml-auto shrink-0 !rounded-lg !px-3 !py-1.5',
+                  'opl-btn-primary shrink-0 !rounded-lg !px-3 !py-1.5',
+                  !dictation.available && 'ml-auto',
                   !canSend && 'opacity-50',
                 )}
                 onClick={submit}
@@ -787,6 +735,33 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
             </div>
           )}
         </div>
+
+        {/* Een gemaakte prompt is net binnengekomen: zeg wat het is en wat er nog
+            moet gebeuren. Weg zodra de gebruiker hem wijzigt of verstuurt. */}
+        {madePrompt && text === madePrompt.text && (
+          <div className="mt-1.5 flex animate-fade-in flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-slate-700 dark:text-slate-200">
+            <Sparkles size={14} className="shrink-0 text-rijksoranje" />
+            <span className="font-semibold">
+              {madePrompt.framework ? `Gebouwd met ${madePrompt.framework}.` : 'Je prompt staat klaar.'}
+            </span>
+            {madePrompt.reden && <InfoDot label="Waarom deze aanpak" text={madePrompt.reden} />}
+            {SLOT.test(text) && <span>Vul de plekken tussen haken in.</span>}
+            {madePrompt.before.trim() && (
+              <button
+                type="button"
+                className="inline-flex shrink-0 items-center gap-1 font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
+                onClick={() => {
+                  setText(madePrompt.before);
+                  setMadePrompt(null);
+                  setEnlarged(false);
+                  textareaRef.current?.focus();
+                }}
+              >
+                <Undo2 size={13} /> Herstel mijn tekst
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Na een verbetering: één klik terug naar de eigen tekst. Verdwijnt zodra
             de gebruiker zelf verder typt of het bericht verstuurt. */}

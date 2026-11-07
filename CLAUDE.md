@@ -267,7 +267,7 @@ en antwoord op één lijn beginnen.
 
 Eén edge function, `optimize-prompt`, ongeveer 8000 regels, met een
 `mode`-veld in de body als router. Nieuwe AI-functionaliteit wordt een nieuwe
-mode in dat bestand, niet een nieuwe function. De 35 modes, gegroepeerd:
+mode in dat bestand, niet een nieuwe function. De 37 modes, gegroepeerd:
 
 | Groep | Modes |
 | --- | --- |
@@ -276,7 +276,7 @@ mode in dat bestand, niet een nieuwe function. De 35 modes, gegroepeerd:
 | Veldhulp in de bouwer | `analyze`, `prefill`, `expand-field`, `title`, `metadata` |
 | PlanWizard | `plan`, `plan-step`, `plan-step-analyze`, `clarify`, `assumption-check` |
 | Techniekbouwers | `persona-fill`, `fewshot-example`, `fewshot-extract`, `meta-build`, `cove-scan`, `stepback-ladder`, `rubric-propose`, `skill-draft`, `skill-trigger` |
-| Chat en projecten | `chat-optimize`, `project-optimize`, `project-brief`, `project-interview`, `project-prompt` |
+| Chat en projecten | `chat-optimize`, `project-optimize`, `project-brief`, `project-interview`, `project-prompt`, `context-interview`, `context-prompt` |
 | Testkamer-loop | `mock-answer`, `refine`, `refine-suggest` |
 | Sjablonen | `sjabloon` |
 
@@ -421,6 +421,29 @@ bestandskaart.
 
 Vanuit de bouwer kun je een prompt met "Uitvoeren in chat" doorzetten naar
 `/chat`, en vanuit de chat weer terug (`handoffService`).
+
+## Plus en Context in de chat
+
+De balk van het tekstvak toont alleen wat er aanstaat. De rest zit achter de plus
+(`ComposerPlusMenu`): bestand, context, prompt maken, denken, internet en
+inspreken. De microfoon blijft ook los staan, want inspreken moet zonder menu
+kunnen. De bevestigingen van Denken en Internet staan op één plek, in
+`ThinkingToggle` en `WebSearchToggle`, die daarom ook een menuvorm hebben.
+
+Context (`ChatContextWizard`, ook te openen door `@` als eerste teken te typen)
+kiest een project met bronbestanden en maakt desgewenst een prompt: taak, vragen,
+prompt. Dezelfde vragenronde als "Prompt maken" in een project
+(`usePromptInterview`), maar met eigen modes en systeemprompts, want dat is een
+vaste prompt voor een terugkerende taak en dit is één taak van nu. Hier hoort wat
+per keer verschilt juist wel in de prompt. Context werkt ook zonder account, net
+als de chat; alleen projecten vragen om in te loggen.
+
+Er is bewust geen voorstelscherm: de prompt komt in het tekstvak en daar lees je
+hem. Versturen blijft een eigen handeling, inclusief de controle op
+persoonsgegevens. Een lege chat zonder project wordt daarbij een uitvoergesprek,
+zodat de prompt onder de neutrale systeemprompt draait. Staan er al berichten, dan
+wordt een ander project een nieuwe chat. `[ontbreekt]` in een prompt is geen
+invulplek maar een woord dat de AI zelf gebruikt (`SLOT` in `ChatComposer`).
 
 ---
 

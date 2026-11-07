@@ -1,4 +1,5 @@
-// "Prompt maken" in een project: de vragenronde en het voorstel.
+// "Prompt maken" in een project en de knop Context in de chat: de vragenronde en
+// de prompt.
 //
 // Alleen AI-aanroepen; opslaan loopt via chatProjectService, want het resultaat
 // is gewoon de projectinstructie. Er is geen lokale tak: projecten vragen een
@@ -49,16 +50,18 @@ async function post<T extends { success?: boolean; error?: string }>(
   body: Record<string, unknown>,
   settings: ChatSettings | null,
   signal?: AbortSignal,
+  /** De knop Context in de chat werkt net als de chat zelf ook zonder account. */
+  openForGuests = false,
 ): Promise<T> {
   const functionUrl = getFunctionUrl('optimize-prompt');
   if (!isSupabaseConfigured || !supabase || !functionUrl) {
     throw new Error('Geen AI-service geconfigureerd. Neem contact op met de beheerder.');
   }
   const { data } = await supabase.auth.getSession();
-  const accessToken = data.session?.access_token;
+  const anonKey = getAnonKey();
+  const accessToken = data.session?.access_token ?? (openForGuests ? anonKey : undefined);
   if (!accessToken) throw new Error('Log in om een prompt voor je project te maken.');
 
-  const anonKey = getAnonKey();
   const response = await fetch(functionUrl, {
     method: 'POST',
     headers: {
@@ -129,5 +132,51 @@ export function adjustProjectPrompt(args: {
     },
     args.settings,
     args.signal,
+  );
+}
+
+/** De volgende vraag bij de knop Context: hier gaat het om de taak van nu. */
+export function nextContextQuestion(args: {
+  goal: string;
+  turns: ProjectTurn[];
+  material?: string;
+  settings: ChatSettings | null;
+  signal?: AbortSignal;
+}): Promise<ProjectInterviewStep> {
+  return post<ProjectInterviewStep & { success?: boolean; error?: string }>(
+    {
+      mode: 'context-interview',
+      goal: args.goal,
+      transcript: args.turns,
+      projectContext: args.material,
+    },
+    args.settings,
+    args.signal,
+    true,
+  );
+}
+
+/** Kiest het framework en schrijft de prompt die in het tekstvak komt. */
+export function writeContextPrompt(args: {
+  goal: string;
+  turns: ProjectTurn[];
+  soort?: string;
+  material?: string;
+  techniques: Technique[];
+  settings: ChatSettings | null;
+  signal?: AbortSignal;
+}): Promise<ProjectPromptDraft> {
+  return post<ProjectPromptDraft & { success?: boolean; error?: string }>(
+    {
+      mode: 'context-prompt',
+      goal: args.goal,
+      transcript: args.turns,
+      projectSoort: args.soort,
+      projectContext: args.material,
+      techniques: projectFrameworks(args.techniques),
+    },
+    args.settings,
+    args.signal,
+    true,
   );
 }
