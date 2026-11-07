@@ -1,12 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   AlignLeft,
   ArrowLeft,
   ArrowRight,
-  FileText,
   FolderOpen,
-  Layers,
-  Loader2,
   LogIn,
   PenLine,
   Plus,
@@ -18,14 +15,14 @@ import clsx from 'clsx';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import Modal from '@/components/common/Modal';
 import { useReferenceData } from '@/context/ReferenceDataContext';
-import { buildGeneratorContext, listProjectFiles } from '@/services/chatProjectService';
+import { buildGeneratorContext } from '@/services/chatProjectService';
 import {
   nextContextQuestion,
   writeContextPrompt,
   type ProjectPromptDraft,
 } from '@/services/projectPromptService';
 import type { ChatSettings } from '@/services/settingsService';
-import type { ChatAttachment, ChatProject, ChatProjectFile } from '@/types';
+import type { ChatAttachment, ChatProject } from '@/types';
 import {
   InterviewQuestion,
   WizardError,
@@ -36,8 +33,8 @@ import { submitOnEnter, usePromptInterview } from './usePromptInterview';
 
 type Step = 'context' | 'taak' | 'vragen' | 'schrijven';
 
-const STAPPEN: Step[] = ['context', 'taak', 'vragen', 'schrijven'];
-const STAP_LABELS = ['Project', 'Taak', 'Vragen', 'Prompt'];
+const STAPPEN: Step[] = ['taak', 'vragen', 'schrijven'];
+const STAP_LABELS = ['Taak', 'Vragen', 'Prompt'];
 
 /** Zoveel tekst uit de bijlagen van deze chat leest de vragenronde mee. */
 const MAX_ATTACHMENT_EXCERPT = 6_000;
@@ -55,15 +52,16 @@ const PILL =
 
 const bronnen = (n: number) => (n === 1 ? '1 bron' : `${n} bronnen`);
 
-/** Wat er in het tekstvak komt als de prompt klaar is. */
+/** Wat er in het tekstvak komt als de context prompt klaar is. */
 export interface ContextPrompt {
   draft: ProjectPromptDraft;
   projectId: string | null;
 }
 
 /**
- * De knop Projecten in de chat: kies een project met zijn bronbestanden en maak
- * er een context prompt bij. De AI vraagt door tot duidelijk is wat de medewerker wil bereiken,
+ * De knop Projecten in de chat. Een project kiezen koppelt het meteen aan de chat,
+ * er hoeft niets meer bevestigd te worden. De context prompt leest het project van
+ * de chat mee: de AI vraagt door tot duidelijk is wat de medewerker wil bereiken,
  * kiest zelf een framework en zet de prompt in het tekstvak van de chat.
  *
  * Er is bewust geen voorstelscherm zoals bij "Prompt maken" in een project: het
@@ -103,27 +101,14 @@ export default function ChatContextWizard({
 }) {
   const { techniques } = useReferenceData();
   const [step, setStep] = useState<Step>(startAt);
-  const [projectId, setProjectId] = useState(activeProjectId);
-  const [files, setFiles] = useState<ChatProjectFile[] | null>(null);
   const [goal, setGoal] = useState(initialGoal);
   const [reading, setReading] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
   // Eén keer per project ophalen: de analyse kan even duren en Terug mag niet opnieuw wachten.
   const material = useRef<{ projectId: string | null; text: string } | null>(null);
 
+  const projectId = activeProjectId;
   const project = projects.find((p) => p.id === projectId) ?? null;
-
-  useEffect(() => {
-    setFiles(null);
-    if (!projectId) return;
-    let active = true;
-    listProjectFiles(projectId)
-      .then((list) => active && setFiles(list))
-      .catch(() => active && setFiles([]));
-    return () => {
-      active = false;
-    };
-  }, [projectId]);
 
   /** De analyse van het project plus een stuk uit de bijlagen van deze chat. */
   async function loadMaterial(): Promise<string> {
@@ -191,8 +176,6 @@ export default function ChatContextWizard({
     }
   };
 
-  const changed = projectId !== activeProjectId;
-  const showNewChatNote = chatStarted && changed;
   const errorBox = error && <WizardError message={error} onRetry={interview.retry} />;
   const backButton = (
     <button type="button" className="opl-btn-ghost" onClick={goBack}>
@@ -202,7 +185,7 @@ export default function ChatContextWizard({
 
   return (
     <Modal open onClose={requestClose} title={step === 'context' ? 'Projecten' : 'Context prompt'}>
-      <WizardSteps labels={STAP_LABELS} current={STAPPEN.indexOf(step)} />
+      {step !== 'context' && <WizardSteps labels={STAP_LABELS} current={STAPPEN.indexOf(step)} />}
 
       {step === 'context' && (
         <div className="animate-fade-in space-y-4">
@@ -219,7 +202,7 @@ export default function ChatContextWizard({
                     key={p.id}
                     type="button"
                     aria-pressed={on}
-                    onClick={() => setProjectId(on ? null : p.id)}
+                    onClick={() => onApplyProject(on ? null : p.id)}
                     className={clsx(
                       'flex min-h-[4rem] items-center gap-3 rounded-xl px-3 py-2 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-800',
                       on
@@ -249,57 +232,19 @@ export default function ChatContextWizard({
             </button>
           )}
 
-          {project && (
-            <div className="animate-fade-in rounded-xl border border-slate-200 p-3 dark:border-slate-700">
-              {files === null ? (
-                <p role="status" className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-                  <Loader2 size={15} className="animate-spin" /> Bronnen ophalen
-                </p>
-              ) : files.length === 0 ? (
-                <p className="text-sm text-slate-700 dark:text-slate-200">
-                  Dit project heeft nog geen bronbestanden.
-                </p>
-              ) : (
-                <>
-                  <p className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
-                    Deze bronnen gaan mee
-                  </p>
-                  <ul className="flex flex-wrap gap-1.5">
-                    {files.map((file) => (
-                      <li
-                        key={file.id}
-                        className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-sm text-slate-800 dark:bg-slate-700 dark:text-slate-100"
-                      >
-                        <FileText size={14} className="shrink-0" />
-                        <span className="truncate">{file.name}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              )}
-            </div>
-          )}
-
-          {showNewChatNote && (
+          {chatStarted && (
             <p className="text-sm text-slate-700 dark:text-slate-200">
-              Deze chat is al begonnen. Een ander project start een nieuwe chat; deze blijft bewaard.
+              Een ander project start een nieuwe chat; deze blijft bewaard.
             </p>
           )}
 
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            {changed && (
-              <button
-                type="button"
-                className="opl-btn-secondary"
-                onClick={() => onApplyProject(projectId)}
-              >
-                <Layers size={16} /> {projectId ? 'Alleen koppelen' : 'Project losmaken'}
+          {!project && (
+            <div className="flex justify-end">
+              <button type="button" className="opl-btn-primary" onClick={() => setStep('taak')}>
+                <Wand2 size={16} /> Context prompt
               </button>
-            )}
-            <button type="button" className="opl-btn-primary" onClick={() => setStep('taak')}>
-              <Wand2 size={16} /> Context prompt
-            </button>
-          </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -345,9 +290,13 @@ export default function ChatContextWizard({
             ))}
           </div>
           <div className="flex items-center justify-between gap-2">
-            <button type="button" className="opl-btn-ghost" onClick={() => setStep('context')}>
-              <ArrowLeft size={16} /> Terug
-            </button>
+            {startAt === 'context' ? (
+              <button type="button" className="opl-btn-ghost" onClick={() => setStep('context')}>
+                <ArrowLeft size={16} /> Terug
+              </button>
+            ) : (
+              <span />
+            )}
             <button
               type="button"
               className="opl-btn-primary"

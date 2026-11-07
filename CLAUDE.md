@@ -451,9 +451,12 @@ kunnen. De bevestigingen van Denken en Internet staan op één plek, in
 `ThinkingToggle` en `WebSearchToggle`, die daarom ook een menuvorm hebben.
 
 De knop Projecten (`ChatContextWizard`, ook te openen door `@` als eerste teken te
-typen) kiest een project met bronbestanden en maakt desgewenst een context prompt:
-taak, vragen, prompt. De namen komen van de gebruiker: Projecten omdat de knop
-daarnaar verwijst, Context prompt voor het maken van de prompt.
+typen) is een keuzelijst: een project kiezen koppelt het meteen aan de chat, zonder
+bevestiging, en het venster sluit. Klik je het gekozen project opnieuw aan, dan gaat
+het los. De context prompt (taak, vragen, prompt) start vanuit de plus, of vanuit
+de keuzelijst als er geen project gekozen is, en leest het project van de chat mee.
+De namen komen van de gebruiker: Projecten omdat de knop daarnaar verwijst, Context
+prompt voor het maken van de prompt.
 
 Dezelfde vragenronde als "Prompt maken" in een project (`usePromptInterview`), maar
 met eigen modes en systeemprompts, want dat is een vaste prompt voor een
