@@ -16,3 +16,9 @@ verify_jwt = false
 # (pg_net) aangeroepen, niet door een ingelogde gebruiker. Authenticatie
 # gebeurt via het gedeelde geheim in de header x-webhook-secret.
 verify_jwt = false
+
+[functions.brevo-event]
+# JWT-verificatie staat uit: deze functie wordt door database-triggers (pg_net)
+# aangeroepen. Authenticatie gebeurt via het gedeelde geheim in de header
+# x-webhook-secret, net als bij register-brevo-contact.
+verify_jwt = false

@@ -153,6 +153,16 @@ wijzigen. Plaatjes staan in `public/email/` en gaan als `https://www.promptplein
 mee; hernoem ze niet, want verstuurde mails blijven ernaar wijzen. Geen Rijks Sans in Brevo:
 het lettertype is niet vrij en werkt in e-mail toch niet, dus Arial.
 
+Goedkeuringsmails lopen via vier automations in Brevo (nummers 25 t/m 28), elk met een
+Custom event als trigger: `promptplein_goedkeuring_wacht`, `promptplein_aanvraag_goedgekeurd`,
+`promptplein_aanvraag_ingediend` en `promptplein_aanvraag_afgewezen`. De database-triggers uit
+migratie 0048 sturen die gebeurtenissen via de edge function `brevo-event`. Beoordelaars zijn de
+moderatoren van het ministerie, of de beheerders als die er niet zijn en voor Rijksoverheid,
+categorieën en functies. Een nieuw soort aanvraag hoort dus een trigger in die migratielijn te
+krijgen. In de mail staan de gegevens als `params.soort`, `titel`, `bereik`, `aanvrager`,
+`toelichting` en `link`. Een nieuwe automation in Brevo moet "Allow contact re-entry" aan hebben,
+anders krijgt iemand de mail maar een keer.
+
 ## Twee draaimodi
 
 `src/lib/supabase.ts` exporteert `isSupabaseConfigured`. Ontbreken de
@@ -177,7 +187,8 @@ src/
   data/           seed.ts, promptExamples.ts
   types/          index.ts, alle domeinmodellen op één plek
 supabase/
-  functions/      optimize-prompt (de grote), send-contact, register-brevo-contact
+  functions/      optimize-prompt (de grote), send-contact, register-brevo-contact,
+                  brevo-event
   migrations/     0001 … 0035, oplopend genummerd
 ```
 

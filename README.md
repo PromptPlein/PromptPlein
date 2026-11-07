@@ -114,7 +114,7 @@ src/
   config/       providers, modellen en prijzen
   types/        de domeinmodellen
 supabase/
-  functions/    optimize-prompt, send-contact, register-brevo-contact
+  functions/    optimize-prompt, send-contact, register-brevo-contact, brevo-event
   migrations/   databaseschema, oplopend genummerd
 infra/
   searxng/      eigen zoekserver voor de chat
