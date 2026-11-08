@@ -80,10 +80,18 @@ REVOKE ALL ON FUNCTION public.opruimen_ongebruikte_projecten() FROM PUBLIC, anon
 -- Elke nacht om 03:17 UTC. De uitkomst staat in cron.job_run_details.
 --
 -- Bewust geen GRANT op het schema cron: Supabase zet die rechten zelf bij het
--- aanzetten van pg_cron. Staan ze hier, dan faalt een tweede uitvoering met
--- "2BP01: dependent privileges exist". Zo is het bestand veilig om opnieuw te
--- draaien: cron.schedule met dezelfde naam werkt de bestaande taak bij.
-CREATE EXTENSION IF NOT EXISTS pg_cron WITH SCHEMA pg_catalog;
+-- aanzetten van pg_cron. Dat doet een event trigger van Supabase bij elk
+-- CREATE EXTENSION voor pg_cron, ook bij IF NOT EXISTS als de extensie er al is,
+-- en die tweede keer faalt met "2BP01: dependent privileges exist". Daarom
+-- draait het commando alleen als pg_cron nog ontbreekt. Zo is het bestand veilig
+-- om opnieuw te draaien: cron.schedule met dezelfde naam werkt de bestaande taak bij.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
+    CREATE EXTENSION pg_cron WITH SCHEMA pg_catalog;
+  END IF;
+END
+$$;
 
 SELECT cron.schedule(
   'projecten-opruimen',
