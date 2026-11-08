@@ -1,5 +1,5 @@
-import { List, Rows3 } from '@/components/common/icons';
-import clsx from 'clsx';
+import { useRef } from 'react';
+import { useNlddEvent } from '@/lib/nldd';
 import type { FieldLayout } from '@/lib/useFieldLayout';
 
 interface FieldLayoutToggleProps {
@@ -8,47 +8,35 @@ interface FieldLayoutToggleProps {
 }
 
 /**
- * Kleine icoon-schakelaar waarmee de gebruiker kiest hoe de invulvelden
- * verschijnen: stap voor stap (wizard) of alle velden tegelijk in een raster
- * (stacked). De keuze wordt persoonlijk bewaard via useFieldLayout.
+ * Small switch for how the fields appear: one question at a time (wizard) or all
+ * fields at once in a grid (stacked). useFieldLayout keeps the choice per user.
  */
 export default function FieldLayoutToggle({ layout, onChange }: FieldLayoutToggleProps) {
+  const ref = useRef<HTMLElement>(null);
+  useNlddEvent<CustomEvent<{ value: string }>>(ref, 'change', (e) => {
+    const value = e.detail?.value;
+    if (value === 'wizard' || value === 'stacked') onChange(value);
+  });
   return (
-    <div
-      role="group"
-      aria-label="Indeling van de velden"
-      className="inline-flex items-center gap-0.5 rounded-lg border border-slate-200 bg-slate-50 p-0.5 dark:border-slate-700 dark:bg-slate-800"
+    <nldd-segmented-control
+      ref={ref}
+      size="sm"
+      variant="icon-and-text"
+      value={layout}
+      accessible-label="Indeling van de velden"
     >
-      <button
-        type="button"
-        onClick={() => onChange('wizard')}
-        aria-pressed={layout === 'wizard'}
-        title="Stap voor stap: één vraag tegelijk"
-        className={clsx(
-          'inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors',
-          layout === 'wizard'
-            ? 'bg-white text-rijksblauw-700 shadow-sm dark:bg-slate-700 dark:text-rijksblauw-200'
-            : 'text-slate-500 hover:text-rijksblauw-600 dark:text-slate-400 dark:hover:text-rijksblauw-300',
-        )}
-      >
-        <List size={15} />
-        <span className="hidden sm:inline">Stap voor stap</span>
-      </button>
-      <button
-        type="button"
-        onClick={() => onChange('stacked')}
-        aria-pressed={layout === 'stacked'}
-        title="Alle velden tegelijk"
-        className={clsx(
-          'inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors',
-          layout === 'stacked'
-            ? 'bg-white text-rijksblauw-700 shadow-sm dark:bg-slate-700 dark:text-rijksblauw-200'
-            : 'text-slate-500 hover:text-rijksblauw-600 dark:text-slate-400 dark:hover:text-rijksblauw-300',
-        )}
-      >
-        <Rows3 size={15} />
-        <span className="hidden sm:inline">Alles tegelijk</span>
-      </button>
-    </div>
+      <nldd-segmented-control-item
+        value="wizard"
+        icon="list"
+        text="Per stap"
+        selected={layout === 'wizard' || undefined}
+      ></nldd-segmented-control-item>
+      <nldd-segmented-control-item
+        value="stacked"
+        icon="rectangle-split-3x1"
+        text="Alles"
+        selected={layout === 'stacked' || undefined}
+      ></nldd-segmented-control-item>
+    </nldd-segmented-control>
   );
 }

@@ -2,15 +2,14 @@ import { prefersReducedMotion } from '@/context/AccessibilityContext';
 import { useMemo, useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { rijksblauw, rijksoranje, hexToVec3 } from '@/config/brandColors';
+import { rijksblauw, rijkskleur, hexToVec3 } from '@/config/brandColors';
 
-// Heldachtergrond in WebGL met twee varianten, beide decoratief (pointer-events:
-// none in de wrapper):
-//  - tegels: een raster van vierkantjes dat in golven oplicht, afgeleid van het
-//    logo. Heel af en toe kleurt een tegel oranje; het midden blijft rustig zodat
-//    de kop leesbaar blijft.
-//  - polder: hoogtelijnen zoals op een topografische kaart, die traag omhoog
-//    schuiven. Elke vierde lijn is iets sterker.
+// WebGL hero background with two variants, both decorative (the parent in
+// DailyBackground is aria-hidden and sits behind the content):
+//  - tegels: a grid of squares that light up in waves, after the logo. Now and
+//    then a tile turns orange; the middle stays calm so the heading stays legible.
+//  - polder: contour lines as on a topographic map, slowly moving up. Every
+//    fourth line is a little stronger.
 
 export type ShaderBackground = 'tegels' | 'polder';
 
@@ -28,7 +27,7 @@ const shaderHeader = /* glsl */ `
   uniform float uTime;
   uniform vec2 uResolution;
 
-  // Klassieke 2D simplex noise (Ashima Arts, MIT-licentie).
+  // Classic 2D simplex noise (Ashima Arts, MIT license).
   vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
   vec2 mod289(vec2 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
   vec3 permute(vec3 x) { return mod289(((x * 34.0) + 1.0) * x); }
@@ -74,10 +73,11 @@ const shaderHeader = /* glsl */ `
   }
 `;
 
-// Kleuren komen uit src/config/brandColors.js.
-const tegelsShader = /* glsl */ `
+// Colors come from the design system tokens via src/config/brandColors.js. The
+// shaders are built on first use, once the stylesheet holds the tokens.
+const tegelsShader = () => /* glsl */ `
   void main() {
-    // uResolution is in apparaatpixels, net als gl_FragCoord.
+    // uResolution is in device pixels, as is gl_FragCoord.
     vec2 uv = gl_FragCoord.xy / uResolution;
     float cellSize = uResolution.y / 9.0;
     vec2 cell = floor(gl_FragCoord.xy / cellSize);
@@ -94,7 +94,7 @@ const tegelsShader = /* glsl */ `
     vec3 tileLow = mix(${hexToVec3(rijksblauw[700])}, ${hexToVec3(rijksblauw[600])}, 0.6);
     vec3 tileHigh = mix(${hexToVec3(rijksblauw[400])}, ${hexToVec3(rijksblauw[300])}, 0.25);
     vec3 tile = mix(tileLow, tileHigh, level);
-    tile = mix(tile, ${hexToVec3(rijksoranje)}, step(0.988, r) * level);
+    tile = mix(tile, ${hexToVec3(rijkskleur.oranje)}, step(0.988, r) * level);
 
     vec2 fromCenter = (uv - 0.5) * vec2(1.0, 1.7);
     float calm = smoothstep(0.08, 0.55, length(fromCenter));
@@ -104,13 +104,13 @@ const tegelsShader = /* glsl */ `
   }
 `;
 
-const polderShader = /* glsl */ `
+const polderShader = () => /* glsl */ `
   void main() {
     vec2 uv = gl_FragCoord.xy / uResolution;
     vec2 st = vec2(uv.x * uResolution.x / uResolution.y, uv.y);
     float t = uTime * 0.035;
 
-    // Ruis vervormt horizontale banden; fract() van de hoogte geeft de lijnen.
+    // Noise bends horizontal bands; fract() of the height gives the lines.
     float n = fbm(st * vec2(0.8, 1.4) + vec2(t, t * 0.4));
     float height = uv.y * 13.0 + n * 3.2 - uTime * 0.12;
     float f = fract(height);
@@ -120,7 +120,7 @@ const polderShader = /* glsl */ `
 
     vec3 bg = mix(${hexToVec3(rijksblauw[900])}, ${hexToVec3(rijksblauw[700])}, uv.y * 0.8 + 0.1);
     bg += vec3(0.0, 0.03, 0.05) * fbm(st * 2.0 - t);
-    // Rond de kop iets zachter, zodat de tekst leesbaar blijft.
+    // Softer around the heading, so the text stays legible.
     float calm = mix(0.55, 1.0, smoothstep(0.1, 0.5, abs(uv.y - 0.55)));
     vec3 color = bg + ${hexToVec3(rijksblauw[300])} * line * mix(0.16, 0.42, major) * calm;
 
@@ -128,13 +128,14 @@ const polderShader = /* glsl */ `
   }
 `;
 
-const FRAGMENT_SHADERS: Record<ShaderBackground, string> = {
-  tegels: shaderHeader + tegelsShader,
-  polder: shaderHeader + polderShader,
+const FRAGMENT_SHADERS: Record<ShaderBackground, () => string> = {
+  tegels: () => shaderHeader + tegelsShader(),
+  polder: () => shaderHeader + polderShader(),
 };
 
 function ShaderPlane({ variant }: { variant: ShaderBackground }) {
   const materialRef = useRef<THREE.ShaderMaterial>(null);
+  const fragmentShader = useMemo(() => FRAGMENT_SHADERS[variant](), [variant]);
 
   const uniforms = useMemo(
     () => ({
@@ -156,30 +157,25 @@ function ShaderPlane({ variant }: { variant: ShaderBackground }) {
       <shaderMaterial
         ref={materialRef}
         vertexShader={vertexShader}
-        fragmentShader={FRAGMENT_SHADERS[variant]}
+        fragmentShader={fragmentShader}
         uniforms={uniforms}
       />
     </mesh>
   );
 }
 
-export default function DashboardBackground({
-  variant,
-  className = '',
-}: {
-  variant: ShaderBackground;
-  className?: string;
-}) {
+/**
+ * Fills its parent, which positions it and hides it from assistive technology.
+ */
+export default function DashboardBackground({ variant }: { variant: ShaderBackground }) {
   return (
-    <div className={`pointer-events-none absolute inset-0 ${className}`} aria-hidden="true">
-      <Canvas
-        gl={{ antialias: false, powerPreference: 'low-power' }}
-        dpr={[1, 1.5]}
-        frameloop={prefersReducedMotion() ? 'demand' : 'always'}
-        camera={{ position: [0, 0, 1] }}
-      >
-        <ShaderPlane key={variant} variant={variant} />
-      </Canvas>
-    </div>
+    <Canvas
+      gl={{ antialias: false, powerPreference: 'low-power' }}
+      dpr={[1, 1.5]}
+      frameloop={prefersReducedMotion() ? 'demand' : 'always'}
+      camera={{ position: [0, 0, 1] }}
+    >
+      <ShaderPlane key={variant} variant={variant} />
+    </Canvas>
   );
 }

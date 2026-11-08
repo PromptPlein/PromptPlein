@@ -621,7 +621,7 @@ declare module 'react' {
       'reorderable'?: true | undefined;
       'selected'?: true | undefined;
       'checked'?: true | undefined;
-      'expanded'?: string;
+      'expanded'?: true | undefined;
       'current'?: true | undefined;
       'current-type'?: 'date' | 'location' | 'page' | 'step' | 'time' | 'true';
       'disabled'?: true | undefined;
@@ -641,7 +641,7 @@ declare module 'react' {
       'disclosure'?: true | undefined;
       'accessible-label'?: string;
       'checked'?: true | undefined;
-      'expanded'?: string;
+      'expanded'?: true | undefined;
       'popup-type'?: string;
       'popovertarget'?: string;
       'current'?: true | undefined;

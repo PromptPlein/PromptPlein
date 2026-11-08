@@ -1,6 +1,6 @@
-import { useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { useRef, useState, type FormEvent } from 'react';
 import { notify } from '@/lib/notify';
+import { useNlddValue } from '@/lib/nldd';
 import { requestPasswordReset } from '@/services/authService';
 import { useAuth } from '@/context/AuthContext';
 import AuthLayout from './AuthLayout';
@@ -10,10 +10,16 @@ export default function PasswordResetPage() {
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
+  const emailRef = useRef<HTMLElement & { value?: string }>(null);
+  useNlddValue(emailRef, email, setEmail);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (busy) return;
+    if (!configured) {
+      notify.error('Versturen kan nu niet: er is geen backend ingesteld.');
+      return;
+    }
     setBusy(true);
     try {
       await requestPasswordReset(email.trim());
@@ -30,32 +36,29 @@ export default function PasswordResetPage() {
     <AuthLayout
       title="Wachtwoord vergeten"
       subtitle="We sturen je een link om je wachtwoord opnieuw in te stellen."
-      footer={
-        <Link to="/auth/login" className="font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300">
-          Terug naar inloggen
-        </Link>
-      }
+      footer={<nldd-link href="/auth/login" text="Terug naar inloggen"></nldd-link>}
     >
       {sent ? (
-        <p className="rounded-lg bg-emerald-50 px-3 py-3 text-sm text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300">
-          Controleer je inbox voor de herstellink.
-        </p>
+        <nldd-banner variant="success" size="sm" text="Controleer je inbox voor de herstellink."></nldd-banner>
       ) : (
-        <form onSubmit={submit} className="space-y-3">
-          <input
-            type="email"
-            autoFocus
-            required
-            className="opl-input"
-            placeholder="E-mailadres"
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <button type="submit" className="opl-btn-primary w-full" disabled={busy || !configured}>
-            {busy ? 'Bezig…' : 'Herstellink versturen'}
-          </button>
-        </form>
+        <nldd-form>
+          <form onSubmit={submit}>
+            <nldd-form-field label="E-mailadres">
+              <nldd-text-field ref={emailRef} type="email" required autocomplete="email" name="email"></nldd-text-field>
+            </nldd-form-field>
+            <nldd-form-actions>
+              <nldd-button-group>
+                <nldd-button
+                  appearance="primary"
+                  type="submit"
+                  text="Verstuur herstellink"
+                  loading={busy || undefined}
+                  loading-text="Bezig met versturen"
+                ></nldd-button>
+              </nldd-button-group>
+            </nldd-form-actions>
+          </form>
+        </nldd-form>
       )}
     </AuthLayout>
   );

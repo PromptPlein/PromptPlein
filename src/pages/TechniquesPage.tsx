@@ -1,15 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import {
-  AlertTriangle,
-  ArrowDown,
-  Check,
-  Compass,
-  Eraser,
-  Loader2,
-  Sparkles,
-} from '@/components/common/icons';
-import clsx from 'clsx';
 import { notify } from '@/lib/notify';
 import TechniqueChooser from '@/components/optimizer/TechniqueChooser';
 import TechniqueAdvisor from '@/components/optimizer/TechniqueAdvisor';
@@ -73,7 +63,7 @@ import type { OptimizeResult, Technique } from '@/types';
 /**
  * Werken mét de prompttechnieken zelf: de volledige lijst frameworks en losse
  * technieken, en per techniek de velden die je zelf invult. Bedoeld voor de
- * training — deelnemers zien welke technieken er zijn, kiezen er één, vullen
+ * training, deelnemers zien welke technieken er zijn, kiezen er één, vullen
  * hun eigen gegevens in en bouwen daar een prompt van.
  *
  * Bewust naast /genereren: die pagina kiest de techniek zélf op basis van een
@@ -97,7 +87,7 @@ export default function TechniquesPage() {
 
   // Alle invoer op deze pagina is sessie-state, bewust niet bewaard: wie de
   // pagina opent begint bij de keuze, met een schone lijst. In een training
-  // gaat dit scherm van hand tot hand — dan is achtergebleven werk van de
+  // gaat dit scherm van hand tot hand, dan is achtergebleven werk van de
   // vorige oefening storender dan een verloren concept.
   //
   // Waar het over gaat: optioneel startpunt. Is dit gevuld, dan vult de AI de
@@ -129,7 +119,7 @@ export default function TechniquesPage() {
   // kunt openen om aan te passen.
   const [editingContext, setEditingContext] = useState(true);
   // Staat de techniek-adviseur open? Die kiest niet voor je, maar vraagt door
-  // tot duidelijk is welke techniek past — voor wie de lijst niet overziet.
+  // tot duidelijk is welke techniek past, voor wie de lijst niet overziet.
   const [advisorOpen, setAdvisorOpen] = useState(false);
   // Staat de kiezer open terwijl er al een techniek gekozen is? Na het kiezen gaat
   // hij dicht, zodat alleen het invulblok overblijft. "Andere kiezen" opent hem
@@ -153,8 +143,8 @@ export default function TechniquesPage() {
   // Het contextveld zelf, zodat een gekozen voorbeeldprompt meteen de cursor
   // krijgt: de tekst staat er, en de gebruiker kan direct verder typen.
   const contextRef = useRef<HTMLTextAreaElement>(null);
-  const advisorRef = useRef<HTMLDivElement>(null);
-  const optimizingRef = useRef<HTMLDivElement>(null);
+  const advisorRef = useRef<HTMLElement>(null);
+  const optimizingRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     let active = true;
@@ -174,7 +164,6 @@ export default function TechniquesPage() {
 
   const technique = techniques.find((t) => t.id === techniqueId) ?? null;
   const sjabloonMode = Boolean(technique && isSjabloon(technique));
-  const ChosenIcon = technique ? techniekKaart(technique).icon : null;
   // De context zoals hij naar het voor-invullen en het bouwen gaat. Bij een
   // sjabloon: de antwoorden op de vragen, elk onder zijn vraag, plus het losse vak.
   const contextText =
@@ -185,7 +174,7 @@ export default function TechniquesPage() {
   /**
    * Kies een techniek: antwoorden van de vorige techniek vervallen en het
    * invulblok scrollt in beeld. Staat er al iets in "waar gaat het over", dan
-   * vult de AI de velden alvast voor — anders begin je met lege velden.
+   * vult de AI de velden alvast voor, anders begin je met lege velden.
    */
   function handleSelectTechnique(id: string, contextOverride?: string) {
     // Opnieuw op de actieve techniek klikken mag geen werk weggooien. Komt de
@@ -221,7 +210,7 @@ export default function TechniquesPage() {
 
   /**
    * De gebruiker neemt het advies van de adviseur over. Vanaf hier loopt alles
-   * gelijk aan zelf klikken in de lijst — alleen staat de context uit het
+   * gelijk aan zelf klikken in de lijst, alleen staat de context uit het
    * gesprek er alvast in. Niet elke techniek toont dat veld (Persona, Few-Shot
    * en Meta vragen hun eigen invoer), maar de tekst voedt daar wél de bouwer,
    * dus hij wordt altijd gezet.
@@ -516,7 +505,7 @@ export default function TechniquesPage() {
         : contextText || '[BESCHRIJF HIER WAT JE WILT BEREIKEN]';
       // Chain-of-Thought/Socratic: is het gesprek al ín de tool gevoerd (de
       // conclusie staat in builderText)? Dan hoeft de prompt de dialoog niet
-      // meer "aan te zetten" — de generator maakt een uitgewerkte prompt.
+      // meer "aan te zetten", de generator maakt een uitgewerkte prompt.
       const fmt = structureFormat(technique);
       const interviewResolved =
         (fmt === 'chain-of-thought' || fmt === 'socratic') && Boolean(builderText.trim());
@@ -620,168 +609,136 @@ export default function TechniquesPage() {
     advisorOpen ||
     Object.keys(answers).length > 0;
 
+  function openAdvisor() {
+    setAdvisorOpen(true);
+    requestAnimationFrame(() => {
+      advisorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+
+  const clearButton = (
+    <nldd-button
+      appearance="neutral-transparent"
+      start-icon="trash"
+      text="Opschonen"
+      accessible-label="Opschonen: wis je invoer en begin opnieuw"
+      onClick={handleClearAll}
+    ></nldd-button>
+  );
+
   return (
-    <div
-      className={clsx(
-        'mx-auto px-4 py-8 sm:px-6 lg:px-8',
-        technique ? 'max-w-4xl' : 'max-w-5xl',
-      )}
-    >
+    <nldd-simple-section>
       {/* Je keuze staat bovenaan, ook bij het resultaat: zo blijft zichtbaar waar
           je mee werkt en is de weg terug naar de kiezer één klik. */}
-      {technique && (
-        <section
-          ref={builderRef}
-          aria-label="Je keuze"
-          className="mb-4 flex scroll-mt-24 flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 pb-3 pt-4 shadow-[inset_0_4px_0_0_theme(colors.rijksoranje.vast)] dark:border-slate-700 dark:bg-slate-800"
-        >
-          <span
-            aria-hidden="true"
-            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/20 dark:text-rijksblauw-200"
-          >
-            {ChosenIcon && <ChosenIcon size={24} />}
-          </span>
-          <div className="min-w-0">
-            <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
-              {isContextPrompt(technique) ? 'Framework gekozen' : 'Techniek gekozen'}
-            </p>
-            <h1 className="text-2xl font-bold leading-tight text-rijksblauw-700 dark:text-rijksblauw-200">
-              {technique.name}
-            </h1>
-          </div>
-          <InfoDot label={`Uitleg over ${technique.name}`} text={chosenInfo(technique)} />
-          {phase === 'input' && (
-            <div className="ml-auto flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={handleClearAll}
-                title="Wis je invoer en begin opnieuw"
-                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-rijksblauw-700 transition-colors hover:text-rijksoranje dark:text-rijksblauw-200"
-              >
-                <Eraser size={15} /> Opschonen
-              </button>
-              <button
-                type="button"
-                className="opl-btn-secondary"
-                aria-expanded={chooserOpen}
-                onClick={() => {
-                  setChooserOpen((open) => !open);
-                  setAdvisorOpen(false);
-                }}
-              >
-                {chooserOpen ? 'Sluiten' : 'Andere kiezen'}
-              </button>
-            </div>
-          )}
-        </section>
-      )}
-
-      {phase === 'output' && result ? (
-        <div className="opl-card p-6">
-          <OptimizedOutput
-            result={result}
-            technique={technique}
-            goal={context}
-            onReset={handleReset}
-            versions={versions}
-            activeVersion={activeVersion}
-            onSelectVersion={setActiveVersion}
-            skill={
-              technique && structureFormat(technique) === 'skill' && skillData
-                ? {
-                    naam: skillData.naam,
-                    beschrijving: skillData.beschrijving,
-                    bronnen: skillData.velden.bronnen,
-                    publicatie: skillData.publicatie,
-                    model: skillModel(result.provider, settingsRef.current),
-                  }
-                : undefined
-            }
-          />
-        </div>
-      ) : (
-        <div
-          className={`space-y-6 transition-opacity duration-700 ${
-            phase === 'transition' ? 'pointer-events-none opacity-0' : 'opacity-100'
-          }`}
-        >
-          {/* De kiezer: het eerste scherm zonder techniek, en wat "Andere kiezen"
-              opent. De adviseur hoort erbij, voor wie er zelf niet uitkomt. */}
-          {(!technique || chooserOpen) && (
-            <div className="space-y-6">
-              {/* Hetzelfde raster als de tegels eronder: de knop is even breed als de
-                  laatste tegel. */}
-              <div className="grid grid-cols-1 items-center gap-3 lg:grid-cols-5">
-                <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 lg:col-span-4">
-                  {technique ? (
-                    <h2 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
-                      Wat wil je bereiken?
-                    </h2>
-                  ) : (
-                    <h1 className="text-3xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
-                      Wat wil je bereiken?
-                    </h1>
-                  )}
-                  {!technique && hasContent && (
-                    <button
-                      type="button"
-                      onClick={handleClearAll}
-                      title="Wis je invoer en begin opnieuw"
-                      className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-rijksblauw-700 transition-colors hover:text-rijksoranje dark:text-rijksblauw-200"
-                    >
-                      <Eraser size={15} /> Opschonen
-                    </button>
-                  )}
-                </div>
-                {!advisorOpen && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAdvisorOpen(true);
-                      requestAnimationFrame(() => {
-                        advisorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                      });
-                    }}
-                    className="opl-btn-primary min-h-12 w-full justify-center px-3 text-base sm:w-auto sm:justify-self-start lg:w-full"
-                  >
-                    <Compass size={20} className="text-rijksoranje-vast" /> Help mij kiezen
-                  </button>
+      <nldd-title
+        slot="header"
+        heading-level={1}
+        size={2}
+        overline={technique ? (isContextPrompt(technique) ? 'Framework gekozen' : 'Techniek gekozen') : undefined}
+        text={technique ? technique.name : 'Wat wil je bereiken?'}
+        supporting-text={
+          technique
+            ? chosenInfo(technique)
+            : 'Kies eerst je doel en daarna een framework of techniek. Weet je het niet, laat je dan helpen kiezen.'
+        }
+      ></nldd-title>
+      <nldd-container gap="24">
+        {technique && phase === 'input' && (
+          <nldd-container layout="wrap" gap="8">
+            <nldd-button
+              appearance="neutral-transparent"
+              start-icon={chooserOpen ? 'dismiss' : 'list'}
+              text={chooserOpen ? 'Sluiten' : 'Andere kiezen'}
+              expanded={chooserOpen || undefined}
+              onClick={() => {
+                setChooserOpen((open) => !open);
+                setAdvisorOpen(false);
+              }}
+            ></nldd-button>
+            {clearButton}
+          </nldd-container>
+        )}
+        {!technique && (hasContent || !advisorOpen) && (
+          <nldd-container layout="wrap" gap="8">
+            {!advisorOpen && (
+              <nldd-button appearance="accent-transparent" start-icon="signpost" text="Help mij kiezen" onClick={openAdvisor}></nldd-button>
+            )}
+            {hasContent && clearButton}
+          </nldd-container>
+        )}
+        {phase === 'output' && result ? (
+          <nldd-card>
+            <nldd-container padding="24" sm-padding="16">
+              <OptimizedOutput
+                result={result}
+                technique={technique}
+                goal={context}
+                onReset={handleReset}
+                versions={versions}
+                activeVersion={activeVersion}
+                onSelectVersion={setActiveVersion}
+                skill={
+                  technique && structureFormat(technique) === 'skill' && skillData
+                    ? {
+                        naam: skillData.naam,
+                        beschrijving: skillData.beschrijving,
+                        bronnen: skillData.velden.bronnen,
+                        publicatie: skillData.publicatie,
+                        model: skillModel(result.provider, settingsRef.current),
+                      }
+                    : undefined
+                }
+              />
+            </nldd-container>
+          </nldd-card>
+        ) : (
+          <nldd-container gap="24">
+            {/* De kiezer: het eerste scherm zonder techniek, en wat "Andere kiezen"
+                opent. De adviseur hoort erbij, voor wie er zelf niet uitkomt. */}
+            {(!technique || chooserOpen) && (
+              <nldd-container gap="24">
+                {technique && (
+                  <nldd-container gap="12">
+                    <nldd-title heading-level={2} size={3} text="Wat wil je bereiken?"></nldd-title>
+                    {!advisorOpen && (
+                      <nldd-container layout="wrap" gap="8">
+                        <nldd-button
+                          appearance="accent-transparent"
+                          start-icon="signpost"
+                          text="Help mij kiezen"
+                          onClick={openAdvisor}
+                        ></nldd-button>
+                      </nldd-container>
+                    )}
+                  </nldd-container>
                 )}
-              </div>
-              {advisorOpen && (
-                <div ref={advisorRef} className="scroll-mt-24">
-                  <TechniqueAdvisor
-                    techniques={techniques}
-                    settings={settingsRef.current}
-                    start={context}
-                    onChoose={applyAdvice}
-                    onClose={() => setAdvisorOpen(false)}
-                  />
-                </div>
-              )}
-              <TechniqueChooser selectedId={techniqueId} onSelect={handleSelectTechnique} />
-            </div>
-          )}
+                {advisorOpen && (
+                  <nldd-container ref={advisorRef}>
+                    <TechniqueAdvisor
+                      techniques={techniques}
+                      settings={settingsRef.current}
+                      start={context}
+                      onChoose={applyAdvice}
+                      onClose={() => setAdvisorOpen(false)}
+                    />
+                  </nldd-container>
+                )}
+                <TechniqueChooser selectedId={techniqueId} onSelect={handleSelectTechnique} />
+              </nldd-container>
+            )}
 
-          {/* Het invulblok van de gekozen techniek. */}
-          {technique && (
-            <div key={technique.id} className="animate-fade-in space-y-4">
+            {/* Het invulblok van de gekozen techniek. */}
+            {technique && (
+              <nldd-container ref={builderRef} key={technique.id} gap="32">
                 {/* Het oordeel van de voor-invulling hoort bovenaan het blok, waar
                     de blik na het kiezen van een techniek al is: onder de knop
                     "Bouw prompt" viel het pas op na scrollen. */}
                 {unclearReason && (
-                  <div
-                    role="alert"
-                    className="animate-fade-in flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-200"
-                  >
-                    <AlertTriangle size={18} className="mt-0.5 shrink-0" />
-                    <div>
-                      <p className="font-medium">Je invoer is nog niet duidelijk genoeg</p>
-                      <p className="mt-0.5 text-amber-700 dark:text-amber-300/90">
-                        {stripMarkdown(unclearReason)}
-                      </p>
-                    </div>
-                  </div>
+                  <nldd-banner
+                    variant="warning"
+                    text="Je invoer is nog niet duidelijk genoeg"
+                    supporting-text={stripMarkdown(unclearReason)}
+                  ></nldd-banner>
                 )}
 
                 {/* Zo begin je: waar de techniek over moet gaan. Alleen bij
@@ -792,18 +749,23 @@ export default function TechniquesPage() {
                   const starter = techniqueStarter(technique);
                   if (!starter) return null;
                   return (
-                    <div className="rounded-lg border border-rijksblauw-200 bg-rijksblauw-50/60 p-3 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10">
-                      <p className="flex items-center gap-1.5 text-sm font-semibold text-rijksblauw-700 dark:text-rijksblauw-200">
-                        <Compass size={15} className="shrink-0" /> Zo begin je
-                      </p>
-                      <p className="mt-1.5 text-sm text-slate-600 dark:text-slate-300">{starter}</p>
-                    </div>
+                    <nldd-box background="accent-tinted">
+                      <nldd-container padding="12" gap="6">
+                        <nldd-container layout="row" gap="6" vertical-alignment="center">
+                          <nldd-icon icon="signpost" size="16" color="accent"></nldd-icon>
+                          <nldd-text size="sm" weight="bold">
+                            Zo begin je
+                          </nldd-text>
+                        </nldd-container>
+                        <nldd-text size="sm">{starter}</nldd-text>
+                      </nldd-container>
+                    </nldd-box>
                   );
                 })()}
 
                 {/* Waar het over gaat, compact. Het losse startpunt-veld is door
                     dit blok vervangen, maar de tekst voedt nog steeds het
-                    voor-invullen en het bouwen — dus blijft hij hier zichtbaar
+                    voor-invullen en het bouwen, dus blijft hij hier zichtbaar
                     en aanpasbaar.
 
                     Niet bij Few-Shot, Persona en Meta: die bouwers vragen zelf
@@ -846,401 +808,386 @@ export default function TechniquesPage() {
                       sjabloonAntwoorden[q.id]?.trim(),
                     ).length;
                     return (
-                      <section className="opl-card p-5">
-                        {editingContext ? (
-                          <>
-                            <StepHeading
-                              step={1}
-                              title="Eerst de context"
-                              info="Schrijf bij elke vraag op wat je al weet. Na Klaar zet de AI je antwoorden in de velden en vraagt naar wat ontbreekt."
-                            />
-                            {/* Voorbereid materiaal bovenaan: wie in een andere chat al
-                                iets heeft uitgewerkt, plakt het hier en laat de vragen
-                                eronder daaruit invullen. */}
-                            <div className="mb-5 rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-800">
-                              <div className="mb-1 flex items-center gap-1">
-                                <label htmlFor="techniek-context" className="opl-label mb-0">
-                                  Heb je al iets voorbereid?
-                                </label>
-                                <InfoDot
-                                  label="Uitleg over voorbereide tekst"
-                                  text="Plak wat je al hebt, zoals aantekeningen of een planning. Per vraag zie je wat uit je tekst komt en wat de AI heeft bedacht."
-                                />
-                              </div>
-                              <OptimizableTextarea
-                                id="techniek-context"
-                                ref={contextRef}
-                                rows={5}
-                                value={context}
-                                onValueChange={setContext}
-                                placeholder="Plak hier je voorbereide tekst."
-                                className="opl-input resize-y px-4 py-3 text-sm leading-relaxed"
-                                optimizeTitle="Schrijf mijn context uit met AI; je oorspronkelijke tekst kun je daarna terughalen"
+                      <>
+                        <nldd-container gap="16">
+                          {editingContext ? (
+                            <>
+                              <StepHeading
+                                step={1}
+                                title="Eerst de context"
+                                info="Schrijf bij elke vraag op wat je al weet. Na Klaar zet de AI je antwoorden in de velden en vraagt naar wat ontbreekt."
                               />
-                              <div className="mt-2 flex justify-end">
-                                <button
-                                  type="button"
-                                  className="opl-btn-secondary"
-                                  disabled={!context.trim() || vragenVullen || prefilling}
-                                  onClick={() => void handleVragenUitTekst()}
-                                >
-                                  {vragenVullen ? (
-                                    <>
-                                      <Loader2 size={16} className="animate-spin" /> Vragen invullen…
-                                    </>
-                                  ) : (
-                                    <>
-                                      <ArrowDown size={16} /> Vul de vragen in uit deze tekst
-                                    </>
-                                  )}
-                                </button>
-                              </div>
-                            </div>
-                            <SjabloonVragen
-                              technique={technique}
-                              antwoorden={sjabloonAntwoorden}
-                              herkomst={vraagHerkomst}
-                              onChange={(next, aangepast) => {
-                                setSjabloonAntwoorden(next);
-                                setVraagHerkomst((prev) => {
-                                  if (!prev[aangepast]) return prev;
-                                  const rest = { ...prev };
-                                  delete rest[aangepast];
-                                  return rest;
-                                });
-                              }}
-                              disabled={prefilling || vragenVullen}
-                            />
-                            <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
-                              <button
-                                type="button"
-                                className="opl-btn-secondary"
-                                title="Sla de vragen over en vul de velden zelf in"
-                                onClick={() => setEditingContext(false)}
-                              >
-                                Zelf invullen
-                              </button>
-                              <button
-                                type="button"
-                                className="opl-btn-primary"
-                                disabled={prefilling || vragenVullen || !contextText}
-                                onClick={() => void startSjabloonVelden()}
-                              >
-                                <Sparkles size={16} /> Klaar, vul de velden in
-                              </button>
-                            </div>
-                          </>
-                        ) : (
-                          <div className="flex items-start justify-between gap-3">
-                            <p className="text-sm text-slate-600 dark:text-slate-300">
-                              <span className="font-medium text-slate-700 dark:text-slate-200">
-                                Context:
-                              </span>{' '}
-                              {beantwoord} van {technique.follow_up_questions.length} vragen
-                              beantwoord{context.trim() ? ', met voorbereide tekst' : ''}.
-                            </p>
-                            <button
-                              type="button"
-                              className="shrink-0 text-sm font-medium text-rijksblauw-600 transition-colors hover:text-rijksblauw-700 hover:underline dark:text-rijksblauw-300 dark:hover:text-rijksblauw-200"
-                              onClick={() => setEditingContext(true)}
-                            >
-                              Aanpassen
-                            </button>
-                          </div>
-                        )}
-                      </section>
+                              {/* Voorbereid materiaal bovenaan: wie in een andere chat al
+                                  iets heeft uitgewerkt, plakt het hier en laat de vragen
+                                  eronder daaruit invullen. */}
+                              <nldd-box background="tinted">
+                                <nldd-container padding="12" gap="8">
+                                  <nldd-container layout="row" gap="4" vertical-alignment="center">
+                                    <nldd-text size="sm" weight="bold">
+                                      Heb je al iets voorbereid?
+                                    </nldd-text>
+                                    <InfoDot
+                                      label="Uitleg over voorbereide tekst"
+                                      text="Plak wat je al hebt, zoals aantekeningen of een planning. Per vraag zie je wat uit je tekst komt en wat de AI heeft bedacht."
+                                    />
+                                  </nldd-container>
+                                  <OptimizableTextarea
+                                    id="techniek-context"
+                                    aria-label="Heb je al iets voorbereid?"
+                                    ref={contextRef}
+                                    rows={5}
+                                    value={context}
+                                    onValueChange={setContext}
+                                    placeholder="Plak hier je voorbereide tekst."
+                                    optimizeTitle="Schrijf mijn context uit met AI; je oorspronkelijke tekst kun je daarna terughalen"
+                                  />
+                                  <nldd-container>
+                                    <nldd-button
+                                      appearance="secondary"
+                                      start-icon="arrow-down"
+                                      text="Vul de vragen in uit deze tekst"
+                                      loading={vragenVullen || undefined}
+                                      loading-text="Vragen invullen"
+                                      disabled={!context.trim() || prefilling || undefined}
+                                      onClick={() => void handleVragenUitTekst()}
+                                    ></nldd-button>
+                                  </nldd-container>
+                                </nldd-container>
+                              </nldd-box>
+                              <SjabloonVragen
+                                technique={technique}
+                                antwoorden={sjabloonAntwoorden}
+                                herkomst={vraagHerkomst}
+                                onChange={(next, aangepast) => {
+                                  setSjabloonAntwoorden(next);
+                                  setVraagHerkomst((prev) => {
+                                    if (!prev[aangepast]) return prev;
+                                    const rest = { ...prev };
+                                    delete rest[aangepast];
+                                    return rest;
+                                  });
+                                }}
+                                disabled={prefilling || vragenVullen}
+                              />
+                              <nldd-container layout="wrap" gap="8">
+                                <nldd-button
+                                  appearance="secondary"
+                                  start-icon="sparkles"
+                                  text="Klaar, vul de velden in"
+                                  disabled={prefilling || vragenVullen || !contextText || undefined}
+                                  onClick={() => void startSjabloonVelden()}
+                                ></nldd-button>
+                                <nldd-button
+                                  appearance="secondary"
+                                  text="Zelf invullen"
+                                  accessible-label="Zelf invullen: sla de vragen over"
+                                  onClick={() => setEditingContext(false)}
+                                ></nldd-button>
+                              </nldd-container>
+                            </>
+                          ) : (
+                            <nldd-container layout="row" gap="12" vertical-alignment="center">
+                              <nldd-text size="sm" color="secondary">
+                                <strong>Context:</strong> {beantwoord} van{' '}
+                                {technique.follow_up_questions.length} vragen beantwoord
+                                {context.trim() ? ', met voorbereide tekst' : ''}.
+                              </nldd-text>
+                              <nldd-spacer size="flexible"></nldd-spacer>
+                              <nldd-button
+                                size="sm"
+                                appearance="neutral-transparent"
+                                text="Aanpassen"
+                                onClick={() => setEditingContext(true)}
+                              ></nldd-button>
+                            </nldd-container>
+                          )}
+                        </nldd-container>
+                      </>
                     );
                   }
                   return (
-                    <section className="opl-card p-5">
-                      {/* Bij een vragenlijst blijft dit veld open; bij een gesprek klapt
-                          het dicht zodra het gesprek begint. */}
-                      {editingContext || usesQuestionnaire ? (
-                        <>
-                          <StepHeading
-                            step={1}
-                            title="Waar gaat het over?"
-                            htmlFor="techniek-context"
-                            info={
-                              usesQuestionnaire
-                                ? 'Vul je hier iets in, dan kan de AI de velden alvast voor je invullen.'
-                                : isInterview
-                                  ? 'Vul je hier iets in, dan begint het gesprek bij jouw onderwerp.'
-                                  : 'Vul je hier iets in, dan begint deze techniek met jouw onderwerp.'
-                            }
-                          >
-                            <span className="text-sm text-slate-500 dark:text-slate-400">
-                              Mag leeg blijven
-                            </span>
-                          </StepHeading>
-                          {/* Voorbeeldprompts als startpunt, alleen bij de
-                              frameworks: daar is de context een opdracht in
-                              gewone taal, precies wat deze voorbeelden zijn.
-                              De losse technieken vragen om iets anders (een
-                              te controleren tekst, een rol, een rubric), dus
-                              een voorbeeldprompt zou daar niet passen. */}
-                          {isContextPrompt(technique) && (
-                            <PromptExamplePicker
-                              onPick={(prompt) => {
-                                setContext(prompt);
-                                requestAnimationFrame(() => {
-                                  const el = contextRef.current;
-                                  if (!el) return;
-                                  el.focus();
-                                  el.setSelectionRange(prompt.length, prompt.length);
-                                });
-                              }}
+                    <>
+                      <nldd-container gap="12">
+                        {/* Bij een vragenlijst blijft dit veld open; bij een gesprek klapt
+                            het dicht zodra het gesprek begint. */}
+                        {editingContext || usesQuestionnaire ? (
+                          <>
+                            <StepHeading
+                              step={1}
+                              title="Waar gaat het over?"
+                              htmlFor="techniek-context"
+                              info={
+                                usesQuestionnaire
+                                  ? 'Vul je hier iets in, dan kan de AI de velden alvast voor je invullen.'
+                                  : isInterview
+                                    ? 'Vul je hier iets in, dan begint het gesprek bij jouw onderwerp.'
+                                    : 'Vul je hier iets in, dan begint deze techniek met jouw onderwerp.'
+                              }
+                            >
+                              <nldd-text size="sm" color="secondary">
+                                Mag leeg blijven
+                              </nldd-text>
+                            </StepHeading>
+                            {/* Voorbeeldprompts als startpunt, alleen bij de
+                                frameworks: daar is de context een opdracht in
+                                gewone taal, precies wat deze voorbeelden zijn.
+                                De losse technieken vragen om iets anders (een
+                                te controleren tekst, een rol, een rubric), dus
+                                een voorbeeldprompt zou daar niet passen. */}
+                            {isContextPrompt(technique) && (
+                              <PromptExamplePicker
+                                onPick={(prompt) => {
+                                  setContext(prompt);
+                                  requestAnimationFrame(() => {
+                                    const el = contextRef.current;
+                                    if (!el) return;
+                                    el.focus();
+                                    el.setSelectionRange(prompt.length, prompt.length);
+                                  });
+                                }}
+                              />
+                            )}
+                            {/* Met het oranje sterretje uit de chat erbij: wat de gebruiker in
+                                steekwoorden neerzet, staat hier vaak nog niet uitgeschreven,
+                                en juist deze tekst bepaalt wat de AI van de techniek maakt. */}
+                            <OptimizableTextarea
+                              id="techniek-context"
+                              ref={contextRef}
+                              rows={3}
+                              value={context}
+                              onValueChange={setContext}
+                              placeholder={contextExample(technique)}
+                              optimizeTitle="Schrijf mijn context uit met AI; je oorspronkelijke tekst kun je daarna terughalen"
                             />
-                          )}
-                          {/* Met het oranje sterretje uit de chat erbij: wat de gebruiker in
-                              steekwoorden neerzet, staat hier vaak nog niet uitgeschreven,
-                              en juist deze tekst bepaalt wat de AI van de techniek maakt. */}
-                          <OptimizableTextarea
-                            id="techniek-context"
-                            ref={contextRef}
-                            rows={3}
-                            value={context}
-                            onValueChange={setContext}
-                            placeholder={contextExample(technique)}
-                            className="opl-input min-h-[5.5rem] resize-y px-4 py-3 text-[0.9375rem] leading-relaxed"
-                            optimizeTitle="Schrijf mijn context uit met AI; je oorspronkelijke tekst kun je daarna terughalen"
-                          />
-                          <div className="mt-2 flex flex-wrap justify-end gap-2">
-                            {usesQuestionnaire ? (
-                              <button
-                                type="button"
-                                className="opl-btn-secondary"
-                                title="Vervangt de huidige antwoorden door een voorstel van de AI"
+                            <nldd-container>
+                              {usesQuestionnaire ? (
                                 // Zolang er een voor-invulling loopt geen tweede starten: elke
                                 // klik was een extra aanroep, en de laatste die klaar was
                                 // overschreef de velden, ook als die niets opleverde.
-                                disabled={prefilling || !context.trim()}
-                                onClick={() => void runPrefill(technique, context.trim())}
-                              >
-                                <Sparkles size={16} />{' '}
-                                {Object.keys(answers).length > 0
-                                  ? 'Velden opnieuw voorinvullen'
-                                  : 'Velden voorinvullen'}
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                className={isInterview ? 'opl-btn-primary' : 'opl-btn-secondary'}
-                                onClick={() => setEditingContext(false)}
-                              >
-                                {isInterview ? 'Start het gesprek' : 'Klaar'}
-                              </button>
-                            )}
-                          </div>
-                        </>
-                      ) : (
-                        <div className="flex items-start justify-between gap-3">
-                          <p className="text-sm text-slate-600 dark:text-slate-300">
-                            {context.trim() ? (
-                              <>
-                                <span className="font-medium text-slate-700 dark:text-slate-200">
-                                  Context:
-                                </span>{' '}
-                                {context.trim()}
-                              </>
-                            ) : (
-                              'Waar gaat het over? Mag leeg blijven.'
-                            )}
-                          </p>
-                          <button
-                            type="button"
-                            className="shrink-0 text-sm font-medium text-rijksblauw-600 transition-colors hover:text-rijksblauw-700 hover:underline dark:text-rijksblauw-300 dark:hover:text-rijksblauw-200"
-                            onClick={() => setEditingContext(true)}
-                          >
-                            {context.trim() ? 'Aanpassen' : 'Toevoegen'}
-                          </button>
-                        </div>
-                      )}
-                    </section>
+                                <nldd-button
+                                  appearance="secondary"
+                                  start-icon="sparkles"
+                                  text={
+                                    Object.keys(answers).length > 0
+                                      ? 'Velden opnieuw voorinvullen'
+                                      : 'Velden voorinvullen'
+                                  }
+                                  supporting-text={
+                                    Object.keys(answers).length > 0
+                                      ? 'Vervangt de huidige antwoorden'
+                                      : undefined
+                                  }
+                                  loading={prefilling || undefined}
+                                  disabled={!context.trim() || undefined}
+                                  onClick={() => void runPrefill(technique, context.trim())}
+                                ></nldd-button>
+                              ) : (
+                                <nldd-button
+                                  appearance="secondary"
+                                  text={isInterview ? 'Start het gesprek' : 'Klaar'}
+                                  onClick={() => setEditingContext(false)}
+                                ></nldd-button>
+                              )}
+                            </nldd-container>
+                          </>
+                        ) : (
+                          <nldd-container layout="row" gap="12" vertical-alignment="center">
+                            <nldd-text size="sm" color="secondary">
+                              {context.trim() ? (
+                                <>
+                                  <strong>Context:</strong> {context.trim()}
+                                </>
+                              ) : (
+                                'Waar gaat het over? Mag leeg blijven.'
+                              )}
+                            </nldd-text>
+                            <nldd-spacer size="flexible"></nldd-spacer>
+                            <nldd-button
+                              size="sm"
+                              appearance="neutral-transparent"
+                              text={context.trim() ? 'Aanpassen' : 'Toevoegen'}
+                              onClick={() => setEditingContext(true)}
+                            ></nldd-button>
+                          </nldd-container>
+                        )}
+                      </nldd-container>
+                    </>
                   );
                 })()}
 
                 {/* Gespecialiseerde bouwers per techniek; anders de vragenlijst.
                     De bouwer levert geserialiseerde input die bij het bouwen
                     van de prompt wordt meegewogen. */}
-                <section className="opl-card p-5">
-                {(() => {
-                  const fmt = structureFormat(technique);
-                  const s = settingsRef.current;
-                  if (fmt === 'persona' || fmt === 'multi-persona') {
-                    return (
-                      <PersonaBuilder
-                        multi={fmt === 'multi-persona'}
-                        settings={s}
-                        technique={technique}
-                        context={context}
-                        onSerialized={setBuilderText}
-                      />
-                    );
-                  }
-                  if (fmt === 'few-shot') {
-                    return <FewShotBuilder settings={s} onSerialized={setBuilderText} />;
-                  }
-                  if (fmt === 'meta') {
-                    return <MetaBuilder settings={s} goal={context} onSerialized={setBuilderText} />;
-                  }
-                  // De drie rijksspecifieke technieken: elk een eigen bouwer die
-                  // precies ophaalt waar die techniek op staat of valt (zie de
-                  // koptekst van elk bestand).
-                  if (fmt === 'chain-of-verification') {
-                    return (
-                      <VerificationBuilder
-                        settings={s}
-                        context={context}
-                        onSerialized={setBuilderText}
-                      />
-                    );
-                  }
-                  if (fmt === 'step-back') {
-                    return (
-                      <StepBackBuilder settings={s} context={context} onSerialized={setBuilderText} />
-                    );
-                  }
-                  if (fmt === 'rubric') {
-                    return (
-                      <RubricBuilder settings={s} context={context} onSerialized={setBuilderText} />
-                    );
-                  }
-                  if (fmt === 'skill') {
-                    return (
-                      <SkillBuilder
-                        settings={s}
-                        context={context}
-                        onSerialized={setBuilderText}
-                        onChange={setSkillData}
-                      />
-                    );
-                  }
-                  // Chain-of-Thought / Socratic: het vraag-na-vraag-interview.
-                  // De conclusie voedt het bouwen van de prompt. Het gesprek
-                  // start pas als het contextveld dicht is — anders stelt de AI
-                  // zijn eerste vraag terwijl de gebruiker nog context typt.
-                  if (fmt === 'chain-of-thought' || fmt === 'socratic') {
-                    return (
-                      <>
-                        <StepHeading step={2} title="Het gesprek" />
-                        {editingContext ? (
-                          <p className="rounded-lg border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-600 dark:text-slate-400">
-                            Het gesprek begint zodra je hierboven op &quot;Start het gesprek&quot;
-                            klikt.
-                          </p>
-                        ) : (
-                          <InterviewFlow
-                            technique={technique}
+                <>
+                  <nldd-container>
+                    {(() => {
+                      const fmt = structureFormat(technique);
+                      const s = settingsRef.current;
+                      if (fmt === 'persona' || fmt === 'multi-persona') {
+                        return (
+                          <PersonaBuilder
+                            multi={fmt === 'multi-persona'}
                             settings={s}
-                            goal={context}
-                            onComplete={setBuilderText}
+                            technique={technique}
+                            context={context}
+                            onSerialized={setBuilderText}
                           />
-                        )}
-                      </>
-                    );
-                  }
-                  // Sjabloon: de velden pas na de contextstap, zodat de gebruiker
-                  // niet meteen in het eerste veld begint.
-                  if (sjabloonMode && editingContext) {
-                    return (
-                      <>
-                        <StepHeading step={2} title="Vul de velden in" />
-                        <p className="rounded-lg border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-600 dark:text-slate-400">
-                          De velden van het sjabloon verschijnen zodra je hierboven op Klaar klikt.
-                        </p>
-                      </>
-                    );
-                  }
-                  // Template-based: upload-zone (document → velden voor-invullen)
-                  // bovenop de vragenlijst; anders alleen de vragenlijst.
-                  return (
-                    <div className="space-y-4">
-                      {fmt === 'template-based' && (
-                        <DocumentUpload
-                          onPrefill={(text) => prefillFromStructure(text, 'document')}
-                          onDescribe={(brief) => prefillFromStructure(brief, 'brief')}
-                          disabled={prefilling}
-                        />
-                      )}
-                      {sjabloonMode && (
-                        <div className="flex items-start gap-2 rounded-lg border border-rijksblauw-200 bg-rijksblauw-50/60 px-3 py-2.5 text-sm text-slate-700 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10 dark:text-slate-200">
-                          {aanvullingen === null ? (
-                            <Loader2 size={16} className="mt-0.5 shrink-0 animate-spin text-rijksblauw-500" />
-                          ) : (
-                            <Check size={16} className="mt-0.5 shrink-0 text-rijksblauw-500" />
+                        );
+                      }
+                      if (fmt === 'few-shot') {
+                        return <FewShotBuilder settings={s} onSerialized={setBuilderText} />;
+                      }
+                      if (fmt === 'meta') {
+                        return <MetaBuilder settings={s} goal={context} onSerialized={setBuilderText} />;
+                      }
+                      // De drie rijksspecifieke technieken: elk een eigen bouwer die
+                      // precies ophaalt waar die techniek op staat of valt (zie de
+                      // koptekst van elk bestand).
+                      if (fmt === 'chain-of-verification') {
+                        return (
+                          <VerificationBuilder settings={s} context={context} onSerialized={setBuilderText} />
+                        );
+                      }
+                      if (fmt === 'step-back') {
+                        return <StepBackBuilder settings={s} context={context} onSerialized={setBuilderText} />;
+                      }
+                      if (fmt === 'rubric') {
+                        return <RubricBuilder settings={s} context={context} onSerialized={setBuilderText} />;
+                      }
+                      if (fmt === 'skill') {
+                        return (
+                          <SkillBuilder
+                            settings={s}
+                            context={context}
+                            onSerialized={setBuilderText}
+                            onChange={setSkillData}
+                          />
+                        );
+                      }
+                      // Chain-of-Thought / Socratic: het vraag-na-vraag-interview.
+                      // De conclusie voedt het bouwen van de prompt. Het gesprek
+                      // start pas als het contextveld dicht is, anders stelt de AI
+                      // zijn eerste vraag terwijl de gebruiker nog context typt.
+                      if (fmt === 'chain-of-thought' || fmt === 'socratic') {
+                        return (
+                          <nldd-container gap="12">
+                            <StepHeading step={2} title="Het gesprek" />
+                            {editingContext ? (
+                              <nldd-inline-dialog
+                                icon="comment"
+                                text="Het gesprek begint zodra je hierboven op Start het gesprek klikt."
+                              ></nldd-inline-dialog>
+                            ) : (
+                              <InterviewFlow
+                                technique={technique}
+                                settings={s}
+                                goal={context}
+                                onComplete={setBuilderText}
+                              />
+                            )}
+                          </nldd-container>
+                        );
+                      }
+                      // Sjabloon: de velden pas na de contextstap, zodat de gebruiker
+                      // niet meteen in het eerste veld begint.
+                      if (sjabloonMode && editingContext) {
+                        return (
+                          <nldd-container gap="12">
+                            <StepHeading step={2} title="Vul de velden in" />
+                            <nldd-inline-dialog
+                              icon="text-document"
+                              text="De velden van het sjabloon verschijnen zodra je hierboven op Klaar klikt."
+                            ></nldd-inline-dialog>
+                          </nldd-container>
+                        );
+                      }
+                      // Template-based: upload-zone (document → velden voor-invullen)
+                      // bovenop de vragenlijst; anders alleen de vragenlijst.
+                      return (
+                        <nldd-container gap="16">
+                          {fmt === 'template-based' && (
+                            <DocumentUpload
+                              onPrefill={(text) => prefillFromStructure(text, 'document')}
+                              onDescribe={(brief) => prefillFromStructure(brief, 'brief')}
+                              disabled={prefilling}
+                            />
                           )}
-                          <p>
-                            Je antwoorden staan ongewijzigd in de velden.{' '}
-                            {aanvullingen === null
-                              ? 'De AI kijkt nog of er per veld iets aan te vullen is.'
-                              : Object.keys(aanvullingen).length > 0
-                                ? `De AI stelt bij ${Object.keys(aanvullingen).length} ${
-                                    Object.keys(aanvullingen).length === 1 ? 'veld' : 'velden'
-                                  } een aanvulling voor; die staat oranje onder het veld. Voeg toe wat klopt, de rest verwerp je.`
-                                : 'De AI had niets aan te vullen.'}
-                          </p>
-                        </div>
-                      )}
-                      <FollowUpQuestions
-                        technique={technique}
-                        answers={answers}
-                        onChange={setAnswers}
-                        aanvullingen={sjabloonMode ? (aanvullingen ?? undefined) : undefined}
-                        onAanvulling={sjabloonMode ? handleAanvulling : undefined}
-                        fieldMeta={fieldMeta}
-                        onUserEdit={handleFieldEdit}
-                        prefilling={prefilling}
-                        preferredProvider={settingsRef.current.provider}
-                        preferredModel={settingsRef.current.model}
-                        heading={<StepHeading step={2} title="Vul de velden in" />}
-                      />
-                    </div>
-                  );
-                })()}
-                </section>
-            </div>
-          )}
+                          {sjabloonMode && (
+                            <nldd-banner
+                              variant="accent"
+                              size="sm"
+                              icon={aanvullingen === null ? 'clock' : 'check-mark'}
+                              text="Je antwoorden staan ongewijzigd in de velden."
+                              supporting-text={
+                                aanvullingen === null
+                                  ? 'De AI kijkt nog of er per veld iets aan te vullen is.'
+                                  : Object.keys(aanvullingen).length > 0
+                                    ? `De AI stelt bij ${Object.keys(aanvullingen).length} ${
+                                        Object.keys(aanvullingen).length === 1 ? 'veld' : 'velden'
+                                      } een aanvulling voor; die staat onder het veld. Voeg toe wat klopt, de rest verwerp je.`
+                                    : 'De AI had niets aan te vullen.'
+                              }
+                            ></nldd-banner>
+                          )}
+                          <FollowUpQuestions
+                            technique={technique}
+                            answers={answers}
+                            onChange={setAnswers}
+                            aanvullingen={sjabloonMode ? (aanvullingen ?? undefined) : undefined}
+                            onAanvulling={sjabloonMode ? handleAanvulling : undefined}
+                            fieldMeta={fieldMeta}
+                            onUserEdit={handleFieldEdit}
+                            prefilling={prefilling}
+                            preferredProvider={settingsRef.current.provider}
+                            preferredModel={settingsRef.current.model}
+                            heading={<StepHeading step={2} title="Vul de velden in" />}
+                          />
+                        </nldd-container>
+                      );
+                    })()}
+                  </nldd-container>
+                </>
+              </nldd-container>
+            )}
 
-          {/* Denken, zoeken en bouwen op één regel, voor elke techniek. */}
-          {!optimizing && technique && (
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <ThinkingToggle
-                value={thinking}
-                onChange={setThinking}
-                unavailableReason={thinkingUnavailable}
-              />
-              {searchAvailable && <WebSearchToggle value={webSearch} onChange={setWebSearch} />}
-              <button className="opl-btn-primary px-6 py-2.5" onClick={handleGenerate}>
-                <Sparkles size={18} />{' '}
-                {structureFormat(technique) === 'skill' ? 'Bouw skill' : 'Bouw prompt'}
-              </button>
-            </div>
-          )}
+            {/* Denken, zoeken en bouwen op één regel, voor elke techniek. */}
+            {!optimizing && technique && (
+              <nldd-container layout="wrap" gap="8" vertical-alignment="center">
+                <nldd-button
+                  appearance="primary"
+                  start-icon="sparkles"
+                  text={structureFormat(technique) === 'skill' ? 'Bouw skill' : 'Bouw prompt'}
+                  onClick={handleGenerate}
+                ></nldd-button>
+                <ThinkingToggle value={thinking} onChange={setThinking} unavailableReason={thinkingUnavailable} />
+                {searchAvailable && <WebSearchToggle value={webSearch} onChange={setWebSearch} />}
+              </nldd-container>
+            )}
 
-          {optimizing && (
-            <div ref={optimizingRef} className="scroll-mt-24">
-              <OptimizingLoader
-                techniqueName={technique?.name}
-                streamText={streamText}
-                phase={genProgress.phase}
-                models={genProgress.models}
-                winner={genProgress.provider ?? null}
-              />
-            </div>
-          )}
-        </div>
-      )}
+            {optimizing && (
+              <nldd-container ref={optimizingRef}>
+                <OptimizingLoader
+                  techniqueName={technique?.name}
+                  streamText={streamText}
+                  phase={genProgress.phase}
+                  models={genProgress.models}
+                  winner={genProgress.provider ?? null}
+                />
+              </nldd-container>
+            )}
+          </nldd-container>
+        )}
 
-      {guardrailFindings && (
-        <GuardrailDialog
-          findings={guardrailFindings}
-          piiWarning={settingsRef.current.pii.warning}
-          onConfirm={() => void runGenerate()}
-          onCancel={() => setGuardrailFindings(null)}
-        />
-      )}
-    </div>
+        {guardrailFindings && (
+          <GuardrailDialog
+            findings={guardrailFindings}
+            piiWarning={settingsRef.current.pii.warning}
+            onConfirm={() => void runGenerate()}
+            onCancel={() => setGuardrailFindings(null)}
+          />
+        )}
+      </nldd-container>
+    </nldd-simple-section>
   );
 }
 

@@ -1,57 +1,66 @@
-import { useEffect, useRef } from 'react';
-import { Check, Loader2, RotateCcw } from '@/components/common/icons';
-import clsx from 'clsx';
+import { useEffect, useRef, type RefObject } from 'react';
 import type { ProjectInterviewStep } from '@/services/projectPromptService';
-import { submitOnEnter } from './usePromptInterview';
+import { useNlddEvent, useNlddValue } from '@/lib/nldd';
+
+/**
+ * Enter submits, Shift+Enter starts a new line. The keydown of the textarea inside
+ * an nldd field is composed, so it reaches a listener on the field itself.
+ */
+export function useSubmitOnEnter(ref: RefObject<HTMLElement | null>, submit: () => void) {
+  useNlddEvent<KeyboardEvent>(ref, 'keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+      e.preventDefault();
+      submit();
+    }
+  });
+}
 
 /** De balk met stappen boven in "Prompt maken" en het projectvenster. */
 export function WizardSteps({ labels, current }: { labels: string[]; current: number }) {
   return (
-    <ol
-      className="mb-5 grid gap-2"
-      style={{ gridTemplateColumns: `repeat(${labels.length}, minmax(0, 1fr))` }}
-      aria-label="Stappen"
-    >
-      {labels.map((label, i) => (
-        <li
-          key={label}
-          aria-current={i === current ? 'step' : undefined}
-          className={clsx(
-            'border-t-4 pt-1 text-sm font-semibold transition-colors',
-            i <= current
-              ? 'border-rijksblauw-700 text-rijksblauw-700 dark:border-rijksblauw-400 dark:text-rijksblauw-200'
-              : 'border-slate-200 text-slate-500 dark:border-slate-700 dark:text-slate-400',
-          )}
-        >
-          {label}
-        </li>
-      ))}
-    </ol>
+    <>
+      <nldd-step-bar accessible-label="Stappen">
+        {labels.map((label, i) => (
+          <nldd-step-bar-item
+            key={label}
+            text={label}
+            status={i === current ? 'current' : undefined}
+          ></nldd-step-bar-item>
+        ))}
+      </nldd-step-bar>
+      <nldd-spacer size="20"></nldd-spacer>
+    </>
   );
 }
 
 export function WizardError({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
-    <div
-      role="alert"
-      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200"
-    >
-      {message}
-      <button type="button" className="opl-btn-secondary !px-3 !py-1.5" onClick={onRetry}>
-        <RotateCcw size={14} /> Opnieuw
-      </button>
-    </div>
+    <nldd-banner variant="critical" size="sm" text={message}>
+      <nldd-button slot="actions" appearance="secondary" start-icon="refresh" text="Opnieuw" onClick={onRetry}></nldd-button>
+    </nldd-banner>
   );
 }
 
 export function WizardWaiting({ label }: { label: string }) {
   return (
-    <p
-      role="status"
-      className="flex items-center justify-center gap-2 py-14 text-base font-semibold text-rijksblauw-700 dark:text-rijksblauw-200"
-    >
-      <Loader2 size={20} className="animate-spin" /> {label}
-    </p>
+    <nldd-container padding-block="48">
+      <nldd-inline-dialog variant="loading" text={label}></nldd-inline-dialog>
+    </nldd-container>
+  );
+}
+
+/** One answer option of the interview: a checkbox row, the whole row is the control. */
+function OptionRow({ optie, on, onToggle }: { optie: string; on: boolean; onToggle: () => void }) {
+  const ref = useRef<HTMLElement>(null);
+  useNlddEvent(ref, 'change', () => onToggle());
+  return (
+    <nldd-list-item ref={ref} checkbox checked={on || undefined}>
+      <nldd-cell>
+        <nldd-checkbox decorative checked={on || undefined}></nldd-checkbox>
+      </nldd-cell>
+      <nldd-spacer-cell size="12"></nldd-spacer-cell>
+      <nldd-text-cell text={optie}></nldd-text-cell>
+    </nldd-list-item>
   );
 }
 
@@ -73,77 +82,52 @@ export function InterviewQuestion({
   onAnswer: (text: string) => void;
   onSubmit: () => void;
 }) {
-  const headingRef = useRef<HTMLHeadingElement>(null);
+  const headingRef = useRef<HTMLElement>(null);
+  const fieldRef = useRef<HTMLElement & { value?: string }>(null);
+  useNlddValue(fieldRef, answer, onAnswer);
+  useSubmitOnEnter(fieldRef, onSubmit);
 
-  // Een nieuwe vraag krijgt de focus, zodat een schermlezer hem meteen voorleest.
+  // A new question takes focus, so a screen reader reads it out at once.
   useEffect(() => {
     headingRef.current?.focus();
   }, [question]);
 
   return (
-    <div className="animate-fade-in space-y-4">
+    <nldd-container gap="16">
       {question.begrip && (
-        <p className="rounded-lg bg-rijksblauw-50 px-3 py-2 text-sm text-slate-800 dark:bg-rijksblauw-500/15 dark:text-slate-100">
-          {question.begrip}
-        </p>
+        <nldd-box background="accent-tinted">
+          <nldd-container padding="12">
+            <nldd-text size="sm">{question.begrip}</nldd-text>
+          </nldd-container>
+        </nldd-box>
       )}
-      <div>
-        <p className="mb-1 text-sm font-semibold text-slate-600 dark:text-slate-400">
-          Vraag {number}
-          {question.max ? ` van ${question.max}` : ''}
-        </p>
-        <h3
-          ref={headingRef}
-          tabIndex={-1}
-          className="text-lg font-bold text-rijksblauw-700 focus:outline-none dark:text-rijksblauw-200"
-        >
-          {question.vraag}
-        </h3>
-      </div>
+      <nldd-title
+        ref={headingRef}
+        tabIndex={-1}
+        heading-level={3}
+        size={4}
+        overline={`Vraag ${number}${question.max ? ` van ${question.max}` : ''}`}
+        text={question.vraag}
+      ></nldd-title>
       {(question.opties?.length ?? 0) > 0 && (
-        <div className="space-y-2">
-          {question.opties?.map((optie) => {
-            const on = picked.includes(optie);
-            return (
-              <button
-                key={optie}
-                type="button"
-                aria-pressed={on}
-                onClick={() => onTogglePick(optie)}
-                className={clsx(
-                  'flex min-h-[2.75rem] w-full items-center gap-3 rounded-xl border px-3 py-2 text-left text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500',
-                  on
-                    ? 'border-rijksblauw-700 bg-rijksblauw-50 text-slate-900 dark:border-rijksblauw-300 dark:bg-rijksblauw-500/20 dark:text-white'
-                    : 'border-slate-200 text-slate-800 hover:border-rijksblauw-500 hover:bg-rijksblauw-50 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-rijksblauw-500/15',
-                )}
-              >
-                <span
-                  aria-hidden="true"
-                  className={clsx(
-                    'flex h-5 w-5 shrink-0 items-center justify-center rounded border',
-                    on
-                      ? 'border-rijksblauw-700 bg-rijksblauw-700 text-white dark:border-rijksblauw-300 dark:bg-rijksblauw-500'
-                      : 'border-slate-400 dark:border-slate-500',
-                  )}
-                >
-                  {on && <Check size={14} />}
-                </span>
-                {optie}
-              </button>
-            );
-          })}
-        </div>
+        <nldd-list appearance="box-tinted" accessible-label={question.vraag}>
+          {question.opties?.map((optie) => (
+            <OptionRow
+              key={optie}
+              optie={optie}
+              on={picked.includes(optie)}
+              onToggle={() => onTogglePick(optie)}
+            />
+          ))}
+        </nldd-list>
       )}
-      <textarea
+      <nldd-multi-line-text-field
+        ref={fieldRef}
         rows={2}
-        aria-label="Typ er iets bij"
+        accessible-label="Typ er iets bij"
         placeholder="Typ er iets bij"
-        maxLength={2000}
-        className="opl-input resize-y"
-        value={answer}
-        onChange={(e) => onAnswer(e.target.value)}
-        onKeyDown={submitOnEnter(onSubmit)}
-      />
-    </div>
+        maxlength="2000"
+      ></nldd-multi-line-text-field>
+    </nldd-container>
   );
 }

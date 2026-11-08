@@ -47,23 +47,26 @@ export type PromptCategoryId =
 
 export interface PromptCategory {
   label: string;
+  /** Lucide component, still used by callers that are not on nldd yet. */
   icon: LucideIcon;
+  /** Name of the nldd icon (`<nldd-icon icon=...>`). */
+  iconName: string;
 }
 
 export const PROMPT_CATEGORIES: Record<PromptCategoryId, PromptCategory> = {
-  samenvatten: { label: 'Samenvatten & analyseren', icon: FileText },
-  begrijpelijk: { label: 'Begrijpelijke taal', icon: Languages },
-  burgercontact: { label: 'Contact met burgers', icon: Mail },
-  bestuurlijk: { label: 'Bestuurlijk & politiek', icon: Landmark },
-  beleid: { label: 'Beleid & regelgeving', icon: Compass },
-  europa: { label: 'Europa & internationaal', icon: Globe },
-  openbaarheid: { label: 'Openbaarheid & Woo', icon: FileSearch },
-  toezicht: { label: 'Toezicht & handhaving', icon: ShieldAlert },
-  communicatie: { label: 'Communicatie & voorlichting', icon: Megaphone },
-  onderzoek: { label: 'Kennis & onderzoek', icon: BookOpen },
-  overleg: { label: 'Overleg & verslag', icon: ListChecks },
-  privacy: { label: 'Privacy & AVG', icon: Lock },
-  inkoop: { label: 'Bedrijfsvoering & inkoop', icon: Briefcase },
-  data: { label: 'Data & dashboards', icon: BarChart3 },
-  digitaal: { label: 'Digitaal & ICT', icon: CodeXml },
+  samenvatten: { label: 'Samenvatten & analyseren', icon: FileText, iconName: 'file-text' },
+  begrijpelijk: { label: 'Begrijpelijke taal', icon: Languages, iconName: 'languages' },
+  burgercontact: { label: 'Contact met burgers', icon: Mail, iconName: 'envelope' },
+  bestuurlijk: { label: 'Bestuurlijk & politiek', icon: Landmark, iconName: 'building' },
+  beleid: { label: 'Beleid & regelgeving', icon: Compass, iconName: 'signpost' },
+  europa: { label: 'Europa & internationaal', icon: Globe, iconName: 'globe' },
+  openbaarheid: { label: 'Openbaarheid & Woo', icon: FileSearch, iconName: 'search' },
+  toezicht: { label: 'Toezicht & handhaving', icon: ShieldAlert, iconName: 'shield' },
+  communicatie: { label: 'Communicatie & voorlichting', icon: Megaphone, iconName: 'megaphone' },
+  onderzoek: { label: 'Kennis & onderzoek', icon: BookOpen, iconName: 'book' },
+  overleg: { label: 'Overleg & verslag', icon: ListChecks, iconName: 'check-list' },
+  privacy: { label: 'Privacy & AVG', icon: Lock, iconName: 'lock' },
+  inkoop: { label: 'Bedrijfsvoering & inkoop', icon: Briefcase, iconName: 'business-suitcase' },
+  data: { label: 'Data & dashboards', icon: BarChart3, iconName: 'bar-chart' },
+  digitaal: { label: 'Digitaal & ICT', icon: CodeXml, iconName: 'code' },
 };

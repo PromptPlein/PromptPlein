@@ -1,12 +1,8 @@
-// Heldachtergrond zonder WebGL: een vlak lintblauw. De stijl staat in index.css
-// (.hero-sweep).
-// Decoratief: pointer-events staat uit en het blok is verborgen voor schermlezers.
-
-export default function LightSweepBackground({ className = '' }: { className?: string }) {
-  return (
-    <div
-      className={`hero-sweep pointer-events-none absolute inset-0 overflow-hidden ${className}`}
-      aria-hidden="true"
-    />
-  );
+/**
+ * Formerly a decorative lintblauw band. The design system (0.18.0) has no
+ * decorative background surface and a fixed layer behind the page needs CSS of
+ * its own, so this renders nothing. Nothing functional depends on it.
+ */
+export default function LightSweepBackground(_props: { className?: string }) {
+  return null;
 }

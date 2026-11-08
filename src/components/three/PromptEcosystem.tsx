@@ -5,7 +5,7 @@ import { OrbitControls, Billboard, Text } from '@react-three/drei';
 import * as THREE from 'three';
 import type { Category, Prompt } from '@/types';
 import { useTheme } from '@/context/ThemeContext';
-import { ecosystemPalette } from '@/config/brandColors';
+import { ecosystemPalette, readToken } from '@/config/brandColors';
 
 const PALETTE = ecosystemPalette;
 
@@ -39,7 +39,7 @@ function buildClusters(prompts: Prompt[], categories: Category[]): Cluster[] {
   });
 }
 
-/** Deterministische positie van een prompt rond zijn clustercentrum. */
+/** Deterministic position of a prompt around the center of its cluster. */
 function satellitePosition(center: THREE.Vector3, index: number, count: number): THREE.Vector3 {
   const golden = Math.PI * (3 - Math.sqrt(5));
   const y = count > 1 ? 1 - (index / (count - 1)) * 2 : 0; // -1..1
@@ -138,18 +138,22 @@ export default function PromptEcosystem({
   categories: Category[];
 }) {
   const { resolvedTheme } = useTheme();
-  const dark = resolvedTheme === 'dark';
-  const bg = dark ? '#0b1220' : '#f8fafc';
-  const labelColor = dark ? '#e2e8f0' : '#1f2937';
-  const outline = dark ? '#0b1220' : '#ffffff';
+  const scheme = resolvedTheme === 'dark' ? 'dark' : 'light';
+  // The scene follows the theme: the tokens resolve in the scheme ThemeContext
+  // reports, so a switch re-reads them on the next render.
+  const colors = useMemo(
+    () => ({
+      bg: readToken('--semantics-surfaces-tinted-background-color', scheme),
+      labelColor: readToken('--semantics-content-color', scheme),
+      outline: readToken('--semantics-surfaces-base-background-color', scheme),
+    }),
+    [scheme],
+  );
+  const { bg, labelColor, outline } = colors;
 
   const clusters = useMemo(() => buildClusters(prompts, categories), [prompts, categories]);
   if (prompts.length === 0) {
-    return (
-      <div className="flex h-full items-center justify-center text-sm text-slate-400 dark:text-slate-500">
-        Nog geen prompts om te tonen.
-      </div>
-    );
+    return <nldd-inline-dialog icon="info-circle" text="Nog geen prompts om te tonen."></nldd-inline-dialog>;
   }
   return (
     <Canvas

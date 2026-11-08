@@ -1,16 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { ProjectContextSlot } from '@/components/optimizer/ProjectContextPicker';
-import {
-  AlertTriangle,
-  Check,
-  ClipboardCopy,
-  Eraser,
-  Lightbulb,
-  MessageCircleQuestion,
-  RotateCw,
-  Sparkles,
-  Wand2,
-} from '@/components/common/icons';
+import { useNlddValue } from '@/lib/nldd';
 import StepHeading from '@/components/optimizer/StepHeading';
 import AanpakKaart, { type AanpakOptie } from '@/components/optimizer/AanpakKaart';
 import MakeProgress from '@/components/optimizer/MakeProgress';
@@ -31,7 +21,6 @@ import { usePersistentDraft } from '@/lib/usePersistentDraft';
 import { detectPii, detectBlockedTopics, type GuardrailFinding } from '@/services/guardrails';
 import { logBehavior, newBehaviorSession, type BehaviorSession } from '@/services/behaviorService';
 import { useAuth } from '@/context/AuthContext';
-import HoverPreview from '@/components/common/HoverPreview';
 import { GOAL_EXAMPLES, categoryOf } from '@/data/goalExamples';
 import { overheidsContext, type AiSettings } from '@/services/settingsService';
 import OptimizingLoader from './OptimizingLoader';
@@ -151,7 +140,7 @@ type Phase = 'goal' | 'dialogue' | 'framework' | 'fields' | 'composing' | 'done'
 
 /**
  * De doel-flow: "Bouw een prompt rond je doel". De gebruiker beschrijft in eigen
- * woorden wat die wil bereiken en gaat daarna direct het gesprek in — de AI
+ * woorden wat die wil bereiken en gaat daarna direct het gesprek in, de AI
  * redeneert stap voor stap mee en stelt één vraag per keer, tot het beeld
  * compleet is. Er wordt bewust géén plan vooraf getoond en geen techniek bij naam
  * genoemd: de gebruiker praat over zijn vraagstuk, niet over prompt-methodes.
@@ -159,7 +148,7 @@ type Phase = 'goal' | 'dialogue' | 'framework' | 'fields' | 'composing' | 'done'
  * Pas ná het gesprek volgt de analyse: uit de opdrachtbeschrijving én de
  * antwoorden over gebruik (chat, zelfstandige assistent of programma) en vorm
  * (tekst, code, beeld, …) bepaalt de AI welk framework past. De gebruiker kiest
- * daaruit — of pakt zelf een ander framework — en dán pas wordt de prompt gebouwd.
+ * daaruit, of pakt zelf een ander framework, en dán pas wordt de prompt gebouwd.
  */
 export default function GoalDialog({
   settings,
@@ -251,14 +240,14 @@ export default function GoalDialog({
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [fieldMeta, setFieldMeta] = useState<FieldMeta>({});
 
-  // Een bij het laden gevonden, niet-afgemaakt gesprek — aangeboden om te hervatten.
+  // Een bij het laden gevonden, niet-afgemaakt gesprek, aangeboden om te hervatten.
   const [resumable, setResumable] = useState<PersistedRun | null>(null);
 
   // Het laadscherm tijdens het bouwen van de prompt; wordt in beeld gescrold
   // zodra "Bouw mijn prompt" is geklikt.
-  const composingRef = useRef<HTMLDivElement>(null);
+  const composingRef = useRef<HTMLElement>(null);
   // Het velden-blok; komt in beeld zodra er een framework is gekozen.
-  const fieldsRef = useRef<HTMLDivElement>(null);
+  const fieldsRef = useRef<HTMLElement>(null);
 
   const inputDisabled = phase !== 'goal';
 
@@ -603,7 +592,7 @@ export default function GoalDialog({
             p.fields.some((f) => f.id === field.id) ? p : { ...p, fields: [...p.fields, field] },
           ),
       });
-      // Onduidelijk is hier vrijwel uitgesloten — de tekst komt uit ons eigen
+      // Onduidelijk is hier vrijwel uitgesloten, de tekst komt uit ons eigen
       // gesprek. Gebeurt het toch, dan blijven de velden leeg en kan de
       // gebruiker ze zelf invullen; de flow loopt niet vast.
       if (res.unclear) {
@@ -717,7 +706,7 @@ export default function GoalDialog({
   function retry() {
     setError(null);
     setUnclearReason(null);
-    // Stonden de velden al klaar? Dan alleen het bouwen opnieuw proberen — de
+    // Stonden de velden al klaar? Dan alleen het bouwen opnieuw proberen, de
     // aanpassingen van de gebruiker gaan zo niet verloren.
     if (frameworkId && prefill) {
       void compose(frameworkId);
@@ -745,223 +734,165 @@ export default function GoalDialog({
   const chosenFramework = frameworkId ? techniqueById(frameworkId) : null;
 
   return (
-    <div className="space-y-4">
+    <nldd-container gap="16">
       {afterDialogue ? (
-        <section
-          aria-label="Jouw idee"
-          className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-1.5 dark:border-slate-700 dark:bg-slate-800"
-        >
-          <p className="min-w-0 flex-1 truncate text-slate-600 dark:text-slate-300">
-            <strong className="font-semibold text-slate-900 dark:text-slate-100">Jouw idee: </strong>
-            {goal}
-          </p>
-          <button
-            type="button"
-            onClick={handleClear}
-            disabled={phase === 'framework' || prefilling}
-            className="min-h-11 shrink-0 font-semibold text-rijksblauw-500 transition-colors hover:underline disabled:opacity-50 dark:text-rijksblauw-200"
-          >
-            Opnieuw beginnen
-          </button>
-        </section>
+        <nldd-box background="tinted">
+          <nldd-container padding-inline="16" padding-block="8" layout="row" gap="12" vertical-alignment="center">
+            <nldd-text color="secondary">
+              <strong>Jouw idee: </strong>
+              {goal}
+            </nldd-text>
+            <nldd-spacer size="flexible"></nldd-spacer>
+            <nldd-button
+              appearance="neutral-transparent"
+              text="Opnieuw beginnen"
+              disabled={phase === 'framework' || prefilling || undefined}
+              onClick={handleClear}
+            ></nldd-button>
+          </nldd-container>
+        </nldd-box>
       ) : (
-        <div>
+        <nldd-container gap="24">
           {header}
-          <section className="space-y-5 rounded-xl border border-slate-200 bg-white p-5 sm:rounded-t-none dark:border-slate-700 dark:bg-slate-800">
-            <div>
-              <StepHeading
-                title="Wat wil je bereiken?"
-                htmlFor="goal-dialog-input"
-                info="We stellen eerst een paar vragen. Daarna kiest de AI de aanpak en vult de velden voor je in."
-              >
-                <button
-                  type="button"
-                  onClick={() => setShowExamples((v) => !v)}
-                  aria-expanded={showExamples}
-                  aria-controls="goal-dialog-examples"
-                  title="Bekijk voorbeelden"
-                  className="inline-flex items-center gap-1.5 rounded-full px-1.5 py-0.5 text-sm font-medium text-rijksblauw-500 transition-colors hover:underline dark:text-rijksblauw-200"
+          <nldd-container gap="20">
+              <nldd-container gap="8">
+                <StepHeading
+                  title="Wat wil je bereiken?"
+                  htmlFor="goal-dialog-input"
+                  info="We stellen eerst een paar vragen. Daarna kiest de AI de aanpak en vult de velden voor je in."
                 >
-                  <Lightbulb size={16} className="text-rijksoranje" />
-                  <span>Voorbeelden</span>
-                </button>
-                {goal.trim() && (
-                  <button
-                    type="button"
-                    onClick={handleClear}
-                    title="Wis je doel en begin opnieuw"
-                    className="ml-auto inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-sm font-medium text-slate-700 transition-colors hover:underline dark:text-slate-200"
-                  >
-                    <Eraser size={15} />
-                    <span>Opschonen</span>
-                  </button>
-                )}
-              </StepHeading>
+                  <nldd-button
+                    size="sm"
+                    appearance="neutral-transparent"
+                    start-icon="lightbulb"
+                    text="Voorbeelden"
+                    expanded={showExamples || undefined}
+                    onClick={() => setShowExamples((v) => !v)}
+                  ></nldd-button>
+                  {goal.trim() && (
+                    <nldd-button
+                      size="sm"
+                      appearance="neutral-transparent"
+                      start-icon="trash"
+                      text="Opschonen"
+                      accessible-label="Opschonen: wis je doel en begin opnieuw"
+                      onClick={handleClear}
+                    ></nldd-button>
+                  )}
+                </StepHeading>
 
-              {showExamples && (
-                <div
-                  id="goal-dialog-examples"
-                  className="animate-fade-in mb-3 space-y-2 rounded-xl border border-rijksblauw-200 bg-rijksblauw-50/40 p-3 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10"
-                >
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Zo omschrijf je een doel. Achter elk voorbeeld zit de prompttechniek waar zo’n
-                    omschrijving op uitkomt. Klik om er één in te vullen.
-                  </p>
-                  {/* Zelfde kaartsjabloon als de voorbeeldprompts bij "Jouw eigen
-                      prompt": techniek, titel, één regel toelichting, en rechts
-                      kopiëren of gebruiken. De doelomschrijving zelf staat er niet
-                      onder — die zou de lijst onleesbaar lang maken; hij komt in
-                      het veld zodra je op "Gebruik" klikt. */}
-                  <div className="opl-scroll-slim max-h-[22rem] space-y-2 overflow-y-auto pr-1">
-                    {GOAL_EXAMPLES.map((ex) => {
-              const CategoryIcon = categoryOf(ex).icon;
-              return (
-                      <HoverPreview key={ex.title} label="Doelomschrijving" text={ex.goal}>
-                      <div className="group rounded-lg border border-slate-200 bg-white p-2.5 transition-colors hover:border-rijksblauw-300 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-rijksblauw-500/40">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <span className="inline-flex items-center gap-1 text-[0.6875rem] font-medium text-rijksblauw-600 dark:text-rijksblauw-300">
-                              <CategoryIcon size={12} className="shrink-0" />
-                              {categoryOf(ex).label}
-                            </span>
-                            <p className="mt-0.5 text-sm font-semibold text-slate-800 dark:text-slate-100">
-                              {ex.title}
-                            </p>
-                            <p className="text-xs text-slate-500 dark:text-slate-400">
-                              {ex.subtitle}
-                            </p>
-                          </div>
-                          <div className="flex shrink-0 gap-1">
-                            <button
-                              type="button"
+                {showExamples && (
+                  <nldd-container gap="8">
+                      <nldd-text size="sm" color="secondary">
+                        Zo omschrijf je een doel. Achter elk voorbeeld zit de prompttechniek waar zo’n
+                        omschrijving op uitkomt. Kies Gebruik om er één in te vullen.
+                      </nldd-text>
+                      {/* Zelfde opbouw als de voorbeeldprompts bij "Jouw eigen prompt":
+                          categorie, titel, één regel toelichting, en rechts kopiëren of
+                          gebruiken. De doelomschrijving zelf komt in het veld zodra je op
+                          "Gebruik" klikt. */}
+                      <nldd-list appearance="box-tinted" accessible-label="Voorbeelden van een doel">
+                        {GOAL_EXAMPLES.map((ex) => (
+                          <nldd-list-item key={ex.title}>
+                            <nldd-icon-cell icon={categoryOf(ex).iconName} size="20" color="accent"></nldd-icon-cell>
+                            <nldd-spacer-cell size="8"></nldd-spacer-cell>
+                            <nldd-text-cell supporting-text={ex.subtitle}>
+                              <strong>{ex.title}</strong>{' '}
+                              <nldd-tag size="sm" text={categoryOf(ex).label}></nldd-tag>
+                            </nldd-text-cell>
+                            <nldd-list-item-segment
+                              button
+                              accessible-label={`Kopieer voorbeeld ${ex.title}`}
                               onClick={() => void copyExample(ex.goal)}
-                              title="Kopieer voorbeeld"
-                              className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs text-slate-500 transition-colors hover:bg-slate-100 hover:text-rijksblauw-600 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-rijksblauw-300"
                             >
-                              <ClipboardCopy size={13} /> Kopieer
-                            </button>
-                            <button
-                              type="button"
+                              <nldd-icon-cell icon="copy" size="20" color="secondary"></nldd-icon-cell>
+                            </nldd-list-item-segment>
+                            <nldd-list-item-segment
+                              button
+                              accessible-label={`Gebruik voorbeeld ${ex.title}`}
                               onClick={() => {
                                 setGoal(ex.goal);
                                 setShowExamples(false);
                                 notify.success('Voorbeeld ingevuld.');
                               }}
-                              title="Gebruik dit voorbeeld in het invoerveld"
-                              className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-rijksblauw-600 transition-colors hover:bg-rijksblauw-50 dark:text-rijksblauw-300 dark:hover:bg-rijksblauw-500/15"
                             >
-                              <Wand2 size={13} /> Gebruik
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                      </HoverPreview>
-                    );
-                    })}
-                  </div>
-                </div>
+                              <nldd-text-cell width="fit-content" color="accent" text="Gebruik"></nldd-text-cell>
+                            </nldd-list-item-segment>
+                          </nldd-list-item>
+                        ))}
+                      </nldd-list>
+                  </nldd-container>
+                )}
+
+                {renderProjectContext?.({
+                  text: goal,
+                  stripMention: () => setGoal(goal.replace(/@$/, '')),
+                })}
+
+                <GoalInput value={goal} onChange={setGoal} disabled={inputDisabled} />
+                <VerantwoordGebruikHint text={goal} />
+
+                {/* Hervat-melding: er staat nog een niet-afgemaakt gesprek klaar. */}
+                {resumable && phase === 'goal' && (
+                  <nldd-banner
+                    variant="accent"
+                    size="sm"
+                    icon="arrow-clockwise"
+                    text={`Je hebt nog een lopend gesprek met ${resumable.transcript.length} beantwoorde vragen. Verder waar je gebleven was?`}
+                  >
+                    <nldd-button slot="actions" text="Hervatten" onClick={resumeRun}></nldd-button>
+                    <nldd-button slot="actions" text="Verwijder" onClick={discardRun}></nldd-button>
+                  </nldd-banner>
+                )}
+              </nldd-container>
+
+              {phase === 'goal' && (
+                <nldd-container layout="wrap" gap="6" vertical-alignment="center">
+                  <nldd-button
+                    appearance="primary"
+                    size="lg"
+                    start-icon="comment"
+                    text="Start het gesprek"
+                    onClick={handleStart}
+                  ></nldd-button>
+                  {toggles}
+                </nldd-container>
               )}
-
-              {renderProjectContext?.({
-                text: goal,
-                stripMention: () => setGoal(goal.replace(/@$/, '')),
-                className: 'mb-2',
-              })}
-
-              <textarea
-                id="goal-dialog-input"
-                className="opl-input min-h-[120px] resize-y"
-                value={goal}
-                disabled={inputDisabled}
-                placeholder="Bijv. er moet een projectplan geschreven worden voor de invoering van een nieuwe interne tool"
-                onChange={(e) => setGoal(e.target.value)}
-              />
-              <VerantwoordGebruikHint text={goal} />
-
-              {/* Hervat-melding: er staat nog een niet-afgemaakt gesprek klaar. */}
-              {resumable && phase === 'goal' && (
-                <div className="animate-fade-in mt-3 flex flex-col gap-3 rounded-xl border border-rijksblauw-200 bg-rijksblauw-50/50 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10">
-                  <div className="flex items-start gap-2 text-slate-600 dark:text-slate-300">
-                    <RotateCw size={16} className="mt-0.5 shrink-0 text-rijksblauw-500" />
-                    <span>
-                      Je hebt nog een lopend gesprek met {resumable.transcript.length} beantwoorde
-                      vragen. Verder waar je gebleven was?
-                    </span>
-                  </div>
-                  <div className="flex shrink-0 gap-2">
-                    <button type="button" className="opl-btn-secondary" onClick={discardRun}>
-                      Verwijder
-                    </button>
-                    <button type="button" className="opl-btn-primary" onClick={resumeRun}>
-                      Hervatten
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {phase === 'goal' && (
-              <div className="flex flex-wrap items-center justify-end gap-1.5">
-                {toggles}
-                <button
-                  type="button"
-                  className="opl-btn-primary min-h-12 px-5 text-base"
-                  onClick={handleStart}
-                  disabled={!goal.trim()}
-                >
-                  <MessageCircleQuestion size={20} className="text-rijksoranje-vast" /> Start het
-                  gesprek
-                </button>
-              </div>
-            )}
-          </section>
-        </div>
+          </nldd-container>
+        </nldd-container>
       )}
 
-        {/* Het gesprek, de keuze van de AI of het bouwen. */}
-        {showConversation && (
-          <div className="space-y-4">
-            {/* Wat we uit het gesprek haalden, om na te lezen en te bewaren. */}
-            {brief && phase !== 'dialogue' && <BriefSummary brief={brief} goal={goal} />}
+      {/* Het gesprek, de keuze van de AI of het bouwen. */}
+      {showConversation && (
+        <nldd-container gap="16">
+          {/* Wat we uit het gesprek haalden, om na te lezen en te bewaren. */}
+          {brief && phase !== 'dialogue' && <BriefSummary brief={brief} goal={goal} />}
 
-            {phase === 'error' ? (
-              <div className="flex flex-col gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 sm:flex-row sm:items-center sm:justify-between dark:border-rose-500/30 dark:bg-rose-500/15 dark:text-rose-200">
-                <span>{stripMarkdown(error ?? 'Het gesprek is mislukt.')}</span>
-                <button type="button" className="opl-btn-secondary shrink-0" onClick={retry}>
-                  Opnieuw proberen
-                </button>
-              </div>
-            ) : phase === 'composing' ? (
-              <div ref={composingRef} className="scroll-mt-24">
-                <OptimizingLoader
-                  techniqueName="je prompt"
-                  streamText={streamText}
-                  models={composeProgress.models}
-                  winner={composeProgress.provider}
-                  phase={composeProgress.phase}
-                />
-              </div>
-            ) : phase === 'done' ? (
-              <div className="flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50/50 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between dark:border-emerald-500/30 dark:bg-emerald-500/10">
-                <span className="flex items-start gap-2 text-emerald-800 dark:text-emerald-200">
-                  <Check size={16} className="mt-0.5 shrink-0" />
-                  Je prompt is klaar en staat hieronder.
-                </span>
-                <button type="button" className="opl-btn-secondary shrink-0" onClick={handleClear}>
-                  Begin opnieuw
-                </button>
-              </div>
-            ) : phase === 'fields' ? (
-              <div ref={fieldsRef} className="scroll-mt-24 space-y-4">
-                {prefilling ? (
-                  <>
-                  <MakeProgress
-                    stage="invullen"
-                    bron="Het gesprek"
-                    aanpak={chosenFramework?.name}
-                  />
-                  /* De AI verdeelt de opbrengst van het gesprek over de velden;
-                     die lopen één voor één vol terwijl de modellen werken. */
+          {phase === 'error' ? (
+            <nldd-banner variant="critical" size="sm" text={stripMarkdown(error ?? 'Het gesprek is mislukt.')}>
+              <nldd-button slot="actions" text="Opnieuw proberen" onClick={retry}></nldd-button>
+            </nldd-banner>
+          ) : phase === 'composing' ? (
+            <nldd-container ref={composingRef}>
+              <OptimizingLoader
+                techniqueName="je prompt"
+                streamText={streamText}
+                models={composeProgress.models}
+                winner={composeProgress.provider}
+                phase={composeProgress.phase}
+              />
+            </nldd-container>
+          ) : phase === 'done' ? (
+            <nldd-banner variant="success" size="sm" text="Je prompt is klaar en staat hieronder.">
+              <nldd-button slot="actions" text="Begin opnieuw" onClick={handleClear}></nldd-button>
+            </nldd-banner>
+          ) : phase === 'fields' ? (
+            <nldd-container ref={fieldsRef} gap="16">
+              {prefilling ? (
+                <>
+                  <MakeProgress stage="invullen" bron="Het gesprek" aanpak={chosenFramework?.name} />
+                  {/* De AI verdeelt de opbrengst van het gesprek over de velden; die
+                      lopen één voor één vol terwijl de modellen werken. */}
                   <PrefillLoader
                     plain
                     techniqueName={chosenFramework?.name}
@@ -979,48 +910,39 @@ export default function GoalDialog({
                     sources={prefillProgress.sources}
                     queries={prefillProgress.queries}
                   />
-                  </>
-                ) : chosenFramework ? (
-                  <div className="animate-fade-in space-y-4">
-                    <AanpakKaart
-                      technique={chosenFramework}
-                      reden={stripMarkdown(chosenFit?.value || chosenFit?.reason || '')}
-                      opties={aanpakOpties}
-                      onKies={(id) => void chooseFramework(id)}
-                      disabled={prefilling}
-                    />
-                    <div>
-                      {/* Kwam er niets terug (AI-dienst druk of niet bereikbaar), dan
-                          zeggen we dat in plaats van te melden dat alles is ingevuld
-                          terwijl het formulier leeg is. */}
-                      {prefill && prefill.fields.length === 0 ? (
-                        <div
-                          role="alert"
-                          className="mt-2 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-200"
-                        >
-                          <AlertTriangle size={18} className="mt-0.5 shrink-0" />
-                          <div className="min-w-0">
-                            <p className="font-medium">Voor-invullen is niet gelukt</p>
-                            <p className="mt-0.5 text-amber-700 dark:text-amber-300/90">
-                              De AI-dienst was even niet bereikbaar. Probeer het opnieuw, of vul de
-                              velden hieronder zelf in.
-                            </p>
-                            <button
-                              type="button"
-                              className="opl-btn-secondary mt-2"
-                              onClick={() => void chooseFramework(chosenFramework.id)}
-                              disabled={prefilling}
-                            >
-                              <RotateCw size={16} /> Opnieuw proberen
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        prefill && <PrefillSources prefill={prefill} />
-                      )}
-                    </div>
+                </>
+              ) : chosenFramework ? (
+                <nldd-container gap="16">
+                  <AanpakKaart
+                    technique={chosenFramework}
+                    reden={stripMarkdown(chosenFit?.value || chosenFit?.reason || '')}
+                    opties={aanpakOpties}
+                    onKies={(id) => void chooseFramework(id)}
+                    disabled={prefilling}
+                  />
+                  {/* Kwam er niets terug (AI-dienst druk of niet bereikbaar), dan
+                      zeggen we dat in plaats van te melden dat alles is ingevuld
+                      terwijl het formulier leeg is. */}
+                  {prefill && prefill.fields.length === 0 ? (
+                    <nldd-banner
+                      variant="warning"
+                      size="sm"
+                      text="Voor-invullen is niet gelukt"
+                      supporting-text="De AI-dienst was even niet bereikbaar. Probeer het opnieuw, of vul de velden hieronder zelf in."
+                    >
+                      <nldd-button
+                        slot="actions"
+                        start-icon="arrow-clockwise"
+                        text="Opnieuw proberen"
+                        onClick={() => void chooseFramework(chosenFramework.id)}
+                      ></nldd-button>
+                    </nldd-banner>
+                  ) : (
+                    prefill && <PrefillSources prefill={prefill} />
+                  )}
 
-                    <section className="opl-card p-5">
+                  <>
+                    <nldd-container>
                       <FollowUpQuestions
                         projectContext={projectContext}
                         technique={chosenFramework}
@@ -1044,58 +966,54 @@ export default function GoalDialog({
                         showLetters={false}
                         askIfEmpty={Boolean(prefill && prefill.fields.length > 0)}
                       />
-                    </section>
+                    </nldd-container>
+                  </>
 
-                    <div className="flex flex-wrap items-center justify-end gap-1.5">
-                      {toggles}
-                      <button
-                        type="button"
-                        className="opl-btn-primary min-h-12 px-6 text-base"
-                        onClick={() => void compose(chosenFramework.id)}
-                      >
-                        <Sparkles size={20} className="text-rijksoranje-vast" /> Bouw prompt
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            ) : phase === 'framework' ? (
-              <MakeProgress stage="kiezen" bron="Het gesprek" />
-            ) : (
-              <section className="opl-card p-5">
-              <InterviewPanel
-                socratic={false}
-                step={step}
-                onInventAnswer={isAdmin ? handleInventAnswer : undefined}
-                inventing={inventing}
-                intro="We stellen één vraag per keer: eerst wat je wilt bereiken, daarna de bouwstenen van de techniek die daarbij past."
-                question={question}
-                transcript={transcript}
-                answer={answer}
-                busy={busy}
-                finishing={finishing}
-                onAnswerChange={setAnswer}
-                onSubmit={submitAnswer}
-                onFinish={finishDialogue}
-              />
-              </section>
-            )}
-          </div>
-        )}
+                  <nldd-container layout="wrap" gap="6" vertical-alignment="center">
+                    <nldd-button
+                      appearance="primary"
+                      size="lg"
+                      start-icon="sparkles"
+                      text="Bouw prompt"
+                      onClick={() => void compose(chosenFramework.id)}
+                    ></nldd-button>
+                    {toggles}
+                  </nldd-container>
+                </nldd-container>
+              ) : null}
+            </nldd-container>
+          ) : phase === 'framework' ? (
+            <MakeProgress stage="kiezen" bron="Het gesprek" />
+          ) : (
+            <>
+              <nldd-container>
+                <InterviewPanel
+                  socratic={false}
+                  step={step}
+                  onInventAnswer={isAdmin ? handleInventAnswer : undefined}
+                  inventing={inventing}
+                  intro="We stellen één vraag per keer: eerst wat je wilt bereiken, daarna de bouwstenen van de techniek die daarbij past."
+                  question={question}
+                  transcript={transcript}
+                  answer={answer}
+                  busy={busy}
+                  finishing={finishing}
+                  onAnswerChange={setAnswer}
+                  onSubmit={submitAnswer}
+                  onFinish={finishDialogue}
+                />
+              </nldd-container>
+            </>
+          )}
+        </nldd-container>
+      )}
 
       {unclearReason && (
-        <div
-          role="alert"
-          className="animate-fade-in flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
-        >
-          <AlertTriangle size={18} className="mt-0.5 shrink-0" />
-          <div>
-            <p className="font-medium">Je omschrijving is nog niet duidelijk genoeg</p>
-            <p className="mt-0.5 text-amber-700 dark:text-amber-300/90">
-              {stripMarkdown(unclearReason)}
-            </p>
-          </div>
-        </div>
+        <nldd-banner
+          variant="warning"
+          text="Je omschrijving is nog niet duidelijk genoeg"
+          supporting-text={stripMarkdown(unclearReason)}
+        ></nldd-banner>
       )}
 
       {guardrailFindings && (
@@ -1112,7 +1030,30 @@ export default function GoalDialog({
           onCancel={() => setGuardrailFindings(null)}
         />
       )}
-    </div>
+    </nldd-container>
   );
 }
 
+/** The goal in the user's own words. */
+function GoalInput({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  disabled: boolean;
+}) {
+  const ref = useRef<HTMLElement & { value?: string }>(null);
+  useNlddValue(ref, value, onChange);
+  return (
+    <nldd-multi-line-text-field
+      ref={ref}
+      id="goal-dialog-input"
+      accessible-label="Wat wil je bereiken?"
+      rows={5}
+      disabled={disabled || undefined}
+      placeholder="Bijv. er moet een projectplan geschreven worden voor de invoering van een nieuwe interne tool"
+    ></nldd-multi-line-text-field>
+  );
+}

@@ -1,18 +1,14 @@
-import { useMemo, useState } from 'react';
-import clsx from 'clsx';
-import { ArrowRight, Check } from '@/components/common/icons';
-import InfoDot from '@/components/common/InfoDot';
+import { useMemo, useRef, useState } from 'react';
+import { useNlddEvent } from '@/lib/nldd';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { isContextPrompt } from '@/lib/techniques';
-import { TECHNIEK_DOELEN, techniekKaart, type TechniekDoel } from '@/lib/techniekDoelen';
+import { TECHNIEK_DOELEN, techniekKaart, type DoelTegel, type TechniekDoel } from '@/lib/techniekDoelen';
 import type { Technique } from '@/types';
 
 /**
  * Kiezen op doel: eerst wat je wilt bereiken, dan de frameworks en technieken die
- * daarbij passen. De doelen zijn tabbladen: de gekozen tegel loopt zonder lijn over
- * in het vlak eronder. Dat kan alleen als ze op één rij staan, dus pas vanaf lg.
- * Oranje staat alleen op de streep bovenaan en op kleine iconen: als tekst op wit
- * haalt het de contrasteis niet.
+ * daarbij passen. De doelen zijn tabbladen; wat niet op de rij past, zet de
+ * tabbalk zelf achter "Meer tabs".
  */
 export default function TechniqueChooser({
   selectedId,
@@ -49,80 +45,17 @@ export default function TechniqueChooser({
   const lijst = perDoel.get(actief.id) ?? [];
 
   return (
-    <div>
-      <div
-        role="group"
-        aria-label="Kies je doel"
-        className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5"
-      >
-        {doelen.map((d) => {
-          const aan = d.id === actief.id;
-          const Icon = d.icon;
-          return (
-            <button
-              key={d.id}
-              type="button"
-              aria-pressed={aan}
-              onClick={() => setKeuze(d.id)}
-              className={clsx(
-                'relative mb-3 flex min-h-[9.25rem] flex-col items-center gap-2 rounded-xl border px-3 py-4 text-center transition-colors',
-                'focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500/50',
-                aan
-                  ? // z-10 en -mb-px: de tegel legt zich over de bovenrand van het
-                    // vlak heen, zodat er geen lijn tussen beide loopt.
-                    'z-10 border-slate-200 bg-white shadow-[inset_0_4px_0_0_theme(colors.rijksoranje.vast)] lg:-mb-px lg:rounded-b-none lg:border-b-white dark:border-slate-700 dark:bg-slate-800 lg:dark:border-b-slate-800'
-                  : 'border-slate-200 bg-[#e6edf3] hover:border-rijksblauw-700 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-rijksblauw-200',
-              )}
-            >
-              <span
-                aria-hidden="true"
-                className={clsx(
-                  'flex h-14 w-14 shrink-0 items-center justify-center rounded-full',
-                  aan
-                    ? 'bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/20 dark:text-rijksblauw-200'
-                    : 'bg-white text-rijksblauw-700 dark:bg-slate-800 dark:text-rijksblauw-200',
-                )}
-              >
-                <Icon size={26} />
-              </span>
-              <span className="text-lg font-bold leading-tight text-rijksblauw-700 dark:text-rijksblauw-200">
-                {d.naam}
-              </span>
-              <span className="text-sm leading-snug text-slate-600 dark:text-slate-300">{d.zin}</span>
-            </button>
-          );
-        })}
-      </div>
+    <nldd-container gap="24">
+      <DoelTabs doelen={doelen} actief={actief.id} onKies={setKeuze} />
 
-      <section
-        aria-labelledby="techniek-keuzes"
-        className="rounded-xl border border-slate-200 bg-white p-4 lg:rounded-t-none dark:border-slate-700 dark:bg-slate-800"
-      >
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-x-6 gap-y-1">
-          <h2
-            id="techniek-keuzes"
-            className="text-xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200"
-          >
-            {actief.naam}: {lijst.length} {lijst.length === 1 ? 'keuze' : 'keuzes'}
-          </h2>
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-600 dark:text-slate-300">
-            <span className="inline-flex items-center gap-1.5">
-              <span
-                aria-hidden="true"
-                className="h-3 w-3 rounded-full bg-rijksblauw-700 dark:bg-rijksblauw-200"
-              />
-              Framework: bouwt je hele prompt op
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <span
-                aria-hidden="true"
-                className="h-3 w-3 rounded-full bg-rijksblauw-50 ring-1 ring-inset ring-rijksblauw-700 dark:bg-rijksblauw-500/20 dark:ring-rijksblauw-200"
-              />
-              Techniek: stuurt hoe de AI werkt
-            </span>
-          </div>
-        </div>
-        <ul className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
+      <nldd-container gap="8">
+        <nldd-title
+          heading-level={2}
+          size={4}
+          text={`${actief.naam}: ${lijst.length} ${lijst.length === 1 ? 'keuze' : 'keuzes'}`}
+          supporting-text={`${actief.zin}. Een framework bouwt je hele prompt op, een techniek stuurt hoe de AI werkt.`}
+        ></nldd-title>
+        <nldd-list appearance="box-tinted" accessible-label={`Keuzes bij ${actief.naam}`}>
           {lijst.map((t) => (
             <TechniqueRow
               key={t.id}
@@ -131,11 +64,54 @@ export default function TechniqueChooser({
               onSelect={() => onSelect(t.id)}
             />
           ))}
-        </ul>
-      </section>
-    </div>
+        </nldd-list>
+        {/* Outside the list: inside a row a screen reader would read it as part of that row. */}
+        {lijst.map((t) => {
+          const info = techniekKaart(t).info;
+          return info ? (
+            <nldd-popover key={t.id} id={uitlegId(t)} accessible-label={`Uitleg over ${t.name}`} role="region">
+              <nldd-container padding="12">
+                <nldd-text size="sm">{info}</nldd-text>
+              </nldd-container>
+            </nldd-popover>
+          ) : null;
+        })}
+      </nldd-container>
+    </nldd-container>
   );
 }
+
+/** The goals as tabs; what does not fit goes behind "Meer tabs". */
+function DoelTabs({
+  doelen,
+  actief,
+  onKies,
+}: {
+  doelen: DoelTegel[];
+  actief: TechniekDoel;
+  onKies: (doel: TechniekDoel) => void;
+}) {
+  const ref = useRef<HTMLElement>(null);
+  useNlddEvent<CustomEvent<{ item: HTMLElement }>>(ref, 'tabchange', (e) => {
+    const text = e.detail?.item?.getAttribute('text');
+    const doel = doelen.find((d) => d.naam === text);
+    if (doel) onKies(doel.id);
+  });
+  return (
+    <nldd-tab-bar ref={ref} variant="icon-and-text" size="lg" accessible-label="Kies je doel">
+      {doelen.map((d) => (
+        <nldd-tab-bar-item
+          key={d.id}
+          text={d.naam}
+          icon={d.icon}
+          current={d.id === actief || undefined}
+        ></nldd-tab-bar-item>
+      ))}
+    </nldd-tab-bar>
+  );
+}
+
+const uitlegId = (t: Technique) => `techniek-uitleg-${t.id}`;
 
 function TechniqueRow({
   technique: t,
@@ -148,68 +124,42 @@ function TechniqueRow({
 }) {
   const kaart = techniekKaart(t);
   const framework = isContextPrompt(t);
-  const Icon = kaart.icon;
+  const popoverId = uitlegId(t);
 
-  // Het infobolletje staat naast de knop en niet erin: een knop in een knop is
-  // ongeldige HTML en een schermlezer slaat hem dan over.
+  // The explanation is a segment of its own beside the choice: a button inside a
+  // button is invalid and a screen reader skips it.
   return (
-    <li className="relative">
-      <button
-        type="button"
+    <nldd-list-item selected={active || undefined}>
+      <nldd-list-item-segment
+        button
+        width="full"
+        accessible-label={`${active ? 'Gekozen' : 'Kies'} ${t.name}`}
         onClick={onSelect}
-        aria-pressed={active}
-        className={clsx(
-          'group/rij flex h-full min-h-[5.25rem] w-full items-center gap-3 rounded-xl border bg-slate-50 py-3 pl-3.5 pr-20 text-left transition-all',
-          'hover:border-rijksblauw-700 hover:bg-white hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500/50',
-          'dark:bg-slate-900/40 dark:hover:border-rijksblauw-200 dark:hover:bg-slate-900',
-          active
-            ? 'border-rijksblauw-700 ring-1 ring-rijksblauw-700 dark:border-rijksblauw-200 dark:ring-rijksblauw-200'
-            : 'border-slate-200 dark:border-slate-700',
-        )}
       >
-        <span
-          aria-hidden="true"
-          className={clsx(
-            'flex h-11 w-11 shrink-0 items-center justify-center rounded-full',
-            framework
-              ? 'bg-rijksblauw-700 text-white dark:bg-rijksblauw-200 dark:text-slate-900'
-              : 'bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/20 dark:text-rijksblauw-200',
-          )}
-        >
-          <Icon size={22} />
-        </span>
-        <span className="min-w-0">
-          <span className="block font-bold leading-tight text-rijksblauw-700 dark:text-rijksblauw-200">
-            {t.name}
-          </span>
-          {kaart.kort && (
-            <span className="line-clamp-2 text-[0.9375rem] leading-snug text-slate-600 dark:text-slate-300">
-              {kaart.kort}
-            </span>
-          )}
-          <span className="block text-[0.8125rem] font-medium text-slate-500 dark:text-slate-400">
-            {framework ? 'Framework' : 'Techniek'}
-          </span>
-        </span>
-        <span className="absolute bottom-3 right-3.5 inline-flex items-center gap-1 text-[0.9375rem] font-semibold text-rijksblauw-500 dark:text-rijksblauw-200">
-          {active ? (
-            <>
-              Gekozen <Check size={16} className="text-rijksoranje" />
-            </>
-          ) : (
-            <>
-              Kies
-              <ArrowRight
-                size={16}
-                className="transition-transform group-hover/rij:translate-x-0.5 group-hover/rij:text-rijksoranje"
-              />
-            </>
-          )}
-        </span>
-      </button>
+        <nldd-icon-cell icon={kaart.icon} color={framework ? 'accent' : 'secondary'}></nldd-icon-cell>
+        <nldd-spacer-cell size="12"></nldd-spacer-cell>
+        <nldd-text-cell supporting-text={kaart.kort || undefined}>
+          <strong>{t.name}</strong>{' '}
+          <nldd-tag size="sm" color="neutral" text={framework ? 'Framework' : 'Techniek'}></nldd-tag>
+        </nldd-text-cell>
+        <nldd-spacer-cell size="12"></nldd-spacer-cell>
+        <nldd-text-cell
+          hide-below="md"
+          width="fit-content"
+          color="accent"
+          text={active ? 'Gekozen' : 'Kies'}
+        ></nldd-text-cell>
+        <nldd-icon-cell
+          size="20"
+          color="accent"
+          icon={active ? 'check-mark' : 'chevron-right'}
+        ></nldd-icon-cell>
+      </nldd-list-item-segment>
       {kaart.info && (
-        <InfoDot label={`Uitleg over ${t.name}`} text={kaart.info} className="absolute right-1 top-1" />
+        <nldd-list-item-segment button popovertarget={popoverId} accessible-label={`Uitleg over ${t.name}`}>
+          <nldd-icon-cell icon="info-circle" size="20" color="secondary"></nldd-icon-cell>
+        </nldd-list-item-segment>
       )}
-    </li>
+    </nldd-list-item>
   );
 }

@@ -13,13 +13,27 @@ export function useNlddEvent<E extends Event = CustomEvent>(
 ) {
   const latest = useRef(handler);
   latest.current = handler;
+  const bound = useRef<{ el: HTMLElement; listener: EventListener } | null>(null);
+  // Runs after every render: the element behind the ref can appear, change or
+  // disappear later (a field that only renders once a step opens), and a listener
+  // bound on the first render only would never reach it.
   useEffect(() => {
     const el = ref.current;
+    if (bound.current?.el === el) return;
+    if (bound.current) bound.current.el.removeEventListener(type, bound.current.listener);
+    bound.current = null;
     if (!el) return;
     const listener = (e: Event) => latest.current(e as E);
     el.addEventListener(type, listener);
-    return () => el.removeEventListener(type, listener);
-  }, [ref, type]);
+    bound.current = { el, listener };
+  });
+  useEffect(
+    () => () => {
+      if (bound.current) bound.current.el.removeEventListener(type, bound.current.listener);
+      bound.current = null;
+    },
+    [type],
+  );
 }
 
 /**
@@ -35,7 +49,7 @@ export function useNlddValue(
   useLayoutEffect(() => {
     const el = ref.current;
     if (el && el.value !== value) el.value = value;
-  }, [ref, value]);
+  });
   useNlddEvent(ref, 'input', (e) => {
     const target = e.currentTarget as (HTMLElement & { value?: string }) | null;
     const next = (e as CustomEvent<{ value?: string }>).detail?.value ?? target?.value ?? '';

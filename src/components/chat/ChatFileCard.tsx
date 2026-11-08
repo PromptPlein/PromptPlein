@@ -1,17 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  AlertTriangle,
-  Check,
-  Code2,
-  Download,
-  Eye,
-  EyeOff,
-  FileCode2,
-  Loader2,
-  Maximize2,
-  ShieldCheck,
-  Wrench,
-} from '@/components/common/icons';
 import { downloadText } from '@/lib/download';
 import { htmlFileName, htmlLooksComplete } from '@/lib/chatFiles';
 import { checkHtml, repairRequest, type FileCheckResult } from '@/lib/fileCheck';
@@ -55,7 +42,8 @@ export default function ChatFileCard({
 }) {
   const [preview, setPreview] = useState(false);
   const [showCode, setShowCode] = useState(false);
-  const frameRef = useRef<HTMLIFrameElement>(null);
+  const frameHostRef = useRef<HTMLElement>(null);
+  const frameRef = useRef<HTMLIFrameElement | null>(null);
 
   const writing = isStreaming && !closed;
   const complete = closed || htmlLooksComplete(code);
@@ -83,156 +71,166 @@ export default function ChatFileCard({
   const lineCount = useMemo(() => code.split('\n').length, [code]);
   const tail = writing ? code.split('\n').slice(-TAIL_LINES).join('\n') : '';
 
+  // nldd 0.18.0 has no component for a sandboxed frame, so the preview iframe is
+  // created through the DOM API inside an nldd-container instead of as markup.
+  useEffect(() => {
+    const host = frameHostRef.current;
+    if (!host || writing || !preview) return;
+    const frame = document.createElement('iframe');
+    frame.title = `Voorbeeld van ${name}`;
+    frame.srcdoc = code;
+    frame.setAttribute('sandbox', 'allow-scripts');
+    frame.setAttribute('allow', 'fullscreen');
+    frame.allowFullscreen = true;
+    frame.width = '100%';
+    frame.height = String(Math.round(window.innerHeight * 0.7));
+    frame.frameBorder = '0';
+    host.replaceChildren(frame);
+    frameRef.current = frame;
+    return () => {
+      frame.remove();
+      frameRef.current = null;
+    };
+  }, [writing, preview, code, name]);
+
   const status = writing ? 'Wordt geschreven' : complete ? 'Klaar' : 'Niet af';
 
   return (
-    <div className="my-2 w-full overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3.5 py-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-rijksblauw-50 text-rijksblauw-600 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-300">
-          <FileCode2 size={18} />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100" title={name}>
-            {name}
-          </p>
-          <p className="flex items-center gap-1.5 text-xs tabular-nums text-slate-500 dark:text-slate-400">
-            {writing ? (
-              <Loader2 size={12} className="animate-spin text-rijksblauw-500" aria-hidden="true" />
-            ) : complete ? (
-              <Check size={12} className="text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-            ) : null}
-            <span>{status}</span>
-            <span aria-hidden="true">·</span>
-            <span>{formatSize(bytes)}</span>
-            <span aria-hidden="true">·</span>
-            <span>
-              {lineCount.toLocaleString('nl-NL')} {lineCount === 1 ? 'regel' : 'regels'}
-            </span>
-          </p>
-        </div>
+    <nldd-card accessible-label={name}>
+      <nldd-container padding="12" gap="12">
+        <nldd-container layout="row" gap="12" vertical-alignment="center">
+          <nldd-icon icon="code" box color="lintblauw" size="40"></nldd-icon>
+          <nldd-container gap="2">
+            <nldd-text weight="bold">{name}</nldd-text>
+            <nldd-container layout="row" gap="6" vertical-alignment="center">
+              {writing ? (
+                <nldd-activity-indicator size="16" timing="instant" text="Wordt geschreven"></nldd-activity-indicator>
+              ) : complete ? (
+                <nldd-icon icon="check-mark" size="16" color="success"></nldd-icon>
+              ) : null}
+              <nldd-text size="xs" color="secondary">
+                {status} · {formatSize(bytes)} · {lineCount.toLocaleString('nl-NL')}{' '}
+                {lineCount === 1 ? 'regel' : 'regels'}
+              </nldd-text>
+            </nldd-container>
+          </nldd-container>
+        </nldd-container>
+        {!writing && (
+            <nldd-button-group orientation="horizontal" size="sm">
+              <nldd-button
+                appearance="secondary"
+                start-icon={preview ? 'eye-slash' : 'eye'}
+                text={preview ? 'Verberg voorbeeld' : 'Bekijk'}
+                expanded={preview || undefined}
+                onClick={() => setPreview((v) => !v)}
+              ></nldd-button>
+              <nldd-button
+                appearance="primary"
+                start-icon="download"
+                text="Download"
+                supporting-text={complete ? undefined : 'Nog niet af'}
+                onClick={() => downloadText(name, code, 'text/html')}
+              ></nldd-button>
+            </nldd-button-group>
+          )}
 
         {!writing && (
-          <div className="flex flex-wrap items-center gap-1.5">
-            <button
-              type="button"
-              className="opl-btn-secondary !px-2.5 !py-1.5 text-xs"
-              onClick={() => setPreview((v) => !v)}
-              aria-expanded={preview}
-            >
-              {preview ? <EyeOff size={14} /> : <Eye size={14} />}
-              {preview ? 'Verberg voorbeeld' : 'Bekijk'}
-            </button>
-            <button
-              type="button"
-              className="opl-btn-primary !px-2.5 !py-1.5 text-xs"
-              onClick={() => downloadText(name, code, 'text/html')}
-              title={complete ? undefined : 'Het bestand is nog niet af; je downloadt wat er nu staat'}
-            >
-              <Download size={14} /> Download
-            </button>
-          </div>
-        )}
-      </div>
-
-      {!writing && (
-        <div className="border-t border-slate-200 px-3.5 py-2 text-xs dark:border-slate-700" aria-live="polite">
-          {!check ? (
-            <span className="inline-flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
-              <Loader2 size={12} className="animate-spin" aria-hidden="true" /> Wordt gecontroleerd op fouten…
-            </span>
-          ) : check.ok ? (
-            <span className="inline-flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
-              <ShieldCheck size={13} aria-hidden="true" /> Gecontroleerd: de pagina opent zonder fouten.
-            </span>
-          ) : (
-            <div className="space-y-1.5 text-rijksrood dark:text-red-400">
-              <p className="flex items-center gap-1.5 font-semibold">
-                <AlertTriangle size={13} aria-hidden="true" />
-                {check.problems.length === 1
-                  ? 'Er zit een fout in dit bestand.'
-                  : `Er zitten ${check.problems.length} fouten in dit bestand.`}{' '}
-                Zo werkt de pagina niet goed.
-              </p>
-              <ul className="space-y-1 pl-5">
+          <nldd-container role="status" gap="6">
+            {!check ? (
+              <nldd-container layout="row" gap="6" vertical-alignment="center">
+                <nldd-activity-indicator size="16" timing="instant" text="Wordt gecontroleerd"></nldd-activity-indicator>
+                <nldd-text size="xs" color="secondary">Wordt gecontroleerd op fouten…</nldd-text>
+              </nldd-container>
+            ) : check.ok ? (
+              <nldd-container layout="row" gap="6" vertical-alignment="center">
+                <nldd-icon icon="shield-check-mark" size="16" color="success"></nldd-icon>
+                <nldd-text size="xs" color="success">Gecontroleerd: de pagina opent zonder fouten.</nldd-text>
+              </nldd-container>
+            ) : (
+              <>
+                <nldd-container layout="row" gap="6" vertical-alignment="center">
+                  <nldd-icon icon="exclamation-triangle" size="16" color="critical"></nldd-icon>
+                  <nldd-text size="xs" weight="bold" color="critical">
+                    {check.problems.length === 1
+                      ? 'Er zit een fout in dit bestand.'
+                      : `Er zitten ${check.problems.length} fouten in dit bestand.`}{' '}
+                    Zo werkt de pagina niet goed.
+                  </nldd-text>
+                </nldd-container>
                 {check.problems.map((p, i) => (
-                  <li key={i} className="list-disc">
-                    {p.line ? <span className="font-medium">Regel {p.line}: </span> : null}
-                    {p.message}
+                  <nldd-container key={i} gap="2">
+                    <nldd-text size="xs" color="critical">
+                      {p.line ? <strong>Regel {p.line}: </strong> : null}
+                      {p.message}
+                    </nldd-text>
                     {p.snippet && (
-                      <code className="mt-0.5 block truncate rounded bg-red-50 px-1.5 py-0.5 font-mono text-[0.6875rem] text-slate-700 dark:bg-red-500/10 dark:text-slate-200">
+                      <nldd-code-viewer appearance="simple" no-copy wrap>
                         {p.snippet}
-                      </code>
+                      </nldd-code-viewer>
                     )}
-                  </li>
+                  </nldd-container>
                 ))}
-              </ul>
-              {onRepair && (
-                <button
-                  type="button"
-                  className="opl-btn-primary !px-2.5 !py-1.5 text-xs"
-                  onClick={() => onRepair(repairRequest(name, check.problems))}
-                >
-                  <Wrench size={14} /> Laat de AI dit herstellen
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-      )}
+                {onRepair && (
+                  <nldd-container layout="row">
+                    <nldd-button
+                      appearance="primary"
+                      size="sm"
+                      start-icon="wrench"
+                      text="Laat de AI dit herstellen"
+                      onClick={() => onRepair(repairRequest(name, check.problems))}
+                    ></nldd-button>
+                  </nldd-container>
+                )}
+              </>
+            )}
+          </nldd-container>
+        )}
 
-      {/* Terwijl het model schrijft: de laatste regels, zodat je ziet dat het
-          bestand groeit. De hoogte staat vast, dus de chat springt niet mee. */}
-      {writing && (
-        <pre
-          className="h-56 overflow-hidden whitespace-pre-wrap break-all border-t border-slate-200 bg-slate-950 px-3.5 py-2.5 font-mono text-[0.6875rem] leading-relaxed text-slate-300 dark:border-slate-700"
-          aria-hidden="true"
-        >
-          {tail}
-        </pre>
-      )}
+        {/* Terwijl het model schrijft: de laatste regels, zodat je ziet dat het
+            bestand groeit. Een vast aantal regels, dus de chat springt niet mee. */}
+        {writing && (
+          <nldd-code-viewer aria-hidden="true" language="html" no-copy wrap max-height="14rem">
+            {tail}
+          </nldd-code-viewer>
+        )}
 
-      {!writing && preview && (
-        <div className="border-t border-slate-200 dark:border-slate-700">
-          <div className="flex items-center justify-between gap-2 bg-slate-50 px-3.5 py-1.5 text-[0.6875rem] text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
-            <span>Voorbeeld. Scripts draaien afgeschermd van PromptPlein.</span>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
-              onClick={() => void frameRef.current?.requestFullscreen?.()}
-            >
-              <Maximize2 size={12} /> Volledig scherm
-            </button>
-          </div>
-          <iframe
-            ref={frameRef}
-            title={`Voorbeeld van ${name}`}
-            srcDoc={code}
-            sandbox="allow-scripts"
-            allow="fullscreen"
-            allowFullScreen
-            className="block h-[70vh] w-full bg-white"
-          />
-        </div>
-      )}
+        {!writing && preview && (
+          <nldd-container gap="6">
+            <nldd-container layout="wrap" gap="8" vertical-alignment="center">
+              <nldd-text size="xs" color="secondary">
+                Voorbeeld. Scripts draaien afgeschermd van PromptPlein.
+              </nldd-text>
+              <nldd-button
+                appearance="neutral-transparent"
+                size="xs"
+                start-icon="full-screen"
+                text="Volledig scherm"
+                onClick={() => void frameRef.current?.requestFullscreen?.()}
+              ></nldd-button>
+            </nldd-container>
+            <nldd-container ref={frameHostRef}></nldd-container>
+          </nldd-container>
+        )}
 
-      {!writing && (
-        <div className="flex items-center gap-3 border-t border-slate-200 px-3.5 py-1.5 dark:border-slate-700">
-          <button
-            type="button"
-            className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[0.6875rem] font-medium text-slate-400 hover:bg-slate-100 hover:text-rijksblauw-600 dark:text-slate-500 dark:hover:bg-slate-700 dark:hover:text-rijksblauw-300"
-            onClick={() => setShowCode((v) => !v)}
-            aria-expanded={showCode}
-          >
-            <Code2 size={12} /> {showCode ? 'Verberg code' : 'Toon code'}
-          </button>
-          <CopyMessageButton text={code} label="Kopieer code" />
-        </div>
-      )}
-      {!writing && showCode && (
-        <pre tabIndex={0} className="max-h-96 overflow-auto border-t border-slate-200 bg-slate-950 px-3.5 py-2.5 font-mono text-[0.6875rem] leading-relaxed text-slate-300 dark:border-slate-700">
-          {code}
-        </pre>
-      )}
-    </div>
+        {!writing && (
+          <nldd-container layout="row" gap="12" vertical-alignment="center">
+            <nldd-button
+              appearance="neutral-transparent"
+              size="xs"
+              start-icon="code"
+              text={showCode ? 'Verberg code' : 'Toon code'}
+              expanded={showCode || undefined}
+              onClick={() => setShowCode((v) => !v)}
+            ></nldd-button>
+            <CopyMessageButton text={code} label="Kopieer code" />
+          </nldd-container>
+        )}
+        {!writing && showCode && (
+          <nldd-code-viewer language="html" max-height="24rem">
+            {code}
+          </nldd-code-viewer>
+        )}
+      </nldd-container>
+    </nldd-card>
   );
 }

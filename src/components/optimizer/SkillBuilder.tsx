@@ -1,14 +1,5 @@
-import { useEffect, useState } from 'react';
-import {
-  CheckCircle2,
-  CircleDashed,
-  FlaskConical,
-  Loader2,
-  MessageCircleQuestion,
-  Package,
-  Sparkles,
-  Wand2,
-} from '@/components/common/icons';
+import { useEffect, useRef, useState } from 'react';
+import { useNlddEvent, useNlddValue } from '@/lib/nldd';
 import { notify } from '@/lib/notify';
 import { draftSkill, sharpenSkillDescription, testSkillTrigger } from '@/services/optimizeService';
 import type { AiSettings } from '@/services/settingsService';
@@ -236,464 +227,464 @@ export default function SkillBuilder({ settings, context, onSerialized, onChange
   }
 
   return (
-    <div className="space-y-5">
+    <nldd-container gap="20">
       <BuilderIntro
-        icon={<Wand2 size={18} />}
+        icon={<nldd-icon icon="sparkles" size="20"></nldd-icon>}
         title="Bouw je skill"
         text="Eén vaste instructie voor je eigen AI-omgeving. De waarde zit in wat de AI zonder skill niet weet: jullie afspraken, valkuilen en grenzen."
       />
 
       {/* Stap 1: begin. */}
-      <div className="space-y-3">
-        <div>
-          <label className="opl-label mb-0.5 block" htmlFor="sk-kern">
-            1. Wat moet je de AI nu telkens opnieuw uitleggen?
-          </label>
-          <textarea
-            id="sk-kern"
-            rows={3}
-            className="opl-input resize-y text-sm"
-            value={data.kern}
-            placeholder="Bijv. hoe wij feedback geven op conceptbrieven aan burgers: op B1-niveau, volgens onze schrijfwijzer, met per opmerking een herschreven zin"
-            onChange={(e) => setData((d) => ({ ...d, kern: e.target.value }))}
-          />
-        </div>
-        <div>
-          <div className="mb-0.5 flex items-center gap-1">
-            <label className="opl-label mb-0" htmlFor="sk-verzoeken">2. Welke verzoeken typ je dan? Geef er drie, zoals je ze echt zou intikken.</label>
-            <InfoDot label="Uitleg bij dit veld" text="Echte formuleringen helpen het meest: daaruit volgt wanneer de skill moet aanslaan." />
-          </div>
-          <textarea
-            id="sk-verzoeken"
-            rows={3}
-            className="opl-input resize-y text-sm"
-            value={data.verzoeken}
-            placeholder={'Bijv.\nkun je even naar deze brief kijken?\nis dit begrijpelijk voor een burger?\ncheck deze reactie op de bezwaarbrief'}
-            onChange={(e) => setData((d) => ({ ...d, verzoeken: e.target.value }))}
-          />
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            className="opl-btn-primary"
+      <nldd-container gap="12">
+        <Veld
+          id="sk-kern"
+          label="1. Wat moet je de AI nu telkens opnieuw uitleggen?"
+          multi
+          rows={3}
+          value={data.kern}
+          onValue={(kern) => setData((d) => ({ ...d, kern }))}
+          placeholder="Bijv. hoe wij feedback geven op conceptbrieven aan burgers: op B1-niveau, volgens onze schrijfwijzer, met per opmerking een herschreven zin"
+        />
+        <Veld
+          id="sk-verzoeken"
+          label="2. Welke verzoeken typ je dan? Geef er drie, zoals je ze echt zou intikken."
+          info="Echte formuleringen helpen het meest: daaruit volgt wanneer de skill moet aanslaan."
+          multi
+          rows={3}
+          value={data.verzoeken}
+          onValue={(verzoeken) => setData((d) => ({ ...d, verzoeken }))}
+          placeholder={'Bijv.\nkun je even naar deze brief kijken?\nis dit begrijpelijk voor een burger?\ncheck deze reactie op de bezwaarbrief'}
+        />
+        <nldd-container layout="wrap" gap="12" vertical-alignment="center">
+          <nldd-button
+            appearance="secondary"
+            start-icon="sparkles"
+            text={showRest ? 'Lege velden opnieuw laten voorstellen' : 'Laat de AI de rest voorstellen'}
+            loading={busy === 'draft' || undefined}
+            disabled={(busy !== null && busy !== 'draft') || undefined}
             onClick={() => void runDraft()}
-            disabled={busy !== null || !data.kern.trim()}
-          >
-            {busy === 'draft' ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-            {showRest ? 'Lege velden opnieuw laten voorstellen' : 'Laat de AI de rest voorstellen'}
-          </button>
+          ></nldd-button>
           {!showRest && (
-            <button
-              type="button"
-              className="text-sm font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
-              onClick={() => setShowRest(true)}
-            >
-              Liever zelf invullen
-            </button>
+            <nldd-button appearance="neutral-transparent" text="Liever zelf invullen" onClick={() => setShowRest(true)}></nldd-button>
           )}
-        </div>
-      </div>
+        </nldd-container>
+      </nldd-container>
 
       {showRest && (
         <>
           {/* Stap 2: aanvullen. */}
-          <div className="animate-fade-in space-y-4 border-t border-slate-200 pt-5 dark:border-slate-700">
-            <p className="text-sm text-slate-500 dark:text-slate-400">
+          <nldd-divider></nldd-divider>
+          <nldd-container gap="16">
+            <nldd-text size="sm" color="secondary">
               Vul aan en pas aan wat niet klopt. Waar de AI het niet kon weten, staat een vraag bij
               het veld.
-            </p>
+            </nldd-text>
             {SKILL_VELDEN.map((veld, i) => (
-              <div key={veld.id}>
-                <div className="mb-0.5 flex flex-wrap items-center gap-2">
-                  <label className="opl-label block" htmlFor={`sk-${veld.id}`}>
-                    {i + 3}. {veld.vraag}
-                  </label>
-                  {voorstel[veld.id] && (
-                    <span className="rounded-full bg-rijksblauw-100 px-1.5 py-0.5 text-[0.625rem] font-semibold text-rijksblauw-700 dark:bg-rijksblauw-500/20 dark:text-rijksblauw-200">
-                      voorstel van de AI
-                    </span>
-                  )}
-                </div>
+              <nldd-container key={veld.id} gap="6">
+                {voorstel[veld.id] && <nldd-badge size="sm" color="accent" text="voorstel van de AI"></nldd-badge>}
                 {vragen[veld.id] && (
-                  <p className="mb-1.5 flex items-start gap-1.5 rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs text-amber-800 dark:bg-amber-500/15 dark:text-amber-200">
-                    <MessageCircleQuestion size={14} className="mt-0.5 shrink-0" />
-                    <span>{vragen[veld.id]}</span>
-                  </p>
+                  <nldd-banner variant="warning" size="sm" icon="question-mark-circle" text={vragen[veld.id]}></nldd-banner>
                 )}
-                <textarea
+                <Veld
                   id={`sk-${veld.id}`}
+                  label={`${i + 3}. ${veld.vraag}`}
+                  multi
                   rows={veld.rows}
-                  className="opl-input resize-y text-sm"
                   value={data.velden[veld.id]}
+                  onValue={(v) => setVeld(veld.id, v)}
                   placeholder={veld.placeholder}
-                  onChange={(e) => setVeld(veld.id, e.target.value)}
                 />
-              </div>
+              </nldd-container>
             ))}
 
-            <div>
-              <p className="opl-label mb-0.5">9. Moet het resultaat er elke keer precies zo uitzien?</p>
-              <div className="space-y-1.5">
+            <nldd-container gap="8">
+              <nldd-text>
+                9. Moet het resultaat er elke keer precies zo uitzien?
+              </nldd-text>
+              <nldd-list type="radiogroup" appearance="box-tinted" accessible-label="Moet het resultaat er elke keer precies zo uitzien?">
                 {SKILL_STRAKHEID.map((s) => (
-                  <label
+                  <RadioRow
                     key={s.value}
-                    className={`flex cursor-pointer items-start gap-2.5 rounded-lg border p-2.5 transition-colors ${
-                      data.strakheid === s.value
-                        ? 'border-rijksblauw-300 bg-rijksblauw-50/60 dark:border-rijksblauw-500/40 dark:bg-rijksblauw-500/10'
-                        : 'border-slate-200 hover:border-slate-300 dark:border-slate-700 dark:hover:border-slate-600'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="sk-strakheid"
-                      className="mt-1 h-4 w-4 shrink-0 accent-rijksoranje"
-                      checked={data.strakheid === s.value}
-                      onChange={() => setData((d) => ({ ...d, strakheid: s.value }))}
-                    />
-                    <span>
-                      <span className="block text-sm font-medium text-slate-700 dark:text-slate-200">
-                        {s.label}
-                      </span>
-                      <span className="block text-xs text-slate-500 dark:text-slate-400">{s.hint}</span>
-                    </span>
-                  </label>
+                    label={s.label}
+                    hint={s.hint}
+                    checked={data.strakheid === s.value}
+                    onSelect={() => setData((d) => ({ ...d, strakheid: s.value }))}
+                  />
                 ))}
-              </div>
-            </div>
-          </div>
+              </nldd-list>
+            </nldd-container>
+          </nldd-container>
 
           {/* Stap 3: naam, beschrijving en de triggertest. */}
-          <div className="animate-fade-in space-y-3 border-t border-slate-200 pt-5 dark:border-slate-700">
-            <div>
-              <p className="font-semibold text-slate-700 dark:text-slate-200">Naam en beschrijving</p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                De beschrijving bepaalt wanneer de skill aanslaat. In de prompt wordt hij de afbakening;
-                in SKILL.md is het het enige wat de AI leest voordat hij de skill erbij pakt.
-              </p>
-            </div>
-            <div>
-              <label className="opl-label mb-0.5 block" htmlFor="sk-naam">
-                Naam
-              </label>
-              <input
-                id="sk-naam"
-                className="opl-input text-sm"
-                value={data.naam}
-                placeholder="Bijv. feedback burgerbrieven"
-                onChange={(e) => setData((d) => ({ ...d, naam: e.target.value }))}
-              />
-              {data.naam.trim() && (
-                <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-                  In SKILL.md: <span className="font-mono">{skillSlug(data.naam)}</span>
-                </p>
-              )}
-            </div>
-            <div>
-              <label className="opl-label mb-0.5 block" htmlFor="sk-beschrijving">
-                Beschrijving
-              </label>
-              <textarea
-                id="sk-beschrijving"
-                rows={3}
-                className="opl-input resize-y text-sm"
-                value={data.beschrijving}
-                maxLength={SKILL_DESCRIPTION_MAX}
-                placeholder="Bijv. Geeft feedback op conceptbrieven aan burgers volgens de schrijfwijzer. Gebruik deze skill wanneer iemand een brief, mail of reactie aan een burger wil laten nakijken."
-                onChange={(e) => {
-                  setData((d) => ({ ...d, beschrijving: e.target.value }));
-                  // Oude testuitslagen horen bij de oude tekst.
-                  setTests([]);
-                }}
-              />
-              <p className="mt-1 text-right text-xs text-slate-400 dark:text-slate-500">
-                {data.beschrijving.length} / {SKILL_DESCRIPTION_MAX}
-              </p>
-            </div>
+          <nldd-divider></nldd-divider>
+          <nldd-container gap="12">
+            <nldd-title
+              heading-level={4}
+              size={6}
+              text="Naam en beschrijving"
+              supporting-text="De beschrijving bepaalt wanneer de skill aanslaat. In de prompt wordt hij de afbakening; in SKILL.md is het het enige wat de AI leest voordat hij de skill erbij pakt."
+            ></nldd-title>
+            <Veld
+              id="sk-naam"
+              label="Naam"
+              value={data.naam}
+              onValue={(naam) => setData((d) => ({ ...d, naam }))}
+              placeholder="Bijv. feedback burgerbrieven"
+              help={data.naam.trim() ? `In SKILL.md: ${skillSlug(data.naam)}` : undefined}
+            />
+            <Veld
+              id="sk-beschrijving"
+              label="Beschrijving"
+              multi
+              rows={3}
+              maxlength={SKILL_DESCRIPTION_MAX}
+              value={data.beschrijving}
+              onValue={(beschrijving) => {
+                setData((d) => ({ ...d, beschrijving }));
+                // Oude testuitslagen horen bij de oude tekst.
+                setTests([]);
+              }}
+              placeholder="Bijv. Geeft feedback op conceptbrieven aan burgers volgens de schrijfwijzer. Gebruik deze skill wanneer iemand een brief, mail of reactie aan een burger wil laten nakijken."
+              help={`${data.beschrijving.length} / ${SKILL_DESCRIPTION_MAX}`}
+            />
 
-            <button
-              type="button"
-              className="opl-btn-secondary"
-              onClick={() => void runTest()}
-              disabled={busy !== null || !data.beschrijving.trim()}
-            >
-              {busy === 'test' ? <Loader2 size={16} className="animate-spin" /> : <FlaskConical size={16} />}
-              {tests.length > 0 ? 'Test opnieuw' : 'Test wanneer de skill aanslaat'}
-            </button>
+            <nldd-container horizontal-alignment="left">
+              <nldd-button
+                appearance="secondary"
+                start-icon="erlenmeyer-flask"
+                text={tests.length > 0 ? 'Test opnieuw' : 'Test wanneer de skill aanslaat'}
+                loading={busy === 'test' || undefined}
+                disabled={(busy !== null && busy !== 'test') || undefined}
+                onClick={() => void runTest()}
+              ></nldd-button>
+            </nldd-container>
 
             {tests.length > 0 && (
-              <div className="animate-fade-in space-y-2 rounded-xl border border-slate-200 p-3 dark:border-slate-700">
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Zo leest de AI je beschrijving. Klopt een oordeel niet, klik dan het andere aan.
-                </p>
-                <ul className="space-y-1.5">
-                  {tests.map((t, i) => {
-                    const afwijking = t.hoortErbij !== t.aiDacht;
-                    return (
-                      <li
-                        key={i}
-                        className={`flex flex-col gap-2 rounded-lg border p-2 sm:flex-row sm:items-center sm:justify-between ${
-                          afwijking
-                            ? 'border-amber-300 bg-amber-50/70 dark:border-amber-500/40 dark:bg-amber-500/10'
-                            : 'border-slate-200 dark:border-slate-700'
-                        }`}
-                      >
-                        <span className="text-sm text-slate-700 dark:text-slate-200">{t.tekst}</span>
-                        <span className="flex shrink-0 gap-1">
-                          {[true, false].map((waarde) => (
-                            <button
-                              key={String(waarde)}
-                              type="button"
-                              onClick={() =>
-                                setTests((ts) =>
-                                  ts.map((x, j) => (j === i ? { ...x, hoortErbij: waarde } : x)),
-                                )
-                              }
-                              className={`rounded-md border px-2 py-1 text-xs transition-colors ${
-                                t.hoortErbij === waarde
-                                  ? 'border-rijksblauw-400 bg-rijksblauw-50 font-medium text-rijksblauw-800 dark:border-rijksblauw-500/50 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-100'
-                                  : 'border-slate-200 text-slate-500 hover:border-slate-300 dark:border-slate-700 dark:text-slate-400'
-                              }`}
-                            >
-                              {waarde ? 'Hoort erbij' : 'Hoort er niet bij'}
-                            </button>
-                          ))}
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ul>
+              <nldd-container gap="8">
+                <nldd-text size="xs" color="secondary">
+                  Zo leest de AI je beschrijving. Klopt een oordeel niet, kies dan het andere.
+                </nldd-text>
+                <nldd-list appearance="box-tinted" accessible-label="Testverzoeken">
+                  {tests.map((t, i) => (
+                    <TestRow
+                      key={i}
+                      test={t}
+                      onChange={(hoortErbij) =>
+                        setTests((ts) => ts.map((x, j) => (j === i ? { ...x, hoortErbij } : x)))
+                      }
+                    />
+                  ))}
+                </nldd-list>
                 {afwijkingen.length > 0 ? (
-                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                    <p className="text-xs text-amber-700 dark:text-amber-300">
+                  <nldd-container layout="wrap" gap="8" vertical-alignment="center">
+                    <nldd-text size="xs" color="warning">
                       {afwijkingen.length === 1
                         ? 'Bij één verzoek leest de beschrijving het anders dan jij bedoelt.'
                         : `Bij ${afwijkingen.length} verzoeken leest de beschrijving het anders dan jij bedoelt.`}
-                    </p>
-                    <button
-                      type="button"
-                      className="opl-btn-primary"
+                    </nldd-text>
+                    <nldd-spacer size="flexible"></nldd-spacer>
+                    <nldd-button
+                      appearance="secondary"
+                      start-icon="sparkles"
+                      text="Scherp de beschrijving aan"
+                      loading={busy === 'scherp' || undefined}
+                      disabled={(busy !== null && busy !== 'scherp') || undefined}
                       onClick={() => void runSharpen()}
-                      disabled={busy !== null}
-                    >
-                      {busy === 'scherp' ? <Loader2 size={16} className="animate-spin" /> : <Wand2 size={16} />}
-                      Scherp de beschrijving aan
-                    </button>
-                  </div>
+                    ></nldd-button>
+                  </nldd-container>
                 ) : (
-                  <p className="flex items-center gap-1.5 pt-1 text-xs text-rijksgroen">
-                    <CheckCircle2 size={14} className="shrink-0" />
-                    Alle oordelen kloppen: de beschrijving dekt wat je bedoelt.
-                  </p>
+                  <nldd-container layout="row" gap="6" vertical-alignment="center">
+                    <nldd-icon icon="check-mark-circle" size="16" color="success"></nldd-icon>
+                    <nldd-text size="xs" color="success">
+                      Alle oordelen kloppen: de beschrijving dekt wat je bedoelt.
+                    </nldd-text>
+                  </nldd-container>
                 )}
-              </div>
+              </nldd-container>
             )}
-          </div>
+          </nldd-container>
 
           {/* Stap 4: delen als plugin. */}
-          <div className="animate-fade-in space-y-4 border-t border-slate-200 pt-5 dark:border-slate-700">
-            <div>
-              <p className="flex items-center gap-2 font-semibold text-slate-700 dark:text-slate-200">
-                <Package size={16} className="text-rijksblauw-500" /> Delen als plugin
-              </p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Deze gegevens komen niet in de instructie zelf, maar in de plugin: in publiccode.yml,
-                in het manifest en in de kop van SKILL.md. Daarmee kan de skill in een repository en
-                bij de skills-marketplace van developer.overheid.nl worden aangemeld.
-              </p>
-            </div>
+          <nldd-divider></nldd-divider>
+          <nldd-container gap="16">
+            <nldd-title
+              heading-level={4}
+              size={6}
+              text="Delen als plugin"
+              supporting-text="Deze gegevens komen niet in de instructie zelf, maar in de plugin: in publiccode.yml, in het manifest en in de kop van SKILL.md. Daarmee kan de skill in een repository en bij de skills-marketplace van developer.overheid.nl worden aangemeld."
+            ></nldd-title>
 
-            <div>
-              <label className="opl-label mb-0.5 block" htmlFor="sk-organisatie">
-                Welke organisatie is eigenaar van de afspraken in deze skill?
-              </label>
-              <input
-                id="sk-organisatie"
-                className="opl-input text-sm"
-                value={data.publicatie.organisatie}
-                placeholder="Bijv. Ministerie van Binnenlandse Zaken en Koninkrijksrelaties"
-                onChange={(e) => setPublicatie({ organisatie: e.target.value })}
+            <Veld
+              id="sk-organisatie"
+              label="Welke organisatie is eigenaar van de afspraken in deze skill?"
+              value={data.publicatie.organisatie}
+              onValue={(organisatie) => setPublicatie({ organisatie })}
+              placeholder="Bijv. Ministerie van Binnenlandse Zaken en Koninkrijksrelaties"
+            />
+
+            <nldd-container layout="grid" gap="16">
+              <Veld
+                id="sk-contact"
+                label="Wie beheert de skill en beantwoordt vragen erover?"
+                value={data.publicatie.contact}
+                onValue={(contact) => setPublicatie({ contact })}
+                placeholder="Bijv. team Schrijfadvies, directie Communicatie"
               />
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="opl-label mb-0.5 block" htmlFor="sk-contact">
-                  Wie beheert de skill en beantwoordt vragen erover?
-                </label>
-                <input
-                  id="sk-contact"
-                  className="opl-input text-sm"
-                  value={data.publicatie.contact}
-                  placeholder="Bijv. team Schrijfadvies, directie Communicatie"
-                  onChange={(e) => setPublicatie({ contact: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="opl-label mb-0.5 block" htmlFor="sk-email">
-                  Op welk e-mailadres kunnen collega&apos;s terecht?
-                </label>
-                <input
-                  id="sk-email"
-                  type="email"
-                  className="opl-input text-sm"
-                  value={data.publicatie.email}
-                  placeholder="Bijv. schrijfadvies@minbzk.nl"
-                  onChange={(e) => setPublicatie({ email: e.target.value })}
-                />
-                <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-                  Bij voorkeur een teammailbox: het adres komt in de openbare repository.
-                </p>
-              </div>
-            </div>
-
-            <div>
-              <label className="opl-label mb-0.5 block" htmlFor="sk-repository">
-                Waar komt de repository te staan?
-              </label>
-              <input
-                id="sk-repository"
-                type="url"
-                className="opl-input text-sm"
-                value={data.publicatie.repository}
-                placeholder="Bijv. https://github.com/minbzk/skill-schrijfadvies of een adres op code.overheid.nl"
-                onChange={(e) => setPublicatie({ repository: e.target.value })}
+              <Veld
+                id="sk-email"
+                label="Op welk e-mailadres kunnen collega's terecht?"
+                type="email"
+                value={data.publicatie.email}
+                onValue={(email) => setPublicatie({ email })}
+                placeholder="Bijv. schrijfadvies@minbzk.nl"
+                help="Bij voorkeur een teammailbox: het adres komt in de openbare repository."
               />
-              <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-                Weet je het nog niet, laat het dan leeg. Dan blijft dit de enige regel in
-                publiccode.yml die je later invult.
-              </p>
-            </div>
+            </nldd-container>
 
-            <div>
-              <p className="opl-label mb-0.5">Onder welke licentie deel je de skill?</p>
-              <div className="flex flex-col gap-1.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
-                <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
-                  <input
-                    type="radio"
-                    name="sk-licentie-keuze"
-                    className="h-4 w-4 accent-rijksoranje"
-                    checked={!eigenLicentie}
-                    onChange={() => {
-                      setEigenLicentie(false);
-                      setPublicatie({ licentie: DEFAULT_SKILL_LICENTIE });
-                    }}
-                  />
-                  EUPL-1.2, aanbevolen door de overheid (de tekst gaat mee)
-                </label>
-                <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
-                  <input
-                    type="radio"
-                    name="sk-licentie-keuze"
-                    className="h-4 w-4 accent-rijksoranje"
-                    checked={eigenLicentie}
-                    onChange={() => {
-                      setEigenLicentie(true);
-                      setPublicatie({ licentie: '' });
-                    }}
-                  />
-                  Een andere licentie
-                </label>
-              </div>
-              {eigenLicentie && (
-                <input
-                  id="sk-licentie"
-                  className="opl-input mt-2 text-sm"
-                  value={data.publicatie.licentie}
-                  placeholder="De SPDX-code, bijv. MIT of Apache-2.0"
-                  onChange={(e) => setPublicatie({ licentie: e.target.value.trim() })}
-                />
-              )}
-            </div>
+            <Veld
+              id="sk-repository"
+              label="Waar komt de repository te staan?"
+              type="url"
+              value={data.publicatie.repository}
+              onValue={(repository) => setPublicatie({ repository })}
+              placeholder="Bijv. https://github.com/minbzk/skill-schrijfadvies of een adres op code.overheid.nl"
+              help="Weet je het nog niet, laat het dan leeg. Dan blijft dit de enige regel in publiccode.yml die je later invult."
+            />
 
-            <div>
-              <p className="opl-label mb-0.5">
-                Is de skill al goedgekeurd door de beheerder van de afspraken?
-              </p>
-              <div className="flex flex-col gap-1.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
-                <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
-                  <input
-                    type="radio"
-                    name="sk-goedkeuring"
-                    className="h-4 w-4 accent-rijksoranje"
-                    checked={!goedgekeurd}
-                    onChange={() => {
-                      setGoedgekeurd(false);
-                      setPublicatie({ goedgekeurdDoor: '' });
-                    }}
-                  />
-                  Nee, het is een concept
-                </label>
-                <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
-                  <input
-                    type="radio"
-                    name="sk-goedkeuring"
-                    className="h-4 w-4 accent-rijksoranje"
-                    checked={goedgekeurd}
-                    onChange={() => setGoedgekeurd(true)}
-                  />
-                  Ja
-                </label>
-              </div>
-              {goedgekeurd && (
-                <input
-                  id="sk-goedgekeurd-door"
-                  className="opl-input mt-2 text-sm"
-                  value={data.publicatie.goedgekeurdDoor}
-                  placeholder="Door wie? Bijv. de juridische afdeling van DGOO"
-                  onChange={(e) => setPublicatie({ goedgekeurdDoor: e.target.value })}
-                />
-              )}
-              <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-                Het overheidsbrede standpunt over generatieve AI vraagt om bij een skill vast te
-                leggen of hij goedgekeurd is, en door wie.
-              </p>
-            </div>
+            <Keuze
+              label="Onder welke licentie deel je de skill?"
+              name="sk-licentie-keuze"
+              value={eigenLicentie ? 'eigen' : 'eupl'}
+              options={[
+                { value: 'eupl', label: 'EUPL-1.2, aanbevolen door de overheid (de tekst gaat mee)' },
+                { value: 'eigen', label: 'Een andere licentie' },
+              ]}
+              onValue={(v) => {
+                const eigen = v === 'eigen';
+                setEigenLicentie(eigen);
+                setPublicatie({ licentie: eigen ? '' : DEFAULT_SKILL_LICENTIE });
+              }}
+            />
+            {eigenLicentie && (
+              <Veld
+                id="sk-licentie"
+                label="Licentie"
+                value={data.publicatie.licentie}
+                onValue={(v) => setPublicatie({ licentie: v.trim() })}
+                placeholder="De SPDX-code, bijv. MIT of Apache-2.0"
+              />
+            )}
+
+            <Keuze
+              label="Is de skill al goedgekeurd door de beheerder van de afspraken?"
+              name="sk-goedkeuring"
+              value={goedgekeurd ? 'ja' : 'nee'}
+              options={[
+                { value: 'nee', label: 'Nee, het is een concept' },
+                { value: 'ja', label: 'Ja' },
+              ]}
+              help="Het overheidsbrede standpunt over generatieve AI vraagt om bij een skill vast te leggen of hij goedgekeurd is, en door wie."
+              onValue={(v) => {
+                if (v === 'ja') setGoedgekeurd(true);
+                else {
+                  setGoedgekeurd(false);
+                  setPublicatie({ goedgekeurdDoor: '' });
+                }
+              }}
+            />
+            {goedgekeurd && (
+              <Veld
+                id="sk-goedgekeurd-door"
+                label="Goedgekeurd door"
+                value={data.publicatie.goedgekeurdDoor}
+                onValue={(goedgekeurdDoor) => setPublicatie({ goedgekeurdDoor })}
+                placeholder="Door wie? Bijv. de juridische afdeling van DGOO"
+              />
+            )}
 
             {/* Wat er nog openstaat: lege velden, onbeantwoorde vragen van de AI en
                 invulplekken van de plugin. Klik springt naar het veld. */}
-            <div
-              className={`rounded-xl border p-3 ${
-                openPunten.length > 0
-                  ? 'border-amber-200 bg-amber-50/60 dark:border-amber-500/30 dark:bg-amber-500/10'
-                  : 'border-rijksgroen/30 bg-rijksgroen/5'
-              }`}
-            >
-              {openPunten.length > 0 ? (
-                <>
-                  <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
-                    {openPunten.length === 1
-                      ? 'Nog één punt voor een volledige skill'
-                      : `Nog ${openPunten.length} punten voor een volledige skill`}
-                  </p>
-                  <ul className="mt-1.5 space-y-1">
-                    {openPunten.map((punt) => (
-                      <li key={punt.veld}>
-                        <button
-                          type="button"
-                          onClick={() => springNaar(punt.veld)}
-                          className="flex items-start gap-1.5 text-left text-xs text-amber-800 hover:underline dark:text-amber-200"
-                        >
-                          <CircleDashed size={13} className="mt-0.5 shrink-0" />
-                          {punt.tekst}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                    Je kunt de skill ook nu al bouwen. Wat leeg is, komt in de plugin als invulplek
-                    tussen rechte haken.
-                  </p>
-                </>
-              ) : (
-                <p className="flex items-center gap-1.5 text-sm text-rijksgroen">
-                  <CheckCircle2 size={15} className="shrink-0" />
-                  Alles is ingevuld: de skill en de plugin zijn compleet.
-                </p>
-              )}
-            </div>
-          </div>
+            {openPunten.length > 0 ? (
+              <nldd-banner
+                variant="warning"
+                text={
+                  openPunten.length === 1
+                    ? 'Nog één punt voor een volledige skill'
+                    : `Nog ${openPunten.length} punten voor een volledige skill`
+                }
+                supporting-text="Je kunt de skill ook nu al bouwen. Wat leeg is, komt in de plugin als invulplek tussen rechte haken."
+              >
+                <nldd-container gap="2">
+                  {openPunten.map((punt) => (
+                    <nldd-button
+                      key={punt.veld}
+                      size="sm"
+                      appearance="neutral-transparent"
+                      horizontal-alignment="left"
+                      start-icon="circle-dashed"
+                      text={punt.tekst}
+                      onClick={() => springNaar(punt.veld)}
+                    ></nldd-button>
+                  ))}
+                </nldd-container>
+              </nldd-banner>
+            ) : (
+              <nldd-banner variant="success" text="Alles is ingevuld: de skill en de plugin zijn compleet."></nldd-banner>
+            )}
+          </nldd-container>
         </>
       )}
-    </div>
+    </nldd-container>
+  );
+}
+
+/** A labeled text field bound to a value; `multi` makes it a multi-line field. */
+function Veld({
+  id,
+  label,
+  value,
+  onValue,
+  placeholder,
+  multi,
+  rows,
+  type,
+  maxlength,
+  help,
+  info,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onValue: (value: string) => void;
+  placeholder?: string;
+  multi?: boolean;
+  rows?: number;
+  type?: 'email' | 'url';
+  maxlength?: number;
+  help?: string;
+  /** Explanation behind the info dot beside the label. */
+  info?: string;
+}) {
+  const ref = useRef<HTMLElement & { value?: string }>(null);
+  useNlddValue(ref, value, onValue);
+  // nldd-form-field 0.18.0 has no place for a control beside its label, so a
+  // field with an info dot draws its label itself and names the input directly.
+  const header = info && (
+    <nldd-container layout="row" gap="4" vertical-alignment="center">
+      <nldd-text>{label}</nldd-text>
+      <InfoDot label="Uitleg bij dit veld" text={info} />
+    </nldd-container>
+  );
+  return (
+    <nldd-form-field label={info ? undefined : label}>
+      {header}
+      {multi ? (
+        <nldd-multi-line-text-field
+          ref={ref}
+          id={id}
+          accessible-label={info ? label : undefined}
+          rows={rows}
+          placeholder={placeholder}
+          maxlength={maxlength === undefined ? undefined : String(maxlength)}
+        ></nldd-multi-line-text-field>
+      ) : (
+        <nldd-text-field ref={ref} id={id} type={type ?? 'text'} placeholder={placeholder}></nldd-text-field>
+      )}
+      {help && <nldd-form-field-help-text>{help}</nldd-form-field-help-text>}
+    </nldd-form-field>
+  );
+}
+
+/** A choice of a few options as radio buttons. */
+function Keuze({
+  label,
+  name,
+  value,
+  options,
+  onValue,
+  help,
+}: {
+  label: string;
+  name: string;
+  value: string;
+  options: { value: string; label: string }[];
+  onValue: (value: string) => void;
+  help?: string;
+}) {
+  const ref = useRef<HTMLElement>(null);
+  useNlddEvent<CustomEvent<{ checked: boolean; value: string }>>(ref, 'change', (e) => {
+    if (e.detail?.checked) onValue(e.detail.value);
+  });
+  return (
+    <nldd-form-field label={label}>
+      <nldd-radio-button-group ref={ref} name={name}>
+        {options.map((o) => (
+          <nldd-radio-button-field
+            key={o.value}
+            value={o.value}
+            label={o.label}
+            checked={o.value === value || undefined}
+          ></nldd-radio-button-field>
+        ))}
+      </nldd-radio-button-group>
+      {help && <nldd-form-field-help-text>{help}</nldd-form-field-help-text>}
+    </nldd-form-field>
+  );
+}
+
+/** One option of a radio list, with a line of explanation under it. */
+function RadioRow({
+  label,
+  hint,
+  checked,
+  onSelect,
+}: {
+  label: string;
+  hint: string;
+  checked: boolean;
+  onSelect: () => void;
+}) {
+  const ref = useRef<HTMLElement>(null);
+  useNlddEvent<CustomEvent<{ checked: boolean }>>(ref, 'change', (e) => {
+    if (e.detail?.checked) onSelect();
+  });
+  return (
+    <nldd-list-item ref={ref} radio checked={checked || undefined}>
+      <nldd-cell>
+        <nldd-radio-button decorative checked={checked || undefined}></nldd-radio-button>
+      </nldd-cell>
+      <nldd-spacer-cell size="8"></nldd-spacer-cell>
+      <nldd-text-cell text={label} supporting-text={hint}></nldd-text-cell>
+    </nldd-list-item>
+  );
+}
+
+/** One test request with the user's verdict on whether it belongs to the skill. */
+function TestRow({ test: t, onChange }: { test: SkillTestVerzoek; onChange: (hoortErbij: boolean) => void }) {
+  const ref = useRef<HTMLElement>(null);
+  useNlddEvent<CustomEvent<{ value: string }>>(ref, 'change', (e) => onChange(e.detail?.value === 'ja'));
+  const afwijking = t.hoortErbij !== t.aiDacht;
+  return (
+    <nldd-list-item>
+      <nldd-text-cell text={t.tekst}></nldd-text-cell>
+      {afwijking && (
+        <nldd-cell>
+          <nldd-badge size="sm" color="warning" text="Anders dan de AI"></nldd-badge>
+        </nldd-cell>
+      )}
+      <nldd-spacer-cell size="8"></nldd-spacer-cell>
+      <nldd-cell>
+        <nldd-segmented-control
+          ref={ref}
+          size="sm"
+          width="fit-content"
+          accessible-label={`Oordeel over: ${t.tekst}`}
+          value={t.hoortErbij ? 'ja' : 'nee'}
+        >
+          <nldd-segmented-control-item value="ja" text="Hoort erbij" selected={t.hoortErbij || undefined}></nldd-segmented-control-item>
+          <nldd-segmented-control-item value="nee" text="Hoort er niet bij" selected={!t.hoortErbij || undefined}></nldd-segmented-control-item>
+        </nldd-segmented-control>
+      </nldd-cell>
+    </nldd-list-item>
   );
 }

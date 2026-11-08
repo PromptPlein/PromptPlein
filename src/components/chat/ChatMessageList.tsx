@@ -1,22 +1,16 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
-  AlertTriangle,
-  ArrowDown,
-  ArrowRight,
-  FileText,
-  Globe,
-  Lightbulb,
-  Pencil,
-  RotateCcw,
-  Save,
-  Send,
-  Volume2,
-  VolumeX,
-  Wand2,
-  X,
-} from '@/components/common/icons';
-import clsx from 'clsx';
+  Fragment,
+  forwardRef,
+  memo,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import { notify } from '@/lib/notify';
+import { useNlddEvent, useNlddValue } from '@/lib/nldd';
 import {
   prefersReducedMotion,
   useAccessibility,
@@ -25,35 +19,65 @@ import {
 import { isConversationActive } from '@/lib/conversationMode';
 import { matchesShortcut, SHORTCUTS } from '@/lib/shortcuts';
 import { isSpeaking, speak, stopSpeaking, toSpeakableText, useSpeakingId } from '@/lib/speech';
+import { visibleHeight } from '@/lib/viewportWatch';
 import ChatAnswer from './ChatAnswer';
 import CopyMessageButton from './CopyMessageButton';
 import type { ChatMessage } from '@/types';
 
-/** Ruimte boven de vraag zodra die bovenaan staat; gelijk aan de `py-4` van de lijst. */
-const LIST_PADDING = 16;
+/** Ruimte boven de vraag zodra die bovenaan staat. */
+const TOP_GAP = 16;
 /** Zo veel tekst onder beeld hoort er te zijn voordat de knop "Naar beneden" komt. */
 const JUMP_THRESHOLD = 48;
 /** Eigen berichten boven deze omvang klappen in: het zijn vaak hele prompts. */
 const LONG_MESSAGE_CHARS = 800;
 const LONG_MESSAGE_LINES = 12;
+/** Zo veel van een ingeklapt bericht blijft staan. */
+const COLLAPSED_CHARS = 400;
+const COLLAPSED_LINES = 6;
+
+/** Wat ChatPage van de lijst kan vragen: de knop "Naar beneden" staat bij het tekstvak. */
+export interface ChatMessageListHandle {
+  jumpToEnd: () => void;
+}
+
+/**
+ * The bars of the nldd-page this list sits in: the sticky title bar above, and
+ * the composer below the conversation. The last turn leaves room for both.
+ */
+function stickyBars(el: HTMLElement) {
+  const page = el.closest('nldd-page');
+  const header = page?.querySelector<HTMLElement>(':scope > [slot="header"]');
+  const footer = page?.querySelector<HTMLElement>(':scope > [slot="footer"], :scope > [data-chat-composer]');
+  return {
+    top: header?.getBoundingClientRect().height ?? 0,
+    bottom: footer?.getBoundingClientRect().height ?? 0,
+    footerEl: footer ?? null,
+  };
+}
+
+function scrollRoot() {
+  return document.scrollingElement ?? document.documentElement;
+}
+
+/** De tekst met regeleinden, als regels met een <br> ertussen. */
+function withBreaks(text: string) {
+  const lines = text.split('\n');
+  return lines.map((line, i) => (
+    <Fragment key={i}>
+      {line}
+      {i < lines.length - 1 && <br />}
+    </Fragment>
+  ));
+}
 
 /**
  * De berichtenlijst van de chat. Elke rij is gememoïseerd: tijdens het streamen
  * verandert alleen het laatste bericht, dus alleen die rij rendert opnieuw.
+ *
+ * Het document scrollt, niet de lijst: de titelbalk en het tekstvak staan vast
+ * in de pagina eromheen (nldd-page met sticky-header en sticky-footer).
  */
-export default function ChatMessageList({
-  messages,
-  streaming,
-  phase,
-  onRetry,
-  onContinue,
-  onRepair,
-  onEdit,
-  onImprove,
-  onSaveAsPrompt,
-  nudgeMessageId,
-  onNudgeDismiss,
-}: {
+const ChatMessageList = forwardRef<ChatMessageListHandle, {
   messages: ChatMessage[];
   streaming: boolean;
   /**
@@ -69,21 +93,33 @@ export default function ChatMessageList({
   onRepair?: (text: string) => void;
   /** Vervang je laatste bericht en laat het antwoord opnieuw schrijven. */
   onEdit?: (messageId: string, text: string) => void;
-  /**
-   * "Verbeter in generator" op eigen berichten (omgekeerde handoff). Niet
-   * meegegeven (bijv. in de Testkamer — je bent daar al in de generator) =
-   * geen actie zichtbaar.
-   */
+  /** "Verbeter in generator" op eigen berichten (omgekeerde handoff). */
   onImprove?: (text: string) => void;
   /** "Bewaar als prompt": sla een eigen bericht op in de bibliotheek. */
   onSaveAsPrompt?: (text: string) => void;
   /** Onder dit eigen bericht staat de bouw-een-prompt-tip (zie ChatPage). */
   nudgeMessageId?: string | null;
   onNudgeDismiss?: () => void;
-}) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
-  const [showJump, setShowJump] = useState(false);
+  /** Of er genoeg tekst onder beeld staat voor de knop "Naar beneden". */
+  onShowJumpChange?: (show: boolean) => void;
+}>(function ChatMessageList(
+  {
+    messages,
+    streaming,
+    phase,
+    onRetry,
+    onContinue,
+    onRepair,
+    onEdit,
+    onImprove,
+    onSaveAsPrompt,
+    nudgeMessageId,
+    onNudgeDismiss,
+    onShowJumpChange,
+  },
+  ref,
+) {
+  const contentRef = useRef<HTMLElement>(null);
   const [status, setStatus] = useState('');
   const { settings, speechOn } = useAccessibility();
   const speechVoice = useSpeechVoice();
@@ -93,6 +129,9 @@ export default function ChatMessageList({
   const lastTopRef = useRef(0);
   const streamingRef = useRef(streaming);
   streamingRef.current = streaming;
+  const showJumpRef = useRef(false);
+  const onShowJumpRef = useRef(onShowJumpChange);
+  onShowJumpRef.current = onShowJumpChange;
 
   const lastUserIndex = messages.map((m) => m.role).lastIndexOf('user');
   const lastUserId = lastUserIndex >= 0 ? messages[lastUserIndex].id : null;
@@ -100,79 +139,111 @@ export default function ChatMessageList({
     lastUserIndex >= 0 && lastUserIndex === messages.length - 2;
 
   /**
-   * De laatste beurt vult minstens de hele lijst. Alleen dan is er genoeg ruimte
-   * om de vraag bovenaan te zetten terwijl het antwoord nog kort is. Staat als
-   * CSS-variabele op de lijst, zodat de maat meteen geldt en de rijen niet
-   * opnieuw hoeven te renderen.
+   * De laatste beurt vult minstens het zichtbare deel van het venster. Alleen dan
+   * is er genoeg ruimte om de vraag bovenaan te zetten terwijl het antwoord nog
+   * kort is. De maat gaat als `min-height` rechtstreeks op de rij van het antwoord,
+   * zodat de rijen niet opnieuw hoeven te renderen.
    */
   const fitLastTurn = useCallback(() => {
-    const list = scrollRef.current;
-    if (!list || !lastUserId) return;
-    const row = list.querySelector<HTMLElement>(`[data-message-id="${lastUserId}"]`);
-    if (!row) return;
-    const fill = list.clientHeight - row.getBoundingClientRect().height - 2 * LIST_PADDING - 24;
-    list.style.setProperty('--turn-fill', `${Math.max(0, fill)}px`);
+    const content = contentRef.current;
+    if (!content) return;
+    const fill = content.querySelector<HTMLElement>('[data-turn-fill]');
+    content.querySelectorAll<HTMLElement>('[data-turn-row][min-height]').forEach((row) => {
+      if (row !== fill) row.removeAttribute('min-height');
+    });
+    if (!fill || !lastUserId) return;
+    const question = content.querySelector<HTMLElement>(`[data-message-id="${lastUserId}"]`);
+    if (!question) return;
+    // The question belongs right under the title bar and the composer at the
+    // bottom of the window, so the answer row makes up the difference.
+    const bars = stickyBars(content);
+    const composer = bars.footerEl?.getBoundingClientRect().bottom;
+    if (composer === undefined) return;
+    const span = composer - question.getBoundingClientRect().top;
+    const wanted = visibleHeight() - bars.top - TOP_GAP;
+    const room = fill.getBoundingClientRect().height + wanted - span;
+    fill.setAttribute('min-height', `${Math.max(0, Math.round(room))}px`);
   }, [lastUserId]);
+
+  const syncJump = useCallback(() => {
+    // What is still below the window: up to the end of the composer under the
+    // conversation, or the end of the document when there is none.
+    const content = contentRef.current;
+    const composer = content ? stickyBars(content).footerEl : null;
+    const end = composer
+      ? composer.getBoundingClientRect().bottom
+      : scrollRoot().scrollHeight - window.scrollY;
+    const show = end - visibleHeight() > JUMP_THRESHOLD;
+    if (show === showJumpRef.current) return;
+    showJumpRef.current = show;
+    onShowJumpRef.current?.(show);
+  }, []);
 
   // Een nieuwe vraag gaat bovenaan staan en daarna blijft het scherm stil: het
   // antwoord groeit eronder en je leest in je eigen tempo vanaf het begin. Ook
   // een geopend gesprek begint bij de laatste vraag.
   useLayoutEffect(() => {
-    const list = scrollRef.current;
-    if (!list || !lastUserId) return;
+    const content = contentRef.current;
+    if (!content || !lastUserId) return;
     followRef.current = false;
     stopSpeaking();
     fitLastTurn();
-    const row = list.querySelector<HTMLElement>(`[data-message-id="${lastUserId}"]`);
+    const row = content.querySelector<HTMLElement>(`[data-message-id="${lastUserId}"]`);
     if (!row) return;
-    const offset = row.getBoundingClientRect().top - list.getBoundingClientRect().top;
-    list.scrollTo({
-      top: list.scrollTop + offset - LIST_PADDING,
+    const { top } = stickyBars(content);
+    window.scrollTo({
+      top: window.scrollY + row.getBoundingClientRect().top - top - TOP_GAP,
       behavior: streamingRef.current && !prefersReducedMotion() ? 'smooth' : 'auto',
     });
   }, [lastUserId, fitLastTurn]);
 
   useEffect(() => {
-    const list = scrollRef.current;
     const content = contentRef.current;
-    if (!list || !content) return;
-
-    const syncJump = () =>
-      setShowJump(list.scrollHeight - list.scrollTop - list.clientHeight > JUMP_THRESHOLD);
+    if (!content) return;
 
     const onResize = () => {
       fitLastTurn();
-      if (followRef.current) list.scrollTop = list.scrollHeight;
+      if (followRef.current) window.scrollTo({ top: scrollRoot().scrollHeight });
       syncJump();
     };
 
     const onScroll = () => {
-      if (list.scrollTop < lastTopRef.current - 2) followRef.current = false;
-      lastTopRef.current = list.scrollTop;
+      if (window.scrollY < lastTopRef.current - 2) followRef.current = false;
+      lastTopRef.current = window.scrollY;
       syncJump();
     };
 
     const observer = new ResizeObserver(onResize);
-    observer.observe(list);
     observer.observe(content);
-    list.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onResize);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    syncJump();
     return () => {
       observer.disconnect();
-      list.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('scroll', onScroll);
+      if (showJumpRef.current) {
+        showJumpRef.current = false;
+        onShowJumpRef.current?.(false);
+      }
     };
-  }, [fitLastTurn]);
+  }, [fitLastTurn, syncJump]);
 
-  function jumpToEnd() {
-    const list = scrollRef.current;
-    if (!list) return;
-    followRef.current = streaming;
-    list.scrollTo({
-      top: list.scrollHeight,
-      behavior: streaming || prefersReducedMotion() ? 'auto' : 'smooth',
-    });
-    // De knop verdwijnt zo meteen; de focus mag niet met hem mee verdwijnen.
-    list.focus({ preventScroll: true });
-  }
+  useImperativeHandle(
+    ref,
+    () => ({
+      jumpToEnd() {
+        followRef.current = streamingRef.current;
+        window.scrollTo({
+          top: scrollRoot().scrollHeight,
+          behavior: streamingRef.current || prefersReducedMotion() ? 'auto' : 'smooth',
+        });
+        // De knop verdwijnt zo meteen; de focus mag niet met hem mee verdwijnen.
+        contentRef.current?.focus({ preventScroll: true });
+      },
+    }),
+    [],
+  );
 
   // Wat een schermlezer hoort. Niet de hele lijst als live-regio: dan zou hij
   // elk woord van een lopend antwoord oppikken. Alleen begin en einde, en de
@@ -253,61 +324,42 @@ export default function ChatMessageList({
   }, []);
 
   return (
-    <div className="relative flex min-h-0 flex-auto flex-col">
-      {/* Bereikbaar met het toetsenbord, zodat de pijltjes en PageDown het gesprek
-          scrollen. Zie de status hieronder voor wat een schermlezer hoort. */}
-      <div
-        ref={scrollRef}
-        data-chat-lijst
-        tabIndex={0}
-        role="region"
-        aria-label="Gesprek"
-        aria-busy={streaming}
-        className="opl-scroll-slim min-h-0 flex-auto overflow-y-auto px-4 py-4 [scrollbar-gutter:stable_both-edges] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-rijksblauw-500 sm:px-6"
-      >
-        {/* Vaste leeskolom: 60ch is in Rijks Sans zo'n 72 tekens per regel (gemeten),
-            en onder de 75 leest het oog het prettigst. De schuifbalk blijft wel aan
-            de rand van de kaart. */}
-        <div ref={contentRef} className="mx-auto max-w-[60ch] space-y-6">
-          {messages.map((message, i) => (
-            <ChatMessageRow
-              key={message.id}
-              message={message}
-              isStreaming={streaming && i === messages.length - 1 && message.role === 'assistant'}
-              // Alleen de rij die nu schrijft heeft de fase nodig; de rest krijgt
-              // null, zodat een fasewissel niet elke rij opnieuw laat renderen.
-              phase={streaming && i === messages.length - 1 ? (phase ?? null) : null}
-              onRetry={onRetry}
-              onContinue={onContinue}
-              onRepair={streaming ? undefined : onRepair}
-              canRetry={!streaming && i === messages.length - 1}
-              fillsTurn={lastIsAnswerToQuestion && i === messages.length - 1}
-              onEdit={!streaming && i === lastUserIndex ? onEdit : undefined}
-              onImprove={onImprove}
-              onSaveAsPrompt={onSaveAsPrompt}
-              showNudge={message.id === nudgeMessageId}
-              onNudgeDismiss={onNudgeDismiss}
-            />
-          ))}
-        </div>
-      </div>
+    <>
+      {/* Focusable without a tab stop, so "Naar beneden" can hand its focus here. */}
+      <nldd-container ref={contentRef} tabIndex={-1} gap="24">
+        {messages.map((message, i) => (
+          <ChatMessageRow
+            key={message.id}
+            message={message}
+            isStreaming={streaming && i === messages.length - 1 && message.role === 'assistant'}
+            // Alleen de rij die nu schrijft heeft de fase nodig; de rest krijgt
+            // null, zodat een fasewissel niet elke rij opnieuw laat renderen.
+            phase={streaming && i === messages.length - 1 ? (phase ?? null) : null}
+            onRetry={onRetry}
+            onContinue={onContinue}
+            onRepair={streaming ? undefined : onRepair}
+            canRetry={!streaming && i === messages.length - 1}
+            fillsTurn={lastIsAnswerToQuestion && i === messages.length - 1}
+            onEdit={!streaming && i === lastUserIndex ? onEdit : undefined}
+            onImprove={onImprove}
+            onSaveAsPrompt={onSaveAsPrompt}
+            showNudge={message.id === nudgeMessageId}
+            onNudgeDismiss={onNudgeDismiss}
+          />
+        ))}
+      </nldd-container>
 
-      {showJump && (
-        <button
-          type="button"
-          onClick={jumpToEnd}
-          className="absolute bottom-3 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 whitespace-nowrap rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-rijksblauw-700 shadow-md hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-rijksblauw-500 dark:border-slate-600 dark:bg-slate-800 dark:text-rijksblauw-200 dark:hover:bg-slate-700"
-        >
-          <ArrowDown size={15} /> Naar beneden
-        </button>
-      )}
-
-      <div role="status" aria-atomic="true" className="sr-only">
+      {/* The status line a screen reader hears. nldd 0.18.0 has no visible status
+          component that stays silent on screen, and the begin and end of an answer
+          are already visible, so this one is hidden. */}
+      <nldd-visually-hidden role="status" aria-atomic="true">
         {status}
-      </div>
-    </div>
+      </nldd-visually-hidden>
+    </>
   );
-}
+});
+
+export default ChatMessageList;
 
 const NO_VOICE_MESSAGE =
   'Er staat geen Nederlandse stem op dit apparaat. Kies er een bij Toegankelijkheid.';
@@ -333,15 +385,74 @@ function SpeakButton({ messageId, text }: { messageId: string; text: string }) {
   }
 
   return (
-    <button
-      type="button"
-      onClick={toggle}
+    <nldd-button
+      size="xs"
+      appearance="neutral-transparent"
+      start-icon={active ? 'speaker-slash' : 'speaker-volume-high'}
+      text={active ? 'Stop voorlezen' : 'Voorlezen'}
       aria-pressed={active}
-      className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-rijksblauw-700 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-rijksblauw-200"
-    >
-      {active ? <VolumeX size={12} /> : <Volume2 size={12} />}
-      {active ? 'Stop voorlezen' : 'Voorlezen'}
-    </button>
+      onClick={toggle}
+    ></nldd-button>
+  );
+}
+
+/** Het bewerkveld van je laatste bericht. Enter verstuurt, Escape annuleert. */
+function MessageEditor({
+  initial,
+  onCancel,
+  onSave,
+}: {
+  initial: string;
+  onCancel: () => void;
+  onSave: (text: string) => void;
+}) {
+  const [draft, setDraft] = useState(initial);
+  const fieldRef = useRef<HTMLElement & { value?: string }>(null);
+  useNlddValue(fieldRef, draft, setDraft);
+
+  useNlddEvent<KeyboardEvent>(fieldRef, 'keydown', (e) => {
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      onCancel();
+    }
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+      e.preventDefault();
+      if (draft.trim()) onSave(draft.trim());
+    }
+  });
+
+  // The field has no autofocus of its own: focus the textarea in its shadow root
+  // and put the caret after the last letter.
+  useEffect(() => {
+    const textarea = fieldRef.current?.shadowRoot?.querySelector('textarea');
+    if (!textarea) {
+      fieldRef.current?.focus();
+      return;
+    }
+    textarea.focus();
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+  }, []);
+
+  return (
+    <nldd-container gap="8">
+      <nldd-multi-line-text-field
+        ref={fieldRef}
+        accessible-label="Bewerk je bericht"
+        rows={Math.min(14, initial.split('\n').length + 1)}
+      ></nldd-multi-line-text-field>
+      <nldd-container layout="row" gap="8" horizontal-alignment="right">
+        <nldd-button appearance="secondary" size="sm" text="Annuleren" onClick={onCancel}></nldd-button>
+        <nldd-button
+          appearance="primary"
+          size="sm"
+          start-icon="send"
+          text="Versturen"
+          onClick={() => {
+            if (draft.trim()) onSave(draft.trim());
+          }}
+        ></nldd-button>
+      </nldd-container>
+    </nldd-container>
   );
 }
 
@@ -362,179 +473,122 @@ function UserMessage({
   onNudgeDismiss?: () => void;
 }) {
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState('');
   const [expanded, setExpanded] = useState(false);
-  const editorRef = useRef<HTMLTextAreaElement>(null);
-  const editButtonRef = useRef<HTMLButtonElement>(null);
+  const editButtonRef = useRef<HTMLElement>(null);
+  const nudgeRef = useRef<HTMLElement>(null);
+  useNlddEvent(nudgeRef, 'dismiss', () => onNudgeDismiss?.());
 
-  const long =
-    message.content.length > LONG_MESSAGE_CHARS ||
-    message.content.split('\n').length > LONG_MESSAGE_LINES;
+  const lines = message.content.split('\n');
+  const long = message.content.length > LONG_MESSAGE_CHARS || lines.length > LONG_MESSAGE_LINES;
   const collapsed = long && !expanded;
-
-  useEffect(() => {
-    if (!editing) return;
-    const el = editorRef.current;
-    if (!el) return;
-    el.focus();
-    el.setSelectionRange(el.value.length, el.value.length);
-  }, [editing]);
-
-  function startEdit() {
-    setDraft(message.content);
-    setEditing(true);
-  }
+  const shown = collapsed
+    ? `${lines.slice(0, COLLAPSED_LINES).join('\n').slice(0, COLLAPSED_CHARS).trimEnd()}…`
+    : message.content;
 
   function cancelEdit() {
     setEditing(false);
     // De knop bestaat weer zodra React heeft gerenderd.
-    requestAnimationFrame(() => editButtonRef.current?.focus());
+    setTimeout(() => editButtonRef.current?.focus(), 0);
   }
 
-  function saveEdit() {
-    const value = draft.trim();
+  function saveEdit(value: string) {
     if (!value || !onEdit) return;
     setEditing(false);
     onEdit(message.id, value);
   }
 
   return (
-    <div data-message-id={message.id} className="group flex flex-col items-end">
-      <h2 className="sr-only">Jouw bericht</h2>
+    <nldd-container data-message-id={message.id} gap="4" horizontal-alignment="right">
+      <nldd-visually-hidden>
+        <nldd-title heading-level={2} text="Jouw bericht"></nldd-title>
+      </nldd-visually-hidden>
 
       {editing ? (
-        <div className="w-full">
-          <textarea
-            ref={editorRef}
-            value={draft}
-            aria-label="Bewerk je bericht"
-            rows={Math.min(14, draft.split('\n').length + 1)}
-            className="opl-input !text-base leading-7"
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                e.stopPropagation();
-                cancelEdit();
-              }
-              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-                e.preventDefault();
-                saveEdit();
-              }
-            }}
-          />
-          <div className="mt-2 flex justify-end gap-2">
-            <button type="button" className="opl-btn-ghost !px-3 !py-1.5" onClick={cancelEdit}>
-              Annuleren
-            </button>
-            <button
-              type="button"
-              className="opl-btn-primary !px-3 !py-1.5"
-              disabled={!draft.trim()}
-              onClick={saveEdit}
-            >
-              <Send size={14} /> Versturen
-            </button>
-          </div>
-        </div>
+        <MessageEditor initial={message.content} onCancel={cancelEdit} onSave={saveEdit} />
       ) : (
-        <div className="max-w-[85%] rounded-2xl rounded-br-md bg-rijksblauw-50 px-4 py-2.5 text-base leading-7 text-slate-900 dark:bg-rijksblauw-500/15 dark:text-slate-100">
-          <div
-            className={clsx(
-              'whitespace-pre-wrap break-words',
-              collapsed &&
-                'max-h-48 overflow-hidden [mask-image:linear-gradient(to_bottom,black_65%,transparent)]',
-            )}
-          >
-            {message.content}
-          </div>
-          {long && (
-            <button
-              type="button"
-              aria-expanded={expanded}
-              onClick={() => setExpanded((v) => !v)}
-              className="mt-1 text-sm font-medium text-rijksblauw-700 hover:underline dark:text-rijksblauw-200"
-            >
-              {expanded ? 'Toon minder' : 'Toon alles'}
-            </button>
-          )}
-        </div>
+        <nldd-container width="fit-content" max-width="85%">
+          <nldd-box background="accent-tinted">
+            {/* fit-content here too: a container is an inline-size query container,
+                and inside a fit-content parent it would size itself to zero. */}
+            <nldd-container width="fit-content" padding-inline="16" padding-block="10" gap="4">
+              <nldd-text size="lg" line-height="loose">
+                {withBreaks(shown)}
+              </nldd-text>
+              {long && (
+                <nldd-button
+                  size="xs"
+                  appearance="accent-transparent"
+                  text={expanded ? 'Toon minder' : 'Toon alles'}
+                  expanded={expanded || undefined}
+                  onClick={() => setExpanded((v) => !v)}
+                ></nldd-button>
+              )}
+            </nldd-container>
+          </nldd-box>
+        </nldd-container>
       )}
 
-      {/* Acties onder het eigen bericht verschijnen bij de muis of toetsenbordfocus,
-          zodat het gesprek rustig blijft. In de instellingen kun je ze altijd
-          tonen; onzichtbaar zijn ze alleen voor het oog, niet voor de tabvolgorde. */}
       {message.content.trim() && !editing && (
-        <div className="opl-msg-actions mt-1 flex flex-wrap items-center justify-end gap-x-3">
+        <nldd-container layout="wrap" gap="4" horizontal-alignment="right">
           <CopyMessageButton text={message.content} label="" />
           {onEdit && (
-            <button
+            <nldd-button
               ref={editButtonRef}
-              type="button"
-              className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-medium text-slate-600 hover:text-rijksblauw-700 dark:text-slate-300 dark:hover:text-rijksblauw-200"
-              onClick={startEdit}
-            >
-              <Pencil size={12} /> Bewerk
-            </button>
+              size="xs"
+              appearance="neutral-transparent"
+              start-icon="pencil"
+              text="Bewerk"
+              onClick={() => setEditing(true)}
+            ></nldd-button>
           )}
           {onImprove && (
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-medium text-slate-600 hover:text-rijksblauw-700 dark:text-slate-300 dark:hover:text-rijksblauw-200"
-              onClick={() => onImprove(message.content)}
-              title="Maak hier in de generator een sterkere, herbruikbare prompt van"
-            >
-              <Wand2 size={12} /> Verbeter in generator
-            </button>
+            <nldd-tooltip text="Maak hier in de generator een sterkere, herbruikbare prompt van">
+              <nldd-button
+                size="xs"
+                appearance="neutral-transparent"
+                start-icon="magic"
+                text="Verbeter in generator"
+                onClick={() => onImprove(message.content)}
+              ></nldd-button>
+            </nldd-tooltip>
           )}
           {onSaveAsPrompt && (
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-medium text-slate-600 hover:text-rijksblauw-700 dark:text-slate-300 dark:hover:text-rijksblauw-200"
-              onClick={() => onSaveAsPrompt(message.content)}
-              title="Sla dit bericht op als prompt in de bibliotheek"
-            >
-              <Save size={12} /> Bewaar als prompt
-            </button>
+            <nldd-tooltip text="Sla dit bericht op als prompt in de bibliotheek">
+              <nldd-button
+                size="xs"
+                appearance="neutral-transparent"
+                start-icon="save"
+                text="Bewaar als prompt"
+                onClick={() => onSaveAsPrompt(message.content)}
+              ></nldd-button>
+            </nldd-tooltip>
           )}
-        </div>
+        </nldd-container>
       )}
 
       {/* De bouw-een-prompt-tip: dit bericht leek een opdracht zonder
           structuur (zie looksLikeMessyPrompt). Subtiel, en definitief weg te
           klikken. */}
       {showNudge && onImprove && (
-        // Vaste opbouw, op elke breedte gelijk: lampje en tekst links, het kruisje
-        // rechtsboven, de knop recht onder de tekst. Geen flex-wrap, want dan
-        // springt de knop per schermbreedte naar een andere plek.
-        <div className="mt-1.5 flex items-start gap-2 rounded-lg border border-rijksblauw-200 bg-rijksblauw-50/60 py-2 pl-3 pr-1 text-xs text-slate-600 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10 dark:text-slate-300">
-          <Lightbulb size={14} className="mt-px shrink-0 text-rijksoranje" />
-          <div className="min-w-0 flex-1">
-            <p>
-              Tip: dit lijkt op een opdracht. In de generator bouw je er een sterkere, herbruikbare
-              prompt van.
-            </p>
-            <button
-              type="button"
-              className="mt-1.5 inline-flex items-center gap-1 font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
-              onClick={() => onImprove(message.content)}
-            >
-              Bouw in generator <ArrowRight size={12} />
-            </button>
-          </div>
-          {onNudgeDismiss && (
-            <button
-              type="button"
-              className="flex shrink-0 items-center justify-center rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300"
-              onClick={onNudgeDismiss}
-              aria-label="Verberg deze tip voortaan"
-              title="Verberg deze tip voortaan"
-            >
-              <X size={14} />
-            </button>
-          )}
-        </div>
+        <nldd-banner
+          ref={nudgeRef}
+          size="sm"
+          variant="accent"
+          icon="lightbulb"
+          text="Tip: dit lijkt op een opdracht."
+          supporting-text="In de generator bouw je er een sterkere, herbruikbare prompt van."
+          dismissible={onNudgeDismiss ? true : undefined}
+        >
+          <nldd-button
+            slot="actions"
+            appearance="secondary"
+            end-icon="arrow-right"
+            text="Bouw in generator"
+            onClick={() => onImprove(message.content)}
+          ></nldd-button>
+        </nldd-banner>
       )}
-    </div>
+    </nldd-container>
   );
 }
 
@@ -560,7 +614,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
   onContinue?: () => void;
   onRepair?: (text: string) => void;
   canRetry: boolean;
-  /** Dit antwoord hoort bij de laatste vraag en vult de rest van de lijst. */
+  /** Dit antwoord hoort bij de laatste vraag en vult de rest van het venster. */
   fillsTurn: boolean;
   onEdit?: (messageId: string, text: string) => void;
   onImprove?: (text: string) => void;
@@ -584,148 +638,131 @@ const ChatMessageRow = memo(function ChatMessageRow({
   }
 
   return (
-    <div
-      className={clsx(
-        'group flex flex-col items-start gap-2',
-        fillsTurn && 'min-h-[var(--turn-fill,0px)]',
-      )}
-    >
-      <h2 className="sr-only">Antwoord</h2>
-      <div
-        className={clsx(
-          'w-full text-base leading-7 text-slate-800 dark:text-slate-100',
-          message.error && !message.content && 'text-rijksrood dark:text-red-400',
-        )}
-      >
-        {message.content ? (
-          <ChatAnswer text={message.content} isStreaming={isStreaming} onRepair={onRepair} />
-        ) : isStreaming ? (
-          <span className="text-slate-500 dark:text-slate-400">
-            {phase === 'searching'
-              ? 'Aan het zoeken op internet…'
-              : phase === 'sources'
-                ? 'Bronnen doorzoeken…'
-                : 'Aan het nadenken…'}
-          </span>
-        ) : null}
-      </div>
+    <nldd-container data-turn-row data-turn-fill={fillsTurn || undefined} gap="8">
+      <nldd-visually-hidden>
+        <nldd-title heading-level={2} text="Antwoord"></nldd-title>
+      </nldd-visually-hidden>
 
-      {/* Kopieerknop onder het antwoord: dit is de tekst waar de gebruiker voor
-          kwam, dus die moet in één klik mee naar een document of e-mail. Pas
-          zichtbaar zodra het antwoord af is — halverwege kopiëren levert een
-          afgekapte tekst op. */}
+      {message.content ? (
+        <ChatAnswer text={message.content} isStreaming={isStreaming} onRepair={onRepair} />
+      ) : isStreaming ? (
+        <nldd-text size="lg" color="secondary">
+          {phase === 'searching'
+            ? 'Aan het zoeken op internet…'
+            : phase === 'sources'
+              ? 'Bronnen doorzoeken…'
+              : 'Aan het nadenken…'}
+        </nldd-text>
+      ) : null}
+
       {/* De bronnen waarmee dit antwoord is geschreven. Staan er los onder, ook
           al noemt het model ze meestal zelf in de tekst: hier zijn het echte
           links die je kunt aanklikken om na te lezen of het klopt. De nummering
           loopt gelijk met de [1]-verwijzingen in het antwoord. */}
       {!isStreaming && message.sources && message.sources.length > 0 && (
-        <div className="mt-1 w-full">
-          <p className="mb-1 flex items-center gap-1.5 text-[0.6875rem] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
-            <Globe size={12} className="shrink-0" />
-            Bronnen van internet
-          </p>
-          <ol className="space-y-0.5">
-            {message.sources.map((source, i) => (
-              <li key={source.url} className="flex gap-1.5 text-xs">
-                <span className="shrink-0 tabular-nums text-slate-400 dark:text-slate-500">
-                  [{i + 1}]
-                </span>
-                <a
-                  href={source.url}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="min-w-0 truncate text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
-                  title={source.url}
-                >
-                  {source.title}
-                </a>
-              </li>
-            ))}
-          </ol>
-        </div>
+        <nldd-container gap="4">
+          <nldd-container layout="row" gap="4" vertical-alignment="center">
+            <nldd-icon icon="globe" size="16" color="secondary-content"></nldd-icon>
+            <nldd-text size="xs" weight="bold" color="secondary">
+              Bronnen van internet
+            </nldd-text>
+          </nldd-container>
+          {message.sources.map((source, i) => (
+            <nldd-text key={source.url} size="xs" color="secondary">
+              [{i + 1}]{' '}
+              <nldd-tooltip text={source.url}>
+                <nldd-link href={source.url} target="_blank" text={source.title}></nldd-link>
+              </nldd-tooltip>
+            </nldd-text>
+          ))}
+        </nldd-container>
       )}
 
       {!isStreaming && message.projectSources && message.projectSources.length > 0 && (
-        <div className="mt-1 w-full">
-          <p className="mb-1 flex items-center gap-1.5 text-[0.6875rem] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
-            <FileText size={12} className="shrink-0" />
-            Stukken uit je bestanden
-          </p>
-          <ul className="space-y-0.5">
-            {message.projectSources.map((name) => (
-              <li key={name} className="truncate text-xs text-slate-600 dark:text-slate-300">
-                {name}
-              </li>
-            ))}
-          </ul>
-        </div>
+        <nldd-container gap="4">
+          <nldd-container layout="row" gap="4" vertical-alignment="center">
+            <nldd-icon icon="file-text" size="16" color="secondary-content"></nldd-icon>
+            <nldd-text size="xs" weight="bold" color="secondary">
+              Stukken uit je bestanden
+            </nldd-text>
+          </nldd-container>
+          {message.projectSources.map((name) => (
+            <nldd-text key={name} size="xs" color="secondary">
+              {name}
+            </nldd-text>
+          ))}
+        </nldd-container>
       )}
 
-      {/* Onder het laatste antwoord altijd in beeld; bij oudere pas bij de muis
-          of toetsenbordfocus, anders staat er na elk antwoord dezelfde rij. */}
       {!isStreaming && message.content.trim() && (
-        <div
-          className={clsx('-ml-1.5 flex flex-wrap items-center gap-2', !canRetry && 'opl-msg-actions')}
-        >
+        <nldd-container layout="wrap" gap="4">
           <CopyMessageButton text={message.content} label="Kopieer antwoord" />
           {canRetry && !message.error && !message.madeBy && (
-            <button
-              type="button"
-              onClick={onRetry}
-              className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-rijksblauw-700 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-rijksblauw-200"
-              title="Laat de AI dit antwoord opnieuw schrijven"
-            >
-              <RotateCcw size={12} /> Opnieuw
-            </button>
+            <nldd-tooltip text="Laat de AI dit antwoord opnieuw schrijven">
+              <nldd-button
+                size="xs"
+                appearance="neutral-transparent"
+                start-icon="arrow-2-counter-clockwise"
+                text="Schrijf opnieuw"
+                onClick={onRetry}
+              ></nldd-button>
+            </nldd-tooltip>
           )}
           {speechOn && <SpeakButton messageId={message.id} text={message.content} />}
-        </div>
+        </nldd-container>
       )}
 
       {/* Een lang antwoord gaat in meerdere rondes; tussen twee rondes is het
           even stil en zonder uitleg lijkt het dan of de chat is gestopt. */}
       {isStreaming && phase === 'continuing' && message.content && (
-        <p className="text-[0.6875rem] text-slate-400 dark:text-slate-500">
+        <nldd-text size="xs" color="secondary">
           Lang antwoord, de AI schrijft verder…
-        </p>
+        </nldd-text>
       )}
 
       {message.stopped && (
-        <p className="text-[0.6875rem] text-slate-400 dark:text-slate-500">Gestopt door jou.</p>
+        <nldd-text size="xs" color="secondary">
+          Gestopt door jou.
+        </nldd-text>
       )}
 
       {/* Niet af: gestopt, of ook na het automatisch verderschrijven nog niet
           klaar. "Ga verder" pakt het op vanaf de laatste letter, zonder dat je
           het zelf hoeft te vragen. */}
       {canRetry && onContinue && (message.incomplete || message.stopped) && message.content.trim() && (
-        <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-          {message.incomplete && !message.error && <span>Het antwoord is nog niet af.</span>}
-          <button
-            type="button"
-            className="inline-flex items-center gap-1 font-medium text-rijksblauw-700 hover:underline dark:text-rijksblauw-200"
+        <nldd-container layout="wrap" gap="8" vertical-alignment="center">
+          {message.incomplete && !message.error && (
+            <nldd-text size="xs" color="secondary">
+              Het antwoord is nog niet af.
+            </nldd-text>
+          )}
+          <nldd-button
+            size="xs"
+            appearance="accent-transparent"
+            start-icon="arrow-right"
+            text="Ga verder"
             onClick={onContinue}
-          >
-            <ArrowRight size={12} /> Ga verder
-          </button>
-        </div>
+          ></nldd-button>
+        </nldd-container>
       )}
 
       {message.error && (
-        <div className="flex items-center gap-2 text-xs text-rijksrood dark:text-red-400">
-          <AlertTriangle size={14} />
-          <span>{message.error}</span>
+        <nldd-container layout="wrap" gap="8" vertical-alignment="center">
+          <nldd-icon icon="exclamation-triangle" size="16" color="critical"></nldd-icon>
+          <nldd-text size="sm" color="critical">
+            {message.error}
+          </nldd-text>
           {canRetry && !message.incomplete && (
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 font-medium text-rijksblauw-700 hover:underline dark:text-rijksblauw-200"
+            <nldd-button
+              size="xs"
+              appearance="accent-transparent"
+              start-icon="arrow-2-counter-clockwise"
+              text="Opnieuw proberen"
               onClick={onRetry}
-            >
-              <RotateCcw size={12} /> Opnieuw proberen
-            </button>
+            ></nldd-button>
           )}
-        </div>
+        </nldd-container>
       )}
-    </div>
+    </nldd-container>
   );
 });
-

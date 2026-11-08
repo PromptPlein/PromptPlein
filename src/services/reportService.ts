@@ -3,7 +3,7 @@ import { listPrompts } from '@/services/repository';
 import { listOrganizations, listProfiles } from '@/services/orgService';
 import { PROMPT_STATUS_META } from '@/services/collaborationService';
 import { downloadText } from '@/lib/download';
-import { brand, backgroundGradient } from '@/config/brandColors';
+import { documentStyle } from '@/config/brandColors';
 import type { CountByLabel } from '@/services/analyticsService';
 import type { Organization, Profile, Prompt, PromptApproval, PromptStatus } from '@/types';
 
@@ -144,9 +144,18 @@ export function reportToCsv(data: ReportData, catName: (id: string) => string): 
   downloadText('rapportage.csv', lines.join('\n'), 'text/csv');
 }
 
-/** Open een opgemaakt, printbaar bestuurlijk rapport (Opslaan als PDF). */
+/**
+ * Opens a formatted, printable management report (Save as PDF).
+ *
+ * Generated document: the HTML below is a standalone page in a new window that
+ * leaves the app. The design system's web components do not exist there, so it
+ * is plain HTML with its own stylesheet; the purity gate reports its elements
+ * and class attributes on purpose. Colors and fonts come from the design system
+ * tokens through documentStyle().
+ */
 export function printReport(data: ReportData, catName: (id: string) => string): void {
   const kpis = computeKpis(data);
+  const c = documentStyle();
   const generated = new Date().toLocaleString('nl-NL', { dateStyle: 'long', timeStyle: 'short' });
 
   const table = (heading: string, rows: CountByLabel[]) => `
@@ -157,24 +166,25 @@ export function printReport(data: ReportData, catName: (id: string) => string): 
   <title>Bestuurlijke rapportage</title>
   <style>
     @page { margin: 22mm 18mm; }
-    body { font-family: "Segoe UI", Arial, sans-serif; color:#1f2937; max-width:800px; margin:0 auto; }
-    .classification { text-align:center; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:${brand.primary}; border-top:2px solid ${brand.primary}; border-bottom:2px solid ${brand.primary}; padding:6px 0; font-size:12px; }
-    .brand { font-weight:700; color:${brand.primary}; font-size:18px; margin-top:16px; }
-    h1 { color:${backgroundGradient.deep}; font-size:22px; }
-    h2 { color:${brand.primary}; font-size:15px; margin-top:24px; border-bottom:1px solid #e2e8f0; padding-bottom:4px; }
+    body { font-family: ${c.fontFamily}; color:${c.content}; max-width:800px; margin:0 auto; }
+    .classification { text-align:center; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:${c.primary}; border-top:2px solid ${c.primary}; border-bottom:2px solid ${c.primary}; padding:6px 0; font-size:12px; }
+    .brand { font-weight:700; color:${c.primary}; font-size:18px; margin-top:16px; }
+    .generated { color:${c.secondary}; font-size:13px; }
+    h1 { color:${c.heading}; font-size:22px; }
+    h2 { color:${c.primary}; font-size:15px; margin-top:24px; border-bottom:1px solid ${c.border}; padding-bottom:4px; }
     .kpis { display:flex; flex-wrap:wrap; gap:12px; margin:16px 0; }
-    .kpi { flex:1 1 120px; border:1px solid #e2e8f0; border-radius:8px; padding:12px; text-align:center; }
-    .kpi b { display:block; font-size:24px; color:${brand.primary}; }
-    .kpi span { font-size:12px; color:#64748b; }
+    .kpi { flex:1 1 120px; border:1px solid ${c.border}; border-radius:8px; padding:12px; text-align:center; }
+    .kpi b { display:block; font-size:24px; color:${c.primary}; }
+    .kpi span { font-size:12px; color:${c.secondary}; }
     table { width:100%; border-collapse:collapse; font-size:13px; }
-    td { padding:4px 8px; border-bottom:1px solid #f1f5f9; }
+    td { padding:4px 8px; border-bottom:1px solid ${c.faint}; }
     td.num { text-align:right; font-weight:600; }
-    footer { margin-top:32px; border-top:1px solid #e2e8f0; padding-top:8px; font-size:11px; color:#94a3b8; text-align:center; }
+    footer { margin-top:32px; border-top:1px solid ${c.border}; padding-top:8px; font-size:11px; color:${c.muted}; text-align:center; }
   </style></head><body>
     <div class="classification">Intern: bestuurlijke rapportage</div>
     <div class="brand">Rijksoverheid</div>
     <h1>Bestuurlijke rapportage: Overheid Prompt Library</h1>
-    <p style="color:#64748b;font-size:13px;">Gegenereerd: ${generated}</p>
+    <p class="generated">Gegenereerd: ${generated}</p>
     <div class="kpis">
       <div class="kpi"><b>${kpis.totalPrompts}</b><span>Prompts</span></div>
       <div class="kpi"><b>${kpis.approved}</b><span>Goedgekeurd</span></div>

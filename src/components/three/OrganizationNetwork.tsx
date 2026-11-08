@@ -4,7 +4,7 @@ import { OrbitControls, Line, Billboard, Text } from '@react-three/drei';
 import * as THREE from 'three';
 import type { Organization, OrganizationType } from '@/types';
 import { useTheme } from '@/context/ThemeContext';
-import { orgTypeColor, rijksblauw } from '@/config/brandColors';
+import { orgTypeColor, rijksblauw, readToken } from '@/config/brandColors';
 
 const TYPE_COLOR: Record<OrganizationType, string> = orgTypeColor;
 
@@ -13,7 +13,7 @@ interface Node {
   position: THREE.Vector3;
 }
 
-/** Bereken een eenvoudige 2-lagen radiale lay-out op basis van parent_id. */
+/** Computes a simple two-layer radial layout from parent_id. */
 function layout(orgs: Organization[]): { nodes: Node[]; edges: [THREE.Vector3, THREE.Vector3][] } {
   const byId = new Map(orgs.map((o) => [o.id, o]));
   const roots = orgs.filter((o) => !o.parent_id || !byId.has(o.parent_id));
@@ -37,7 +37,7 @@ function layout(orgs: Organization[]): { nodes: Node[]; edges: [THREE.Vector3, T
     });
   }
 
-  // Eventuele diepere/orphan-knopen krijgen een plek nabij hun ouder of de oorsprong.
+  // Deeper or orphaned nodes get a place near their parent or the origin.
   orgs.forEach((o, i) => {
     if (pos.has(o.id)) return;
     const parent = o.parent_id ? pos.get(o.parent_id) : undefined;
@@ -126,18 +126,22 @@ function Scene({
 
 export default function OrganizationNetwork({ orgs }: { orgs: Organization[] }) {
   const { resolvedTheme } = useTheme();
-  const dark = resolvedTheme === 'dark';
-  const bg = dark ? '#0b1220' : '#f8fafc';
-  const labelColor = dark ? '#e2e8f0' : '#1f2937';
-  const outline = dark ? '#0b1220' : '#ffffff';
-  const edgeColor = dark ? '#475569' : '#9bb4d4';
+  const scheme = resolvedTheme === 'dark' ? 'dark' : 'light';
+  // The scene follows the theme: the tokens resolve in the scheme ThemeContext
+  // reports, so a switch re-reads them on the next render.
+  const colors = useMemo(
+    () => ({
+      bg: readToken('--semantics-surfaces-tinted-background-color', scheme),
+      labelColor: readToken('--semantics-content-color', scheme),
+      outline: readToken('--semantics-surfaces-base-background-color', scheme),
+      edgeColor: readToken('--primitives-color-donkerblauw-250', scheme),
+    }),
+    [scheme],
+  );
+  const { bg, labelColor, outline, edgeColor } = colors;
 
   if (orgs.length === 0) {
-    return (
-      <div className="flex h-full items-center justify-center text-sm text-slate-400 dark:text-slate-500">
-        Nog geen organisaties om te tonen.
-      </div>
-    );
+    return <nldd-inline-dialog icon="info-circle" text="Nog geen organisaties om te tonen."></nldd-inline-dialog>;
   }
   return (
     <Canvas camera={{ position: [0, 6, 16], fov: 50 }} dpr={[1, 1.5]}>

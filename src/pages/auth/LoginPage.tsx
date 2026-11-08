@@ -73,6 +73,9 @@ export default function LoginPage() {
           </nldd-form-field>
           <nldd-form-field label="Wachtwoord">
             <nldd-password-field ref={passwordRef} required autocomplete="current-password" name="password"></nldd-password-field>
+            <nldd-form-field-help-text>
+              <nldd-link href="/auth/wachtwoord-vergeten" size="sm" text="Wachtwoord vergeten?"></nldd-link>
+            </nldd-form-field-help-text>
           </nldd-form-field>
           <nldd-form-actions>
             <nldd-button-group>
@@ -80,7 +83,6 @@ export default function LoginPage() {
                 appearance="primary"
                 type="submit"
                 text="Log in"
-                width="full"
                 loading={busy || undefined}
                 loading-text="Bezig met inloggen"
               ></nldd-button>
@@ -88,12 +90,6 @@ export default function LoginPage() {
           </nldd-form-actions>
         </form>
       </nldd-form>
-      <nldd-spacer size="12"></nldd-spacer>
-      <nldd-link
-        href="/auth/wachtwoord-vergeten"
-        size="sm"
-        text="Wachtwoord vergeten?"
-      ></nldd-link>
     </AuthLayout>
   );
 }

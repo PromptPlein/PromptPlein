@@ -1,6 +1,7 @@
-import { FileText, FileType2, FileCode2, FileJson, Hash } from '@/components/common/icons';
+import { useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { notify } from '@/lib/notify';
-import Modal from '@/components/common/Modal';
+import { useNlddEvent } from '@/lib/nldd';
 import { exportPrompt, type ExportFormat, type ExportMeta } from '@/services/exportService';
 import type { Prompt } from '@/types';
 
@@ -8,15 +9,18 @@ const FORMATS: {
   id: ExportFormat;
   label: string;
   hint: string;
-  icon: typeof FileText;
+  icon: string;
 }[] = [
-  { id: 'pdf', label: 'PDF', hint: 'Opent printvenster; opslaan als PDF', icon: FileText },
-  { id: 'word', label: 'Word (.doc)', hint: 'Opent in Microsoft Word', icon: FileType2 },
-  { id: 'html', label: 'HTML', hint: 'Opgemaakt webdocument', icon: FileCode2 },
-  { id: 'markdown', label: 'Markdown', hint: 'Platte tekst met opmaak', icon: Hash },
-  { id: 'json', label: 'JSON', hint: 'Ruwe gegevens', icon: FileJson },
+  { id: 'pdf', label: 'PDF', hint: 'Opent printvenster; opslaan als PDF', icon: 'file-pdf' },
+  { id: 'word', label: 'Word (.doc)', hint: 'Opent in Microsoft Word', icon: 'file-text' },
+  { id: 'html', label: 'HTML', hint: 'Opgemaakt webdocument', icon: 'code' },
+  { id: 'markdown', label: 'Markdown', hint: 'Platte tekst met opmaak', icon: 'file-markdown' },
+  { id: 'json', label: 'JSON', hint: 'Ruwe gegevens', icon: 'code-block' },
 ];
 
+const TITLE = 'Exporteren';
+
+/** A sheet that exports one prompt in the format the user picks. */
 export default function ExportModal({
   open,
   onClose,
@@ -28,6 +32,11 @@ export default function ExportModal({
   prompt: Prompt;
   meta?: ExportMeta;
 }) {
+  const sheetRef = useRef<HTMLElement>(null);
+  useNlddEvent(sheetRef, 'close', () => {
+    if (open) onClose();
+  });
+
   function handle(format: ExportFormat) {
     try {
       exportPrompt(prompt, format, meta);
@@ -38,28 +47,27 @@ export default function ExportModal({
     }
   }
 
-  return (
-    <Modal open={open} onClose={onClose} title="Exporteren" size="max-w-md">
-      <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
-        Kies een formaat. Het document krijgt een overheidsconforme kop met rubricering.
-      </p>
-      <div className="grid grid-cols-1 gap-2">
-        {FORMATS.map(({ id, label, hint, icon: Icon }) => (
-          <button
-            key={id}
-            onClick={() => handle(id)}
-            className="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 text-left transition-colors hover:border-rijksblauw-300 hover:bg-rijksblauw-50 dark:border-slate-700 dark:hover:bg-rijksblauw-500/15"
-          >
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-rijksblauw-50 text-rijksblauw-600 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-300">
-              <Icon size={18} />
-            </span>
-            <span>
-              <span className="block text-sm font-medium text-slate-800 dark:text-slate-100">{label}</span>
-              <span className="block text-xs text-slate-400 dark:text-slate-500">{hint}</span>
-            </span>
-          </button>
-        ))}
-      </div>
-    </Modal>
+  return createPortal(
+    <nldd-sheet ref={sheetRef} open={open || undefined} placement="right" width="480px">
+      <nldd-page landmarks="region" accessible-label={TITLE}>
+        <nldd-top-title-bar slot="header" text={TITLE} heading-level={2} dismiss-text="Sluit"></nldd-top-title-bar>
+        <nldd-simple-section>
+          <nldd-text color="secondary">
+            Kies een formaat. Het document krijgt een overheidsconforme kop met rubricering.
+          </nldd-text>
+          <nldd-spacer size="16"></nldd-spacer>
+          <nldd-list appearance="box-base" accessible-label="Formaten">
+            {FORMATS.map(({ id, label, hint, icon }) => (
+              <nldd-list-item key={id} button onClick={() => handle(id)}>
+                <nldd-icon-cell icon={icon} size="24" color="accent"></nldd-icon-cell>
+                <nldd-spacer-cell size="12"></nldd-spacer-cell>
+                <nldd-text-cell text={label} supporting-text={hint}></nldd-text-cell>
+              </nldd-list-item>
+            ))}
+          </nldd-list>
+        </nldd-simple-section>
+      </nldd-page>
+    </nldd-sheet>,
+    document.body,
   );
 }

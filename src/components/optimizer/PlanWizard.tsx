@@ -1,23 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import {
-  AlertTriangle,
-  ArrowRight,
-  Check,
-  ChevronDown,
-  ChevronRight,
-  ChevronUp,
-  Eraser,
-  HelpCircle,
-  Info,
-  Lightbulb,
-  Loader2,
-  Pencil,
-  RotateCw,
-  Sparkles,
-  Trash2,
-  Wand2,
-} from '@/components/common/icons';
-import clsx from 'clsx';
+import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react';
+import { useNlddValue } from '@/lib/nldd';
 import { notify } from '@/lib/notify';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import {
@@ -1257,249 +1239,206 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
   }
 
   return (
-    <div className="space-y-5">
-      {/* Blauwe rand: deze doel-flow hoort bij de blauwe instap-tab. */}
-      <div className="overflow-hidden rounded-2xl border-2 border-rijksblauw-500/60 shadow-sm dark:border-rijksblauw-500/50">
-        <div
-          className={clsx(
-            'overflow-hidden',
-            plan && 'border-b border-slate-200 dark:border-slate-700',
-          )}
-        >
-          {header}
-          <div className="space-y-5 bg-white p-5 dark:bg-slate-800 sm:p-6">
-            <div>
-              <div className="mb-1 flex items-center gap-1.5">
-                <label className="opl-label mb-0" htmlFor="plan-goal-input">
-                  Wat wil je graag bereiken?
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setShowExamples((v) => !v)}
-                  aria-expanded={showExamples}
-                  aria-controls="plan-goal-examples"
-                  title="Bekijk voorbeelden"
-                  className={clsx(
-                    'inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-medium transition-colors',
-                    showExamples
-                      ? 'text-rijksblauw-700 dark:text-rijksblauw-200'
-                      : 'text-slate-400 hover:text-rijksblauw-600 dark:text-slate-500 dark:hover:text-rijksblauw-300',
-                  )}
-                >
-                  <Info size={15} />
-                  <span>Voorbeelden</span>
-                </button>
-                {goal.trim() && (
-                  <button
-                    type="button"
-                    onClick={handleClear}
-                    title="Wis je doel en begin opnieuw"
-                    className="ml-auto inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-semibold text-slate-700 transition-colors hover:text-rijksoranje dark:text-slate-200 dark:hover:text-rijksoranje"
-                  >
-                    <Eraser size={15} />
-                    <span>Opschonen</span>
-                  </button>
-                )}
-              </div>
+    <nldd-container gap="20">
+      <nldd-card>
+        {header}
+        <nldd-container padding="20" sm-padding="16" gap="16">
+          <nldd-container gap="8">
+            <nldd-container layout="wrap" gap="8" vertical-alignment="center">
+              <nldd-button
+                appearance="neutral-transparent"
+                size="sm"
+                start-icon="info-circle"
+                text="Voorbeelden"
+                accessible-label="Bekijk voorbeelden"
+                expanded={showExamples || undefined}
+                onClick={() => setShowExamples((v) => !v)}
+              ></nldd-button>
+              {goal.trim() && (
+                <nldd-button
+                  appearance="neutral-transparent"
+                  size="sm"
+                  start-icon="delete"
+                  text="Opschonen"
+                  accessible-label="Wis je doel en begin opnieuw"
+                  onClick={handleClear}
+                ></nldd-button>
+              )}
+            </nldd-container>
 
-              {showExamples && (
-                <div
-                  id="plan-goal-examples"
-                  className="animate-fade-in mb-3 space-y-2 rounded-xl border border-rijksblauw-200 bg-rijksblauw-50/40 p-3 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10"
-                >
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Voorbeelden van samengestelde doelen. Klik om er één in te vullen.
-                  </p>
+            {showExamples && (
+              <nldd-container gap="6">
+                <nldd-text size="xs" color="secondary">
+                  Voorbeelden van samengestelde doelen. Kies er één om in te vullen.
+                </nldd-text>
+                <nldd-list appearance="box-tinted" accessible-label="Voorbeelden van doelen">
                   {GOAL_EXAMPLES.map((ex) => (
-                    <button
+                    <nldd-list-item
                       key={ex}
-                      type="button"
+                      button
                       onClick={() => {
                         setGoal(ex);
                         setShowExamples(false);
                       }}
-                      className="block w-full rounded-lg border border-slate-200 bg-white p-2.5 text-left text-sm leading-relaxed text-slate-600 transition-colors hover:border-rijksblauw-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700/60"
                     >
-                      {ex}
-                    </button>
+                      <nldd-text-cell size="sm" text={ex}></nldd-text-cell>
+                    </nldd-list-item>
                   ))}
-                </div>
-              )}
+                </nldd-list>
+              </nldd-container>
+            )}
 
-              <textarea
-                id="plan-goal-input"
-                className="opl-input min-h-[120px] resize-y"
+            <nldd-form-field label="Wat wil je graag bereiken?">
+              <TextArea
                 value={goal}
-                disabled={busy}
+                onValue={setGoal}
+                rows={5}
+                resize="vertical"
+                disabled={busy || undefined}
                 placeholder="Bijv. er moet een projectplan geschreven worden voor de invoering van een nieuwe interne tool"
-                onChange={(e) => setGoal(e.target.value)}
               />
-              <VerantwoordGebruikHint text={goal} />
-              <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+              <nldd-form-field-help-text>
                 We beginnen met vragen tot je vraagstuk compleet in beeld is, en versterken dat beeld
                 daarna met meerdere technieken tot één sterke, herbruikbare prompt.
-              </p>
+              </nldd-form-field-help-text>
+            </nldd-form-field>
+            <VerantwoordGebruikHint text={goal} />
 
-              {/* Hervat-melding: er staat nog een niet-afgemaakte bouw bewaard. */}
-              {resumable && phase === 'goal' && !plan && (
-                <div className="animate-fade-in mt-3 flex flex-col gap-3 rounded-xl border border-rijksblauw-200 bg-rijksblauw-50/50 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10">
-                  <div className="flex items-start gap-2 text-slate-600 dark:text-slate-300">
-                    <RotateCw size={16} className="mt-0.5 shrink-0 text-rijksblauw-500" />
-                    <span>
-                      Je hebt nog een niet-afgemaakte bouw{' '}
-                      <span className="font-medium">
-                        ({resumable.outcomes.length}/{resumable.plan.steps.length} stappen)
-                      </span>
-                      . Verder waar je gebleven was?
-                    </span>
-                  </div>
-                  <div className="flex shrink-0 gap-2">
-                    <button type="button" className="opl-btn-secondary" onClick={discardRun}>
-                      Verwijder
-                    </button>
-                    <button type="button" className="opl-btn-primary" onClick={resumeRun}>
-                      Hervatten
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {phase !== 'plan-review' && (
-              <button
-                type="button"
-                className="opl-btn-primary"
-                onClick={handlePlan}
-                disabled={busy || !goal.trim()}
+            {/* Hervat-melding: er staat nog een niet-afgemaakte bouw bewaard. */}
+            {resumable && phase === 'goal' && !plan && (
+              <nldd-banner
+                variant="accent"
+                icon="arrow-clockwise"
+                text={`Je hebt nog een niet-afgemaakte bouw (${resumable.outcomes.length}/${resumable.plan.steps.length} stappen)`}
+                supporting-text="Verder waar je gebleven was?"
               >
-                {phase === 'planning' ? (
-                  <>
-                    <Loader2 size={18} className="animate-spin" /> Plan opstellen…
-                  </>
-                ) : (
-                  <>
-                    <Wand2 size={18} /> Stel een plan op
-                  </>
-                )}
-              </button>
+                <nldd-button slot="actions" appearance="secondary" text="Verwijder" onClick={discardRun}></nldd-button>
+                <nldd-button slot="actions" appearance="primary" text="Hervatten" onClick={resumeRun}></nldd-button>
+              </nldd-banner>
             )}
-          </div>
-        </div>
+          </nldd-container>
+
+          {phase !== 'plan-review' && (
+            <nldd-button-group>
+              <nldd-button
+                appearance="primary"
+                start-icon="magic"
+                text="Stel een plan op"
+                loading={phase === 'planning' || undefined}
+                loading-text="Plan opstellen"
+                disabled={phase === 'composing' || !goal.trim() || undefined}
+                onClick={handlePlan}
+              ></nldd-button>
+            </nldd-button-group>
+          )}
+        </nldd-container>
 
         {/* Routing-gate: de planner kon de herhaalbaarheid niet uit het doel
             afleiden. Eén vraag, en dan pas een plan. */}
         {phase === 'routing' && routing && (
-          <div className="space-y-4 bg-white p-5 dark:bg-slate-800 sm:p-6">
-            <div>
-              <h3 className="font-semibold text-slate-800 dark:text-slate-100">{routing.question}</h3>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                Dit bepaalt of voorbeelden zinvol zijn. Voorbeelden werken alleen als er telkens iets
-                soortgelijks binnenkomt waar op dezelfde manier op gereageerd moet worden.
-              </p>
-            </div>
-            <div className="space-y-2">
-              {routing.options.map((o) => (
-                <button
-                  key={o.id}
-                  type="button"
-                  onClick={() => answerRouting(o.id)}
-                  className="block w-full rounded-xl border border-slate-200 bg-white p-3 text-left transition-colors hover:border-rijksblauw-300 dark:border-slate-700 dark:bg-slate-800"
-                >
-                  <span className="font-medium text-slate-800 dark:text-slate-100">{o.label}</span>
-                  {o.hint && (
-                    <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">{o.hint}</span>
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
+          <>
+            <nldd-divider></nldd-divider>
+            <nldd-container padding="20" sm-padding="16" gap="12">
+              <nldd-title
+                heading-level={3}
+                size={5}
+                text={routing.question}
+                supporting-text="Dit bepaalt of voorbeelden zinvol zijn. Voorbeelden werken alleen als er telkens iets soortgelijks binnenkomt waar op dezelfde manier op gereageerd moet worden."
+              ></nldd-title>
+              <nldd-list appearance="box-tinted" accessible-label={routing.question}>
+                {routing.options.map((o) => (
+                  <nldd-list-item key={o.id} button onClick={() => answerRouting(o.id)}>
+                    <nldd-text-cell text={o.label} supporting-text={o.hint}></nldd-text-cell>
+                    <nldd-spacer-cell size="12"></nldd-spacer-cell>
+                    <nldd-icon-cell size="20" color="secondary" icon="chevron-right"></nldd-icon-cell>
+                  </nldd-list-item>
+                ))}
+              </nldd-list>
+            </nldd-container>
+          </>
         )}
 
         {/* Adviesdeel: het opgestelde plan (review) óf de uitvoering (executing). */}
         {plan && (
-          <div className="space-y-5 bg-white p-5 dark:bg-slate-800 sm:p-6">
-            {phase === 'planning' ? (
-              <OptimizingLoader techniqueName="je plan" />
-            ) : phase === 'plan-review' ? (
-              <PlanReview
-                plan={plan}
-                techniqueById={techniqueById}
-                onRemoveStep={removeStep}
-                onMoveStep={moveStep}
-                onEditStepTitle={editStepTitle}
-                onBuild={handleBuild}
-              />
-            ) : phase === 'assumption-review' && pendingResult ? (
-              <AssumptionReview
-                assumptions={assumptions}
-                answers={assumptionAnswers}
-                onAnswerChange={(i, v) => setAssumptionAnswers((prev) => ({ ...prev, [i]: v }))}
-                templateContent={pendingResult.optimized_content}
-                onApply={applyAssumptions}
-                onSkip={skipAssumptions}
-              />
-            ) : (
-              <PlanExecutor
-                plan={plan}
-                techniqueById={techniqueById}
-                currentStepIndex={currentStepIndex}
-                outcomes={outcomes}
-                phase={phase}
-                error={phase === 'error' ? stepError : null}
-                onRetry={retryStep}
-                onRegenerateStep={regenerateStep}
-                stepAnswers={stepAnswers}
-                onStepAnswersChange={setStepAnswers}
-                stepFieldMeta={stepFieldMeta}
-                stepPrefilling={stepPrefilling}
-                stepPrefillProgress={stepPrefillProgress}
-                onStepFieldEdit={handleStepFieldEdit}
-                analyzing={analyzing}
-                stepMaterial={stepMaterial}
-                stepSummary={stepSummary}
-                stepGaps={stepGaps}
-                clarification={clarification}
-                onClarificationChange={setClarification}
-                onAnalyze={() => void analyzeCurrentStep(clarification.trim() || undefined)}
-                onCommit={commitStep}
-                onPrefillFromDocument={(text) => prefillFromStructure(text, 'document')}
-                onDescribeFormat={(brief) => prefillFromStructure(brief, 'brief')}
-                settings={settings}
-                goal={goal}
-                onPersonaChange={setPersonaText}
-                onFewShotChange={setFewShotText}
-                onMetaChange={setMetaText}
-                onBuilderChange={setBuilderText}
-                interviewActive={interviewActive}
-                interviewQuestion={interviewQuestion}
-                interviewTranscript={interviewTranscript}
-                interviewAnswer={interviewAnswer}
-                interviewBusy={interviewBusy}
-                interviewFinishing={interviewFinishing}
-                onInterviewAnswerChange={setInterviewAnswer}
-                onSubmitInterviewAnswer={submitInterviewAnswer}
-                onFinishInterview={finishInterview}
-                composeStream={composeStream}
-                composeProgress={composeProgress}
-              />
-            )}
-          </div>
+          <>
+            <nldd-divider></nldd-divider>
+            <nldd-container padding="20" sm-padding="16" gap="20">
+              {phase === 'planning' ? (
+                <OptimizingLoader techniqueName="je plan" />
+              ) : phase === 'plan-review' ? (
+                <PlanReview
+                  plan={plan}
+                  techniqueById={techniqueById}
+                  onRemoveStep={removeStep}
+                  onMoveStep={moveStep}
+                  onEditStepTitle={editStepTitle}
+                  onBuild={handleBuild}
+                />
+              ) : phase === 'assumption-review' && pendingResult ? (
+                <AssumptionReview
+                  assumptions={assumptions}
+                  answers={assumptionAnswers}
+                  onAnswerChange={(i, v) => setAssumptionAnswers((prev) => ({ ...prev, [i]: v }))}
+                  templateContent={pendingResult.optimized_content}
+                  onApply={applyAssumptions}
+                  onSkip={skipAssumptions}
+                />
+              ) : (
+                <PlanExecutor
+                  plan={plan}
+                  techniqueById={techniqueById}
+                  currentStepIndex={currentStepIndex}
+                  outcomes={outcomes}
+                  phase={phase}
+                  error={phase === 'error' ? stepError : null}
+                  onRetry={retryStep}
+                  onRegenerateStep={regenerateStep}
+                  stepAnswers={stepAnswers}
+                  onStepAnswersChange={setStepAnswers}
+                  stepFieldMeta={stepFieldMeta}
+                  stepPrefilling={stepPrefilling}
+                  stepPrefillProgress={stepPrefillProgress}
+                  onStepFieldEdit={handleStepFieldEdit}
+                  analyzing={analyzing}
+                  stepMaterial={stepMaterial}
+                  stepSummary={stepSummary}
+                  stepGaps={stepGaps}
+                  clarification={clarification}
+                  onClarificationChange={setClarification}
+                  onAnalyze={() => void analyzeCurrentStep(clarification.trim() || undefined)}
+                  onCommit={commitStep}
+                  onPrefillFromDocument={(text) => prefillFromStructure(text, 'document')}
+                  onDescribeFormat={(brief) => prefillFromStructure(brief, 'brief')}
+                  settings={settings}
+                  goal={goal}
+                  onPersonaChange={setPersonaText}
+                  onFewShotChange={setFewShotText}
+                  onMetaChange={setMetaText}
+                  onBuilderChange={setBuilderText}
+                  interviewActive={interviewActive}
+                  interviewQuestion={interviewQuestion}
+                  interviewTranscript={interviewTranscript}
+                  interviewAnswer={interviewAnswer}
+                  interviewBusy={interviewBusy}
+                  interviewFinishing={interviewFinishing}
+                  onInterviewAnswerChange={setInterviewAnswer}
+                  onSubmitInterviewAnswer={submitInterviewAnswer}
+                  onFinishInterview={finishInterview}
+                  composeStream={composeStream}
+                  composeProgress={composeProgress}
+                />
+              )}
+            </nldd-container>
+          </>
         )}
-      </div>
+      </nldd-card>
 
       {unclearReason && (
-        <div
-          role="alert"
-          className="animate-fade-in flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-200"
-        >
-          <AlertTriangle size={18} className="mt-0.5 shrink-0" />
-          <div>
-            <p className="font-medium">Je omschrijving is nog niet duidelijk genoeg</p>
-            <p className="mt-0.5 text-amber-700 dark:text-amber-300/90">
-              {stripMarkdown(unclearReason)}
-            </p>
-          </div>
-        </div>
+        <nldd-banner
+          variant="warning"
+          text="Je omschrijving is nog niet duidelijk genoeg"
+          supporting-text={stripMarkdown(unclearReason)}
+        ></nldd-banner>
       )}
 
       {guardrailFindings && (
@@ -1519,7 +1458,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
           onCancel={() => setGuardrailFindings(null)}
         />
       )}
-    </div>
+    </nldd-container>
   );
 }
 
@@ -1543,20 +1482,20 @@ function PlanReview({
   onBuild: () => void;
 }) {
   return (
-    <div className="space-y-4">
-      <div>
-        <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Voorgesteld plan</p>
-        {plan.summary && (
-          <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
-            {stripMarkdown(plan.summary)}
-          </p>
-        )}
-        <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
-          Sleep­volgorde aanpassen met de pijltjes, hernoem een stap, of verwijder er een.
-        </p>
-      </div>
+    <nldd-container gap="16">
+      <nldd-container gap="4">
+        <nldd-title
+          heading-level={3}
+          size={5}
+          text="Voorgesteld plan"
+          supporting-text={plan.summary ? stripMarkdown(plan.summary) : undefined}
+        ></nldd-title>
+        <nldd-text size="xs" color="secondary">
+          Pas de volgorde aan met de pijltjes, hernoem een stap, of verwijder er een.
+        </nldd-text>
+      </nldd-container>
 
-      <ol className="space-y-3">
+      <nldd-list appearance="box-tinted" accessible-label="Stappen van het plan">
         {plan.steps.map((step, idx) => (
           <ReviewStepRow
             key={step.id}
@@ -1569,20 +1508,26 @@ function PlanReview({
             onRemove={onRemoveStep}
           />
         ))}
-      </ol>
+      </nldd-list>
 
-      <div className="flex flex-wrap items-center justify-end gap-3 pt-1">
-        <button type="button" className="opl-btn-primary px-6 py-2.5" onClick={onBuild}>
-          <Sparkles size={18} /> Start met bouwen <ArrowRight size={16} />
-        </button>
-      </div>
+      <nldd-container horizontal-alignment="right">
+        <nldd-button
+          appearance="primary"
+          start-icon="sparkles"
+          end-icon="arrow-right"
+          text="Start met bouwen"
+          onClick={onBuild}
+        ></nldd-button>
+      </nldd-container>
 
-      <p className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500">
-        <Check size={13} className="text-rijksblauw-400" />
-        We beginnen met vraag voor vraag het totaalplaatje ophalen; de volgende stappen versterken dat
-        beeld en het geheel wordt één herbruikbare prompt.
-      </p>
-    </div>
+      <nldd-container layout="row" gap="6" vertical-alignment="center">
+        <nldd-icon icon="check-mark" size="16" color="accent"></nldd-icon>
+        <nldd-text size="xs" color="secondary">
+          We beginnen met vraag voor vraag het totaalplaatje ophalen; de volgende stappen versterken dat
+          beeld en het geheel wordt één herbruikbare prompt.
+        </nldd-text>
+      </nldd-container>
+    </nldd-container>
   );
 }
 
@@ -1615,95 +1560,77 @@ function ReviewStepRow({
   }
 
   return (
-    <li className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-      {/* Herorden-pijltjes + nummer. */}
-      <div className="flex shrink-0 flex-col items-center gap-1">
-        <button
-          type="button"
-          onClick={() => onMove(index, -1)}
-          disabled={index === 0}
-          title="Omhoog"
-          aria-label={`Stap ${index + 1} omhoog`}
-          className="rounded p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-rijksblauw-600 disabled:opacity-30 dark:hover:bg-slate-700"
-        >
-          <ChevronUp size={15} />
-        </button>
-        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-rijksblauw-500 text-xs font-semibold text-white">
-          {index + 1}
-        </span>
-        <button
-          type="button"
-          onClick={() => onMove(index, 1)}
-          disabled={index === total - 1}
-          title="Omlaag"
-          aria-label={`Stap ${index + 1} omlaag`}
-          className="rounded p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-rijksblauw-600 disabled:opacity-30 dark:hover:bg-slate-700"
-        >
-          <ChevronDown size={15} />
-        </button>
-      </div>
-
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          {editing ? (
-            <input
-              className="opl-input h-8 max-w-xs py-1 text-sm font-semibold"
-              value={draft}
-              autoFocus
-              onChange={(e) => setDraft(e.target.value)}
-              onBlur={commit}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  commit();
-                } else if (e.key === 'Escape') {
-                  setDraft(step.title);
-                  setEditing(false);
-                }
-              }}
-            />
-          ) : (
-            <button
-              type="button"
-              onClick={() => {
-                setDraft(step.title);
-                setEditing(true);
-              }}
-              title="Hernoem deze stap"
-              className="group inline-flex items-center gap-1 font-semibold text-slate-800 hover:text-rijksblauw-700 dark:text-slate-100 dark:hover:text-rijksblauw-200"
-            >
-              {step.title}
-              <Pencil size={12} className="opacity-0 transition-opacity group-hover:opacity-60 opl-geen-muis:opacity-60" />
-            </button>
-          )}
-          {techniqueName && (
-            <span className="opl-badge bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">
-              {techniqueName}
-            </span>
-          )}
-          {step.interactive && (
-            <span className="opl-badge bg-rijksoranje/15 text-rijksoranje">vraag na vraag</span>
-          )}
-        </div>
-        {step.rationale && (
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            {stripMarkdown(step.rationale)}
-          </p>
-        )}
-      </div>
-
-      {total > 1 && (
-        <button
-          type="button"
-          onClick={() => onRemove(step.id)}
-          title="Verwijder deze stap"
-          aria-label={`Verwijder stap ${index + 1}`}
-          className="shrink-0 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-rijksoranje/10 hover:text-rijksoranje disabled:opacity-40 dark:text-slate-500"
-        >
-          <Trash2 size={15} />
-        </button>
+    <nldd-list-item>
+      {editing ? (
+        <nldd-cell width="full">
+          <TitleField
+            value={draft}
+            onValue={setDraft}
+            label={`Naam van stap ${index + 1}`}
+            onCommit={commit}
+            onCancel={() => {
+              setDraft(step.title);
+              setEditing(false);
+            }}
+          />
+        </nldd-cell>
+      ) : (
+        <nldd-text-cell
+          overline={`Stap ${index + 1}`}
+          text={step.title}
+          supporting-text={step.rationale ? stripMarkdown(step.rationale) : undefined}
+        ></nldd-text-cell>
       )}
-    </li>
+      <nldd-spacer-cell size="8"></nldd-spacer-cell>
+      {(techniqueName || step.interactive) && (
+        <nldd-cell>
+          <nldd-container layout="wrap" gap="4">
+            {techniqueName && <nldd-tag size="sm" color="lintblauw" text={techniqueName}></nldd-tag>}
+            {step.interactive && <nldd-tag size="sm" color="oranje" text="vraag na vraag"></nldd-tag>}
+          </nldd-container>
+        </nldd-cell>
+      )}
+      <nldd-spacer-cell size="8"></nldd-spacer-cell>
+      <nldd-cell>
+        <nldd-container layout="row" gap="2">
+          <nldd-icon-button
+            appearance="neutral-transparent"
+            size="sm"
+            icon="chevron-up"
+            accessible-label={`Stap ${index + 1} omhoog`}
+            disabled={index === 0 || undefined}
+            onClick={() => onMove(index, -1)}
+          ></nldd-icon-button>
+          <nldd-icon-button
+            appearance="neutral-transparent"
+            size="sm"
+            icon="chevron-down"
+            accessible-label={`Stap ${index + 1} omlaag`}
+            disabled={index === total - 1 || undefined}
+            onClick={() => onMove(index, 1)}
+          ></nldd-icon-button>
+          <nldd-icon-button
+            appearance="neutral-transparent"
+            size="sm"
+            icon="pencil"
+            accessible-label={`Hernoem stap ${index + 1}`}
+            onClick={() => {
+              setDraft(step.title);
+              setEditing(true);
+            }}
+          ></nldd-icon-button>
+          {total > 1 && (
+            <nldd-icon-button
+              appearance="critical-transparent"
+              size="sm"
+              icon="trash"
+              accessible-label={`Verwijder stap ${index + 1}`}
+              onClick={() => onRemove(step.id)}
+            ></nldd-icon-button>
+          )}
+        </nldd-container>
+      </nldd-cell>
+    </nldd-list-item>
   );
 }
 
@@ -1820,20 +1747,31 @@ function PlanExecutor({
   const contextText = [goal.trim(), serializeOutcomes(outcomes)].filter(Boolean).join('\n\n');
 
   return (
-    <div className="space-y-4">
-      <div>
-        <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
-          {composing
-            ? 'De prompt wordt samengesteld…'
-            : `Stap ${Math.min(currentStepIndex + 1, total)} van ${total}`}
-        </p>
-        <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
-          We halen eerst vraag voor vraag het totaalplaatje op; elke volgende stap bouwt daarop voort
-          en de AI denkt mee wat er nog nodig is.
-        </p>
-      </div>
+    <nldd-container gap="16">
+      <nldd-title
+        heading-level={3}
+        size={5}
+        text={composing ? 'De prompt wordt samengesteld…' : `Stap ${Math.min(currentStepIndex + 1, total)} van ${total}`}
+        supporting-text="We halen eerst vraag voor vraag het totaalplaatje op; elke volgende stap bouwt daarop voort en de AI denkt mee wat er nog nodig is."
+      ></nldd-title>
 
-      <ol className="space-y-3">
+      {/* Overzicht van de voortgang; meer dan zeven stappen past niet in een balk,
+          dan dragen de stappen hieronder het zelf. */}
+      {total <= 7 && (
+        <nldd-step-bar accessible-label="Voortgang van het plan">
+          {plan.steps.map((step, idx) => (
+            <nldd-step-bar-item
+              key={step.id}
+              text={step.title}
+              status={
+                outcomeByStepId.has(step.id) ? 'past' : idx === currentStepIndex && !composing ? 'current' : 'future'
+              }
+            ></nldd-step-bar-item>
+          ))}
+        </nldd-step-bar>
+      )}
+
+      <nldd-container gap="12">
         {plan.steps.map((step, idx) => {
           const technique = techniqueById(step.technique_id);
           const outcome = outcomeByStepId.get(step.id);
@@ -1911,7 +1849,7 @@ function PlanExecutor({
             </StepRow>
           );
         })}
-      </ol>
+      </nldd-container>
 
       {/* Eindstap: laat de prompt meelezen terwijl hij wordt samengesteld, in
           plaats van alleen een spinner bij de laatste stap. */}
@@ -1926,23 +1864,17 @@ function PlanExecutor({
       )}
 
       {error && (
-        <div
-          role="alert"
-          className="animate-fade-in flex flex-col gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 sm:flex-row sm:items-center sm:justify-between dark:border-rose-500/30 dark:bg-rose-500/15 dark:text-rose-200"
-        >
-          <div className="flex items-start gap-2">
-            <AlertTriangle size={18} className="mt-0.5 shrink-0" />
-            <div>
-              <p className="font-medium">Deze stap is niet gelukt</p>
-              <p className="mt-0.5 text-rose-700 dark:text-rose-300/90">{stripMarkdown(error)}</p>
-            </div>
-          </div>
-          <button type="button" className="opl-btn-secondary shrink-0" onClick={onRetry}>
-            <RotateCw size={16} /> Opnieuw proberen
-          </button>
-        </div>
+        <nldd-banner variant="critical" text="Deze stap is niet gelukt" supporting-text={stripMarkdown(error)}>
+          <nldd-button
+            slot="actions"
+            appearance="secondary"
+            start-icon="arrow-clockwise"
+            text="Opnieuw proberen"
+            onClick={onRetry}
+          ></nldd-button>
+        </nldd-banner>
       )}
-    </div>
+    </nldd-container>
   );
 }
 
@@ -2051,24 +1983,22 @@ function StepCollector({
   // de gewone input+Genereren, tot de AI een conclusie levert (dan is material gezet).
   if (interviewActive && material == null) {
     return (
-      <div className="mt-3">
-        <InterviewPanel
-          socratic={format === 'socratic'}
-          question={interviewQuestion}
-          transcript={interviewTranscript}
-          answer={interviewAnswer}
-          busy={interviewBusy || interviewFinishing}
-          finishing={interviewFinishing}
-          onAnswerChange={onInterviewAnswerChange}
-          onSubmit={onSubmitInterviewAnswer}
-          onFinish={onFinishInterview}
-        />
-      </div>
+      <InterviewPanel
+        socratic={format === 'socratic'}
+        question={interviewQuestion}
+        transcript={interviewTranscript}
+        answer={interviewAnswer}
+        busy={interviewBusy || interviewFinishing}
+        finishing={interviewFinishing}
+        onAnswerChange={onInterviewAnswerChange}
+        onSubmit={onSubmitInterviewAnswer}
+        onFinish={onFinishInterview}
+      />
     );
   }
 
   return (
-    <div className="mt-3 space-y-4">
+    <nldd-container gap="16">
       {/* 0. Alleen bij Template-based: upload een voorbeelddocument om de velden
              op basis van de layout automatisch voor te laten invullen. */}
       {supportsDocument && material == null && (
@@ -2140,126 +2070,119 @@ function StepCollector({
           prefillProgress={prefillProgress}
         />
       ) : (
-        <p className="text-sm text-slate-500 dark:text-slate-400">
+        <nldd-text size="sm" color="secondary">
           Deze techniek heeft geen vaste vragen. Klik op &quot;Genereren&quot;; de AI denkt mee wat
           er nog nodig is.
-        </p>
+        </nldd-text>
       )}
 
       {/* 2. Genereren: analyseer de input en bepaal wat nog mist. */}
       {material == null ? (
-        <div className="flex justify-end">
-          <button type="button" className="opl-btn-primary" onClick={onAnalyze} disabled={analyzing}>
-            {analyzing ? (
-              <>
-                <Loader2 size={16} className="animate-spin" /> Meedenken…
-              </>
-            ) : (
-              <>
-                <Sparkles size={16} /> Genereren
-              </>
-            )}
-          </button>
-        </div>
+        <nldd-container horizontal-alignment="right">
+          <nldd-button
+            appearance="primary"
+            start-icon="sparkles"
+            text="Genereren"
+            loading={analyzing || undefined}
+            loading-text="Meedenken"
+            onClick={onAnalyze}
+          ></nldd-button>
+        </nldd-container>
       ) : (
-        <div className="space-y-3 rounded-xl border border-rijksblauw-200 bg-rijksblauw-50/40 p-4 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10">
-          {summary && (
-            <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
-              {stripMarkdown(summary)}
-            </p>
-          )}
+        <nldd-box background="accent-tinted">
+          <nldd-container padding="16" gap="12">
+            {summary && (
+              <nldd-text size="sm" weight="medium">
+                {stripMarkdown(summary)}
+              </nldd-text>
+            )}
 
-          {/* Het uitgeschreven materiaal van deze stap. Bij de vraag-na-vraag-stap
-              is dat het totaalplaatje waar de volgende stappen op voortbouwen. */}
-          <div>
-            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-              {isInterviewStep ? 'Het totaalplaatje' : 'Tussenresultaat'}
-            </p>
-            <div className="max-h-56 overflow-auto rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
-              <RichText text={material} className="text-xs text-slate-600 dark:text-slate-300" />
-            </div>
-          </div>
+            {/* Het uitgeschreven materiaal van deze stap. Bij de vraag-na-vraag-stap
+                is dat het totaalplaatje waar de volgende stappen op voortbouwen. */}
+            <nldd-container gap="4">
+              <nldd-text size="xs" weight="bold" color="secondary">
+                {isInterviewStep ? 'Het totaalplaatje' : 'Tussenresultaat'}
+              </nldd-text>
+              <nldd-box background="base">
+                <nldd-container padding="12">
+                  <RichText text={material} />
+                </nldd-container>
+              </nldd-box>
+            </nldd-container>
 
-          {/* "Wat mist nog voor het totale plaatje" — de doorvraag-lus. */}
-          {gaps.length > 0 && (
-            <div className="rounded-lg border border-rijksblauw-200 bg-white/70 p-3 dark:border-rijksblauw-500/30 dark:bg-slate-800/60">
-              <p className="flex items-start gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
-                <Lightbulb size={16} className="mt-0.5 shrink-0 text-rijksblauw-500" />
-                {isInterviewStep
-                  ? 'Dit is nog niet helemaal duidelijk; vul het aan'
-                  : 'Wat je nog kunt aanleveren voor een scherper geheel'}
-              </p>
-              <ul className="mt-2 space-y-1.5 pl-1">
-                {gaps.map((g, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
-                    <HelpCircle size={15} className="mt-0.5 shrink-0 text-rijksblauw-500" />
-                    <span>
-                      {g.label && <span className="font-medium">{g.label}: </span>}
-                      {stripMarkdown(g.question)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              <label className="opl-label mb-1 mt-3 block" htmlFor="plan-step-clarify">
-                Jouw aanvulling
-              </label>
-              <textarea
-                id="plan-step-clarify"
-                className="opl-input min-h-[72px] resize-y text-sm"
-                value={clarification}
-                placeholder="Vul aan wat hierboven nog mist…"
-                onChange={(e) => onClarificationChange(e.target.value)}
-                disabled={analyzing}
-              />
-              <div className="mt-2">
-                <button
-                  type="button"
-                  className="opl-btn-secondary"
-                  onClick={onAnalyze}
-                  disabled={analyzing || !clarification.trim()}
-                >
-                  {analyzing ? (
-                    <>
-                      <Loader2 size={16} className="animate-spin" /> Opnieuw meedenken…
-                    </>
-                  ) : (
-                    <>
-                      <RotateCw size={16} /> Verwerk mijn aanvulling
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          )}
+            {/* "Wat mist nog voor het totale plaatje": de doorvraag-lus. */}
+            {gaps.length > 0 && (
+              <nldd-box background="base">
+                <nldd-container padding="12" gap="8">
+                  <nldd-container layout="row" gap="8" vertical-alignment="center">
+                    <nldd-icon icon="lightbulb" size="16" color="accent"></nldd-icon>
+                    <nldd-text size="sm" weight="bold">
+                      {isInterviewStep
+                        ? 'Dit is nog niet helemaal duidelijk; vul het aan'
+                        : 'Wat je nog kunt aanleveren voor een scherper geheel'}
+                    </nldd-text>
+                  </nldd-container>
+                  <nldd-container gap="6">
+                    {gaps.map((g, i) => (
+                      <nldd-container key={i} layout="row" gap="8">
+                        <nldd-icon icon="question-mark-circle" size="16" color="accent"></nldd-icon>
+                        <nldd-text size="sm">
+                          {g.label && <strong>{g.label}: </strong>}
+                          {stripMarkdown(g.question)}
+                        </nldd-text>
+                      </nldd-container>
+                    ))}
+                  </nldd-container>
+                  <nldd-form-field label="Jouw aanvulling">
+                    <TextArea
+                      value={clarification}
+                      onValue={onClarificationChange}
+                      rows={3}
+                      resize="vertical"
+                      placeholder="Vul aan wat hierboven nog mist…"
+                      disabled={analyzing || undefined}
+                    />
+                  </nldd-form-field>
+                  <nldd-button-group>
+                    <nldd-button
+                      appearance="secondary"
+                      start-icon="arrow-clockwise"
+                      text="Verwerk mijn aanvulling"
+                      loading={analyzing || undefined}
+                      loading-text="Opnieuw meedenken"
+                      disabled={!clarification.trim() || undefined}
+                      onClick={onAnalyze}
+                    ></nldd-button>
+                  </nldd-button-group>
+                </nldd-container>
+              </nldd-box>
+            )}
 
-          {/* Door naar de volgende stap (of de eindtemplate). */}
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <button
-              type="button"
-              className="text-xs font-medium text-slate-500 hover:text-rijksblauw-600 dark:text-slate-400"
-              onClick={onAnalyze}
-              disabled={analyzing}
-            >
-              Opnieuw genereren
-            </button>
-            <button type="button" className="opl-btn-primary" onClick={onCommit} disabled={analyzing}>
-              {isLastBeforeCompose ? (
-                <>
-                  <Sparkles size={16} /> Naar de eindprompt <ArrowRight size={16} />
-                </>
-              ) : (
-                <>
-                  Volgende stap <ArrowRight size={16} />
-                </>
-              )}
-            </button>
-          </div>
-        </div>
+            {/* Door naar de volgende stap (of de eindtemplate). */}
+            <nldd-container layout="wrap" gap="8" vertical-alignment="center">
+              <nldd-button
+                appearance="neutral-transparent"
+                size="sm"
+                text="Opnieuw genereren"
+                disabled={analyzing || undefined}
+                onClick={onAnalyze}
+              ></nldd-button>
+              <nldd-spacer size="flexible" direction="horizontal"></nldd-spacer>
+              <nldd-button
+                appearance="primary"
+                start-icon={isLastBeforeCompose ? 'sparkles' : undefined}
+                end-icon="arrow-right"
+                text={isLastBeforeCompose ? 'Naar de eindprompt' : 'Volgende stap'}
+                disabled={analyzing || undefined}
+                onClick={onCommit}
+              ></nldd-button>
+            </nldd-container>
+          </nldd-container>
+        </nldd-box>
       )}
-    </div>
+    </nldd-container>
   );
 }
-
 
 /**
  * Socratische eindcontrole: de AI heeft in de samengestelde template AANNAMES
@@ -2284,67 +2207,61 @@ function AssumptionReview({
 }) {
   const answeredCount = assumptions.filter((_, i) => (answers[i] ?? '').trim()).length;
   return (
-    <div className="space-y-4">
-      <div>
-        <p className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
-          <Lightbulb size={16} className="text-rijksoranje" /> Socratische controle: aannames in
-          het resultaat
-        </p>
-        <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
-          Je prompt is klaar, maar er zitten aannames in die je niet zelf hebt aangeleverd.
-          Beantwoord de vragen om die aannames te vervangen door wat jíj bedoelt, of gebruik de
-          prompt zoals hij is.
-        </p>
-      </div>
+    <nldd-container gap="16">
+      <nldd-title
+        heading-level={3}
+        size={5}
+        overline="Socratische controle"
+        text="Aannames in het resultaat"
+        supporting-text="Je prompt is klaar, maar er zitten aannames in die je niet zelf hebt aangeleverd. Beantwoord de vragen om die aannames te vervangen door wat jíj bedoelt, of gebruik de prompt zoals hij is."
+      ></nldd-title>
 
-      <ol className="space-y-3">
+      <nldd-container gap="12">
         {assumptions.map((a, i) => (
-          <li
-            key={i}
-            className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800"
-          >
-            <p className="flex items-start gap-2 text-sm font-medium text-slate-800 dark:text-slate-100">
-              <HelpCircle size={15} className="mt-0.5 shrink-0 text-rijksblauw-500" />
-              <span>
-                {a.label && <span className="font-semibold">{a.label}: </span>}
-                {stripMarkdown(a.question)}
-              </span>
-            </p>
-            <textarea
-              className="opl-input mt-2 min-h-[64px] resize-y text-sm"
-              value={answers[i] ?? ''}
-              placeholder="Laat leeg als de aanname klopt…"
-              onChange={(e) => onAnswerChange(i, e.target.value)}
-            />
-          </li>
+          <nldd-card key={i}>
+            <nldd-container padding="16">
+              <nldd-form-field
+                label={a.label ? `**${a.label}:** ${stripMarkdown(a.question)}` : stripMarkdown(a.question)}
+              >
+                <TextArea
+                  value={answers[i] ?? ''}
+                  onValue={(v) => onAnswerChange(i, v)}
+                  rows={2}
+                  resize="vertical"
+                  placeholder="Laat leeg als de aanname klopt…"
+                />
+              </nldd-form-field>
+            </nldd-container>
+          </nldd-card>
         ))}
-      </ol>
+      </nldd-container>
 
       {/* De huidige template (nog zonder de aanscherping), ter referentie. */}
-      <div>
-        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+      <nldd-container gap="4">
+        <nldd-text size="xs" weight="bold" color="secondary">
           Huidige prompt
-        </p>
-        <div className="max-h-56 overflow-auto rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900">
-          <RichText text={templateContent} className="text-xs text-slate-600 dark:text-slate-300" />
-        </div>
-      </div>
+        </nldd-text>
+        <nldd-box>
+          <nldd-container padding="12">
+            <RichText text={templateContent} />
+          </nldd-container>
+        </nldd-box>
+      </nldd-container>
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <button type="button" className="opl-btn-secondary" onClick={onSkip}>
-          <Check size={16} /> Gebruik zoals het is
-        </button>
+      <nldd-container layout="wrap" gap="12" vertical-alignment="center">
+        <nldd-button appearance="secondary" start-icon="check-mark" text="Gebruik zoals het is" onClick={onSkip}></nldd-button>
+        <nldd-spacer size="flexible" direction="horizontal"></nldd-spacer>
         {/* Niet uitschakelen bij lege velden: "laat leeg als de aanname klopt" is
             een geldig antwoord. `applyAssumptions` behandelt een lege set als
             overslaan, dus beide knoppen komen dan op hetzelfde uit. */}
-        <button type="button" className="opl-btn-primary" onClick={onApply}>
-          <Sparkles size={16} />
-          {answeredCount === 0
-            ? 'Maak de prompt'
-            : `Verwerk mijn antwoorden (${answeredCount})`}
-        </button>
-      </div>
-    </div>
+        <nldd-button
+          appearance="primary"
+          start-icon="sparkles"
+          text={answeredCount === 0 ? 'Maak de prompt' : `Verwerk mijn antwoorden (${answeredCount})`}
+          onClick={onApply}
+        ></nldd-button>
+      </nldd-container>
+    </nldd-container>
   );
 }
 
@@ -2382,7 +2299,7 @@ function StepRow({
 }) {
   const [open, setOpen] = useState(false);
   const active = status === 'active';
-  const rowRef = useRef<HTMLLIElement>(null);
+  const rowRef = useRef<HTMLElement>(null);
 
   // Na het vastleggen van een stap (of zodra het resultaat er is) staat de
   // gebruiker onderaan de pagina; breng de kop van de actieve stap in beeld
@@ -2396,100 +2313,113 @@ function StepRow({
   }, [focusSignal]);
 
   return (
-    <li
-      ref={rowRef}
-      className={clsx(
-        'scroll-mt-24 rounded-xl border p-4 shadow-sm transition-colors',
-        active
-          ? 'border-rijksblauw-300 bg-rijksblauw-50/40 dark:border-rijksblauw-500/40 dark:bg-rijksblauw-500/10'
-          : status === 'error'
-            ? 'border-rose-200 bg-rose-50/40 dark:border-rose-500/30 dark:bg-rose-500/10'
-            : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800',
-      )}
-    >
-      <div className="flex items-start gap-3">
-        <StepBadge index={index} status={status} composing={compose && composing} />
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-semibold text-slate-800 dark:text-slate-100">{step.title}</span>
-            {techniqueName && (
-              <span className="opl-badge bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">
-                {techniqueName}
-              </span>
-            )}
+    <nldd-card ref={rowRef} background={active ? 'accent-tinted' : undefined}>
+      <nldd-container padding="16" gap="12">
+        <nldd-container gap="6">
+          <nldd-title heading-level={3} size={6} overline={`Stap ${index + 1}`} text={step.title}></nldd-title>
+          <nldd-container layout="wrap" gap="6" vertical-alignment="center">
+            <StepBadge index={index} status={status} composing={compose && composing} />
+            {techniqueName && <nldd-tag size="sm" color="lintblauw" text={techniqueName}></nldd-tag>}
             {compose && composing && (
-              <span className="inline-flex items-center gap-1 text-xs text-rijksblauw-600 dark:text-rijksblauw-300">
-                <Loader2 size={13} className="animate-spin" /> Prompt samenstellen…
-              </span>
+              <nldd-container layout="row" gap="4" vertical-alignment="center">
+                <nldd-activity-indicator size="16" timing="instant"></nldd-activity-indicator>
+                <nldd-text size="xs" color="accent">Prompt samenstellen…</nldd-text>
+              </nldd-container>
             )}
-          </div>
+          </nldd-container>
+        </nldd-container>
 
-          {children}
+        {children}
 
-          {/* Inklapbaar: het verzamelde materiaal van een afgeronde stap. */}
-          {outcome?.material && (
-            <div className="mt-2">
-              <div className="flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setOpen((v) => !v)}
-                  aria-expanded={open}
-                  className="inline-flex items-center gap-1 text-xs font-medium text-rijksblauw-600 hover:text-rijksblauw-700 dark:text-rijksblauw-300"
-                >
-                  {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                  {open ? 'Verberg' : 'Bekijk'} {outcomeLabel(outcome).toLowerCase()}
-                </button>
-                {onRegenerate && (
-                  <button
-                    type="button"
+        {/* Inklapbaar: het verzamelde materiaal van een afgeronde stap. */}
+        {outcome?.material && (
+          <nldd-container gap="8">
+            <nldd-container layout="wrap" gap="8" vertical-alignment="center">
+              <nldd-button
+                appearance="neutral-transparent"
+                size="sm"
+                start-icon={open ? 'chevron-down' : 'chevron-right'}
+                text={`${open ? 'Verberg' : 'Bekijk'} ${outcomeLabel(outcome).toLowerCase()}`}
+                expanded={open || undefined}
+                onClick={() => setOpen((v) => !v)}
+              ></nldd-button>
+              {onRegenerate && (
+                <nldd-tooltip text="Doorloop deze stap opnieuw (latere stappen worden ook opnieuw gedaan)">
+                  <nldd-button
+                    appearance="neutral-transparent"
+                    size="sm"
+                    start-icon="arrow-clockwise"
+                    text="Opnieuw"
                     onClick={onRegenerate}
-                    title="Doorloop deze stap opnieuw (latere stappen worden ook opnieuw gedaan)"
-                    className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-rijksoranje dark:text-slate-400"
-                  >
-                    <RotateCw size={13} /> Opnieuw
-                  </button>
-                )}
-              </div>
-              {open && (
-                <div className="mt-2 max-h-56 overflow-auto rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900">
-                  <RichText text={outcome.material} className="text-xs text-slate-600 dark:text-slate-300" />
-                </div>
+                  ></nldd-button>
+                </nldd-tooltip>
               )}
-            </div>
-          )}
-        </div>
-      </div>
-    </li>
+            </nldd-container>
+            {open && (
+              <nldd-box>
+                <nldd-container padding="12">
+                  <RichText text={outcome.material} />
+                </nldd-container>
+              </nldd-box>
+            )}
+          </nldd-container>
+        )}
+      </nldd-container>
+    </nldd-card>
   );
 }
 
-/** Het ronde statusbadge links van een stap: nummer, spinner, vinkje of kruis. */
-function StepBadge({ index, status, composing }: { index: number; status: StepStatus; composing: boolean }) {
-  const base = 'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold';
-  if (status === 'done') {
-    return (
-      <span className={clsx(base, 'bg-emerald-500 text-white')}>
-        <Check size={14} />
-      </span>
-    );
-  }
-  if (status === 'error') {
-    return (
-      <span className={clsx(base, 'bg-rose-500 text-white')}>
-        <AlertTriangle size={13} />
-      </span>
-    );
-  }
-  if (status === 'active') {
-    return (
-      <span className={clsx(base, 'bg-rijksblauw-500 text-white')}>
-        {composing ? <Loader2 size={13} className="animate-spin" /> : index + 1}
-      </span>
-    );
-  }
+/** De status van een stap als badge: het woord draagt de betekenis, de kleur helpt scannen. */
+function StepBadge({ status, composing }: { index: number; status: StepStatus; composing: boolean }) {
+  if (status === 'done') return <nldd-badge size="sm" color="success" icon="check-mark" text="Klaar"></nldd-badge>;
+  if (status === 'error') return <nldd-badge size="sm" color="critical" icon="exclamation-triangle" text="Mislukt"></nldd-badge>;
+  if (status === 'active') return <nldd-badge size="sm" color="accent" text={composing ? 'Bezig' : 'Nu aan de beurt'}></nldd-badge>;
+  return <nldd-badge size="sm" color="neutral" text="Nog te doen"></nldd-badge>;
+}
+
+/** A multi-line nldd field bound to React state; it binds its own listener when it mounts. */
+function TextArea({
+  value,
+  onValue,
+  ...rest
+}: Omit<ComponentProps<'nldd-multi-line-text-field'>, 'ref'> & { value: string; onValue: (v: string) => void }) {
+  const ref = useRef<HTMLElement & { value?: string }>(null);
+  useNlddValue(ref, value, onValue);
+  return <nldd-multi-line-text-field ref={ref} {...rest}></nldd-multi-line-text-field>;
+}
+
+/** The inline name field of a plan step: Enter or leaving the field saves, Escape cancels. */
+function TitleField({
+  value,
+  onValue,
+  label,
+  onCommit,
+  onCancel,
+}: {
+  value: string;
+  onValue: (v: string) => void;
+  label: string;
+  onCommit: () => void;
+  onCancel: () => void;
+}) {
+  const ref = useRef<HTMLElement & { value?: string }>(null);
+  useNlddValue(ref, value, onValue);
+  useEffect(() => {
+    ref.current?.focus();
+  }, []);
   return (
-    <span className={clsx(base, 'bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400')}>
-      {index + 1}
-    </span>
+    <nldd-text-field
+      ref={ref}
+      accessible-label={label}
+      onBlur={onCommit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          onCommit();
+        } else if (e.key === 'Escape') {
+          onCancel();
+        }
+      }}
+    ></nldd-text-field>
   );
 }

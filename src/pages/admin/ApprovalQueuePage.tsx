@@ -1,21 +1,27 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Check, X, Inbox, ExternalLink } from '@/components/common/icons';
+import { useLocation } from 'react-router-dom';
 import { notify } from '@/lib/notify';
-import clsx from 'clsx';
+import { BoundMultiLine } from '@/components/admin/AdminFields';
 import { formatDate, visibilityMeta } from '@/lib/utils';
 import { listPendingForModeration, decideVisibility } from '@/services/visibilityService';
 import { VISIBILITY_STATUS_META } from '@/services/collaborationService';
 import { logAdminAction } from '@/services/adminService';
-import type { Prompt, PromptVisibility } from '@/types';
+import type { Prompt, PromptVisibility, VisibilityStatus } from '@/types';
 
 type PendingRow = PromptVisibility & { prompt: Prompt | null };
+
+const STATUS_COLOR: Record<VisibilityStatus, 'success' | 'warning' | 'critical'> = {
+  approved: 'success',
+  pending: 'warning',
+  rejected: 'critical',
+};
 
 export default function ApprovalQueuePage() {
   const [rows, setRows] = useState<PendingRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
+  const inAdmin = useLocation().pathname.startsWith('/admin');
 
   async function load() {
     setLoading(true);
@@ -52,99 +58,91 @@ export default function ApprovalQueuePage() {
     }
   }
 
-  return (
-    <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Goedkeuringen</h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          {rows.length} deelniveau{rows.length === 1 ? '' : 's'} wacht{rows.length === 1 ? '' : 'en'} op
-          jouw beoordeling
-        </p>
-      </div>
+  const content = (
+    <nldd-container layout="stack" gap="24">
+      <nldd-title
+        heading-level={1}
+        size={2}
+        text="Goedkeuringen"
+        supporting-text={`${rows.length} deelniveau${rows.length === 1 ? '' : 's'} wacht${rows.length === 1 ? '' : 'en'} op jouw beoordeling`}
+      ></nldd-title>
 
       {loading ? (
-        <div className="opl-card">
-          <div className="skeleton h-40 w-full" />
-        </div>
+        <nldd-container min-height="10rem">
+          <nldd-activity-indicator></nldd-activity-indicator>
+        </nldd-container>
       ) : rows.length === 0 ? (
-        <div className="opl-card flex flex-col items-center gap-2 py-12 text-center">
-          <Inbox size={32} className="text-slate-300 dark:text-slate-600" />
-          <p className="text-sm text-slate-500 dark:text-slate-400">Geen openstaande aanvragen. Mooi werk!</p>
-        </div>
+        <nldd-card>
+          <nldd-container padding="32">
+            <nldd-inline-dialog icon="inbox" text="Geen openstaande aanvragen. Mooi werk!"></nldd-inline-dialog>
+          </nldd-container>
+        </nldd-card>
       ) : (
-        <div className="space-y-4">
+        <nldd-container layout="stack" gap="16">
           {rows.map((row) => {
             const p = row.prompt;
             const meta = visibilityMeta(row.level);
             const statusMeta = VISIBILITY_STATUS_META[row.status];
             return (
-              <div key={row.id} className="opl-card p-5">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="font-semibold text-slate-800 dark:text-slate-100">
-                        {p?.title ?? 'Onbekende prompt'}
-                      </h2>
-                      <span className="rounded-full bg-rijksblauw-50 px-2 py-0.5 text-[0.6875rem] font-medium text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">
-                        Niveau: {meta?.label ?? row.level}
-                      </span>
-                      <span className={clsx('opl-badge', statusMeta.classes)}>{statusMeta.label}</span>
-                    </div>
-                    {p?.description && (
-                      <p className="mt-0.5 line-clamp-2 text-sm text-slate-500 dark:text-slate-400">
-                        {p.description}
-                      </p>
+              <nldd-card key={row.id}>
+                <nldd-container padding="20" sm-padding="16" layout="stack" gap="12">
+                  <nldd-title heading-level={2} size={5} text={p?.title ?? 'Onbekende prompt'}>
+                    {p && (
+                      <nldd-link slot="end" size="sm" href={`/prompt/${p.id}`} end-icon="external-link" text="Bekijk"></nldd-link>
                     )}
-                    <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-                      Aangevraagd {row.created_at ? formatDate(row.created_at) : '—'} · door{' '}
-                      {p?.created_by ?? 'onbekend'}
-                    </p>
-                  </div>
-                  {p && (
-                    <Link
-                      to={`/prompt/${p.id}`}
-                      className="inline-flex shrink-0 items-center gap-1 text-sm text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
-                    >
-                      Bekijken <ExternalLink size={14} />
-                    </Link>
+                  </nldd-title>
+                  <nldd-container layout="wrap" gap="4">
+                    <nldd-tag size="sm" color="lintblauw" text={`Niveau: ${meta?.label ?? row.level}`}></nldd-tag>
+                    <nldd-badge size="sm" color={STATUS_COLOR[row.status]} text={statusMeta.label}></nldd-badge>
+                  </nldd-container>
+                  {p?.description && (
+                    <nldd-text size="sm" color="secondary">
+                      {p.description}
+                    </nldd-text>
                   )}
-                </div>
+                  <nldd-text size="xs" color="secondary">
+                    Aangevraagd {row.created_at ? formatDate(row.created_at) : 'onbekend'} · door {p?.created_by ?? 'onbekend'}
+                  </nldd-text>
 
-                {p?.content && (
-                  <pre tabIndex={0} className="mt-3 max-h-32 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-3 font-mono text-xs text-slate-700 dark:bg-slate-900 dark:text-slate-200">
-                    {p.content}
-                  </pre>
-                )}
+                  {p?.content && (
+                    <nldd-code-viewer wrap no-copy max-height="8rem">
+                      {p.content}
+                    </nldd-code-viewer>
+                  )}
 
-                <textarea
-                  className="opl-input mt-3"
-                  rows={2}
-                  placeholder="Optionele opmerking…"
-                  value={notes[row.id] ?? ''}
-                  onChange={(e) => setNotes((n) => ({ ...n, [row.id]: e.target.value }))}
-                />
+                  <nldd-form-field label="Opmerking" optional>
+                    <BoundMultiLine
+                      rows={2}
+                      value={notes[row.id] ?? ''}
+                      onValue={(note) => setNotes((n) => ({ ...n, [row.id]: note }))}
+                    ></BoundMultiLine>
+                  </nldd-form-field>
 
-                <div className="mt-3 flex justify-end gap-2">
-                  <button
-                    onClick={() => handleDecision(row, 'rejected')}
-                    disabled={busyId === row.id}
-                    className="opl-btn-secondary text-rijksrood"
-                  >
-                    <X size={16} /> Afwijzen
-                  </button>
-                  <button
-                    onClick={() => handleDecision(row, 'approved')}
-                    disabled={busyId === row.id}
-                    className="opl-btn-primary bg-emerald-600 hover:bg-emerald-700"
-                  >
-                    <Check size={16} /> Goedkeuren
-                  </button>
-                </div>
-              </div>
+                  <nldd-button-group>
+                    <nldd-button
+                      appearance="critical-tinted"
+                      start-icon="dismiss"
+                      text="Wijs af"
+                      loading={busyId === row.id || undefined}
+                      onClick={() => handleDecision(row, 'rejected')}
+                    ></nldd-button>
+                    <nldd-button
+                      appearance="primary"
+                      start-icon="check-mark"
+                      text="Keur goed"
+                      loading={busyId === row.id || undefined}
+                      onClick={() => handleDecision(row, 'approved')}
+                    ></nldd-button>
+                  </nldd-button-group>
+                </nldd-container>
+              </nldd-card>
             );
           })}
-        </div>
+        </nldd-container>
       )}
-    </div>
+    </nldd-container>
   );
+
+  // Under /admin the page sits in the admin layout; at /goedkeuringen it is a page of its own.
+  return inAdmin ? content : <nldd-simple-section>{content}</nldd-simple-section>;
 }

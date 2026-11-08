@@ -1,21 +1,8 @@
-import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
-import {
-  ArrowLeft,
-  Copy,
-  Check,
-  Pencil,
-  Save,
-  X,
-  Star,
-  Share2,
-  Trash2,
-  History,
-  Download,
-  ThumbsUp,
-  Building2,
-} from '@/components/common/icons';
+import { useEffect, useRef, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { notify } from '@/lib/notify';
+import { useNlddEvent, useNlddValue } from '@/lib/nldd';
+import MenuAction from '@/components/common/MenuAction';
 import ShareModal from '@/components/share/ShareModal';
 import ExportModal from '@/components/export/ExportModal';
 import CollaborationPanel from '@/components/collaboration/CollaborationPanel';
@@ -30,13 +17,15 @@ import {
 } from '@/services/repository';
 import { getLikeInfo, toggleLike } from '@/services/likeService';
 import { getPublicProfile, firstName } from '@/services/communityService';
-import {
-  copyToClipboard,
-  formatDate,
-  sharingBadgeClasses,
-  sharingLabel,
-} from '@/lib/utils';
-import type { Optimization, Prompt, PublicProfile } from '@/types';
+import { copyToClipboard, formatDate, sharingLabel } from '@/lib/utils';
+import type { Optimization, Prompt, PublicProfile, SharingLevel } from '@/types';
+
+const SHARING_TAG_COLOR: Record<SharingLevel, 'neutral' | 'hemelblauw' | 'violet' | 'groen'> = {
+  private: 'neutral',
+  department: 'hemelblauw',
+  ministry: 'violet',
+  public: 'groen',
+};
 
 export default function PromptDetailPage() {
   const { promptId } = useParams<{ promptId: string }>();
@@ -60,6 +49,9 @@ export default function PromptDetailPage() {
   const [draftDescription, setDraftDescription] = useState('');
   const [draftContent, setDraftContent] = useState('');
   const [saving, setSaving] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const deleteDialogRef = useRef<HTMLElement>(null);
+  useNlddEvent(deleteDialogRef, 'close', () => setConfirmDelete(false));
   // Verhoogd na een opslag, zodat de versiegeschiedenis ververst.
   const [versionRefresh, setVersionRefresh] = useState(0);
 
@@ -145,7 +137,7 @@ export default function PromptDetailPage() {
 
   async function handleDelete() {
     if (!prompt) return;
-    if (!confirm('Weet je zeker dat je deze prompt wilt verwijderen?')) return;
+    setConfirmDelete(false);
     await deletePrompt(prompt.id);
     notify.success('Prompt verwijderd');
     navigate('/zoeken');
@@ -173,7 +165,11 @@ export default function PromptDetailPage() {
     try {
       const updated = await savePromptEdit(
         prompt,
-        { title: draftTitle, description: draftDescription, content: draftContent },
+        {
+          title: draftTitle,
+          description: draftDescription,
+          content: draftContent,
+        },
         user?.id,
       );
       setPrompt(updated);
@@ -189,21 +185,31 @@ export default function PromptDetailPage() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-8">
-        <div className="skeleton mb-4 h-8 w-2/3 rounded" />
-        <div className="skeleton h-48 w-full rounded-xl" />
-      </div>
+      <nldd-simple-section>
+        <nldd-title heading-level={1} size={2} text="Prompt laden"></nldd-title>
+        <nldd-spacer size="24"></nldd-spacer>
+        <nldd-inline-dialog
+          variant="loading"
+          text="Even geduld, de prompt wordt geladen."
+        ></nldd-inline-dialog>
+      </nldd-simple-section>
     );
   }
 
   if (!prompt) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-16 text-center">
-        <p className="text-slate-600 dark:text-slate-300">Deze prompt bestaat niet (meer).</p>
-        <Link to="/zoeken" className="opl-btn-primary mt-4 inline-flex">
-          Terug naar zoeken
-        </Link>
-      </div>
+      <nldd-simple-section>
+        <nldd-inline-dialog
+          heading-level={1}
+          icon="search"
+          icon-color="secondary"
+          text="Deze prompt bestaat niet (meer)."
+        >
+          <nldd-button-group slot="actions">
+            <nldd-button appearance="primary" href="/zoeken" text="Terug naar zoeken"></nldd-button>
+          </nldd-button-group>
+        </nldd-inline-dialog>
+      </nldd-simple-section>
     );
   }
 
@@ -212,213 +218,287 @@ export default function PromptDetailPage() {
   // Alleen de eigenaar of een admin mag de prompt bewerken of verwijderen.
   const isOwner = !!user && prompt.created_by_user === user.id;
   const canManage = isAdmin || isOwner;
+  const org = organizationById(author?.organization_id ?? prompt.organization_id);
+  const authorName = author?.full_name ? firstName(author.full_name) : prompt.created_by || 'onbekend';
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
-      <button
-        onClick={() => navigate(-1)}
-        className="mb-4 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100"
-      >
-        <ArrowLeft size={16} /> Terug
-      </button>
-
-      <div className="opl-card p-6">
-        <div className="mb-4 flex items-start justify-between gap-4">
+    <>
+      <nldd-simple-section>
+        <nldd-container slot="header" max-width="48rem">
           {editing ? (
-            <input
-              className="opl-input flex-1 text-xl font-bold"
-              value={draftTitle}
-              onChange={(e) => setDraftTitle(e.target.value)}
-              placeholder="Titel van de prompt"
-              aria-label="Titel"
-            />
+            <nldd-link
+              href={`/prompt/${prompt.id}`}
+              size="sm"
+              start-icon="close"
+              text="Annuleer bewerken"
+              onClick={(e) => {
+                e.preventDefault();
+                if (!saving) cancelEditing();
+              }}
+            ></nldd-link>
           ) : (
-            <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">{prompt.title}</h1>
+            <nldd-link
+              href="/zoeken"
+              size="sm"
+              start-icon="arrow-left"
+              text="Terug"
+              onClick={(e) => {
+                if (window.history.length <= 1) return;
+                e.preventDefault();
+                navigate(-1);
+              }}
+            ></nldd-link>
           )}
-          <div className="flex shrink-0 items-center gap-1">
-            <button
-              onClick={handleLike}
-              disabled={likeBusy}
-              className={
-                liked
-                  ? 'inline-flex items-center gap-1.5 rounded-md px-2.5 py-2 text-sm font-medium text-rijksblauw-600 dark:text-rijksblauw-300'
-                  : 'inline-flex items-center gap-1.5 rounded-md px-2.5 py-2 text-sm text-slate-400 hover:bg-rijksblauw-50 hover:text-rijksblauw-600 dark:text-slate-500 dark:hover:bg-rijksblauw-500/10 dark:hover:text-rijksblauw-300'
-              }
-              aria-label={`${liked ? 'Like intrekken' : 'Prompt liken'}, ${likeCount}`}
-              aria-pressed={liked}
-              title={liked ? 'Like intrekken' : 'Vind ik goed'}
-            >
-              <ThumbsUp size={20} className={liked ? 'fill-rijksblauw-500/20' : ''} />
-              <span className="tabular-nums">{likeCount}</span>
-            </button>
-            <button
-              onClick={handleFavorite}
-              className="rounded-md p-2 text-slate-400 hover:bg-amber-50 hover:text-amber-500 dark:text-slate-500 dark:hover:bg-amber-500/10"
-              aria-label="Favoriet"
-            >
-              <Star size={22} className={prompt.is_favorite ? 'fill-amber-400 text-amber-400' : ''} />
-            </button>
-          </div>
-        </div>
-
-        {editing ? (
-          <textarea
-            className="opl-input mb-4 min-h-[60px] resize-y"
-            value={draftDescription}
-            onChange={(e) => setDraftDescription(e.target.value)}
-            placeholder="Korte omschrijving (optioneel)"
-            aria-label="Omschrijving"
-          />
-        ) : (
-          prompt.description && (
-            <p className="mb-4 text-slate-600 dark:text-slate-300">{prompt.description}</p>
-          )
-        )}
-
-        <div className="mb-5 flex flex-wrap gap-1.5">
-          {category && (
-            <span className="opl-badge bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">{category.name}</span>
-          )}
-          {role && (
-            <span className="opl-badge bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300">{role.name}</span>
-          )}
-          <span className={`opl-badge ${sharingBadgeClasses(prompt.sharing_level)}`}>
-            {sharingLabel(prompt.sharing_level)}
-          </span>
-        </div>
-
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Prompt-inhoud</h2>
-          {!editing && (
-            <button
-              onClick={() => handleCopy(prompt.content)}
-              className="inline-flex items-center gap-1 text-sm text-rijksblauw-500 hover:text-rijksblauw-700 dark:text-rijksblauw-300 dark:hover:text-rijksblauw-200"
-            >
-              {copied ? <Check size={14} /> : <Copy size={14} />} Kopiëren
-            </button>
-          )}
-        </div>
-        {editing ? (
-          <textarea
-            className="mb-5 min-h-[280px] w-full resize-y rounded-xl border border-rijksblauw-300 bg-white p-4 font-mono text-[0.8125rem] leading-relaxed text-slate-800 focus:outline-none focus:ring-2 focus:ring-rijksblauw-500/30 dark:border-rijksblauw-500/40 dark:bg-slate-900 dark:text-slate-200"
-            value={draftContent}
-            onChange={(e) => setDraftContent(e.target.value)}
-            aria-label="Prompt-inhoud"
-          />
-        ) : (
-          <pre tabIndex={0} className="mb-5 max-h-[360px] overflow-auto whitespace-pre-wrap rounded-xl border border-slate-200 bg-slate-50 p-4 font-mono text-[0.8125rem] leading-relaxed text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
-            {prompt.content}
-          </pre>
-        )}
-
-        <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4 dark:border-slate-800">
+          <nldd-spacer size="16"></nldd-spacer>
           {editing ? (
-            <>
-              <button onClick={handleSaveEdit} disabled={saving} className="opl-btn-primary">
-                <Save size={16} /> {saving ? 'Opslaan…' : 'Prompt opslaan'}
-              </button>
-              <button onClick={cancelEditing} disabled={saving} className="opl-btn-secondary">
-                <X size={16} /> Annuleren
-              </button>
-            </>
+            <nldd-title
+              heading-level={1}
+              size={2}
+              text="Prompt bewerken"
+              overline={prompt.title}
+            ></nldd-title>
+          ) : (
+            <nldd-title
+              heading-level={1}
+              size={2}
+              text={prompt.title}
+              supporting-text={prompt.description || undefined}
+            ></nldd-title>
+          )}
+          <nldd-spacer size="12"></nldd-spacer>
+          <nldd-container layout="wrap" gap="6">
+            {category && <nldd-tag color="lintblauw" text={category.name}></nldd-tag>}
+            {role && <nldd-tag color="neutral" text={role.name}></nldd-tag>}
+            <nldd-tag
+              color={SHARING_TAG_COLOR[prompt.sharing_level] ?? 'neutral'}
+              text={sharingLabel(prompt.sharing_level)}
+            ></nldd-tag>
+          </nldd-container>
+        </nldd-container>
+
+        <nldd-container max-width="48rem">
+          {editing ? (
+            <nldd-form>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void handleSaveEdit();
+                }}
+              >
+                <EditForm
+                  title={draftTitle}
+                  description={draftDescription}
+                  content={draftContent}
+                  onTitle={setDraftTitle}
+                  onDescription={setDraftDescription}
+                  onContent={setDraftContent}
+                />
+                <nldd-form-actions>
+                  <nldd-button-group>
+                    <nldd-button
+                      appearance="primary"
+                      type="submit"
+                      start-icon="save"
+                      text="Bewaar prompt"
+                      loading={saving || undefined}
+                      loading-text="Bezig met opslaan"
+                    ></nldd-button>
+                  </nldd-button-group>
+                </nldd-form-actions>
+              </form>
+            </nldd-form>
           ) : (
             <>
-              {/* Bewerken alleen voor eigenaar/admin. */}
-              {canManage && (
-                <button onClick={startEditing} className="opl-btn-primary">
-                  <Pencil size={16} /> Bewerken
-                </button>
-              )}
-              <button onClick={() => setShareOpen(true)} className="opl-btn-secondary">
-                <Share2 size={16} /> Delen
-              </button>
-              <button onClick={() => setExportOpen(true)} className="opl-btn-secondary">
-                <Download size={16} /> Exporteren
-              </button>
-              {/* Verwijderen alleen voor eigenaar/admin. */}
-              {canManage && (
-                <button
-                  onClick={handleDelete}
-                  className="opl-btn-ghost ml-auto text-rijksrood hover:bg-red-50 dark:hover:bg-red-500/10"
-                >
-                  <Trash2 size={16} /> Verwijderen
-                </button>
-              )}
+              <nldd-toolbar accessible-label="Acties voor deze prompt">
+                {canManage && (
+                  <nldd-toolbar-item slot="start" priority="3">
+                    <nldd-button
+                      appearance="primary"
+                      start-icon="pencil"
+                      text="Bewerk"
+                      onClick={startEditing}
+                    ></nldd-button>
+                    <MenuAction slot="overflow" icon="pencil" text="Bewerk" onSelect={startEditing} />
+                  </nldd-toolbar-item>
+                )}
+                <nldd-toolbar-item slot="start" priority="2">
+                  <nldd-button
+                    appearance="neutral-tinted"
+                    start-icon="share"
+                    text="Deel"
+                    popup-type="dialog"
+                    onClick={() => setShareOpen(true)}
+                  ></nldd-button>
+                  <MenuAction slot="overflow" icon="share" text="Deel" onSelect={() => setShareOpen(true)} />
+                </nldd-toolbar-item>
+                <nldd-toolbar-item slot="start" priority="1">
+                  <nldd-button
+                    appearance="neutral-tinted"
+                    start-icon="download"
+                    text="Exporteer"
+                    popup-type="dialog"
+                    onClick={() => setExportOpen(true)}
+                  ></nldd-button>
+                  <MenuAction
+                    slot="overflow"
+                    icon="download"
+                    text="Exporteer"
+                    onSelect={() => setExportOpen(true)}
+                  />
+                </nldd-toolbar-item>
+                <nldd-toolbar-item slot="end" priority="3">
+                  <nldd-tooltip text={liked ? 'Like intrekken' : 'Vind ik goed'}>
+                    <nldd-toggle-button
+                      appearance="neutral-transparent"
+                      icon="hand-thumbs-up"
+                      text={String(likeCount)}
+                      accessible-label={`${liked ? 'Like intrekken' : 'Prompt liken'}, ${likeCount}`}
+                      selected={liked || undefined}
+                      onClick={() => {
+                        if (!likeBusy) void handleLike();
+                      }}
+                    ></nldd-toggle-button>
+                  </nldd-tooltip>
+                  <MenuAction
+                    slot="overflow"
+                    type="checkbox"
+                    selected={liked || undefined}
+                    icon="hand-thumbs-up"
+                    text={`Vind ik goed (${likeCount})`}
+                    onSelect={() => {
+                      if (!likeBusy) void handleLike();
+                    }}
+                  />
+                </nldd-toolbar-item>
+                <nldd-toolbar-item slot="end" priority="3">
+                  <nldd-toggle-button
+                    appearance="neutral-transparent"
+                    variant="icon"
+                    icon="star"
+                    selected-icon="star-filled"
+                    accessible-label="Favoriet"
+                    selected={prompt.is_favorite || undefined}
+                    onClick={() => void handleFavorite()}
+                  ></nldd-toggle-button>
+                  <MenuAction
+                    slot="overflow"
+                    type="checkbox"
+                    selected={prompt.is_favorite || undefined}
+                    icon="star"
+                    text="Favoriet"
+                    onSelect={() => void handleFavorite()}
+                  />
+                </nldd-toolbar-item>
+                {canManage && (
+                  <nldd-toolbar-item slot="end" priority="0">
+                    <nldd-button
+                      appearance="critical-transparent"
+                      start-icon="trash"
+                      text="Verwijder"
+                      popup-type="dialog"
+                      onClick={() => setConfirmDelete(true)}
+                    ></nldd-button>
+                    <MenuAction
+                      slot="overflow"
+                      destructive
+                      icon="trash"
+                      text="Verwijder"
+                      onSelect={() => setConfirmDelete(true)}
+                    />
+                  </nldd-toolbar-item>
+                )}
+              </nldd-toolbar>
+              <nldd-spacer size="32"></nldd-spacer>
+
+              <nldd-container layout="row" gap="8" vertical-alignment="center">
+                <nldd-title heading-level={2} size={4} text="Prompt-inhoud"></nldd-title>
+                <nldd-spacer size="flexible"></nldd-spacer>
+                <nldd-button
+                  appearance="secondary"
+                  size="sm"
+                  start-icon={copied ? 'check-mark' : 'copy'}
+                  text="Kopieer"
+                  onClick={() => void handleCopy(prompt.content)}
+                ></nldd-button>
+              </nldd-container>
+              <nldd-spacer size="12"></nldd-spacer>
+              <nldd-code-viewer wrap no-copy max-height="360px">
+                {prompt.content}
+              </nldd-code-viewer>
+              <nldd-spacer size="16"></nldd-spacer>
+
+              <nldd-text size="sm" color="secondary">
+                Aangemaakt door{' '}
+                {prompt.created_by_user ? (
+                  <nldd-link href={`/community/${prompt.created_by_user}`} size="inherit" text={authorName}></nldd-link>
+                ) : (
+                  prompt.created_by || 'onbekend'
+                )}
+                {org ? ` · ${org.name}` : ''} · {formatDate(prompt.created_at)}
+              </nldd-text>
             </>
           )}
-        </div>
 
-        <p className="mt-4 flex flex-wrap items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500">
-          Aangemaakt door{' '}
-          {prompt.created_by_user ? (
-            <Link
-              to={`/community/${prompt.created_by_user}`}
-              className="opl-raak font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
-            >
-              {author?.full_name ? firstName(author.full_name) : prompt.created_by || 'onbekend'}
-            </Link>
-          ) : (
-            <span className="font-medium text-slate-500 dark:text-slate-400">
-              {prompt.created_by || 'onbekend'}
-            </span>
+          {/* Eerdere optimalisaties */}
+          {optimizations.length > 0 && (
+            <>
+              <nldd-spacer size="32"></nldd-spacer>
+              <nldd-container layout="row" gap="8" vertical-alignment="center">
+                <nldd-icon icon="history" size="20" color="lintblauw"></nldd-icon>
+                <nldd-title
+                  heading-level={2}
+                  size={4}
+                  text={`Eerdere optimalisaties (${optimizations.length})`}
+                ></nldd-title>
+              </nldd-container>
+              <nldd-spacer size="12"></nldd-spacer>
+              <nldd-container gap="12">
+                {optimizations.map((opt) => {
+                  const tech = techniqueById(opt.technique_id);
+                  return (
+                    <nldd-card key={opt.id}>
+                      <nldd-container padding="16">
+                        <nldd-container layout="row" gap="8" vertical-alignment="center">
+                          <nldd-tag color="lintblauw" text={tech?.name ?? 'Techniek'}></nldd-tag>
+                          <nldd-spacer size="flexible"></nldd-spacer>
+                          <nldd-icon-button
+                            appearance="neutral-transparent"
+                            size="sm"
+                            icon="copy"
+                            accessible-label="Kopieer optimalisatie"
+                            onClick={() => void handleCopy(opt.optimized_content)}
+                          ></nldd-icon-button>
+                        </nldd-container>
+                        <nldd-spacer size="8"></nldd-spacer>
+                        <nldd-code-viewer wrap no-copy max-height="12rem">
+                          {opt.optimized_content}
+                        </nldd-code-viewer>
+                        <nldd-spacer size="8"></nldd-spacer>
+                        <nldd-text size="xs" color="secondary">
+                          {formatDate(opt.created_at)}
+                        </nldd-text>
+                      </nldd-container>
+                    </nldd-card>
+                  );
+                })}
+              </nldd-container>
+            </>
           )}
-          {(() => {
-            const org = organizationById(author?.organization_id ?? prompt.organization_id);
-            return org ? (
-              <span className="inline-flex items-center gap-1 text-slate-400 dark:text-slate-500">
-                <Building2 size={12} /> {org.name}
-              </span>
-            ) : null;
-          })()}
-          <span>· {formatDate(prompt.created_at)}</span>
-        </p>
-      </div>
 
-      {/* Eerdere optimalisaties */}
-      {optimizations.length > 0 && (
-        <section className="mt-8">
-          <h2 className="mb-3 flex items-center gap-2 text-lg font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
-            <History size={20} /> Eerdere optimalisaties ({optimizations.length})
-          </h2>
-          <div className="space-y-3">
-            {optimizations.map((opt) => {
-              const tech = techniqueById(opt.technique_id);
-              return (
-                <div key={opt.id} className="opl-card p-4">
-                  <div className="mb-2 flex items-center justify-between">
-                    <span className="opl-badge bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">
-                      {tech?.name ?? 'Techniek'}
-                    </span>
-                    <button
-                      onClick={() => handleCopy(opt.optimized_content)}
-                      className="text-slate-400 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-200"
-                      aria-label="Kopieer optimalisatie"
-                    >
-                      <Copy size={15} />
-                    </button>
-                  </div>
-                  <pre tabIndex={0} className="max-h-48 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-3 font-mono text-xs text-slate-700 dark:bg-slate-900 dark:text-slate-200">
-                    {opt.optimized_content}
-                  </pre>
-                  <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">{formatDate(opt.created_at)}</p>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      <CollaborationPanel
-        prompt={prompt}
-        refreshKey={versionRefresh}
-        canEditVisibility={canManage}
-        onVisibilityChanged={async () => {
-          // Zichtbaarheid is aangepast → prompt opnieuw ophalen zodat de
-          // sharing-badge bovenaan de pagina klopt.
-          const fresh = await getPrompt(prompt.id);
-          if (fresh) setPrompt(fresh);
-        }}
-      />
+          <nldd-spacer size="32"></nldd-spacer>
+          <CollaborationPanel
+            prompt={prompt}
+            refreshKey={versionRefresh}
+            canEditVisibility={canManage}
+            onVisibilityChanged={async () => {
+              // Zichtbaarheid is aangepast → prompt opnieuw ophalen zodat de
+              // sharing-badge bovenaan de pagina klopt.
+              const fresh = await getPrompt(prompt.id);
+              if (fresh) setPrompt(fresh);
+            }}
+          />
+        </nldd-container>
+      </nldd-simple-section>
 
       <ShareModal open={shareOpen} onClose={() => setShareOpen(false)} prompt={prompt} />
       <ExportModal
@@ -427,6 +507,70 @@ export default function PromptDetailPage() {
         prompt={prompt}
         meta={{ categoryName: category?.name, roleName: role?.name }}
       />
-    </div>
+      <nldd-modal-dialog
+        ref={deleteDialogRef}
+        open={confirmDelete || undefined}
+        variant="alert"
+        text={`Verwijder "${prompt.title}"?`}
+        supporting-text="De prompt verdwijnt voor iedereen met wie hij gedeeld is. Dit kan niet ongedaan worden gemaakt."
+      >
+        <nldd-button
+          slot="actions"
+          appearance="primary"
+          text="Behoud prompt"
+          onClick={() => setConfirmDelete(false)}
+        ></nldd-button>
+        <nldd-button
+          slot="actions"
+          appearance="destructive"
+          text="Verwijder prompt"
+          onClick={() => void handleDelete()}
+        ></nldd-button>
+      </nldd-modal-dialog>
+    </>
+  );
+}
+
+/**
+ * The edit fields. They mount with the edit mode, so their value bindings
+ * attach to fields that exist.
+ */
+function EditForm({
+  title,
+  description,
+  content,
+  onTitle,
+  onDescription,
+  onContent,
+}: {
+  title: string;
+  description: string;
+  content: string;
+  onTitle: (value: string) => void;
+  onDescription: (value: string) => void;
+  onContent: (value: string) => void;
+}) {
+  const titleRef = useRef<HTMLElement & { value?: string }>(null);
+  const descriptionRef = useRef<HTMLElement & { value?: string }>(null);
+  const contentRef = useRef<HTMLElement & { value?: string }>(null);
+  useNlddValue(titleRef, title, onTitle);
+  useNlddValue(descriptionRef, description, onDescription);
+  useNlddValue(contentRef, content, onContent);
+  return (
+    <>
+      <nldd-form-field label="Titel">
+        <nldd-text-field ref={titleRef} placeholder="Titel van de prompt" required></nldd-text-field>
+      </nldd-form-field>
+      <nldd-form-field label="Omschrijving" optional>
+        <nldd-multi-line-text-field
+          ref={descriptionRef}
+          rows={2}
+          placeholder="Korte omschrijving"
+        ></nldd-multi-line-text-field>
+      </nldd-form-field>
+      <nldd-form-field label="Prompt-inhoud">
+        <nldd-multi-line-text-field ref={contentRef} rows={12} resize="vertical"></nldd-multi-line-text-field>
+      </nldd-form-field>
+    </>
   );
 }

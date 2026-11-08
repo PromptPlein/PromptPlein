@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Plus, Pencil, Trash2, Upload, ImageOff } from '@/components/common/icons';
 import { notify } from '@/lib/notify';
-import clsx from 'clsx';
-import Modal from '@/components/common/Modal';
+import { useNlddEvent, useNlddValue } from '@/lib/nldd';
+import AdminSheet from '@/components/admin/AdminSheet';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
+import MenuAction from '@/components/common/MenuAction';
 import LogoCropper from '@/components/common/LogoCropper';
 import {
   createOrganization,
@@ -16,7 +16,6 @@ import {
 } from '@/services/orgService';
 import { logAdminAction } from '@/services/adminService';
 import type { Organization, OrganizationType } from '@/types';
-import StackTable from '@/components/common/StackTable';
 
 const TYPES: OrganizationType[] = [
   'government',
@@ -51,12 +50,35 @@ export default function OrganizationManagerPage() {
   const [cropSrc, setCropSrc] = useState<string | null>(null);
   const [pendingLogo, setPendingLogo] = useState<Blob | null>(null);
   const [savingLogo, setSavingLogo] = useState(false);
-  const [dragActive, setDragActive] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  type Field = HTMLElement & { value?: string };
+  const nameRef = useRef<Field>(null);
+  const codeRef = useRef<Field>(null);
+  const typeRef = useRef<HTMLElement>(null);
+  const fileRef = useRef<HTMLElement>(null);
+  const parentRef = useRef<HTMLElement>(null);
+  const emailRef = useRef<Field>(null);
+  const descriptionRef = useRef<Field>(null);
+  const activeRef = useRef<HTMLElement>(null);
+
+  function setField<K extends keyof Editor>(key: K, value: Editor[K]) {
+    setEditor((prev) => (prev ? { ...prev, [key]: value } : prev));
+  }
+  const valueOf = (e: Event) =>
+    (e as CustomEvent<{ value?: string }>).detail?.value ?? (e.target as HTMLSelectElement | null)?.value ?? '';
+
+  useNlddValue(nameRef, editor?.name ?? '', (v) => setField('name', v));
+  useNlddValue(codeRef, editor?.code ?? '', (v) => setField('code', v));
+  useNlddValue(emailRef, editor?.contact_email ?? '', (v) => setField('contact_email', v));
+  useNlddValue(descriptionRef, editor?.description ?? '', (v) => setField('description', v));
+  useNlddEvent(typeRef, 'change', (e) => setField('organization_type', valueOf(e) as OrganizationType));
+  useNlddEvent(parentRef, 'change', (e) => setField('parent_id', valueOf(e)));
+  useNlddEvent<CustomEvent<{ checked: boolean }>>(activeRef, 'change', (e) => setField('is_active', !!e.detail?.checked));
+  useNlddEvent<CustomEvent<{ files: File[] }>>(fileRef, 'change', (e) => pickFile(e.detail?.files?.[0]));
 
   const orgName = useMemo(() => {
     const map = new Map(orgs.map((o) => [o.id, o.name]));
-    return (id?: string | null) => (id ? map.get(id) ?? '—' : '—');
+    return (id?: string | null) => (id ? map.get(id) ?? 'Onbekend' : 'Geen');
   }, [orgs]);
 
   async function load() {
@@ -151,12 +173,6 @@ export default function OrganizationManagerPage() {
     setCropSrc(URL.createObjectURL(file));
   }
 
-  function onDrop(e: React.DragEvent) {
-    e.preventDefault();
-    setDragActive(false);
-    pickFile(e.dataTransfer.files?.[0]);
-  }
-
   function handleCropConfirm(blob: Blob, previewUrl: string) {
     if (!editor) return;
     // Alleen een lokale preview tonen + de blob onthouden. De daadwerkelijke
@@ -183,274 +199,221 @@ export default function OrganizationManagerPage() {
     }
   }
 
+  function openEditor(o: Organization) {
+    setEditor({
+      id: o.id,
+      name: o.name,
+      code: o.code ?? '',
+      description: o.description ?? '',
+      logo_url: o.logo_url ?? '',
+      parent_id: o.parent_id ?? '',
+      organization_type: o.organization_type,
+      contact_email: o.contact_email ?? '',
+      is_active: o.is_active,
+    });
+  }
+
+  const logo = editor?.logo_url?.trim() ?? '';
+  const initials = ((editor?.code?.trim() || editor?.name.trim() || '').slice(0, 3)).toUpperCase();
+
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Organisaties beheren</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">{orgs.length} organisaties</p>
-        </div>
-        <button className="opl-btn-primary" onClick={() => setEditor({ ...EMPTY })}>
-          <Plus size={18} /> Nieuwe organisatie
-        </button>
-      </div>
+    <nldd-container layout="stack" gap="24">
+      <nldd-container layout="stack" gap="16">
+        <nldd-title heading-level={1} size={2} text="Organisaties beheren" supporting-text={`${orgs.length} organisaties`}></nldd-title>
+        <nldd-button-group>
+          <nldd-button
+            appearance="primary"
+            start-icon="plus"
+            text="Nieuwe organisatie"
+            onClick={() => setEditor({ ...EMPTY })}
+          ></nldd-button>
+        </nldd-button-group>
+      </nldd-container>
 
-      <div className="opl-card overflow-hidden">
+      <nldd-list appearance="box-tinted" accessible-label="Organisaties">
+        {!loading &&
+          orgs.map((o) => {
+            const details = [
+              o.code,
+              ORG_TYPE_LABELS[o.organization_type],
+              o.parent_id ? `onder ${orgName(o.parent_id)}` : null,
+            ]
+              .filter(Boolean)
+              .join(' · ');
+            return (
+              <nldd-list-item key={o.id}>
+                <nldd-list-item-segment button width="full" onClick={() => openEditor(o)}>
+                  {/* A code longer than three letters would be cut off, so that row shows the building icon. */}
+                  <nldd-cell>
+                    <nldd-avatar
+                      type="organization"
+                      size="32"
+                      src={o.logo_url || undefined}
+                      initials={o.code && o.code.length <= 3 ? o.code.toUpperCase() : undefined}
+                      decorative
+                    ></nldd-avatar>
+                  </nldd-cell>
+                  <nldd-spacer-cell size="12"></nldd-spacer-cell>
+                  <nldd-text-cell hide-below={!o.is_active ? 'md' : undefined} text={o.name} supporting-text={details}></nldd-text-cell>
+                  {/* Narrow, the status column is gone: an inactive organization says so after its name. */}
+                  {!o.is_active && (
+                    <nldd-text-cell hide-above="sm" supporting-text={details}>
+                      {o.name} <nldd-badge size="sm" color="neutral" text="Inactief"></nldd-badge>
+                    </nldd-text-cell>
+                  )}
+                  <nldd-spacer-cell size="16" hide-below="md"></nldd-spacer-cell>
+                  <nldd-cell hide-below="md">
+                    <nldd-badge color={o.is_active ? 'success' : 'neutral'} decorative></nldd-badge>
+                  </nldd-cell>
+                  <nldd-spacer-cell size="8" hide-below="md"></nldd-spacer-cell>
+                  <nldd-text-cell
+                    hide-below="md"
+                    width="4.5rem"
+                    size="sm"
+                    text={o.is_active ? 'Actief' : 'Inactief'}
+                  ></nldd-text-cell>
+                </nldd-list-item-segment>
+                <nldd-list-item-segment
+                  button
+                  popovertarget={`organisatie-acties-${o.id}`}
+                  accessible-label={`Acties voor ${o.name}`}
+                >
+                  <nldd-icon-cell icon="ellipsis" size="20" color="secondary"></nldd-icon-cell>
+                </nldd-list-item-segment>
+              </nldd-list-item>
+            );
+          })}
         {loading ? (
-          <div className="skeleton h-48 w-full" />
+          <nldd-inline-dialog slot="empty" variant="loading" text="Organisaties laden"></nldd-inline-dialog>
         ) : (
-          <StackTable>
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-              <tr>
-                <th className="px-4 py-3 font-medium">Naam</th>
-                <th className="hidden px-4 py-3 font-medium sm:table-cell">Type</th>
-                <th className="hidden px-4 py-3 font-medium md:table-cell">Bovenliggend</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 text-right font-medium">Acties</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-              {orgs.map((o) => (
-                <tr key={o.id} className="hover:bg-slate-50 dark:hover:bg-slate-800">
-                  <td className="px-4 py-3">
-                    <div className="font-medium text-slate-800 dark:text-slate-100">{o.name}</div>
-                    {o.code && <div className="text-xs text-slate-400 dark:text-slate-500">{o.code}</div>}
-                  </td>
-                  <td className="hidden px-4 py-3 text-slate-500 sm:table-cell dark:text-slate-400">
-                    {ORG_TYPE_LABELS[o.organization_type]}
-                  </td>
-                  <td className="hidden px-4 py-3 text-slate-500 md:table-cell dark:text-slate-400">
-                    {orgName(o.parent_id)}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={clsx(
-                        'rounded-full px-2 py-0.5 text-xs font-medium',
-                        o.is_active ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400',
-                      )}
-                    >
-                      {o.is_active ? 'Actief' : 'Inactief'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-1">
-                      <button
-                        onClick={() =>
-                          setEditor({
-                            id: o.id,
-                            name: o.name,
-                            code: o.code ?? '',
-                            description: o.description ?? '',
-                            logo_url: o.logo_url ?? '',
-                            parent_id: o.parent_id ?? '',
-                            organization_type: o.organization_type,
-                            contact_email: o.contact_email ?? '',
-                            is_active: o.is_active,
-                          })
-                        }
-                        className="rounded p-1.5 text-rijksblauw-500 hover:bg-rijksblauw-50 dark:hover:bg-rijksblauw-500/15"
-                        aria-label="Bewerken"
-                      >
-                        <Pencil size={15} />
-                      </button>
-                      <button
-                        onClick={() => setToDelete(o)}
-                        className="rounded p-1.5 text-rijksrood hover:bg-red-50 dark:hover:bg-red-500/10"
-                        aria-label="Verwijderen"
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {orgs.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-sm text-slate-400 dark:text-slate-500">
-                    Nog geen organisaties.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-          </StackTable>
+          <nldd-inline-dialog
+            slot="empty"
+            icon="building"
+            text="Nog geen organisaties"
+            supporting-text="Begin met de Rijksoverheid of een ministerie; de rest hangt daaronder."
+          ></nldd-inline-dialog>
         )}
-      </div>
+      </nldd-list>
+      {orgs.map((o) => (
+        <nldd-menu key={o.id} id={`organisatie-acties-${o.id}`} placement="bottom-end">
+          <MenuAction icon="pencil" text="Bewerk" onSelect={() => openEditor(o)} />
+          <nldd-menu-divider></nldd-menu-divider>
+          <MenuAction icon="trash" text="Verwijder" destructive onSelect={() => setToDelete(o)} />
+        </nldd-menu>
+      ))}
 
-      <Modal
+      <AdminSheet
         open={!!editor}
         onClose={closeEditor}
         title={editor?.id ? 'Organisatie bewerken' : 'Nieuwe organisatie'}
-        size="max-w-lg"
       >
-        {editor && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <label className="opl-label">Naam</label>
-                <input
-                  className="opl-input"
-                  value={editor.name}
-                  onChange={(e) => setEditor({ ...editor, name: e.target.value })}
-                  autoFocus
-                />
-              </div>
-              <div>
-                <label className="opl-label">Code</label>
-                <input
-                  className="opl-input"
-                  placeholder="bijv. BZK"
-                  value={editor.code ?? ''}
-                  onChange={(e) => setEditor({ ...editor, code: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="opl-label">Type</label>
-                <select
-                  className="opl-input"
-                  value={editor.organization_type}
-                  onChange={(e) =>
-                    setEditor({ ...editor, organization_type: e.target.value as OrganizationType })
-                  }
-                >
+        <nldd-form>
+          <form
+            noValidate
+            onSubmit={(e) => {
+              e.preventDefault();
+              void save();
+            }}
+          >
+            <nldd-form-field label="Naam">
+              <nldd-text-field ref={nameRef} required></nldd-text-field>
+            </nldd-form-field>
+            <nldd-form-field label="Code" optional>
+              <nldd-text-field ref={codeRef} placeholder="bijv. BZK"></nldd-text-field>
+            </nldd-form-field>
+            <nldd-form-field label="Type">
+              <nldd-dropdown ref={typeRef}>
+                <select value={editor?.organization_type ?? 'ministry'} onChange={() => undefined}>
                   {TYPES.map((t) => (
                     <option key={t} value={t}>
                       {ORG_TYPE_LABELS[t]}
                     </option>
                   ))}
                 </select>
-              </div>
-              <div className="sm:col-span-2">
-                <label className="opl-label">Logo</label>
-                <div
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    setDragActive(true);
-                  }}
-                  onDragLeave={() => setDragActive(false)}
-                  onDrop={onDrop}
-                  className={clsx(
-                    'flex items-center gap-4 rounded-xl border-2 border-dashed p-3 transition-colors',
-                    dragActive
-                      ? 'border-rijksblauw-400 bg-rijksblauw-50/60 dark:bg-rijksblauw-500/10'
-                      : 'border-slate-300 dark:border-slate-600',
-                  )}
-                >
-                  <div className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-600 dark:bg-slate-900">
-                    {savingLogo ? (
-                      <span className="text-[0.625rem] text-slate-400">Uploaden…</span>
-                    ) : editor.logo_url?.trim() ? (
-                      <img src={editor.logo_url.trim()} alt="" className="h-full w-full object-contain" />
-                    ) : (
-                      <span className="text-sm font-bold text-rijksblauw-500">
-                        {(editor.code?.trim() || editor.name.trim().slice(0, 3)).toUpperCase() || (
-                          <ImageOff size={18} className="text-slate-300" />
-                        )}
-                      </span>
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="opl-btn-secondary"
-                    >
-                      <Upload size={15} /> Logo uploaden
-                    </button>
-                    {editor.logo_url?.trim() && !savingLogo && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setPendingLogo(null);
-                          setEditor({ ...editor, logo_url: '' });
-                        }}
-                        className="ml-2 text-xs text-rijksrood hover:underline"
-                      >
-                        Verwijderen
-                      </button>
-                    )}
-                    <p className="mt-1.5 text-xs text-slate-400 dark:text-slate-500">
-                      Sleep een afbeelding hierheen of klik. Je kunt het logo bijsnijden en zoomen;
-                      het wordt vierkant en geoptimaliseerd opgeslagen. Zonder logo toont het
-                      organogram de code (bijv. OCW, DUO).
-                    </p>
-                  </div>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => {
-                      pickFile(e.target.files?.[0]);
-                      e.target.value = '';
+              </nldd-dropdown>
+            </nldd-form-field>
+            <nldd-form-field
+              label="Logo"
+              optional
+              supporting-label="Je kunt het logo bijsnijden en zoomen; het wordt vierkant en geoptimaliseerd opgeslagen."
+            >
+              <nldd-container layout="row" gap="16" vertical-alignment="center">
+                {savingLogo ? (
+                  <nldd-container width="64px" min-height="64px">
+                    <nldd-activity-indicator size="24" text="Logo uploaden" timing="instant"></nldd-activity-indicator>
+                  </nldd-container>
+                ) : (
+                  <nldd-avatar
+                    type="organization"
+                    size="64"
+                    src={logo || undefined}
+                    initials={initials || undefined}
+                    name={editor?.name || 'Logo'}
+                  ></nldd-avatar>
+                )}
+                <nldd-file-field ref={fileRef} accept="image/*" accessible-label="Logo"></nldd-file-field>
+                {logo && !savingLogo && (
+                  <nldd-icon-button
+                    appearance="critical-transparent"
+                    icon="trash"
+                    accessible-label="Verwijder logo"
+                    onClick={() => {
+                      setPendingLogo(null);
+                      setField('logo_url', '');
                     }}
-                  />
-                </div>
-              </div>
-              <div className="sm:col-span-2">
-                <label className="opl-label">Bovenliggende organisatie</label>
-                <select
-                  className="opl-input"
-                  value={editor.parent_id ?? ''}
-                  onChange={(e) => setEditor({ ...editor, parent_id: e.target.value })}
-                >
-                  <option value="">— Geen (top-niveau) —</option>
+                  ></nldd-icon-button>
+                )}
+              </nldd-container>
+              <nldd-form-field-help-text>
+                Zonder logo toont het organogram de code (bijv. OCW, DUO).
+              </nldd-form-field-help-text>
+            </nldd-form-field>
+            <nldd-form-field label="Bovenliggende organisatie">
+              <nldd-dropdown ref={parentRef}>
+                <select value={editor?.parent_id ?? ''} onChange={() => undefined}>
+                  <option value="">Geen (top-niveau)</option>
                   {orgs
-                    .filter((o) => o.id !== editor.id)
+                    .filter((o) => o.id !== editor?.id)
                     .map((o) => (
                       <option key={o.id} value={o.id}>
                         {o.name}
                       </option>
                     ))}
                 </select>
-              </div>
-              <div className="sm:col-span-2">
-                <label className="opl-label">Contact-e-mail</label>
-                <input
-                  className="opl-input"
-                  type="email"
-                  value={editor.contact_email ?? ''}
-                  onChange={(e) => setEditor({ ...editor, contact_email: e.target.value })}
-                />
-              </div>
-              <div className="sm:col-span-2">
-                <label className="opl-label">Beschrijving</label>
-                <input
-                  className="opl-input"
-                  value={editor.description ?? ''}
-                  onChange={(e) => setEditor({ ...editor, description: e.target.value })}
-                />
-              </div>
-            </div>
-            <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
-              <input
-                type="checkbox"
-                checked={editor.is_active ?? true}
-                onChange={(e) => setEditor({ ...editor, is_active: e.target.checked })}
-              />
-              Actief
-            </label>
-            <div className="flex justify-end gap-3">
-              <button className="opl-btn-secondary" onClick={closeEditor}>
-                Annuleren
-              </button>
-              <button className="opl-btn-primary" onClick={save} disabled={savingLogo}>
-                {savingLogo ? 'Logo uploaden…' : 'Opslaan'}
-              </button>
-            </div>
-          </div>
-        )}
-      </Modal>
+              </nldd-dropdown>
+            </nldd-form-field>
+            <nldd-form-field label="Contact-e-mail" optional>
+              <nldd-text-field ref={emailRef} type="email" autocomplete="email"></nldd-text-field>
+            </nldd-form-field>
+            <nldd-form-field label="Beschrijving" optional>
+              <nldd-text-field ref={descriptionRef}></nldd-text-field>
+            </nldd-form-field>
+            <nldd-form-field>
+              <nldd-switch-field ref={activeRef} label="Actief" checked={(editor?.is_active ?? true) || undefined}></nldd-switch-field>
+            </nldd-form-field>
+            <nldd-form-actions>
+              <nldd-button-group>
+                <nldd-button
+                  appearance="primary"
+                  type="submit"
+                  text="Bewaar"
+                  loading={savingLogo || undefined}
+                  loading-text="Logo uploaden"
+                ></nldd-button>
+              </nldd-button-group>
+            </nldd-form-actions>
+          </form>
+        </nldd-form>
+      </AdminSheet>
 
-      <Modal
+      <AdminSheet
         open={!!cropSrc}
         onClose={() => {
           if (cropSrc) URL.revokeObjectURL(cropSrc);
           setCropSrc(null);
         }}
         title="Logo bijsnijden"
-        size="max-w-md"
+        width="480px"
       >
         {cropSrc && (
           <LogoCropper
@@ -462,7 +425,7 @@ export default function OrganizationManagerPage() {
             }}
           />
         )}
-      </Modal>
+      </AdminSheet>
 
       <ConfirmDialog
         open={!!toDelete}
@@ -473,6 +436,6 @@ export default function OrganizationManagerPage() {
         onConfirm={() => toDelete && remove(toDelete)}
         onClose={() => setToDelete(null)}
       />
-    </div>
+    </nldd-container>
   );
 }

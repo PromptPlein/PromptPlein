@@ -1,6 +1,3 @@
-import clsx from 'clsx';
-import { Check, Loader2 } from '@/components/common/icons';
-
 export type MakeStage = 'lezen' | 'kiezen' | 'invullen';
 
 const VOLGORDE: MakeStage[] = ['lezen', 'kiezen', 'invullen'];
@@ -29,47 +26,33 @@ export default function MakeProgress({
   ];
 
   return (
-    <section
-      aria-label="De AI is bezig"
-      className="animate-fade-in rounded-xl border border-slate-200 bg-white p-5 shadow-[inset_0_4px_0_0_theme(colors.rijksoranje.vast)] dark:border-slate-700 dark:bg-slate-800"
-    >
-      <h2 className="text-xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
-        De AI maakt je prompt klaar
-      </h2>
-      <ol className="mt-3 space-y-2">
-        {stappen.map((tekst, i) => {
-          const klaar = i < huidig;
-          const bezig = i === huidig;
-          return (
-            <li
-              key={i}
-              aria-current={bezig ? 'step' : undefined}
-              className={clsx(
-                'flex items-center gap-2.5',
-                bezig
-                  ? 'font-bold text-rijksblauw-700 dark:text-rijksblauw-200'
-                  : klaar
-                    ? 'text-slate-800 dark:text-slate-100'
-                    : 'text-slate-500 dark:text-slate-400',
-              )}
-            >
-              <span
-                aria-hidden="true"
-                className={clsx(
-                  'flex h-6 w-6 shrink-0 items-center justify-center rounded-full',
-                  klaar && 'bg-rijksblauw-500 text-white',
-                  bezig && 'text-rijksoranje',
-                  !klaar && !bezig && 'border-2 border-slate-300 dark:border-slate-600',
+    <nldd-box role="region" aria-label="De AI is bezig">
+      <nldd-container padding="20" gap="12">
+        <nldd-title heading-level={2} size={5} text="De AI maakt je prompt klaar"></nldd-title>
+        <nldd-list accessible-label="Stappen" dividers="never">
+          {stappen.map((tekst, i) => {
+            const status: 'past' | 'current' | 'future' = i < huidig ? 'past' : i === huidig ? 'current' : 'future';
+            return (
+              <nldd-list-item key={i} aria-current={status === 'current' ? 'step' : undefined}>
+                <nldd-step-cell
+                  status={status}
+                  position={i === 0 ? 'first' : i === stappen.length - 1 ? 'last' : 'between'}
+                ></nldd-step-cell>
+                <nldd-spacer-cell size="12"></nldd-spacer-cell>
+                <nldd-text-cell
+                  text={status === 'current' ? `**${tekst}**` : tekst}
+                  color={status === 'future' ? 'secondary' : undefined}
+                ></nldd-text-cell>
+                {status === 'current' && (
+                  <nldd-cell>
+                    <nldd-activity-indicator size="20" timing="instant" text={tekst}></nldd-activity-indicator>
+                  </nldd-cell>
                 )}
-              >
-                {klaar && <Check size={14} />}
-                {bezig && <Loader2 size={20} className="animate-spin" />}
-              </span>
-              {tekst}
-            </li>
-          );
-        })}
-      </ol>
-    </section>
+              </nldd-list-item>
+            );
+          })}
+        </nldd-list>
+      </nldd-container>
+    </nldd-box>
   );
 }

@@ -1,17 +1,5 @@
-import { useEffect, useState } from 'react';
-import {
-  AlertTriangle,
-  ArrowLeft,
-  ArrowRight,
-  Check,
-  Loader2,
-  Plus,
-  RefreshCw,
-  Sparkles,
-  Trash2,
-  Wand2,
-} from '@/components/common/icons';
-import clsx from 'clsx';
+import { useEffect, useRef, useState } from 'react';
+import { useNlddEvent, useNlddValue } from '@/lib/nldd';
 import { notify } from '@/lib/notify';
 import OptimizableTextarea from '@/components/common/OptimizableTextarea';
 import { generateFewShotExample, extractFewShot } from '@/services/optimizeService';
@@ -208,28 +196,17 @@ export default function FewShotBuilder({ settings, onSerialized, initialContext 
   }
 
   return (
-    <div className="space-y-4">
+    <nldd-container gap="16">
       {/* Voortgang: welke stap van welke. */}
-      <div className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
-        {PHASES.map((p, i) => (
-          <span key={p} className="flex items-center gap-2">
-            <span
-              className={clsx(
-                'flex h-5 w-5 items-center justify-center rounded-full text-[0.6875rem]',
-                i < phaseIndex
-                  ? 'bg-emerald-500 text-white'
-                  : i === phaseIndex
-                    ? 'bg-rijksblauw-500 text-white'
-                    : 'bg-slate-200 text-slate-500 dark:bg-slate-700',
-              )}
-            >
-              {i < phaseIndex ? <Check size={11} /> : i + 1}
-            </span>
-            {i < PHASES.length - 1 && <span className="h-px w-4 bg-slate-200 dark:bg-slate-700" />}
-          </span>
+      <nldd-step-bar accessible-label="Stappen van de few-shot-bouwer">
+        {PHASES.map((p) => (
+          <nldd-step-bar-item
+            key={p}
+            text={PHASE_TITLES[p]}
+            status={p === phase ? 'current' : undefined}
+          ></nldd-step-bar-item>
         ))}
-        <span className="ml-1">{PHASE_TITLES[phase]}</span>
-      </div>
+      </nldd-step-bar>
 
       {phase === 'context' && (
         <ContextPhase value={d.context} onChange={(context) => patch({ context })} />
@@ -261,45 +238,47 @@ export default function FewShotBuilder({ settings, onSerialized, initialContext 
       )}
 
       {/* Navigatie. */}
-      <div className="flex items-center justify-between gap-3 pt-1">
-        <button
-          type="button"
-          className={clsx('opl-btn-secondary', phaseIndex === 0 && 'invisible')}
-          onClick={back}
-          disabled={busy}
-        >
-          <ArrowLeft size={16} /> Vorige
-        </button>
+      <nldd-container layout="row" gap="12" vertical-alignment="center">
+        {phaseIndex > 0 && (
+          <nldd-button
+            appearance="secondary"
+            start-icon="arrow-left"
+            text="Vorige"
+            disabled={busy || undefined}
+            onClick={back}
+          ></nldd-button>
+        )}
+        <nldd-spacer size="flexible"></nldd-spacer>
         {phase !== 'analysis' ? (
-          <button type="button" className="opl-btn-primary" onClick={next} disabled={busy || !canNext}>
-            {phase === 'pairs' ? (
-              <>
-                <Sparkles size={16} /> Analyseer
-              </>
-            ) : (
-              <>
-                Volgende <ArrowRight size={16} />
-              </>
-            )}
-          </button>
+          <nldd-button
+            appearance="secondary"
+            start-icon={phase === 'pairs' ? 'sparkles' : undefined}
+            end-icon={phase === 'pairs' ? undefined : 'arrow-right'}
+            text={phase === 'pairs' ? 'Analyseer' : 'Volgende'}
+            disabled={busy || !canNext || undefined}
+            onClick={next}
+          ></nldd-button>
         ) : (
           analyzed &&
           !stale &&
           !analyzing && (
-            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-              <Check size={14} /> Klaar. Bouw hieronder de prompt.
-            </span>
+            <>
+              <nldd-icon icon="check-mark" size="16" color="success"></nldd-icon>
+              <nldd-text size="xs" weight="medium" color="success">
+                Klaar. Bouw hieronder de prompt.
+              </nldd-text>
+            </>
           )
         )}
-      </div>
-    </div>
+      </nldd-container>
+    </nldd-container>
   );
 }
 
 /** Stap 1: de context, met het sterretje om hem uit te laten schrijven. */
 function ContextPhase({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
-    <div className="space-y-2">
+    <nldd-container gap="8">
       <BuilderIntro
         title="Beschrijf de situatie"
         text="Wat komt er binnen, van wie, en wat moet ermee gebeuren? Steekwoorden mogen; het sterretje maakt er een heldere context van."
@@ -309,10 +288,9 @@ function ContextPhase({ value, onChange }: { value: string; onChange: (v: string
         value={value}
         onValueChange={onChange}
         placeholder="Bijv. Ik krijg elke dag e-mails van burgers over hun aanvraag. Ik wil dat de AI elke mail beoordeelt en er passend op reageert."
-        className="opl-input min-h-[8rem] resize-y px-4 py-3 text-[0.9375rem] leading-relaxed"
         optimizeTitle="Verduidelijk mijn context met AI; je oorspronkelijke tekst kun je daarna terughalen"
       />
-    </div>
+    </nldd-container>
   );
 }
 
@@ -335,74 +313,104 @@ function PairsPhase({
   onSuggest: (id: string) => void;
 }) {
   return (
-    <div className="space-y-3">
+    <nldd-container gap="12">
       <BuilderIntro
         title="Geef voorbeelden"
         text="Leg per situatie vast wat de AI herkent en hoe hij dan reageert. Weet je er geen? Laat de AI er een voorstellen."
       />
       {pairs.map((p, idx) => (
-        <div
+        <PairCard
           key={p.id}
-          className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-800"
-        >
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-sm font-semibold text-rijksblauw-700 dark:text-rijksblauw-200">
-              Input en output {idx + 1}
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-rijksblauw-600 disabled:opacity-50 dark:text-slate-400"
-                onClick={() => onSuggest(p.id)}
-                disabled={busy}
-              >
-                {suggesting === p.id ? <Loader2 size={13} className="animate-spin" /> : <Wand2 size={13} />}
-                Laat AI voorstellen
-              </button>
-              {pairs.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => onRemovePair(p.id)}
-                  title="Verwijder dit paar"
-                  className="rounded p-1 text-slate-400 hover:bg-rijksoranje/10 hover:text-rijksoranje dark:text-slate-500"
-                >
-                  <Trash2 size={14} />
-                </button>
-              )}
-            </div>
-          </div>
-          <label className="opl-label mb-0.5 block text-xs">Input: wat herkent de AI?</label>
-          <textarea
-            className="opl-input min-h-[56px] resize-y text-sm"
-            value={p.input}
+          pair={p}
+          index={idx}
+          removable={pairs.length > 1}
+          busy={busy}
+          suggesting={suggesting === p.id}
+          onUpdate={(field, value) => onUpdatePair(p.id, field, value)}
+          onRemove={() => onRemovePair(p.id)}
+          onSuggest={() => onSuggest(p.id)}
+        />
+      ))}
+      <nldd-container horizontal-alignment="left">
+        <nldd-button appearance="secondary" start-icon="plus" text="Input en output toevoegen" onClick={onAddPair}></nldd-button>
+      </nldd-container>
+    </nldd-container>
+  );
+}
+
+/** One input/output pair. */
+function PairCard({
+  pair: p,
+  index: idx,
+  removable,
+  busy,
+  suggesting,
+  onUpdate,
+  onRemove,
+  onSuggest,
+}: {
+  pair: FewShotPair;
+  index: number;
+  removable: boolean;
+  busy: boolean;
+  suggesting: boolean;
+  onUpdate: (field: 'input' | 'output', value: string) => void;
+  onRemove: () => void;
+  onSuggest: () => void;
+}) {
+  const inputRef = useRef<HTMLElement & { value?: string }>(null);
+  const outputRef = useRef<HTMLElement & { value?: string }>(null);
+  useNlddValue(inputRef, p.input, (v) => onUpdate('input', v));
+  useNlddValue(outputRef, p.output, (v) => onUpdate('output', v));
+  return (
+    <nldd-card>
+      <nldd-container padding="12" gap="8">
+        <nldd-container layout="row" gap="8" vertical-alignment="center">
+          <nldd-title heading-level={4} size={6} text={`Input en output ${idx + 1}`}></nldd-title>
+          <nldd-spacer size="flexible"></nldd-spacer>
+          <nldd-button
+            size="sm"
+            appearance="neutral-transparent"
+            start-icon="sparkles"
+            text="Laat AI voorstellen"
+            loading={suggesting || undefined}
+            disabled={(busy && !suggesting) || undefined}
+            onClick={onSuggest}
+          ></nldd-button>
+          {removable && (
+            <nldd-icon-button
+              size="sm"
+              appearance="critical-transparent"
+              icon="trash"
+              accessible-label={`Verwijder paar ${idx + 1}`}
+              onClick={onRemove}
+            ></nldd-icon-button>
+          )}
+        </nldd-container>
+        <nldd-form-field label="Input: wat herkent de AI?">
+          <nldd-multi-line-text-field
+            ref={inputRef}
+            rows={2}
             placeholder={
               idx === 0
                 ? 'Bijv. Analyseer of de mail onbeleefd is.'
                 : 'Bijv. Het bericht is onduidelijk: niet te zien wat de afzender vraagt.'
             }
-            onChange={(e) => onUpdatePair(p.id, 'input', e.target.value)}
-          />
-          <label className="opl-label mb-0.5 mt-2 block text-xs">Output: hoe reageert de AI dan?</label>
-          <textarea
-            className="opl-input min-h-[56px] resize-y text-sm"
-            value={p.output}
+          ></nldd-multi-line-text-field>
+        </nldd-form-field>
+        <nldd-form-field label="Output: hoe reageert de AI dan?">
+          <nldd-multi-line-text-field
+            ref={outputRef}
+            rows={2}
             placeholder={
               idx === 0
                 ? 'Bijv. Reageer beleefd: "Vervelend dat u in deze situatie zit. We helpen u graag verder."'
                 : 'Bijv. Vraag om uitleg: "We begrijpen uw bericht niet helemaal. Kunt u wat meer uitleg geven?"'
             }
-            onChange={(e) => onUpdatePair(p.id, 'output', e.target.value)}
-          />
-        </div>
-      ))}
-      <button
-        type="button"
-        onClick={onAddPair}
-        className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-rijksblauw-300 px-3 py-2 text-sm font-medium text-rijksblauw-700 hover:bg-rijksblauw-50 dark:border-rijksblauw-500/40 dark:text-rijksblauw-200 dark:hover:bg-rijksblauw-500/10"
-      >
-        <Plus size={16} /> Input en output toevoegen
-      </button>
-    </div>
+          ></nldd-multi-line-text-field>
+        </nldd-form-field>
+      </nldd-container>
+    </nldd-card>
   );
 }
 
@@ -432,142 +440,115 @@ function AnalysisPhase({
 }) {
   if (analyzing) {
     return (
-      <p className="flex items-center gap-2 rounded-lg border border-dashed border-slate-300 px-4 py-6 text-sm text-slate-500 dark:border-slate-600 dark:text-slate-400">
-        <Loader2 size={16} className="animate-spin" /> De AI legt je input en output naast de context…
-      </p>
+      <nldd-inline-dialog variant="loading" text="De AI legt je input en output naast de context…"></nldd-inline-dialog>
     );
   }
   if (!analyzed) {
     return (
-      <div className="space-y-3">
-        <p className="text-sm text-slate-600 dark:text-slate-300">
+      <nldd-container gap="12">
+        <nldd-text size="sm">
           De AI legt je input en output naast de context: welke kenmerken de prompt moet vastleggen, welke
           details alleen bij één geval horen, en welke situaties nog ontbreken.
-        </p>
-        <button type="button" className="opl-btn-primary" onClick={onAnalyze}>
-          <Sparkles size={16} /> Analyseer
-        </button>
-      </div>
+        </nldd-text>
+        <nldd-container horizontal-alignment="left">
+          <nldd-button appearance="secondary" start-icon="sparkles" text="Analyseer" onClick={onAnalyze}></nldd-button>
+        </nldd-container>
+      </nldd-container>
     );
   }
   return (
-    <div className="space-y-4">
+    <nldd-container gap="16">
       {stale && (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-200">
-          <span>Je hebt de context of de paren aangepast sinds deze analyse.</span>
-          <button type="button" className="opl-btn-secondary" onClick={onAnalyze}>
-            <RefreshCw size={14} /> Opnieuw analyseren
-          </button>
-        </div>
+        <nldd-banner variant="warning" size="sm" text="Je hebt de context of de paren aangepast sinds deze analyse.">
+          <nldd-button slot="actions" start-icon="arrow-clockwise" text="Opnieuw analyseren" onClick={onAnalyze}></nldd-button>
+        </nldd-banner>
       )}
 
       {/* Dekking: situaties uit de context zonder paar. */}
       {dekking && (
-        <div className="rounded-xl border border-rijksblauw-200 bg-rijksblauw-50/40 p-3 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10">
-          <p className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
-            <Sparkles size={15} className="mt-0.5 shrink-0 text-rijksblauw-500" />
-            <span>
-              <span className="font-medium">Nog niet gedekt:</span> {dekking}
-            </span>
-          </p>
-          <button
-            type="button"
-            onClick={onAddPair}
-            className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-rijksblauw-700 hover:underline dark:text-rijksblauw-200"
-          >
-            <Plus size={14} /> Input en output toevoegen
-          </button>
-        </div>
+        <nldd-banner variant="accent" size="sm" icon="sparkles" text="Nog niet gedekt" supporting-text={dekking}>
+          <nldd-button slot="actions" start-icon="plus" text="Input en output toevoegen" onClick={onAddPair}></nldd-button>
+        </nldd-banner>
       )}
 
       {/* Tegenspraak of overlap tussen paren. */}
       {consistentie && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-500/30 dark:bg-amber-500/15">
-          <p className="flex items-start gap-2 text-sm text-amber-800 dark:text-amber-200">
-            <AlertTriangle size={15} className="mt-0.5 shrink-0" />
-            <span>
-              <span className="font-medium">Let op:</span> {consistentie}
-            </span>
-          </p>
-        </div>
+        <nldd-banner variant="warning" size="sm" text="Let op" supporting-text={consistentie}></nldd-banner>
       )}
 
       <FeatureChecklist
         title="Deze kenmerken zag ik in je outputs; welke moet de prompt vastleggen?"
-        accent="rijksblauw"
         features={d.overnemen}
         onToggle={(i) => onToggle('overnemen', i)}
       />
       {d.nietOvernemen.length > 0 && (
         <FeatureChecklist
           title="Deze details horen bij één geval; deze laat ik weg (of maak ik een [plaatshouder])"
-          accent="oranje"
           features={d.nietOvernemen}
           onToggle={(i) => onToggle('nietOvernemen', i)}
         />
       )}
 
-      <div>
-        <label className="opl-label mb-0.5 block">
-          Wat doet de AI als geen enkele input past?{' '}
-          <span className="font-normal text-slate-400">(optioneel)</span>
-        </label>
-        <textarea
-          className="opl-input min-h-[56px] resize-y text-sm"
-          value={d.randgeval}
-          placeholder="Bijv. Niet gokken, maar de mail doorsturen naar een medewerker met een korte samenvatting."
-          onChange={(e) => onRandgeval(e.target.value)}
-        />
-      </div>
+      <RandgevalField value={d.randgeval} onChange={onRandgeval} />
 
       {!stale && (
-        <button
-          type="button"
-          className="text-xs font-medium text-slate-500 hover:text-rijksblauw-600 dark:text-slate-400"
-          onClick={onAnalyze}
-        >
-          Opnieuw analyseren
-        </button>
+        <nldd-container horizontal-alignment="left">
+          <nldd-button size="sm" appearance="neutral-transparent" text="Opnieuw analyseren" onClick={onAnalyze}></nldd-button>
+        </nldd-container>
       )}
-    </div>
+    </nldd-container>
+  );
+}
+
+function RandgevalField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const ref = useRef<HTMLElement & { value?: string }>(null);
+  useNlddValue(ref, value, onChange);
+  return (
+    <nldd-form-field label="Wat doet de AI als geen enkele input past?" optional>
+      <nldd-multi-line-text-field
+        ref={ref}
+        rows={2}
+        placeholder="Bijv. Niet gokken, maar de mail doorsturen naar een medewerker met een korte samenvatting."
+      ></nldd-multi-line-text-field>
+    </nldd-form-field>
   );
 }
 
 function FeatureChecklist({
   title,
-  accent,
   features,
   onToggle,
 }: {
   title: string;
-  accent: 'rijksblauw' | 'oranje';
   features: FewShotFeature[];
   onToggle: (index: number) => void;
 }) {
   return (
-    <div>
-      <p className="mb-1.5 text-sm font-semibold text-slate-800 dark:text-slate-100">{title}</p>
-      <div className="space-y-1.5">
+    <nldd-container gap="6">
+      <nldd-text size="sm" weight="bold">
+        {title}
+      </nldd-text>
+      <nldd-list appearance="box-tinted" accessible-label={title}>
         {features.map((f, i) => (
-          <label
-            key={i}
-            className="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 bg-white p-2.5 text-sm dark:border-slate-700 dark:bg-slate-800"
-          >
-            <input type="checkbox" className="mt-0.5" checked={f.checked} onChange={() => onToggle(i)} />
-            <span>
-              <span
-                className={clsx(
-                  'font-medium',
-                  accent === 'oranje' ? 'text-rijksoranje' : 'text-rijksblauw-700 dark:text-rijksblauw-200',
-                )}
-              >
-                {f.label}
-              </span>
-              {f.detail && <span className="block text-xs text-slate-500 dark:text-slate-400">{f.detail}</span>}
-            </span>
-          </label>
+          <FeatureRow key={i} feature={f} onToggle={() => onToggle(i)} />
         ))}
-      </div>
-    </div>
+      </nldd-list>
+    </nldd-container>
+  );
+}
+
+function FeatureRow({ feature: f, onToggle }: { feature: FewShotFeature; onToggle: () => void }) {
+  const ref = useRef<HTMLElement>(null);
+  useNlddEvent<CustomEvent<{ checked: boolean }>>(ref, 'change', (e) => {
+    if (e.detail?.checked !== f.checked) onToggle();
+  });
+  return (
+    <nldd-list-item ref={ref} checkbox checked={f.checked || undefined}>
+      <nldd-cell>
+        <nldd-checkbox decorative checked={f.checked || undefined}></nldd-checkbox>
+      </nldd-cell>
+      <nldd-spacer-cell size="8"></nldd-spacer-cell>
+      <nldd-text-cell text={f.label} supporting-text={f.detail || undefined}></nldd-text-cell>
+    </nldd-list-item>
   );
 }

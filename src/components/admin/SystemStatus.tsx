@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { CheckCircle2, XCircle, AlertTriangle, Loader2, RefreshCw } from '@/components/common/icons';
 import { isSupabaseConfigured, supabase, getFunctionUrl } from '@/lib/supabase';
 
 type Health = 'ok' | 'warn' | 'error' | 'checking';
@@ -11,11 +10,17 @@ interface Check {
   detail: string;
 }
 
-const STATUS_META: Record<Health, { icon: typeof CheckCircle2; classes: string; ring: string }> = {
-  ok: { icon: CheckCircle2, classes: 'text-rijksgroen', ring: 'bg-rijksgroen' },
-  warn: { icon: AlertTriangle, classes: 'text-rijksoranje', ring: 'bg-rijksoranje' },
-  error: { icon: XCircle, classes: 'text-rijksrood', ring: 'bg-rijksrood' },
-  checking: { icon: Loader2, classes: 'text-slate-400', ring: 'bg-slate-300' },
+const STATUS_META: Record<Exclude<Health, 'checking'>, { icon: string; color: 'success' | 'warning' | 'critical' }> = {
+  ok: { icon: 'check-mark-circle-filled', color: 'success' },
+  warn: { icon: 'exclamation-triangle-filled', color: 'warning' },
+  error: { icon: 'dismiss-circle-filled', color: 'critical' },
+};
+
+const BADGE_COLOR: Record<Health, 'success' | 'warning' | 'critical' | 'neutral'> = {
+  ok: 'success',
+  warn: 'warning',
+  error: 'critical',
+  checking: 'neutral',
 };
 
 /**
@@ -72,9 +77,10 @@ export default function SystemStatus() {
             key: 'edge',
             label: 'AI edge-functie',
             status: res.ok || res.status === 204 ? 'ok' : 'warn',
-            detail: res.ok || res.status === 204
-              ? 'De optimize-prompt functie is bereikbaar.'
-              : `Onverwachte status (${res.status}). Controleer of de functie is uitgerold.`,
+            detail:
+              res.ok || res.status === 204
+                ? 'De optimize-prompt functie is bereikbaar.'
+                : `Onverwachte status (${res.status}). Controleer of de functie is uitgerold.`,
           });
         } catch {
           results.push({
@@ -100,7 +106,6 @@ export default function SystemStatus() {
 
   useEffect(() => {
     void runChecks();
-     
   }, []);
 
   const overall: Health = checks.some((c) => c.status === 'error')
@@ -119,41 +124,48 @@ export default function SystemStatus() {
   };
 
   return (
-    <div className="opl-card p-5">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className={`inline-block h-2.5 w-2.5 rounded-full ${STATUS_META[overall].ring}`} />
-          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-            Systeemstatus: {overallText[overall]}
-          </h3>
-        </div>
-        <button
-          onClick={runChecks}
-          disabled={running}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-60 dark:text-slate-300 dark:hover:bg-slate-800"
-        >
-          <RefreshCw size={13} className={running ? 'animate-spin' : ''} /> Vernieuwen
-        </button>
-      </div>
-
-      <ul className="divide-y divide-slate-100 dark:divide-slate-700">
-        {checks.map((c) => {
-          const Icon = STATUS_META[c.status].icon;
-          return (
-            <li key={c.key} className="flex items-start gap-3 py-3">
-              <Icon
-                size={18}
-                className={`mt-0.5 shrink-0 ${STATUS_META[c.status].classes} ${c.status === 'checking' ? 'animate-spin' : ''}`}
-              />
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{c.label}</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">{c.detail}</p>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
+    <nldd-card>
+      <nldd-container padding="24" sm-padding="16" gap="12">
+        <nldd-title heading-level={2} size={5} text="Systeemstatus">
+          <nldd-container slot="supporting-text" layout="row" gap="8" vertical-alignment="center">
+            <nldd-badge size="sm" color={BADGE_COLOR[overall]} decorative></nldd-badge>
+            <nldd-text size="sm" color="secondary">
+              {overallText[overall]}
+            </nldd-text>
+          </nldd-container>
+          <nldd-button
+            slot="end"
+            size="sm"
+            appearance="neutral-transparent"
+            start-icon="refresh"
+            text="Vernieuwen"
+            loading={running || undefined}
+            loading-text="Bezig met controleren"
+            onClick={() => void runChecks()}
+          ></nldd-button>
+        </nldd-title>
+        <nldd-list accessible-label="Verbindingen">
+          {checks.map((c) => (
+            <nldd-list-item key={c.key}>
+              {c.status === 'checking' ? (
+                <nldd-cell min-width="24px" min-height="24px" vertical-alignment="top">
+                  <nldd-activity-indicator size="20" timing="instant"></nldd-activity-indicator>
+                </nldd-cell>
+              ) : (
+                <nldd-icon-cell
+                  size="20"
+                  vertical-alignment="top"
+                  icon={STATUS_META[c.status].icon}
+                  color={STATUS_META[c.status].color}
+                ></nldd-icon-cell>
+              )}
+              <nldd-spacer-cell size="12"></nldd-spacer-cell>
+              <nldd-text-cell text={c.label} supporting-text={c.detail || undefined}></nldd-text-cell>
+            </nldd-list-item>
+          ))}
+        </nldd-list>
+      </nldd-container>
+    </nldd-card>
   );
 }
 

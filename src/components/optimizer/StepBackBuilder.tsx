@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { ArrowUpNarrowWide, Loader2, Lock, Plus, Trash2, Unlock } from '@/components/common/icons';
+import { useEffect, useRef, useState } from 'react';
+import { useNlddEvent, useNlddValue } from '@/lib/nldd';
 import { notify } from '@/lib/notify';
 import { proposeLadder } from '@/services/optimizeService';
 import type { AiSettings } from '@/services/settingsService';
@@ -43,6 +43,12 @@ export default function StepBackBuilder({ settings, context, onSerialized }: Ste
   });
   const [busy, setBusy] = useState(false);
   const [eigenVraag, setEigenVraag] = useState('');
+  const vraagRef = useRef<HTMLElement & { value?: string }>(null);
+  const tafelRef = useRef<HTMLElement & { value?: string }>(null);
+  const kadersRef = useRef<HTMLElement & { value?: string }>(null);
+  useNlddValue(vraagRef, data.concreteVraag, (v) => setData((d) => ({ ...d, concreteVraag: v })));
+  useNlddValue(tafelRef, data.opTafel, (v) => setData((d) => ({ ...d, opTafel: v })));
+  useNlddValue(kadersRef, data.kaders, (v) => setData((d) => ({ ...d, kaders: v })));
 
   useEffect(() => {
     onSerialized(serializeStepBack(data));
@@ -95,226 +101,250 @@ export default function StepBackBuilder({ settings, context, onSerialized }: Ste
     }));
   }
 
+  function setConstraintText(id: string, text: string) {
+    setData((d) => ({
+      ...d,
+      randvoorwaarden: d.randvoorwaarden.map((x) => (x.id === id ? { ...x, text } : x)),
+    }));
+  }
+
   function removeConstraint(id: string) {
     setData((d) => ({ ...d, randvoorwaarden: d.randvoorwaarden.filter((c) => c.id !== id) }));
   }
 
   return (
-    <div className="space-y-5">
+    <nldd-container gap="24">
       <BuilderIntro
-        icon={<ArrowUpNarrowWide size={18} />}
+        icon="arrow-up"
         title="Zet een stap terug"
         text="Eerst naar het vraagstuk achter je opdracht, dan terug naar je vraag. Jij bepaalt hoe ver terug."
       />
 
-      {/* Stap 1: de opdracht zoals hij binnenkwam. */}
-      <div>
-        <label className="opl-label mb-0.5 block" htmlFor="sb-vraag">
-          1. Welke vraag of opdracht ligt voor?
-        </label>
-        <textarea
-          id="sb-vraag"
-          className="opl-input min-h-[70px] resize-y text-sm"
-          value={data.concreteVraag}
+      {/* Step 1: the task as it came in. */}
+      <nldd-container gap="8">
+        <StepLabel text="1. Welke vraag of opdracht ligt voor?" />
+        <nldd-multi-line-text-field
+          ref={vraagRef}
+          rows={3}
+          resize="vertical"
+          accessible-label="Welke vraag of opdracht ligt voor?"
           placeholder="Bijv. werk een meldplicht uit voor verhuurders van kamers"
-          onChange={(e) => setData((d) => ({ ...d, concreteVraag: e.target.value }))}
-        />
-      </div>
+        ></nldd-multi-line-text-field>
+      </nldd-container>
 
-      {/* Stap 2: de oplossing die er al ligt. */}
-      <div>
-        <div className="mb-0.5 flex items-center gap-1">
-          <label className="opl-label mb-0" htmlFor="sb-tafel">2. Welke oplossing of richting ligt er al op tafel?</label>
-          <InfoDot label="Uitleg bij dit veld" text="Juist dit maakt de stap terug zinvol: wat er al besloten lijkt, is vaak nooit besloten." />
-        </div>
-        <textarea
-          id="sb-tafel"
-          className="opl-input min-h-[60px] resize-y text-sm"
-          value={data.opTafel}
+      {/* Step 2: the solution that is already on the table. */}
+      <nldd-container gap="8">
+        <StepLabel
+          text="2. Welke oplossing of richting ligt er al op tafel?"
+          info="Juist dit maakt de stap terug zinvol: wat er al besloten lijkt, is vaak nooit besloten."
+        />
+        <nldd-multi-line-text-field
+          ref={tafelRef}
+          rows={2}
+          resize="vertical"
+          accessible-label="Welke oplossing of richting ligt er al op tafel?"
           placeholder="Bijv. het wordt een meldplicht met een boete bij niet-melden"
-          onChange={(e) => setData((d) => ({ ...d, opTafel: e.target.value }))}
-        />
-        <button
-          type="button"
-          className="opl-btn-secondary mt-2"
-          onClick={() => void runLadder()}
-          disabled={busy || !data.concreteVraag.trim()}
-        >
-          {busy ? <Loader2 size={16} className="animate-spin" /> : <ArrowUpNarrowWide size={16} />}
-          {busy ? 'Vragen opstellen…' : data.ladder.length > 0 ? 'Opnieuw voorstellen' : 'Stel stap-terug-vragen voor'}
-        </button>
-      </div>
+        ></nldd-multi-line-text-field>
+        <nldd-button-group>
+          <nldd-button
+            appearance="secondary"
+            start-icon="arrow-up"
+            text={data.ladder.length > 0 ? 'Opnieuw voorstellen' : 'Stel stap-terug-vragen voor'}
+            loading={busy || undefined}
+            loading-text="Vragen opstellen…"
+            disabled={busy || !data.concreteVraag.trim() || undefined}
+            onClick={() => void runLadder()}
+          ></nldd-button>
+        </nldd-button-group>
+      </nldd-container>
 
-      {/* Stap 3: de ladder. Dit is het mechanisme van de techniek. */}
+      {/* Step 3: the ladder. This is the mechanism of the technique. */}
       {data.ladder.length > 0 && (
-        <div>
-          <div className="mb-0.5 flex items-center gap-1">
-            <p className="opl-label mb-0">3. Hoe ver zet je de stap terug?</p>
-            <InfoDot label="Uitleg bij dit veld" text="Eén trede omhoog levert een bruikbaar antwoord op. Drie treden omhoog levert een essay op. Kies de hoogte waarop het antwoord nog over jouw dossier gaat." />
-          </div>
-          <div className="space-y-2">
+        <nldd-container gap="8">
+          <StepLabel
+            text="3. Hoe ver zet je de stap terug?"
+            info="Eén trede omhoog levert een bruikbaar antwoord op. Drie treden omhoog levert een essay op. Kies de hoogte waarop het antwoord nog over jouw dossier gaat."
+          />
+          <nldd-list type="radiogroup" appearance="box-base" accessible-label="Hoe ver zet je de stap terug?">
             {data.ladder.map((rung) => {
               const meta = LADDER_LEVELS.find((l) => l.niveau === rung.niveau);
-              const gekozen = data.gekozenVraag === rung.vraag;
               return (
-                <button
+                <RungRow
                   key={`${rung.niveau}-${rung.vraag}`}
-                  type="button"
-                  onClick={() =>
-                    setData((d) => ({ ...d, gekozenVraag: rung.vraag, gekozenNiveau: rung.niveau }))
-                  }
-                  className={`w-full rounded-lg border p-3 text-left transition-colors ${
-                    gekozen
-                      ? 'border-rijksoranje bg-rijksoranje/5 dark:border-rijksoranje/60 dark:bg-rijksoranje/10'
-                      : 'border-slate-200 hover:border-rijksblauw-300 dark:border-slate-700 dark:hover:border-rijksblauw-500/40'
-                  }`}
-                >
-                  <span className="flex items-center gap-2">
-                    <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-rijksblauw-500 text-[0.6875rem] font-bold text-white">
-                      {rung.niveau}
-                    </span>
-                    <span className="text-xs font-semibold uppercase tracking-wide text-rijksblauw-600 dark:text-rijksblauw-300">
-                      {meta?.label ?? `Niveau ${rung.niveau}`}
-                    </span>
-                  </span>
-                  <span className="mt-1.5 block text-sm font-medium text-slate-800 dark:text-slate-100">
-                    {rung.vraag}
-                  </span>
-                  {rung.winst && (
-                    <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400">
-                      {rung.winst}
-                    </span>
-                  )}
-                </button>
+                  checked={data.gekozenVraag === rung.vraag}
+                  overline={`${rung.niveau}. ${meta?.label ?? `Niveau ${rung.niveau}`}`}
+                  text={rung.vraag}
+                  supporting={rung.winst || undefined}
+                  onPick={() => setData((d) => ({ ...d, gekozenVraag: rung.vraag, gekozenNiveau: rung.niveau }))}
+                />
               );
             })}
-          </div>
+          </nldd-list>
 
-          {/* Zelf formuleren mag altijd: de ladder is een voorstel, geen keuzemenu. */}
-          <div className="mt-3 flex flex-wrap items-end gap-2">
-            <div className="min-w-[240px] flex-1">
-              <label className="opl-label mb-0.5 block" htmlFor="sb-eigen">
-                Of schrijf je eigen stap-terug-vraag
-              </label>
-              <input
-                id="sb-eigen"
-                className="opl-input text-sm"
-                value={eigenVraag}
-                placeholder="Bijv. hoe krijgen we verhuurders zover dat ze zich aan de regels houden?"
-                onChange={(e) => setEigenVraag(e.target.value)}
-              />
-            </div>
-            <button
-              type="button"
-              className="opl-btn-secondary"
-              disabled={!eigenVraag.trim()}
-              onClick={() =>
-                setData((d) => ({ ...d, gekozenVraag: eigenVraag.trim(), gekozenNiveau: 0 }))
-              }
-            >
-              Gebruik deze
-            </button>
-          </div>
+          {/* Writing your own is always allowed: the ladder is a proposal, not a menu. */}
+          <nldd-spacer size="8"></nldd-spacer>
+          <StepLabel text="Of schrijf je eigen stap-terug-vraag" />
+          <nldd-container layout="row" gap="8" vertical-alignment="center">
+            <EigenVraagField value={eigenVraag} onValue={setEigenVraag} />
+            <nldd-button
+              appearance="secondary"
+              text="Gebruik deze"
+              disabled={!eigenVraag.trim() || undefined}
+              onClick={() => setData((d) => ({ ...d, gekozenVraag: eigenVraag.trim(), gekozenNiveau: 0 }))}
+            ></nldd-button>
+          </nldd-container>
           {data.gekozenVraag && data.gekozenNiveau === 0 && (
-            <p className="mt-1.5 text-xs text-rijksblauw-600 dark:text-rijksblauw-300">
+            <nldd-text size="sm" color="accent">
               Gekozen: {data.gekozenVraag}
-            </p>
+            </nldd-text>
           )}
-        </div>
+        </nldd-container>
       )}
 
-      {/* Stap 4: vast vs. aanname. Zonder dit onderscheid wordt uitzoomen
-          ongehoorzaam of tandeloos. */}
+      {/* Step 4: fixed versus assumed. Without this distinction zooming out
+          becomes disobedient or toothless. */}
       {data.randvoorwaarden.length > 0 && (
-        <div>
-          <div className="mb-0.5 flex items-center gap-1">
-            <p className="opl-label mb-0">4. Wat staat vast, en wat is alleen aangenomen?</p>
-            <InfoDot label="Uitleg bij dit veld" text="Vaststaand = ergens besloten; daar tornt de AI niet aan. Aanname = nooit besloten, alleen overgenomen; daar gaat de stap terug juist over. Klik om te wisselen." />
-          </div>
-          <div className="space-y-1.5">
-            {data.randvoorwaarden.map((c) => (
-              <div
-                key={c.id}
-                className={`flex items-start gap-2 rounded-lg border p-2.5 ${
-                  c.status === 'vast'
-                    ? 'border-slate-300 bg-slate-50 dark:border-slate-600 dark:bg-slate-900/40'
-                    : 'border-rijksoranje/40 bg-rijksoranje/5 dark:border-rijksoranje/40 dark:bg-rijksoranje/10'
-                }`}
-              >
-                <button
-                  type="button"
-                  title={
-                    c.status === 'vast'
-                      ? 'Staat vast; klik om als aanname te markeren'
-                      : 'Aanname; klik om als vaststaand te markeren'
-                  }
-                  onClick={() => setStatus(c.id, c.status === 'vast' ? 'aanname' : 'vast')}
-                  className={`mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[0.6875rem] font-semibold transition-colors ${
-                    c.status === 'vast'
-                      ? 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200'
-                      : 'bg-rijksoranje/20 text-rijksoranje-dark dark:text-rijksoranje'
-                  }`}
-                >
-                  {c.status === 'vast' ? <Lock size={11} /> : <Unlock size={11} />}
-                  {c.status === 'vast' ? 'Staat vast' : 'Aanname'}
-                </button>
-                {/* Altijd een invoerveld, ook bij een door de AI voorgestelde
-                    regel: de formulering van "wat vaststaat" moet exact kloppen,
-                    en een leeg veld dat na één letter in tekst verandert zou de
-                    focus verliezen. */}
-                <input
-                  className="opl-input min-w-0 flex-1 text-sm"
-                  value={c.text}
-                  placeholder="Bijv. de invoering moet binnen deze kabinetsperiode"
-                  onChange={(e) =>
-                    setData((d) => ({
-                      ...d,
-                      randvoorwaarden: d.randvoorwaarden.map((x) =>
-                        x.id === c.id ? { ...x, text: e.target.value } : x,
-                      ),
-                    }))
-                  }
-                />
-                <button
-                  type="button"
-                  title="Verwijderen"
-                  onClick={() => removeConstraint(c.id)}
-                  className="mt-0.5 shrink-0 text-slate-400 transition-colors hover:text-red-500"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            ))}
-          </div>
-          <button
-            type="button"
-            className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
-            onClick={() =>
-              setData((d) => ({
-                ...d,
-                randvoorwaarden: [...d.randvoorwaarden, newConstraint('', 'vast')],
-              }))
-            }
-          >
-            <Plus size={14} /> Zelf toevoegen
-          </button>
-        </div>
+        <nldd-container gap="8">
+          <StepLabel
+            text="4. Wat staat vast, en wat is alleen aangenomen?"
+            info="Vaststaand = ergens besloten; daar tornt de AI niet aan. Aanname = nooit besloten, alleen overgenomen; daar gaat de stap terug juist over. Klik om te wisselen."
+          />
+          {data.randvoorwaarden.map((c) => (
+            <ConstraintRow
+              key={c.id}
+              constraint={c}
+              onToggle={() => setStatus(c.id, c.status === 'vast' ? 'aanname' : 'vast')}
+              onText={(text) => setConstraintText(c.id, text)}
+              onRemove={() => removeConstraint(c.id)}
+            />
+          ))}
+          <nldd-button-group>
+            <nldd-button
+              appearance="accent-transparent"
+              size="sm"
+              start-icon="plus"
+              text="Zelf toevoegen"
+              onClick={() =>
+                setData((d) => ({
+                  ...d,
+                  randvoorwaarden: [...d.randvoorwaarden, newConstraint('', 'vast')],
+                }))
+              }
+            ></nldd-button>
+          </nldd-button-group>
+        </nldd-container>
       )}
 
-      {/* Stap 5: kaders op het algemenere niveau. */}
-      <div>
-        <div className="mb-0.5 flex items-center gap-1">
-          <label className="opl-label mb-0" htmlFor="sb-kaders">{data.ladder.length > 0 ? '5.' : '3.'} Welke kaders gelden hier hoe dan ook?{' '} <span className="font-normal">(optioneel)</span></label>
-          <InfoDot label="Uitleg bij dit veld" text="Deze gelden ook op het algemenere niveau; ze houden het antwoord binnen de werkelijkheid." />
-        </div>
-        <input
-          id="sb-kaders"
-          className="opl-input text-sm"
-          value={data.kaders}
-          placeholder="Bijv. uitvoerbaarheid bij gemeenten, regeldruk, bestaande wetgeving"
-          onChange={(e) => setData((d) => ({ ...d, kaders: e.target.value }))}
+      {/* Step 5: frameworks at the more general level. */}
+      <nldd-container gap="8">
+        <StepLabel
+          text={`${data.ladder.length > 0 ? '5.' : '3.'} Welke kaders gelden hier hoe dan ook? (optioneel)`}
+          info="Deze gelden ook op het algemenere niveau; ze houden het antwoord binnen de werkelijkheid."
         />
-      </div>
-    </div>
+        <nldd-text-field
+          ref={kadersRef}
+          accessible-label="Welke kaders gelden hier hoe dan ook?"
+          placeholder="Bijv. uitvoerbaarheid bij gemeenten, regeldruk, bestaande wetgeving"
+        ></nldd-text-field>
+      </nldd-container>
+    </nldd-container>
+  );
+}
+
+/** The question above a step, with its explanation behind the info dot. */
+function StepLabel({ text, info }: { text: string; info?: string }) {
+  return (
+    <nldd-container layout="row" gap="4" vertical-alignment="center">
+      <nldd-text weight="bold">{text}</nldd-text>
+      {info && <InfoDot label="Uitleg bij dit veld" text={info} />}
+    </nldd-container>
+  );
+}
+
+/** One rung of the ladder: a radio row. */
+function RungRow({
+  checked,
+  overline,
+  text,
+  supporting,
+  onPick,
+}: {
+  checked: boolean;
+  overline: string;
+  text: string;
+  supporting?: string;
+  onPick: () => void;
+}) {
+  const ref = useRef<HTMLElement>(null);
+  useNlddEvent<CustomEvent<{ checked: boolean }>>(ref, 'change', (e) => {
+    if (e.detail?.checked) onPick();
+  });
+  return (
+    <nldd-list-item ref={ref} radio checked={checked || undefined}>
+      <nldd-cell>
+        <nldd-radio-button decorative checked={checked || undefined}></nldd-radio-button>
+      </nldd-cell>
+      <nldd-spacer-cell size="8"></nldd-spacer-cell>
+      <nldd-text-cell overline={overline} text={text} supporting-text={supporting}></nldd-text-cell>
+    </nldd-list-item>
+  );
+}
+
+/**
+ * One boundary condition: its status (fixed or assumed), its text and a delete
+ * button. Always an input field, also for a line the AI proposed: the wording
+ * of what is fixed has to be exact.
+ */
+function ConstraintRow({
+  constraint,
+  onToggle,
+  onText,
+  onRemove,
+}: {
+  constraint: Constraint;
+  onToggle: () => void;
+  onText: (text: string) => void;
+  onRemove: () => void;
+}) {
+  const ref = useRef<HTMLElement & { value?: string }>(null);
+  useNlddValue(ref, constraint.text, onText);
+  const vast = constraint.status === 'vast';
+  return (
+    <nldd-container layout="row" gap="8" vertical-alignment="center">
+      <nldd-tooltip
+        text={vast ? 'Staat vast; klik om als aanname te markeren' : 'Aanname; klik om als vaststaand te markeren'}
+      >
+        <nldd-button
+          appearance={vast ? 'neutral-tinted' : 'accent-filled'}
+          start-icon={vast ? 'lock-closed' : 'lock-open'}
+          text={vast ? 'Staat vast' : 'Aanname'}
+          onClick={onToggle}
+        ></nldd-button>
+      </nldd-tooltip>
+      <nldd-text-field
+        ref={ref}
+        accessible-label={vast ? 'Wat staat vast' : 'Aanname'}
+        placeholder="Bijv. de invoering moet binnen deze kabinetsperiode"
+      ></nldd-text-field>
+      <nldd-icon-button
+        appearance="neutral-transparent"
+        size="sm"
+        icon="trash"
+        accessible-label={`Verwijder: ${constraint.text.trim() || 'lege regel'}`}
+        onClick={onRemove}
+      ></nldd-icon-button>
+    </nldd-container>
+  );
+}
+
+/** The field for an own step-back question; it mounts with the ladder, so its binding does too. */
+function EigenVraagField({ value, onValue }: { value: string; onValue: (v: string) => void }) {
+  const ref = useRef<HTMLElement & { value?: string }>(null);
+  useNlddValue(ref, value, onValue);
+  return (
+    <nldd-text-field
+      ref={ref}
+      placeholder="Bijv. hoe krijgen we verhuurders zover dat ze zich aan de regels houden?"
+    ></nldd-text-field>
   );
 }

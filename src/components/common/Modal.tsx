@@ -1,63 +1,70 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useId, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { X } from '@/components/common/icons';
-import useDialogFocus from '@/lib/useDialogFocus';
+import { useNlddEvent } from '@/lib/nldd';
 
 interface ModalProps {
   open: boolean;
   onClose: () => void;
   title: string;
   children: ReactNode;
-  /** Maximale breedte-utility, bijv. 'max-w-2xl'. */
+  /** Width as a Tailwind max-width name, e.g. 'max-w-2xl'. Mapped to the sheet width. */
   size?: string;
 }
 
+const WIDTHS: Record<string, string> = {
+  'max-w-sm': '24rem',
+  'max-w-md': '28rem',
+  'max-w-lg': '32rem',
+  'max-w-xl': '36rem',
+  'max-w-2xl': '42rem',
+  'max-w-3xl': '48rem',
+  'max-w-4xl': '56rem',
+  'max-w-5xl': '64rem',
+};
+
+type SheetElement = HTMLElement & { show?: () => void };
+
+/**
+ * A window for work: an nldd-sheet with a title bar, rendered at the document
+ * root. The sheet stays mounted so it animates; its content mounts when it opens
+ * and unmounts once it has closed, so every opening starts fresh as before.
+ *
+ * The sheet closes with its dismiss button, Escape and a click on the backdrop.
+ * When the parent keeps `open` after `onClose` (to ask first, for instance), the
+ * sheet opens again.
+ */
 export default function Modal({ open, onClose, title, children, size = 'max-w-2xl' }: ModalProps) {
-  const dialogRef = useRef<HTMLDivElement>(null);
-  useDialogFocus(open, dialogRef);
+  const ref = useRef<SheetElement>(null);
+  const headingId = `modal-${useId().replace(/:/g, '')}`;
+  const openRef = useRef(open);
+  openRef.current = open;
+  const [mounted, setMounted] = useState(open);
+  if (open && !mounted) setMounted(true);
 
-  // Een venster sluit alleen via het kruisje of een eigen knop (Annuleren,
-  // Opslaan). Geen klik op de achtergrond en geen Escape: daarmee ging per
-  // ongeluk alles verloren wat er al was ingevuld.
-  useEffect(() => {
-    if (!open) return;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, [open]);
+  useNlddEvent(ref, 'close', () => {
+    if (openRef.current) onClose();
+    window.setTimeout(() => {
+      if (openRef.current) ref.current?.show?.();
+      else setMounted(false);
+    }, 0);
+  });
 
-  if (!open) return null;
-
-  // Op de telefoon een vel dat van onderen opkomt, tot de volle hoogte: de knoppen
-  // staan dan onder de duim. Via een portal, zodat de pagina eronder `inert` kan.
   return createPortal(
-    <div
-      ref={dialogRef}
-      tabIndex={-1}
-      className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-slate-900/50 focus:outline-none dark:bg-black/60"
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
-    >
-      <div className="flex min-h-full items-end justify-center sm:items-start sm:p-8">
-        <div
-          className={`w-full ${size} animate-fade-in rounded-t-2xl bg-white pb-[env(safe-area-inset-bottom)] shadow-2xl dark:bg-slate-800 sm:mt-6 sm:rounded-2xl sm:pb-0`}
-        >
-          <div className="sticky top-0 z-10 flex items-center justify-between gap-2 rounded-t-2xl border-b border-slate-200 bg-white px-4 py-2 dark:border-slate-700 dark:bg-slate-800 sm:static sm:px-6 sm:py-4">
-            <h2 className="min-w-0 text-lg font-bold text-rijksblauw-700 dark:text-rijksblauw-200">{title}</h2>
-            <button
-              onClick={onClose}
-              className="shrink-0 rounded-lg p-1.5 text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200"
-              aria-label="Sluiten"
-            >
-              <X size={20} />
-            </button>
-          </div>
-          <div className="px-4 py-5 sm:px-6">{children}</div>
-        </div>
-      </div>
-    </div>,
+    <nldd-sheet ref={ref} open={open || undefined} width={WIDTHS[size] ?? '42rem'}>
+      <nldd-page>
+        <nldd-top-title-bar
+          slot="header"
+          text={title}
+          heading-level={2}
+          dismiss-text="Sluiten"
+          collapse-anchor={headingId}
+        ></nldd-top-title-bar>
+        <nldd-simple-section>
+          <nldd-title id={headingId} slot="header" size={3} heading-level={2} text={title}></nldd-title>
+          {mounted && children}
+        </nldd-simple-section>
+      </nldd-page>
+    </nldd-sheet>,
     document.body,
   );
 }

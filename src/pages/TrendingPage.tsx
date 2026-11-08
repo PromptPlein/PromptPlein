@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { TrendingUp, Flame } from '@/components/common/icons';
 import PromptCard from '@/components/prompts/PromptCard';
 import { BarChartCard } from '@/components/analytics/Charts';
 import { SkeletonGrid } from '@/components/common/Skeleton';
@@ -59,49 +58,56 @@ export default function TrendingPage({ embedded = false }: { embedded?: boolean 
 
   const { enriched, authors } = usePromptCommunity(trending);
 
+  const content = loading ? (
+    <nldd-simple-section padding-top="24">
+      <SkeletonGrid count={6} />
+    </nldd-simple-section>
+  ) : (
+    <>
+      <nldd-simple-section padding-top="24">
+        <nldd-title slot="header" heading-level={2} size={4} text="Populairste prompts"></nldd-title>
+        {trending.length === 0 ? (
+          <nldd-inline-dialog icon="line-chart" text="Nog te weinig activiteit om trends te tonen."></nldd-inline-dialog>
+        ) : (
+          <nldd-collection item-min-width="18rem">
+            {enriched.map((p) => (
+              <PromptCard
+                key={p.id}
+                prompt={p}
+                author={p.created_by_user ? authors[p.created_by_user] : null}
+                onChanged={(u) => setPrompts((prev) => prev.map((x) => (x.id === u.id ? u : x)))}
+              />
+            ))}
+          </nldd-collection>
+        )}
+      </nldd-simple-section>
+
+      <nldd-simple-section background="tinted">
+        <nldd-title slot="header" heading-level={2} size={4} text="Meest gebruikte technieken"></nldd-title>
+        <BarChartCard
+          title="Optimalisaties per techniek"
+          headingLevel={3}
+          data={techniqueData}
+          emptyHint="Voer optimalisaties uit om trends te zien."
+        />
+      </nldd-simple-section>
+    </>
+  );
+
+  if (embedded) return content;
+
   return (
-    <div className={embedded ? '' : 'mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8'}>
-      {!embedded && (
-        <div className="mb-6 flex items-center gap-2">
-          <Flame className="text-rijksoranje" />
-          <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Trending</h1>
-        </div>
-      )}
-
-      {loading ? (
-        <SkeletonGrid count={6} />
-      ) : (
-        <div className="space-y-8">
-          <section>
-            <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold text-slate-700 dark:text-slate-200">
-              <TrendingUp size={18} /> Populairste prompts
-            </h2>
-            {trending.length === 0 ? (
-              <p className="text-sm text-slate-500 dark:text-slate-400">Nog te weinig activiteit om trends te tonen.</p>
-            ) : (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {enriched.map((p) => (
-                  <PromptCard
-                    key={p.id}
-                    prompt={p}
-                    author={p.created_by_user ? authors[p.created_by_user] : null}
-                    onChanged={(u) => setPrompts((prev) => prev.map((x) => (x.id === u.id ? u : x)))}
-                  />
-                ))}
-              </div>
-            )}
-          </section>
-
-          <section>
-            <h2 className="mb-3 text-lg font-semibold text-slate-700 dark:text-slate-200">Meest gebruikte technieken</h2>
-            <BarChartCard
-              title="Optimalisaties per techniek"
-              data={techniqueData}
-              emptyHint="Voer optimalisaties uit om trends te zien."
-            />
-          </section>
-        </div>
-      )}
-    </div>
+    <>
+      <nldd-simple-section padding-bottom="0">
+        <nldd-title
+          slot="header"
+          heading-level={1}
+          size={2}
+          text="Trending"
+          supporting-text="De prompts en technieken waar collega’s nu het meest mee werken."
+        ></nldd-title>
+      </nldd-simple-section>
+      {content}
+    </>
   );
 }

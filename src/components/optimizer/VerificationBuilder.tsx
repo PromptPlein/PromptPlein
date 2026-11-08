@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { AlertTriangle, Loader2, ScanLine, ShieldCheck } from '@/components/common/icons';
+import { useEffect, useRef, useState } from 'react';
+import { useNlddEvent, useNlddValue } from '@/lib/nldd';
 import { notify } from '@/lib/notify';
 import { scanClaims } from '@/services/optimizeService';
 import type { AiSettings } from '@/services/settingsService';
@@ -42,6 +42,12 @@ export default function VerificationBuilder({
     return context?.trim() ? { ...base, teControleren: context.trim() } : base;
   });
   const [scanning, setScanning] = useState(false);
+  const tekstRef = useRef<HTMLElement & { value?: string }>(null);
+  const bronnenRef = useRef<HTMLElement & { value?: string }>(null);
+  const risicoRef = useRef<HTMLElement & { value?: string }>(null);
+  useNlddValue(tekstRef, data.teControleren, (v) => setData((d) => ({ ...d, teControleren: v })));
+  useNlddValue(bronnenRef, data.bronnen, (v) => setData((d) => ({ ...d, bronnen: v })));
+  useNlddValue(risicoRef, data.duursteFout, (v) => setData((d) => ({ ...d, duursteFout: v })));
 
   useEffect(() => {
     onSerialized(serializeVerification(data));
@@ -67,9 +73,7 @@ export default function VerificationBuilder({
       }
       const gevonden = new Map((res.gevonden ?? []).map((g) => [g.id, g.voorbeeld]));
       if (gevonden.size === 0) {
-        notify('Geen controleerbare beweringen herkend. Vink zelf aan wat er wél in staat.', {
-          icon: 'ℹ️',
-        });
+        notify('Geen controleerbare beweringen herkend. Vink zelf aan wat er wél in staat.');
       }
       setData((d) => ({
         ...d,
@@ -90,189 +94,196 @@ export default function VerificationBuilder({
   }
 
   return (
-    <div className="space-y-5">
+    <nldd-container gap="24">
       <BuilderIntro
-        icon={<ShieldCheck size={18} />}
+        icon="shield-check-mark"
         title="Laat de AI zichzelf controleren"
         text="Eerst de beweringen eruit, dan per bewering één vraag. Die vragen worden los van het concept beantwoord."
       />
 
-      {/* Stap 1: het concept. */}
-      <div>
-        <div className="mb-0.5 flex items-center gap-1">
-          <label className="opl-label mb-0" htmlFor="cove-tekst">1. Welke tekst moet gecontroleerd worden?</label>
-          <InfoDot label="Uitleg bij dit veld" text="Plak het concept hier. Heb je het nog niet, beschrijf dan om wat voor stuk het gaat; de prompt krijgt dan een plaatshouder waar je het later inplakt." />
-        </div>
-        <textarea
-          id="cove-tekst"
-          className="opl-input min-h-[120px] resize-y text-sm"
-          value={data.teControleren}
-          placeholder="Bijv. de conceptbrief aan de Tweede Kamer over de wijziging van de subsidieregeling…"
-          onChange={(e) => setData((d) => ({ ...d, teControleren: e.target.value }))}
+      {/* Step 1: the draft. */}
+      <nldd-container gap="8">
+        <StepLabel
+          text="1. Welke tekst moet gecontroleerd worden?"
+          info="Plak het concept hier. Heb je het nog niet, beschrijf dan om wat voor stuk het gaat; de prompt krijgt dan een plaatshouder waar je het later inplakt."
         />
-        <div className="mt-2 flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            className="opl-btn-secondary"
-            onClick={() => void runScan()}
-            disabled={scanning || !kanScannen}
-            title={
+        <nldd-multi-line-text-field
+          ref={tekstRef}
+          rows={5}
+          resize="vertical"
+          accessible-label="Welke tekst moet gecontroleerd worden?"
+          placeholder="Bijv. de conceptbrief aan de Tweede Kamer over de wijziging van de subsidieregeling…"
+        ></nldd-multi-line-text-field>
+        <nldd-container layout="wrap" gap="12" vertical-alignment="center">
+          <nldd-tooltip
+            text={
               kanScannen
                 ? 'Laat de AI aflopen welke soorten controleerbare beweringen erin staan'
                 : 'Plak eerst een stuk tekst (minimaal een alinea)'
             }
           >
-            {scanning ? <Loader2 size={16} className="animate-spin" /> : <ScanLine size={16} />}
-            {scanning ? 'Scannen…' : 'Scan op controleerbare beweringen'}
-          </button>
+            <nldd-button
+              appearance="secondary"
+              start-icon="scan"
+              text="Scan op controleerbare beweringen"
+              loading={scanning || undefined}
+              loading-text="Scannen…"
+              disabled={scanning || !kanScannen || undefined}
+              onClick={() => void runScan()}
+            ></nldd-button>
+          </nldd-tooltip>
           {!kanScannen && (
-            <span className="text-xs text-slate-400 dark:text-slate-500">
+            <nldd-text size="sm" color="secondary">
               Plak minstens een alinea om te kunnen scannen.
-            </span>
+            </nldd-text>
           )}
-        </div>
-      </div>
+        </nldd-container>
+      </nldd-container>
 
-      {/* Stap 2: welke soorten beweringen meetellen. */}
-      <div>
-        <div className="mb-0.5 flex items-center gap-1">
-          <p className="opl-label mb-0">2. Wat moet er gecontroleerd worden?</p>
-          <InfoDot
-            label="Uitleg bij dit veld"
-            text={
-              data.gescand
-                ? 'De AI heeft aangevinkt wat hij in je tekst tegenkwam. Vink bij of af; jij kent het dossier.'
-                : 'Vink aan welke soorten beweringen in dit stuk fout kunnen gaan. Zonder deze lijst controleert de AI wat hem toevallig opvalt.'
-            }
-          />
-        </div>
-        <div className="space-y-1.5">
+      {/* Step 2: which kinds of claims count. */}
+      <nldd-container gap="8">
+        <StepLabel
+          text="2. Wat moet er gecontroleerd worden?"
+          info={
+            data.gescand
+              ? 'De AI heeft aangevinkt wat hij in je tekst tegenkwam. Vink bij of af; jij kent het dossier.'
+              : 'Vink aan welke soorten beweringen in dit stuk fout kunnen gaan. Zonder deze lijst controleert de AI wat hem toevallig opvalt.'
+          }
+        />
+        <nldd-list appearance="box-base" accessible-label="Wat moet er gecontroleerd worden?">
           {data.claims.map((c) => (
-            <label
+            <ChoiceRow
               key={c.id}
-              className={`flex cursor-pointer items-start gap-2.5 rounded-lg border p-2.5 transition-colors ${
-                c.checked
-                  ? 'border-rijksblauw-300 bg-rijksblauw-50/60 dark:border-rijksblauw-500/40 dark:bg-rijksblauw-500/10'
-                  : 'border-slate-200 hover:border-slate-300 dark:border-slate-700 dark:hover:border-slate-600'
-              }`}
-            >
-              <input
-                type="checkbox"
-                className="mt-1 h-4 w-4 shrink-0 accent-rijksoranje"
-                checked={c.checked}
-                onChange={(e) =>
-                  setData((d) => ({
-                    ...d,
-                    claims: d.claims.map((x) =>
-                      x.id === c.id ? { ...x, checked: e.target.checked } : x,
-                    ),
-                  }))
-                }
-              />
-              <span className="min-w-0">
-                <span className="block text-sm font-medium text-slate-700 dark:text-slate-200">
-                  {c.label}
-                </span>
-                <span className="block text-xs text-slate-500 dark:text-slate-400">{c.hint}</span>
-                {c.voorbeeld && (
-                  <span className="mt-1 block truncate rounded bg-white/70 px-1.5 py-0.5 font-mono text-[0.6875rem] text-rijksblauw-700 dark:bg-slate-900/60 dark:text-rijksblauw-200">
-                    gezien: {c.voorbeeld}
-                  </span>
-                )}
-              </span>
-            </label>
+              kind="checkbox"
+              checked={c.checked}
+              text={c.label}
+              supporting={c.voorbeeld ? `${c.hint} Gezien: ${c.voorbeeld}` : c.hint}
+              onChecked={(checked) =>
+                setData((d) => ({
+                  ...d,
+                  claims: d.claims.map((x) => (x.id === c.id ? { ...x, checked } : x)),
+                }))
+              }
+            />
           ))}
-        </div>
+        </nldd-list>
         {aangevinkt === 0 && (
-          <p className="mt-2 flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
-            <AlertTriangle size={13} /> Zonder aangevinkte soorten wordt de controle een algemene
-            leesbeurt.
-          </p>
+          <nldd-container layout="row" gap="6" vertical-alignment="center">
+            <nldd-icon icon="exclamation-triangle" size="16" color="warning"></nldd-icon>
+            <nldd-text size="sm" color="warning">
+              Zonder aangevinkte soorten wordt de controle een algemene leesbeurt.
+            </nldd-text>
+          </nldd-container>
         )}
-      </div>
+      </nldd-container>
 
-      {/* Stap 3: de bronafbakening: waartegen mag "klopt" gemeten worden? */}
-      <div>
-        <div className="mb-0.5 flex items-center gap-1">
-          <p className="opl-label mb-0">3. Waartegen mag geverifieerd worden?</p>
-          <InfoDot label="Uitleg bij dit veld" text={"Dit is de scherpste knop. Zonder afbakening betekent \"klopt\" alleen dat het model het herkent, en dat is precies de fout die je zocht."} />
-        </div>
-        <div className="space-y-1.5">
+      {/* Step 3: the source boundary: against what may "correct" be measured? */}
+      <nldd-container gap="8">
+        <StepLabel
+          text="3. Waartegen mag geverifieerd worden?"
+          info={'Dit is de scherpste knop. Zonder afbakening betekent "klopt" alleen dat het model het herkent, en dat is precies de fout die je zocht.'}
+        />
+        <nldd-list type="radiogroup" appearance="box-base" accessible-label="Waartegen mag geverifieerd worden?">
           {SOURCE_REGIMES.map((r) => (
-            <label
+            <ChoiceRow
               key={r.value}
-              className={`flex cursor-pointer items-start gap-2.5 rounded-lg border p-2.5 transition-colors ${
-                data.regime === r.value
-                  ? 'border-rijksblauw-300 bg-rijksblauw-50/60 dark:border-rijksblauw-500/40 dark:bg-rijksblauw-500/10'
-                  : 'border-slate-200 hover:border-slate-300 dark:border-slate-700 dark:hover:border-slate-600'
-              }`}
-            >
-              <input
-                type="radio"
-                name="cove-regime"
-                className="mt-1 h-4 w-4 shrink-0 accent-rijksoranje"
-                checked={data.regime === r.value}
-                onChange={() => setData((d) => ({ ...d, regime: r.value as SourceRegime }))}
-              />
-              <span>
-                <span className="block text-sm font-medium text-slate-700 dark:text-slate-200">
-                  {r.label}
-                </span>
-                <span className="block text-xs text-slate-500 dark:text-slate-400">{r.hint}</span>
-              </span>
-            </label>
+              kind="radio"
+              checked={data.regime === r.value}
+              text={r.label}
+              supporting={r.hint}
+              onChecked={(checked) => {
+                if (checked) setData((d) => ({ ...d, regime: r.value as SourceRegime }));
+              }}
+            />
           ))}
-        </div>
-        <input
-          className="opl-input mt-2 text-sm"
-          value={data.bronnen}
+        </nldd-list>
+        <nldd-text-field
+          ref={bronnenRef}
+          accessible-label="Bronnen"
           placeholder="Noem de bronnen concreet, bijv. de vier bijlagen en de nota van 3 juli"
-          onChange={(e) => setData((d) => ({ ...d, bronnen: e.target.value }))}
-        />
-      </div>
+        ></nldd-text-field>
+      </nldd-container>
 
-      {/* Stap 4: wat er met onverifieerbare beweringen gebeurt. */}
-      <div>
-        <div className="mb-0.5 flex items-center gap-1">
-          <p className="opl-label mb-0">4. En als iets niet te verifiëren blijkt?</p>
-          <InfoDot label="Uitleg bij dit veld" text={"Wat je hier kiest geldt in de tekst. Onverifieerbare beweringen komen daarnaast altijd op de lijst \"nog te verifiëren door een mens\"."} />
-        </div>
-        <div className="flex flex-wrap gap-2">
+      {/* Step 4: what happens to claims that cannot be verified. */}
+      <nldd-container gap="8">
+        <StepLabel
+          text="4. En als iets niet te verifiëren blijkt?"
+          info={'Wat je hier kiest geldt in de tekst. Onverifieerbare beweringen komen daarnaast altijd op de lijst "nog te verifiëren door een mens".'}
+        />
+        <nldd-list type="radiogroup" appearance="box-base" accessible-label="En als iets niet te verifiëren blijkt?">
           {UNVERIFIABLE_RULES.map((r) => (
-            <button
+            <ChoiceRow
               key={r.value}
-              type="button"
-              title={r.hint}
-              onClick={() => setData((d) => ({ ...d, onverifieerbaar: r.value as UnverifiableRule }))}
-              className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
-                data.onverifieerbaar === r.value
-                  ? 'border-rijksblauw-400 bg-rijksblauw-50 font-medium text-rijksblauw-800 dark:border-rijksblauw-500/50 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-100'
-                  : 'border-slate-200 text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:text-slate-300'
-              }`}
-            >
-              {r.label}
-            </button>
+              kind="radio"
+              checked={data.onverifieerbaar === r.value}
+              text={r.label}
+              supporting={r.hint}
+              onChecked={(checked) => {
+                if (checked) setData((d) => ({ ...d, onverifieerbaar: r.value as UnverifiableRule }));
+              }}
+            />
           ))}
-        </div>
-        <p className="mt-1.5 text-xs text-slate-400 dark:text-slate-500">
-          {UNVERIFIABLE_RULES.find((r) => r.value === data.onverifieerbaar)?.hint}
-        </p>
-      </div>
+        </nldd-list>
+      </nldd-container>
 
-      {/* Stap 5: prioriteit. */}
-      <div>
-        <div className="mb-0.5 flex items-center gap-1">
-          <label className="opl-label mb-0" htmlFor="cove-risico">5. Welke fout is hier het duurst? <span className="font-normal">(optioneel)</span></label>
-          <InfoDot label="Uitleg bij dit veld" text="Bepaalt welke beweringen als eerste worden nagetrokken." />
-        </div>
-        <input
-          id="cove-risico"
-          className="opl-input text-sm"
-          value={data.duursteFout}
-          placeholder="Bijv. een toezegging die de bewindspersoon nooit heeft gedaan"
-          onChange={(e) => setData((d) => ({ ...d, duursteFout: e.target.value }))}
+      {/* Step 5: priority. */}
+      <nldd-container gap="8">
+        <StepLabel
+          text="5. Welke fout is hier het duurst? (optioneel)"
+          info="Bepaalt welke beweringen als eerste worden nagetrokken."
         />
-      </div>
-    </div>
+        <nldd-text-field
+          ref={risicoRef}
+          accessible-label="Welke fout is hier het duurst?"
+          placeholder="Bijv. een toezegging die de bewindspersoon nooit heeft gedaan"
+        ></nldd-text-field>
+      </nldd-container>
+    </nldd-container>
+  );
+}
+
+/** The question above a step, with its explanation behind the info dot. */
+function StepLabel({ text, info }: { text: string; info: string }) {
+  return (
+    <nldd-container layout="row" gap="4" vertical-alignment="center">
+      <nldd-text weight="bold">{text}</nldd-text>
+      <InfoDot label="Uitleg bij dit veld" text={info} />
+    </nldd-container>
+  );
+}
+
+/** A list row that is one checkbox or one radio, with its label and hint. */
+function ChoiceRow({
+  kind,
+  checked,
+  text,
+  supporting,
+  onChecked,
+}: {
+  kind: 'checkbox' | 'radio';
+  checked: boolean;
+  text: string;
+  supporting?: string;
+  onChecked: (checked: boolean) => void;
+}) {
+  const ref = useRef<HTMLElement>(null);
+  useNlddEvent<CustomEvent<{ checked: boolean }>>(ref, 'change', (e) => onChecked(Boolean(e.detail?.checked)));
+  return (
+    <nldd-list-item
+      ref={ref}
+      checkbox={kind === 'checkbox' || undefined}
+      radio={kind === 'radio' || undefined}
+      checked={checked || undefined}
+    >
+      <nldd-cell>
+        {kind === 'checkbox' ? (
+          <nldd-checkbox decorative checked={checked || undefined}></nldd-checkbox>
+        ) : (
+          <nldd-radio-button decorative checked={checked || undefined}></nldd-radio-button>
+        )}
+      </nldd-cell>
+      <nldd-spacer-cell size="8"></nldd-spacer-cell>
+      <nldd-text-cell text={text} supporting-text={supporting}></nldd-text-cell>
+    </nldd-list-item>
   );
 }

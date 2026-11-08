@@ -1,18 +1,7 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import {
-  Plus,
-  ArrowRight,
-  Search,
-  Sparkles,
-  MessageSquare,
-  Layers,
-  type LucideIcon,
-} from '@/components/common/icons';
-import clsx from 'clsx';
-import InfoDot from '@/components/common/InfoDot';
+import { useEffect, useState, type ComponentProps, type ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useReferenceData } from '@/context/ReferenceDataContext';
-import { categoryIcon } from '@/lib/categoryIcons';
+import { categoryIconName } from '@/lib/categoryIcons';
 import { listPrompts } from '@/services/repository';
 import { getChatSettingsCached } from '@/services/settingsService';
 import { usePromptCommunity } from '@/hooks/usePromptCommunity';
@@ -64,179 +53,135 @@ export default function HomePage() {
   const { enriched, authors } = usePromptCommunity(recent);
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-      {/* Wat wil je doen? Vier grote tegels, elk één taak. */}
-      <section className="mb-10" aria-labelledby="home-taken">
-        <h1
-          id="home-taken"
-          className="mb-4 text-3xl font-bold text-rijksblauw-700 dark:text-rijksblauw-100"
-        >
-          Wat wil je doen?
-        </h1>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <>
+      {/* Wat wil je doen? Vier tegels, elk één taak. */}
+      <nldd-simple-section>
+        <nldd-title slot="header" heading-level={1} size={1} text="Wat wil je doen?"></nldd-title>
+        <nldd-container layout="grid" column-count={4} md-column-count={2} sm-column-count={1} gap="16">
+          <TaskTile href="/genereren" icon="sparkles" label="Prompt maken" background="accent-tinted" />
+          {chatEnabled && <TaskTile href="/chat" icon="comment" label="Chatten" />}
+          <TaskTile href="/zoeken" icon="search" label="Prompts zoeken" count={total} countLabel="prompts" />
           <TaskTile
-            to="/genereren"
-            icon={Sparkles}
-            label="Prompt maken"
-            className="bg-rijksblauw-700 text-white hover:bg-rijksblauw-800 dark:bg-rijksblauw-600 dark:hover:bg-rijksblauw-500"
-          />
-          {chatEnabled && (
-            <TaskTile
-              to="/chat"
-              icon={MessageSquare}
-              label="Chatten"
-              className="bg-rijksblauw-50 text-rijksblauw-700 hover:bg-rijksblauw-100 dark:bg-[#123a55] dark:text-white dark:hover:bg-[#184a6c]"
-            />
-          )}
-          <TaskTile
-            to="/zoeken"
-            icon={Search}
-            label="Prompts zoeken"
-            count={total}
-            countLabel="prompts"
-            className="bg-[#dff4ed] text-rijksblauw-700 hover:bg-[#c8ecdf] dark:bg-[#1f4346] dark:text-white dark:hover:bg-[#285558]"
-          />
-          <TaskTile
-            to="/technieken"
-            icon={Layers}
+            href="/technieken"
+            icon="stack"
             label="Technieken leren"
             count={techniques.length || null}
             countLabel="technieken"
-            className="bg-[#fff0c9] text-rijksblauw-700 hover:bg-[#ffe6a6] dark:bg-[#403a24] dark:text-white dark:hover:bg-[#524a2d]"
           />
-        </div>
-      </section>
+        </nldd-container>
+      </nldd-simple-section>
 
-      {/* Categorieën als iconen met het aantal prompts. */}
-      <section className="mb-10" aria-labelledby="home-categorieen">
-        <div className="mb-3 flex items-center gap-1">
-          <h2
-            id="home-categorieen"
-            className="text-xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200"
-          >
-            Categorieën
-          </h2>
-          <InfoDot
-            label="Uitleg over categorieën"
-            text="Klik een categorie. Het getal is het aantal prompts."
-          />
-        </div>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
+      {/* Categorieën met het aantal prompts. */}
+      <nldd-one-third-two-thirds-section background="tinted">
+        <nldd-title
+          slot="left"
+          heading-level={2}
+          size={3}
+          text="Categorieën"
+          supporting-text="Kies een categorie. Het getal is het aantal prompts."
+        ></nldd-title>
+        <nldd-list slot="right" type="navigation" appearance="box-base" accessible-label="Categorieën">
           {categories.map((c) => {
-            const Icon = categoryIcon(c.icon);
             const count = perCategory[c.id] ?? 0;
             return (
-              <Link
-                key={c.id}
-                to={`/zoeken?category=${c.id}`}
-                title={c.description || undefined}
-                className="opl-card group relative flex min-h-[7.5rem] flex-col items-center justify-center gap-2.5 px-2 pb-3 pt-5 text-center hover:border-rijksblauw-500 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500"
-              >
-                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-rijksblauw-50 text-rijksblauw-700 transition-colors group-hover:bg-rijksblauw-700 group-hover:text-white dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">
-                  <Icon size={24} />
-                </span>
-                <span className="text-sm font-semibold leading-tight text-slate-900 dark:text-slate-100">
-                  {c.name}
-                </span>
+              <nldd-list-item key={c.id} href={`/zoeken?category=${c.id}`}>
+                <nldd-icon-cell icon={categoryIconName(c.icon)} color="accent"></nldd-icon-cell>
+                <nldd-spacer-cell size="12"></nldd-spacer-cell>
+                <nldd-text-cell hide-below="md" text={c.name} supporting-text={c.description || undefined}></nldd-text-cell>
+                <nldd-text-cell
+                  hide-above="sm"
+                  text={c.name}
+                  supporting-text={loading ? undefined : `${count} ${count === 1 ? 'prompt' : 'prompts'}`}
+                ></nldd-text-cell>
                 {!loading && (
-                  <span
-                    aria-label={`${count} prompts`}
-                    className="absolute right-2 top-2 min-w-[1.5rem] rounded-full bg-rijksblauw-700 px-1.5 text-center text-xs font-bold leading-6 text-white dark:bg-rijksblauw-500"
-                  >
-                    {count}
-                  </span>
+                  <>
+                    <nldd-spacer-cell size="12" hide-below="md"></nldd-spacer-cell>
+                    <nldd-text-cell
+                      hide-below="md"
+                      width="fit-content"
+                      color="secondary"
+                      text={`${count} ${count === 1 ? 'prompt' : 'prompts'}`}
+                    ></nldd-text-cell>
+                  </>
                 )}
-              </Link>
+                <nldd-spacer-cell size="12"></nldd-spacer-cell>
+                <nldd-icon-cell size="20" color="secondary" icon="chevron-right"></nldd-icon-cell>
+              </nldd-list-item>
             );
           })}
-        </div>
-      </section>
+        </nldd-list>
+      </nldd-one-third-two-thirds-section>
 
       {/* Nieuwste prompts */}
-      <section aria-labelledby="home-nieuw">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 id="home-nieuw" className="text-xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
-            Nieuwe prompts
-          </h2>
-          <Link
-            to="/zoeken"
-            className="inline-flex items-center gap-1 text-sm font-semibold text-rijksblauw-500 hover:text-rijksblauw-700 dark:text-rijksblauw-300 dark:hover:text-rijksblauw-200"
-          >
-            Alles <ArrowRight size={16} />
-          </Link>
-        </div>
-
+      <nldd-simple-section>
+        <nldd-title slot="header" heading-level={2} size={3} text="Nieuwe prompts"></nldd-title>
         {loading ? (
           <SkeletonGrid count={6} />
         ) : recent.length === 0 ? (
-          <div className="opl-card flex flex-col items-center gap-3 p-10 text-center">
-            <p className="text-slate-600 dark:text-slate-300">Er zijn nog geen prompts.</p>
-            <button onClick={() => setUploadOpen(true)} className="opl-btn-primary">
-              <Plus size={18} /> Nieuwe prompt
-            </button>
-          </div>
+          <nldd-inline-dialog icon="file-text" text="Er zijn nog geen prompts.">
+            <nldd-button-group slot="actions">
+              <nldd-button
+                appearance="primary"
+                start-icon="plus"
+                text="Nieuwe prompt"
+                onClick={() => setUploadOpen(true)}
+              ></nldd-button>
+            </nldd-button-group>
+          </nldd-inline-dialog>
         ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {enriched.map((p) => (
-              <PromptCard
-                key={p.id}
-                prompt={p}
-                author={p.created_by_user ? authors[p.created_by_user] : null}
-                onChanged={(u) => setRecent((prev) => prev.map((x) => (x.id === u.id ? u : x)))}
-              />
-            ))}
-          </div>
+          <>
+            <nldd-collection item-min-width="20rem">
+              {enriched.map((p) => (
+                <PromptCard
+                  key={p.id}
+                  prompt={p}
+                  author={p.created_by_user ? authors[p.created_by_user] : null}
+                  onChanged={(u) => setRecent((prev) => prev.map((x) => (x.id === u.id ? u : x)))}
+                />
+              ))}
+            </nldd-collection>
+            <nldd-spacer size="24"></nldd-spacer>
+            <nldd-link href="/zoeken" end-icon="arrow-right" text="Alle prompts"></nldd-link>
+          </>
         )}
-      </section>
+      </nldd-simple-section>
 
       <UploadModal
         open={uploadOpen}
         onClose={() => setUploadOpen(false)}
         onCreated={(prompt) => navigate(`/prompt/${prompt.id}`)}
       />
-    </div>
+    </>
   );
 }
 
-/** Eén taaktegel: groot icoon, één label, een pijl en soms een aantal. */
+/** Eén taaktegel: icoon, één label, een pijl en soms een aantal. */
 function TaskTile({
-  to,
-  icon: Icon,
+  href,
+  icon,
   label,
   count,
   countLabel,
-  className,
+  background,
 }: {
-  to: string;
-  icon: LucideIcon;
+  href: string;
+  icon: string;
   label: string;
   count?: number | null;
   countLabel?: string;
-  className: string;
+  background?: ComponentProps<'nldd-card'>['background'];
 }): ReactNode {
+  const amount = count != null ? `${count} ${countLabel ?? ''}`.trim() : undefined;
   return (
-    <Link
-      to={to}
-      className={clsx(
-        'flex min-h-[10.5rem] flex-col justify-between gap-4 rounded-xl p-5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900',
-        className,
-      )}
-    >
-      <span className="flex items-start justify-between">
-        <Icon size={44} strokeWidth={1.5} />
-        {count != null && (
-          <span
-            aria-label={`${count} ${countLabel ?? ''}`.trim()}
-            className="rounded-full bg-white px-2.5 py-0.5 text-sm font-bold text-rijksblauw-700"
-          >
-            {count}
-          </span>
-        )}
-      </span>
-      <span className="flex items-center justify-between gap-2">
-        <span className="text-2xl font-bold leading-tight">{label}</span>
-        <ArrowRight size={22} className="shrink-0" />
-      </span>
-    </Link>
+    <nldd-card href={href} accessible-label={amount ? `${label}, ${amount}` : label} background={background}>
+      <nldd-container padding="20" gap="24">
+        <nldd-icon icon={icon} size="40" color="accent"></nldd-icon>
+        <nldd-container layout="row" gap="8" vertical-alignment="center">
+          <nldd-title heading-level={2} size={4} text={label} supporting-text={amount}></nldd-title>
+          <nldd-spacer size="flexible"></nldd-spacer>
+          <nldd-icon icon="arrow-right" size="24" color="accent"></nldd-icon>
+        </nldd-container>
+      </nldd-container>
+    </nldd-card>
   );
 }

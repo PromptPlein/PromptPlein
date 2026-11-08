@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Loader2, Plus, Sparkles, Trash2, UserRound } from '@/components/common/icons';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNlddValue } from '@/lib/nldd';
 import { notify } from '@/lib/notify';
 import PrefillBadge from './PrefillBadge';
 import { fillPersona } from '@/services/optimizeService';
@@ -159,14 +159,14 @@ export default function PersonaBuilder({
   }
 
   return (
-    <div className="space-y-4">
+    <nldd-container gap="24">
       <BuilderIntro
         title={multi ? 'Beschrijf de persona’s' : 'Beschrijf de persona'}
         text="Vanuit wie of voor wie schrijft de AI? Hoe scherper, hoe beter het resultaat."
       />
 
       {personas.map((persona, idx) => (
-        <PersonaCard
+        <PersonaBlock
           key={persona.id}
           index={idx}
           total={personas.length}
@@ -183,20 +183,19 @@ export default function PersonaBuilder({
       ))}
 
       {multi && (
-        <button
-          type="button"
-          onClick={addPersona}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-rijksblauw-300 px-3 py-2 text-sm font-medium text-rijksblauw-700 transition-colors hover:bg-rijksblauw-50 dark:border-rijksblauw-500/40 dark:text-rijksblauw-200 dark:hover:bg-rijksblauw-500/10"
-        >
-          <Plus size={16} /> Nog een persona toevoegen
-        </button>
+        <nldd-button-group>
+          <nldd-button appearance="secondary" start-icon="plus" text="Nog een persona toevoegen" onClick={addPersona}></nldd-button>
+        </nldd-button-group>
       )}
-    </div>
+    </nldd-container>
   );
 }
 
-/** Eén persona-kaart: de aanduiding + AI-invulhulp bovenaan, daaronder de vragen. */
-function PersonaCard({
+/**
+ * One persona: with several, a heading and a divider above it; then the short
+ * description with the AI fill aid, and the questions under it.
+ */
+function PersonaBlock({
   index,
   total,
   multi,
@@ -221,96 +220,109 @@ function PersonaCard({
   onAiFill: () => void;
   onRemove: () => void;
 }) {
+  const hintRef = useRef<HTMLElement & { value?: string }>(null);
+  useNlddValue(hintRef, persona.hint, onHintChange);
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <span className="inline-flex items-center gap-2 font-semibold text-rijksblauw-700 dark:text-rijksblauw-200">
-          <UserRound size={16} />
-          {multi ? `Persona ${index + 1}` : 'Persona'}
-          {persona.hint.trim() && (
-            <span className="text-sm font-normal text-slate-500 dark:text-slate-400">
-              · {persona.hint.trim()}
-            </span>
-          )}
-        </span>
-        {multi && total > 1 && (
-          <button
-            type="button"
-            onClick={onRemove}
-            title="Verwijder deze persona"
-            aria-label={`Verwijder persona ${index + 1}`}
-            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-rijksoranje/10 hover:text-rijksoranje dark:text-slate-500"
-          >
-            <Trash2 size={15} />
-          </button>
-        )}
-      </div>
+    <nldd-container gap="16">
+      {multi && (
+        <nldd-container gap="16">
+          {index > 0 && <nldd-divider></nldd-divider>}
+          <nldd-container layout="row" gap="8" vertical-alignment="center">
+            <nldd-title
+              heading-level={3}
+              size={5}
+              text={`Persona ${index + 1}`}
+              supporting-text={persona.hint.trim() || undefined}
+            ></nldd-title>
+            <nldd-spacer size="flexible" direction="horizontal"></nldd-spacer>
+            {total > 1 && (
+              <nldd-icon-button
+                appearance="neutral-transparent"
+                icon="trash"
+                accessible-label={`Verwijder persona ${index + 1}`}
+                onClick={onRemove}
+              ></nldd-icon-button>
+            )}
+          </nldd-container>
+        </nldd-container>
+      )}
 
-      {/* Korte aanduiding + AI-invulhulp. */}
-      <div className="mb-4 rounded-lg bg-rijksblauw-50/60 p-3 dark:bg-rijksblauw-500/10">
-        <div className="mb-1 flex items-center gap-1">
-          <label className="opl-label mb-0" htmlFor={`persona-hint-${persona.id}`}>
-            Korte aanduiding
-          </label>
-          <span className="text-sm text-slate-500 dark:text-slate-400">Mag leeg blijven</span>
-          <InfoDot
-            label="Uitleg bij korte aanduiding"
-            text="Weet je de details niet? Geef een korte aanduiding en laat de AI de velden invullen."
-          />
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <input
-            id={`persona-hint-${persona.id}`}
-            className="opl-input h-9 flex-1 py-1 text-sm"
-            value={persona.hint}
-            placeholder="Bijv. mijn teammanager"
-            onChange={(e) => onHintChange(e.target.value)}
-          />
-          <button
-            type="button"
-            className="opl-btn-primary shrink-0"
-            onClick={onAiFill}
-            disabled={busy || !persona.hint.trim()}
-          >
-            {busy ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-            {busy ? 'Invullen…' : 'Vul aan met AI'}
-          </button>
-        </div>
-      </div>
+      {/* Short description and the AI fill aid. */}
+      <nldd-box background="accent-tinted">
+        <nldd-container padding="16" gap="8">
+          <nldd-container layout="row" gap="4" vertical-alignment="center">
+            <nldd-text weight="bold">Korte aanduiding</nldd-text>
+            <InfoDot
+              label="Uitleg bij korte aanduiding"
+              text="Weet je de details niet? Geef een korte aanduiding en laat de AI de velden invullen. Mag leeg blijven."
+            />
+          </nldd-container>
+          <nldd-container layout="wrap" gap="8" vertical-alignment="center">
+            <nldd-text-field
+              ref={hintRef}
+              width="20rem"
+              accessible-label="Korte aanduiding"
+              placeholder="Bijv. mijn teammanager"
+            ></nldd-text-field>
+            <nldd-button
+              appearance="secondary"
+              start-icon="sparkles"
+              text="Vul aan met AI"
+              loading={busy || undefined}
+              loading-text="Invullen…"
+              disabled={busy || !persona.hint.trim() || undefined}
+              onClick={onAiFill}
+            ></nldd-button>
+          </nldd-container>
+        </nldd-container>
+      </nldd-box>
 
-      {/* De persona-vragen zoals gedefinieerd bij de techniek. */}
-      {/* Label en tekstvak delen hun rijen met het veld ernaast (subgrid), zodat de
-          vakken op één lijn staan als een vraag over twee regels loopt. */}
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,22rem),1fr))] gap-x-4">
-        {questions.map((q) => {
-          const isAi = aiFields?.has(q.id);
-          return (
-            <div key={q.id} className="row-span-2 grid min-w-0 grid-cols-1 grid-rows-subgrid pb-3">
-              <div className="mb-0.5 flex min-h-8 items-start gap-1">
-                <label
-                  className="opl-label mb-0 min-w-0 pt-1"
-                  htmlFor={`persona-${persona.id}-${q.id}`}
-                >
-                  {q.label}
-                </label>
-                {q.why && <InfoDot label={`Uitleg bij: ${q.label}`} text={q.why} />}
-                {isAi && <PrefillBadge source="ai" />}
-              </div>
-              {/* Door de AI ingevulde velden krijgen alleen een badge, geen eigen
-                  achtergrond: de tekst is gewoon bewerkbare invoer en moet als
-                  normaal veld lezen. */}
-              <textarea
-                id={`persona-${persona.id}-${q.id}`}
-                rows={3}
-                className="opl-input min-h-full resize-y self-stretch text-sm"
-                value={persona.fields[q.id] ?? ''}
-                placeholder={q.placeholder}
-                onChange={(e) => onFieldChange(q.id, e.target.value)}
-              />
-            </div>
-          );
-        })}
-      </div>
-    </div>
+      {/* The persona questions as defined with the technique. A field the AI
+          filled only gets a label, no surface of its own: it is ordinary,
+          editable input. Bottom alignment keeps the fields of a row level when
+          one label runs over two lines. */}
+      <nldd-container layout="grid" gap="16" vertical-alignment="bottom" sm-column-count={1} md-column-count={2} lg-column-count={3}>
+        {questions.map((q) => (
+          <PersonaField
+            key={q.id}
+            question={q}
+            value={persona.fields[q.id] ?? ''}
+            isAi={Boolean(aiFields?.has(q.id))}
+            onValue={(v) => onFieldChange(q.id, v)}
+          />
+        ))}
+      </nldd-container>
+    </nldd-container>
+  );
+}
+
+function PersonaField({
+  question,
+  value,
+  isAi,
+  onValue,
+}: {
+  question: PersonaQuestion;
+  value: string;
+  isAi: boolean;
+  onValue: (v: string) => void;
+}) {
+  const ref = useRef<HTMLElement & { value?: string }>(null);
+  useNlddValue(ref, value, onValue);
+  return (
+    <nldd-container gap="8">
+      <nldd-container layout="row" gap="4" vertical-alignment="center">
+        <nldd-text weight="bold">{question.label}</nldd-text>
+        {question.why && <InfoDot label={`Uitleg bij: ${question.label}`} text={question.why} />}
+        {isAi && <PrefillBadge source="ai" />}
+      </nldd-container>
+      <nldd-multi-line-text-field
+        ref={ref}
+        rows={3}
+        resize="vertical"
+        accessible-label={question.label}
+        placeholder={question.placeholder}
+      ></nldd-multi-line-text-field>
+    </nldd-container>
   );
 }

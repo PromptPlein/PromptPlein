@@ -1,9 +1,7 @@
 import { useEffect, useState } from 'react';
-import { ScrollText } from '@/components/common/icons';
 import { listAuditEntries } from '@/services/adminService';
 import { formatDate } from '@/lib/utils';
 import type { AuditLogEntry } from '@/types';
-import StackTable from '@/components/common/StackTable';
 
 export default function AuditLogPage() {
   const [entries, setEntries] = useState<AuditLogEntry[]>([]);
@@ -16,48 +14,43 @@ export default function AuditLogPage() {
   }, []);
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h1 className="flex items-center gap-2 text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
-          <ScrollText size={22} /> Audit log
-        </h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400">Alle wijzigingen door beheerders.</p>
-      </div>
+    <nldd-container layout="stack" gap="24">
+      <nldd-title heading-level={1} size={2} text="Audit log" supporting-text="Alle wijzigingen door beheerders."></nldd-title>
 
-      <div className="opl-card overflow-hidden">
-        {loading ? (
-          <div className="skeleton h-48 w-full" />
-        ) : entries.length === 0 ? (
-          <p className="p-8 text-center text-sm text-slate-400 dark:text-slate-500">Nog geen admin-acties geregistreerd.</p>
-        ) : (
-          <StackTable>
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-              <tr>
-                <th className="px-4 py-3 font-medium">Actie</th>
-                <th className="px-4 py-3 font-medium">Entiteit</th>
-                <th className="hidden px-4 py-3 font-medium sm:table-cell">Details</th>
-                <th className="px-4 py-3 font-medium">Tijdstip</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-              {entries.map((e) => (
-                <tr key={e.id} className="hover:bg-slate-50 dark:hover:bg-slate-800">
-                  <td className="px-4 py-3">
-                    <span className="opl-badge bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">{e.action}</span>
-                  </td>
-                  <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{e.entity_type}</td>
-                  <td className="hidden px-4 py-3 text-xs text-slate-400 sm:table-cell dark:text-slate-500">
-                    {e.changes ? JSON.stringify(e.changes) : '—'}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-slate-400 dark:text-slate-500">{formatDate(e.created_at)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          </StackTable>
-        )}
-      </div>
-    </div>
+      {loading ? (
+        <nldd-container min-height="12rem">
+          <nldd-activity-indicator></nldd-activity-indicator>
+        </nldd-container>
+      ) : (
+        <nldd-table
+          accessible-label="Audit log"
+          columns="minmax(8rem,1fr) minmax(7rem,1fr) minmax(10rem,2fr) minmax(8rem,auto)"
+          sm-columns="minmax(0,1fr) minmax(0,1fr) minmax(0,1fr)"
+        >
+          <nldd-table-row slot="header">
+            <nldd-text-cell text="Actie"></nldd-text-cell>
+            <nldd-text-cell text="Entiteit"></nldd-text-cell>
+            <nldd-text-cell text="Details" hide-below="md"></nldd-text-cell>
+            <nldd-text-cell text="Tijdstip"></nldd-text-cell>
+          </nldd-table-row>
+          {entries.map((e) => (
+            <nldd-table-row key={e.id}>
+              <nldd-cell row-header>
+                <nldd-tag size="sm" color="lintblauw" text={e.action}></nldd-tag>
+              </nldd-cell>
+              <nldd-text-cell text={e.entity_type} color="secondary"></nldd-text-cell>
+              <nldd-text-cell
+                size="sm"
+                color="secondary"
+                text={e.changes ? JSON.stringify(e.changes) : 'Geen'}
+                hide-below="md"
+              ></nldd-text-cell>
+              <nldd-text-cell size="sm" color="secondary" text={formatDate(e.created_at)}></nldd-text-cell>
+            </nldd-table-row>
+          ))}
+          <nldd-inline-dialog slot="empty" icon="history" text="Nog geen admin-acties geregistreerd."></nldd-inline-dialog>
+        </nldd-table>
+      )}
+    </nldd-container>
   );
 }

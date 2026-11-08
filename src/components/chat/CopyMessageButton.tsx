@@ -1,6 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Check, ClipboardCopy } from '@/components/common/icons';
-import clsx from 'clsx';
 import { copyToClipboard } from '@/lib/utils';
 
 interface CopyMessageButtonProps {
@@ -8,19 +6,16 @@ interface CopyMessageButtonProps {
   text: string;
   /** Opschrift naast het icoon; leeg = alleen het icoon (met aria-label). */
   label?: string;
+  /** Kept for callers that still pass it; the design system sets the look. */
   className?: string;
 }
 
 /**
  * Kopieerknop voor één chatbericht. Bevestigt in de knop zelf ("Gekopieerd")
- * in plaats van met een toast: je kopieert hier vaak meerdere berichten achter
+ * in plaats van met een melding: je kopieert hier vaak meerdere berichten achter
  * elkaar, en dan is een stapel meldingen meer ruis dan bevestiging.
  */
-export default function CopyMessageButton({
-  text,
-  label = 'Kopiëren',
-  className,
-}: CopyMessageButtonProps) {
+export default function CopyMessageButton({ text, label = 'Kopiëren' }: CopyMessageButtonProps) {
   const [copied, setCopied] = useState(false);
 
   // Bevestiging vanzelf laten vervallen; opruimen zodat een bericht dat
@@ -40,23 +35,28 @@ export default function CopyMessageButton({
     }
   }
 
+  const icon = copied ? 'check-mark' : 'copy';
+
+  // Zonder opschrift blijft alleen het icoon over; de naam staat dan in `text`.
+  if (!label) {
+    return (
+      <nldd-icon-button
+        size="xs"
+        appearance="neutral-transparent"
+        icon={icon}
+        text={copied ? 'Gekopieerd' : 'Bericht kopiëren'}
+        onClick={() => void handleCopy()}
+      ></nldd-icon-button>
+    );
+  }
+
   return (
-    <button
-      type="button"
+    <nldd-button
+      size="xs"
+      appearance="neutral-transparent"
+      start-icon={icon}
+      text={copied ? 'Gekopieerd' : label}
       onClick={() => void handleCopy()}
-      // Zonder opschrift blijft alleen het icoon over; dan moet de naam via aria.
-      aria-label={label ? undefined : copied ? 'Gekopieerd' : 'Bericht kopiëren'}
-      title={copied ? 'Gekopieerd' : 'Kopieer deze tekst'}
-      className={clsx(
-        'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium transition-colors',
-        copied
-          ? 'text-emerald-600 dark:text-emerald-400'
-          : 'text-slate-600 hover:bg-slate-100 hover:text-rijksblauw-700 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-rijksblauw-200',
-        className,
-      )}
-    >
-      {copied ? <Check size={12} /> : <ClipboardCopy size={12} />}
-      {label ? (copied ? 'Gekopieerd' : label) : null}
-    </button>
+    ></nldd-button>
   );
 }

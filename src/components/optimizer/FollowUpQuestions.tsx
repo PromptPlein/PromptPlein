@@ -1,7 +1,6 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import { ArrowLeft, ArrowRight, Check, Loader2, Pencil, Sparkles, Wand2 } from '@/components/common/icons';
-import clsx from 'clsx';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { notify } from '@/lib/notify';
+import { useNlddValue } from '@/lib/nldd';
 import InfoDot from '@/components/common/InfoDot';
 import PrefillBadge from './PrefillBadge';
 import PrefillLoader from './PrefillLoader';
@@ -22,8 +21,6 @@ interface FieldBlockProps {
   question: FollowUpQuestion;
   value: string;
   meta?: { source: PrefillSource; note?: string };
-  /** Voorvoegsel voor het veld-id, zodat beide indelingen eigen ids houden. */
-  idPrefix: string;
   autoFocus?: boolean;
   /** Hoger tekstvak; de stapsgewijze indeling toont er maar één tegelijk. */
   tall?: boolean;
@@ -51,19 +48,13 @@ interface FieldBlockProps {
 /**
  * Eén veld, compact: naam, uitleg achter het infobolletje en het tekstvak. Staat
  * er tekst in, dan komt "Vul verder aan" erbij. Zodra de AI aan een veld werkt,
- * kleurt het hele blok op en neemt het de volle breedte, zodat het voorstel
- * leesbaar is en zichtbaar blijft bij welk veld het hoort.
- *
- * Elk veld bestaat uit vijf rijen (naam, status, tekstvak, notitie, voorstel) die
- * het via subgrid deelt met het veld ernaast. Zo staan tekstvakken en labels op één
- * lijn, ook als één titel over twee regels loopt. Een rij die in geen enkel veld
- * iets toont, heeft geen hoogte.
+ * krijgt het blok een getinte achtergrond, zodat het voorstel zichtbaar bij dat
+ * veld hoort.
  */
 function FieldBlock({
   question,
   value,
   meta,
-  idPrefix,
   autoFocus,
   tall,
   marker,
@@ -79,98 +70,68 @@ function FieldBlock({
   onAanvullingToevoegen,
   onAanvullingVerwerpen,
 }: FieldBlockProps) {
-  const fieldId = `${idPrefix}-${question.id}`;
   const active = expanding || proposal !== null;
   const filled = value.trim() !== '';
   const { name, instruction } = compactFieldLabel(question.label);
   const uitleg = [instruction, question.why].filter(Boolean).join('\n');
   const badge = Boolean(meta && filled);
   const vraag = Boolean(askIfEmpty && !filled);
-  return (
-    <div
-      className={clsx(
-        'min-w-0 rounded-xl border p-2 transition-all duration-200',
-        // Alleen in het raster: stap voor stap staat er één veld, zonder buren.
-        !tall && 'row-span-5 grid grid-cols-1 grid-rows-subgrid',
-        (active || aanvulling) && 'col-span-full',
-        active
-          ? 'border-rijksblauw-300 bg-rijksblauw-50/60 ring-4 ring-rijksblauw-500/10 dark:border-rijksblauw-500/50 dark:bg-rijksblauw-500/10 dark:ring-rijksblauw-500/15'
-          : 'border-transparent',
-      )}
-    >
-      <div className="flex min-h-8 items-start gap-x-1.5">
-        {marker && (
-          <span
-            aria-hidden="true"
-            className={clsx(
-              'mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded text-xs font-bold transition-colors',
-              filled
-                ? 'bg-rijksblauw-500 text-white'
-                : 'bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/20 dark:text-rijksblauw-200',
-            )}
-          >
-            {marker}
-          </span>
-        )}
-        <label
-          className="min-w-0 pt-1 text-[0.9375rem] font-semibold leading-snug text-slate-800 dark:text-slate-100"
-          htmlFor={fieldId}
-        >
-          {name}
-        </label>
+  const label = marker ? `${marker} · ${name}` : name;
+
+  const fieldRef = useRef<HTMLElement & { value?: string; focus: () => void }>(null);
+  useNlddValue(fieldRef, value, onChange);
+  useEffect(() => {
+    if (autoFocus) fieldRef.current?.focus();
+    // Focus only when the field appears, not on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const body = (
+    <nldd-container gap="8">
+      <nldd-container layout="row" gap="4" vertical-alignment="center">
+        <nldd-text weight="bold">{label}</nldd-text>
         {uitleg && <InfoDot label={`Uitleg bij ${name}`} text={uitleg} />}
-      </div>
-      {/* Status en actie op een eigen rij, zodat ze de titel niet laten verspringen. */}
-      <div>
-        {(badge || active || filled || vraag) && (
-          <div className="flex min-h-7 flex-wrap items-center gap-x-2 gap-y-1 pb-1">
-            {meta && filled && <PrefillBadge source={meta.source} note={meta.note} />}
-            {vraag && (
-              <span className="inline-flex items-center rounded-full bg-rijksoranje/15 px-2 py-0.5 text-[0.6875rem] font-semibold text-slate-800 dark:text-slate-100">
-                Vul dit nog in
-              </span>
-            )}
-            {active && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-rijksblauw-500/10 px-2 py-0.5 text-[0.6875rem] font-semibold text-rijksblauw-700 dark:bg-rijksblauw-500/20 dark:text-rijksblauw-100">
-                <Wand2 size={11} /> {expanding ? 'AI vult dit veld aan' : 'Voorstel voor dit veld'}
-              </span>
-            )}
-            {filled && (
-              <button
-                type="button"
-                onClick={onExpand}
-                disabled={busy}
-                title="Laat AI dit veld verder aanvullen"
-                aria-label={`Laat AI ${name} verder aanvullen`}
-                className="ml-auto inline-flex items-center gap-1 text-xs font-semibold text-rijksblauw-500 transition-colors hover:underline disabled:cursor-not-allowed disabled:opacity-40 dark:text-rijksblauw-200"
-              >
-                {expanding ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
-                {expanding ? 'Bezig met aanvullen…' : 'Vul verder aan'}
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-      <textarea
-        id={fieldId}
-        autoFocus={autoFocus}
+      </nldd-container>
+      {(badge || active || filled || vraag) && (
+        <nldd-container layout="wrap" gap="8" vertical-alignment="center">
+          {meta && filled && <PrefillBadge source={meta.source} note={meta.note} />}
+          {vraag && <nldd-badge color="warning" text="Vul dit nog in"></nldd-badge>}
+          {active && (
+            <nldd-badge
+              color="accent"
+              icon="sparkles"
+              text={expanding ? 'AI vult dit veld aan' : 'Voorstel voor dit veld'}
+            ></nldd-badge>
+          )}
+          {filled && (
+            <nldd-button
+              size="sm"
+              appearance="accent-transparent"
+              start-icon="sparkles"
+              text="Vul verder aan"
+              accessible-label={`Laat AI ${name} verder aanvullen`}
+              loading={expanding || undefined}
+              loading-text="Bezig met aanvullen"
+              disabled={(busy && !expanding) || undefined}
+              onClick={onExpand}
+            ></nldd-button>
+          )}
+        </nldd-container>
+      )}
+      <nldd-multi-line-text-field
+        ref={fieldRef}
+        accessible-label={name}
         rows={tall ? 6 : 3}
-        className={clsx(
-          'opl-input block min-h-full resize-y self-stretch text-[0.9375rem]',
-          vraag && 'border-2 border-rijksoranje',
-        )}
-        value={value}
         placeholder={question.placeholder}
-        onChange={(e) => onChange(e.target.value)}
-      />
-      <div>
-        {meta?.note && filled && (
-          <p className="mt-1 flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
-            <Sparkles size={12} className="shrink-0" /> {meta.note}
-          </p>
-        )}
-      </div>
-      <div className="min-w-0">
+      ></nldd-multi-line-text-field>
+      {meta?.note && filled && (
+        <nldd-container layout="row" gap="4" vertical-alignment="center">
+          <nldd-icon icon="sparkles" size="16" color="secondary-content"></nldd-icon>
+          <nldd-text size="xs" color="secondary">
+            {meta.note}
+          </nldd-text>
+        </nldd-container>
+      )}
       {proposal && (
         <ExpandProposal
           fieldLabel={name}
@@ -193,8 +154,15 @@ function FieldBlock({
           onReject={onAanvullingVerwerpen}
         />
       )}
-      </div>
-    </div>
+    </nldd-container>
+  );
+
+  return active || aanvulling ? (
+    <nldd-box background="accent-tinted">
+      <nldd-container padding="12">{body}</nldd-container>
+    </nldd-box>
+  ) : (
+    body
   );
 }
 
@@ -275,7 +243,7 @@ interface FollowUpQuestionsProps {
  * Begeleidt de gebruiker stap voor stap door de velden die nodig zijn om een
  * herbruikbare prompt-template te bouwen. Eén vraag per scherm met voortgang,
  * en aan het eind een overzicht. Het doel is een template die een collega
- * later opnieuw kan invullen — niet het optimaliseren van losse tekst.
+ * later opnieuw kan invullen, niet het optimaliseren van losse tekst.
  */
 export default function FollowUpQuestions({
   technique,
@@ -360,9 +328,11 @@ export default function FollowUpQuestions({
 
   if (total === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-600 dark:bg-slate-900/40 dark:text-slate-400">
-        Deze techniek heeft geen invulvelden. Je kunt de prompt direct bouwen.
-      </div>
+      <nldd-inline-dialog
+        icon="info-circle"
+        text="Deze techniek heeft geen invulvelden"
+        supporting-text="Je kunt de prompt direct bouwen."
+      ></nldd-inline-dialog>
     );
   }
 
@@ -431,9 +401,7 @@ export default function FollowUpQuestions({
   // knoppenbalk van de vragenlijst zelf. Oranje: het is de afsluitende actie,
   // niet zomaar de volgende stap.
   const buildButton = onBuild ? (
-    <button type="button" className="opl-btn-accent" onClick={onBuild}>
-      <Sparkles size={16} /> {buildLabel}
-    </button>
+    <nldd-button appearance="primary" start-icon="sparkles" text={buildLabel} onClick={onBuild}></nldd-button>
   ) : null;
 
   const answeredCount = questions.filter((q) => (answers[q.id] ?? '').trim()).length;
@@ -443,24 +411,24 @@ export default function FollowUpQuestions({
   // smal venster of bij grote letters vallen de velden vanzelf onder elkaar.
   if (layout === 'stacked') {
     return (
-      <div className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 [&>div]:mb-0">
+      <nldd-container gap="12">
+        <nldd-container layout="wrap" gap="12" vertical-alignment="bottom">
+          <nldd-container gap="4" width="fit-content">
             {heading}
-            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+            <nldd-text size="sm" color="secondary">
               {answeredCount} van {total} ingevuld, leeg laten mag
-            </span>
-          </div>
+            </nldd-text>
+          </nldd-container>
+          <nldd-spacer size="flexible"></nldd-spacer>
           <FieldLayoutToggle layout={layout} onChange={setLayout} />
-        </div>
-        <div className="-mx-2 grid grid-cols-[repeat(auto-fit,minmax(min(100%,22rem),1fr))] gap-x-2">
+        </nldd-container>
+        <nldd-container layout="grid" gap="16">
           {questions.map((q, i) => (
             <FieldBlock
               key={q.id}
               question={q}
               value={answers[q.id] ?? ''}
               meta={fieldMeta?.[q.id]}
-              idPrefix="fu-stacked"
               marker={fieldMarker(i)}
               askIfEmpty={askIfEmpty}
               onChange={(v) => editField(q.id, v)}
@@ -475,11 +443,15 @@ export default function FollowUpQuestions({
               onAanvullingVerwerpen={onAanvulling && (() => onAanvulling(q.id, false))}
             />
           ))}
-        </div>
+        </nldd-container>
         {/* Alles staat al in beeld, dus er valt hier niets meer te navigeren:
             alleen de bouw-knop, rechts onderaan. */}
-        {buildButton && <div className="flex justify-end pt-1">{buildButton}</div>}
-      </div>
+        {buildButton && (
+          <nldd-container>
+            <nldd-button-group>{buildButton}</nldd-button-group>
+          </nldd-container>
+        )}
+      </nldd-container>
     );
   }
 
@@ -511,168 +483,130 @@ export default function FollowUpQuestions({
   // --- Overzichtsweergave (na de laatste vraag) ---
   if (reviewing) {
     return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 text-sm font-medium text-rijksblauw-700 dark:text-rijksblauw-200">
-            <Check size={16} /> Overzicht: controleer je antwoorden
-          </div>
+      <nldd-container gap="16">
+        <nldd-container layout="wrap" gap="8" vertical-alignment="center">
+          <nldd-icon icon="check-mark" size="20" color="accent"></nldd-icon>
+          <nldd-title heading-level={3} size={6} text="Overzicht: controleer je antwoorden"></nldd-title>
+          <nldd-spacer size="flexible"></nldd-spacer>
           <FieldLayoutToggle layout={layout} onChange={setLayout} />
-        </div>
-        <p className="text-sm text-slate-500 dark:text-slate-400">
+        </nldd-container>
+        <nldd-text size="sm" color="secondary">
           {hasPrefill
             ? 'We hebben deze velden alvast voor je ingevuld op basis van je prompt. Controleer en pas aan waar nodig, vooral de AI-suggesties met het oranje label "Controleren".'
             : 'Dit zijn de bouwstenen van je prompt. Klopt alles? Bouw dan de herbruikbare prompt.'}
-        </p>
-        <ul className="divide-y divide-slate-100 dark:divide-slate-700">
+        </nldd-text>
+        <nldd-list accessible-label="Je antwoorden">
           {questions.map((q, i) => {
             const value = (answers[q.id] ?? '').trim();
             const meta = fieldMeta?.[q.id];
             return (
-              <li key={q.id} className="flex items-start justify-between gap-3 py-3">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
-                      <span
-                        aria-hidden="true"
-                        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-rijksblauw-500 text-xs font-bold text-white"
-                      >
-                        {markers[i]}
-                      </span>
-                      {labelParts[i].name}
-                    </p>
-                    {meta && value && <PrefillBadge source={meta.source} note={meta.note} />}
-                  </div>
-                  <p
-                    className={clsx(
-                      'mt-0.5 whitespace-pre-wrap text-sm',
-                      value ? 'text-slate-600 dark:text-slate-300' : 'italic text-slate-400 dark:text-slate-500',
-                    )}
-                  >
-                    {value || 'Nog niet ingevuld; blijft een plaatshouder in de prompt.'}
-                  </p>
-                </div>
-                <button
-                  type="button"
+              <nldd-list-item key={q.id}>
+                <nldd-text-cell
+                  overline={markers[i]}
+                  text={labelParts[i].name}
+                  supporting-text={value || 'Nog niet ingevuld; blijft een plaatshouder in de prompt.'}
+                ></nldd-text-cell>
+                {meta && value && (
+                  <nldd-cell>
+                    <PrefillBadge source={meta.source} note={meta.note} />
+                  </nldd-cell>
+                )}
+                <nldd-list-item-segment
+                  button
+                  accessible-label={`Bewerk: ${labelParts[i].name}`}
                   onClick={() => {
                     setReviewing(false);
                     setStep(i);
                   }}
-                  className="shrink-0 rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-rijksblauw-600 dark:hover:bg-slate-800"
-                  aria-label={`Bewerk: ${labelParts[i].name}`}
-                  title="Bewerken"
                 >
-                  <Pencil size={15} />
-                </button>
-              </li>
+                  <nldd-icon-cell icon="pencil" size="20" color="secondary"></nldd-icon-cell>
+                </nldd-list-item-segment>
+              </nldd-list-item>
             );
           })}
-        </ul>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={back}
-            className="inline-flex items-center gap-1 text-sm font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100"
-          >
-            <ArrowLeft size={15} /> Terug naar de vragen
-          </button>
+        </nldd-list>
+        <nldd-container layout="wrap" gap="12" vertical-alignment="center">
+          <nldd-button appearance="neutral-transparent" start-icon="arrow-left" text="Terug naar de vragen" onClick={back}></nldd-button>
+          <nldd-spacer size="flexible"></nldd-spacer>
           {buildButton}
-        </div>
-      </div>
+        </nldd-container>
+      </nldd-container>
     );
   }
 
   // --- Stapsgewijze vraagweergave ---
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2 [&>div:first-child]:mb-0">
-        {heading ?? <span />}
+    <nldd-container gap="16">
+      <nldd-container layout="wrap" gap="12" vertical-alignment="bottom">
+        <nldd-container gap="4" width="fit-content">
+          {heading}
+          <nldd-text size="sm" color="secondary">
+            Vraag {step + 1} van {total}, {answeredCount} ingevuld
+          </nldd-text>
+        </nldd-container>
+        <nldd-spacer size="flexible"></nldd-spacer>
         <FieldLayoutToggle layout={layout} onChange={setLayout} />
-      </div>
-      {/* Voortgang */}
-      <div>
-        <div className="mb-1.5 flex items-center justify-between text-xs font-medium text-slate-500 dark:text-slate-400">
-          <span>
-            Vraag {step + 1} van {total}
-          </span>
-          <span>{answeredCount} ingevuld</span>
-        </div>
-        <div className="flex gap-1">
+      </nldd-container>
+      {/* Voortgang: elke stap is een knop naar die vraag. */}
+      <nldd-container gap="8">
+        <nldd-step-bar accessible-label="Vragen">
           {questions.map((q, i) => (
-            <button
+            <nldd-step-bar-item
               key={q.id}
-              type="button"
+              button
+              text={labelParts[i].name}
+              status={
+                i === step ? 'current' : (answers[q.id] ?? '').trim() ? 'past' : 'future'
+              }
               onClick={() => setStep(i)}
-              aria-label={`Ga naar vraag ${i + 1}`}
-              className={clsx(
-                'h-1.5 flex-1 rounded-full transition-colors',
-                i === step
-                  ? 'bg-rijksblauw-500'
-                  : (answers[q.id] ?? '').trim()
-                    ? 'bg-rijksblauw-300 dark:bg-rijksblauw-500/50'
-                    : 'bg-slate-200 dark:bg-slate-700',
-              )}
-            />
+            ></nldd-step-bar-item>
           ))}
-        </div>
-      </div>
+        </nldd-step-bar>
+      </nldd-container>
 
       {/* Huidige vraag */}
-      <div key={current.id} className="animate-fade-in">
-        <FieldBlock
-          question={current}
-          value={answers[current.id] ?? ''}
-          meta={currentMeta}
-          idPrefix="fu"
-          autoFocus
-          tall
-          marker={fieldMarker(step)}
-          askIfEmpty={askIfEmpty}
-          onChange={update}
-          onExpand={() => handleExpand(current)}
-          expanding={expandingId === current.id}
-          busy={expandingId !== null}
-          proposal={proposal?.fieldId === current.id ? proposal : null}
-          onAccept={acceptProposal}
-          onReject={rejectProposal}
-          aanvulling={aanvullingen?.[current.id] ?? null}
-          onAanvullingToevoegen={onAanvulling && (() => onAanvulling(current.id, true))}
-          onAanvullingVerwerpen={onAanvulling && (() => onAanvulling(current.id, false))}
-        />
-      </div>
+      <FieldBlock
+        key={current.id}
+        question={current}
+        value={answers[current.id] ?? ''}
+        meta={currentMeta}
+        autoFocus
+        tall
+        marker={fieldMarker(step)}
+        askIfEmpty={askIfEmpty}
+        onChange={update}
+        onExpand={() => handleExpand(current)}
+        expanding={expandingId === current.id}
+        busy={expandingId !== null}
+        proposal={proposal?.fieldId === current.id ? proposal : null}
+        onAccept={acceptProposal}
+        onReject={rejectProposal}
+        aanvulling={aanvullingen?.[current.id] ?? null}
+        onAanvullingToevoegen={onAanvulling && (() => onAanvulling(current.id, true))}
+        onAanvullingVerwerpen={onAanvulling && (() => onAanvulling(current.id, false))}
+      />
 
       {/* Navigatie */}
-      <div className="flex items-center justify-between gap-3">
-        <button
-          type="button"
+      <nldd-container layout="wrap" gap="12" vertical-alignment="center">
+        <nldd-button
+          appearance="neutral-transparent"
+          start-icon="arrow-left"
+          text="Vorige"
+          disabled={step === 0 || undefined}
           onClick={back}
-          disabled={step === 0}
-          className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40 dark:text-slate-300 dark:hover:bg-slate-800"
-        >
-          <ArrowLeft size={16} /> Vorige
-        </button>
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <button type="button" onClick={next} className="opl-btn-primary">
-            {isLast ? (
-              onFinish ? (
-                <>
-                  <Sparkles size={16} /> {finishLabel}
-                </>
-              ) : (
-                <>
-                  <Check size={16} /> Naar overzicht
-                </>
-              )
-            ) : (
-              <>
-                Volgende <ArrowRight size={16} />
-              </>
-            )}
-          </button>
-          {/* Naast "Volgende": je hoeft de rest van de vragen niet af te lopen
-              om te kunnen bouwen. */}
-          {buildButton}
-        </div>
-      </div>
-    </div>
+        ></nldd-button>
+        <nldd-spacer size="flexible"></nldd-spacer>
+        <nldd-button
+          appearance={isLast && onFinish && !buildButton ? 'primary' : 'secondary'}
+          start-icon={isLast ? (onFinish ? 'sparkles' : 'check-mark') : undefined}
+          end-icon={isLast ? undefined : 'arrow-right'}
+          text={isLast ? (onFinish ? finishLabel : 'Naar overzicht') : 'Volgende'}
+          onClick={next}
+        ></nldd-button>
+        {/* Naast "Volgende": je hoeft de rest van de vragen niet af te lopen
+            om te kunnen bouwen. */}
+        {buildButton}
+      </nldd-container>
+    </nldd-container>
   );
 }

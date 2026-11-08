@@ -1,21 +1,7 @@
-import { useEffect, useState } from 'react';
-import {
-  Copy,
-  Check,
-  ChevronDown,
-  RotateCcw,
-  Save,
-  Share2,
-  FolderCheck,
-  FolderDown,
-  MessageSquarePlus,
-  Globe,
-  Download,
-  Brain,
-} from '@/components/common/icons';
-import clsx from 'clsx';
+import { useEffect, useRef, useState } from 'react';
 import { notify } from '@/lib/notify';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+import { useNlddEvent } from '@/lib/nldd';
 import { copyToClipboard } from '@/lib/utils';
 import { downloadText, downloadZip } from '@/lib/download';
 import { buildSkillMd, buildSkillPlugin, skillSlug, type SkillMeta } from '@/lib/skill';
@@ -144,35 +130,27 @@ export default function OptimizedOutput({
   }
 
   return (
-    <div className="space-y-4 animate-fade-in">
-      <h3 className="text-lg font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
-        {skill ? 'Je skill' : 'Je herbruikbare prompt'}
-      </h3>
+    <nldd-container gap="16">
+      <nldd-title heading-level={3} size={5} text={skill ? 'Je skill' : 'Je herbruikbare prompt'}></nldd-title>
 
       {skill ? (
-        <p className="text-sm text-slate-500 dark:text-slate-400">
+        <nldd-text size="sm" color="secondary">
           Plak deze skill één keer in je eigen AI-omgeving, bijvoorbeeld als instructie van een
           Mistral-agent of als projectinstructie. Daarna geef je alleen je invoer, en de AI pakt die
           elke keer op dezelfde manier aan. Werk je met een omgeving die Agent Skills leest, download
-          hem dan als <span className="font-mono text-xs">SKILL.md</span>, of als plugin in de vorm
-          die de skills-marketplace van developer.overheid.nl gebruikt. In de kop staat dat hij met AI
-          is gemaakt en nog een concept is, zoals het overheidsbrede standpunt over generatieve AI
-          vraagt.
-        </p>
+          hem dan als <code>SKILL.md</code>, of als plugin in de vorm die de skills-marketplace van
+          developer.overheid.nl gebruikt. In de kop staat dat hij met AI is gemaakt en nog een concept
+          is, zoals het overheidsbrede standpunt over generatieve AI vraagt.
+        </nldd-text>
       ) : (
-        <p className="text-sm text-slate-500 dark:text-slate-400">
+        <nldd-text size="sm" color="secondary">
           Kopieer deze prompt naar je eigen AI-chat, sla hem op voor je collega&apos;s, of laat de AI
-          hem <span className="font-medium">direct uitvoeren</span> voor een kant-en-klaar resultaat.
-          Vul de plekken tussen <span className="font-mono text-xs">[haakjes]</span> per keer aan met
-          je eigen inhoud.
-        </p>
+          hem <strong>direct uitvoeren</strong> voor een kant-en-klaar resultaat. Vul de plekken
+          tussen <code>[haakjes]</code> per keer aan met je eigen inhoud.
+        </nldd-text>
       )}
 
-      {result.error && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300">
-          {result.error}
-        </div>
-      )}
+      {result.error && <nldd-banner variant="warning" size="sm" text={result.error}></nldd-banner>}
 
       {/* Routekaart: het bestand zelf, met de vaste opmaak van PromptPlein. De
           opdracht eronder blijft bruikbaar voor een andere AI-omgeving. */}
@@ -180,134 +158,94 @@ export default function OptimizedOutput({
         <RoutekaartResult content={result.optimized_content} />
       )}
 
-      {/* Versie-chips: verschijnen zodra de verbeter-lus een tweede versie
-          oplevert. De nieuwste staat rechts en is bij aankomst actief. */}
+      {/* Versies: verschijnen zodra de verbeter-lus een tweede versie oplevert.
+          De nieuwste staat rechts en is bij aankomst actief. */}
       {versions && versions.length > 1 && onSelectVersion && (
-        <div className="flex flex-wrap items-center gap-1.5" role="tablist" aria-label="Versies">
-          {versions.map((_, i) => (
-            <button
-              key={i}
-              type="button"
-              role="tab"
-              aria-selected={i === activeVersion}
-              onClick={() => onSelectVersion(i)}
-              className={clsx(
-                'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-                i === activeVersion
-                  ? 'border-rijksblauw-500 bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/20 dark:text-rijksblauw-200'
-                  : 'border-slate-300 text-slate-600 hover:border-slate-400 dark:border-slate-600 dark:text-slate-300',
-              )}
-              title={i === 0 ? 'De oorspronkelijke versie' : `Verbeterde versie ${i + 1}`}
-            >
-              v{i + 1}
-              {i === versions.length - 1 && i > 0 ? ' · nieuwste' : ''}
-            </button>
-          ))}
-        </div>
+        <VersionPicker count={versions.length} active={activeVersion} onSelect={onSelectVersion} />
       )}
 
       {/* Wat er tijdens het bouwen gebeurde: zo zie je dat denken en zoeken
           echt zijn gebruikt, en waar de extra tijd heen ging. */}
       {result.trace && (result.trace.thought || result.trace.searched || result.trace.reviewed) && (
-        <div className="flex flex-wrap items-center gap-1.5 text-[0.6875rem]">
-          {result.trace.thought && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-rijksblauw-50 px-2 py-0.5 font-medium text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">
-              <Brain size={11} /> Nagedacht
-            </span>
-          )}
+        <nldd-container layout="wrap" gap="6" vertical-alignment="center">
+          {result.trace.thought && <nldd-tag size="sm" color="accent" icon="brain" text="Nagedacht"></nldd-tag>}
           {result.trace.reviewed && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-rijksblauw-50 px-2 py-0.5 font-medium text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">
-              <RotateCcw size={11} /> Twee rondes: eerste versie nagekeken
-            </span>
+            <nldd-tag size="sm" color="accent" icon="arrow-2-counter-clockwise" text="Twee rondes: eerste versie nagekeken"></nldd-tag>
           )}
           {result.trace.searched && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-rijksblauw-50 px-2 py-0.5 font-medium text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">
-              <Globe size={11} /> Internet geraadpleegd
-              {result.sources?.length
-                ? ` · ${used?.size ?? 0} van ${result.sources.length} bronnen verwerkt`
-                : ' · geen bronnen gevonden'}
-            </span>
+            <nldd-tag
+              size="sm"
+              color="accent"
+              icon="globe"
+              text={`Internet geraadpleegd, ${
+                result.sources?.length
+                  ? `${used?.size ?? 0} van ${result.sources.length} bronnen verwerkt`
+                  : 'geen bronnen gevonden'
+              }`}
+            ></nldd-tag>
           )}
-          <span className="text-slate-400 dark:text-slate-500">{result.trace.seconds}s</span>
-        </div>
+          <nldd-text size="xs" color="secondary">
+            {result.trace.seconds}s
+          </nldd-text>
+        </nldd-container>
       )}
 
-      <pre tabIndex={0} className="max-h-[420px] overflow-auto whitespace-pre-wrap rounded-xl border border-slate-200 bg-slate-50 p-4 font-mono text-[0.8125rem] leading-relaxed text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+      <nldd-code-viewer wrap max-height="420px">
         {result.optimized_content}
-      </pre>
+      </nldd-code-viewer>
 
-      {/* Zocht de AI eerst op internet, of kreeg hij
-          pagina's uit de kennisbank van developer.overheid.nl, dan staan hier de
-          pagina's die hij kreeg: echte links om na te lezen of de feiten in de
-          prompt kloppen. */}
       {/* Meldingen over de bouw: zoeken leverde niets op of mocht niet, of de
           bronnen kwamen niet in de prompt terecht. */}
       {(result.notices?.length || unusedAll) && (
-        <div className="mt-3 space-y-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
-          {result.notices?.map((n) => <p key={n}>{n}</p>)}
-          {unusedAll && (
-            <p>
-              De AI heeft geen van de gevonden bronnen in de prompt verwerkt. Bouw de prompt
-              opnieuw, of kijk in de bronnen hieronder of ze wel over je opdracht gaan.
-            </p>
-          )}
-        </div>
+        <nldd-banner variant="warning" size="sm">
+          <nldd-container gap="4">
+            {result.notices?.map((n) => (
+              <nldd-text key={n} size="sm">
+                {n}
+              </nldd-text>
+            ))}
+            {unusedAll && (
+              <nldd-text size="sm">
+                De AI heeft geen van de gevonden bronnen in de prompt verwerkt. Bouw de prompt
+                opnieuw, of kijk in de bronnen hieronder of ze wel over je opdracht gaan.
+              </nldd-text>
+            )}
+          </nldd-container>
+        </nldd-banner>
       )}
 
+      {/* Zocht de AI eerst op internet, of kreeg hij pagina's uit de kennisbank van
+          developer.overheid.nl, dan staan hier de pagina's die hij kreeg: echte
+          links om na te lezen of de feiten in de prompt kloppen. */}
       {result.sources && result.sources.length > 0 && (
-        <div className="mt-3">
-          <p className="mb-1 flex items-center gap-1.5 text-[0.6875rem] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
-            <Globe size={12} className="shrink-0" />
-            {sourcesLabel(result.sources)}
-          </p>
-          <ol className="space-y-0.5">
-            {result.sources.map((source, i) => (
-              <li key={source.url} className="flex gap-1.5 text-xs">
-                <span className="shrink-0 tabular-nums text-slate-400 dark:text-slate-500">
-                  [{i + 1}]
-                </span>
-                <a
-                  href={source.url}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="min-w-0 truncate text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
-                  title={source.url}
-                >
-                  {source.title}
-                </a>
-                {used?.has(source.url) && (
-                  <span
-                    className="inline-flex shrink-0 items-center gap-0.5 text-[0.6875rem] text-rijksgroen"
-                    title="Deze bron staat met zijn URL in de prompt"
-                  >
-                    <Check size={11} /> verwerkt
-                  </span>
-                )}
-              </li>
-            ))}
-          </ol>
-        </div>
+        <nldd-list accessible-label={sourcesLabel(result.sources)}>
+          {result.sources.map((source, i) => (
+            <nldd-list-item key={source.url} size="sm" href={source.url} target="_blank">
+              <nldd-text-cell width="fit-content" color="secondary" text={`[${i + 1}]`}></nldd-text-cell>
+              <nldd-spacer-cell size="8"></nldd-spacer-cell>
+              <nldd-text-cell text={source.title} supporting-text={source.url}></nldd-text-cell>
+              {used?.has(source.url) && (
+                <nldd-cell>
+                  <nldd-badge size="sm" color="success" icon="check-mark" text="verwerkt"></nldd-badge>
+                </nldd-cell>
+              )}
+              <nldd-icon-cell size="20" color="secondary" icon="square-arrow-right-top"></nldd-icon-cell>
+            </nldd-list-item>
+          ))}
+        </nldd-list>
       )}
 
       {/* Kwam deze prompt uit de doel-dialoog? Dan is navolgbaar waar hij vandaan
           komt: het beschreven doel, de gestelde vragen met je antwoorden, de
           opdrachtbeschrijving die eruit volgde en het gekozen framework. Bewust
-          ingeklapt — de prompt zelf is de hoofdzaak. */}
+          ingeklapt: de prompt zelf is de hoofdzaak. */}
       {result.dialogue && <DialogueSummary dialogue={result.dialogue} />}
 
       {/* Opgeslagen-bevestiging */}
       {saved && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-300">
-          <span className="inline-flex items-center gap-2">
-            <FolderCheck size={16} /> Opgeslagen als herbruikbare prompt.
-          </span>
-          <Link
-            to={`/prompt/${saved.id}`}
-            className="font-medium underline underline-offset-2 hover:no-underline"
-          >
-            Bekijk in de bibliotheek
-          </Link>
-        </div>
+        <nldd-banner variant="success" size="sm" icon="folder" text="Opgeslagen als herbruikbare prompt.">
+          <nldd-button slot="actions" text="Bekijk in de bibliotheek" href={`/prompt/${saved.id}`}></nldd-button>
+        </nldd-banner>
       )}
 
       {/* Opslaan-formulier: gedeeld met de chat via SavePromptPanel. */}
@@ -325,61 +263,91 @@ export default function OptimizedOutput({
       )}
 
       {/* Acties */}
-      <div className="flex flex-wrap items-center justify-end gap-3">
-        <button className="opl-btn-secondary" onClick={onReset}>
-          <RotateCcw size={16} /> Opnieuw
-        </button>
+      <nldd-container layout="wrap" gap="12">
+        <nldd-button
+          appearance="primary"
+          start-icon={copied ? 'check-mark' : 'copy'}
+          text={copied ? 'Gekopieerd' : skill ? 'Kopieer skill' : 'Kopieer prompt'}
+          onClick={() => void handleCopy()}
+        ></nldd-button>
         {saved ? (
-          <button className="opl-btn-secondary" onClick={() => setShareOpen(true)}>
-            <Share2 size={16} /> Delen met collega&apos;s
-          </button>
+          <nldd-button
+            appearance="secondary"
+            start-icon="share-network"
+            text="Delen met collega's"
+            onClick={() => setShareOpen(true)}
+          ></nldd-button>
         ) : (
-          <button className="opl-btn-secondary" onClick={() => setShowSave((v) => !v)}>
-            <Save size={16} /> Opslaan in bibliotheek
-          </button>
+          <nldd-button
+            appearance="secondary"
+            start-icon="save"
+            text="Opslaan in bibliotheek"
+            expanded={showSave || undefined}
+            onClick={() => setShowSave((v) => !v)}
+          ></nldd-button>
         )}
         {/* Kopiëren in chat: de prompt komt in het invoerveld van een nieuwe chat
             te staan en wordt niet verstuurd. Uitgeschakeld wanneer de beheerder
             de chat uitzette, anders zou de prompt stilletjes verdwijnen in een
             handoff die nooit vuurt. */}
-        <button
-          className="opl-btn-accent"
-          onClick={handleSendToChat}
-          disabled={!chatAvailable}
-          title={
+        <nldd-tooltip
+          text={
             !chatAvailable
               ? 'De beheerder heeft de chat uitgeschakeld.'
               : 'Zet de prompt klaar in de chat; je verstuurt hem daar zelf.'
           }
         >
-          <MessageSquarePlus size={16} /> Kopiëren in chat
-        </button>
+          <nldd-button
+            appearance="secondary"
+            start-icon="comment"
+            text="Kopiëren in chat"
+            disabled={!chatAvailable || undefined}
+            onClick={handleSendToChat}
+          ></nldd-button>
+        </nldd-tooltip>
         {skill && (
-          <button
-            className="opl-btn-secondary"
+          <nldd-button
+            appearance="secondary"
+            start-icon="download"
+            text="Download SKILL.md"
             onClick={handleDownloadSkill}
-            title="Download deze skill als SKILL.md, met naam en beschrijving erboven"
-          >
-            <Download size={16} /> Download SKILL.md
-          </button>
+          ></nldd-button>
         )}
         {skill && (
-          <button
-            className="opl-btn-secondary"
+          <nldd-button
+            appearance="secondary"
+            start-icon="download-document"
+            text="Download als plugin"
+            supporting-text="zip voor Claude Code, Codex of Cursor"
             onClick={() => void handleDownloadPlugin()}
-            title="Download de skill als plugin (zip) voor Claude Code, Codex of Cursor, in de opbouw van de overheidsmarketplace"
-          >
-            <FolderDown size={16} /> Download als plugin
-          </button>
+          ></nldd-button>
         )}
-        <button className="opl-btn-primary" onClick={handleCopy}>
-          {copied ? <Check size={16} /> : <Copy size={16} />}
-          {copied ? 'Gekopieerd' : skill ? 'Kopieer skill' : 'Kopieer prompt'}
-        </button>
-      </div>
+        <nldd-button appearance="neutral-transparent" start-icon="arrow-2-counter-clockwise" text="Opnieuw" onClick={onReset}></nldd-button>
+      </nldd-container>
 
       {saved && <ShareModal open={shareOpen} onClose={() => setShareOpen(false)} prompt={saved} />}
-    </div>
+    </nldd-container>
+  );
+}
+
+/** Switches between the versions of the improvement loop; the newest is on the right. */
+function VersionPicker({ count, active, onSelect }: { count: number; active: number; onSelect: (i: number) => void }) {
+  const ref = useRef<HTMLElement>(null);
+  useNlddEvent<CustomEvent<{ value: string }>>(ref, 'change', (e) => {
+    const i = Number(e.detail?.value);
+    if (Number.isInteger(i)) onSelect(i);
+  });
+  return (
+    <nldd-segmented-control ref={ref} size="sm" width="fit-content" accessible-label="Versies" value={String(active)}>
+      {Array.from({ length: count }, (_, i) => (
+        <nldd-segmented-control-item
+          key={i}
+          value={String(i)}
+          selected={i === active || undefined}
+          text={`v${i + 1}${i === count - 1 && i > 0 ? ', nieuwste' : ''}`}
+        ></nldd-segmented-control-item>
+      ))}
+    </nldd-segmented-control>
   );
 }
 
@@ -391,81 +359,67 @@ export default function OptimizedOutput({
 function DialogueSummary({ dialogue }: { dialogue: PromptDialogue }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="rounded-xl border border-slate-200 dark:border-slate-700">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
-      >
-        <span>
-          <span className="block text-sm font-medium text-slate-700 dark:text-slate-200">
-            Hoe deze prompt tot stand kwam
-          </span>
-          <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
-            {dialogue.transcript.length} vragen beantwoord · framework:{' '}
-            {dialogue.frameworkName ?? '—'}
-          </span>
-        </span>
-        <ChevronDown
-          size={18}
-          className={clsx('shrink-0 text-slate-400 transition-transform', open && 'rotate-180')}
-        />
-      </button>
+    <nldd-card>
+      <nldd-container padding="12" gap="12">
+        <nldd-button
+          appearance="neutral-transparent"
+          width="full"
+          horizontal-alignment="left"
+          end-icon={open ? 'chevron-up' : 'chevron-down'}
+          text="Hoe deze prompt tot stand kwam"
+          supporting-text={`${dialogue.transcript.length} vragen beantwoord, framework: ${dialogue.frameworkName ?? 'geen'}`}
+          expanded={open || undefined}
+          onClick={() => setOpen((v) => !v)}
+        ></nldd-button>
 
-      {open && (
-        <div className="animate-fade-in space-y-4 border-t border-slate-200 px-4 py-4 text-sm dark:border-slate-700">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-              Wat je wilde bereiken
-            </p>
-            <p className="mt-1 text-slate-700 dark:text-slate-200">{dialogue.goal}</p>
-          </div>
+        {open && (
+          <nldd-container gap="16" padding-inline="12">
+            <nldd-container gap="4">
+              <nldd-text size="xs" weight="bold" color="secondary">
+                Wat je wilde bereiken
+              </nldd-text>
+              <nldd-text size="sm">{dialogue.goal}</nldd-text>
+            </nldd-container>
 
-          {dialogue.transcript.length > 0 && (
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                Gestelde vragen ({dialogue.transcript.length})
-              </p>
-              <ol className="mt-1 space-y-2">
-                {dialogue.transcript.map((turn, i) => (
-                  <li
-                    key={i}
-                    className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs dark:border-slate-700 dark:bg-slate-900"
-                  >
-                    <p className="font-medium text-slate-600 dark:text-slate-300">
-                      {i + 1}. {turn.question}
-                    </p>
-                    <p className="mt-0.5 text-slate-500 dark:text-slate-400">{turn.answer}</p>
-                  </li>
-                ))}
-              </ol>
-            </div>
-          )}
+            {dialogue.transcript.length > 0 && (
+              <nldd-container gap="4">
+                <nldd-text size="xs" weight="bold" color="secondary">
+                  Gestelde vragen ({dialogue.transcript.length})
+                </nldd-text>
+                <nldd-list appearance="box-tinted" accessible-label="Gestelde vragen">
+                  {dialogue.transcript.map((turn, i) => (
+                    <nldd-list-item key={i} size="sm">
+                      <nldd-text-cell text={`${i + 1}. ${turn.question}`} supporting-text={turn.answer}></nldd-text-cell>
+                    </nldd-list-item>
+                  ))}
+                </nldd-list>
+              </nldd-container>
+            )}
 
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-              Opdrachtbeschrijving uit het gesprek
-            </p>
-            <pre tabIndex={0} className="mt-1 max-h-64 overflow-auto whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-relaxed text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
-              {dialogue.brief}
-            </pre>
-          </div>
+            <nldd-container gap="4">
+              <nldd-text size="xs" weight="bold" color="secondary">
+                Opdrachtbeschrijving uit het gesprek
+              </nldd-text>
+              <nldd-code-viewer wrap max-height="256px">
+                {dialogue.brief}
+              </nldd-code-viewer>
+            </nldd-container>
 
-          {dialogue.frameworkName && (
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                Gekozen framework
-              </p>
-              <p className="mt-1 text-slate-700 dark:text-slate-200">
-                <span className="font-medium">{dialogue.frameworkName}</span>
-                {dialogue.frameworkReason ? `: ${dialogue.frameworkReason}` : ''}
-              </p>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
+            {dialogue.frameworkName && (
+              <nldd-container gap="4">
+                <nldd-text size="xs" weight="bold" color="secondary">
+                  Gekozen framework
+                </nldd-text>
+                <nldd-text size="sm">
+                  <strong>{dialogue.frameworkName}</strong>
+                  {dialogue.frameworkReason ? `: ${dialogue.frameworkReason}` : ''}
+                </nldd-text>
+              </nldd-container>
+            )}
+          </nldd-container>
+        )}
+      </nldd-container>
+    </nldd-card>
   );
 }
 

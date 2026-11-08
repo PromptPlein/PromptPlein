@@ -1,4 +1,4 @@
-import { Check, Sparkles, X } from '@/components/common/icons';
+import { Fragment } from 'react';
 
 interface ExpandProposalProps {
   /** Naam van het veld waar dit voorstel bij hoort; staat in de koptekst. */
@@ -20,9 +20,9 @@ interface ExpandProposalProps {
 }
 
 /**
- * Toont het AI-voorstel voor een veld als schone, leesbare tekst (geen diff-kleuren),
- * met eronder een kort lijstje "Wat is verbeterd". Zo ziet de gebruiker meteen het
- * nette resultaat plus waaróm het beter is, en neemt die het over of verwerpt het.
+ * Shows the AI proposal for a field as clean, readable text (no diff colors),
+ * with a short list of what improved below it. The user sees the result and why
+ * it is better, and takes it over or rejects it.
  */
 export default function ExpandProposal({
   fieldLabel,
@@ -34,61 +34,58 @@ export default function ExpandProposal({
   acceptLabel,
   hint,
 }: ExpandProposalProps) {
-  // Veldnamen zijn vaak lang ("EXAMPLES: geef voorbeelden van ..."); voor de
-  // koptekst is het deel vóór de toelichting genoeg om het veld te herkennen.
+  // Field names are often long ("EXAMPLES: geef voorbeelden van ..."); the part
+  // before the explanation is enough to recognize the field.
   const shortLabel = fieldLabel?.split(/\s+[—–:-]\s+/)[0]?.trim();
-  // Oranje omlijsting: het voorstel is een voorstel van de AI, niet je eigen
-  // tekst. Dat onderscheidt het van het blauw van het veld eromheen.
+  const lines = proposed.split('\n');
   return (
-    <div className="animate-fade-in mt-2 overflow-hidden rounded-xl border border-rijksoranje bg-white shadow-sm dark:border-rijksoranje/60 dark:bg-slate-800">
-      <div className="flex items-center gap-2 border-b border-rijksoranje/25 bg-rijksoranje/10 px-3 py-2 dark:border-rijksoranje/25 dark:bg-rijksoranje/15">
-        <Sparkles size={14} className="shrink-0 text-rijksoranje" />
-        <span className="truncate text-xs font-semibold text-rijksoranje" title={fieldLabel}>
+    <nldd-card background="tinted">
+      <nldd-container slot="header" padding-inline="12" padding-top="12" layout="row" gap="8" vertical-alignment="center">
+        <nldd-icon icon="sparkles" size="16" color="oranje"></nldd-icon>
+        <nldd-text size="xs" weight="bold">
           {title ?? (shortLabel ? `AI-voorstel voor ${shortLabel}` : 'AI-voorstel')}
-        </span>
-      </div>
+        </nldd-text>
+      </nldd-container>
 
-      {/* De nette voorgestelde tekst — gewoon leesbaar, zonder markeringen. */}
-      <p className="whitespace-pre-wrap px-3 py-3 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
-        {proposed}
-      </p>
+      <nldd-container padding="12" gap="12">
+        <nldd-text size="sm" line-height="loose">
+          {lines.map((line, i) => (
+            <Fragment key={i}>
+              {i > 0 && <br />}
+              {line}
+            </Fragment>
+          ))}
+        </nldd-text>
 
-      {hint && (
-        <p className="px-3 pb-2 text-xs text-slate-500 dark:text-slate-400">{hint}</p>
-      )}
+        {hint && (
+          <nldd-text size="xs" color="secondary">
+            {hint}
+          </nldd-text>
+        )}
 
-      {improvements.length > 0 && (
-        <div className="border-t border-slate-100 bg-slate-50/60 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-900/30">
-          <p className="mb-1.5 text-[0.6875rem] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
-            Wat is verbeterd
-          </p>
-          <ul className="space-y-1">
-            {improvements.map((item, i) => (
-              <li key={i} className="flex items-start gap-1.5 text-xs text-slate-600 dark:text-slate-300">
-                <Check size={13} className="mt-0.5 shrink-0 text-emerald-500" />
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+        {improvements.length > 0 && (
+          <nldd-container gap="4">
+            <nldd-text size="xs" weight="bold" color="secondary">
+              Wat is verbeterd
+            </nldd-text>
+            <nldd-list accessible-label="Wat is verbeterd" dividers="never">
+              {improvements.map((item, i) => (
+                <nldd-list-item key={i} size="sm">
+                  <nldd-icon-cell icon="check-mark" size="16" color="success" vertical-alignment="top"></nldd-icon-cell>
+                  <nldd-text-cell size="sm" text={item} vertical-alignment="top"></nldd-text-cell>
+                </nldd-list-item>
+              ))}
+            </nldd-list>
+          </nldd-container>
+        )}
+      </nldd-container>
 
-      <div className="flex items-center justify-end gap-1.5 border-t border-slate-100 px-3 py-2 dark:border-slate-700">
-        <button
-          type="button"
-          onClick={onReject}
-          className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200"
-        >
-          <X size={13} /> Verwerpen
-        </button>
-        <button
-          type="button"
-          onClick={onAccept}
-          className="inline-flex items-center gap-1 rounded-md bg-rijksoranje px-2.5 py-1 text-xs font-semibold text-slate-950 shadow-sm transition-colors hover:bg-rijksoranje-dark dark:hover:text-white"
-        >
-          <Check size={13} /> {acceptLabel ?? 'Overnemen'}
-        </button>
-      </div>
-    </div>
+      <nldd-container slot="footer" padding="12" horizontal-alignment="right">
+        <nldd-button-group size="sm">
+          <nldd-button appearance="neutral-transparent" size="sm" start-icon="dismiss" text="Verwerpen" onClick={onReject}></nldd-button>
+          <nldd-button appearance="primary" size="sm" start-icon="check-mark" text={acceptLabel ?? 'Overnemen'} onClick={onAccept}></nldd-button>
+        </nldd-button-group>
+      </nldd-container>
+    </nldd-card>
   );
 }

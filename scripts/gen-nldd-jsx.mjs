@@ -14,7 +14,7 @@ const literalUnion = /^\s*('[^']*'\s*\|\s*)*'[^']*'\s*$/;
 
 function tsType(attr) {
   const t = (attr.expandedType?.text ?? attr.type?.text ?? 'string').trim();
-  if (t === 'boolean') return 'true | undefined';
+  if (t === 'boolean' || t === 'boolean | undefined') return 'true | undefined';
   if (t === 'number') return 'number | string';
   if (/^[\d|\s]+$/.test(t)) return `${t} | \`${t.split('|').map((s) => s.trim()).join('` | `')}\``;
   if (literalUnion.test(t)) return t;

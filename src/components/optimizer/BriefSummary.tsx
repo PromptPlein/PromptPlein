@@ -1,34 +1,28 @@
 import { useState } from 'react';
-import { Check, ChevronDown, ClipboardCopy, Download, ListChecks, Sparkles } from '@/components/common/icons';
-import clsx from 'clsx';
 import { notify } from '@/lib/notify';
 import { stripMarkdown, copyToClipboard } from '@/lib/utils';
 
 /**
- * Herkent de kopjes waarmee de opdrachtbeschrijving is opgebouwd (DOEL:,
- * CONTEXT:, AANPAK: …). Hoofdletters, spaties en losse tekens, gevolgd door een
- * dubbele punt aan het begin van een regel.
+ * Recognizes the headings the task description is built from (DOEL:, CONTEXT:,
+ * AANPAK: …): capitals, spaces and a few signs, followed by a colon at the start
+ * of a line.
  */
 const HEADING = /^([A-Z][A-Z\s&/-]{2,}):\s*(.*)$/;
 
-/** Bestandsnaam voor de download; zonder tekens die een besturingssysteem dwarszitten. */
+/** File name for the download, without characters an operating system objects to. */
 function fileNameFor(goal: string): string {
   const base = goal.trim().split(/\s+/).slice(0, 6).join('-').replace(/[^\p{L}\p{N}-]/gu, '');
   return `opdrachtbeschrijving-${base || 'gesprek'}.txt`.toLowerCase();
 }
 
 /**
- * De oogst van de vragenronde: wat de AI uit het gesprek heeft opgetekend. De
- * framework-keuze en de velden komen hieruit.
+ * What the AI wrote down from the round of questions. The framework choice and
+ * the fields come from it. Visible, so whoever answered eight questions can check
+ * that nothing went missing or was made up, and resume the conversation before
+ * the prompt is built.
  *
- * Waarom zichtbaar: tot nu toe verdween deze beschrijving rechtstreeks in de
- * volgende stap. Wie acht vragen heeft beantwoord wil eerst zien wat daar uit
- * kwam — en kunnen vaststellen dat er niets is weggevallen of verzonnen. Klopt
- * er iets niet, dan is dít het moment om het gesprek te hervatten, niet nadat de
- * prompt al gebouwd is.
- *
- * Bewaren gaat bewust naar het klembord of een tekstbestand: de beschrijving is
- * geen prompt, dus in de promptbibliotheek zou hij niet thuishoren.
+ * Saving goes to the clipboard or a text file on purpose: the description is not
+ * a prompt, so it does not belong in the prompt library.
  */
 export default function BriefSummary({
   brief,
@@ -43,12 +37,11 @@ export default function BriefSummary({
   /** Eén zin waarom die techniek past, gekoppeld aan wat de gebruiker vertelde. */
   why?: string;
 }) {
-  // Dicht: de ingevulde velden gaan voor. Wie wil nalezen, klapt hem open.
+  // Closed: the filled-in fields come first. Whoever wants to read it opens it.
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // De regels TECHNIEK: en WAAROM DEZE TECHNIEK: tonen we apart bovenaan; hier
-  // zouden ze dubbel staan.
+  // The lines TECHNIEK: and WAAROM DEZE TECHNIEK: are shown apart at the top.
   const lines = brief
     .trim()
     .split('\n')
@@ -66,101 +59,101 @@ export default function BriefSummary({
   }
 
   function download() {
-    // Blob + tijdelijke link: hiermee blijft het bestand op het apparaat van de
-    // gebruiker; er gaat niets naar de server.
+    // A blob and a temporary link keep the file on the user's device; nothing
+    // goes to the server.
     const blob = new Blob([brief.trim()], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileNameFor(goal);
-    a.click();
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileNameFor(goal);
+    link.click();
     URL.revokeObjectURL(url);
     notify.success('Samenvatting opgeslagen.');
   }
 
   return (
-    <div className="animate-fade-in rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
-      <div className="flex flex-wrap items-center gap-2 px-4 py-3">
-        <ListChecks size={18} className="shrink-0 text-rijksblauw-500" />
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-            Dit hebben we uit het gesprek gehaald
-          </p>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            Hieruit heeft de AI je velden ingevuld.
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-1">
-          <button
-            type="button"
-            onClick={() => void copy()}
-            title="Kopieer de samenvatting"
-            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-slate-600 transition-colors hover:bg-white hover:text-rijksblauw-600 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-rijksblauw-300"
-          >
-            {copied ? <Check size={13} /> : <ClipboardCopy size={13} />}
-            {copied ? 'Gekopieerd' : 'Kopieer'}
-          </button>
-          <button
-            type="button"
-            onClick={download}
-            title="Bewaar de samenvatting als tekstbestand op je apparaat"
-            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-rijksblauw-600 transition-colors hover:bg-white dark:text-rijksblauw-300 dark:hover:bg-slate-700"
-          >
-            <Download size={13} /> Opslaan
-          </button>
-          <button
-            type="button"
-            onClick={() => setOpen((v) => !v)}
-            aria-expanded={open}
-            title={open ? 'Inklappen' : 'Uitklappen'}
-            className="inline-flex items-center rounded-md p-1 text-slate-500 transition-colors hover:bg-white dark:text-slate-400 dark:hover:bg-slate-700"
-          >
-            <ChevronDown size={16} className={clsx('transition-transform', open && 'rotate-180')} />
-          </button>
-        </div>
-      </div>
+    <nldd-card>
+      <nldd-container padding="16" gap="12">
+        <nldd-container layout="wrap" gap="8" vertical-alignment="center">
+          <nldd-icon icon="checkbox-list" size="20" color="lintblauw"></nldd-icon>
+          <nldd-container width="14rem" gap="2">
+            <nldd-text size="sm" weight="bold">
+              Dit hebben we uit het gesprek gehaald
+            </nldd-text>
+            <nldd-text size="xs" color="secondary">
+              Hieruit heeft de AI je velden ingevuld.
+            </nldd-text>
+          </nldd-container>
+          <nldd-button-group size="sm">
+            <nldd-tooltip text="Kopieer de samenvatting">
+              <nldd-button
+                appearance="neutral-transparent"
+                size="xs"
+                start-icon={copied ? 'check-mark' : 'copy'}
+                text={copied ? 'Gekopieerd' : 'Kopieer'}
+                onClick={() => void copy()}
+              ></nldd-button>
+            </nldd-tooltip>
+            <nldd-tooltip text="Bewaar de samenvatting als tekstbestand op je apparaat">
+              <nldd-button
+                appearance="neutral-transparent"
+                size="xs"
+                start-icon="download"
+                text="Opslaan"
+                onClick={download}
+              ></nldd-button>
+            </nldd-tooltip>
+            <nldd-icon-button
+              appearance="neutral-transparent"
+              size="xs"
+              icon={open ? 'chevron-up' : 'chevron-down'}
+              accessible-label={open ? 'Inklappen' : 'Uitklappen'}
+              onClick={() => setOpen((v) => !v)}
+            ></nldd-icon-button>
+          </nldd-button-group>
+        </nldd-container>
 
-      {open && (
-        <div className="space-y-1.5 border-t border-rijksblauw-200/70 px-4 py-3 dark:border-rijksblauw-500/20">
-          {/* De techniek die uit het gesprek volgt, met de reden erbij. Staat
-              bovenaan omdat het de conclusie van het gesprek is: hierop rust de
-              rest van de opbouw. */}
-          {technique && (
-            <div className="mb-2 flex items-start gap-2 rounded-lg bg-white/70 px-3 py-2 dark:bg-slate-800/60">
-              <Sparkles size={15} className="mt-0.5 shrink-0 text-rijksblauw-500" />
-              <div className="min-w-0">
-                <p className="text-sm text-slate-800 dark:text-slate-100">
-                  Techniek: <strong className="font-bold">{stripMarkdown(technique)}</strong>
-                </p>
-                {why && (
-                  <p className="mt-0.5 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
-                    {stripMarkdown(why)}
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
-          {lines.map((line, i) => {
-            const heading = HEADING.exec(line.trim());
-            if (heading) {
+        {open && (
+          <nldd-container gap="6">
+            <nldd-divider></nldd-divider>
+            {/* The technique that follows from the conversation, with the reason:
+                the conclusion on which the rest rests. */}
+            {technique && (
+              <nldd-box background="accent-tinted">
+                <nldd-container padding="12" layout="row" gap="8">
+                  <nldd-icon icon="sparkles" size="16" color="lintblauw"></nldd-icon>
+                  <nldd-container gap="2">
+                    <nldd-text size="sm">
+                      Techniek: <strong>{stripMarkdown(technique)}</strong>
+                    </nldd-text>
+                    {why && (
+                      <nldd-text size="xs" color="secondary" line-height="loose">
+                        {stripMarkdown(why)}
+                      </nldd-text>
+                    )}
+                  </nldd-container>
+                </nldd-container>
+              </nldd-box>
+            )}
+            {lines.map((line, i) => {
+              const heading = HEADING.exec(line.trim());
+              if (heading) {
+                return (
+                  <nldd-text key={i} size="sm" line-height="loose">
+                    <strong>{heading[1].trim()}:</strong> {stripMarkdown(heading[2])}
+                  </nldd-text>
+                );
+              }
+              if (!line.trim()) return null;
               return (
-                <p key={i} className="text-sm leading-relaxed text-slate-700 dark:text-slate-200">
-                  <span className="font-semibold text-slate-900 dark:text-slate-100">
-                    {heading[1].trim()}:
-                  </span>{' '}
-                  {stripMarkdown(heading[2])}
-                </p>
+                <nldd-text key={i} size="sm" color="secondary" line-height="loose">
+                  {stripMarkdown(line)}
+                </nldd-text>
               );
-            }
-            if (!line.trim()) return null;
-            return (
-              <p key={i} className="text-sm leading-relaxed text-slate-600 dark:text-slate-300">
-                {stripMarkdown(line)}
-              </p>
-            );
-          })}
-        </div>
-      )}
-    </div>
+            })}
+          </nldd-container>
+        )}
+      </nldd-container>
+    </nldd-card>
   );
 }

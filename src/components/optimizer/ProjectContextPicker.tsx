@@ -1,16 +1,5 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { Link } from 'react-router-dom';
-import clsx from 'clsx';
-import {
-  Check,
-  FileText,
-  FolderOpen,
-  Loader2,
-  Plus,
-  Sparkles,
-  X,
-} from '@/components/common/icons';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNlddEvent } from '@/lib/nldd';
 import InfoDot from '@/components/common/InfoDot';
 import { useAuth } from '@/context/AuthContext';
 import { matchProject } from '@/lib/projectMatch';
@@ -35,11 +24,6 @@ export interface ProjectContextSlot {
 /** Zoveel bronlabels staan er los; de rest wordt één knop "+3". */
 const MAX_FILE_CHIPS = 3;
 
-const CHIP =
-  'inline-flex min-h-10 max-w-full items-center gap-1.5 rounded pl-2.5 text-sm';
-const REMOVE =
-  'flex h-10 w-8 shrink-0 items-center justify-center rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500';
-
 const nl = (n: number) => n.toLocaleString('nl-NL');
 
 /**
@@ -47,10 +31,8 @@ const nl = (n: number) => n.toLocaleString('nl-NL');
  * meegaat, op de plek waar je typt. Zelfde gebaar als in de chat, en de stappen
  * erboven blijven daardoor gelijk voor wie geen project gebruikt.
  *
- * WAAROM DE KEUZELIJST EEN PORTAL IS
- * De bouwerkaart en het invoerblok hebben `overflow-hidden` voor hun ronde
- * hoeken. Een gewoon uitklapmenu wordt daar afgeknipt, dus hangt de lijst aan
- * `document.body` en wordt hij `fixed` geplaatst, net als InfoDot.
+ * De keuzelijst is een nldd-popover in de knop: die staat in de bovenste laag,
+ * dus geen kaart om de knop heen knipt hem af.
  *
  * WAAROM DE BRONKEUZE PAS BIJ "KLAAR" INGAAT
  * Elke andere selectie is ander materiaal en dus een nieuwe AI-analyse van
@@ -73,7 +55,6 @@ export default function ProjectContextPicker({
   onPick,
   onClear,
   onSelectFiles,
-  className,
 }: {
   /** De projecten van de ingelogde gebruiker. */
   projects: ChatProject[];
@@ -95,15 +76,7 @@ export default function ProjectContextPicker({
   const [draft, setDraft] = useState<string[] | null>(null);
   const [files, setFiles] = useState<ChatProjectFile[]>([]);
   const [dismissed, setDismissed] = useState<string[]>([]);
-  const [pos, setPos] = useState<{
-    left: number;
-    width: number;
-    maxHeight: number;
-    top?: number;
-    bottom?: number;
-  } | null>(null);
-  const anchorRef = useRef<HTMLButtonElement>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
+  const popoverRef = useRef<HTMLElement>(null);
   // De lijst ging open door `@` te typen: dan hoort die `@` er bij het sluiten
   // weer uit en blijft de cursor in het tekstvak in plaats van op de knop.
   const openedByMention = useRef(false);
@@ -132,7 +105,9 @@ export default function ProjectContextPicker({
     };
   }, [activeProjectId]);
 
-  function close() {
+  // The popover closes itself on Escape, a click outside or a click on its button,
+  // and closing is when the choice of sources takes effect.
+  function handleClosed() {
     setOpen(false);
     if (draft && [...draft].sort().join() !== [...committed].sort().join()) {
       onSelectFiles(draft);
@@ -141,10 +116,10 @@ export default function ProjectContextPicker({
     if (openedByMention.current) {
       openedByMention.current = false;
       if (text.endsWith('@')) onStripMention();
-    } else {
-      anchorRef.current?.focus();
     }
   }
+  useNlddEvent(popoverRef, 'close', handleClosed);
+  useNlddEvent(popoverRef, 'open', () => setOpen(true));
 
   // `@` aan het begin van een woord opent de lijst; een e-mailadres niet. Typt
   // iemand daarna gewoon door, dan was het niet voor ons bedoeld.
@@ -159,56 +134,6 @@ export default function ProjectContextPicker({
       setOpen(false);
     }
   }, [text, open]);
-
-  // Eerst onzichtbaar renderen, dan plaatsen: onder de knop als daar ruimte is,
-  // anders erboven, en altijd binnen het venster. De lijst scrolt zelf.
-  useLayoutEffect(() => {
-    if (!open) {
-      setPos(null);
-      return;
-    }
-    function place() {
-      const anchor = anchorRef.current?.getBoundingClientRect();
-      if (!anchor) return;
-      const margin = 8;
-      const width = Math.min(360, window.innerWidth - margin * 2);
-      const left = Math.max(margin, Math.min(anchor.left, window.innerWidth - width - margin));
-      const below = window.innerHeight - anchor.bottom - margin * 2;
-      const above = anchor.top - margin * 2;
-      setPos(
-        below >= 320 || below >= above
-          ? { left, width, maxHeight: below, top: anchor.bottom + margin }
-          : { left, width, maxHeight: above, bottom: window.innerHeight - anchor.top + margin },
-      );
-    }
-    place();
-    window.addEventListener('scroll', place, true);
-    window.addEventListener('resize', place);
-    return () => {
-      window.removeEventListener('scroll', place, true);
-      window.removeEventListener('resize', place);
-    };
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    function onPointer(e: MouseEvent) {
-      const target = e.target as Node;
-      if (panelRef.current?.contains(target) || anchorRef.current?.contains(target)) return;
-      close();
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') close();
-    }
-    document.addEventListener('pointerdown', onPointer);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('pointerdown', onPointer);
-      document.removeEventListener('keydown', onKey);
-    };
-    // close leest de actuele draft en tekst, dus deze effect moet die volgen.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, draft, committed, text]);
 
   const suggestion = useMemo(() => {
     if (activeProjectId || loading || !isAuthenticated) return null;
@@ -240,239 +165,130 @@ export default function ProjectContextPicker({
   const chips = context?.files ?? [];
   const hiddenChips = chips.length - MAX_FILE_CHIPS;
 
-  const panel = open && (
-    <div
-      ref={panelRef}
-      role="dialog"
-      aria-label="Context kiezen"
-      className="fixed z-50 flex flex-col rounded-xl border border-slate-300 bg-white shadow-xl dark:border-slate-600 dark:bg-slate-800"
-      style={{
-        left: pos?.left ?? 0,
-        width: pos?.width ?? 360,
-        maxHeight: pos?.maxHeight,
-        top: pos?.top,
-        bottom: pos?.bottom,
-        opacity: pos ? 1 : 0,
-      }}
-    >
-      <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
+  const panel = (
+    <nldd-popover ref={popoverRef} slot="popup" width="360px" accessible-label="Context kiezen" open={open || undefined}>
+      <nldd-container padding="8" gap="8">
         {isAuthenticated ? (
           <>
             {projects.length > 0 && (
-              <p className="px-2.5 pb-1 pt-2 text-xs font-bold text-slate-600 dark:text-slate-300">
-                Project
-              </p>
+              <nldd-list accessible-label="Project">
+                {projects.map((project) => {
+                  const active = project.id === activeProjectId;
+                  return (
+                    <nldd-list-item
+                      key={project.id}
+                      button
+                      size="sm"
+                      selected={active || undefined}
+                      onClick={() => pickProject(project.id)}
+                    >
+                      <nldd-icon-cell icon="folder-open" size="20" color="accent"></nldd-icon-cell>
+                      <nldd-spacer-cell size="8"></nldd-spacer-cell>
+                      <nldd-text-cell text={project.name}></nldd-text-cell>
+                      {active && <nldd-icon-cell icon="check-mark" size="20" color="accent"></nldd-icon-cell>}
+                    </nldd-list-item>
+                  );
+                })}
+              </nldd-list>
             )}
-            {projects.map((project) => {
-              const active = project.id === activeProjectId;
-              return (
-                <button
-                  key={project.id}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => pickProject(project.id)}
-                  className={clsx(
-                    'flex min-h-11 w-full items-center gap-2 rounded px-2.5 text-left text-[0.9375rem] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500',
-                    active
-                      ? 'bg-rijksblauw-50 font-semibold text-slate-900 dark:bg-rijksblauw-500/15 dark:text-white'
-                      : 'text-slate-800 hover:bg-slate-100 dark:text-slate-100 dark:hover:bg-slate-700',
-                  )}
-                >
-                  <FolderOpen size={16} className="shrink-0 text-rijksblauw-500 dark:text-rijksblauw-300" />
-                  <span className="min-w-0 flex-1 truncate">{project.name}</span>
-                  {active && (
-                    <Check size={16} className="shrink-0 text-rijksblauw-500 dark:text-rijksblauw-300" />
-                  )}
-                </button>
-              );
-            })}
 
             {activeProjectId && files.length > 0 && (
               <>
-                <div className="mx-1 my-1.5 border-t border-slate-200 dark:border-slate-700" />
-                <p className="px-2.5 pb-1 pt-1 text-xs font-bold text-slate-600 dark:text-slate-300">
+                <nldd-divider></nldd-divider>
+                <nldd-text size="xs" weight="bold" color="secondary">
                   Bronnen
-                </p>
-                {files.map((file) => {
-                  const on = selected.includes(file.id);
-                  return (
-                    <button
+                </nldd-text>
+                <nldd-list accessible-label="Bronnen">
+                  {files.map((file) => (
+                    <FileRow
                       key={file.id}
-                      type="button"
-                      role="checkbox"
-                      aria-checked={on}
-                      onClick={() => toggleFile(file.id)}
-                      className="flex min-h-11 w-full items-center gap-2.5 rounded px-2.5 text-left text-sm text-slate-800 transition-colors hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 dark:text-slate-100 dark:hover:bg-slate-700"
-                    >
-                      <span
-                        aria-hidden
-                        className={clsx(
-                          'flex h-5 w-5 shrink-0 items-center justify-center rounded border-2',
-                          on
-                            ? 'border-rijksblauw-500 bg-rijksblauw-500 text-white'
-                            : 'border-slate-400 dark:border-slate-500',
-                        )}
-                      >
-                        {on && <Check size={13} strokeWidth={3} />}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate">{file.name}</span>
-                      <span className="shrink-0 text-xs text-slate-600 dark:text-slate-400">
-                        {nl(file.chars)}
-                      </span>
-                    </button>
-                  );
-                })}
+                      file={file}
+                      checked={selected.includes(file.id)}
+                      onToggle={() => toggleFile(file.id)}
+                    />
+                  ))}
+                </nldd-list>
+                <nldd-text size="sm" weight="medium" color={over ? 'warning' : 'secondary'}>
+                  {over
+                    ? 'Past niet meer: zet een bron uit.'
+                    : `${nl(used)} van ${nl(MAX_GENERATOR_CONTEXT_CHARS)} tekens`}
+                </nldd-text>
               </>
             )}
           </>
         ) : (
-          <p className="px-2.5 py-2 text-sm text-slate-700 dark:text-slate-200">
-            Log in om een project te gebruiken.
-          </p>
+          <nldd-text size="sm">Log in om een project te gebruiken.</nldd-text>
         )}
-      </div>
 
-      <div className="border-t border-slate-200 p-1.5 dark:border-slate-700">
-        {activeProjectId && files.length > 0 && (
-          <p
-            className={clsx(
-              'px-2.5 pb-1.5 pt-1 text-[0.8125rem] font-medium',
-              over ? 'text-amber-800 dark:text-amber-400' : 'text-slate-600 dark:text-slate-300',
-            )}
-          >
-            {over
-              ? 'Past niet meer: zet een bron uit.'
-              : `${nl(used)} van ${nl(MAX_GENERATOR_CONTEXT_CHARS)} tekens`}
-          </p>
-        )}
-        <div className="flex items-center justify-between gap-2">
+        <nldd-divider></nldd-divider>
+        <nldd-container layout="wrap" gap="8" vertical-alignment="center">
           {isAuthenticated ? (
-            <Link
-              to="/chat"
+            <nldd-button
+              size="sm"
+              appearance="neutral-transparent"
+              start-icon="plus"
+              text="Nieuw project"
+              href="/chat"
               onClick={writeNewProjectHandoff}
-              className="inline-flex min-h-11 items-center gap-1.5 rounded px-2.5 text-sm font-semibold text-rijksblauw-700 transition-colors hover:bg-rijksblauw-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 dark:text-rijksblauw-200 dark:hover:bg-slate-700"
-            >
-              <Plus size={15} /> Nieuw project
-            </Link>
+            ></nldd-button>
           ) : (
-            <Link
-              to="/auth/login"
-              className="inline-flex min-h-11 items-center rounded px-2.5 text-sm font-semibold text-rijksblauw-700 transition-colors hover:bg-rijksblauw-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 dark:text-rijksblauw-200 dark:hover:bg-slate-700"
-            >
-              Inloggen
-            </Link>
+            <nldd-button size="sm" appearance="neutral-transparent" text="Inloggen" href="/auth/login"></nldd-button>
           )}
           {activeProjectId && (
-            <button
-              type="button"
+            <nldd-button
+              size="sm"
+              appearance="neutral-transparent"
+              text="Verder zonder project"
               onClick={() => {
                 setDraft(null);
                 onClear();
               }}
-              className="inline-flex min-h-11 items-center rounded px-2.5 text-sm text-slate-600 transition-colors hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 dark:text-slate-300 dark:hover:bg-slate-700"
-            >
-              Verder zonder project
-            </button>
+            ></nldd-button>
           )}
-          <button type="button" onClick={close} className="opl-btn-primary ml-auto">
-            Klaar
-          </button>
-        </div>
-      </div>
-    </div>
+          <nldd-spacer size="flexible"></nldd-spacer>
+          <nldd-button size="sm" appearance="primary" text="Klaar" onClick={() => setOpen(false)}></nldd-button>
+        </nldd-container>
+      </nldd-container>
+    </nldd-popover>
   );
 
   return (
-    <div className={className}>
-      <div className="flex flex-wrap items-center gap-1.5">
-        <button
-          ref={anchorRef}
-          type="button"
-          onClick={() => (open ? close() : setOpen(true))}
-          aria-expanded={open}
-          aria-haspopup="dialog"
-          className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded border border-rijksblauw-500 bg-white px-3 text-sm font-semibold text-rijksblauw-700 transition-colors hover:bg-rijksblauw-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 dark:bg-slate-800 dark:text-rijksblauw-200 dark:hover:bg-slate-700"
-        >
-          <Plus size={15} /> Context
-        </button>
+    <nldd-container gap="6">
+      <nldd-container layout="wrap" gap="6" vertical-alignment="center">
+        <nldd-button appearance="secondary" size="sm" start-icon="plus" text="Context" expandable>
+          {panel}
+        </nldd-button>
 
         {activeProjectId && projectName && (
-          <span className={clsx(CHIP, 'bg-rijksblauw-700 font-semibold text-white dark:bg-rijksblauw-500')}>
-            {loading ? (
-              <Loader2 size={15} className="shrink-0 animate-spin" />
-            ) : (
-              <FolderOpen size={15} className="shrink-0" />
-            )}
-            <span className="min-w-0 truncate">{projectName}</span>
-            <button
-              type="button"
-              onClick={onClear}
-              aria-label="Project loskoppelen"
-              className={REMOVE}
-            >
-              <X size={15} />
-            </button>
-          </span>
+          <>
+            {loading && <nldd-activity-indicator size="16" timing="instant"></nldd-activity-indicator>}
+            <Chip text={projectName} dismissText="Project loskoppelen" onDismiss={onClear} />
+          </>
         )}
 
         {chips.slice(0, MAX_FILE_CHIPS).map((file) => (
-          <span
+          <Chip
             key={file.id}
-            className={clsx(
-              CHIP,
-              'bg-rijksblauw-50 font-medium text-rijksblauw-800 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-100',
-            )}
-          >
-            <FileText size={15} className="shrink-0" />
-            <span className="min-w-0 truncate">{file.name}</span>
-            <button
-              type="button"
-              onClick={() => onSelectFiles(committed.filter((id) => id !== file.id))}
-              aria-label={`${file.name} weghalen`}
-              className={REMOVE}
-            >
-              <X size={15} />
-            </button>
-          </span>
+            text={file.name}
+            dismissText={`${file.name} weghalen`}
+            onDismiss={() => onSelectFiles(committed.filter((id) => id !== file.id))}
+          />
         ))}
 
         {hiddenChips > 0 && (
-          <button
-            type="button"
+          <nldd-button
+            size="sm"
+            appearance="neutral-tinted"
+            text={`+${hiddenChips}`}
+            accessible-label={`Nog ${hiddenChips} bronnen bekijken`}
             onClick={() => setOpen(true)}
-            aria-label={`Nog ${hiddenChips} bronnen bekijken`}
-            className="inline-flex min-h-10 items-center rounded bg-rijksblauw-50 px-2.5 text-sm font-semibold text-rijksblauw-800 transition-colors hover:bg-rijksblauw-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-100"
-          >
-            +{hiddenChips}
-          </button>
+          ></nldd-button>
         )}
 
         {loading && (
-          <span className="text-[0.8125rem] text-slate-600 dark:text-slate-300">
+          <nldd-text size="sm" color="secondary">
             Je project wordt geanalyseerd…
-          </span>
-        )}
-
-        {suggestion && !open && (
-          <span className="inline-flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 rounded bg-rijksblauw-50 pl-2.5 text-sm text-rijksblauw-900 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-100">
-            <Sparkles size={15} className="shrink-0" />
-            <span className="min-w-0 font-medium">Dit lijkt op je project {suggestion.name}.</span>
-            <button
-              type="button"
-              onClick={() => pickProject(suggestion.id)}
-              className="min-h-10 rounded px-2 text-sm font-semibold text-rijksblauw-700 underline underline-offset-2 hover:no-underline focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 dark:text-rijksblauw-200"
-            >
-              Meenemen
-            </button>
-            <button
-              type="button"
-              onClick={() => setDismissed((list) => [...list, suggestion.id])}
-              aria-label="Voorstel sluiten"
-              className={REMOVE}
-            >
-              <X size={15} />
-            </button>
-          </span>
+          </nldd-text>
         )}
 
         {!activeProjectId && !suggestion && (
@@ -481,15 +297,57 @@ export default function ProjectContextPicker({
             text={'Voeg een project toe. De AI kent je onderwerp dan al en schrijft een scherpere prompt.\nTyp @ om te kiezen.'}
           />
         )}
-      </div>
+      </nldd-container>
 
-      {context && context.skipped.length > 0 && (
-        <p className="mt-1.5 text-[0.8125rem] font-medium text-amber-800 dark:text-amber-400">
-          Past niet meer, weggelaten: {context.skipped.join(', ')}. Haal een bron weg.
-        </p>
+      {suggestion && !open && (
+        <Suggestion
+          name={suggestion.name}
+          onTake={() => pickProject(suggestion.id)}
+          onDismiss={() => setDismissed((list) => [...list, suggestion.id])}
+        />
       )}
 
-      {panel && createPortal(panel, document.body)}
-    </div>
+      {context && context.skipped.length > 0 && (
+        <nldd-text size="sm" weight="medium" color="warning">
+          Past niet meer, weggelaten: {context.skipped.join(', ')}. Haal een bron weg.
+        </nldd-text>
+      )}
+    </nldd-container>
+  );
+}
+
+/** One source of the project, on or off for this prompt. */
+function FileRow({ file, checked, onToggle }: { file: ChatProjectFile; checked: boolean; onToggle: () => void }) {
+  const ref = useRef<HTMLElement>(null);
+  useNlddEvent<CustomEvent<{ checked: boolean }>>(ref, 'change', (e) => {
+    if (e.detail?.checked !== checked) onToggle();
+  });
+  return (
+    <nldd-list-item ref={ref} checkbox size="sm" checked={checked || undefined}>
+      <nldd-cell>
+        <nldd-checkbox decorative checked={checked || undefined}></nldd-checkbox>
+      </nldd-cell>
+      <nldd-spacer-cell size="8"></nldd-spacer-cell>
+      <nldd-text-cell text={file.name}></nldd-text-cell>
+      <nldd-text-cell width="fit-content" size="sm" color="secondary" text={nl(file.chars)}></nldd-text-cell>
+    </nldd-list-item>
+  );
+}
+
+/** What goes along with the prompt, removable one by one. */
+function Chip({ text, dismissText, onDismiss }: { text: string; dismissText: string; onDismiss: () => void }) {
+  const ref = useRef<HTMLElement>(null);
+  useNlddEvent(ref, 'dismiss', onDismiss);
+  return <nldd-token ref={ref} control="dismiss" text={text} dismiss-text={dismissText}></nldd-token>;
+}
+
+/** Asks whether a project the text seems to be about should come along. */
+function Suggestion({ name, onTake, onDismiss }: { name: string; onTake: () => void; onDismiss: () => void }) {
+  const ref = useRef<HTMLElement>(null);
+  useNlddEvent(ref, 'dismiss', onDismiss);
+  return (
+    <nldd-banner ref={ref} variant="accent" size="sm" icon="sparkles" text={`Dit lijkt op je project ${name}.`} dismissible>
+      <nldd-button slot="actions" text="Meenemen" onClick={onTake}></nldd-button>
+    </nldd-banner>
   );
 }

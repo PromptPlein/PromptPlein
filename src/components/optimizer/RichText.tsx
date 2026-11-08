@@ -1,19 +1,18 @@
-import { Fragment, memo, type ReactNode } from 'react';
-import clsx from 'clsx';
+import { memo, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 
 /**
- * Lichtgewicht renderer voor de markdown die de AI teruggeeft: koppen, vet,
- * cursief, `code`, links, genummerde en geneste lijsten, tabellen, citaten en
- * scheidslijnen. Bewust géén markdown-library en géén `dangerouslySetInnerHTML`:
- * we bouwen React-elementen, dus XSS-veilig.
+ * Lightweight renderer for the markdown the AI returns: headings, bold, italic,
+ * `code`, links, numbered and nested lists, tables, quotes and rules. No
+ * markdown library: the parser builds plain semantic HTML, with every piece of
+ * text escaped and only http(s) and mailto links, and nldd-rich-text styles it.
  *
- * `variant="chat"` is de leesstand van de chat (ruimere tekst en witruimte,
- * koppen in oplopende grootte). De standaard is de compacte stand voor kleine
- * panelen in de bouwer.
+ * `variant="chat"` is the reading mode of the chat (the default spacing of the
+ * rich text); the compact mode for small panels in the builder spaces tighter.
  *
- * Tijdens het streamen (`streaming`) is de laatste regel vaak nog niet af. Die
- * tonen we alsof hij al af is, anders staan er even losse sterretjes en springt
- * de tekst zodra de afsluiter binnenkomt.
+ * While streaming (`streaming`) the last line is often unfinished. It is shown
+ * as if it were finished, so no loose asterisks appear and the text does not
+ * jump once the closing marker arrives.
  */
 
 interface ListNode {
@@ -220,184 +219,109 @@ function parseBlocks(text: string, streaming: boolean): Block[] {
 const INLINE_TOKENS =
   /(\*\*.+?\*\*|`[^`]+`|\[[^\]]+\]\((?:https?:\/\/|mailto:)[^\s)]+\)|https?:\/\/[^\s<>)\]]+|\*(?=[^*\s])[^*]*[^*\s]\*|(?<![\p{L}\p{N}_])_(?=[^_\s])[^_]*[^_\s]_(?![\p{L}\p{N}_]))/gu;
 
-const LINK_CLASS =
-  'text-rijksblauw-700 underline underline-offset-2 hover:no-underline dark:text-rijksblauw-200';
+/** Marks where `trailing` goes: right after the last letter. */
+const TRAILING_ATTR = 'data-rich-text-trailing';
 
-/** Vet, cursief, inline-code en links binnen één regel. Vet mag cursief bevatten. */
-function renderInline(text: string): ReactNode {
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/** One element as markup. Attribute values are escaped; `inner` is markup already. */
+function el(name: string, inner: string, attrs: Record<string, string | number | undefined> = {}): string {
+  const attrText = Object.entries(attrs)
+    .filter(([, v]) => v !== undefined)
+    .map(([k, v]) => ` ${k}="${escapeHtml(String(v))}"`)
+    .join('');
+  return `<${name}${attrText}>${inner}</${name}>`;
+}
+
+/** An element without content or end tag, such as hr. */
+function voidEl(name: string): string {
+  return `<${name}>`;
+}
+
+function link(href: string, inner: string): string {
+  return el('a', inner, { href, target: '_blank', rel: 'noreferrer noopener' });
+}
+
+/** Bold, italic, inline code and links within one line. Bold may hold italic. */
+function renderInline(text: string): string {
   const parts = text.split(INLINE_TOKENS).filter((part) => part);
-  return parts.map((part, i) => {
-    const bold = /^\*\*([\s\S]+)\*\*$/.exec(part);
-    if (bold) return <strong key={i}>{renderInline(bold[1])}</strong>;
+  return parts
+    .map((part) => {
+      const bold = /^\*\*([\s\S]+)\*\*$/.exec(part);
+      if (bold) return el('strong', renderInline(bold[1]));
 
-    const code = /^`([^`]+)`$/.exec(part);
-    if (code) {
-      return (
-        <code
-          key={i}
-          className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[0.85em] text-slate-700 dark:bg-slate-800 dark:text-slate-200"
-        >
-          {code[1]}
-        </code>
-      );
-    }
+      const code = /^`([^`]+)`$/.exec(part);
+      if (code) return el('code', escapeHtml(code[1]));
 
-    const link = /^\[([^\]]+)\]\(((?:https?:\/\/|mailto:)[^\s)]+)\)$/.exec(part);
-    if (link) {
-      return (
-        <a key={i} href={link[2]} target="_blank" rel="noreferrer noopener" className={LINK_CLASS}>
-          {renderInline(link[1])}
-        </a>
-      );
-    }
+      const anchor = /^\[([^\]]+)\]\(((?:https?:\/\/|mailto:)[^\s)]+)\)$/.exec(part);
+      if (anchor) return link(anchor[2], renderInline(anchor[1]));
 
-    if (/^https?:\/\//.test(part)) {
-      // Een leesteken achter een kale link hoort bij de zin, niet bij het adres.
-      const url = part.replace(/[.,;:!?]+$/, '');
-      return (
-        <Fragment key={i}>
-          <a href={url} target="_blank" rel="noreferrer noopener" className={LINK_CLASS}>
-            {url}
-          </a>
-          {part.slice(url.length)}
-        </Fragment>
-      );
-    }
+      if (/^https?:\/\//.test(part)) {
+        // A punctuation mark after a bare link belongs to the sentence, not the address.
+        const url = part.replace(/[.,;:!?]+$/, '');
+        return link(url, escapeHtml(url)) + escapeHtml(part.slice(url.length));
+      }
 
-    const italic = /^\*([^*]+)\*$/.exec(part) ?? /^_([^_]+)_$/.exec(part);
-    if (italic) return <em key={i}>{italic[1]}</em>;
+      const italic = /^\*([^*]+)\*$/.exec(part) ?? /^_([^_]+)_$/.exec(part);
+      if (italic) return el('em', escapeHtml(italic[1]));
 
-    return <Fragment key={i}>{part}</Fragment>;
-  });
+      return escapeHtml(part);
+    })
+    .join('');
 }
 
-function renderList(list: ListNode, chat: boolean, trailing: ReactNode): ReactNode {
-  const Tag = list.ordered ? 'ol' : 'ul';
-  return (
-    <Tag
-      start={list.ordered && list.start !== 1 ? list.start : undefined}
-      className={clsx(
-        list.ordered ? 'list-decimal' : 'list-disc',
-        chat ? 'space-y-1.5 pl-6' : 'my-1 space-y-0.5 pl-5',
-      )}
-    >
-      {list.items.map((item, i) => {
-        const last = i === list.items.length - 1;
-        return (
-          <li key={i} className={clsx(chat && 'pl-1')}>
-            {renderInline(item.text)}
-            {last && item.children.length === 0 ? trailing : null}
-            {item.children.map((child, c) => (
-              <Fragment key={c}>
-                {renderList(child, chat, last && c === item.children.length - 1 ? trailing : null)}
-              </Fragment>
-            ))}
-          </li>
-        );
-      })}
-    </Tag>
-  );
+function renderList(list: ListNode, trailing: string): string {
+  const items = list.items
+    .map((item, i) => {
+      const last = i === list.items.length - 1;
+      const children = item.children
+        .map((child, c) => renderList(child, last && c === item.children.length - 1 ? trailing : ''))
+        .join('');
+      return el('li', renderInline(item.text) + (last && item.children.length === 0 ? trailing : '') + children);
+    })
+    .join('');
+  return list.ordered
+    ? el('ol', items, { start: list.start !== 1 ? list.start : undefined })
+    : el('ul', items);
 }
 
-const HEADING_SIZE: Record<number, string> = {
-  1: 'mt-6 text-[1.3em] leading-snug',
-  2: 'mt-5 text-[1.15em] leading-snug',
-  3: 'mt-4 text-[1.05em] leading-snug',
-};
-
-function renderBlock(block: Block, key: number, chat: boolean, trailing: ReactNode): ReactNode {
-  const strong = 'font-semibold text-slate-900 dark:text-slate-100';
-
+function renderBlock(block: Block, trailing: string): string {
   switch (block.kind) {
     case 'spacer':
-      return chat ? null : <div key={key} className="h-2" aria-hidden="true" />;
+      // The rich text sets the rhythm between blocks itself.
+      return '';
     case 'rule':
-      return <hr key={key} className="my-4 border-slate-200 dark:border-slate-700" />;
-    case 'heading': {
-      // De pagina heeft zelf h1 en per bericht h2, dus de koppen uit het antwoord
-      // beginnen bij h3. Zo klopt de structuur voor wie via koppen navigeert.
-      const Tag = `h${Math.min(block.level + 2, 6)}` as 'h3' | 'h4' | 'h5' | 'h6';
-      return (
-        <Tag
-          key={key}
-          className={clsx(strong, chat ? (HEADING_SIZE[block.level] ?? 'mt-3') : 'mt-1')}
-        >
-          {renderInline(block.text)}
-          {trailing}
-        </Tag>
-      );
-    }
+      return voidEl('hr');
+    case 'heading':
+      // The page has its own h1 and an h2 per message, so headings from the
+      // answer start at h3. The structure holds for whoever navigates by heading.
+      return el(`h${Math.min(block.level + 2, 6)}`, renderInline(block.text) + trailing);
     case 'label':
-      return (
-        <p key={key} className={clsx(strong, chat ? 'mt-4' : 'mt-1')}>
-          {renderInline(block.text)}
-          {trailing}
-        </p>
-      );
+      return el('p', el('strong', renderInline(block.text)) + trailing);
     case 'paragraph':
-      return (
-        <p key={key} className={chat ? undefined : 'leading-relaxed'}>
-          {renderInline(block.text)}
-          {trailing}
-        </p>
-      );
+      return el('p', renderInline(block.text) + trailing);
     case 'quote':
-      return (
-        <blockquote
-          key={key}
-          className="border-l-4 border-slate-300 pl-3 text-slate-600 dark:border-slate-600 dark:text-slate-300"
-        >
-          {block.lines.map((line, i) => (
-            <p key={i}>{renderInline(line)}</p>
-          ))}
-          {trailing}
-        </blockquote>
-      );
+      return el('blockquote', block.lines.map((line) => el('p', renderInline(line))).join('') + trailing);
     case 'list':
-      return <Fragment key={key}>{renderList(block.list, chat, trailing)}</Fragment>;
-    case 'table':
-      return (
-        <div
-          key={key}
-          // Past hij niet, dan schuift de tabel. Dat moet ook met het toetsenbord kunnen.
-          tabIndex={0}
-          role="region"
-          aria-label="Tabel"
-          className="overflow-x-auto rounded-lg border border-slate-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 dark:border-slate-700"
-        >
-          <table className="w-full border-collapse text-left text-[0.95em]">
-            <thead className="bg-slate-50 dark:bg-slate-800/60">
-              <tr>
-                {block.header.map((cell, i) => (
-                  <th
-                    key={i}
-                    scope="col"
-                    style={{ textAlign: block.align[i] }}
-                    className="border-b border-slate-200 px-3 py-2 font-semibold text-slate-900 dark:border-slate-700 dark:text-slate-100"
-                  >
-                    {renderInline(cell)}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {block.rows.map((row, r) => (
-                <tr key={r} className="border-b border-slate-100 last:border-0 dark:border-slate-700/60">
-                  {block.header.map((_, c) => (
-                    <td key={c} style={{ textAlign: block.align[c] }} className="px-3 py-2 align-top">
-                      {renderInline(row[c] ?? '')}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      );
+      return renderList(block.list, trailing);
+    case 'table': {
+      const head = el('thead', el('tr', block.header.map((cell) => el('th', renderInline(cell), { scope: 'col' })).join('')));
+      const rows = block.rows
+        .map((row) => el('tr', block.header.map((_, c) => el('td', renderInline(row[c] ?? ''))).join('')))
+        .join('');
+      return el('table', head + el('tbody', rows));
+    }
   }
 }
 
-/** Voorkomt dat `trailing` in een blok belandt dat niets rendert. */
+/** Keeps `trailing` out of a block that renders nothing. */
 function lastVisibleIndex(blocks: Block[]): number {
   for (let i = blocks.length - 1; i >= 0; i--) {
     if (blocks[i].kind !== 'spacer') return i;
@@ -407,12 +331,12 @@ function lastVisibleIndex(blocks: Block[]): number {
 
 const RichText = memo(function RichText({
   text,
-  className,
   variant = 'compact',
   streaming = false,
   trailing = null,
 }: {
   text: string;
+  /** Kept for callers; the rich text sets its own typography. */
   className?: string;
   variant?: 'compact' | 'chat';
   /** De tekst komt nog binnen: de laatste regel kan half zijn. */
@@ -421,20 +345,27 @@ const RichText = memo(function RichText({
   trailing?: ReactNode;
 }) {
   const chat = variant === 'chat';
-  const blocks = parseBlocks(text, streaming);
-  const lastIndex = lastVisibleIndex(blocks);
+  const hasTrailing = trailing !== null && trailing !== undefined && trailing !== false;
+  const html = useMemo(() => {
+    const blocks = parseBlocks(text, streaming);
+    const lastIndex = lastVisibleIndex(blocks);
+    const marker = el('span', '', { [TRAILING_ATTR]: '' });
+    return blocks.map((block, i) => renderBlock(block, hasTrailing && i === lastIndex ? marker : '')).join('');
+  }, [text, streaming, hasTrailing]);
+
+  // `trailing` is a React node; it is portaled into the marker the markup leaves
+  // for it, which is a new element each time the markup changes.
+  const ref = useRef<HTMLElement>(null);
+  const [slot, setSlot] = useState<Element | null>(null);
+  useLayoutEffect(() => {
+    setSlot(hasTrailing ? (ref.current?.querySelector(`[${TRAILING_ATTR}]`) ?? null) : null);
+  }, [html, hasTrailing]);
 
   return (
-    <div
-      className={clsx(
-        chat
-          ? 'space-y-3 text-base leading-7 text-slate-800 dark:text-slate-100'
-          : 'space-y-0.5 text-sm text-slate-700 dark:text-slate-200',
-        className,
-      )}
-    >
-      {blocks.map((block, i) => renderBlock(block, i, chat, i === lastIndex ? trailing : null))}
-    </div>
+    <>
+      <nldd-rich-text ref={ref} spacing={chat ? 'snug' : 'tight'} dangerouslySetInnerHTML={{ __html: html }}></nldd-rich-text>
+      {slot && hasTrailing ? createPortal(trailing, slot) : null}
+    </>
   );
 });
 

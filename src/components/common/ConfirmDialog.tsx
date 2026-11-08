@@ -1,25 +1,26 @@
-import type { ReactNode } from 'react';
-import { AlertTriangle } from '@/components/common/icons';
-import Modal from './Modal';
+import { useRef, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import { useNlddEvent } from '@/lib/nldd';
 
 interface ConfirmDialogProps {
   open: boolean;
   title: string;
-  /** Eén zin, of meerdere alinea's als ReactNode. */
+  /** One sentence, or several paragraphs as a ReactNode. */
   message: ReactNode;
   confirmLabel?: string;
   cancelLabel?: string;
-  /** Rood: de handeling is niet terug te draaien (verwijderen). */
+  /** The action cannot be undone (delete): the way out becomes the primary button. */
   destructive?: boolean;
   /**
-   * Oranje: de handeling is wél terug te draaien, maar de gebruiker moet eerst
-   * iets weten voordat hij hem aanzet (privacy, kwaliteit).
+   * The action can be undone, but the user has to know something before turning
+   * it on (privacy, quality). Shows a warning icon.
    */
   warning?: boolean;
   onConfirm: () => void;
   onClose: () => void;
 }
 
+/** A decision in an nldd-modal-dialog at the document root. */
 export default function ConfirmDialog({
   open,
   title,
@@ -31,37 +32,42 @@ export default function ConfirmDialog({
   onConfirm,
   onClose,
 }: ConfirmDialogProps) {
-  return (
-    <Modal open={open} onClose={onClose} title={title} size="max-w-md">
-      <div className="flex gap-3">
-        {destructive && (
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-50 dark:bg-red-500/10 text-rijksrood">
-            <AlertTriangle size={20} />
-          </span>
-        )}
-        {warning && !destructive && (
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400">
-            <AlertTriangle size={20} />
-          </span>
-        )}
-        <div className="space-y-3 text-sm text-slate-600 dark:text-slate-300">
-          {typeof message === 'string' ? <p>{message}</p> : message}
-        </div>
-      </div>
-      <div className="mt-6 flex justify-end gap-3">
-        <button className="opl-btn-secondary" onClick={onClose}>
-          {cancelLabel}
-        </button>
-        <button
-          className={destructive ? 'opl-btn bg-rijksrood text-white hover:bg-red-700' : 'opl-btn-primary'}
-          onClick={() => {
-            onConfirm();
-            onClose();
-          }}
-        >
-          {confirmLabel}
-        </button>
-      </div>
-    </Modal>
+  const ref = useRef<HTMLElement>(null);
+  const openRef = useRef(open);
+  openRef.current = open;
+  useNlddEvent(ref, 'close', () => {
+    if (openRef.current) onClose();
+  });
+
+  const confirm = () => {
+    onConfirm();
+    onClose();
+  };
+  const isText = typeof message === 'string';
+
+  return createPortal(
+    <nldd-modal-dialog
+      ref={ref}
+      open={open || undefined}
+      text={title}
+      supporting-text={isText ? message : undefined}
+      variant={destructive ? 'alert' : undefined}
+      icon={warning && !destructive ? 'warning' : undefined}
+      horizontal-alignment="left"
+    >
+      {!isText && <nldd-container gap="12">{message}</nldd-container>}
+      {destructive ? (
+        <>
+          <nldd-button slot="actions" appearance="primary" text={cancelLabel} onClick={onClose}></nldd-button>
+          <nldd-button slot="actions" appearance="destructive" text={confirmLabel} onClick={confirm}></nldd-button>
+        </>
+      ) : (
+        <>
+          <nldd-button slot="actions" appearance="primary" text={confirmLabel} onClick={confirm}></nldd-button>
+          <nldd-button slot="actions" appearance="secondary" text={cancelLabel} onClick={onClose}></nldd-button>
+        </>
+      )}
+    </nldd-modal-dialog>,
+    document.body,
   );
 }

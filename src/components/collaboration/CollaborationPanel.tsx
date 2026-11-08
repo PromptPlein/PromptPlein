@@ -1,12 +1,6 @@
-import { useEffect, useState } from 'react';
-import {
-  MessageSquare,
-  History,
-  Trash2,
-  ChevronDown,
-} from '@/components/common/icons';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { notify } from '@/lib/notify';
-import clsx from 'clsx';
+import { useNlddValue } from '@/lib/nldd';
 import { useAuth } from '@/context/AuthContext';
 import { formatDate } from '@/lib/utils';
 import {
@@ -19,10 +13,10 @@ import VisibilityApprovalPanel from '@/components/collaboration/VisibilityApprov
 import type { Prompt, PromptComment, PromptVersion } from '@/types';
 
 /**
- * Reacties (comments) zijn uitgeschakeld: prompts zijn alleen te raadplegen en
- * te liken, niet te becommentariëren (dat zou moderatie vragen). Bestaande
- * reacties blijven in de database bewaard. Zet op `true` om de functie weer aan
- * te zetten — dan verschijnt het reactie-blok en worden reacties weer geladen.
+ * Comments are switched off: prompts can be read and liked, not commented on
+ * (that would need moderation). Existing comments stay in the database. Set
+ * this to `true` to switch the feature back on: the comment block appears and
+ * comments load again.
  */
 const COMMENTS_ENABLED = false;
 
@@ -50,6 +44,8 @@ export default function CollaborationPanel({
   const [newComment, setNewComment] = useState('');
   const [busy, setBusy] = useState(false);
   const [openVersion, setOpenVersion] = useState<string | null>(null);
+  const commentRef = useRef<HTMLElement & { value?: string }>(null);
+  useNlddValue(commentRef, newComment, setNewComment);
 
   async function reload() {
     try {
@@ -60,7 +56,7 @@ export default function CollaborationPanel({
       setComments(m);
       setVersions(v);
     } catch {
-      /* niet-blokkerend */
+      /* not blocking */
     }
   }
 
@@ -68,6 +64,11 @@ export default function CollaborationPanel({
     void reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prompt.id, refreshKey]);
+
+  function onSubmitComment(e: FormEvent) {
+    e.preventDefault();
+    void handleAddComment();
+  }
 
   async function handleAddComment() {
     if (!user || !newComment.trim()) return;
@@ -84,108 +85,110 @@ export default function CollaborationPanel({
   }
 
   return (
-    <section className="mt-8 space-y-6">
-      {/* Deelniveaus & goedkeuring per niveau */}
-      <VisibilityApprovalPanel
-        promptId={prompt.id}
-        refreshKey={refreshKey}
-        canEdit={canEditVisibility}
-        organizationId={prompt.organization_id ?? null}
-        onChanged={onVisibilityChanged}
-      />
+    <>
+      <nldd-spacer size="32"></nldd-spacer>
+      <nldd-container layout="stack" gap="24">
+        {/* Sharing levels and the approval per level */}
+        <VisibilityApprovalPanel
+          promptId={prompt.id}
+          refreshKey={refreshKey}
+          canEdit={canEditVisibility}
+          organizationId={prompt.organization_id ?? null}
+          onChanged={onVisibilityChanged}
+        />
 
-      {/* Reacties — uitgeschakeld via COMMENTS_ENABLED (alleen raadplegen + liken). */}
-      {COMMENTS_ENABLED && (
-      <div className="opl-card p-5">
-        <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
-          <MessageSquare size={18} className="text-rijksblauw-500" /> Reacties ({comments.length})
-        </h2>
-        <ul className="space-y-3">
-          {comments.map((c) => (
-            <li key={c.id} className="rounded-lg bg-slate-50 p-3 dark:bg-slate-800">
-              <div className="mb-1 flex items-center justify-between">
-                <span className="text-xs font-medium text-slate-600 dark:text-slate-300">{authorName(c.profile)}</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-400 dark:text-slate-500">{formatDate(c.created_at)}</span>
-                  {(isAdmin || c.user_id === user?.id) && (
-                    <button
-                      onClick={async () => {
-                        await deleteComment(c.id);
-                        await reload();
-                      }}
-                      className="text-slate-300 hover:text-rijksrood dark:text-slate-600"
-                      aria-label="Reactie verwijderen"
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  )}
-                </div>
-              </div>
-              <p className="whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-200">{c.body}</p>
-            </li>
-          ))}
-          {comments.length === 0 && <li className="text-sm text-slate-400 dark:text-slate-500">Nog geen reacties.</li>}
-        </ul>
-        {isAuthenticated ? (
-          <div className="mt-3 flex gap-2">
-            <input
-              className="opl-input"
-              placeholder="Schrijf een reactie…"
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleAddComment()}
-            />
-            <button onClick={handleAddComment} disabled={busy} className="opl-btn-primary shrink-0">
-              Plaatsen
-            </button>
-          </div>
-        ) : (
-          <p className="mt-3 text-xs text-slate-400 dark:text-slate-500">Log in om te reageren.</p>
+        {/* Comments, switched off through COMMENTS_ENABLED. */}
+        {COMMENTS_ENABLED && (
+          <nldd-card>
+            <nldd-container padding="20" gap="12">
+              <nldd-title heading-level={2} size={5} text={`Reacties (${comments.length})`}></nldd-title>
+              <nldd-list accessible-label="Reacties">
+                <nldd-inline-dialog slot="empty" text="Nog geen reacties"></nldd-inline-dialog>
+                {comments.map((c) => (
+                  <nldd-list-item key={c.id}>
+                    <nldd-text-cell
+                      overline={`${authorName(c.profile)} · ${formatDate(c.created_at)}`}
+                      text={c.body}
+                    ></nldd-text-cell>
+                    {(isAdmin || c.user_id === user?.id) && (
+                      <nldd-list-item-segment
+                        button
+                        accessible-label={`Reactie van ${authorName(c.profile)} verwijderen`}
+                        onClick={async () => {
+                          await deleteComment(c.id);
+                          await reload();
+                        }}
+                      >
+                        <nldd-icon-cell icon="trash" size="20" color="critical"></nldd-icon-cell>
+                      </nldd-list-item-segment>
+                    )}
+                  </nldd-list-item>
+                ))}
+              </nldd-list>
+              {isAuthenticated ? (
+                <nldd-form>
+                  <form onSubmit={onSubmitComment}>
+                    <nldd-text-field ref={commentRef} accessible-label="Reactie" placeholder="Schrijf een reactie…">
+                      <nldd-button
+                        slot="button"
+                        type="submit"
+                        text="Plaats"
+                        disabled={busy || undefined}
+                      ></nldd-button>
+                    </nldd-text-field>
+                  </form>
+                </nldd-form>
+              ) : (
+                <nldd-text size="xs" color="secondary">
+                  Log in om te reageren.
+                </nldd-text>
+              )}
+            </nldd-container>
+          </nldd-card>
         )}
-      </div>
-      )}
 
-      {/* Versiegeschiedenis */}
-      <div className="opl-card p-5">
-        <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
-          <History size={18} className="text-rijksblauw-500" /> Versiegeschiedenis ({versions.length})
-        </h2>
-        <ul className="divide-y divide-slate-100 dark:divide-slate-800">
-          {versions.map((v) => (
-            <li key={v.id} className="py-2">
-              <button
-                onClick={() => setOpenVersion(openVersion === v.id ? null : v.id)}
-                className="flex w-full items-center justify-between text-left text-sm"
-              >
-                <span className="font-medium text-slate-700 dark:text-slate-200">
-                  v{v.version}
-                  <span className="ml-2 text-xs font-normal text-slate-400 dark:text-slate-500">
-                    {formatDate(v.created_at)}
-                  </span>
-                </span>
-                <ChevronDown
-                  size={15}
-                  className={clsx('text-slate-400 transition-transform dark:text-slate-500', openVersion === v.id && 'rotate-180')}
-                />
-              </button>
-              {v.change_summary && (
-                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{v.change_summary}</p>
-              )}
-              {openVersion === v.id && (
-                <div className="mt-2">
-                  <p className="mb-1 text-xs font-medium text-slate-500 dark:text-slate-400">{v.title}</p>
-                  <pre tabIndex={0} className="max-h-48 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-3 font-mono text-xs text-slate-700 dark:bg-slate-900 dark:text-slate-200">
-                    {v.content}
-                  </pre>
-                </div>
-              )}
-            </li>
-          ))}
-          {versions.length === 0 && (
-            <li className="py-2 text-sm text-slate-400 dark:text-slate-500">Nog geen versies vastgelegd.</li>
-          )}
-        </ul>
-      </div>
-    </section>
+        {/* Version history */}
+        <nldd-card>
+          <nldd-container padding="20" gap="12">
+            <nldd-title heading-level={2} size={5} text={`Versiegeschiedenis (${versions.length})`}></nldd-title>
+            <nldd-list accessible-label="Versies">
+              <nldd-inline-dialog slot="empty" text="Nog geen versies vastgelegd"></nldd-inline-dialog>
+              {versions.map((v) => {
+                const isOpen = openVersion === v.id;
+                return [
+                  <nldd-list-item
+                    key={v.id}
+                    button
+                    expanded={isOpen || undefined}
+                    onClick={() => setOpenVersion(isOpen ? null : v.id)}
+                  >
+                    <nldd-text-cell
+                      text={`v${v.version}`}
+                      overline={formatDate(v.created_at)}
+                      supporting-text={v.change_summary || undefined}
+                    ></nldd-text-cell>
+                    <nldd-icon-cell icon="chevron-right" size="20" color="secondary" disclosure></nldd-icon-cell>
+                  </nldd-list-item>,
+                  isOpen && (
+                    <nldd-list-item key={`${v.id}-inhoud`}>
+                      <nldd-cell width="full">
+                        <nldd-container layout="stack" gap="8" padding-block="8">
+                          <nldd-text size="xs" weight="medium" color="secondary">
+                            {v.title}
+                          </nldd-text>
+                          <nldd-code-viewer wrap max-height="12rem">
+                            {v.content}
+                          </nldd-code-viewer>
+                        </nldd-container>
+                      </nldd-cell>
+                    </nldd-list-item>
+                  ),
+                ];
+              })}
+            </nldd-list>
+          </nldd-container>
+        </nldd-card>
+      </nldd-container>
+    </>
   );
 }

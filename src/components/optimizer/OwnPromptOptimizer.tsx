@@ -1,27 +1,8 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import { useNlddEvent, useNlddValue } from '@/lib/nldd';
 import type { ProjectContextSlot } from '@/components/optimizer/ProjectContextPicker';
 import { useNavigate } from 'react-router-dom';
-import {
-  AlertTriangle,
-  ArrowDown,
-  ArrowRight,
-  Blocks,
-  Bot,
-  ClipboardCopy,
-  CodeXml,
-  Eraser,
-  FileText,
-  HelpCircle,
-  LayoutDashboard,
-  Lightbulb,
-  Loader2,
-  RefreshCw,
-  Route,
-  Sparkles,
-  Wand2,
-  type LucideIcon,
-} from '@/components/common/icons';
-import clsx from 'clsx';
 import { notify } from '@/lib/notify';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import VerantwoordGebruikHint from '@/components/optimizer/VerantwoordGebruikHint';
@@ -122,18 +103,18 @@ interface OwnPromptOptimizerProps {
  */
 const KIND_OPTIONS: Record<
   PromptKind,
-  { label: string; icon: LucideIcon; hint: string; placeholder: string; placeholderOff?: string }
+  { label: string; icon: string; hint: string; placeholder: string; placeholderOff?: string }
 > = {
   text: {
     label: 'Tekst',
-    icon: FileText,
+    icon: 'file-text',
     hint: 'Een brief, nota, verslag of samenvatting.',
     placeholder:
       'Bijv. zet mijn ruwe vergaderaantekeningen om in een verslag met besluiten, actiepunten en open vragen.',
   },
   code: {
     label: 'Code',
-    icon: CodeXml,
+    icon: 'code',
     hint: 'Vibecoden: een tool, script of pagina laten bouwen, of bestaande code laten aanpassen.',
     placeholder:
       'Bijv. een webpagina die een Excel-export uit het zaaksysteem inleest en per afdeling de open zaken telt.',
@@ -142,28 +123,28 @@ const KIND_OPTIONS: Record<
   },
   dashboard: {
     label: 'Dashboard',
-    icon: LayoutDashboard,
+    icon: 'chart-bar-x-axis',
     hint: 'Cijfers, grafieken en filters op één scherm.',
     placeholder:
       'Bijv. een overzicht van de doorlooptijden van Woo-verzoeken per directie, met een filter op kwartaal.',
   },
   agent: {
     label: 'Agent',
-    icon: Bot,
+    icon: 'ai',
     hint: 'Een AI die zelfstandig een taak in stappen uitvoert.',
     placeholder:
       'Bijv. een agent die binnenkomende Woo-verzoeken leest, per onderwerp sorteert en een ontvangstbevestiging klaarzet.',
   },
   skill: {
     label: 'Skill',
-    icon: Blocks,
+    icon: 'building-blocks',
     hint: 'Een vaste werkwijze die een AI-assistent elke keer opnieuw toepast. Je bouwt hem verder in de Skill Creator.',
     placeholder:
       'Bijv. geef feedback op conceptbrieven aan burgers, elke keer volgens de schrijfwijzer van ons ministerie.',
   },
   template: {
     label: 'Routekaart',
-    icon: Route,
+    icon: 'path',
     hint: 'Een geanimeerde routekaart in rijksstijl: waar je vandaan komt, waar je nu staat en waar je naartoe wilt. Jij geeft de inhoud; de vormgeving is elke keer hetzelfde.',
     placeholder:
       'Bijv. een routekaart van ons opleidingstraject: vijf bijeenkomsten vanaf 3 maart, met per bijeenkomst het thema, het huiswerk en wat het oplevert. We staan nu bij de tweede.',
@@ -276,8 +257,8 @@ export default function OwnPromptOptimizer({
   // Terugkoppeling bij onzin-input: geen resultaat, wél uitleg.
   const [unclearReason, setUnclearReason] = useState<string | null>(null);
   // Anker voor het voor-invul-/laadblok zodat we er na een keuze naartoe scrollen.
-  const analysisRef = useRef<HTMLDivElement>(null);
-  const topRef = useRef<HTMLDivElement>(null);
+  const analysisRef = useRef<HTMLElement>(null);
+  const topRef = useRef<HTMLElement>(null);
 
   const technique = frameworks.find((t) => t.id === techniqueId) ?? null;
 
@@ -394,11 +375,13 @@ export default function OwnPromptOptimizer({
     }
   }
 
-  /** Kies een soort bij "Wat wil je maken?". Dezelfde soort nog eens kiezen doet niets. */
-  function handleKind(clicked: PromptKind) {
-    // Nog eens op de gekozen soort klikken zet hem uit: zonder soort kiest de
-    // AI zelf uit alle frameworks. Een aparte knop daarvoor is er niet meer.
-    const next = clicked === kind ? null : clicked;
+  /**
+   * Kies een soort bij "Wat wil je maken?". Dezelfde soort nog eens kiezen doet
+   * niets; "AI kiest" (null) zet de soort uit, dan kiest de AI zelf uit alle
+   * frameworks.
+   */
+  function handleKind(next: PromptKind | null) {
+    if (next === kind) return;
     setKind(next);
     setVariantOn(true);
     resetDownstream(); // andere soort = andere frameworks, het oude advies vervalt
@@ -693,27 +676,23 @@ export default function OwnPromptOptimizer({
 
   if (frameworks.length === 0) {
     return (
-      <p className="text-sm text-slate-500 dark:text-slate-400">
-        Er zijn nog geen prompt frameworks beschikbaar. Vraag een beheerder er één toe te voegen.
-      </p>
+      <nldd-inline-dialog
+        icon="info-circle"
+        text="Er zijn nog geen prompt frameworks beschikbaar"
+        supporting-text="Vraag een beheerder er één toe te voegen."
+      ></nldd-inline-dialog>
     );
   }
 
   // De melding bij onduidelijke invoer staat bij het tekstvak als dat open is, anders
   // onder de velden (dan kwam ze van het bouwen zelf).
   const unclearBlock = unclearReason && (
-    <div
-      role="alert"
-      className="animate-fade-in flex items-start gap-3 rounded-xl bg-rijksoranje/10 px-4 py-3 text-sm text-slate-700 dark:text-slate-200"
-    >
-      <HelpCircle size={18} className="mt-0.5 shrink-0 text-rijksoranje" />
-      <div>
-        <p className="font-semibold text-slate-900 dark:text-slate-100">
-          Je tekst is nog niet duidelijk genoeg
-        </p>
-        <p className="mt-0.5">{stripMarkdown(unclearReason)}</p>
-      </div>
-    </div>
+    <nldd-banner
+      variant="warning"
+      icon="question-mark-circle"
+      text="Je tekst is nog niet duidelijk genoeg"
+      supporting-text={stripMarkdown(unclearReason)}
+    ></nldd-banner>
   );
 
   const chosenRec = recommendations?.find((r) => r.id === techniqueId);
@@ -733,416 +712,243 @@ export default function OwnPromptOptimizer({
             .slice(0, 4)
             .map((t) => ({ id: t.id, naam: t.name, waarom: techniekKaart(t).kort }));
 
+  const ownPromptShort = promptText.length > 160 ? `${promptText.slice(0, 160).trimEnd()}…` : promptText;
+
   return (
-    <div ref={topRef} className="scroll-mt-24 space-y-4">
+    <nldd-container ref={topRef} gap="16">
       {!composerOpen ? (
-        <section
-          aria-label="Jouw tekst"
-          className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-1.5 dark:border-slate-700 dark:bg-slate-800"
-        >
-          <p className="min-w-0 flex-1 truncate text-slate-600 dark:text-slate-300">
-            <strong className="font-semibold text-slate-900 dark:text-slate-100">Jouw tekst: </strong>
-            {promptText}
-          </p>
-          <button
-            type="button"
-            onClick={() => setComposerOpen(true)}
-            disabled={recommending || prefilling || generating}
-            className="min-h-11 shrink-0 font-semibold text-rijksblauw-500 transition-colors hover:underline disabled:opacity-50 dark:text-rijksblauw-200"
-          >
-            Aanpassen
-          </button>
-        </section>
+        <nldd-box role="region" aria-label="Jouw tekst">
+          <nldd-container padding-inline="16" padding-block="8" layout="row" gap="12" vertical-alignment="center">
+            <nldd-text color="secondary">
+              <strong>Jouw tekst: </strong>
+              {ownPromptShort}
+            </nldd-text>
+            <nldd-button
+              appearance="neutral-transparent"
+              text="Aanpassen"
+              onClick={() => setComposerOpen(true)}
+              disabled={recommending || prefilling || generating || undefined}
+            ></nldd-button>
+          </nldd-container>
+        </nldd-box>
       ) : (
-      <div>
-        {header}
-        <section className="space-y-5 rounded-xl border border-slate-200 bg-white p-5 sm:rounded-t-none dark:border-slate-700 dark:bg-slate-800">
-          {unclearBlock}
-          <div>
-            <StepHeading
-              step={1}
-              title="Wat wordt het?"
-              info={
-                kindOption
-                  ? kindOption.hint
-                  : 'Kies niets, dan kiest de AI het framework dat bij je tekst past.\nSkill en Routekaart kies je zelf.'
-              }
-            />
-            <div
-              role="group"
-              aria-label="Wat wil je maken? Kies je niets, dan bepaalt de AI het zelf."
-              className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7"
-            >
-              {[null, ...PROMPT_KINDS].map((k) => {
-                const option = k ? KIND_OPTIONS[k] : { label: 'AI kiest', icon: Sparkles };
-                const Icon = option.icon;
-                const active = kind === k;
-                return (
-                  <button
-                    key={k ?? 'auto'}
-                    type="button"
-                    aria-pressed={active}
-                    onClick={() => {
-                      if (k) handleKind(k);
-                      else if (kind) handleKind(kind); // de gekozen soort uitzetten
-                    }}
-                    disabled={recommending || prefilling}
-                    className={clsx(
-                      'flex min-h-[5.25rem] flex-col items-center justify-center gap-1.5 rounded-xl border px-2 py-2.5 text-[0.9375rem] font-semibold transition-colors',
-                      'focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed dark:focus-visible:ring-offset-slate-800',
-                      active
-                        ? 'border-rijksblauw-700 bg-rijksblauw-50 text-rijksblauw-700 ring-1 ring-rijksblauw-700 dark:border-rijksblauw-200 dark:bg-rijksblauw-500/15 dark:text-white dark:ring-rijksblauw-200'
-                        : 'border-slate-200 bg-slate-50 text-rijksblauw-700 hover:border-rijksblauw-700 dark:border-slate-700 dark:bg-slate-900/40 dark:text-rijksblauw-200 dark:hover:border-rijksblauw-200',
+        <nldd-container>
+          {header}
+          <nldd-spacer size="24"></nldd-spacer>
+            <nldd-container gap="24">
+              {unclearBlock}
+              <nldd-container gap="8">
+                <StepHeading
+                  step={1}
+                  title="Wat wordt het?"
+                  info={
+                    kindOption
+                      ? kindOption.hint
+                      : 'Kies niets, dan kiest de AI het framework dat bij je tekst past.\nSkill en Routekaart kies je zelf.'
+                  }
+                />
+                <KindPicker kind={kind} onKind={handleKind} disabled={recommending || prefilling} />
+                {(variant || kind === 'template') && <nldd-spacer size="4"></nldd-spacer>}
+                {/* Vervolgkeuze bij Code en Dashboard: twee opties die elk een eigen
+                    framework aanwijzen. Zichtbaar zodra de soort gekozen is, zodat je
+                    ziet dát er een keuze is in plaats van hem te moeten ontdekken. */}
+                {variant && (
+                  <nldd-container gap="6">
+                    <nldd-text size="sm" weight="medium">{variant.question}</nldd-text>
+                    <nldd-list type="radiogroup" appearance="box-base" accessible-label={variant.question}>
+                      {[
+                        { on: true, option: variant.on },
+                        { on: false, option: variant.off },
+                      ].map(({ on, option }) => (
+                        <RadioRow
+                          key={option.modality}
+                          checked={variantOn === on}
+                          disabled={recommending || prefilling}
+                          text={option.label}
+                          supportingText={option.detail}
+                          onCheck={() => handleVariant(on)}
+                        />
+                      ))}
+                    </nldd-list>
+                  </nldd-container>
+                )}
+
+                {/* Bij Routekaart: welk vast sjabloon. Alleen als er iets te kiezen
+                    valt; met één sjabloon zegt de knop zelf al wat je krijgt. */}
+                {kind === 'template' && candidates.length !== 1 && (
+                  <nldd-container gap="6">
+                    <nldd-text size="sm" weight="medium">Welk sjabloon?</nldd-text>
+                    {candidates.length === 0 ? (
+                      <nldd-text size="sm" color="secondary">
+                        Er zijn nog geen sjablonen. Vraag een beheerder er één toe te voegen.
+                      </nldd-text>
+                    ) : (
+                      <nldd-list type="radiogroup" appearance="box-base" accessible-label="Welk sjabloon?">
+                        {candidates.map((t) => (
+                          <RadioRow
+                            key={t.id}
+                            checked={sjabloon?.id === t.id}
+                            disabled={recommending || prefilling}
+                            text={t.name}
+                            supportingText={t.description || undefined}
+                            onCheck={() => {
+                              if (sjabloon?.id === t.id) return;
+                              setSjabloonId(t.id);
+                              clearSjabloonDraft();
+                              setVraagHerkomst({});
+                              resetDownstream();
+                            }}
+                          />
+                        ))}
+                      </nldd-list>
                     )}
-                  >
-                    <Icon size={26} strokeWidth={1.5} />
-                    {option.label}
-                  </button>
-                );
-              })}
-            </div>
+                  </nldd-container>
+                )}
 
-            <StepHeading step={2} title="Jouw tekst" htmlFor="own-prompt-input">
-          <button
-            type="button"
-            onClick={() => setShowExamples((v) => !v)}
-            aria-expanded={showExamples}
-            aria-controls="prompt-examples"
-            title="Bekijk voorbeeldprompts"
-            className={clsx(
-              'inline-flex items-center gap-1.5 rounded-full px-1.5 py-0.5 text-sm font-medium text-rijksblauw-500 transition-colors hover:underline dark:text-rijksblauw-200',
-            )}
-          >
-            <Lightbulb size={16} className="text-rijksoranje" />
-            <span>Voorbeelden</span>
-          </button>
-          {/* Opschonen: alleen tonen als er iets te wissen valt. */}
-          {(ownPrompt.trim() || promptText) && (
-            <button
-              type="button"
-              onClick={handleClearAll}
-              title="Wis je prompt en begin opnieuw"
-              className="ml-auto inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-sm font-medium text-slate-700 transition-colors hover:underline dark:text-slate-200"
-            >
-              <Eraser size={15} />
-              <span>Opschonen</span>
-            </button>
-          )}
-            </StepHeading>
+              </nldd-container>
 
-        {/* Uitklapbaar paneel met voorbeeldprompts per raamwerk. */}
-        {showExamples && (
-          <div
-            id="prompt-examples"
-            className="animate-fade-in mb-3 space-y-2 rounded-xl border border-rijksblauw-200 bg-rijksblauw-50/40 p-3 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10"
-          >
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Voorbeeldprompts uit het rijkswerk. Klik op "Gebruik" om er een in het invoerveld te
-              zetten, en pas hem aan naar je eigen dossier.
-            </p>
-            {/* Vaste hoogte met eigen schuifbalk: de lijst is bewust lang (er is
-                veel verschillend werk), maar mag de pagina niet wegdrukken. */}
-            <div className="opl-scroll-slim max-h-[24rem] space-y-2 overflow-y-auto pr-1">
-              {PROMPT_EXAMPLES.map((ex) => {
-                const category = PROMPT_CATEGORIES[ex.category];
-                return (
-                  // De prompt zelf staat niet op het kaartje (dan wordt de lijst
-                  // onleesbaar lang); wie hem wil lezen, zet hem met "Gebruik"
-                  // in het veld.
-                  <div
-                    key={ex.title}
-                    className="group rounded-lg border border-slate-200 bg-white p-2.5 transition-colors hover:border-rijksblauw-300 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-rijksblauw-500/40"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <span className="inline-flex items-center gap-1 text-[0.6875rem] font-medium text-rijksblauw-600 dark:text-rijksblauw-300">
-                          <category.icon size={12} className="shrink-0" />
-                          {category.label}
-                        </span>
-                        <p className="mt-0.5 text-sm font-semibold text-slate-800 dark:text-slate-100">
-                          {ex.title}
-                        </p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">{ex.subtitle}</p>
-                      </div>
-                      <div className="flex shrink-0 gap-1">
-                        <button
-                          type="button"
-                          onClick={() => void copyExample(ex.prompt)}
-                          title="Kopieer voorbeeld"
-                          className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs text-slate-500 transition-colors hover:bg-slate-100 hover:text-rijksblauw-600 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-rijksblauw-300"
-                        >
-                          <ClipboardCopy size={13} /> Kopieer
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => applyExample(ex.prompt)}
-                          title="Gebruik dit voorbeeld in het invoerveld"
-                          className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-rijksblauw-600 transition-colors hover:bg-rijksblauw-50 dark:text-rijksblauw-300 dark:hover:bg-rijksblauw-500/15"
-                        >
-                          <Wand2 size={13} /> Gebruik
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Het invoerveld met "Wat wil je maken?" als balk erboven en de
-            schakelaar, de opzet en de zoekknop eronder: één geheel. */}
-        <div className="overflow-hidden rounded-xl border border-slate-300 bg-slate-50 transition-colors focus-within:border-rijksblauw-500 focus-within:ring-2 focus-within:ring-rijksblauw-500/20 dark:border-slate-600 dark:bg-slate-900/40">
-          {renderProjectContext?.({
-            text: ownPrompt,
-            stripMention: () => setOwnPrompt(ownPrompt.replace(/@$/, '')),
-            className: 'border-b border-slate-200 bg-white px-2.5 py-2 dark:border-slate-700 dark:bg-slate-800',
-          })}
-          {/* Vervolgkeuze bij Code en Dashboard: twee opties die elk een eigen
-              framework aanwijzen. Zichtbaar zodra de soort gekozen is, zodat je
-              ziet dát er een keuze is in plaats van hem te moeten ontdekken. */}
-          {variant && (
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-slate-200 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-slate-800">
-              <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                {variant.question}
-              </span>
-              <div
-                role="radiogroup"
-                aria-label={variant.question}
-                className="grid min-w-0 flex-1 grid-cols-1 gap-2 sm:grid-cols-2"
-              >
-                {[
-                  { on: true, option: variant.on },
-                  { on: false, option: variant.off },
-                ].map(({ on, option }) => {
-                  const active = variantOn === on;
-                  return (
-                    <button
-                      key={option.modality}
-                      type="button"
-                      role="radio"
-                      aria-checked={active}
-                      onClick={() => handleVariant(on)}
-                      disabled={recommending || prefilling}
-                      className={clsx(
-                        'flex min-w-0 items-start gap-2.5 rounded-lg border px-3 py-2 text-left transition-colors',
-                        'focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500/40 disabled:cursor-not-allowed',
-                        active
-                          ? 'border-rijksblauw-500 bg-rijksblauw-50 ring-1 ring-rijksblauw-500 dark:bg-rijksblauw-500/15'
-                          : 'border-slate-200 hover:border-rijksblauw-300 dark:border-slate-600 dark:hover:border-rijksblauw-500/50',
-                      )}
-                    >
-                      <span
-                        className={clsx(
-                          'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2',
-                          active ? 'border-rijksblauw-500' : 'border-slate-400 dark:border-slate-500',
-                        )}
-                      >
-                        {active && <span className="h-1.5 w-1.5 rounded-full bg-rijksblauw-500" />}
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block text-sm font-semibold text-slate-800 dark:text-slate-100">
-                          {option.label}
-                        </span>
-                        <span className="block text-xs text-slate-500 dark:text-slate-400">
-                          {option.detail}
-                        </span>
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Bij Routekaart: welk vast sjabloon. Alleen als er iets te kiezen
-              valt; met één sjabloon zegt de knop zelf al wat je krijgt. */}
-          {kind === 'template' && candidates.length !== 1 && (
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-slate-200 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-slate-800">
-              <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                Welk sjabloon?
-              </span>
-              {candidates.length === 0 ? (
-                <span className="text-sm text-slate-500 dark:text-slate-400">
-                  Er zijn nog geen sjablonen. Vraag een beheerder er één toe te voegen.
-                </span>
-              ) : (
-                <div
-                  role="radiogroup"
-                  aria-label="Welk sjabloon?"
-                  className="grid min-w-0 flex-1 grid-cols-1 gap-2 sm:grid-cols-2"
-                >
-                  {candidates.map((t) => {
-                    const active = sjabloon?.id === t.id;
-                    return (
-                      <button
-                        key={t.id}
-                        type="button"
-                        role="radio"
-                        aria-checked={active}
-                        onClick={() => {
-                          if (active) return;
-                          setSjabloonId(t.id);
-                          clearSjabloonDraft();
-                          setVraagHerkomst({});
-                          resetDownstream();
-                        }}
-                        disabled={recommending || prefilling}
-                        className={clsx(
-                          'flex min-w-0 items-start gap-2.5 rounded-lg border px-3 py-2 text-left transition-colors',
-                          'focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500/40 disabled:cursor-not-allowed',
-                          active
-                            ? 'border-rijksblauw-500 bg-rijksblauw-50 ring-1 ring-rijksblauw-500 dark:bg-rijksblauw-500/15'
-                            : 'border-slate-200 hover:border-rijksblauw-300 dark:border-slate-600 dark:hover:border-rijksblauw-500/50',
-                        )}
-                      >
-                        <span
-                          className={clsx(
-                            'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2',
-                            active ? 'border-rijksblauw-500' : 'border-slate-400 dark:border-slate-500',
-                          )}
-                        >
-                          {active && <span className="h-1.5 w-1.5 rounded-full bg-rijksblauw-500" />}
-                        </span>
-                        <span className="min-w-0">
-                          <span className="block text-sm font-semibold text-slate-800 dark:text-slate-100">
-                            {t.name}
-                          </span>
-                          {t.description && (
-                            <span className="line-clamp-2 text-xs text-slate-500 dark:text-slate-400">
-                              {t.description}
-                            </span>
-                          )}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Routekaart: eerst het vak voor wat je al hebt voorbereid, dan de
-              vragen van het sjabloon (onder het tekstvak). */}
-          {sjabloon && (
-            <label
-              htmlFor="own-prompt-input"
-              className="block border-b border-slate-100 bg-white px-3.5 pt-3 pb-2 dark:border-slate-700 dark:bg-slate-800"
-            >
-              <span className="block text-sm font-semibold text-slate-800 dark:text-slate-100">
-                Heb je al iets voorbereid? (optioneel)
-              </span>
-              <span className="block text-xs text-slate-500 dark:text-slate-400">
-                Plak hier wat je al hebt, bijvoorbeeld een uitwerking uit een andere chat, een
-                planning of aantekeningen. De AI haalt eruit wat bij de vragen hoort en vult aan;
-                per vraag zie je wat uit je tekst komt en wat de AI heeft bedacht.
-              </span>
-            </label>
-          )}
-
-          <textarea
-            id="own-prompt-input"
-            className="block min-h-[6.5rem] w-full resize-y border-0 bg-white px-3.5 py-3 text-[0.9375rem] leading-relaxed text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-0 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
-            value={ownPrompt}
-            placeholder={
-              sjabloon
-                ? 'Plak hier je voorbereide tekst.'
-                : kindOption
-                ? (!variantOn && kindOption.placeholderOff) || kindOption.placeholder
-                : 'Plak hier de prompt of stel hier je vraag. Typ @ voor een project.'
-            }
-            onChange={(e) => {
-              setOwnPrompt(e.target.value);
-              resetDownstream(); // gewijzigde prompt = aanbeveling en analyse vervallen
-            }}
-          />
-
-          {/* De vragen van het sjabloon, elk met een eigen vak. Bovenaan de knop
-              die ze invult uit de voorbereide tekst hierboven. */}
-          {sjabloon && (
-            <div className="border-t border-slate-200 bg-white px-3.5 py-4 dark:border-slate-700 dark:bg-slate-800">
-              <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-                  De vragen van de routekaart
-                </p>
-                <button
-                  type="button"
-                  className="opl-btn-secondary text-sm"
-                  disabled={!ownPrompt.trim() || vragenVullen || recommending || prefilling}
-                  title={ownPrompt.trim() ? undefined : 'Plak eerst je voorbereide tekst hierboven'}
-                  onClick={() => void handleVragenUitTekst()}
-                >
-                  {vragenVullen ? (
-                    <>
-                      <Loader2 size={15} className="animate-spin" /> Vragen invullen…
-                    </>
-                  ) : (
-                    <>
-                      <ArrowDown size={15} /> Vul de vragen in uit je tekst
-                    </>
+              <nldd-container gap="8">
+                <StepHeading step={2} title="Jouw tekst">
+                  <nldd-button
+                    appearance="neutral-transparent"
+                    size="sm"
+                    start-icon="lightbulb"
+                    text="Voorbeelden"
+                    accessible-label="Bekijk voorbeeldprompts"
+                    popup-type="dialog"
+                    expanded={showExamples || undefined}
+                    onClick={() => setShowExamples(true)}
+                  ></nldd-button>
+                  {/* Opschonen: alleen tonen als er iets te wissen valt. */}
+                  {(ownPrompt.trim() || promptText) && (
+                    <nldd-button
+                      appearance="neutral-transparent"
+                      size="sm"
+                      start-icon="delete"
+                      text="Opschonen"
+                      accessible-label="Wis je prompt en begin opnieuw"
+                      onClick={handleClearAll}
+                    ></nldd-button>
                   )}
-                </button>
-              </div>
-              <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
-                Sta bij elke vraag even stil en schrijf op wat je al weet. Met Velden invullen zet
-                de AI je antwoorden in de velden van het sjabloon, laat open wat je niet gaf en
-                vraagt daar naar.
-              </p>
-              <SjabloonVragen
-                technique={sjabloon}
-                antwoorden={sjabloonAntwoorden}
-                herkomst={vraagHerkomst}
-                onChange={(next, aangepast) => {
-                  setSjabloonDraft(JSON.stringify(next));
-                  setVraagHerkomst((prev) => {
-                    if (!prev[aangepast]) return prev;
-                    const rest = { ...prev };
-                    delete rest[aangepast];
-                    return rest;
-                  });
-                  resetDownstream(); // andere context = oude voor-invulling vervalt
-                }}
-                disabled={recommending || prefilling || vragenVullen}
-              />
-            </div>
-          )}
+                </StepHeading>
 
-        </div>
-        <VerantwoordGebruikHint text={promptText} />
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5">
-          <span className="text-sm text-slate-600 dark:text-slate-300">
-            {kind === 'skill'
-              ? 'Opzet: Skill Creator'
-              : kind === 'template' && !sjabloon
-                ? 'Nog geen sjabloon beschikbaar'
-                : directFramework
-                  ? `Opzet: ${directFramework.name}`
-                  : `De AI kiest uit ${candidates.length} frameworks`}
-          </span>
-          <div className="flex flex-wrap items-center gap-1.5">
-            {toggles}
-            <button
-              type="button"
-              className="opl-btn-primary min-h-12 px-5 text-base"
-              onClick={() => void handleRecommend()}
-              disabled={recommending || prefilling || !promptText || (kind === 'template' && !sjabloon)}
-            >
-              {kind === 'skill' ? (
-                <>
-                  Verder in de Skill Creator <ArrowRight size={18} />
-                </>
-              ) : (
-                <>
-                  <Sparkles size={20} className="text-rijksoranje-vast" />
-                  {kind === 'template' ? 'Velden invullen' : 'Maak mijn prompt'}
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
-        </section>
-      </div>
+                {renderProjectContext?.({
+                  text: ownPrompt,
+                  stripMention: () => setOwnPrompt(ownPrompt.replace(/@$/, '')),
+                })}
+
+                {/* Routekaart: eerst het vak voor wat je al hebt voorbereid, dan de
+                    vragen van het sjabloon (onder het tekstvak). */}
+                <nldd-form-field
+                  label={sjabloon ? 'Heb je al iets voorbereid?' : undefined}
+                  optional={sjabloon ? true : undefined}
+                  supporting-label={
+                    sjabloon
+                      ? 'Plak hier wat je al hebt, bijvoorbeeld een uitwerking uit een andere chat, een planning of aantekeningen. De AI haalt eruit wat bij de vragen hoort en vult aan; per vraag zie je wat uit je tekst komt en wat de AI heeft bedacht.'
+                      : undefined
+                  }
+                >
+                  <TextArea
+                    value={ownPrompt}
+                    onValue={(v) => {
+                      setOwnPrompt(v);
+                      resetDownstream(); // gewijzigde prompt = aanbeveling en analyse vervallen
+                    }}
+                    rows={4}
+                    resize="vertical"
+                    accessible-label={sjabloon ? undefined : 'Jouw tekst'}
+                    placeholder={
+                      sjabloon
+                        ? 'Plak hier je voorbereide tekst.'
+                        : kindOption
+                          ? (!variantOn && kindOption.placeholderOff) || kindOption.placeholder
+                          : 'Plak hier de prompt of stel hier je vraag. Typ @ voor een project.'
+                    }
+                  />
+                  <nldd-form-field-help-text>
+                    {kind === 'skill'
+                      ? 'Opzet: Skill Creator'
+                      : kind === 'template' && !sjabloon
+                        ? 'Nog geen sjabloon beschikbaar'
+                        : directFramework
+                          ? `Opzet: ${directFramework.name}`
+                          : `De AI kiest uit ${candidates.length} frameworks`}
+                  </nldd-form-field-help-text>
+                </nldd-form-field>
+
+                {/* De vragen van het sjabloon, elk met een eigen vak. Bovenaan de knop
+                    die ze invult uit de voorbereide tekst hierboven. */}
+                {sjabloon && (
+                  <nldd-box>
+                    <nldd-container padding="16" gap="8">
+                      <nldd-title heading-level={3} size={6} text="De vragen van de routekaart">
+                        <nldd-tooltip
+                          slot="end"
+                          text="Plak eerst je voorbereide tekst hierboven"
+                          timing={ownPrompt.trim() ? 'never' : undefined}
+                        >
+                          <nldd-button
+                            appearance="secondary"
+                            size="sm"
+                            start-icon="arrow-down"
+                            text="Vul de vragen in uit je tekst"
+                            loading={vragenVullen || undefined}
+                            loading-text="Vragen invullen"
+                            disabled={!ownPrompt.trim() || recommending || prefilling || undefined}
+                            onClick={() => void handleVragenUitTekst()}
+                          ></nldd-button>
+                        </nldd-tooltip>
+                      </nldd-title>
+                      <nldd-text size="xs" color="secondary">
+                        Sta bij elke vraag even stil en schrijf op wat je al weet. Met Velden invullen zet
+                        de AI je antwoorden in de velden van het sjabloon, laat open wat je niet gaf en
+                        vraagt daar naar.
+                      </nldd-text>
+                      <SjabloonVragen
+                        technique={sjabloon}
+                        antwoorden={sjabloonAntwoorden}
+                        herkomst={vraagHerkomst}
+                        onChange={(next, aangepast) => {
+                          setSjabloonDraft(JSON.stringify(next));
+                          setVraagHerkomst((prev) => {
+                            if (!prev[aangepast]) return prev;
+                            const rest = { ...prev };
+                            delete rest[aangepast];
+                            return rest;
+                          });
+                          resetDownstream(); // andere context = oude voor-invulling vervalt
+                        }}
+                        disabled={recommending || prefilling || vragenVullen}
+                      />
+                    </nldd-container>
+                  </nldd-box>
+                )}
+
+                <VerantwoordGebruikHint text={promptText} />
+              </nldd-container>
+
+              <nldd-container layout="wrap" gap="12" vertical-alignment="center">
+                  <nldd-button
+                    appearance="primary"
+                    size="lg"
+                    onClick={() => void handleRecommend()}
+                    disabled={recommending || prefilling || (kind === 'template' && !sjabloon) || undefined}
+                    start-icon={kind === 'skill' ? undefined : 'sparkles'}
+                    end-icon={kind === 'skill' ? 'arrow-right' : undefined}
+                    text={
+                      kind === 'skill'
+                        ? 'Verder in de Skill Creator'
+                        : kind === 'template'
+                          ? 'Velden invullen'
+                          : 'Maak mijn prompt'
+                    }
+                  ></nldd-button>
+                  <nldd-container layout="wrap" width="fit-content" gap="4" vertical-alignment="center">
+                    {toggles}
+                  </nldd-container>
+              </nldd-container>
+            </nldd-container>
+        </nldd-container>
       )}
 
       {/* De AI kiest en vult in: de stappen, en de velden die vollopen. */}
@@ -1154,9 +960,9 @@ export default function OwnPromptOptimizer({
       )}
 
       {/* Anker voor het laad-/voor-invulblok; hier scrollen we na een keuze naartoe. */}
-      <div ref={analysisRef} className="scroll-mt-24 space-y-4">
-        {/* 4. Mooi laadscherm: de AI ontleedt de prompt en vult de velden voor.
-            De velden lopen één voor één vol terwijl de modellen werken. */}
+      <nldd-container ref={analysisRef} gap="16">
+        {/* De AI ontleedt de prompt en vult de velden voor. De velden lopen één
+            voor één vol terwijl de modellen werken. */}
         {prefilling && (
           <PrefillLoader
             plain
@@ -1177,7 +983,7 @@ export default function OwnPromptOptimizer({
           />
         )}
 
-        {/* Mooi laadscherm tijdens het genereren van de uiteindelijke prompt. */}
+        {/* Laadscherm tijdens het genereren van de uiteindelijke prompt. */}
         {generating && (
           <OptimizingLoader
             techniqueName={technique?.name}
@@ -1190,7 +996,7 @@ export default function OwnPromptOptimizer({
 
         {/* De ingevulde velden: kijk na en vul aan. */}
         {prefill && !prefilling && !generating && technique && (
-          <div className="animate-fade-in space-y-4">
+          <nldd-container gap="16">
             <AanpakKaart
               technique={technique}
               titel={
@@ -1208,129 +1014,260 @@ export default function OwnPromptOptimizer({
                 we dat, met een knop om het opnieuw te proberen. Een leeg formulier
                 onder de tekst "we hebben alles ingevuld" is misleidend. */}
             {prefill.fields.length === 0 && (
-              <div
-                role="alert"
-                className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-200"
+              <nldd-banner
+                variant="warning"
+                text="Voor-invullen is niet gelukt"
+                supporting-text="De AI-dienst was even niet bereikbaar. Probeer het opnieuw, of vul de velden hieronder zelf in."
               >
-                <AlertTriangle size={18} className="mt-0.5 shrink-0" />
-                <div className="min-w-0">
-                  <p className="font-medium">Voor-invullen is niet gelukt</p>
-                  <p className="mt-0.5 text-amber-700 dark:text-amber-300/90">
-                    De AI-dienst was even niet bereikbaar. Probeer het opnieuw, of vul de velden
-                    hieronder zelf in.
-                  </p>
-                  <button
-                    type="button"
-                    className="opl-btn-secondary mt-2"
-                    onClick={() => void runPrefill(technique, clarification)}
-                    disabled={prefilling || generating}
-                  >
-                    <RefreshCw size={16} /> Opnieuw proberen
-                  </button>
-                </div>
-              </div>
+                <nldd-button
+                  slot="actions"
+                  appearance="secondary"
+                  start-icon="refresh"
+                  text="Opnieuw proberen"
+                  onClick={() => void runPrefill(technique, clarification)}
+                ></nldd-button>
+              </nldd-banner>
             )}
 
             <PrefillSources prefill={prefill} />
 
             {isSjabloon(technique) && (
-              <p className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300">
-                {aanvullingen === null && (
-                  <Loader2 size={15} className="mt-0.5 shrink-0 animate-spin text-rijksblauw-500" />
-                )}
-                {aanvullingen === null
-                  ? 'De AI kijkt nog of er per veld iets aan te vullen is.'
-                  : Object.keys(aanvullingen).length > 0
-                    ? `De AI stelt bij ${Object.keys(aanvullingen).length} ${
-                        Object.keys(aanvullingen).length === 1 ? 'veld' : 'velden'
-                      } een aanvulling voor; die staat oranje onder het veld. Voeg toe wat klopt, de rest verwerp je.`
-                    : 'De AI had niets aan te vullen. Wat je leeg laat, blijft een plaatshouder in de prompt.'}
-              </p>
+              <nldd-container layout="row" gap="8" vertical-alignment="center">
+                {aanvullingen === null && <nldd-activity-indicator size="16" timing="instant"></nldd-activity-indicator>}
+                <nldd-text size="sm" color="secondary">
+                  {aanvullingen === null
+                    ? 'De AI kijkt nog of er per veld iets aan te vullen is.'
+                    : Object.keys(aanvullingen).length > 0
+                      ? `De AI stelt bij ${Object.keys(aanvullingen).length} ${
+                          Object.keys(aanvullingen).length === 1 ? 'veld' : 'velden'
+                        } een aanvulling voor; die staat oranje onder het veld. Voeg toe wat klopt, de rest verwerp je.`
+                      : 'De AI had niets aan te vullen. Wat je leeg laat, blijft een plaatshouder in de prompt.'}
+                </nldd-text>
+              </nldd-container>
             )}
 
-            <section className="opl-card p-5">
-              <FollowUpQuestions
-                projectContext={projectContext}
-                technique={technique}
-                answers={answers}
-                onChange={setAnswers}
-                aanvullingen={isSjabloon(technique) ? (aanvullingen ?? undefined) : undefined}
-                onAanvulling={isSjabloon(technique) ? handleAanvulling : undefined}
-                fieldMeta={fieldMeta}
-                onUserEdit={(id) =>
-                  setFieldMeta((prev) => {
-                    if (!prev[id]) return prev;
-                    const next = { ...prev };
-                    delete next[id];
-                    return next;
-                  })
-                }
-                onFinish={handleGenerate}
-                finishLabel="Bouw prompt"
-                heading={<StepHeading title="Kijk na en vul aan" />}
-                showLetters={false}
-                askIfEmpty={prefill.fields.length > 0}
-              />
+            <nldd-container gap="16">
+                <FollowUpQuestions
+                  projectContext={projectContext}
+                  technique={technique}
+                  answers={answers}
+                  onChange={setAnswers}
+                  aanvullingen={isSjabloon(technique) ? (aanvullingen ?? undefined) : undefined}
+                  onAanvulling={isSjabloon(technique) ? handleAanvulling : undefined}
+                  fieldMeta={fieldMeta}
+                  onUserEdit={(id) =>
+                    setFieldMeta((prev) => {
+                      if (!prev[id]) return prev;
+                      const next = { ...prev };
+                      delete next[id];
+                      return next;
+                    })
+                  }
+                  onFinish={handleGenerate}
+                  finishLabel="Bouw prompt"
+                  heading={<StepHeading title="Kijk na en vul aan" />}
+                  showLetters={false}
+                  askIfEmpty={prefill.fields.length > 0}
+                />
 
-              {/* Een nieuwe invulronde met extra uitleg: handig als de AI op het
-                  verkeerde spoor zit. Bij de routekaart niet, daar zou een nieuwe
-                  ronde de velden opnieuw laten schrijven. */}
-              {!isSjabloon(technique) && (
-                <div className="mt-3 border-t border-slate-200 pt-3 dark:border-slate-700">
-                  <button
-                    type="button"
-                    aria-expanded={clarifyOpen}
-                    onClick={() => setClarifyOpen((v) => !v)}
-                    className="inline-flex min-h-8 items-center gap-1.5 text-sm font-medium text-rijksblauw-500 transition-colors hover:underline dark:text-rijksblauw-200"
-                  >
-                    <RefreshCw size={15} /> Opnieuw laten invullen met een toelichting
-                  </button>
-                  {clarifyOpen && (
-                    <div className="animate-fade-in mt-2">
-                      <label className="opl-label" htmlFor="prefill-clarify-input">
-                        Jouw toelichting
-                      </label>
-                      <textarea
-                        id="prefill-clarify-input"
-                        className="opl-input min-h-[5rem] resize-y text-[0.9375rem]"
-                        value={clarification}
-                        placeholder="Bijv. de doelgroep is nieuwe medewerkers, de toon is informeel"
-                        onChange={(e) => setClarification(e.target.value)}
-                        disabled={prefilling}
-                      />
-                      <button
-                        type="button"
-                        className="opl-btn-secondary mt-2"
-                        onClick={() => void runPrefill(technique, clarification)}
-                        disabled={prefilling || generating || !clarification.trim()}
-                      >
-                        <RefreshCw size={16} /> Velden opnieuw invullen
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </section>
-          </div>
+                {/* Een nieuwe invulronde met extra uitleg: handig als de AI op het
+                    verkeerde spoor zit. Bij de routekaart niet, daar zou een nieuwe
+                    ronde de velden opnieuw laten schrijven. */}
+                {!isSjabloon(technique) && (
+                  <>
+                    <nldd-divider></nldd-divider>
+                    <nldd-container gap="8">
+                      <nldd-button
+                        appearance="neutral-transparent"
+                        start-icon="refresh"
+                        text="Opnieuw laten invullen met een toelichting"
+                        expanded={clarifyOpen || undefined}
+                        onClick={() => setClarifyOpen((v) => !v)}
+                      ></nldd-button>
+                      {clarifyOpen && (
+                        <>
+                          <nldd-form-field label="Jouw toelichting">
+                            <TextArea
+                              value={clarification}
+                              onValue={setClarification}
+                              rows={3}
+                              resize="vertical"
+                              placeholder="Bijv. de doelgroep is nieuwe medewerkers, de toon is informeel"
+                              disabled={prefilling || undefined}
+                            />
+                          </nldd-form-field>
+                          <nldd-button-group>
+                            <nldd-button
+                              appearance="secondary"
+                              start-icon="refresh"
+                              text="Velden opnieuw invullen"
+                              onClick={() => void runPrefill(technique, clarification)}
+                              disabled={prefilling || generating || !clarification.trim() || undefined}
+                            ></nldd-button>
+                          </nldd-button-group>
+                        </>
+                      )}
+                    </nldd-container>
+                  </>
+                )}
+            </nldd-container>
+          </nldd-container>
         )}
-      </div>
+      </nldd-container>
 
       {!composerOpen && unclearBlock}
 
       {/* Denken, Internet en bouwen op één regel, net als op Technieken. */}
       {prefill && !prefilling && !generating && (
-        <div className="flex flex-wrap items-center justify-end gap-1.5">
+        <nldd-container layout="wrap" gap="6" vertical-alignment="center" horizontal-alignment="right">
           {toggles}
-          <button
-            type="button"
-            className="opl-btn-primary min-h-12 px-6 text-base"
-            onClick={handleGenerate}
-          >
-            <Sparkles size={20} className="text-rijksoranje-vast" /> Bouw prompt
-          </button>
-        </div>
+          <nldd-button appearance="primary" size="lg" start-icon="sparkles" text="Bouw prompt" onClick={handleGenerate}></nldd-button>
+        </nldd-container>
       )}
-    </div>
+
+      <ExamplesSheet
+        open={showExamples}
+        onClose={() => setShowExamples(false)}
+        onCopy={(text) => void copyExample(text)}
+        onApply={applyExample}
+      />
+    </nldd-container>
+  );
+}
+
+/** A multi-line nldd field bound to React state; it binds its own listener when it mounts. */
+function TextArea({
+  value,
+  onValue,
+  ...rest
+}: Omit<ComponentProps<'nldd-multi-line-text-field'>, 'ref'> & { value: string; onValue: (v: string) => void }) {
+  const ref = useRef<HTMLElement & { value?: string }>(null);
+  useNlddValue(ref, value, onValue);
+  return <nldd-multi-line-text-field ref={ref} {...rest}></nldd-multi-line-text-field>;
+}
+
+/** One choice in an nldd-list type="radiogroup": a row with a name and a line under it. */
+function RadioRow({
+  checked,
+  disabled,
+  text,
+  supportingText,
+  onCheck,
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  text: string;
+  supportingText?: string;
+  onCheck: () => void;
+}) {
+  const ref = useRef<HTMLElement>(null);
+  useNlddEvent<CustomEvent<{ checked: boolean }>>(ref, 'change', (e) => {
+    if (e.detail?.checked) onCheck();
+  });
+  return (
+    <nldd-list-item ref={ref} radio checked={checked || undefined} disabled={disabled || undefined}>
+      <nldd-cell vertical-alignment="top">
+        <nldd-radio-button decorative checked={checked || undefined}></nldd-radio-button>
+      </nldd-cell>
+      <nldd-spacer-cell size="12"></nldd-spacer-cell>
+      <nldd-text-cell text={text} supporting-text={supportingText}></nldd-text-cell>
+    </nldd-list-item>
+  );
+}
+
+/** "Wat wil je maken?": "AI kiest" plus de soorten, één keuze tegelijk. */
+function KindPicker({
+  kind,
+  onKind,
+  disabled,
+}: {
+  kind: PromptKind | null;
+  onKind: (kind: PromptKind | null) => void;
+  disabled: boolean;
+}) {
+  const ref = useRef<HTMLElement>(null);
+  useNlddEvent<CustomEvent<{ selected: boolean; value: string }>>(ref, 'change', (e) => {
+    if (!e.detail?.selected) return;
+    onKind(e.detail.value === 'auto' ? null : (e.detail.value as PromptKind));
+  });
+  return (
+    <nldd-toggle-button-group
+      ref={ref}
+      type="radio"
+      accessible-label="Wat wil je maken? Kies je niets, dan bepaalt de AI het zelf."
+      disabled={disabled || undefined}
+    >
+      {[null, ...PROMPT_KINDS].map((k) => {
+        const option = k ? KIND_OPTIONS[k] : { label: 'AI kiest', icon: 'sparkles' };
+        return (
+          <nldd-toggle-button
+            key={k ?? 'auto'}
+            value={k ?? 'auto'}
+            icon={option.icon}
+            text={option.label}
+            selected={kind === k || undefined}
+          ></nldd-toggle-button>
+        );
+      })}
+    </nldd-toggle-button-group>
+  );
+}
+
+/**
+ * Voorbeeldprompts uit het rijkswerk in een zijpaneel. De prompt zelf staat niet
+ * in de lijst (dan wordt die onleesbaar lang); wie hem wil lezen, zet hem met
+ * "Gebruik" in het veld.
+ */
+function ExamplesSheet({
+  open,
+  onClose,
+  onCopy,
+  onApply,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onCopy: (text: string) => void;
+  onApply: (text: string) => void;
+}) {
+  const ref = useRef<HTMLElement>(null);
+  useNlddEvent(ref, 'close', () => {
+    if (open) onClose();
+  });
+  return createPortal(
+    <nldd-sheet ref={ref} open={open || undefined} placement="right" width="36rem" accessible-label="Voorbeeldprompts">
+      <nldd-page>
+        <nldd-top-title-bar slot="header" text="Voorbeeldprompts" heading-level={2} dismiss-text="Sluit"></nldd-top-title-bar>
+        <nldd-simple-section>
+          <nldd-text size="sm" color="secondary">
+            Voorbeeldprompts uit het rijkswerk. Kies er een om hem in het invoerveld te zetten, en pas hem
+            aan naar je eigen dossier. Met het kopieericoon zet je hem op het klembord.
+          </nldd-text>
+          <nldd-spacer size="12"></nldd-spacer>
+          <nldd-list accessible-label="Voorbeeldprompts" appearance="box-tinted">
+            {PROMPT_EXAMPLES.map((ex) => {
+              const category = PROMPT_CATEGORIES[ex.category];
+              return (
+                <nldd-list-item key={ex.title}>
+                  <nldd-list-item-segment button width="full" onClick={() => onApply(ex.prompt)}>
+                    <nldd-icon-cell icon={category.iconName} size="20" color="accent" vertical-alignment="top"></nldd-icon-cell>
+                    <nldd-spacer-cell size="12"></nldd-spacer-cell>
+                    <nldd-text-cell overline={category.label} text={ex.title} supporting-text={ex.subtitle}></nldd-text-cell>
+                  </nldd-list-item-segment>
+                  <nldd-list-item-segment
+                    button
+                    accessible-label={`Kopieer voorbeeld: ${ex.title}`}
+                    onClick={() => onCopy(ex.prompt)}
+                  >
+                    <nldd-icon-cell icon="copy" size="20" color="secondary"></nldd-icon-cell>
+                  </nldd-list-item-segment>
+                </nldd-list-item>
+              );
+            })}
+          </nldd-list>
+        </nldd-simple-section>
+      </nldd-page>
+    </nldd-sheet>,
+    document.body,
   );
 }
 

@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { CheckCircle2, Clock, FileText } from '@/components/common/icons';
+import { useParams } from 'react-router-dom';
 import { getProjectRetention, keepProjectFiles, type ProjectRetention } from '@/services/chatProjectService';
 
 /**
@@ -41,6 +40,7 @@ export default function KeepProjectFilesPage() {
   }, [projectId]);
 
   async function keep() {
+    if (busy) return;
     setBusy(true);
     setError('');
     try {
@@ -53,87 +53,92 @@ export default function KeepProjectFilesPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6">
-      <div className="mb-6 flex items-center gap-3">
-        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-rijksblauw-50 text-rijksblauw-600 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-300">
-          <FileText size={26} />
-        </span>
-        <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
-          Bronbestanden bewaren
-        </h1>
-      </div>
+    <nldd-simple-section width="42rem">
+      <nldd-container layout="row" gap="12" vertical-alignment="center">
+        <nldd-icon icon="file-text" size="48" color="lintblauw" box></nldd-icon>
+        <nldd-title heading-level={1} size={2} text="Bronbestanden bewaren"></nldd-title>
+      </nldd-container>
+      <nldd-spacer size="24"></nldd-spacer>
 
-      <div className="opl-card space-y-4 p-5 text-base text-slate-700 dark:text-slate-200">
-        {state === 'laden' && <p className="text-slate-500 dark:text-slate-400">Bezig met laden…</p>}
+      <nldd-card>
+        <nldd-container padding="20" gap="16">
+          {state === 'laden' && <nldd-activity-indicator size="32" show-text text="Bezig met laden"></nldd-activity-indicator>}
 
-        {state === 'onbekend' && (
-          <p>
-            Dit project bestaat niet meer, of het is niet van jou. Ben je met een ander account
-            ingelogd dan het account waarop de mail binnenkwam?
-          </p>
-        )}
+          {state === 'onbekend' && (
+            <nldd-text>
+              Dit project bestaat niet meer, of het is niet van jou. Ben je met een ander account
+              ingelogd dan het account waarop de mail binnenkwam?
+            </nldd-text>
+          )}
 
-        {state === 'fout' && <p>Het project kon niet worden geladen. Probeer het later opnieuw.</p>}
+          {state === 'fout' && <nldd-text>Het project kon niet worden geladen. Probeer het later opnieuw.</nldd-text>}
 
-        {state === 'klaar' && info && keptUntil && (
-          <div role="status" className="space-y-3">
-            <p className="flex items-start gap-2 font-semibold text-rijksblauw-700 dark:text-rijksblauw-200">
-              <CheckCircle2 size={22} className="mt-0.5 shrink-0" />
-              De bestanden van {info.name} blijven bewaard.
-            </p>
-            <p>
-              Ze staan er in elk geval tot {datum(keptUntil)}. Gebruik je het project in de tussentijd,
-              dan schuift die datum mee. Je keuze is vastgelegd.
-            </p>
-          </div>
-        )}
+          {state === 'klaar' && info && keptUntil && (
+            <nldd-container role="status" gap="12">
+              <nldd-container layout="row" gap="8">
+                <nldd-icon icon="check-mark-circle" size="24" color="success"></nldd-icon>
+                <nldd-text weight="bold">De bestanden van {info.name} blijven bewaard.</nldd-text>
+              </nldd-container>
+              <nldd-text>
+                Ze staan er in elk geval tot {datum(keptUntil)}. Gebruik je het project in de tussentijd,
+                dan schuift die datum mee. Je keuze is vastgelegd.
+              </nldd-text>
+            </nldd-container>
+          )}
 
-        {state === 'klaar' && info && !keptUntil && (
-          <>
-            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
-              <dt className="font-semibold">Project</dt>
-              <dd className="min-w-0 break-words">{info.name}</dd>
-              <dt className="font-semibold">Bestanden</dt>
-              <dd>{bestanden(info.fileCount)}</dd>
-              {info.deleteOn && (
+          {state === 'klaar' && info && !keptUntil && (
+            <>
+              <nldd-list appearance="simple" accessible-label="Gegevens van het project">
+                <nldd-list-item size="sm">
+                  <nldd-text-cell width="9rem" text="**Project**"></nldd-text-cell>
+                  <nldd-text-cell text={info.name}></nldd-text-cell>
+                </nldd-list-item>
+                <nldd-list-item size="sm">
+                  <nldd-text-cell width="9rem" text="**Bestanden**"></nldd-text-cell>
+                  <nldd-text-cell text={bestanden(info.fileCount)}></nldd-text-cell>
+                </nldd-list-item>
+                {info.deleteOn && (
+                  <nldd-list-item size="sm">
+                    <nldd-text-cell width="9rem" text="**Verwijderd op**"></nldd-text-cell>
+                    <nldd-text-cell text={datum(info.deleteOn)}></nldd-text-cell>
+                  </nldd-list-item>
+                )}
+              </nldd-list>
+
+              {info.fileCount === 0 ? (
+                <nldd-text>Dit project heeft geen bronbestanden meer. Er valt niets te bewaren.</nldd-text>
+              ) : (
                 <>
-                  <dt className="font-semibold">Verwijderd op</dt>
-                  <dd>{datum(info.deleteOn)}</dd>
+                  <nldd-container layout="row" gap="8">
+                    <nldd-icon icon="clock" size="20" color="secondary-content"></nldd-icon>
+                    <nldd-text>
+                      {info.deleteOn
+                        ? 'Bronbestanden die drie maanden niet zijn gebruikt, worden verwijderd. Het project zelf blijft staan, met naam en instructie.'
+                        : `Je bestanden staan er in elk geval tot ${datum(info.keepUntil)}. Wil je die termijn nu al verlengen, dan kan dat hier.`}
+                    </nldd-text>
+                  </nldd-container>
+                  <nldd-button-group>
+                    <nldd-button
+                      appearance="primary"
+                      text="Bewaar bestanden"
+                      onClick={keep}
+                      loading={busy || undefined}
+                      loading-text="Bezig met bewaren"
+                    ></nldd-button>
+                  </nldd-button-group>
+                  {error && (
+                    <nldd-container role="alert">
+                      <nldd-banner variant="critical" size="sm" text={error}></nldd-banner>
+                    </nldd-container>
+                  )}
                 </>
               )}
-            </dl>
+            </>
+          )}
 
-            {info.fileCount === 0 ? (
-              <p>Dit project heeft geen bronbestanden meer. Er valt niets te bewaren.</p>
-            ) : (
-              <>
-                <p className="flex items-start gap-2">
-                  <Clock size={20} className="mt-0.5 shrink-0 text-slate-500 dark:text-slate-400" />
-                  {info.deleteOn
-                    ? 'Bronbestanden die drie maanden niet zijn gebruikt, worden verwijderd. Het project zelf blijft staan, met naam en instructie.'
-                    : `Je bestanden staan er in elk geval tot ${datum(info.keepUntil)}. Wil je die termijn nu al verlengen, dan kan dat hier.`}
-                </p>
-                <button type="button" className="opl-btn-primary" onClick={keep} disabled={busy}>
-                  {busy ? 'Bezig met bewaren…' : 'Bestanden bewaren'}
-                </button>
-                {error && (
-                  <p role="alert" className="text-red-700 dark:text-red-300">
-                    {error}
-                  </p>
-                )}
-              </>
-            )}
-          </>
-        )}
-
-        {state !== 'laden' && (
-          <p>
-            <Link to="/chat" className="opl-raak text-rijksblauw-600 underline dark:text-rijksblauw-300">
-              Naar de chat
-            </Link>
-          </p>
-        )}
-      </div>
-    </div>
+          {state !== 'laden' && <nldd-link href="/chat" text="Naar de chat"></nldd-link>}
+        </nldd-container>
+      </nldd-card>
+    </nldd-simple-section>
   );
 }

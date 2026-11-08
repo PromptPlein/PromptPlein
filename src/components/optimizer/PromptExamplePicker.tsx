@@ -1,19 +1,17 @@
-import { useState } from 'react';
-import { ChevronDown, Lightbulb, Wand2 } from '@/components/common/icons';
-import clsx from 'clsx';
-import HoverPreview from '@/components/common/HoverPreview';
+import { useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useNlddEvent } from '@/lib/nldd';
 import { PROMPT_CATEGORIES } from '@/data/promptCategories';
 import { PROMPT_EXAMPLES, type PromptExample } from '@/data/promptExamples';
 
 /**
- * Voorbeeldprompts kiezen als startpunt voor het contextveld van een framework.
+ * Example prompts as a starting point for the context field of a framework.
  *
- * Eén smalle regel boven het veld: wie een voorbeeld zoekt ziet hem meteen, wie
- * zelf typt heeft er geen last van. Hij klapt uit naar de hele lijst.
- *
- * Het kaartje toont de prompt zelf niet (dan wordt de lijst onleesbaar lang):
- * wie hem vooraf wil lezen, houdt de muis erboven, en verder staat hij na het
- * kiezen gewoon in het contextveld, waar hij toch aangepast moet worden.
+ * One quiet button above the field: whoever looks for an example finds it,
+ * whoever types does not notice it. The list is long on purpose (there is a lot
+ * of different work), so it opens in a sheet beside the page instead of pushing
+ * the field down. A row shows the title, not the prompt; the eye button beside
+ * it shows the prompt itself, and after picking it is in the context field.
  */
 export default function PromptExamplePicker({
   onPick,
@@ -22,10 +20,12 @@ export default function PromptExamplePicker({
   onPick: (prompt: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  // Titel van het laatst gekozen voorbeeld, zodat de balk na het kiezen laat
-  // zien wat er in het veld staat. Puur informatief: de gebruiker bewerkt de
-  // tekst daarna zelf, dus dit is geen selectie die iets stuurt.
+  // Title of the last picked example, so the button shows what is in the field.
+  // Informational only: the user edits the text afterwards.
   const [picked, setPicked] = useState<string | null>(null);
+  const baseId = useId().replace(/:/g, '');
+  const sheetRef = useRef<HTMLElement>(null);
+  useNlddEvent(sheetRef, 'close', () => setOpen(false));
 
   function pick(ex: PromptExample) {
     setPicked(ex.title);
@@ -34,63 +34,76 @@ export default function PromptExamplePicker({
   }
 
   return (
-    <div className="mb-2">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        aria-controls="techniek-voorbeelden"
-        title={`${PROMPT_EXAMPLES.length} prompts uit het rijkswerk. Je past ze daarna aan naar je eigen dossier.`}
-        className="inline-flex min-h-8 items-center gap-1.5 text-sm font-medium text-rijksblauw-500 transition-colors hover:underline dark:text-rijksblauw-200"
-      >
-        <Lightbulb size={16} className="shrink-0 text-rijksoranje" />
-        {picked ? `Voorbeeld gekozen: ${picked}` : 'Begin met een voorbeeld'}
-        <ChevronDown
-          size={14}
-          className={clsx('shrink-0 transition-transform', open && 'rotate-180')}
-        />
-      </button>
+    <>
+      <nldd-tooltip text={`${PROMPT_EXAMPLES.length} prompts uit het rijkswerk. Je past ze daarna aan naar je eigen dossier.`}>
+        <nldd-button
+          appearance="neutral-tinted"
+          size="sm"
+          start-icon="lightbulb"
+          text={picked ? `Voorbeeld gekozen: ${picked}` : 'Begin met een voorbeeld'}
+          onClick={() => setOpen(true)}
+        ></nldd-button>
+      </nldd-tooltip>
 
-      {open && (
-        <div
-          id="techniek-voorbeelden"
-          className="animate-fade-in mt-1 rounded-lg border border-slate-200 p-3 dark:border-slate-700"
-        >
-          {/* Vaste hoogte met eigen schuifbalk: de lijst is bewust lang (er is
-              veel verschillend werk), maar mag de rest van het invulblok niet
-              wegdrukken. */}
-          <div className="opl-scroll-slim max-h-[22rem] space-y-2 overflow-y-auto pr-1">
-            {PROMPT_EXAMPLES.map((ex) => {
-              const category = PROMPT_CATEGORIES[ex.category];
-              return (
-                <HoverPreview key={ex.title} label="Voorbeeldprompt" text={ex.prompt}>
-                  <button
-                    type="button"
-                    onClick={() => pick(ex)}
-                    className="group flex w-full items-start justify-between gap-2 rounded-lg border border-slate-200 bg-white p-2.5 text-left transition-colors hover:border-rijksblauw-300 hover:bg-rijksblauw-50/60 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-rijksblauw-500/40 dark:hover:bg-rijksblauw-500/10"
-                  >
-                    <span className="min-w-0">
-                      <span className="inline-flex items-center gap-1 text-[0.6875rem] font-medium text-rijksblauw-600 dark:text-rijksblauw-300">
-                        <category.icon size={12} className="shrink-0" />
-                        {category.label}
-                      </span>
-                      <span className="mt-0.5 block text-sm font-semibold text-slate-800 dark:text-slate-100">
-                        {ex.title}
-                      </span>
-                      <span className="block text-xs text-slate-500 dark:text-slate-400">
-                        {ex.subtitle}
-                      </span>
-                    </span>
-                    <span className="inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-rijksblauw-600 transition-colors group-hover:bg-rijksblauw-100 dark:text-rijksblauw-300 dark:group-hover:bg-rijksblauw-500/20">
-                      <Wand2 size={13} /> Gebruik
-                    </span>
-                  </button>
-                </HoverPreview>
-              );
-            })}
-          </div>
-        </div>
+      {createPortal(
+        <nldd-sheet ref={sheetRef} placement="right" width="32rem" open={open || undefined}>
+          <nldd-page>
+            <nldd-top-title-bar
+              slot="header"
+              text="Begin met een voorbeeld"
+              heading-level={2}
+              dismiss-text="Sluiten"
+            ></nldd-top-title-bar>
+            <nldd-simple-section>
+              <nldd-text slot="header" color="secondary">
+                {PROMPT_EXAMPLES.length} prompts uit het rijkswerk. Kies er een; je past hem daarna aan naar je
+                eigen dossier.
+              </nldd-text>
+              <nldd-list appearance="box-base" accessible-label="Voorbeeldprompts">
+                {PROMPT_EXAMPLES.map((ex, i) => (
+                  <nldd-list-item key={ex.title}>
+                    <nldd-list-item-segment width="full" button onClick={() => pick(ex)}>
+                      <nldd-text-cell
+                        overline={PROMPT_CATEGORIES[ex.category].label}
+                        text={ex.title}
+                        supporting-text={ex.subtitle}
+                      ></nldd-text-cell>
+                    </nldd-list-item-segment>
+                    <nldd-list-item-segment
+                      button
+                      popovertarget={`${baseId}-voorbeeld-${i}`}
+                      accessible-label={`${ex.title}: bekijk de prompt`}
+                    >
+                      <nldd-icon-cell icon="eye" size="20"></nldd-icon-cell>
+                    </nldd-list-item-segment>
+                  </nldd-list-item>
+                ))}
+              </nldd-list>
+              {PROMPT_EXAMPLES.map((ex, i) => (
+                <nldd-popover
+                  key={ex.title}
+                  id={`${baseId}-voorbeeld-${i}`}
+                  role="region"
+                  width="28rem"
+                  accessible-label={`Voorbeeldprompt: ${ex.title}`}
+                >
+                  <nldd-container padding="16" gap="8">
+                    <nldd-text size="sm" weight="bold">
+                      {ex.title}
+                    </nldd-text>
+                    {ex.prompt.split(/\n{2,}/).map((para, j) => (
+                      <nldd-text key={j} size="sm">
+                        {para}
+                      </nldd-text>
+                    ))}
+                  </nldd-container>
+                </nldd-popover>
+              ))}
+            </nldd-simple-section>
+          </nldd-page>
+        </nldd-sheet>,
+        document.body,
       )}
-    </div>
+    </>
   );
 }

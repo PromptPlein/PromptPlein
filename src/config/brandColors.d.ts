@@ -1,48 +1,59 @@
 /**
- * Typedeclaraties voor de centrale merkkleuren (src/config/brandColors.js).
- * Het implementatiebestand is bewust .js zodat tailwind.config.js het kan
- * importeren; deze .d.ts geeft de TypeScript-broncode volledige typing.
+ * Types for src/config/brandColors.js, which reads every color from the
+ * design system tokens at runtime.
  */
+
+export type Scheme = 'light' | 'dark';
 
 export type RijksblauwTint =
   | 50 | 100 | 200 | 300 | 400 | 500 | 600 | 700 | 800 | 900;
 
+export type RijkskleurName =
+  | 'oranje' | 'oranjeDonker' | 'rood' | 'groen' | 'hemelblauw' | 'lichtblauw'
+  | 'donkergeel' | 'mintgroen' | 'mosgroen' | 'donkergroen' | 'violet' | 'paars' | 'bruin';
+
+type OrgType =
+  | 'government' | 'ministry' | 'directorate_general' | 'directorate' | 'agency' | 'department';
+
+export function currentScheme(): Scheme;
+export function readToken(name: string, scheme?: Scheme): string;
+export function readRawToken(name: string): string;
+
+export const rijksblauwTokens: Record<RijksblauwTint, string>;
+export const rijkskleurTokens: Record<RijkskleurName, string>;
 export const rijksblauw: Record<RijksblauwTint, string>;
-export const rijksoranje: string;
-export const rijksoranjeDonker: string;
-export const accentDonker: string;
-export const accentDonkerHover: string;
-export const rijksrood: string;
-export const rijksgroen: string;
-export const hemelblauw: string;
-export const lichtblauw: string;
-export const donkergeel: string;
-export const mintgroen: string;
-export const mosgroen: string;
-export const donkergroen: string;
-export const violet: string;
-export const paars: string;
-export const bruin: string;
+export const rijkskleur: Record<RijkskleurName, string>;
 
 export const brand: {
-  primary: string;
-  primaryDark: string;
-  primaryDarker: string;
-  primaryLight: string;
-  primaryLighter: string;
-  secondary: string;
+  readonly primary: string;
+  readonly primaryDark: string;
+  readonly primaryDarker: string;
+  readonly primaryLight: string;
+  readonly primaryLighter: string;
+  readonly secondary: string;
 };
 
-export const categoryPalette: string[];
+export const categoryPalette: readonly string[];
 
-export const backgroundGradient: { deep: string; mid: string; light: string };
+export const backgroundGradient: { readonly deep: string; readonly mid: string; readonly light: string };
 
-export const orgTypeColor: Record<
-  'government' | 'ministry' | 'directorate_general' | 'directorate' | 'agency' | 'department',
-  string
->;
+export const orgTypeTokens: Record<OrgType, string>;
+export const orgTypeColor: Record<OrgType, string>;
 
-export const ecosystemPalette: string[];
+export const ecosystemPalette: readonly string[];
+
+export function documentStyle(): {
+  content: string;
+  secondary: string;
+  muted: string;
+  surface: string;
+  border: string;
+  faint: string;
+  primary: string;
+  heading: string;
+  fontFamily: string;
+  monoFamily: string;
+};
 
 export function hexToRgbNorm(hex: string): [number, number, number];
 export function hexToVec3(hex: string): string;

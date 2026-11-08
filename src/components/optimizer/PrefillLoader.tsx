@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Brain, Check, Globe, Loader2, Search, Timer } from '@/components/common/icons';
 import ModelStatus from './ModelStatus';
 import PhaseSteps from './PhaseSteps';
 import type { PrefillPhase } from '@/services/optimizeService';
@@ -88,140 +87,122 @@ export default function PrefillLoader({
   const stepIndex = STEPS.findIndex((s) => s.phase === phase);
 
   return (
-    <div className="animate-fade-in overflow-hidden rounded-2xl border border-rijksblauw-200 bg-white shadow-sm dark:border-rijksblauw-500/30 dark:bg-slate-800">
-      {/* Bovenrand: onbepaald zolang er nog geen veld binnen is, daarna de echte
-          voortgang over het aantal ingevulde velden. */}
-      <div className="h-1 w-full overflow-hidden bg-rijksblauw-100 dark:bg-rijksblauw-500/20">
-        {doneCount > 0 ? (
-          <div
-            className="h-full bg-rijksblauw-500 transition-all duration-500 ease-out"
-            style={{ width: `${Math.max(pct, 8)}%` }}
-          />
-        ) : (
-          <div className="h-full w-1/3 animate-loading-bar bg-rijksblauw-500" />
-        )}
-      </div>
-
-      <div className="p-5 sm:p-6">
+    <nldd-box>
+      <nldd-container padding="20" sm-padding="16" gap="16">
+        {/* Bovenrand: onbepaald zolang er nog geen veld binnen is, daarna de echte
+            voortgang over het aantal ingevulde velden. */}
+        <nldd-progress-bar
+          size="sm"
+          value-display="none"
+          accessible-label="Velden invullen"
+          indeterminate={doneCount === 0 || undefined}
+          value={doneCount > 0 ? String(Math.max(pct, 8)) : undefined}
+        ></nldd-progress-bar>
         {!plain && (
           <>
-        <div className="flex items-center gap-3">
-          <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-rijksblauw-50 text-rijksblauw-600 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rijksblauw-400/30" />
-            <Search size={18} className="relative" />
-          </span>
-          <div className="min-w-0">
-            <p className="flex items-center gap-2 font-semibold text-slate-800 dark:text-slate-100">
-              We vullen de velden alvast voor
-              <Loader2 size={15} className="animate-spin text-rijksblauw-500" />
-            </p>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              We ontleden {source} en verdelen de inhoud over de velden van{' '}
-              <span className="font-medium text-rijksblauw-700 dark:text-rijksblauw-200">
-                {techniqueName}
-              </span>
-              …
-            </p>
-          </div>
-        </div>
+            <nldd-container layout="row" gap="12" vertical-alignment="center">
+              <nldd-icon icon="search" size="40" color="accent" box></nldd-icon>
+              <nldd-container gap="2">
+                <nldd-container layout="row" gap="8" vertical-alignment="center">
+                  <nldd-text weight="bold">We vullen de velden alvast voor</nldd-text>
+                  <nldd-activity-indicator size="16" timing="instant"></nldd-activity-indicator>
+                </nldd-container>
+                <nldd-text size="sm" color="secondary">
+                  We ontleden {source} en verdelen de inhoud over de velden van <strong>{techniqueName}</strong>…
+                </nldd-text>
+              </nldd-container>
+            </nldd-container>
 
-        {/* Stappenspoor: welke fase loopt er nu. */}
-        <PhaseSteps steps={STEPS.map((s) => s.label)} activeIndex={stepIndex} className="mt-4" />
+            {/* Stappenspoor: welke fase loopt er nu. */}
+            <PhaseSteps steps={STEPS.map((s) => s.label)} activeIndex={stepIndex} />
           </>
         )}
 
         {/* Zoeken en denken in beeld: wat er gebeurt en dat het tijd kost. */}
         {(webSearch || thinking) && (
-          <div className="mt-4 space-y-2 rounded-xl bg-slate-50 p-3 text-xs text-slate-600 dark:bg-slate-900/50 dark:text-slate-300">
-            {webSearch && (
-              <div>
-                <p className="flex items-center gap-1.5 font-medium text-rijksblauw-700 dark:text-rijksblauw-200">
-                  <Globe size={13} className={phase === 'searching' ? 'animate-pulse' : ''} />
-                  {sources === undefined
-                    ? 'Internet raadplegen: we zoeken feiten bij je opdracht…'
-                    : sources.length > 0
-                      ? `Internet geraadpleegd: ${sources.length} ${sources.length === 1 ? 'bron' : 'bronnen'} gevonden`
-                      : 'Internet geraadpleegd: geen bruikbare bronnen gevonden'}
-                </p>
-                {queries.length > 0 && (
-                  <p className="mt-0.5 text-slate-500 dark:text-slate-400">
-                    Gezocht op: {queries.map((q) => `"${q}"`).join(' en ')}
-                  </p>
-                )}
-                {sources && sources.length > 0 && (
-                  <ul className="mt-1 space-y-0.5">
-                    {sources.map((src) => (
-                      <li key={src.url} className="truncate">
-                        <a
-                          href={src.url}
-                          target="_blank"
-                          rel="noreferrer noopener"
-                          className="text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
-                          title={src.url}
-                        >
-                          {src.title}
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
-            {thinking && (
-              <p className="flex items-center gap-1.5 font-medium text-rijksblauw-700 dark:text-rijksblauw-200">
-                <Brain size={13} className={phase === 'thinking' ? 'animate-pulse' : ''} />
-                Denken staat aan: het model redeneert eerst over je opdracht, daarom duurt dit langer.
-              </p>
-            )}
-            <p className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
-              <Timer size={13} /> {elapsed}s bezig
-            </p>
-          </div>
+          <nldd-box>
+            <nldd-container padding="12" gap="8">
+              {webSearch && (
+                <nldd-container gap="4">
+                  <nldd-container layout="row" gap="6" vertical-alignment="center">
+                    <nldd-icon icon="globe" size="16" color="accent"></nldd-icon>
+                    <nldd-text size="xs" weight="medium" color="accent">
+                      {sources === undefined
+                        ? 'Internet raadplegen: we zoeken feiten bij je opdracht…'
+                        : sources.length > 0
+                          ? `Internet geraadpleegd: ${sources.length} ${sources.length === 1 ? 'bron' : 'bronnen'} gevonden`
+                          : 'Internet geraadpleegd: geen bruikbare bronnen gevonden'}
+                    </nldd-text>
+                  </nldd-container>
+                  {queries.length > 0 && (
+                    <nldd-text size="xs" color="secondary">
+                      Gezocht op: {queries.map((q) => `"${q}"`).join(' en ')}
+                    </nldd-text>
+                  )}
+                  {sources && sources.length > 0 && (
+                    <nldd-container gap="2">
+                      {sources.map((src) => (
+                        <nldd-link key={src.url} href={src.url} target="_blank" size="xs" text={src.title}></nldd-link>
+                      ))}
+                    </nldd-container>
+                  )}
+                </nldd-container>
+              )}
+              {thinking && (
+                <nldd-container layout="row" gap="6" vertical-alignment="center">
+                  <nldd-icon icon="brain" size="16" color="accent"></nldd-icon>
+                  <nldd-text size="xs" weight="medium" color="accent">
+                    Denken staat aan: het model redeneert eerst over je opdracht, daarom duurt dit langer.
+                  </nldd-text>
+                </nldd-container>
+              )}
+              <nldd-container layout="row" gap="6" vertical-alignment="center">
+                <nldd-icon icon="timer" size="16" color="secondary-content"></nldd-icon>
+                <nldd-text size="xs" color="secondary">{elapsed}s bezig</nldd-text>
+              </nldd-container>
+            </nldd-container>
+          </nldd-box>
         )}
 
-        {models.length > 0 && (
-          <ModelStatus
-            models={models}
-            winner={winner}
-            verb="vult je velden in"
-            className="mt-4"
-          />
-        )}
+        {models.length > 0 && <ModelStatus models={models} winner={winner} verb="vult je velden in" />}
 
         {/* Teller over de velden: de meest concrete voortgang die we hebben. */}
         {fields.length > 0 && (
-          <p className="mt-4 text-xs font-medium text-slate-500 dark:text-slate-400" aria-live="polite">
+          <nldd-text size="xs" weight="medium" color="secondary" aria-live="polite">
             {doneCount} van {fields.length} velden ingevuld
-          </p>
+          </nldd-text>
         )}
 
-        {/* De velden zelf: skelet zolang ze nog komen, echte tekst zodra ze
-            binnen zijn. Zo ziet de gebruiker het werk ontstaan. */}
-        <div className="mt-2 space-y-4">
+        {/* De velden zelf: een wachtregel zolang ze nog komen, echte tekst zodra
+            ze binnen zijn. Zo ziet de gebruiker het werk ontstaan. */}
+        <nldd-container gap="16">
           {rows.map((row) => {
             const value = byId.get(row.id);
             return (
-              <div key={row.id} className="space-y-1.5">
-                {row.label ? (
-                  <p className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300">
-                    {value && <Check size={12} className="text-emerald-500" />}
-                    {row.label}
-                  </p>
-                ) : (
-                  <div className="skeleton h-3.5 w-1/3 rounded" />
+              <nldd-container key={row.id} gap="6">
+                {row.label && (
+                  <nldd-container layout="row" gap="6" vertical-alignment="center">
+                    {value && <nldd-icon icon="check-mark" size="16" color="success"></nldd-icon>}
+                    <nldd-text size="xs" weight="bold">{row.label}</nldd-text>
+                  </nldd-container>
                 )}
                 {value ? (
-                  <p className="animate-fade-in line-clamp-4 rounded-lg border border-emerald-200 bg-emerald-50/40 p-2.5 text-sm leading-relaxed text-slate-700 dark:border-emerald-500/25 dark:bg-emerald-500/10 dark:text-slate-200">
-                    {value.value}
-                  </p>
+                  <nldd-box background="base">
+                    <nldd-container padding="12">
+                      <nldd-text size="sm">{value.value}</nldd-text>
+                    </nldd-container>
+                  </nldd-box>
                 ) : (
-                  <div className="skeleton h-16 w-full rounded-lg" />
+                  <nldd-container layout="row" gap="8" vertical-alignment="center">
+                    <nldd-activity-indicator size="16" timing="instant"></nldd-activity-indicator>
+                    <nldd-text size="xs" color="secondary">Wordt ingevuld…</nldd-text>
+                  </nldd-container>
                 )}
-              </div>
+              </nldd-container>
             );
           })}
-        </div>
-      </div>
-    </div>
+        </nldd-container>
+      </nldd-container>
+    </nldd-box>
   );
 }

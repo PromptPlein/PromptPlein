@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Download, Printer, FileText, CheckCircle2, Clock, XCircle, Building2, Users } from '@/components/common/icons';
 import { notify } from '@/lib/notify';
-import { BarChartCard, LineChartCard, PieChartCard } from '@/components/analytics/Charts';
+import { BarChartCard, KeyFigure, LineChartCard, PieChartCard } from '@/components/analytics/Charts';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import {
   approvalOutcomes,
@@ -17,19 +16,8 @@ import {
   type ReportData,
 } from '@/services/reportService';
 
-function Kpi({ icon: Icon, value, label }: { icon: typeof FileText; value: number; label: string }) {
-  return (
-    <div className="opl-card flex flex-col items-start gap-2 p-4 sm:flex-row sm:items-center sm:gap-3">
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rijksblauw-50 text-rijksblauw-600 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-300">
-        <Icon size={20} />
-      </span>
-      <div className="min-w-0 max-w-full">
-        <div className="text-xl font-bold text-slate-800 dark:text-slate-100">{value}</div>
-        <div className="text-xs text-slate-500 dark:text-slate-400">{label}</div>
-      </div>
-    </div>
-  );
-}
+const PAGE_TITLE = 'Bestuurlijke rapportage';
+const PAGE_INTRO = 'Overzicht van prompts, organisaties en goedkeuringen.';
 
 export default function ReportsPage() {
   const { categoryById, roleById } = useReferenceData();
@@ -49,56 +37,70 @@ export default function ReportsPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading || !data) return <div className="skeleton h-64 w-full rounded-xl" />;
+  if (loading || !data) {
+    return (
+      <nldd-container layout="stack" gap="24">
+        <nldd-title heading-level={1} size={2} text={PAGE_TITLE} supporting-text={PAGE_INTRO}></nldd-title>
+        <nldd-container min-height="16rem">
+          {loading && <nldd-activity-indicator></nldd-activity-indicator>}
+        </nldd-container>
+      </nldd-container>
+    );
+  }
 
   const kpis = computeKpis(data);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Bestuurlijke rapportage</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">Overzicht van prompts, organisaties en goedkeuringen.</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button className="opl-btn-secondary" onClick={() => reportToCsv(data, catName)}>
-            <Download size={16} /> CSV
-          </button>
-          <button className="opl-btn-primary" onClick={() => printReport(data, catName)}>
-            <Printer size={16} /> Rapport (PDF)
-          </button>
-        </div>
-      </div>
+    <nldd-container layout="stack" gap="24">
+      <nldd-container gap="16">
+        <nldd-title heading-level={1} size={2} text={PAGE_TITLE} supporting-text={PAGE_INTRO}></nldd-title>
+        <nldd-button-group>
+          <nldd-button
+            appearance="secondary"
+            start-icon="download"
+            text="CSV"
+            onClick={() => reportToCsv(data, catName)}
+          ></nldd-button>
+          <nldd-button
+            appearance="primary"
+            start-icon="printer"
+            text="Rapport (PDF)"
+            onClick={() => printReport(data, catName)}
+          ></nldd-button>
+        </nldd-button-group>
+      </nldd-container>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
-        <Kpi icon={FileText} value={kpis.totalPrompts} label="Prompts" />
-        <Kpi icon={CheckCircle2} value={kpis.approved} label="Goedgekeurd" />
-        <Kpi icon={Clock} value={kpis.inReview} label="In behandeling" />
-        <Kpi icon={XCircle} value={kpis.rejected} label="Afgewezen" />
-        <Kpi icon={Building2} value={kpis.organizations} label="Organisaties" />
-        <Kpi icon={Users} value={kpis.users} label="Gebruikers" />
-      </div>
+      <nldd-container layout="grid" gap="16" column-count={2} md-column-count={3}>
+        <KeyFigure value={kpis.totalPrompts} label="Prompts" />
+        <KeyFigure value={kpis.organizations} label="Organisaties" />
+        <KeyFigure value={kpis.users} label="Gebruikers" />
+        <KeyFigure value={kpis.approved} label="Goedgekeurd" />
+        <KeyFigure value={kpis.inReview} label="In behandeling" />
+        <KeyFigure value={kpis.rejected} label="Afgewezen" />
+      </nldd-container>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <nldd-container layout="grid" gap="16" column-count={1} md-column-count={2}>
         <PieChartCard title="Prompts per status" data={promptsByStatus(data.prompts)} />
         <PieChartCard
           title="Goedkeuringen"
           data={approvalOutcomes(data.approvals)}
-          emptyHint="Nog geen goedkeuringsbeslissingen."
+          emptyHint="Besluiten verschijnen hier zodra een beoordelaar een aanvraag afhandelt."
         />
+      </nldd-container>
+      <LineChartCard
+        title="Goedkeuringen (laatste 30 dagen)"
+        data={approvalsPerDay(data.approvals)}
+        emptyHint="Hier zie je per dag hoeveel aanvragen zijn afgehandeld."
+      />
+      <nldd-container layout="grid" gap="16" column-count={1} md-column-count={2}>
         <BarChartCard title="Prompts per categorie" data={promptsByCategory(data.prompts, catName)} />
         <BarChartCard title="Prompts per functiegroep" data={promptsByRole(data.prompts, roleName)} />
-        <BarChartCard
-          title="Prompts per organisatie"
-          data={promptsByOrganization(data)}
-          emptyHint="Nog geen aan organisaties gekoppelde prompts."
-        />
-        <LineChartCard
-          title="Goedkeuringen (laatste 30 dagen)"
-          data={approvalsPerDay(data.approvals)}
-          emptyHint="Nog geen goedkeuringsactiviteit."
-        />
-      </div>
-    </div>
+      </nldd-container>
+      <BarChartCard
+        title="Prompts per organisatie"
+        data={promptsByOrganization(data)}
+        emptyHint="Prompts die aan een organisatie gekoppeld zijn, verschijnen hier."
+      />
+    </nldd-container>
   );
 }

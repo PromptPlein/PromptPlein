@@ -1,27 +1,14 @@
-import clsx from 'clsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  AlertTriangle,
-  Download,
-  FolderOpen,
-  LogIn,
-  Menu,
-  MessageSquare,
-  Play,
-  Plus,
-  ShieldCheck,
-  Upload,
-} from '@/components/common/icons';
 import InfoDot from '@/components/common/InfoDot';
 import { useNavigate } from 'react-router-dom';
 import { notify } from '@/lib/notify';
+import { useNlddEvent } from '@/lib/nldd';
 import { useAuth } from '@/context/AuthContext';
 import { AuthLoading } from '@/components/auth/RequireAuth';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
-import Drawer from '@/components/common/Drawer';
 import ChatComposer, { type ChatComposerHandle } from '@/components/chat/ChatComposer';
 import ChatEmptyState from '@/components/chat/ChatEmptyState';
-import ChatMessageList from '@/components/chat/ChatMessageList';
+import ChatMessageList, { type ChatMessageListHandle } from '@/components/chat/ChatMessageList';
 import ChatModelBadge from '@/components/chat/ChatModelBadge';
 import ChatSidebar from '@/components/chat/ChatSidebar';
 import ChatContextWizard, { type ContextPrompt } from '@/components/chat/ChatContextWizard';
@@ -35,8 +22,6 @@ import MemoryNoticeBar from '@/components/chat/MemoryNoticeBar';
 import useThinking from '@/lib/useThinking';
 import useWebSearch from '@/lib/useWebSearch';
 import useChatProjects from '@/components/chat/useChatProjects';
-import useFitHeight from '@/components/chat/useFitHeight';
-import useReadingMode from '@/components/chat/useReadingMode';
 import SavePromptModal from '@/components/prompts/SavePromptModal';
 import { looksLikeMessyPrompt } from '@/lib/promptHeuristics';
 import { shouldJudgeFirstMessage, useChatIntakeEnabled } from '@/lib/chatIntake';
@@ -102,12 +87,7 @@ function ChatPageInner() {
   const projects = useChatProjects();
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
-  // De lijst met chats en projecten op schermen zonder zijbalk.
-  const [listOpen, setListOpen] = useState(false);
-  const restoreInputRef = useRef<HTMLInputElement>(null);
   const handoffDone = useRef(false);
-  // Hoogteplafond van de chatkaart: precies wat het venster overlaat.
-  const cardRef = useFitHeight<HTMLDivElement>();
   // Greep op de invoerbalk, zodat een startsjabloon zijn tekst in het veld kan
   // zetten in plaats van hem meteen te versturen.
   const composerRef = useRef<ChatComposerHandle>(null);
@@ -294,8 +274,6 @@ function ChatPageInner() {
 
   const projectList = projects.projects;
   const openProject = projectList.find((p) => p.id === projectPage) ?? null;
-  // Op de telefoon: wie naar beneden leest, krijgt de bovenkant uit beeld.
-  useReadingMode(cardRef, messages.length > 0 && !openProject, conversationId);
   const settingsProject = projectList.find((p) => p.id === settingsProjectId) ?? null;
   const wizardProject = projectList.find((p) => p.id === wizard?.projectId) ?? null;
 
@@ -604,24 +582,61 @@ function ChatPageInner() {
     composerRef.current?.focus();
   }, [emptyChatReady, conversationId]);
 
+  // --- Layout: de zijbalk en de titelbalk ---
+  // Onder lg is de zijbalk een sheet; de terugknop van de titelbalk opent hem.
+  const sectionRef = useRef<HTMLElement & { collapsed?: boolean; show?: () => void; hide?: () => void }>(null);
+  const titleBarRef = useRef<HTMLElement>(null);
+  const listRef = useRef<ChatMessageListHandle>(null);
+  const [collapsed, setCollapsed] = useState(false);
+  const [showJump, setShowJump] = useState(false);
+  useNlddEvent<CustomEvent<{ collapsed: boolean }>>(sectionRef, 'collapse-change', (e) =>
+    setCollapsed(Boolean(e.detail?.collapsed)),
+  );
+  useEffect(() => {
+    // The section reflects its state once it has measured itself.
+    const el = sectionRef.current;
+    if (!el) return;
+    const sync = () => setCollapsed(el.hasAttribute('collapsed'));
+    sync();
+    const observer = new MutationObserver(sync);
+    observer.observe(el, { attributes: true, attributeFilter: ['collapsed'] });
+    return () => observer.disconnect();
+  }, [configured, settings?.enabled]);
+  useNlddEvent(titleBarRef, 'back', () => sectionRef.current?.show?.());
+  /** Een keuze in de zijbalk sluit de sheet, zodat je ziet wat je koos. */
+  const closeList = useCallback(() => {
+    if (sectionRef.current?.hasAttribute('collapsed')) sectionRef.current.hide?.();
+  }, []);
+
+  /** Een bewaard bestand terugzetten. Het bestand blijft in de browser. */
+  const pickRestoreFile = useCallback(() => {
+    // A file picker opens only from a real input, and the design system has none
+    // without its own visible surface: this one is made on the spot and not shown.
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/json,.json';
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (file) void controller.importHistory(file);
+    };
+    input.click();
+  }, [controller]);
+
   // Chat uitgezet door de beheerder of geen backend: nette melding.
   if (!configured || (settings && !settings.enabled)) {
     return (
-      <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="opl-card flex items-start gap-3 border-amber-200 bg-amber-50 p-5 dark:border-amber-500/30 dark:bg-amber-500/10">
-          <AlertTriangle size={20} className="mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
-          <div>
-            <h1 className="text-sm font-semibold text-amber-800 dark:text-amber-300">
-              De chat is niet beschikbaar
-            </h1>
-            <p className="mt-1 text-sm text-amber-700 dark:text-amber-400">
-              {!configured
-                ? 'Er is geen AI-service geconfigureerd in deze omgeving.'
-                : 'De beheerder heeft de chat tijdelijk uitgeschakeld.'}
-            </p>
-          </div>
-        </div>
-      </div>
+      <nldd-simple-section>
+        <nldd-title heading-level={1} size={3} text="De chat is niet beschikbaar"></nldd-title>
+        <nldd-spacer size="16"></nldd-spacer>
+        <nldd-banner
+          variant="warning"
+          text={
+            !configured
+              ? 'Er is geen AI-service geconfigureerd in deze omgeving.'
+              : 'De beheerder heeft de chat tijdelijk uitgeschakeld.'
+          }
+        ></nldd-banner>
+      </nldd-simple-section>
     );
   }
 
@@ -631,364 +646,330 @@ function ChatPageInner() {
      waarmee je je chats als bestand meeneemt. Het bestand gaat nergens heen:
      opbouwen en inlezen gebeurt in de browser. */
   const storagePromise = (
-    <>
-      <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white py-0.5 pl-3 pr-1 font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
-        <ShieldCheck size={15} className="shrink-0 text-rijksblauw-700 dark:text-rijksblauw-200" />
-        Chats blijven in deze browser
-        <InfoDot
-          label="Uitleg over waar chats en projecten staan"
-          text={
-            'Chats staan alleen in deze browser, ook zonder account en na uitloggen. Wis je de browsergegevens of wissel je van pc, dan zie je ze daar niet.\nProjecten staan bij je account in de database.\nMet Bewaren en Terugzetten neem je je chats mee als bestand.'
-          }
-        />
-      </span>
-      <button
-        type="button"
-        className="opl-btn-ghost !px-2.5 !py-1.5"
-        onClick={controller.exportHistory}
-        disabled={controller.streaming || controller.index.length === 0}
-        title="Download al je chats als één bestand op dit apparaat"
-      >
-        <Download size={15} /> Bewaren
-      </button>
-      <button
-        type="button"
-        className="opl-btn-ghost !px-2.5 !py-1.5"
-        onClick={() => restoreInputRef.current?.click()}
-        disabled={controller.streaming}
-        title="Zet een eerder bewaard bestand terug op dit apparaat"
-      >
-        <Upload size={15} /> Terugzetten
-      </button>
-    </>
+    <nldd-container layout="row" gap="4" vertical-alignment="center">
+      <nldd-text size="sm" color="secondary">
+        Chats blijven in deze browser.
+      </nldd-text>
+      <InfoDot
+        label="Uitleg over waar chats en projecten staan"
+        text={
+          'Chats staan alleen in deze browser, ook zonder account en na uitloggen. Wis je de browsergegevens of wissel je van pc, dan zie je ze daar niet.\nProjecten staan bij je account in de database.\nMet Bewaren en Terugzetten (onder Meer bij Chats) neem je je chats mee als bestand.'
+        }
+      />
+    </nldd-container>
   );
 
-  const sidebarProps = {
-    entries: looseEntries,
-    totalConversations: controller.index.length,
-    projects: projectList,
-    activeId: projectPage ? null : (conversation?.id ?? null),
-    openProjectId: projectPage,
-    disabled: controller.streaming,
-  };
+  const chatTitle = conversation && messages.length > 0 ? conversation.title : 'Chat';
+  const barTitle = openProject ? openProject.name : chatTitle;
+  // Het tekstvak staat onder het gesprek zodra er een gesprek is; in een lege chat
+  // staat het in het midden, onder de begroeting.
+  const composerPinned = chatActive;
 
   return (
-    /* Gesprekkenlijst en gesprek zitten in ÉÉN kaart: de lijst is geen los
-       zwevend blok naast de chat maar hoort er zichtbaar bij, gescheiden door
-       niet meer dan een lijn. De kaart vult altijd het hele venster
-       (useFitHeight): zo blijft de leesruimte zo groot mogelijk en houdt het
-       tekstvak tijdens een gesprek een vaste plek. Alleen de berichtenlijst
-       scrollt. Op de telefoon vervalt de kaart en loopt de chat tot de rand. */
-    <div className="mx-auto w-full max-w-6xl sm:px-6 sm:py-4 lg:px-8 laag:!py-0">
-      <div
-        ref={cardRef}
-        className="opl-card opl-chat-kaart flex h-[calc(100dvh-14rem)] overflow-hidden max-sm:rounded-none max-sm:border-0 max-sm:shadow-none"
+    <>
+      {/* Gesprekkenlijst en gesprek horen bij elkaar: op een breed scherm staat de
+          lijst ernaast, smaller schuift hij in als sheet. Het document scrolt; de
+          titelbalk blijft staan (sticky-header). */}
+      <nldd-sidebar-section
+        ref={sectionRef}
+        sidebar-label="Chats en projecten"
+        width="full"
+        sm-padding-top="8"
       >
-        <ChatSidebar
-          {...sidebarProps}
-          onSelect={handleSelectConversation}
-          onNew={handleNewConversation}
-          onNewProject={() => void handleNewProject()}
-          onOpenProject={handleOpenProject}
-          onRequestDelete={setConfirmDeleteId}
-          onRequestDeleteAll={() => setConfirmDeleteAll(true)}
-        />
+        <nldd-container slot="sidebar" padding="12">
+          <ChatSidebar
+            entries={looseEntries}
+            totalConversations={controller.index.length}
+            projects={projectList}
+            activeId={projectPage ? null : (conversation?.id ?? null)}
+            openProjectId={projectPage}
+            disabled={controller.streaming}
+            onSelect={(id) => {
+              closeList();
+              handleSelectConversation(id);
+            }}
+            onNew={() => {
+              closeList();
+              handleNewConversation();
+            }}
+            onNewProject={() => {
+              closeList();
+              void handleNewProject();
+            }}
+            onOpenProject={(id) => {
+              closeList();
+              handleOpenProject(id);
+            }}
+            onRequestDelete={setConfirmDeleteId}
+            onRequestDeleteAll={() => setConfirmDeleteAll(true)}
+            onExport={controller.exportHistory}
+            onImport={pickRestoreFile}
+            canExport={!controller.streaming && controller.index.length > 0}
+            footer={storagePromise}
+          />
+        </nldd-container>
 
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-            {/* In de leesstand op de telefoon schuift de titelbalk weg (useReadingMode). */}
-            <div className="opl-inklap">
-              <div>
-                <div className="opl-chat-titel flex items-center gap-2 border-b border-slate-200 px-2 py-1 dark:border-slate-700 sm:px-6 sm:py-3 lg:px-6 laag:!py-0">
-                  {/* Zonder zijbalk: de lijst met chats en projecten schuift in. */}
-                  <button
-                    type="button"
-                    className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-rijksblauw-700 hover:bg-slate-100 disabled:opacity-40 dark:text-rijksblauw-200 dark:hover:bg-slate-700 lg:hidden"
-                    onClick={() => setListOpen(true)}
-                    disabled={controller.streaming}
-                    aria-label="Chats en projecten"
-                  >
-                    <Menu size={20} />
-                  </button>
-                  {openProject ? (
-                    <FolderOpen size={18} className="hidden text-rijksblauw-500 lg:block" />
-                  ) : (
-                    <MessageSquare size={18} className="hidden text-rijksblauw-500 lg:block" />
-                  )}
-                  <h1 className="min-w-0 truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
-                    {openProject
-                      ? openProject.name
-                      : conversation && messages.length > 0
-                        ? conversation.title
-                        : 'Chat'}
-                  </h1>
-                  {/* Uitvoergesprek: hier draait een gegenereerde prompt (neutrale
-                      systeemprompt, geen B1-huisregels) — maak dat zichtbaar. */}
-                  {!openProject && conversation?.kind === 'execution' && (
-                    <span
-                      className="opl-badge inline-flex shrink-0 items-center gap-1 bg-rijksoranje/10 text-rijksoranje"
-                      title="In deze chat wordt een gegenereerde prompt uitgevoerd; de prompt bepaalt zelf taal, toon en opmaak."
-                    >
-                      <Play size={11} /> Uitvoering
-                    </span>
-                  )}
-                  {/* Projectgesprek: de instructie van dit project stuurt het
-                      antwoord. Klikbaar, want vanuit een gesprek wil je regelmatig
-                      even terug naar de instructie of de bronnen. */}
-                  {!openProject && activeProject && (
-                    <button
-                      type="button"
-                      className="opl-badge inline-flex shrink-0 items-center gap-1 bg-rijksblauw-50 text-rijksblauw-700 hover:bg-rijksblauw-100 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200"
-                      onClick={() => handleOpenProject(activeProject.id)}
-                      title={`Deze chat draait onder de instructie van project "${activeProject.name}". Klik om het project te openen.`}
-                    >
-                      <FolderOpen size={11} /> {activeProject.name}
-                    </button>
-                  )}
-                  {!openProject && conversation && messages.length > 0 && (
-                    <button
-                      type="button"
-                      className="ml-auto shrink-0 rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:opacity-40 dark:text-slate-500 dark:hover:bg-slate-700 dark:hover:text-slate-200"
-                      onClick={() => controller.exportConversation(conversation.id)}
-                      disabled={controller.streaming}
-                      aria-label="Bewaar deze chat als bestand"
-                      title="Bewaar deze chat als bestand op dit apparaat"
-                    >
-                      <Download size={16} />
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    className={clsx(
-                      'flex h-9 shrink-0 items-center justify-center rounded-lg px-2 text-rijksblauw-700 hover:bg-slate-100 disabled:opacity-40 dark:text-rijksblauw-200 dark:hover:bg-slate-700 lg:hidden',
-                      !(!openProject && conversation && messages.length > 0) && 'ml-auto',
+        <nldd-page
+          sticky-header
+          background="base"
+          landmarks="region"
+          accessible-label="Chat"
+        >
+          {/* The bar always shows the title, as an h2: the h1 with the same words
+              stays in the content for RouteFocus and the heading structure. On a
+              narrow screen the back button opens the list of chats and projects. */}
+          <nldd-top-title-bar
+            ref={titleBarRef}
+            slot="header"
+            text={barTitle}
+            heading-level={2}
+            // The project page shows its name as the h1; the bar takes it over
+            // once that heading scrolls away.
+            collapse-anchor={openProject ? 'chat-titel' : undefined}
+            back-text={collapsed && !controller.streaming ? 'Chats' : undefined}
+          >
+              {!openProject && conversation && messages.length > 0 && (
+                <nldd-icon-button
+                  slot="toolbar"
+                  appearance="neutral-transparent"
+                  icon="download"
+                  text="Bewaar deze chat als bestand op dit apparaat"
+                  disabled={controller.streaming || undefined}
+                  onClick={() => controller.exportConversation(conversation.id)}
+                ></nldd-icon-button>
+              )}
+              {collapsed && (
+                <nldd-icon-button
+                  slot="toolbar"
+                  appearance="neutral-transparent"
+                  icon="plus"
+                  text="Nieuwe chat"
+                  disabled={controller.streaming || undefined}
+                  onClick={handleNewConversation}
+                ></nldd-icon-button>
+              )}
+          </nldd-top-title-bar>
+
+          {openProject && (
+            <nldd-simple-section>
+              <ProjectView
+                project={openProject}
+                conversations={projectConversations}
+                disabled={controller.streaming}
+                onNewChat={() => handleNewChatInProject(openProject.id)}
+                onNewPrompt={handleNewPrompt}
+                onMakeInstruction={() => setWizard({ projectId: openProject.id, isNew: false })}
+                onOpenSettings={() => setSettingsProjectId(openProject.id)}
+                onSelectConversation={handleSelectConversation}
+                onRequestDeleteConversation={setConfirmDeleteId}
+                onRequestDeleteProject={() => setConfirmDeleteProject(openProject.id)}
+              />
+              <nldd-text slot="footer" size="sm" color="secondary">
+                {PII_NOTICE}
+              </nldd-text>
+            </nldd-simple-section>
+          )}
+
+          {/* Leeg gesprek: begroeting en tekstvak staan samen in het midden, met
+              evenveel ruimte erboven als eronder. Na het eerste bericht neemt het
+              gesprek de ruimte in en zakt het tekstvak naar zijn vaste plek onderaan.
+              Het blijft hetzelfde element, dus de cursor raakt niet kwijt. */}
+          {!openProject && (
+            <nldd-simple-section
+              width="60ch"
+              grow
+              vertical-alignment={composerPinned ? undefined : 'bottom'}
+            >
+              {/* The title bar shows these words already; the h1 is for the
+                  heading structure and RouteFocus. */}
+              <nldd-visually-hidden>
+                <nldd-title id="chat-titel" heading-level={1} text={chatTitle}></nldd-title>
+              </nldd-visually-hidden>
+              {/* Uitvoergesprek: hier draait een gegenereerde prompt (neutrale
+                  systeemprompt, geen B1-huisregels); maak dat zichtbaar. */}
+              {(conversation?.kind === 'execution' || activeProject) && (
+                  <nldd-container layout="wrap" gap="4">
+                    {conversation?.kind === 'execution' && (
+                      <nldd-tooltip text="In deze chat wordt een gegenereerde prompt uitgevoerd; de prompt bepaalt zelf taal, toon en opmaak.">
+                        <nldd-tag size="sm" color="oranje" icon="media-play" text="Uitvoering"></nldd-tag>
+                      </nldd-tooltip>
                     )}
-                    onClick={handleNewConversation}
-                    disabled={controller.streaming}
-                    aria-label="Nieuwe chat"
-                    title="Nieuwe chat"
-                  >
-                    <Plus size={20} />
-                  </button>
-                </div>
-              </div>
-            </div>
+                    {/* Projectgesprek: de instructie van dit project stuurt het
+                        antwoord. Klikbaar, want vanuit een gesprek wil je regelmatig
+                        even terug naar de instructie of de bronnen. */}
+                    {activeProject && (
+                      <nldd-tooltip
+                        text={`Deze chat draait onder de instructie van project "${activeProject.name}". Klik om het project te openen.`}
+                      >
+                        <nldd-button
+                          size="xs"
+                          appearance="neutral-tinted"
+                          start-icon="folder-open"
+                          text={activeProject.name}
+                          onClick={() => handleOpenProject(activeProject.id)}
+                        ></nldd-button>
+                      </nldd-tooltip>
+                    )}
+                  </nldd-container>
+              )}
+              <nldd-spacer size="16"></nldd-spacer>
 
-            {openProject ? (
-              <>
-                <ProjectView
-                  project={openProject}
-                  conversations={projectConversations}
-                  disabled={controller.streaming}
-                  onNewChat={() => handleNewChatInProject(openProject.id)}
-                  onNewPrompt={handleNewPrompt}
-                  onMakeInstruction={() => setWizard({ projectId: openProject.id, isNew: false })}
-                  onOpenSettings={() => setSettingsProjectId(openProject.id)}
-                  onSelectConversation={handleSelectConversation}
-                  onRequestDeleteConversation={setConfirmDeleteId}
-                  onRequestDeleteProject={() => setConfirmDeleteProject(openProject.id)}
+              {intakeState && messages.length === 0 ? (
+                <ChatIntake
+                  state={intakeState}
+                  onPick={(answer) => runGuarded('', () => intake.answer(answer))}
+                  onTypeOwn={(start) => {
+                    const composer = composerRef.current;
+                    if (!composer) return;
+                    // Wat er al staat, blijft staan; anders komen de vinkjes erin.
+                    if (start && !composer.getText().trim()) composer.fill(`${start}, `);
+                    else composer.focus();
+                  }}
+                  onFinishQuestions={() => runGuarded('', intake.finishQuestions)}
+                  onSkip={() => runGuarded('', intake.skip)}
+                  onImprove={intake.improve}
+                  onUse={intake.use}
+                  onReopen={intake.reopen}
+                  onRetry={() => runGuarded('', intake.retry)}
+                  onAddFile={() => composerRef.current?.openFilePicker()}
+                  onSaveAsPrompt={() => handleSaveAsPrompt(intakePrompt())}
+                  onBuildInMaken={() => handleImprove(intakePrompt())}
                 />
-                <p className="border-t border-slate-200 px-4 py-2 text-center text-sm text-slate-700 dark:border-slate-700 dark:text-slate-200 sm:px-6">
-                  {PII_NOTICE}
-                </p>
-              </>
-            ) : (
-              /* Leeg gesprek: begroeting en tekstvak staan samen in het midden
-                 (mt-auto en mb-auto, die laten bij een klein venster de
-                 bovenkant bereikbaar). Na het eerste bericht neemt de lijst de
-                 ruimte in en zakt het tekstvak naar zijn vaste plek. Het blijft
-                 hetzelfde element, dus de cursor raakt niet kwijt. */
-              <div
-                className={clsx(
-                  'flex min-h-0 flex-auto flex-col',
-                  !chatActive && 'overflow-y-auto',
-                )}
-              >
-                {intakeState && messages.length === 0 ? (
-                  <ChatIntake
-                    state={intakeState}
-                    onPick={(answer) => runGuarded('', () => intake.answer(answer))}
-                    onTypeOwn={(start) => {
-                      const composer = composerRef.current;
-                      if (!composer) return;
-                      // Wat er al staat, blijft staan; anders komen de vinkjes erin.
-                      if (start && !composer.getText().trim()) composer.fill(`${start}, `);
-                      else composer.focus();
-                    }}
-                    onFinishQuestions={() => runGuarded('', intake.finishQuestions)}
-                    onSkip={() => runGuarded('', intake.skip)}
-                    onImprove={intake.improve}
-                    onUse={intake.use}
-                    onReopen={intake.reopen}
-                    onRetry={() => runGuarded('', intake.retry)}
-                    onAddFile={() => composerRef.current?.openFilePicker()}
-                    onSaveAsPrompt={() => handleSaveAsPrompt(intakePrompt())}
-                    onBuildInMaken={() => handleImprove(intakePrompt())}
-                  />
-                ) : messages.length === 0 ? (
-                  // Een vergroot tekstvak vraagt de hele ruimte: dan geen begroeting.
-                  !composerEnlarged && (
-                    <div className="mt-auto">
-                      {/* Geen startsjablonen meer: een leeg gesprek wijst alleen
-                          het invoerveld aan. */}
-                      <ChatEmptyState />
-                    </div>
-                  )
-                ) : (
-                  <ChatMessageList
-                    messages={messages}
-                    streaming={controller.streaming}
-                    phase={controller.phase}
-                    onRetry={
-                      projectNeedsLogin
-                        ? () => requireLogin('Log in om verder te gaan in deze projectchat.')
-                        : controller.retry
-                    }
-                    onContinue={
-                      projectNeedsLogin
-                        ? () => requireLogin('Log in om verder te gaan in deze projectchat.')
-                        : controller.continueLast
-                    }
-                    onRepair={handleRepair}
-                    onEdit={composerDisabled ? undefined : (id, text) => guardedSend(text, id)}
-                    onImprove={handleImprove}
-                    onSaveAsPrompt={handleSaveAsPrompt}
-                    nudgeMessageId={nudgeMessageId}
-                    onNudgeDismiss={dismissNudge}
-                  />
+              ) : messages.length === 0 ? (
+                // Een vergroot tekstvak vraagt de hele ruimte: dan geen begroeting.
+                // Geen startsjablonen meer: een leeg gesprek wijst alleen het
+                // invoerveld aan.
+                !composerEnlarged && <ChatEmptyState />
+              ) : (
+                <ChatMessageList
+                  ref={listRef}
+                  messages={messages}
+                  streaming={controller.streaming}
+                  phase={controller.phase}
+                  onRetry={
+                    projectNeedsLogin
+                      ? () => requireLogin('Log in om verder te gaan in deze projectchat.')
+                      : controller.retry
+                  }
+                  onContinue={
+                    projectNeedsLogin
+                      ? () => requireLogin('Log in om verder te gaan in deze projectchat.')
+                      : controller.continueLast
+                  }
+                  onRepair={handleRepair}
+                  onEdit={composerDisabled ? undefined : (id, text) => guardedSend(text, id)}
+                  onImprove={handleImprove}
+                  onSaveAsPrompt={handleSaveAsPrompt}
+                  nudgeMessageId={nudgeMessageId}
+                  onNudgeDismiss={dismissNudge}
+                  onShowJumpChange={setShowJump}
+                />
+              )}
+            </nldd-simple-section>
+          )}
+
+          {!openProject && (
+            /* nldd-page 0.18.0 cannot pin this in a sticky footer while the document
+               scrolls: in root scroll mode the footer reads --context-inset-bottom
+               inside .page__scroll, which already includes its own height, so it
+               floats one footer height above the bottom and covers the answer. Until
+               that is fixed in the design system the composer follows the
+               conversation. */
+            <nldd-container
+              data-chat-composer
+              padding-inline="16"
+              padding-block="12"
+              horizontal-alignment="center"
+            >
+              <nldd-container max-width="60ch" gap="8">
+                {showJump && (
+                  <nldd-container horizontal-alignment="center">
+                    <nldd-button
+                      size="sm"
+                      appearance="secondary"
+                      start-icon="arrow-down"
+                      text="Naar beneden"
+                      onClick={() => listRef.current?.jumpToEnd()}
+                    ></nldd-button>
+                  </nldd-container>
                 )}
 
                 {projectNeedsLogin && (
-                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
-                    <span>
-                      Deze chat hoort bij een project. Log in om verder te gaan met de
-                      projectinstructies.
-                    </span>
-                    <button
-                      type="button"
-                      className="opl-btn-primary !px-3 !py-1.5 text-xs"
+                  <nldd-banner
+                    size="sm"
+                    variant="warning"
+                    text="Deze chat hoort bij een project. Log in om verder te gaan met de projectinstructies."
+                  >
+                    <nldd-button
+                      slot="actions"
+                      appearance="primary"
+                      start-icon="login"
+                      text="Inloggen"
                       onClick={() => requireLogin('Log in om verder te gaan in deze projectchat.')}
-                    >
-                      <LogIn size={14} /> Inloggen
-                    </button>
-                  </div>
+                    ></nldd-button>
+                  </nldd-banner>
                 )}
 
-                <div
-                  className={
-                    chatActive
-                      ? undefined
-                      : composerEnlarged
-                        ? 'my-auto'
-                        : 'mb-auto'
+                {/* Wat het geheugen deed, op de plek waar je typt. */}
+                <MemoryNoticeBar
+                  notice={controller.memoryNotice}
+                  onDismiss={controller.dismissMemoryNotice}
+                  onLogin={() => requireLogin('Log in om dit in je geheugen op te slaan.')}
+                />
+                <ChatComposer
+                  ref={composerRef}
+                  disabled={composerDisabled}
+                  disabledPlaceholder={
+                    projectNeedsLogin ? 'Log in om verder te chatten in dit project' : undefined
                   }
-                >
-                  {/* Wat het geheugen deed, op de plek waar je typt. */}
-                  <MemoryNoticeBar
-                    notice={controller.memoryNotice}
-                    onDismiss={controller.dismissMemoryNotice}
-                    onLogin={() => requireLogin('Log in om dit in je geheugen op te slaan.')}
-                  />
-                  <ChatComposer
-                    ref={composerRef}
-                    disabled={composerDisabled}
-                    disabledPlaceholder={
-                      projectNeedsLogin ? 'Log in om verder te chatten in dit project' : undefined
+                  placeholder={intakePlaceholder}
+                  // Ook terwijl het doorvragen loopt: dan stopt Stop die stap.
+                  streaming={controller.streaming || intake.busy}
+                  extracting={controller.extracting}
+                  attachments={conversation?.attachments ?? []}
+                  onSend={guardedSend}
+                  onRoutekaart={(text) => void controller.addRoutekaart(text)}
+                  onStop={() => {
+                    if (!intake.busy) {
+                      controller.stop();
+                      return;
                     }
-                    placeholder={intakePlaceholder}
-                    // Ook terwijl het doorvragen loopt: dan stopt Stop die stap.
-                    streaming={controller.streaming || intake.busy}
-                    extracting={controller.extracting}
-                    attachments={conversation?.attachments ?? []}
-                    onSend={guardedSend}
-                    onRoutekaart={(text) => void controller.addRoutekaart(text)}
-                    onStop={() => {
-                      if (!intake.busy) {
-                        controller.stop();
-                        return;
-                      }
-                      const back = intake.stop();
-                      if (back) composerRef.current?.fill(back);
-                    }}
-                    onAddFile={(file) => void controller.addAttachment(file)}
-                    onRemoveAttachment={controller.removeAttachment}
-                    // Sterretje alleen tonen als de beheerder de functie aan heeft staan.
-                    onOptimize={settings?.optimizeEnabled ? handleOptimizeInput : undefined}
-                    onContext={handleOpenContext}
-                    activeProjectName={activeProject?.name}
-                    thinking={thinking}
-                    onToggleThinking={setThinking}
-                    thinkingUnavailable={thinkingUnavailable}
-                    // Wereldbol alleen tonen als de beheerder zoeken aan heeft staan.
-                    webSearch={webSearch}
-                    onToggleWebSearch={settings?.webSearchEnabled ? setWebSearch : undefined}
-                    // Leeg gesprek: het invoerveld is het enige aanknopingspunt op
-                    // het scherm en wordt daarom groter en blauw omrand getoond.
-                    prominent={!chatActive}
-                    notice={PII_NOTICE}
-                    // Geen uitvoergesprek: daar staan zulke woorden in de prompt die getest wordt.
-                    memoryHint={conversation?.kind !== 'execution'}
-                    onEnlargedChange={setComposerEnlarged}
-                    badge={
-                      settings ? (
-                        <ChatModelBadge provider={settings.provider} model={settings.model} />
-                      ) : undefined
-                    }
-                  />
-                </div>
-              </div>
-            )}
-        </div>
-      </div>
-
-      {/* Onder de kaart, en dus ook tijdens een lopend gesprek zichtbaar. Op de
-          telefoon telt elke regel: daar staat dit in de lijst met chats. */}
-      <div
-        data-fit-below
-        className="mt-3 hidden flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm sm:flex laag:hidden"
-      >
-        {storagePromise}
-      </div>
-      <input
-        ref={restoreInputRef}
-        type="file"
-        accept="application/json,.json"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          e.target.value = '';
-          if (file) void controller.importHistory(file);
-        }}
-      />
-
-      <Drawer open={listOpen} onClose={() => setListOpen(false)} title="Chats en projecten">
-        <ChatSidebar
-          {...sidebarProps}
-          inDrawer
-          onSelect={(id) => {
-            setListOpen(false);
-            handleSelectConversation(id);
-          }}
-          onNew={() => {
-            setListOpen(false);
-            handleNewConversation();
-          }}
-          onNewProject={() => {
-            setListOpen(false);
-            void handleNewProject();
-          }}
-          onOpenProject={(id) => {
-            setListOpen(false);
-            handleOpenProject(id);
-          }}
-          onRequestDelete={setConfirmDeleteId}
-          onRequestDeleteAll={() => setConfirmDeleteAll(true)}
-          footer={
-            <div className="mt-3 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 border-t border-slate-200 pt-3 text-sm dark:border-slate-700">
-              {storagePromise}
-            </div>
-          }
-        />
-      </Drawer>
+                    const back = intake.stop();
+                    if (back) composerRef.current?.fill(back);
+                  }}
+                  onAddFile={(file) => void controller.addAttachment(file)}
+                  onRemoveAttachment={controller.removeAttachment}
+                  // Sterretje alleen tonen als de beheerder de functie aan heeft staan.
+                  onOptimize={settings?.optimizeEnabled ? handleOptimizeInput : undefined}
+                  onContext={handleOpenContext}
+                  activeProjectName={activeProject?.name}
+                  thinking={thinking}
+                  onToggleThinking={setThinking}
+                  thinkingUnavailable={thinkingUnavailable}
+                  // Wereldbol alleen tonen als de beheerder zoeken aan heeft staan.
+                  webSearch={webSearch}
+                  onToggleWebSearch={settings?.webSearchEnabled ? setWebSearch : undefined}
+                  // Leeg gesprek: het invoerveld is het enige aanknopingspunt op
+                  // het scherm en wordt daarom groter getoond.
+                  prominent={!chatActive}
+                  notice={PII_NOTICE}
+                  // Geen uitvoergesprek: daar staan zulke woorden in de prompt die getest wordt.
+                  memoryHint={conversation?.kind !== 'execution'}
+                  onEnlargedChange={setComposerEnlarged}
+                  badge={
+                    settings ? (
+                      <ChatModelBadge provider={settings.provider} model={settings.model} />
+                    ) : undefined
+                  }
+                />
+              </nldd-container>
+            </nldd-container>
+          )}
+          {/* In a fresh chat the same room goes below the composer as above the
+              greeting, which puts the two in the middle. */}
+          {!openProject && !composerPinned && <nldd-spacer size="flexible"></nldd-spacer>}
+        </nldd-page>
+      </nldd-sidebar-section>
 
       {pendingSend && aiSettings && (
         <GuardrailDialog
@@ -1092,6 +1073,6 @@ function ChatPageInner() {
         onConfirm={() => void handleDeleteProject()}
         onClose={() => setConfirmDeleteProject(null)}
       />
-    </div>
+    </>
   );
 }

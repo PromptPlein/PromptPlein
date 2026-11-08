@@ -1,31 +1,42 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import {
-  ChevronDown,
-  ChevronUp,
-  FileText,
-  MessageSquare,
-  Plus,
-  Settings2,
-  Trash2,
-  Upload,
-  Wand2,
-} from '@/components/common/icons';
+import { Fragment, useEffect, useState } from 'react';
 import InfoDot from '@/components/common/InfoDot';
-import { TILE, TILE_PRIMARY, TILE_SOFT } from '@/components/chat/projectTiles';
 import { formatDate } from '@/lib/utils';
 import type { ChatIndexEntry, ChatProject } from '@/types';
 
-// Dezelfde gele tint als "Technieken leren" op de startpagina: de tegel die
-// naar de bouwer leidt valt op naast de twee blauwe.
-const TILE_ACCENT =
-  'bg-[#ffb612]/20 text-rijksblauw-700 hover:bg-[#ffb612]/35 dark:bg-[#ffb612]/15 dark:text-white dark:hover:bg-[#ffb612]/25';
-const SECTION_HEADING =
-  'flex items-center text-base font-bold text-rijksblauw-700 dark:text-rijksblauw-200';
+/** The instruction shows this many lines until someone opens it in full. */
+const COLLAPSED_LINES = 6;
+/** And at most this many characters: one long line wraps into several. */
+const COLLAPSED_CHARS = 480;
+
+/** Text with its line breaks kept, as inline breaks inside one nldd-text. */
+function Lines({ text }: { text: string }) {
+  const lines = text.split('\n');
+  return (
+    <>
+      {lines.map((line, i) => (
+        <Fragment key={i}>
+          {i > 0 && <br />}
+          {line}
+        </Fragment>
+      ))}
+    </>
+  );
+}
+
+/** A section heading with its explanation behind an info dot right after the words. */
+function SectionTitle({ text, info, infoLabel }: { text: string; info: string; infoLabel: string }) {
+  return (
+    <nldd-container layout="row" gap="4" vertical-alignment="center">
+      <nldd-title heading-level={2} size={5} text={text}></nldd-title>
+      <InfoDot label={infoLabel} text={info} />
+    </nldd-container>
+  );
+}
 
 /**
  * De projectpagina: wat je ziet als je links op een project klikt.
  *
- * Bewust géén chat. Een project is een plek, geen gesprek — hier zie je waar het
+ * Bewust géén chat. Een project is een plek, geen gesprek: hier zie je waar het
  * project voor staat (de projectinstructie), waar het uit put (de bronbestanden)
  * en wat je er al mee gedaan hebt (de gesprekken). Vanaf hier begin je een nieuw
  * gesprek, en dat gesprek draagt de instructie van dit project automatisch mee.
@@ -63,252 +74,154 @@ export default function ProjectView({
   const instructions = project.instructions.trim();
   const fileCount = project.fileCount ?? 0;
   const chatCount = conversations.length;
+  const off = disabled || undefined;
 
-  // De instructie staat standaard ingekort. Een projectinstructie kan een heel
-  // document zijn (20.000 tekens mag); dan duwt hij de bronbestanden en de
-  // gesprekken van het scherm en is de projectpagina alleen nog een lap tekst.
-  // Zes regels is genoeg om te zien waar het project over gaat, de rest is er
-  // voor wie hem echt wil lezen.
+  // The instruction starts collapsed: it may be a whole document (20,000
+  // characters), which would push the files and the chats off the screen.
   const [instructionsOpen, setInstructionsOpen] = useState(false);
-  const [instructionsOverflow, setInstructionsOverflow] = useState(false);
-  const instructionsRef = useRef<HTMLParagraphElement>(null);
-
-  // Ander project, weer ingeklapt: de uitklap hoort bij de instructie die je
-  // aan het lezen was, niet bij de pagina.
   useEffect(() => {
     setInstructionsOpen(false);
   }, [project.id]);
 
-  // Of er iets ónder de zesde regel staat kun je alleen meten, niet aan de tekst
-  // aflezen: dat hangt af van de breedte van het venster. Vandaar de meting bij
-  // elke maatverandering — en alleen in ingeklapte staat, want uitgeklapt past
-  // alles per definitie en zou de knop meteen weer laten verdwijnen.
-  useLayoutEffect(() => {
-    const el = instructionsRef.current;
-    if (!el || instructionsOpen) return;
-    const measure = () => setInstructionsOverflow(el.scrollHeight > el.clientHeight + 1);
-    measure();
-    if (typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [instructions, instructionsOpen]);
+  const lines = instructions.split('\n');
+  const overflow = lines.length > COLLAPSED_LINES || instructions.length > COLLAPSED_CHARS;
+  let shown = instructions;
+  if (overflow && !instructionsOpen) {
+    shown = lines.slice(0, COLLAPSED_LINES).join('\n');
+    if (shown.length > COLLAPSED_CHARS) shown = shown.slice(0, COLLAPSED_CHARS).trimEnd();
+    shown += '…';
+  }
 
   return (
-    <div className="min-h-0 flex-auto overflow-y-auto px-4 py-6 sm:px-6">
-      <div className="mx-auto max-w-2xl space-y-6">
-        {/* Naam met de twee aantallen als bolletjes, daaronder de drie dingen
-            die je met een project kunt doen als tegels: praten, er een prompt
-            mee bouwen, of het instellen. Tegels in plaats van een rij knoppen
-            naast de titel: zo wordt een lange projectnaam nooit afgekapt en
-            lees je de acties in één blik, net als op de startpagina. */}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <h2 className="min-w-0 break-words text-2xl font-bold text-rijksblauw-700 dark:text-slate-100">
-            {project.name}
-          </h2>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-rijksblauw-50 px-2.5 py-0.5 text-sm font-semibold text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-100">
-            <FileText size={14} aria-hidden="true" />
-            <span aria-label={`${fileCount} bronbestanden`}>{fileCount}</span>
-          </span>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-rijksblauw-50 px-2.5 py-0.5 text-sm font-semibold text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-100">
-            <MessageSquare size={14} aria-hidden="true" />
-            <span aria-label={`${chatCount} chats`}>{chatCount}</span>
-          </span>
-        </div>
+    <nldd-container>
+      {/* The name with the two counts, then the three things a project is for:
+          talk, build a prompt with it, or set it up. */}
+      <nldd-title id="chat-titel" heading-level={1} size={2} text={project.name}></nldd-title>
+      <nldd-spacer size="8"></nldd-spacer>
+      <nldd-container layout="wrap" gap="8">
+        <nldd-tag icon="text-document" text={String(fileCount)} accessible-label={`${fileCount} bronbestanden`}></nldd-tag>
+        <nldd-tag icon="message-rectangle-text" text={String(chatCount)} accessible-label={`${chatCount} chats`}></nldd-tag>
+      </nldd-container>
+      <nldd-spacer size="24"></nldd-spacer>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <button type="button" className={`${TILE} ${TILE_PRIMARY}`} onClick={onNewChat} disabled={disabled}>
-            <Plus size={28} />
-            <span className="text-base font-bold leading-tight">Nieuwe chat</span>
-          </button>
-          {/* Wand2 is het icoon dat de promptbouwer voor zichzelf gebruikt (de
-              instap op /genereren): je ziet vooraf hetzelfde teken als op de
-              plek waar je terechtkomt. Altijd zonder bronbestanden beginnen: de
-              projectinstructie is meestal genoeg, en wie ze toch wil zet ze aan
-              in de balk boven de bouwer. */}
-          <button
-            type="button"
-            className={`${TILE} ${TILE_ACCENT}`}
-            onClick={() => onNewPrompt(false)}
-            disabled={disabled}
-            title="De promptbouwer krijgt de projectinstructie mee, zodat de prompt over jouw onderwerp gaat."
-          >
-            <Wand2 size={28} strokeWidth={1.5} />
-            <span className="text-base font-bold leading-tight">Prompt maken</span>
-          </button>
-          <button type="button" className={`${TILE} ${TILE_SOFT}`} onClick={onOpenSettings} disabled={disabled}>
-            <Settings2 size={28} />
-            <span className="text-base font-bold leading-tight">Instellingen</span>
-          </button>
-        </div>
+      <nldd-button-group>
+        <nldd-button appearance="primary" start-icon="add" text="Nieuwe chat" disabled={off} onClick={onNewChat}></nldd-button>
+        {/* Always without the source files: the project instruction is usually
+            enough, and whoever wants them switches them on in the builder. */}
+        <nldd-button
+          appearance="secondary"
+          start-icon="magic"
+          text="Prompt maken"
+          disabled={off}
+          onClick={() => onNewPrompt(false)}
+        ></nldd-button>
+        <nldd-button appearance="secondary" start-icon="settings" text="Instellingen" disabled={off} onClick={onOpenSettings}></nldd-button>
+      </nldd-button-group>
+      <nldd-spacer size="32"></nldd-spacer>
 
-        {/* De instructie: het eerste wat je wilt weten als je een project opent.
-            Staat er niets, dan is dat geen fout maar een uitnodiging. */}
-        <section className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-900/40">
-          <h3 className={`${SECTION_HEADING} mb-1.5`}>
-            Projectinstructie
-            <InfoDot
-              label="Uitleg over de projectinstructie"
-              text="Elke chat in dit project volgt deze instructie. Je past hem aan bij Instellingen."
-            />
-          </h3>
+      {/* The instruction: the first thing to know about a project. Without one
+          that is an invitation, not an error. */}
+      <nldd-box>
+        <nldd-container padding="16">
+          <SectionTitle
+            text="Projectinstructie"
+            infoLabel="Uitleg over de projectinstructie"
+            info="Elke chat in dit project volgt deze instructie. Je past hem aan bij Instellingen."
+          />
+          <nldd-spacer size="8"></nldd-spacer>
           {instructions ? (
             <>
-              <p
-                ref={instructionsRef}
-                id="project-instructions-text"
-                // max-h is precies zes regels van 1.5rem, dus de afkapping valt
-                // op een regelgrens en niet dwars door een letter heen. De mask
-                // laat de laatste regel vervagen: dat werkt op elke achtergrond,
-                // waar een gradient-overlay de kleur van de kaart zou moeten
-                // raden — inclusief de doorzichtige donkere variant.
-                className={`whitespace-pre-wrap text-sm leading-6 text-slate-700 dark:text-slate-300 ${
-                  instructionsOpen
-                    ? ''
-                    : `max-h-36 overflow-hidden ${
-                        instructionsOverflow
-                          ? '[mask-image:linear-gradient(to_bottom,black_60%,transparent)]'
-                          : ''
-                      }`
-                }`}
-              >
-                {instructions}
-              </p>
-              {(instructionsOverflow || instructionsOpen) && (
-                <button
-                  type="button"
-                  className="mt-2 flex items-center gap-1 text-sm font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
-                  onClick={() => setInstructionsOpen((open) => !open)}
-                  aria-expanded={instructionsOpen}
-                  aria-controls="project-instructions-text"
-                >
-                  {instructionsOpen ? (
-                    <>
-                      <ChevronUp size={14} /> Minder tonen
-                    </>
-                  ) : (
-                    <>
-                      <ChevronDown size={14} /> Volledige instructie tonen
-                    </>
-                  )}
-                </button>
+              <nldd-text id="project-instructions-text" size="sm">
+                <Lines text={shown} />
+              </nldd-text>
+              {overflow && (
+                <>
+                  <nldd-spacer size="8"></nldd-spacer>
+                  <nldd-button
+                    appearance="neutral-transparent"
+                    size="sm"
+                    start-icon={instructionsOpen ? 'chevron-up' : 'chevron-down'}
+                    text={instructionsOpen ? 'Minder tonen' : 'Volledige instructie tonen'}
+                    expanded={instructionsOpen || undefined}
+                    aria-controls="project-instructions-text"
+                    onClick={() => setInstructionsOpen((open) => !open)}
+                  ></nldd-button>
+                </>
               )}
             </>
           ) : (
-            <p className="text-sm text-slate-600 dark:text-slate-400">
-              Nog geen instructie.{' '}
-              <button
-                type="button"
-                className="font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
-                onClick={onMakeInstruction}
-              >
-                Laat de AI er een maken
-              </button>{' '}
-              of{' '}
-              <button
-                type="button"
-                className="font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
-                onClick={onOpenSettings}
-              >
-                schrijf er zelf een
-              </button>
-            </p>
+            <>
+              <nldd-text size="sm" color="secondary">Nog geen instructie.</nldd-text>
+              <nldd-spacer size="8"></nldd-spacer>
+              <nldd-button-group size="sm">
+                <nldd-button appearance="secondary" text="Laat de AI er een maken" onClick={onMakeInstruction}></nldd-button>
+                <nldd-button appearance="neutral-transparent" text="Schrijf er zelf een" onClick={onOpenSettings}></nldd-button>
+              </nldd-button-group>
+            </>
           )}
-        </section>
+        </nldd-container>
+      </nldd-box>
+      <nldd-spacer size="32"></nldd-spacer>
 
-        <section>
-          <h3 className={`${SECTION_HEADING} mb-1`}>
-            Bronbestanden
-            <span
-              aria-label={`${fileCount} bronbestanden`}
-              className="ml-1.5 min-w-[1.5rem] rounded-full bg-rijksblauw-700 px-1.5 text-center text-xs font-bold leading-6 text-white dark:bg-rijksblauw-500"
+      <SectionTitle
+        text="Bronbestanden"
+        infoLabel="Uitleg over bronbestanden"
+        info="Documenten waar de chats in dit project uit putten. Je beheert ze bij Instellingen."
+      />
+      <nldd-spacer size="8"></nldd-spacer>
+      <nldd-button
+        appearance="secondary"
+        start-icon="upload"
+        text={fileCount > 0 ? 'Bestanden beheren' : 'Bestanden toevoegen'}
+        disabled={off}
+        onClick={onOpenSettings}
+      ></nldd-button>
+      <nldd-spacer size="32"></nldd-spacer>
+
+      <SectionTitle
+        text="Chats in dit project"
+        infoLabel="Uitleg over chats in dit project"
+        info="Een chat hier draait meteen op de instructie en de bronbestanden van dit project."
+      />
+      <nldd-spacer size="8"></nldd-spacer>
+      <nldd-list accessible-label="Chats in dit project">
+        {conversations.map((entry) => (
+          <nldd-list-item key={entry.id}>
+            <nldd-list-item-segment
+              button
+              width="full"
+              disabled={off}
+              onClick={() => onSelectConversation(entry.id)}
             >
-              {fileCount}
-            </span>
-            <InfoDot
-              label="Uitleg over bronbestanden"
-              text="Documenten waar de chats in dit project uit putten. Je beheert ze bij Instellingen."
-            />
-          </h3>
-          <button
-            type="button"
-            className="mt-1 flex min-h-[4rem] w-full items-center justify-center gap-3 rounded-xl border-2 border-dashed border-rijksblauw-300 px-4 py-3 text-base font-bold text-rijksblauw-700 transition-colors hover:border-rijksblauw-500 hover:bg-rijksblauw-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-rijksblauw-500 dark:text-white dark:hover:bg-rijksblauw-500/15"
-            onClick={onOpenSettings}
-            disabled={disabled}
-          >
-            <Upload size={24} aria-hidden="true" />
-            {fileCount > 0 ? 'Bestanden beheren' : 'Bestanden toevoegen'}
-          </button>
-        </section>
+              <nldd-icon-cell icon="message-rectangle-text" color="accent" size="20"></nldd-icon-cell>
+              <nldd-spacer-cell size="12"></nldd-spacer-cell>
+              <nldd-text-cell text={entry.title} supporting-text={formatDate(entry.updatedAt)}></nldd-text-cell>
+            </nldd-list-item-segment>
+            <nldd-list-item-segment
+              button
+              disabled={off}
+              accessible-label={`Verwijder chat "${entry.title}"`}
+              onClick={() => onRequestDeleteConversation(entry.id)}
+            >
+              <nldd-icon-cell icon="trash" color="secondary" size="20"></nldd-icon-cell>
+            </nldd-list-item-segment>
+          </nldd-list-item>
+        ))}
+        <nldd-inline-dialog slot="empty" text="Nog geen chats."></nldd-inline-dialog>
+      </nldd-list>
 
-        <section>
-          <h3 className={`${SECTION_HEADING} mb-1`}>
-            Chats in dit project
-            <InfoDot
-              label="Uitleg over chats in dit project"
-              text="Een chat hier draait meteen op de instructie en de bronbestanden van dit project."
-            />
-          </h3>
-          {conversations.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-slate-300 px-4 py-5 text-center text-sm text-slate-600 dark:border-slate-600 dark:text-slate-400">
-              Nog geen chats.
-            </p>
-          ) : (
-            <ul className="space-y-1">
-              {conversations.map((entry) => (
-                <li
-                  key={entry.id}
-                  className="group flex items-center gap-1 rounded-lg transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
-                >
-                  <button
-                    type="button"
-                    className="flex min-w-0 flex-1 items-center gap-2.5 px-2 py-1.5 text-left"
-                    onClick={() => onSelectConversation(entry.id)}
-                    disabled={disabled}
-                  >
-                    <span
-                      aria-hidden="true"
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200"
-                    >
-                      <MessageSquare size={15} />
-                    </span>
-                    <span className="flex min-w-0 flex-1 flex-col">
-                      <span className="truncate text-sm text-slate-800 dark:text-slate-200">
-                        {entry.title}
-                      </span>
-                      <span className="text-xs text-slate-600 dark:text-slate-400">
-                        {formatDate(entry.updatedAt)}
-                      </span>
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className="mr-1 shrink-0 rounded-md p-1.5 text-slate-500 opacity-0 transition-opacity opl-geen-muis:opacity-100 hover:bg-slate-200 hover:text-rijksrood focus:opacity-100 group-hover:opacity-100 dark:text-slate-400 dark:hover:bg-slate-700"
-                    onClick={() => onRequestDeleteConversation(entry.id)}
-                    disabled={disabled}
-                    aria-label={`Verwijder chat "${entry.title}"`}
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        {/* Onderaan en stil: een project verwijderen is zeldzaam en onomkeerbaar,
-            dus het staat niet naast de knoppen die je elke dag gebruikt. */}
-        <div className="border-t border-slate-200 pt-4 dark:border-slate-700">
-          <button
-            type="button"
-            className="opl-btn-ghost text-rijksrood dark:text-red-400"
-            onClick={onRequestDeleteProject}
-            disabled={disabled}
-          >
-            <Trash2 size={14} /> Project verwijderen
-          </button>
-        </div>
-      </div>
-    </div>
+      {/* At the bottom and quiet: deleting a project is rare and cannot be
+          undone, so it does not sit beside the everyday actions. */}
+      <nldd-spacer size="32"></nldd-spacer>
+      <nldd-divider></nldd-divider>
+      <nldd-spacer size="16"></nldd-spacer>
+      <nldd-button
+        appearance="critical-transparent"
+        start-icon="trash"
+        text="Project verwijderen"
+        disabled={off}
+        onClick={onRequestDeleteProject}
+      ></nldd-button>
+    </nldd-container>
   );
 }

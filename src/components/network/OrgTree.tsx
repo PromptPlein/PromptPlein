@@ -1,13 +1,12 @@
-import { useMemo } from 'react';
-import { Link } from 'react-router-dom';
-import { Building2 } from '@/components/common/icons';
+import { useMemo, useState } from 'react';
 import { ORG_TYPE_LABELS } from '@/services/orgService';
 import type { Organization } from '@/types';
 
 /**
- * Boomstructuur van de organisaties: Rijksoverheid bovenaan, daaronder de
- * ministeries en daaronder de afdelingen/agentschappen. Top-level zijn de
- * organisaties zonder bovenliggende (parent_id = null).
+ * Tree of the organizations: Rijksoverheid on top, the ministries below it and
+ * the departments and agencies below those. The top level holds the
+ * organizations without a parent (parent_id = null). Every branch starts open;
+ * its chevron folds it away. Each row leads to the prompts of that organization.
  */
 export default function OrgTree({ orgs }: { orgs: Organization[] }) {
   const childrenByParent = useMemo(() => {
@@ -22,18 +21,42 @@ export default function OrgTree({ orgs }: { orgs: Organization[] }) {
     return map;
   }, [orgs]);
 
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+  const toggle = (id: string) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
   const roots = childrenByParent.get(null) ?? [];
 
-  if (orgs.length === 0) {
-    return <p className="text-sm text-slate-500 dark:text-slate-400">Geen organisaties beschikbaar.</p>;
-  }
-
   return (
-    <ul className="space-y-1 text-sm">
+    <nldd-list type="tree" accessible-label="Organisaties">
+      <nldd-inline-dialog slot="empty" text="Geen organisaties beschikbaar"></nldd-inline-dialog>
       {roots.map((o) => (
-        <OrgNode key={o.id} org={o} childrenByParent={childrenByParent} depth={0} />
+        <OrgNode
+          key={o.id}
+          org={o}
+          childrenByParent={childrenByParent}
+          depth={0}
+          collapsed={collapsed}
+          onToggle={toggle}
+        />
       ))}
-    </ul>
+    </nldd-list>
+  );
+}
+
+/** One spacer per level: the visual indent of a row in the tree. */
+function Indent({ levels }: { levels: number }) {
+  return (
+    <>
+      {Array.from({ length: levels }, (_, i) => (
+        <nldd-spacer-cell key={i} size="44"></nldd-spacer-cell>
+      ))}
+    </>
   );
 }
 
@@ -41,33 +64,62 @@ function OrgNode({
   org,
   childrenByParent,
   depth,
+  collapsed,
+  onToggle,
+  child = false,
 }: {
   org: Organization;
   childrenByParent: Map<string | null, Organization[]>;
   depth: number;
+  collapsed: Set<string>;
+  onToggle: (id: string) => void;
+  child?: boolean;
 }) {
   const children = childrenByParent.get(org.id) ?? [];
+  const href = `/zoeken?org=${org.id}`;
+  const typeLabel = ORG_TYPE_LABELS[org.organization_type];
+  const slot = child ? 'children' : undefined;
+
+  if (children.length === 0) {
+    return (
+      <nldd-list-item slot={slot} href={href}>
+        <Indent levels={depth + 1} />
+        <nldd-spacer-cell size="8" divider-start></nldd-spacer-cell>
+        <nldd-icon-cell icon="building" size="20" color="secondary"></nldd-icon-cell>
+        <nldd-spacer-cell size="8"></nldd-spacer-cell>
+        <nldd-text-cell text={org.name} supporting-text={typeLabel}></nldd-text-cell>
+      </nldd-list-item>
+    );
+  }
+
+  const open = !collapsed.has(org.id);
   return (
-    <li>
-      <Link
-        to={`/zoeken?org=${org.id}`}
-        style={{ paddingLeft: `${depth * 16}px` }}
-        className="flex min-h-11 min-w-0 flex-wrap items-center gap-x-2 rounded-md py-1.5 pr-2 text-slate-700 sm:min-h-0 transition-colors hover:bg-slate-50 hover:text-rijksblauw-700 dark:text-slate-200 dark:hover:bg-slate-800/60 dark:hover:text-rijksblauw-200"
-        title="Bekijk prompts van deze organisatie"
+    <nldd-list-item slot={slot} expanded={open || undefined}>
+      <Indent levels={depth} />
+      <nldd-list-item-segment
+        button
+        disclosure
+        accessible-label={org.name}
+        onClick={() => onToggle(org.id)}
       >
-        <Building2 size={14} className="shrink-0 text-slate-400 dark:text-slate-500" />
-        <span className="min-w-0 font-medium">{org.name}</span>
-        <span className="ml-auto shrink-0 text-[0.6875rem] text-slate-400 dark:text-slate-500">
-          {ORG_TYPE_LABELS[org.organization_type]}
-        </span>
-      </Link>
-      {children.length > 0 && (
-        <ul className="space-y-1">
-          {children.map((c) => (
-            <OrgNode key={c.id} org={c} childrenByParent={childrenByParent} depth={depth + 1} />
-          ))}
-        </ul>
-      )}
-    </li>
+        <nldd-icon-cell size="20" color="secondary" icon="chevron-right" disclosure divider-start></nldd-icon-cell>
+      </nldd-list-item-segment>
+      <nldd-list-item-segment href={href} width="full">
+        <nldd-icon-cell icon="building" size="20" color="secondary"></nldd-icon-cell>
+        <nldd-spacer-cell size="8"></nldd-spacer-cell>
+        <nldd-text-cell text={org.name} supporting-text={typeLabel}></nldd-text-cell>
+      </nldd-list-item-segment>
+      {children.map((c) => (
+        <OrgNode
+          key={c.id}
+          org={c}
+          childrenByParent={childrenByParent}
+          depth={depth + 1}
+          collapsed={collapsed}
+          onToggle={onToggle}
+          child
+        />
+      ))}
+    </nldd-list-item>
   );
 }

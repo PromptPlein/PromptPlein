@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { X } from '@/components/common/icons';
 import { BarChartCard } from '@/components/analytics/Charts';
 import PromptCard from '@/components/prompts/PromptCard';
 import { listPrompts, listTechniquePromptLinks } from '@/services/repository';
@@ -107,16 +106,15 @@ export default function PromptBreakdown() {
 
   if (loading) {
     return (
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="skeleton h-72 rounded-xl" />
-        <div className="skeleton h-72 rounded-xl" />
-      </div>
+      <nldd-container min-height="18rem">
+        <nldd-activity-indicator></nldd-activity-indicator>
+      </nldd-container>
     );
   }
 
   return (
-    <div>
-      <div className="grid gap-4 lg:grid-cols-2">
+    <nldd-container gap="24">
+      <nldd-container layout="grid" gap="16" column-count={1} lg-column-count={2}>
         <BarChartCard
           title="Prompts per categorie"
           data={byCategory}
@@ -131,10 +129,10 @@ export default function PromptBreakdown() {
           onBarClick={(label) => pick('technique', label)}
           activeLabel={selection?.dimension === 'technique' ? selection.label : null}
         />
-      </div>
+      </nldd-container>
 
       {selection && <SelectedPrompts label={selection.label} prompts={selected} onClose={() => setSelection(null)} />}
-    </div>
+    </nldd-container>
   );
 }
 
@@ -149,29 +147,31 @@ function SelectedPrompts({
 }) {
   const { enriched, authors } = usePromptCommunity(prompts);
   return (
-    <div className="mt-6">
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-base font-semibold text-slate-700 dark:text-slate-200">
-          {label}{' '}
-          <span className="text-sm font-normal text-slate-400 dark:text-slate-500">
-            ({prompts.length} {prompts.length === 1 ? 'prompt' : 'prompts'})
-          </span>
-        </h3>
-        <button
-          type="button"
+    <nldd-container gap="12">
+      <nldd-title
+        heading-level={2}
+        size={5}
+        text={label}
+        supporting-text={`${prompts.length} ${prompts.length === 1 ? 'prompt' : 'prompts'}`}
+      >
+        <nldd-button
+          slot="end"
+          size="sm"
+          appearance="neutral-transparent"
+          start-icon="dismiss"
+          text="Sluiten"
           onClick={onClose}
-          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-sm text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-        >
-          <X size={15} /> Sluiten
-        </button>
-      </div>
+        ></nldd-button>
+      </nldd-title>
 
       {prompts.length === 0 ? (
-        <div className="opl-card p-8 text-center text-sm text-slate-500 dark:text-slate-400">
-          Geen prompts in deze groep.
-        </div>
+        <nldd-card>
+          <nldd-container padding="32">
+            <nldd-inline-dialog text="Geen prompts in deze groep."></nldd-inline-dialog>
+          </nldd-container>
+        </nldd-card>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <nldd-container layout="grid" gap="16" column-count={1} md-column-count={2} lg-column-count={3}>
           {enriched.map((p) => (
             <PromptCard
               key={p.id}
@@ -179,8 +179,8 @@ function SelectedPrompts({
               author={p.created_by_user ? authors[p.created_by_user] : null}
             />
           ))}
-        </div>
+        </nldd-container>
       )}
-    </div>
+    </nldd-container>
   );
 }

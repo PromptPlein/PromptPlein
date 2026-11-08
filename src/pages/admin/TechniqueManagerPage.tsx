@@ -1,35 +1,9 @@
-import { useEffect, useState } from 'react';
-import {
-  Plus,
-  Pencil,
-  Trash2,
-  Eye,
-  EyeOff,
-  ArrowUp,
-  ArrowDown,
-  GripVertical,
-  Info,
-  X,
-} from '@/components/common/icons';
+import { useEffect, useRef, useState } from 'react';
 import { notify } from '@/lib/notify';
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from '@dnd-kit/core';
-import {
-  SortableContext,
-  arrayMove,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import Modal from '@/components/common/Modal';
+import { useNlddEvent } from '@/lib/nldd';
+import AdminSheet from '@/components/admin/AdminSheet';
+import { BoundMultiLine, BoundTextField } from '@/components/admin/AdminFields';
+import MenuAction from '@/components/common/MenuAction';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import {
@@ -42,7 +16,6 @@ import { logAdminAction } from '@/services/adminService';
 import { fillTemplate } from '@/services/optimizeService';
 import { selfDirectedBuilder } from '@/lib/techniques';
 import type { FollowUpQuestion, Technique, TechniqueFamily } from '@/types';
-import StackTable from '@/components/common/StackTable';
 
 interface EditorState {
   id?: string;
@@ -107,135 +80,17 @@ function parseUseCases(text: string): string[] {
     .filter(Boolean);
 }
 
-/** Eén sleepbare tabelrij. De grijp-greep links activeert het slepen; de rest
- *  van de rij blijft normaal klikbaar (bewerken, status, verwijderen). */
-function SortableRow({
-  t,
-  index,
-  total,
-  onMove,
-  onToggleActive,
-  onEdit,
-  onDelete,
-}: {
-  t: Technique;
-  index: number;
-  total: number;
-  onMove: (t: Technique, dir: -1 | 1) => void;
-  onToggleActive: (t: Technique) => void;
-  onEdit: (t: Technique) => void;
-  onDelete: (t: Technique) => void;
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: t.id,
-  });
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    // De gesleepte rij komt visueel bovenop te liggen en wordt licht gemarkeerd.
-    ...(isDragging ? { position: 'relative' as const, zIndex: 10 } : {}),
-  };
-
-  return (
-    <tr
-      ref={setNodeRef}
-      style={style}
-      className={`hover:bg-slate-50 dark:hover:bg-slate-800 ${
-        isDragging ? 'bg-rijksblauw-50 shadow-lg dark:bg-rijksblauw-500/15' : ''
-      }`}
-    >
-      <td className="px-4 py-3">
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="cursor-grab touch-none rounded p-1 text-slate-300 hover:bg-slate-100 hover:text-slate-500 active:cursor-grabbing dark:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300"
-            aria-label="Sleep om te sorteren"
-            {...attributes}
-            {...listeners}
-          >
-            <GripVertical size={16} />
-          </button>
-          <div>
-            <p className="font-medium text-slate-800 dark:text-slate-100">{t.name}</p>
-            <p className="line-clamp-1 text-xs text-slate-400 dark:text-slate-500">{t.description}</p>
-          </div>
-        </div>
-      </td>
-      <td className="hidden px-4 py-3 md:table-cell">
-        <span
-          className={`opl-badge ${
-            (t.family ?? 'technique') === 'context'
-              ? 'bg-rijksblauw-100 text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200'
-              : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
-          }`}
-        >
-          {(t.family ?? 'technique') === 'context' ? 'Framework' : 'Techniek'}
-        </span>
-      </td>
-      {/* Een eigen bouwer stelt zijn vragen zelf; "0" zou hier ten onrechte als
-          onvolledig lezen. */}
-      <td className="hidden px-4 py-3 text-slate-600 sm:table-cell dark:text-slate-300">
-        {selfDirectedBuilder(t) ? (
-          <span className="text-xs text-slate-400 dark:text-slate-500">Eigen bouwer</span>
-        ) : (
-          t.follow_up_questions.length
-        )}
-      </td>
-      <td className="px-4 py-3">
-        <span
-          className={`opl-badge ${
-            t.is_active === false
-              ? 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400'
-              : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
-          }`}
-        >
-          {t.is_active === false ? 'Inactief' : 'Actief'}
-        </span>
-      </td>
-      <td className="px-4 py-3">
-        <div className="flex items-center justify-end gap-1">
-          <button
-            onClick={() => onMove(t, -1)}
-            disabled={index === 0}
-            className="rounded p-1.5 text-slate-400 hover:bg-slate-100 disabled:opacity-30 dark:text-slate-500 dark:hover:bg-slate-800"
-            aria-label="Omhoog"
-          >
-            <ArrowUp size={15} />
-          </button>
-          <button
-            onClick={() => onMove(t, 1)}
-            disabled={index === total - 1}
-            className="rounded p-1.5 text-slate-400 hover:bg-slate-100 disabled:opacity-30 dark:text-slate-500 dark:hover:bg-slate-800"
-            aria-label="Omlaag"
-          >
-            <ArrowDown size={15} />
-          </button>
-          <button
-            onClick={() => onToggleActive(t)}
-            className="rounded p-1.5 text-slate-400 hover:bg-slate-100 dark:text-slate-500 dark:hover:bg-slate-800"
-            aria-label="Actief/inactief"
-          >
-            {t.is_active === false ? <EyeOff size={15} /> : <Eye size={15} />}
-          </button>
-          <button
-            onClick={() => onEdit(t)}
-            className="rounded p-1.5 text-rijksblauw-500 hover:bg-rijksblauw-50 dark:hover:bg-rijksblauw-500/15"
-            aria-label="Bewerken"
-          >
-            <Pencil size={15} />
-          </button>
-          <button
-            onClick={() => onDelete(t)}
-            className="rounded p-1.5 text-rijksrood hover:bg-red-50 dark:hover:bg-red-500/10"
-            aria-label="Verwijderen"
-          >
-            <Trash2 size={15} />
-          </button>
-        </div>
-      </td>
-    </tr>
-  );
+/** Moves one item of a list from one index to another. */
+function arrayMove<T>(list: T[], from: number, to: number): T[] {
+  const next = [...list];
+  const [item] = next.splice(from, 1);
+  next.splice(to, 0, item);
+  return next;
 }
+
+// The handle needs `reorderable-only` for nldd-list to start a drag from it; the
+// generated JSX types of 0.18.0 list that attribute on nldd-list-item only.
+const REORDER_ONLY = { 'reorderable-only': true } as Record<string, unknown>;
 
 export default function TechniqueManagerPage() {
   const { refresh } = useReferenceData();
@@ -400,14 +255,10 @@ export default function TechniqueManagerPage() {
     }
   }
 
-  /** Drag-and-drop: verplaats de gesleepte rij naar zijn nieuwe plek en bewaar. */
-  async function handleDragEnd(event: DragEndEvent) {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    const oldIndex = techniques.findIndex((t) => t.id === active.id);
-    const newIndex = techniques.findIndex((t) => t.id === over.id);
-    if (oldIndex < 0 || newIndex < 0) return;
-    const reordered = arrayMove(techniques, oldIndex, newIndex);
+  /** Drag and drop: the list reports where a row was dropped; store that order. */
+  async function handleReorder(fromIndex: number, toIndex: number) {
+    if (fromIndex === toIndex) return;
+    const reordered = arrayMove(techniques, fromIndex, toIndex);
     setTechniques(reordered); // optimistisch: meteen de nieuwe volgorde tonen
     await persistOrder(reordered);
   }
@@ -422,12 +273,6 @@ export default function TechniqueManagerPage() {
     await persistOrder(reordered);
   }
 
-  const sensors = useSensors(
-    // Een kleine drempel voorkomt dat een gewone klik al als sleep wordt gezien.
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
-
   const preview =
     editor &&
     (() => {
@@ -438,306 +283,332 @@ export default function TechniqueManagerPage() {
       return fillTemplate(editor.template, '[Jouw oorspronkelijke prompt]', sample);
     })();
 
+  // The sheet stays mounted; while it closes it keeps showing the last editor.
+  const lastEditor = useRef<EditorState>(EMPTY);
+  if (editor) lastEditor.current = editor;
+  const ed = editor ?? lastEditor.current;
+  const edit = (patch: Partial<EditorState>) => setEditor({ ...ed, ...patch });
+
+  const listRef = useRef<HTMLElement>(null);
+  const familyRef = useRef<HTMLElement>(null);
+  const activeRef = useRef<HTMLElement>(null);
+  useNlddEvent<CustomEvent<{ fromIndex: number; toIndex: number }>>(listRef, 'nldd-reorder', (e) => {
+    void handleReorder(e.detail.fromIndex, e.detail.toIndex);
+  });
+  useNlddEvent<CustomEvent<{ value: string }>>(familyRef, 'change', (e) => {
+    if (e.detail?.value) edit({ family: e.detail.value as TechniqueFamily });
+  });
+  useNlddEvent<CustomEvent<{ checked: boolean }>>(activeRef, 'change', (e) => {
+    edit({ is_active: !!e.detail?.checked });
+  });
+
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Technieken beheren</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            {techniques.length} technieken · sleep aan de greep{' '}
-            <GripVertical size={13} className="inline align-text-bottom" /> om de volgorde te wijzigen
-          </p>
-        </div>
-        <button className="opl-btn-primary" onClick={() => setEditor({ ...EMPTY })}>
-          <Plus size={18} /> Nieuwe techniek
-        </button>
-      </div>
+    <nldd-container layout="stack" gap="24">
+      <nldd-container layout="stack" gap="16">
+        <nldd-title
+          heading-level={1}
+          size={2}
+          text="Technieken beheren"
+          supporting-text={`${techniques.length} technieken. Wijzig de volgorde met de greep of via het menu.`}
+        ></nldd-title>
+        <nldd-button-group>
+          <nldd-button
+            appearance="primary"
+            start-icon="plus"
+            text="Nieuwe techniek"
+            onClick={() => setEditor({ ...EMPTY })}
+          ></nldd-button>
+        </nldd-button-group>
+      </nldd-container>
 
-      <div className="opl-card overflow-hidden">
+      {/* The list stays mounted so its reorder listener is bound from the start. */}
+      <nldd-list ref={listRef} appearance="box-tinted" reorderable accessible-label="Technieken">
+        {techniques.map((t) => {
+          const framework = (t.family ?? 'technique') === 'context';
+          const inactive = t.is_active === false;
+          const tag = (
+            <nldd-tag
+              size="sm"
+              color={framework ? 'lintblauw' : 'neutral'}
+              text={framework ? 'Framework' : 'Techniek'}
+            ></nldd-tag>
+          );
+          return (
+            <nldd-list-item key={t.id}>
+              <nldd-drag-handle-cell {...REORDER_ONLY}></nldd-drag-handle-cell>
+              <nldd-list-item-segment button width="full" onClick={() => setEditor(toEditor(t))}>
+                <nldd-text-cell hide-below={inactive ? 'md' : undefined} supporting-text={t.description ?? ''}>
+                  {t.name} {tag}
+                </nldd-text-cell>
+                {/* Narrow, the status column is gone: an inactive row says so after its name. */}
+                {inactive && (
+                  <nldd-text-cell hide-above="sm" supporting-text={t.description ?? ''}>
+                    {t.name} {tag} <nldd-badge size="sm" color="neutral" text="Inactief"></nldd-badge>
+                  </nldd-text-cell>
+                )}
+                <nldd-spacer-cell size="16" hide-below="md"></nldd-spacer-cell>
+                {/* A builder of its own asks its own questions; "0" would read as incomplete. */}
+                <nldd-text-cell
+                  hide-below="md"
+                  width="8rem"
+                  color="secondary"
+                  size="sm"
+                  text={selfDirectedBuilder(t) ? 'Eigen bouwer' : `${t.follow_up_questions.length} vervolgvragen`}
+                ></nldd-text-cell>
+                <nldd-spacer-cell size="8" hide-below="md"></nldd-spacer-cell>
+                <nldd-cell hide-below="md">
+                  <nldd-badge color={inactive ? 'neutral' : 'success'} decorative></nldd-badge>
+                </nldd-cell>
+                <nldd-spacer-cell size="8" hide-below="md"></nldd-spacer-cell>
+                <nldd-text-cell
+                  hide-below="md"
+                  width="4.5rem"
+                  size="sm"
+                  text={inactive ? 'Inactief' : 'Actief'}
+                ></nldd-text-cell>
+              </nldd-list-item-segment>
+              <nldd-list-item-segment
+                button
+                popovertarget={`techniek-acties-${t.id}`}
+                accessible-label={`Acties voor ${t.name}`}
+              >
+                <nldd-icon-cell icon="ellipsis" size="20" color="secondary"></nldd-icon-cell>
+              </nldd-list-item-segment>
+            </nldd-list-item>
+          );
+        })}
         {loading ? (
-          <div className="skeleton h-64 w-full" />
+          <nldd-inline-dialog slot="empty" variant="loading" text="Technieken laden"></nldd-inline-dialog>
         ) : (
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-          >
-            <StackTable>
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Naam</th>
-                  <th className="hidden px-4 py-3 font-medium md:table-cell">Soort</th>
-                  <th className="hidden px-4 py-3 font-medium sm:table-cell">Vervolgvragen</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="px-4 py-3 text-right font-medium">Acties</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                <SortableContext
-                  items={techniques.map((t) => t.id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  {techniques.map((t, i) => (
-                    <SortableRow
-                      key={t.id}
-                      t={t}
-                      index={i}
-                      total={techniques.length}
-                      onMove={move}
-                      onToggleActive={toggleActive}
-                      onEdit={(tech) => setEditor(toEditor(tech))}
-                      onDelete={setToDelete}
-                    />
-                  ))}
-                </SortableContext>
-              </tbody>
-            </table>
-            </StackTable>
-          </DndContext>
+          <nldd-inline-dialog
+            slot="empty"
+            icon="sparkles"
+            text="Nog geen technieken"
+            supporting-text="Een nieuwe techniek verschijnt hier en in de promptgenerator."
+          ></nldd-inline-dialog>
         )}
-      </div>
+      </nldd-list>
+      {techniques.map((t, i) => (
+        <nldd-menu key={t.id} id={`techniek-acties-${t.id}`} placement="bottom-end">
+          <MenuAction icon="pencil" text="Bewerk" onSelect={() => setEditor(toEditor(t))} />
+          <MenuAction
+            icon="arrow-up"
+            text="Omhoog"
+            disabled={i === 0 || undefined}
+            onSelect={() => void move(t, -1)}
+          />
+          <MenuAction
+            icon="arrow-down"
+            text="Omlaag"
+            disabled={i === techniques.length - 1 || undefined}
+            onSelect={() => void move(t, 1)}
+          />
+          <MenuAction
+            icon={t.is_active === false ? 'eye' : 'eye-slash'}
+            text={t.is_active === false ? 'Zet actief' : 'Zet inactief'}
+            onSelect={() => void toggleActive(t)}
+          />
+          <nldd-menu-divider></nldd-menu-divider>
+          <MenuAction icon="trash" text="Verwijder" destructive onSelect={() => setToDelete(t)} />
+        </nldd-menu>
+      ))}
 
-      {/* Editor modal */}
-      <Modal
+      <AdminSheet
         open={!!editor}
         onClose={() => setEditor(null)}
-        title={editor?.id ? 'Techniek bewerken' : 'Nieuwe techniek'}
-        size="max-w-3xl"
+        title={ed.id ? 'Techniek bewerken' : 'Nieuwe techniek'}
+        width="720px"
       >
-        {editor && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label className="opl-label">Naam</label>
-                <input
-                  className="opl-input"
-                  value={editor.name}
-                  onChange={(e) => setEditor({ ...editor, name: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="opl-label">Soort</label>
-                <select
-                  className="opl-input"
-                  value={editor.family}
-                  onChange={(e) =>
-                    setEditor({ ...editor, family: e.target.value as TechniqueFamily })
-                  }
-                >
-                  <option value="technique">Prompttechniek</option>
-                  <option value="context">Prompt framework</option>
-                </select>
-              </div>
-            </div>
+        <nldd-form>
+          <form
+            noValidate
+            onSubmit={(e) => {
+              e.preventDefault();
+              void handleSave();
+            }}
+          >
+            <nldd-form-field label="Naam">
+              <BoundTextField value={ed.name} onValue={(name) => edit({ name })}></BoundTextField>
+            </nldd-form-field>
 
-            <div>
-              <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
-                <input
-                  type="checkbox"
-                  checked={editor.is_active}
-                  onChange={(e) => setEditor({ ...editor, is_active: e.target.checked })}
-                />
-                Actief (zichtbaar in de promptgenerator)
-              </label>
-            </div>
+            <nldd-form-field label="Soort">
+              <nldd-segmented-control ref={familyRef} value={ed.family}>
+                <nldd-segmented-control-item
+                  value="technique"
+                  text="Prompttechniek"
+                  selected={ed.family === 'technique' || undefined}
+                ></nldd-segmented-control-item>
+                <nldd-segmented-control-item
+                  value="context"
+                  text="Prompt framework"
+                  selected={ed.family === 'context' || undefined}
+                ></nldd-segmented-control-item>
+              </nldd-segmented-control>
+            </nldd-form-field>
 
-            <div>
-              <label className="opl-label">Beschrijving</label>
-              <input
-                className="opl-input"
-                value={editor.description}
-                onChange={(e) => setEditor({ ...editor, description: e.target.value })}
-              />
-            </div>
+            <nldd-switch-field
+              ref={activeRef}
+              label="Actief (zichtbaar in de promptgenerator)"
+              checked={ed.is_active || undefined}
+            ></nldd-switch-field>
 
-            <div>
-              <label className="opl-label">
-                Doel van de techniek{' '}
-                <span className="font-normal text-slate-400">
-                  (helpt de slimme aanbeveling)
-                </span>
-              </label>
-              <textarea
-                className="opl-input min-h-[64px] resize-y"
-                value={editor.strength}
+            <nldd-form-field label="Beschrijving" optional>
+              <BoundTextField
+                value={ed.description}
+                onValue={(description) => edit({ description })}
+              ></BoundTextField>
+            </nldd-form-field>
+
+            <nldd-form-field label="Doel van de techniek" supporting-label="Helpt de slimme aanbeveling" optional>
+              <BoundMultiLine
+                rows={2}
+                value={ed.strength}
                 placeholder="Waar is deze techniek sterk in? Bijv. complexe afwegingen onderbouwen."
-                onChange={(e) => setEditor({ ...editor, strength: e.target.value })}
-              />
-            </div>
+                onValue={(strength) => edit({ strength })}
+              ></BoundMultiLine>
+            </nldd-form-field>
 
-            <div>
-              <label className="opl-label">
-                Gebruikssituaties <span className="font-normal text-slate-400">(één per regel)</span>
-              </label>
-              <textarea
-                className="opl-input min-h-[80px] resize-y"
-                value={editor.useCasesText}
+            <nldd-form-field label="Gebruikssituaties" supporting-label="Eén per regel" optional>
+              <BoundMultiLine
+                rows={3}
+                value={ed.useCasesText}
                 placeholder={'Een beleidskeuze afwegen\nEen risicoanalyse onderbouwen'}
-                onChange={(e) => setEditor({ ...editor, useCasesText: e.target.value })}
-              />
-            </div>
+                onValue={(useCasesText) => edit({ useCasesText })}
+              ></BoundMultiLine>
+            </nldd-form-field>
 
-            {/* Technieken met een eigen bouwer stellen hun vragen zelf: geen
-                vragenlijst, maar uitleg over wat de bouwer doet. */}
+            {/* A technique with a builder of its own asks its own questions: no list
+                of questions, but an explanation of what the builder does. */}
             {ownBuilder ? (
-              <div>
-                <label className="opl-label">Vervolgvragen</label>
-                <div className="flex items-start gap-2 rounded-xl border border-rijksblauw-200 bg-rijksblauw-50/40 p-3 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10">
-                  <Info size={16} className="mt-0.5 shrink-0 text-rijksblauw-500" />
-                  <div className="text-sm text-slate-600 dark:text-slate-300">
-                    <p className="font-medium text-slate-800 dark:text-slate-100">
-                      Deze techniek heeft een eigen bouwer en geen vaste vragen.
-                    </p>
-                    <p className="mt-1">{ownBuilder}</p>
-                    <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
-                      Wat je hier wél stuurt: de beschrijving en het doel hierboven, en de template
-                      hieronder.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ) : (
-            <div>
-              <label className="opl-label">
-                Vervolgvragen{' '}
-                <span className="font-normal text-slate-400">
-                  (de velden die de gebruiker invult om de template te bouwen)
-                </span>
-              </label>
-
-              {editor.followUps.length === 0 ? (
-                <p className="mb-2 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-4 text-center text-sm text-slate-500 dark:border-slate-600 dark:bg-slate-900/40 dark:text-slate-400">
-                  Nog geen vragen. Voeg er één toe om de gebruiker te begeleiden.
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  {editor.followUps.map((q, i) => (
-                    <div
-                      key={i}
-                      className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900/40"
-                    >
-                      <div className="mb-2 flex items-center justify-between">
-                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
-                          <GripVertical size={14} /> Vraag {i + 1}
-                        </span>
-                        <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => moveFollowUp(i, -1)}
-                            disabled={i === 0}
-                            className="rounded p-1 text-slate-400 hover:bg-slate-200 disabled:opacity-30 dark:hover:bg-slate-700"
-                            aria-label="Omhoog"
-                          >
-                            <ArrowUp size={14} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => moveFollowUp(i, 1)}
-                            disabled={i === editor.followUps.length - 1}
-                            className="rounded p-1 text-slate-400 hover:bg-slate-200 disabled:opacity-30 dark:hover:bg-slate-700"
-                            aria-label="Omlaag"
-                          >
-                            <ArrowDown size={14} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => removeFollowUp(i)}
-                            className="rounded p-1 text-rijksrood hover:bg-red-50 dark:hover:bg-red-500/10"
-                            aria-label="Vraag verwijderen"
-                          >
-                            <X size={15} />
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <input
-                          className="opl-input"
-                          value={q.label}
-                          placeholder="Vraag aan de gebruiker, bijv. Vanuit welke interne rol/expert?"
-                          onChange={(e) => updateFollowUp(i, { label: e.target.value })}
-                        />
-                        <input
-                          className="opl-input"
-                          value={q.placeholder ?? ''}
-                          placeholder="Placeholder / voorbeeld, bijv. Bijv. een ervaren beleidsmedewerker of een manager"
-                          onChange={(e) => updateFollowUp(i, { placeholder: e.target.value })}
-                        />
-                        <div>
-                          <textarea
-                            className="opl-input min-h-[64px] resize-y text-sm"
-                            value={q.why ?? ''}
-                            placeholder="Toelichting: waarom doet deze vraag ertoe en waar moet op worden doorgevraagd?"
-                            onChange={(e) => updateFollowUp(i, { why: e.target.value })}
-                          />
-                          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-                            Staat als hulptekst onder het veld en stuurt de AI-invulhulp aan.
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-slate-400 dark:text-slate-500">Veld-id:</span>
-                          <input
-                            className="opl-input h-8 max-w-[200px] font-mono text-xs"
-                            value={q.id}
-                            placeholder="veld_id"
-                            onChange={(e) =>
-                              updateFollowUp(i, {
-                                id: e.target.value.replace(/[^a-zA-Z0-9_]/g, '_'),
-                              })
-                            }
-                          />
-                          <span className="text-xs text-slate-400 dark:text-slate-500">
-                            gebruikt als <code>{`{{${q.id || 'veld_id'}}}`}</code> in de template
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <button
-                type="button"
-                onClick={addFollowUp}
-                className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-dashed border-rijksblauw-300 px-3 py-2 text-sm font-medium text-rijksblauw-600 hover:bg-rijksblauw-50 dark:border-rijksblauw-500/40 dark:text-rijksblauw-300 dark:hover:bg-rijksblauw-500/10"
+              <nldd-banner
+                variant="accent"
+                text="Deze techniek heeft een eigen bouwer en geen vaste vragen."
+                supporting-text={ownBuilder}
               >
-                <Plus size={15} /> Vraag toevoegen
-              </button>
-            </div>
+                <nldd-text size="sm" color="secondary">
+                  Wat je hier wél stuurt: de beschrijving en het doel hierboven, en de template hieronder.
+                </nldd-text>
+              </nldd-banner>
+            ) : (
+              <nldd-form-section
+                text="Vervolgvragen"
+                supporting-text="De velden die de gebruiker invult om de template te bouwen"
+              >
+                {ed.followUps.length === 0 ? (
+                  <nldd-text size="sm" color="secondary">
+                    Nog geen vragen. Voeg er één toe om de gebruiker te begeleiden.
+                  </nldd-text>
+                ) : (
+                  <nldd-container layout="stack" gap="12">
+                    {ed.followUps.map((q, i) => (
+                      <nldd-box key={i}>
+                        <nldd-container padding="12" layout="stack" gap="8">
+                          <nldd-title heading-level={3} size={6} text={`Vraag ${i + 1}`}>
+                            <nldd-container slot="end" layout="row" gap="4">
+                              <nldd-icon-button
+                                size="sm"
+                                appearance="neutral-transparent"
+                                icon="arrow-up"
+                                accessible-label={`Vraag ${i + 1} omhoog`}
+                                disabled={i === 0 || undefined}
+                                onClick={() => moveFollowUp(i, -1)}
+                              ></nldd-icon-button>
+                              <nldd-icon-button
+                                size="sm"
+                                appearance="neutral-transparent"
+                                icon="arrow-down"
+                                accessible-label={`Vraag ${i + 1} omlaag`}
+                                disabled={i === ed.followUps.length - 1 || undefined}
+                                onClick={() => moveFollowUp(i, 1)}
+                              ></nldd-icon-button>
+                              <nldd-icon-button
+                                size="sm"
+                                appearance="critical-transparent"
+                                icon="trash"
+                                accessible-label={`Verwijder vraag ${i + 1}`}
+                                onClick={() => removeFollowUp(i)}
+                              ></nldd-icon-button>
+                            </nldd-container>
+                          </nldd-title>
+                          <nldd-form-field label="Vraag aan de gebruiker">
+                            <BoundTextField
+                              value={q.label}
+                              placeholder="Bijv. Vanuit welke interne rol of expert?"
+                              onValue={(label) => updateFollowUp(i, { label })}
+                            ></BoundTextField>
+                          </nldd-form-field>
+                          <nldd-form-field label="Voorbeeld in het veld" optional>
+                            <BoundTextField
+                              value={q.placeholder ?? ''}
+                              placeholder="Bijv. een ervaren beleidsmedewerker of een manager"
+                              onValue={(placeholder) => updateFollowUp(i, { placeholder })}
+                            ></BoundTextField>
+                          </nldd-form-field>
+                          <nldd-form-field label="Toelichting" optional>
+                            <BoundMultiLine
+                              rows={2}
+                              value={q.why ?? ''}
+                              placeholder="Waarom doet deze vraag ertoe en waar moet op worden doorgevraagd?"
+                              onValue={(why) => updateFollowUp(i, { why })}
+                            ></BoundMultiLine>
+                            <nldd-form-field-help-text>
+                              Staat als hulptekst onder het veld en stuurt de AI-invulhulp aan.
+                            </nldd-form-field-help-text>
+                          </nldd-form-field>
+                          <nldd-form-field label="Veld-id">
+                            <BoundTextField
+                              value={q.id}
+                              placeholder="veld_id"
+                              no-spellcheck
+                              width="16rem"
+                              onValue={(id) => updateFollowUp(i, { id: id.replace(/[^a-zA-Z0-9_]/g, '_') })}
+                            ></BoundTextField>
+                            <nldd-form-field-help-text>
+                              Gebruikt als <code>{`{{${q.id || 'veld_id'}}}`}</code> in de template.
+                            </nldd-form-field-help-text>
+                          </nldd-form-field>
+                        </nldd-container>
+                      </nldd-box>
+                    ))}
+                  </nldd-container>
+                )}
+                <nldd-spacer size="12"></nldd-spacer>
+                <nldd-button
+                  appearance="secondary"
+                  start-icon="plus"
+                  text="Vraag toevoegen"
+                  onClick={addFollowUp}
+                ></nldd-button>
+              </nldd-form-section>
             )}
 
-            <div>
-              <label className="opl-label">
-                Template (gebruik <code className="text-rijksblauw-500 dark:text-rijksblauw-300">{'{{PROMPT}}'}</code> en{' '}
-                <code className="text-rijksblauw-500 dark:text-rijksblauw-300">{'{{vraag_id}}'}</code>)
-              </label>
-              <textarea
-                className="opl-input min-h-[160px] resize-y font-mono text-xs"
-                value={editor.template}
-                onChange={(e) => setEditor({ ...editor, template: e.target.value })}
-                spellCheck={false}
-              />
-            </div>
+            <nldd-form-field label="Template">
+              <BoundMultiLine
+                rows={8}
+                no-spellcheck
+                value={ed.template}
+                onValue={(template) => edit({ template })}
+              ></BoundMultiLine>
+              <nldd-form-field-help-text>
+                Gebruik <code>{'{{PROMPT}}'}</code> en <code>{'{{vraag_id}}'}</code>.
+              </nldd-form-field-help-text>
+            </nldd-form-field>
 
-            <div>
-              <label className="opl-label">Preview gegenereerde output</label>
-              <pre tabIndex={0} className="max-h-48 overflow-auto whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 p-3 font-mono text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
-                {preview}
-              </pre>
-            </div>
+            <nldd-container layout="stack" gap="8">
+              <nldd-title heading-level={3} size={6} text="Preview gegenereerde output"></nldd-title>
+              <nldd-code-viewer wrap max-height="12rem">
+                {preview || ''}
+              </nldd-code-viewer>
+            </nldd-container>
 
-            <div className="flex justify-end gap-3 pt-2">
-              <button className="opl-btn-secondary" onClick={() => setEditor(null)}>
-                Annuleren
-              </button>
-              <button className="opl-btn-primary" onClick={handleSave}>
-                Opslaan
-              </button>
-            </div>
-          </div>
-        )}
-      </Modal>
+            <nldd-form-actions>
+              <nldd-button-group>
+                <nldd-button appearance="primary" type="submit" text="Bewaar"></nldd-button>
+              </nldd-button-group>
+            </nldd-form-actions>
+          </form>
+        </nldd-form>
+      </AdminSheet>
 
       <ConfirmDialog
         open={!!toDelete}
@@ -748,6 +619,6 @@ export default function TechniqueManagerPage() {
         onConfirm={() => toDelete && handleDelete(toDelete)}
         onClose={() => setToDelete(null)}
       />
-    </div>
+    </nldd-container>
   );
 }

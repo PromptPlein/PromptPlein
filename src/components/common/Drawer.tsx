@@ -1,12 +1,14 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { X } from '@/components/common/icons';
-import useDialogFocus from '@/lib/useDialogFocus';
+import { useNlddEvent } from '@/lib/nldd';
+
+type SheetElement = HTMLElement & { show?: () => void };
 
 /**
- * Paneel dat van links inschuift, voor wat op een groot scherm als zijbalk naast
- * de inhoud staat. Anders dan `Modal` sluit dit ook met Escape en een aanraking
- * ernaast: er is hier niets in te vullen dat verloren kan gaan.
+ * A panel that slides in from the left, for what sits beside the content as a
+ * sidebar on a large screen. An nldd-sheet at the document root: it closes with
+ * its dismiss button, Escape and a tap beside it. The content mounts while the
+ * sheet is open and unmounts once it has closed.
  */
 export default function Drawer({
   open,
@@ -19,44 +21,27 @@ export default function Drawer({
   title: string;
   children: ReactNode;
 }) {
-  const panelRef = useRef<HTMLDivElement>(null);
-  useDialogFocus(open, panelRef, onClose);
+  const ref = useRef<SheetElement>(null);
+  const openRef = useRef(open);
+  openRef.current = open;
+  const [mounted, setMounted] = useState(open);
+  if (open && !mounted) setMounted(true);
 
-  useEffect(() => {
-    if (!open) return;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, [open]);
-
-  if (!open) return null;
+  useNlddEvent(ref, 'close', () => {
+    if (openRef.current) onClose();
+    window.setTimeout(() => {
+      if (openRef.current) ref.current?.show?.();
+      else setMounted(false);
+    }, 0);
+  });
 
   return createPortal(
-    <div className="fixed inset-0 z-50">
-      <div className="absolute inset-0 bg-slate-900/50 dark:bg-black/60" onClick={onClose} aria-hidden="true" />
-      <div
-        ref={panelRef}
-        tabIndex={-1}
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        className="absolute inset-y-0 left-0 flex w-[min(22rem,88vw)] animate-fade-in flex-col bg-white pt-[env(safe-area-inset-top)] pl-[env(safe-area-inset-left)] pb-[env(safe-area-inset-bottom)] shadow-2xl focus:outline-none dark:bg-slate-800"
-      >
-        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-200 px-4 py-2 dark:border-slate-700">
-          <h2 className="text-lg font-bold text-rijksblauw-700 dark:text-rijksblauw-200">{title}</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="shrink-0 rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700"
-            aria-label="Sluiten"
-          >
-            <X size={20} />
-          </button>
-        </div>
-        <div className="min-h-0 flex-1">{children}</div>
-      </div>
-    </div>,
+    <nldd-sheet ref={ref} open={open || undefined} placement="left" width="22rem">
+      <nldd-page>
+        <nldd-top-title-bar slot="header" text={title} heading-level={2} dismiss-text="Sluiten"></nldd-top-title-bar>
+        {mounted && children}
+      </nldd-page>
+    </nldd-sheet>,
     document.body,
   );
 }

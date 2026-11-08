@@ -1,170 +1,119 @@
-import { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useEffect, useRef } from 'react';
+import type { NLDDNotification, NotificationHandle } from '@nldd/design-system/notification';
 import { notify } from '@/lib/notify';
-import DictationButton from './DictationButton';
 import { CUE_MS, playCue } from '@/lib/audioCue';
 import { matchesShortcut, SHORTCUTS } from '@/lib/shortcuts';
 import { insertDictatedText, useDictation } from '@/lib/useDictation';
 
+// The class comes from the registry, as in notify.ts: a second import of the
+// subpath would define the elements twice.
+const Notification = () => customElements.get('nldd-notification') as unknown as typeof NLDDNotification;
+
+/** The focused element, also when it sits in the shadow root of an nldd field. */
+function deepActiveElement(): Element | null {
+  let el: Element | null = document.activeElement;
+  while (el?.shadowRoot?.activeElement) el = el.shadowRoot.activeElement;
+  return el;
+}
+
+/** `closest` that also climbs out of shadow roots, to the host of each. */
+function closestComposed(el: Element, selector: string): Element | null {
+  let node: Element | null = el;
+  while (node) {
+    const hit = node.closest(selector);
+    if (hit) return hit;
+    const root = node.getRootNode();
+    node = root instanceof ShadowRoot ? root.host : null;
+  }
+  return null;
+}
+
 /**
- * Mag dit tekstvak een microfoontje krijgen? Een veld met een eigen knop (de
- * chat) zet `data-dictation="off"` op zichzelf of een ouder.
+ * May this field be dictated into? A field with a button of its own (the chat)
+ * sets `data-dictation="off"` on itself or a parent.
  */
-function isDictationField(el: EventTarget | null): el is HTMLTextAreaElement {
+function isDictationField(el: Element | null): el is HTMLTextAreaElement {
   return (
     el instanceof HTMLTextAreaElement &&
     !el.disabled &&
     !el.readOnly &&
-    !el.closest('[data-dictation="off"]')
+    !closestComposed(el, '[data-dictation="off"]')
   );
 }
 
-interface Placement {
-  /** Het tekstvak zelf, voor de rode rand tijdens het opnemen. */
-  field: { top: number; left: number; width: number; height: number };
-  /** Rechteronderhoek van de knop. */
-  right: number;
-  bottom: number;
-}
-
-/** De knop in rust is 28 pixels hoog; vanaf deze hoogte gaat hij onderaan staan. */
-const TALL_FIELD = 72;
-/** Ruimte voor de greep waarmee je het vak groter trekt, rechtsonder in de hoek. */
-const RESIZE_GRIP = 20;
+const RECORDING_TEXT = 'Opname loopt';
+const RECORDING_SUPPORT = `Stop met Alt + Shift + ${SHORTCUTS.dicteren.key}, of breek af met Escape.`;
 
 /**
- * Eén microfoontje voor alle tekstvakken in de app, rechts in het vak waar je in
- * staat of met de muis boven hangt. Zo krijgt elk invulveld dicteren zonder dat
- * elk formulier het zelf hoeft in te bouwen, ook velden die later bijkomen.
+ * Dictation for every text field in the app, started with the shortcut while
+ * the caret is in a field. The written text lands at the caret.
  *
- * De knop staat in een eigen kolom rechts (zie de regel voor
- * `html[data-dictation='on']` in index.css). Ruimte aan de zijkant scrolt niet
- * mee, ruimte onderaan wel: daar schoof de tekst tijdens het scrollen alsnog
- * onder de knop door. De brede opnamebalk past niet in die kolom en staat daarom
- * boven het vak.
- *
- * De knop ligt in een portal met vaste positie en loopt elk frame mee met het
- * vak (scrollen, meegroeien, een modal die verschuift). Tijdens het opnemen
- * blijft hij aan dát vak vast zitten, ook als de focus ergens anders heen gaat,
- * en krijgt het vak een blauwe rand. De uitgeschreven tekst komt op de plek van de
- * cursor.
+ * While recording and transcribing an nldd-notification says so, with Stop and
+ * Afbreken. A microphone button floating beside each field is not possible in
+ * the design system (0.18.0): a control anchored to a field needs a popover,
+ * which takes focus away from the field and closes on a click in it. The chat
+ * has a microphone of its own (DictationButton).
  */
 export default function DictationLayer() {
-  const [focused, setFocused] = useState<HTMLTextAreaElement | null>(null);
-  const [hovered, setHovered] = useState<HTMLTextAreaElement | null>(null);
-  const [locked, setLocked] = useState<HTMLTextAreaElement | null>(null);
-  const [placement, setPlacement] = useState<Placement | null>(null);
-  const layerRef = useRef<HTMLDivElement>(null);
   const lockedRef = useRef<HTMLTextAreaElement | null>(null);
-  lockedRef.current = locked;
+  const handleRef = useRef<NotificationHandle | null>(null);
 
   const dictation = useDictation((text) => {
     const field = lockedRef.current;
-    setLocked(null);
+    lockedRef.current = null;
     if (field?.isConnected) {
       insertDictatedText(field, text);
     } else {
-      // Het veld is intussen verdwenen (dialoog dicht, andere pagina): de tekst
-      // gaat niet verloren maar naar het klembord.
+      // The field is gone in the meantime (dialog closed, other page): the text
+      // is not lost but goes to the clipboard.
       void navigator.clipboard?.writeText(text).catch(() => undefined);
       notify('Het veld is er niet meer. De tekst staat op je klembord.');
     }
   });
   const { available, state, cancel, start, toggle } = dictation;
-  const stateRef = useRef(state);
-  stateRef.current = state;
+  const toggleRef = useRef(toggle);
+  toggleRef.current = toggle;
+  const cancelRef = useRef(cancel);
+  cancelRef.current = cancel;
 
-  // Klaar of afgebroken: het vak loslaten.
+  // The notification follows the state: raised while recording, updated while
+  // transcribing, gone once idle.
   useEffect(() => {
-    if (state === 'idle') setLocked(null);
-  }, [state]);
-
-  // Welk vak heeft focus, en boven welk vak hangt de muis?
-  useEffect(() => {
-    if (!available) return;
-    function onFocusIn(e: FocusEvent) {
-      setFocused(isDictationField(e.target) ? e.target : null);
-    }
-    function onFocusOut(e: FocusEvent) {
-      if (!isDictationField(e.relatedTarget)) setFocused(null);
-    }
-    function onPointerOver(e: PointerEvent) {
-      if (layerRef.current?.contains(e.target as Node)) return;
-      setHovered(isDictationField(e.target) ? e.target : null);
-    }
-    document.addEventListener('focusin', onFocusIn);
-    document.addEventListener('focusout', onFocusOut);
-    document.addEventListener('pointerover', onPointerOver);
-    return () => {
-      document.removeEventListener('focusin', onFocusIn);
-      document.removeEventListener('focusout', onFocusOut);
-      document.removeEventListener('pointerover', onPointerOver);
-    };
-  }, [available]);
-
-  // Zet de kolom voor de knop aan in alle tekstvakken, ook als ze nog niet
-  // aangeraakt zijn: anders loopt de tekst opnieuw af zodra de muis erboven komt.
-  useEffect(() => {
-    if (!available) return;
-    document.documentElement.dataset.dictation = 'on';
-    return () => {
-      delete document.documentElement.dataset.dictation;
-    };
-  }, [available]);
-
-  const target = locked ?? focused ?? hovered;
-
-  // Elk frame meelopen met het vak. Goedkoop (één getBoundingClientRect) en het
-  // vangt alles: scrollen in een container, meegroeiende vakken, animaties.
-  useEffect(() => {
-    if (!target) {
-      setPlacement(null);
+    if (state === 'idle') {
+      lockedRef.current = null;
+      handleRef.current?.dismiss();
+      handleRef.current = null;
       return;
     }
-    let frame = 0;
-    let last = '';
-    const tick = () => {
-      frame = requestAnimationFrame(tick);
-      if (!target.isConnected) {
-        setPlacement(null);
-        return;
-      }
-      const rect = target.getBoundingClientRect();
-      const visible =
-        rect.width > 0 && rect.bottom > 24 && rect.top < window.innerHeight && rect.height >= 32;
-      if (!visible) {
-        if (last !== 'hidden') setPlacement(null);
-        last = 'hidden';
-        return;
-      }
-      const fieldBottom = window.innerHeight - Math.min(rect.bottom, window.innerHeight);
-      const inset =
-        rect.height >= TALL_FIELD ? RESIZE_GRIP : Math.max(2, (rect.height - 28) / 2);
-      const panelFits = rect.top >= 44;
-      const next: Placement = {
-        field: { top: rect.top, left: rect.left, width: rect.width, height: rect.height },
-        // offsetWidth min clientWidth is de rand plus een eventuele schuifbalk.
-        right:
-          document.documentElement.clientWidth -
-          rect.right +
-          (target.offsetWidth - target.clientWidth) +
-          6,
-        bottom:
-          stateRef.current !== 'idle' && panelFits
-            ? window.innerHeight - rect.top + 4
-            : fieldBottom + inset,
+    if (state === 'recording') {
+      const options = {
+        text: RECORDING_TEXT,
+        supportingText: RECORDING_SUPPORT,
+        variant: 'accent' as const,
+        icon: 'microphone',
+        duration: 0,
+        actions: [
+          { text: 'Stop', onClick: () => toggleRef.current() },
+          { text: 'Afbreken', onClick: () => cancelRef.current() },
+        ],
       };
-      const key = `${next.field.top}|${next.field.left}|${next.field.width}|${next.field.height}|${next.right}|${next.bottom}`;
-      if (key !== last) {
-        last = key;
-        setPlacement(next);
-      }
-    };
-    tick();
-    return () => cancelAnimationFrame(frame);
-  }, [target]);
+      if (handleRef.current) handleRef.current.update(options);
+      else handleRef.current = Notification()?.show(options) ?? null;
+      return;
+    }
+    const options = { text: 'Uitschrijven…', supportingText: undefined, icon: 'microphone', duration: 0, actions: [] };
+    if (handleRef.current) handleRef.current.update(options);
+    else handleRef.current = Notification()?.show(options) ?? null;
+  }, [state]);
 
-  // Esc tijdens het opnemen: afbreken zonder uitschrijven.
+  useEffect(
+    () => () => {
+      handleRef.current?.dismiss();
+    },
+    [],
+  );
+
+  // Escape while recording: cancel without transcribing.
   useEffect(() => {
     if (state !== 'recording') return;
     function onKeyDown(e: KeyboardEvent) {
@@ -177,8 +126,8 @@ export default function DictationLayer() {
     return () => document.removeEventListener('keydown', onKeyDown, true);
   }, [state, cancel]);
 
-  // De sneltoets in elk tekstvak. Staat de cursor in de chat, dan regelt de chat
-  // het zelf (useChatVoice).
+  // The shortcut in every text field. With the caret in the chat, the chat
+  // handles it itself (useChatVoice).
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (!matchesShortcut(e, SHORTCUTS.dicteren)) return;
@@ -188,7 +137,7 @@ export default function DictationLayer() {
         toggle();
         return;
       }
-      const field = document.activeElement;
+      const field = deepActiveElement();
       if (!isDictationField(field)) {
         if (document.querySelector('[data-dictation="off"]')) return;
         e.preventDefault();
@@ -200,11 +149,11 @@ export default function DictationLayer() {
         notify.error('Log in om te kunnen dicteren.');
         return;
       }
-      setLocked(field);
+      lockedRef.current = field;
       playCue('start');
       window.setTimeout(() => {
         void start().then((started) => {
-          if (!started) setLocked(null);
+          if (!started) lockedRef.current = null;
         });
       }, CUE_MS);
     }
@@ -212,37 +161,5 @@ export default function DictationLayer() {
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [available, start, state, toggle]);
 
-  if (!available || !target || !placement) return null;
-
-  function onToggle() {
-    if (state !== 'idle' || !target) {
-      dictation.toggle();
-      return;
-    }
-    const field = target;
-    setLocked(field);
-    void dictation.start().then((started) => {
-      if (!started) setLocked(null);
-    });
-  }
-
-  return createPortal(
-    <div ref={layerRef}>
-      {state === 'recording' && (
-        <div
-          className="pointer-events-none fixed z-[60] rounded-lg ring-2 ring-rijksblauw-400/50 dark:ring-rijksblauw-300/50"
-          style={placement.field}
-        />
-      )}
-      <DictationButton
-        state={state}
-        seconds={dictation.seconds}
-        stream={dictation.stream}
-        onToggle={onToggle}
-        className="fixed z-[60]"
-        style={{ right: placement.right, bottom: placement.bottom }}
-      />
-    </div>,
-    document.body,
-  );
+  return null;
 }

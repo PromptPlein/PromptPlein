@@ -1,15 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import {
-  AlertTriangle,
-  ArrowRight,
-  Check,
-  Compass,
-  Eraser,
-  Loader2,
-  RotateCcw,
-  Sparkles,
-  X,
-} from '@/components/common/icons';
+import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useNlddValue } from '@/lib/nldd';
 import { adviseTechnique } from '@/services/optimizeService';
 import type { AiSettings } from '@/services/settingsService';
 import { isContextPrompt, isSkillCreator } from '@/lib/techniques';
@@ -107,7 +97,7 @@ export default function TechniqueAdvisor({
   // React draait effects in ontwikkelmodus dubbel; zonder deze vlag zou het
   // gesprek met twee openingsvragen tegelijk beginnen.
   const startedRef = useRef(false);
-  const answerRef = useRef<HTMLTextAreaElement>(null);
+  const answerRef = useRef<HTMLElement & { value?: string }>(null);
 
   /**
    * Eén beurt: stuur het gesprek tot nu toe op en verwerk wat er terugkomt:
@@ -187,264 +177,245 @@ export default function TechniqueAdvisor({
     : [];
 
   return (
-    <section className="animate-fade-in scroll-mt-24 overflow-hidden rounded-2xl border border-rijksoranje/40 bg-white shadow-sm dark:border-rijksoranje/30 dark:bg-slate-800">
-      <div className="h-1 w-full bg-rijksoranje" />
-      <div className="p-6">
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <div className="flex items-start gap-3">
-            <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-rijksoranje text-white">
-              <Compass size={14} />
-            </span>
-            <div>
-              <h2 className="font-semibold text-slate-800 dark:text-slate-100">
-                De AI zoekt je techniek erbij
-              </h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                {advies
-                  ? 'Op basis van je antwoorden past deze techniek het best.'
-                  : `Hooguit ${MAX_QUESTIONS} korte vragen over je taak. Na elk antwoord weegt de AI opnieuw.`}
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
+    <nldd-card>
+      <nldd-container padding="24" sm-padding="16" gap="16">
+        <nldd-container layout="row" gap="12">
+          <nldd-icon icon="signpost" size="24" color="oranje"></nldd-icon>
+          <nldd-title
+            heading-level={2}
+            size={5}
+            text="De AI zoekt je techniek erbij"
+            supporting-text={
+              advies
+                ? 'Op basis van je antwoorden past deze techniek het best.'
+                : `Hooguit ${MAX_QUESTIONS} korte vragen over je taak. Na elk antwoord weegt de AI opnieuw.`
+            }
+          ></nldd-title>
+          <nldd-spacer size="flexible" direction="horizontal"></nldd-spacer>
+          <nldd-icon-button
+            appearance="neutral-transparent"
+            size="sm"
+            icon="dismiss"
+            accessible-label="Sluiten en zelf een techniek kiezen"
             onClick={onClose}
-            title="Sluiten en zelf een techniek kiezen"
-            className="shrink-0 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-200"
-          >
-            <X size={18} />
-          </button>
-        </div>
+          ></nldd-icon-button>
+        </nldd-container>
 
         {error && (
-          <div
-            role="alert"
-            className="mb-4 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-200"
-          >
-            <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-            <div>
-              <p>{error}</p>
-              <button
-                type="button"
-                className="mt-1 font-medium underline"
-                onClick={() => void runTurn(turns)}
-              >
-                Opnieuw proberen
-              </button>
-            </div>
-          </div>
+          <nldd-banner variant="warning" text={error}>
+            <nldd-button slot="actions" appearance="secondary" text="Opnieuw proberen" onClick={() => void runTurn(turns)}></nldd-button>
+          </nldd-banner>
         )}
 
-        {/* Het gesprek tot nu toe: kort, zodat je ziet wat je hebt gezegd en de
-            AI dus op meeweegt. */}
+        {/* The conversation so far: short, so you see what you said and the AI weighs. */}
         {turns.length > 0 && (
-          <ol className="mb-4 space-y-1.5">
+          <nldd-container gap="6">
             {turns.map((t, i) => (
-              <li key={i} className="text-sm">
-                <span className="text-slate-500 dark:text-slate-400">{t.question}</span>{' '}
-                <span className="font-medium text-slate-800 dark:text-slate-100">{t.answer}</span>
-              </li>
+              <nldd-text key={i} size="sm" color="secondary">
+                {t.question} <strong>{t.answer}</strong>
+              </nldd-text>
             ))}
-          </ol>
+          </nldd-container>
         )}
 
         {busy && (
-          <p className="flex items-center gap-2 rounded-lg border border-dashed border-slate-300 px-4 py-6 text-sm text-slate-500 dark:border-slate-600 dark:text-slate-400">
-            <Loader2 size={16} className="animate-spin text-rijksoranje" />
-            {turns.length === 0 ? 'De AI kijkt naar je vraagstuk…' : 'De AI weegt je antwoord…'}
-          </p>
+          <nldd-inline-dialog
+            variant="loading"
+            text={turns.length === 0 ? 'De AI kijkt naar je vraagstuk…' : 'De AI weegt je antwoord…'}
+          ></nldd-inline-dialog>
         )}
 
-        {/* De openstaande vraag. */}
+        {/* The open question. */}
         {!busy && !advies && question && (
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-rijksoranje">
-              Vraag {turns.length + 1} van maximaal {MAX_QUESTIONS}
-            </p>
-            <p className="mt-1 text-base font-medium text-slate-800 dark:text-slate-100">
-              {question.tekst}
-            </p>
-            {question.waarom && (
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{question.waarom}</p>
-            )}
+          <nldd-container gap="12">
+            <nldd-title
+              heading-level={3}
+              size={6}
+              overline={`Vraag ${turns.length + 1} van maximaal ${MAX_QUESTIONS}`}
+              text={question.tekst}
+              supporting-text={question.waarom || undefined}
+            ></nldd-title>
 
             {question.opties.length > 0 && (
-              <div className="mt-3 flex flex-wrap gap-2">
+              <nldd-container layout="wrap" gap="8">
                 {question.opties.map((optie) => (
-                  <button
+                  <nldd-button
                     key={optie}
-                    type="button"
+                    appearance="neutral-tinted"
+                    size="sm"
+                    text={optie}
                     onClick={() => submit(optie)}
-                    className="rounded-full border border-rijksblauw-200 bg-rijksblauw-50/60 px-3 py-1.5 text-sm text-rijksblauw-700 transition-colors hover:border-rijksoranje hover:bg-rijksoranje/10 hover:text-rijksoranje dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10 dark:text-rijksblauw-200 dark:hover:border-rijksoranje/60 dark:hover:text-rijksoranje"
-                  >
-                    {optie}
-                  </button>
+                  ></nldd-button>
                 ))}
-              </div>
+              </nldd-container>
             )}
 
-            <textarea
-              ref={answerRef}
-              rows={2}
-              value={answer}
-              onChange={(e) => setAnswer(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  submit(answer);
-                }
-              }}
-              placeholder="Of typ je eigen antwoord…"
-              className="opl-input mt-3 resize-y text-sm"
-            />
-            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                <button
-                  type="button"
-                  className="text-sm font-medium text-slate-500 hover:text-rijksoranje hover:underline dark:text-slate-400"
-                  onClick={() => void runTurn(turns, true)}
-                >
-                  Sla de rest over en adviseer nu
-                </button>
-                {/* Ook midden in het gesprek te wissen: wie merkt dat hij de
-                    eerste vraag verkeerd las, moet niet vier vragen hoeven
-                    uitzitten om er vanaf te komen. */}
-                {turns.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={restart}
-                    className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-rijksoranje hover:underline dark:text-slate-400"
-                  >
-                    <Eraser size={14} /> Opnieuw beginnen
-                  </button>
-                )}
-              </div>
-              <button
-                type="button"
-                className="opl-btn-primary"
-                disabled={!answer.trim()}
+            <AnswerField fieldRef={answerRef} value={answer} onValue={setAnswer} onSubmit={() => submit(answer)} />
+            <nldd-container layout="wrap" gap="8" vertical-alignment="center">
+              <nldd-button
+                appearance="neutral-transparent"
+                size="sm"
+                text="Sla de rest over en adviseer nu"
+                onClick={() => void runTurn(turns, true)}
+              ></nldd-button>
+              {/* Also clearable mid-conversation: whoever misread the first
+                  question should not have to sit out four questions. */}
+              {turns.length > 0 && (
+                <nldd-button
+                  appearance="neutral-transparent"
+                  size="sm"
+                  start-icon="arrow-2-counter-clockwise"
+                  text="Opnieuw beginnen"
+                  onClick={restart}
+                ></nldd-button>
+              )}
+              <nldd-spacer size="flexible" direction="horizontal"></nldd-spacer>
+              <nldd-button
+                appearance="primary"
+                end-icon="arrow-right"
+                text="Volgende"
+                disabled={!answer.trim() || undefined}
                 onClick={() => submit(answer)}
-              >
-                Volgende <ArrowRight size={16} />
-              </button>
-            </div>
-          </div>
+              ></nldd-button>
+            </nldd-container>
+          </nldd-container>
         )}
 
-        {/* Het advies: één techniek, plus wat er als tweede uit kwam. */}
+        {/* The advice: one technique, plus what came out second. */}
         {!busy && advies && geadviseerd && (
-          <div>
-            <button
-              type="button"
+          <nldd-container gap="12">
+            <nldd-card
+              button
+              background="accent-tinted"
+              accessible-label={`${geadviseerd.name}: hiermee verder`}
               onClick={() => onChoose(geadviseerd, advies.context)}
-              className="w-full rounded-xl border-2 border-rijksoranje bg-rijksoranje/5 p-4 text-left transition-colors hover:bg-rijksoranje/10 dark:bg-rijksoranje/10"
             >
-              <span className="flex items-center gap-2">
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-rijksoranje text-white">
-                  <Check size={12} />
-                </span>
-                <span className="text-xs font-semibold uppercase tracking-wide text-rijksoranje">
-                  Prompttechniek
-                </span>
-              </span>
-              <span className="mt-1.5 block text-lg font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
-                {geadviseerd.name}
-              </span>
-              {advies.reden && (
-                <span className="mt-1 block text-sm text-slate-600 dark:text-slate-300">
-                  {advies.reden}
-                </span>
-              )}
-              <span className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-rijksoranje">
-                <Sparkles size={15} /> Hiermee verder
-              </span>
-            </button>
+              <nldd-container padding="16" gap="6">
+                <nldd-container layout="row" gap="6" vertical-alignment="center">
+                  <nldd-icon icon="check-mark-circle" size="20" color="oranje"></nldd-icon>
+                  <nldd-text size="xs" weight="bold" color="secondary">
+                    Prompttechniek
+                  </nldd-text>
+                </nldd-container>
+                <nldd-text size="lg" weight="bold" color="accent">
+                  {geadviseerd.name}
+                </nldd-text>
+                {advies.reden && (
+                  <nldd-text size="sm" color="secondary">
+                    {advies.reden}
+                  </nldd-text>
+                )}
+                <nldd-container layout="row" gap="6" vertical-alignment="center">
+                  <nldd-icon icon="sparkles" size="16" color="accent"></nldd-icon>
+                  <nldd-text size="sm" weight="bold" color="accent">
+                    Hiermee verder
+                  </nldd-text>
+                </nldd-container>
+              </nldd-container>
+            </nldd-card>
 
             {advies.context && (
-              <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+              <nldd-text size="xs" color="secondary">
                 Je context wordt alvast ingevuld: &ldquo;{advies.context}&rdquo;
-              </p>
+              </nldd-text>
             )}
 
             {alternatieven.length > 0 && (
-              <div className="mt-4">
-                <p className="opl-label mb-2">Twijfelt de AI? Dit kwam er ook uit</p>
-                <div className="space-y-2">
+              <nldd-container gap="8">
+                <nldd-text size="sm" weight="bold">
+                  Twijfelt de AI? Dit kwam er ook uit
+                </nldd-text>
+                <nldd-list appearance="box-base" accessible-label="Twijfelt de AI? Dit kwam er ook uit">
                   {alternatieven.map((k) => {
                     const t = byId(k.id)!;
                     return (
-                      <button
-                        key={k.id}
-                        type="button"
-                        onClick={() => onChoose(t, advies.context)}
-                        className="w-full rounded-lg border border-slate-200 p-3 text-left transition-colors hover:border-rijksoranje/50 hover:bg-rijksoranje/5 dark:border-slate-700 dark:hover:border-rijksoranje/40"
-                      >
-                        <span className="block text-sm font-semibold text-slate-800 dark:text-slate-100">
-                          {t.name}
-                        </span>
-                        {k.waarom && (
-                          <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
-                            {k.waarom}
-                          </span>
-                        )}
-                      </button>
+                      <nldd-list-item key={k.id} button onClick={() => onChoose(t, advies.context)}>
+                        <nldd-text-cell size="sm" text={t.name} supporting-text={k.waarom || undefined}></nldd-text-cell>
+                        <nldd-icon-cell icon="chevron-right" size="20"></nldd-icon-cell>
+                      </nldd-list-item>
                     );
                   })}
-                </div>
-              </div>
+                </nldd-list>
+              </nldd-container>
             )}
 
-            <button
-              type="button"
-              onClick={restart}
-              className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-rijksoranje hover:underline dark:text-slate-400"
-            >
-              <RotateCcw size={14} /> Opnieuw beginnen
-            </button>
-          </div>
+            <nldd-button-group>
+              <nldd-button
+                appearance="neutral-transparent"
+                size="sm"
+                start-icon="undo"
+                text="Opnieuw beginnen"
+                onClick={restart}
+              ></nldd-button>
+            </nldd-button-group>
+          </nldd-container>
         )}
 
-        {/* De tussenstand van de weging. Staat er bewust bij tijdens het
-            gesprek: zo zie je je antwoord de rangschikking verschuiven, en
-            waarom er nog een vraag komt.
-
-            Pas ná het eerste antwoord: bij de openingsvraag heeft de gebruiker
-            nog niets verteld, dus is er niets gewogen. Het model vult die kolom
-            dan met een gok, en een percentage naast een techniek suggereert een
-            analyse die er nog niet is. */}
+        {/* The interim weighing. Shown during the conversation on purpose: you
+            see your answer shift the ranking, and why another question comes.
+            Only after the first answer: before that nothing was weighed, and a
+            percentage beside a technique suggests an analysis that is not there. */}
         {!advies && turns.length > 0 && candidates.length > 0 && (
-          <div className="mt-5 border-t border-slate-200 pt-4 dark:border-slate-700">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          <nldd-container gap="8">
+            <nldd-divider></nldd-divider>
+            <nldd-text size="xs" weight="bold" color="secondary">
               Tussenstand
-            </p>
+            </nldd-text>
             {redenering && (
-              <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{redenering}</p>
+              <nldd-text size="sm" color="secondary">
+                {redenering}
+              </nldd-text>
             )}
-            <ul className="mt-2 space-y-1.5">
-              {candidates.map((k) => {
-                const t = byId(k.id);
-                if (!t) return null;
-                return (
-                  <li key={k.id} className="flex items-center gap-2">
-                    <span className="w-44 shrink-0 truncate text-sm text-slate-700 dark:text-slate-200">
-                      {t.name}
-                    </span>
-                    <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
-                      <span
-                        className="block h-full rounded-full bg-rijksoranje"
-                        style={{ width: `${Math.max(4, k.zekerheid)}%` }}
-                      />
-                    </span>
-                    <span className="w-10 shrink-0 text-right text-xs tabular-nums text-slate-500 dark:text-slate-400">
-                      {k.zekerheid}%
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
+            {candidates.map((k) => {
+              const t = byId(k.id);
+              if (!t) return null;
+              return (
+                <nldd-progress-bar
+                  key={k.id}
+                  size="sm"
+                  max={100}
+                  value={String(Math.max(0, Math.min(100, k.zekerheid)))}
+                  color="oranje"
+                  text={t.name}
+                  value-format="percentage"
+                  value-display="inline"
+                ></nldd-progress-bar>
+              );
+            })}
+          </nldd-container>
         )}
-      </div>
-    </section>
+      </nldd-container>
+    </nldd-card>
+  );
+}
+
+/** The free answer field; Enter sends, Shift+Enter starts a new line. */
+function AnswerField({
+  fieldRef,
+  value,
+  onValue,
+  onSubmit,
+}: {
+  fieldRef: RefObject<HTMLElement & { value?: string }>;
+  value: string;
+  onValue: (value: string) => void;
+  onSubmit: () => void;
+}) {
+  useNlddValue(fieldRef, value, onValue);
+  return (
+    <nldd-multi-line-text-field
+      ref={fieldRef}
+      size="sm"
+      rows={2}
+      resize="vertical"
+      accessible-label="Je eigen antwoord"
+      placeholder="Of typ je eigen antwoord…"
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          onSubmit();
+        }
+      }}
+    ></nldd-multi-line-text-field>
   );
 }

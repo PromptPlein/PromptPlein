@@ -1,6 +1,6 @@
 import { downloadText } from '@/lib/download';
 import { PROMPT_STATUS_META } from '@/services/collaborationService';
-import { brand, backgroundGradient } from '@/config/brandColors';
+import { documentStyle } from '@/config/brandColors';
 import type { Prompt, SharingLevel } from '@/types';
 
 /**
@@ -55,11 +55,20 @@ function formatStamp(iso?: string | null): string {
   }
 }
 
-/** Bouw een opgemaakt, overheidsconform HTML-document voor één prompt. */
+/**
+ * Builds a formatted HTML document for one prompt.
+ *
+ * Generated document: this string is a standalone file that leaves the app
+ * (download, Word, print). The design system's web components do not exist
+ * there, so it is plain HTML with its own stylesheet; the purity gate reports
+ * its elements and class attributes on purpose. Colors and fonts come from the
+ * design system tokens through documentStyle().
+ */
 export function buildPromptHtml(prompt: Prompt, meta: ExportMeta = {}): string {
   const classification = CLASSIFICATION[prompt.sharing_level] ?? 'Intern';
   const status = prompt.status ? PROMPT_STATUS_META[prompt.status].label : '—';
   const generated = new Date().toLocaleString('nl-NL', { dateStyle: 'long', timeStyle: 'short' });
+  const c = documentStyle();
 
   const row = (label: string, value: string) =>
     `<tr><th>${label}</th><td>${escapeHtml(value)}</td></tr>`;
@@ -71,27 +80,28 @@ export function buildPromptHtml(prompt: Prompt, meta: ExportMeta = {}): string {
 <title>${escapeHtml(prompt.title)}</title>
 <style>
   @page { margin: 25mm 20mm; }
-  body { font-family: "Segoe UI", Arial, sans-serif; color: #1f2937; line-height: 1.55; max-width: 800px; margin: 0 auto; padding: 24px; }
-  .classification { text-align: center; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: ${brand.primary}; border-top: 2px solid ${brand.primary}; border-bottom: 2px solid ${brand.primary}; padding: 6px 0; font-size: 12px; }
+  body { font-family: ${c.fontFamily}; color: ${c.content}; line-height: 1.55; max-width: 800px; margin: 0 auto; padding: 24px; }
+  .classification { text-align: center; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: ${c.primary}; border-top: 2px solid ${c.primary}; border-bottom: 2px solid ${c.primary}; padding: 6px 0; font-size: 12px; }
   header { display: flex; align-items: baseline; justify-content: space-between; margin-top: 18px; }
-  .brand { font-weight: 700; color: ${brand.primary}; font-size: 18px; }
-  .brand small { display:block; font-weight: 400; color:#64748b; font-size: 11px; letter-spacing: .04em; }
-  h1 { font-size: 24px; color: ${backgroundGradient.deep}; margin: 24px 0 4px; }
-  .description { color: #475569; margin: 0 0 18px; }
+  .brand { font-weight: 700; color: ${c.primary}; font-size: 18px; }
+  .brand small { display:block; font-weight: 400; color: ${c.secondary}; font-size: 11px; letter-spacing: .04em; }
+  .generated { font-size: 12px; color: ${c.secondary}; }
+  h1 { font-size: 24px; color: ${c.heading}; margin: 24px 0 4px; }
+  .description { color: ${c.secondary}; margin: 0 0 18px; }
   table.meta { width: 100%; border-collapse: collapse; margin: 12px 0 24px; font-size: 13px; }
-  table.meta th { text-align: left; width: 180px; color: #64748b; font-weight: 600; padding: 4px 8px; vertical-align: top; }
+  table.meta th { text-align: left; width: 180px; color: ${c.secondary}; font-weight: 600; padding: 4px 8px; vertical-align: top; }
   table.meta td { padding: 4px 8px; }
-  .content { white-space: pre-wrap; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; font-family: "Consolas", monospace; font-size: 13px; }
+  .content { white-space: pre-wrap; background: ${c.surface}; border: 1px solid ${c.border}; border-radius: 8px; padding: 16px; font-family: ${c.monoFamily}; font-size: 13px; }
   .signature { margin-top: 40px; display: flex; gap: 48px; }
-  .signature div { flex: 1; border-top: 1px solid #94a3b8; padding-top: 6px; font-size: 12px; color: #64748b; }
-  footer { margin-top: 32px; border-top: 1px solid #e2e8f0; padding-top: 8px; font-size: 11px; color: #94a3b8; text-align: center; }
+  .signature div { flex: 1; border-top: 1px solid ${c.muted}; padding-top: 6px; font-size: 12px; color: ${c.secondary}; }
+  footer { margin-top: 32px; border-top: 1px solid ${c.border}; padding-top: 8px; font-size: 11px; color: ${c.muted}; text-align: center; }
 </style>
 </head>
 <body>
   <div class="classification">${escapeHtml(classification)}</div>
   <header>
     <div class="brand">Rijksoverheid<small>Overheid Prompt Library</small></div>
-    <div style="font-size:12px;color:#64748b;">Gegenereerd: ${escapeHtml(generated)}</div>
+    <div class="generated">Gegenereerd: ${escapeHtml(generated)}</div>
   </header>
 
   <h1>${escapeHtml(prompt.title)}</h1>

@@ -1,5 +1,5 @@
-import { Check } from '@/components/common/icons';
-import clsx from 'clsx';
+import { useRef } from 'react';
+import { useNlddValue } from '@/lib/nldd';
 import { splitFieldLabel } from '@/lib/fieldLabel';
 import type { VraagHerkomst } from '@/services/optimizeService';
 import type { Technique } from '@/types';
@@ -17,33 +17,22 @@ interface SjabloonVragenProps {
   disabled?: boolean;
 }
 
-const HERKOMST_LABEL: Record<VraagHerkomst, { tekst: string; className: string }> = {
-  tekst: {
-    tekst: 'Uit je tekst',
-    className: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300',
-  },
-  aangevuld: {
-    tekst: 'Uit je tekst, aangevuld door de AI',
-    className: 'bg-amber-50 text-amber-800 dark:bg-amber-500/15 dark:text-amber-200',
-  },
-  ai: {
-    tekst: 'Bedacht door de AI',
-    className: 'bg-orange-50 text-orange-800 dark:bg-orange-500/15 dark:text-orange-200',
-  },
+const HERKOMST_LABEL: Record<VraagHerkomst, { tekst: string; color: 'success' | 'warning' | 'oranje' }> = {
+  tekst: { tekst: 'Uit je tekst', color: 'success' },
+  aangevuld: { tekst: 'Uit je tekst, aangevuld door de AI', color: 'warning' },
+  ai: { tekst: 'Bedacht door de AI', color: 'oranje' },
 };
 
 /**
- * De contextstap van een sjabloon: de vragen van het sjabloon onder elkaar, elk
- * met een eigen vak, vóórdat de velden zelf in beeld komen. Zo staat de
- * gebruiker bij elke vraag stil en geeft hij in eigen woorden mee wat hij weet.
- * Daarna zet de AI het in de velden (voor-invullen) en vraagt naar wat ontbreekt.
- * Zijn de vragen ingevuld uit een voorbereide tekst, dan staat bij elke vraag
- * waar het antwoord vandaan komt; dat label verdwijnt zodra de gebruiker het
- * antwoord zelf aanpast.
+ * The context step of a template: its questions under each other, each with its
+ * own field, before the fields themselves appear. The user stops at each
+ * question and gives what he knows in his own words; then the AI puts it in the
+ * fields (prefill) and asks for what is missing. When the questions were filled
+ * from a prepared text, each question says where the answer comes from; that
+ * label goes away once the user edits the answer.
  *
- * De vragen zijn de velden van het sjabloon zelf (naam plus uitleg uit het
- * label, het voorbeeld uit de placeholder), zodat een nieuw sjabloon ze
- * vanzelf meekrijgt.
+ * The questions are the template's own fields (name and explanation from the
+ * label, the example from the placeholder), so a new template gets them for free.
  */
 export default function SjabloonVragen({
   technique,
@@ -57,62 +46,67 @@ export default function SjabloonVragen({
   const heeftAanvulling = Object.values(herkomst ?? {}).some((h) => h !== 'tekst');
 
   return (
-    <div>
-      <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
+    <nldd-container gap="16">
+      <nldd-text size="xs" color="secondary">
         {beantwoord} van {vragen.length} vragen beantwoord. Steekwoorden mogen; wat je nog niet
         weet, laat je leeg.
         {heeftAanvulling &&
           ' Wat de AI zelf heeft bedacht, staat in een alinea na "Aangevuld door de AI:". Pas aan of haal weg wat niet klopt.'}
-      </p>
-      <ol className="space-y-4">
-        {vragen.map((q, i) => {
-          const { name, instruction } = splitFieldLabel(q.label);
-          const id = `sjabloon-${technique.id}-${q.id}`;
-          const ingevuld = Boolean(antwoorden[q.id]?.trim());
-          const bron = herkomst?.[q.id] ? HERKOMST_LABEL[herkomst[q.id]] : null;
-          return (
-            <li key={q.id} className="flex gap-3">
-              <span
-                aria-hidden="true"
-                className={clsx(
-                  'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
-                  ingevuld
-                    ? 'bg-rijksblauw-500 text-white'
-                    : 'bg-rijksblauw-100 text-rijksblauw-700 dark:bg-rijksblauw-500/20 dark:text-rijksblauw-200',
-                )}
-              >
-                {ingevuld ? <Check size={13} /> : i + 1}
-              </span>
-              <div className="min-w-0 flex-1">
-                <label htmlFor={id} className="block">
-                  <span className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-rijksblauw-600 dark:text-rijksblauw-300">
-                      {name}
-                    </span>
-                    {bron && (
-                      <span className={clsx('rounded-full px-2 py-0.5 text-[0.6875rem] font-medium', bron.className)}>
-                        {bron.tekst}
-                      </span>
-                    )}
-                  </span>
-                  <span className="block text-sm font-medium text-slate-800 dark:text-slate-100">
-                    {instruction ?? name}
-                  </span>
-                </label>
-                <textarea
-                  id={id}
-                  rows={antwoorden[q.id]?.includes('\n') ? 5 : 2}
-                  className="opl-input mt-1.5 resize-y text-sm"
-                  value={antwoorden[q.id] ?? ''}
-                  placeholder={q.placeholder}
-                  disabled={disabled}
-                  onChange={(e) => onChange({ ...antwoorden, [q.id]: e.target.value }, q.id)}
-                />
-              </div>
-            </li>
-          );
-        })}
-      </ol>
-    </div>
+      </nldd-text>
+      {vragen.map((q, i) => {
+        const { name, instruction } = splitFieldLabel(q.label);
+        return (
+          <SjabloonVraag
+            key={q.id}
+            nummer={i + 1}
+            naam={name}
+            instructie={instruction ?? undefined}
+            placeholder={q.placeholder}
+            value={antwoorden[q.id] ?? ''}
+            bron={herkomst?.[q.id] ? HERKOMST_LABEL[herkomst[q.id]] : null}
+            disabled={disabled}
+            onValue={(v) => onChange({ ...antwoorden, [q.id]: v }, q.id)}
+          />
+        );
+      })}
+    </nldd-container>
+  );
+}
+
+function SjabloonVraag({
+  nummer,
+  naam,
+  instructie,
+  placeholder,
+  value,
+  bron,
+  disabled,
+  onValue,
+}: {
+  nummer: number;
+  naam: string;
+  instructie?: string;
+  placeholder?: string;
+  value: string;
+  bron: { tekst: string; color: 'success' | 'warning' | 'oranje' } | null;
+  disabled?: boolean;
+  onValue: (value: string) => void;
+}) {
+  const ref = useRef<HTMLElement & { value?: string }>(null);
+  useNlddValue(ref, value, onValue);
+  const ingevuld = Boolean(value.trim());
+  return (
+    <nldd-form-field label={`${nummer}. ${naam}`} supporting-label={ingevuld ? 'ingevuld' : undefined}>
+      {instructie && <nldd-form-field-help-text>{instructie}</nldd-form-field-help-text>}
+      {bron && <nldd-tag size="sm" color={bron.color} text={bron.tekst}></nldd-tag>}
+      <nldd-multi-line-text-field
+        ref={ref}
+        size="sm"
+        rows={value.includes('\n') ? 5 : 2}
+        resize="vertical"
+        placeholder={placeholder}
+        disabled={disabled || undefined}
+      ></nldd-multi-line-text-field>
+    </nldd-form-field>
   );
 }
