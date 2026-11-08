@@ -30,9 +30,8 @@ const BELOW_MARGIN_REM = 0.75;
  * Op de telefoon telt de zichtbare hoogte en niet die van het venster: anders
  * valt de kaart met het tekstvak weg onder het schermtoetsenbord (`viewportWatch`).
  *
- * De hoogte gaat rechtstreeks op het element en niet via React: in de leesstand
- * klapt de kop in en wordt er tijdens de animatie elk beeld opnieuw gemeten. Via
- * state zou de hele chatpagina dan elk beeld opnieuw renderen.
+ * De hoogte gaat rechtstreeks op het element en niet via React: zo rendert de
+ * chatpagina niet opnieuw bij elke meting.
  */
 export default function useFitHeight<T extends HTMLElement>(): RefObject<T> {
   const ref = useRef<T>(null);

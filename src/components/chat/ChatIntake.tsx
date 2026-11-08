@@ -235,7 +235,6 @@ export default function ChatIntake({
   return (
     <div
       ref={scrollRef}
-      data-chat-lijst
       tabIndex={0}
       role="region"
       aria-label="Gesprek"
