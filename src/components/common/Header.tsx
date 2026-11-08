@@ -189,13 +189,13 @@ export default function Header() {
                   'focus-visible:-outline-offset-2 focus-visible:outline-white',
                   'laag:min-h-[44px] laag:flex-row laag:gap-2 laag:py-2',
                   'lg:h-14 lg:min-h-0 lg:flex-none lg:flex-row lg:gap-2.5 lg:px-5 lg:py-0 lg:text-lg',
-                  isActive && 'shadow-[inset_0_-3px_0_0_theme(colors.pleingroen.vast)]',
+                  isActive && 'shadow-[inset_0_-3px_0_0_theme(colors.nadruk.vast)]',
                 )
               }
             >
               {({ isActive }) => (
                 <>
-                  <Icon size={22} className={isActive ? 'text-pleingroen-vast' : undefined} />
+                  <Icon size={22} className={isActive ? 'text-nadruk-vast' : undefined} />
                   {label}
                 </>
               )}

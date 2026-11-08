@@ -145,7 +145,7 @@ export function InterviewPanel({
           {onInventAnswer && (
             <button
               type="button"
-              className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-dashed border-pleingroen/50 px-2 py-1 text-xs font-medium text-pleingroen transition-colors hover:bg-pleingroen/10 disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-dashed border-nadruk/50 px-2 py-1 text-xs font-medium text-nadruk transition-colors hover:bg-nadruk/10 disabled:cursor-not-allowed disabled:opacity-50"
               onClick={() => void onInventAnswer()}
               disabled={busy || inventing}
               title="Alleen voor beheerders: laat de AI een testantwoord op deze vraag verzinnen"
@@ -156,7 +156,7 @@ export function InterviewPanel({
                 <Dices size={13} />
               )}
               {inventing ? 'Antwoord verzinnen…' : 'Verzin een testantwoord'}
-              <span className="rounded bg-pleingroen/15 px-1 py-px text-[0.625rem] uppercase tracking-wide">
+              <span className="rounded bg-nadruk/15 px-1 py-px text-[0.625rem] uppercase tracking-wide">
                 admin
               </span>
             </button>

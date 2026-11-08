@@ -16,9 +16,9 @@
  *
  * Lintblauw  #154273 = hoofdkleur: koppen, kop- en voetbalk, primaire knop
  * Donkerblauw #01689B = interactief: links, focus, accenten
- * Pleingroen #7CADAF = accent, het groen uit het logo; tekst erop is donker.
- *   Op wit haalt het maar 2,5:1, dus tekst en iconen krijgen de donkere tint
- *   pleingroenTekst (6:1). Vlakken, strepen en randen houden de logokleur.
+ * Nadruk     #D2563E = accent, een warm rood. Vlakken, strepen, randen en
+ *   knoppen met alleen een wit icoon (4,1:1) houden deze kleur. Witte tekst
+ *   staat op nadrukKnop, tekst in de accentkleur gebruikt nadrukTekst.
  */
 
 /**
@@ -39,19 +39,30 @@ export const rijksblauw = {
   900: '#162945',
 };
 
-/** Accentkleur: het groen uit het beeldmerk van PromptPlein. @type {string} */
-export const pleingroen = '#7cadaf';
-
-/** Hover van een vlak in de accentkleur; donkere tekst erop haalt 6,7:1. @type {string} */
-export const pleingroenHover = '#5da0a2';
+/** Accentkleur: vlakken, strepen, randen, knoppen met een wit icoon. @type {string} */
+export const nadruk = '#d2563e';
 
 /**
- * Tekst en iconen in de accentkleur op een lichte ondergrond. De logokleur haalt
- * daar 2,5:1; deze tint 6:1 op wit en 5:1 op een licht groen vlak. In de donkere
- * modus is dat omgekeerd en staat de logokleur zelf er (5,9:1 op slate-800).
+ * Vlak met witte tekst erop (accentknop, labels). Het accent zelf haalt met
+ * wit 4,1:1, te weinig voor kleine tekst; deze tint haalt 5,5:1.
  * @type {string}
  */
-export const pleingroenTekst = '#356c6e';
+export const nadrukKnop = '#b5432e';
+
+/** Hover van een accentvlak; wit erop haalt 7:1. @type {string} */
+export const nadrukHover = '#9c3827';
+
+/**
+ * Tekst en iconen in de accentkleur. Licht: 6,2:1 op wit en 5,2:1 op een licht
+ * rood vlak. Donker: een lichtere tint, 5,8:1 op slate-800.
+ * @type {string}
+ */
+export const nadrukTekst = '#a83d2a';
+/** @type {string} */
+export const nadrukTekstDonker = '#e88a76';
+
+/** Op lintblauw (menubalk), in beide modi gelijk: 3,5:1 voor iconen en strepen. @type {string} */
+export const nadrukOpBlauw = '#e57a63';
 
 /** Overige rijkshuisstijl-accenten. */
 export const rijksrood = '#d52b1e';
@@ -75,7 +86,7 @@ export const brand = {
   primaryDarker: rijksblauw[800],
   primaryLight: rijksblauw[400],
   primaryLighter: rijksblauw[200],
-  secondary: pleingroen,
+  secondary: nadruk,
 };
 
 /**
@@ -85,7 +96,7 @@ export const brand = {
  */
 export const categoryPalette = [
   rijksblauw[500],
-  pleingroen,
+  nadruk,
   rijksgroen,
   rijksrood,
   hemelblauw,
@@ -125,7 +136,7 @@ export const ecosystemPalette = [
   rijksblauw[500],
   hemelblauw,
   rijksgroen,
-  pleingroen,
+  nadruk,
   paars,
   mintgroen,
   violet,

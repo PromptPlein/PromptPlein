@@ -693,14 +693,14 @@ export default function SettingsPage() {
 
           <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
             <div className="mb-3 flex items-center gap-2">
-              <Sparkles size={16} className="text-pleingroen" />
+              <Sparkles size={16} className="text-nadruk" />
               <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
                 Tekst verbeteren in het invoerveld
               </h3>
             </div>
             <p className="mb-4 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
               Typt een gebruiker iets in de chat, dan verschijnt rechtsboven in het invoerveld een
-              groene sterretje. Eén klik herschrijft de getypte tekst tot een scherpere vraag, die de
+              rode sterretje. Eén klik herschrijft de getypte tekst tot een scherpere vraag, die de
               gebruiker daarna zelf kan nalezen, aanpassen of terugdraaien. Dit is een{' '}
               <strong>lichte</strong> verbetering; de volledige generator blijft achter
               &ldquo;Genereren&rdquo;. Hetzelfde sterretje staat bij het contextveld van een techniek
@@ -753,13 +753,13 @@ export default function SettingsPage() {
 
           <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
             <div className="mb-3 flex items-center gap-2">
-              <Sparkles size={16} className="text-pleingroen" />
+              <Sparkles size={16} className="text-nadruk" />
               <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
                 Projectinstructie omschrijven tot systeemprompt
               </h3>
             </div>
             <p className="mb-4 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
-              Hetzelfde groene sterretje, maar dan in het veld
+              Hetzelfde rode sterretje, maar dan in het veld
               &ldquo;Projectinstructie&rdquo; van de projectinstellingen. Eén klik schrijft de ruwe
               instructie om tot een volwaardige systeemprompt. Dit is een <strong>zwaardere</strong>{' '}
               slag dan het sterretje in de chat: de uitkomst stuurt <em>elk</em> gesprek in dat

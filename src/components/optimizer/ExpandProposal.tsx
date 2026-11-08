@@ -37,13 +37,13 @@ export default function ExpandProposal({
   // Veldnamen zijn vaak lang ("EXAMPLES: geef voorbeelden van ..."); voor de
   // koptekst is het deel vóór de toelichting genoeg om het veld te herkennen.
   const shortLabel = fieldLabel?.split(/\s+[—–:-]\s+/)[0]?.trim();
-  // Groene omlijsting: het voorstel is een voorstel van de AI, niet je eigen
+  // Rode omlijsting: het voorstel is een voorstel van de AI, niet je eigen
   // tekst. Dat onderscheidt het van het blauw van het veld eromheen.
   return (
-    <div className="animate-fade-in mt-2 overflow-hidden rounded-xl border border-pleingroen bg-white shadow-sm dark:border-pleingroen/60 dark:bg-slate-800">
-      <div className="flex items-center gap-2 border-b border-pleingroen/25 bg-pleingroen/10 px-3 py-2 dark:border-pleingroen/25 dark:bg-pleingroen/15">
-        <Sparkles size={14} className="shrink-0 text-pleingroen" />
-        <span className="truncate text-xs font-semibold text-pleingroen" title={fieldLabel}>
+    <div className="animate-fade-in mt-2 overflow-hidden rounded-xl border border-nadruk bg-white shadow-sm dark:border-nadruk/60 dark:bg-slate-800">
+      <div className="flex items-center gap-2 border-b border-nadruk/25 bg-nadruk/10 px-3 py-2 dark:border-nadruk/25 dark:bg-nadruk/15">
+        <Sparkles size={14} className="shrink-0 text-nadruk" />
+        <span className="truncate text-xs font-semibold text-nadruk" title={fieldLabel}>
           {title ?? (shortLabel ? `AI-voorstel voor ${shortLabel}` : 'AI-voorstel')}
         </span>
       </div>
@@ -84,7 +84,7 @@ export default function ExpandProposal({
         <button
           type="button"
           onClick={onAccept}
-          className="inline-flex items-center gap-1 rounded-md bg-pleingroen px-2.5 py-1 text-xs font-semibold text-slate-950 shadow-sm transition-colors hover:bg-pleingroen-dark"
+          className="inline-flex items-center gap-1 rounded-md bg-nadruk-knop px-2.5 py-1 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-nadruk-dark"
         >
           <Check size={13} /> {acceptLabel ?? 'Overnemen'}
         </button>

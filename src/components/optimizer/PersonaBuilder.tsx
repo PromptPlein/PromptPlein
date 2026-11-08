@@ -239,7 +239,7 @@ function PersonaCard({
             onClick={onRemove}
             title="Verwijder deze persona"
             aria-label={`Verwijder persona ${index + 1}`}
-            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-pleingroen/10 hover:text-pleingroen dark:text-slate-500"
+            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-nadruk/10 hover:text-nadruk dark:text-slate-500"
           >
             <Trash2 size={15} />
           </button>

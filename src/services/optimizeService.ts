@@ -1309,7 +1309,7 @@ function localRecommend(goal: string, techniques: Technique[]): TechniqueRecomme
 
 /**
  * Bouw een korte "waarom dit de beste optie is"-zin zonder AI. Koppelt de
- * gematchte gebruikssituatie of de kracht aan het doel, zodat de groene
+ * gematchte gebruikssituatie of de kracht aan het doel, zodat de rode
  * onderbouwing ook offline gevuld is.
  */
 function buildLocalValue(technique: Technique, matchedUseCases: string[]): string {

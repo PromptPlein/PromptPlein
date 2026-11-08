@@ -704,9 +704,9 @@ export default function OwnPromptOptimizer({
   const unclearBlock = unclearReason && (
     <div
       role="alert"
-      className="animate-fade-in flex items-start gap-3 rounded-xl bg-pleingroen/10 px-4 py-3 text-sm text-slate-700 dark:text-slate-200"
+      className="animate-fade-in flex items-start gap-3 rounded-xl bg-nadruk/10 px-4 py-3 text-sm text-slate-700 dark:text-slate-200"
     >
-      <HelpCircle size={18} className="mt-0.5 shrink-0 text-pleingroen" />
+      <HelpCircle size={18} className="mt-0.5 shrink-0 text-nadruk" />
       <div>
         <p className="font-semibold text-slate-900 dark:text-slate-100">
           Je tekst is nog niet duidelijk genoeg
@@ -813,7 +813,7 @@ export default function OwnPromptOptimizer({
               'inline-flex items-center gap-1.5 rounded-full px-1.5 py-0.5 text-sm font-medium text-rijksblauw-500 transition-colors hover:underline dark:text-rijksblauw-200',
             )}
           >
-            <Lightbulb size={16} className="text-pleingroen" />
+            <Lightbulb size={16} className="text-nadruk" />
             <span>Voorbeelden</span>
           </button>
           {/* Opschonen: alleen tonen als er iets te wissen valt. */}
@@ -1133,7 +1133,7 @@ export default function OwnPromptOptimizer({
                 </>
               ) : (
                 <>
-                  <Sparkles size={20} className="text-pleingroen-vast" />
+                  <Sparkles size={20} className="text-nadruk-vast" />
                   {kind === 'template' ? 'Velden invullen' : 'Maak mijn prompt'}
                 </>
               )}
@@ -1243,7 +1243,7 @@ export default function OwnPromptOptimizer({
                   : Object.keys(aanvullingen).length > 0
                     ? `De AI stelt bij ${Object.keys(aanvullingen).length} ${
                         Object.keys(aanvullingen).length === 1 ? 'veld' : 'velden'
-                      } een aanvulling voor; die staat in het groen onder het veld. Voeg toe wat klopt, de rest verwerp je.`
+                      } een aanvulling voor; die staat in het rood onder het veld. Voeg toe wat klopt, de rest verwerp je.`
                     : 'De AI had niets aan te vullen. Wat je leeg laat, blijft een plaatshouder in de prompt.'}
               </p>
             )}
@@ -1326,7 +1326,7 @@ export default function OwnPromptOptimizer({
             className="opl-btn-primary min-h-12 px-6 text-base"
             onClick={handleGenerate}
           >
-            <Sparkles size={20} className="text-pleingroen-vast" /> Bouw prompt
+            <Sparkles size={20} className="text-nadruk-vast" /> Bouw prompt
           </button>
         </div>
       )}

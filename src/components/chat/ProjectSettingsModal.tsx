@@ -143,7 +143,7 @@ export default function ProjectSettingsModal({
     // files.length erbij: een nieuw bestand in een groot project heeft ook vectoren nodig.
   }, [open, projectId, needsIndex, files.length]);
 
-  // --- Het groene sterretje: van ruwe instructie naar systeemprompt ---
+  // --- Het rode sterretje: van ruwe instructie naar systeemprompt ---
   // Bewust een zwaardere slag dan het sterretje in de chat: daar wordt één
   // bericht scherper, hier wordt een instructie herschreven die élk gesprek in
   // dit project stuurt. Het resultaat vervangt het veld maar wordt níét
@@ -331,12 +331,12 @@ export default function ProjectSettingsModal({
                       // zodat het greepje bruikbaar blijft en de knop niet tegen
                       // de grijze baan van de schuifbalk aan plakt.
                       'absolute bottom-2.5 right-[22px] flex h-8 w-8 items-center justify-center rounded-lg',
-                      'bg-pleingroen text-slate-950',
+                      'bg-nadruk text-white',
                       // Een ringetje in de veldkleur licht de knop van de tekst
                       // eronder: zonder die scheiding loopt hij vast aan de regel
                       // waar hij toevallig overheen valt.
                       'shadow-sm ring-2 ring-white dark:ring-slate-800',
-                      'transition-all duration-200 focus:outline-none focus:ring-pleingroen/40',
+                      'transition-all duration-200 focus:outline-none focus:ring-nadruk/40',
                       canOptimize && !optimizing
                         ? 'hover:shadow-md motion-safe:hover:-translate-y-px'
                         : 'cursor-default opacity-60',

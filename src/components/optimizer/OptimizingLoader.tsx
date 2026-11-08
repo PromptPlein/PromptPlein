@@ -145,7 +145,7 @@ export default function OptimizingLoader({
         >
           {streaming ? (
             <>
-              <PenLine size={12} className="text-pleingroen" />
+              <PenLine size={12} className="text-nadruk" />
               {words} {words === 1 ? 'woord' : 'woorden'} geschreven · {elapsed}s
             </>
           ) : (

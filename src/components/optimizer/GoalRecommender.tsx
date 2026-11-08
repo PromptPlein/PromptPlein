@@ -28,15 +28,15 @@ interface GoalRecommenderProps {
    * dit niet meegegeven, dan wordt de knop niet getoond.
    */
   onClear?: () => void;
-  /** De instap-tabs; vallen bovenin het groene generator-blok. */
+  /** De instap-tabs; vallen bovenin het rode generator-blok. */
   header?: ReactNode;
   /**
    * De "Bouw je template"-velden die ná een keuze verschijnen. Vallen binnen de
-   * groene rand, onder de aanbevelingen — zodat het veld zich daar uitbreidt.
+   * rode rand, onder de aanbevelingen — zodat het veld zich daar uitbreidt.
    */
   templateBuilder?: ReactNode;
   /**
-   * De volledige, handmatige techniekenlijst. Valt bewust BUITEN de groene rand,
+   * De volledige, handmatige techniekenlijst. Valt bewust BUITEN de rode rand,
    * als losse kaart eronder — dit is geen advies van de generator maar een eigen
    * keuze.
    */
@@ -123,14 +123,14 @@ export default function GoalRecommender({
     }
   }
 
-  // Zodra er technieken zijn aanbevolen, groeit de groene omranding mee om het
+  // Zodra er technieken zijn aanbevolen, groeit de rode omranding mee om het
   // hele advies — chat + aanbevelingen + (na een keuze) de template-velden.
   const expanded = Boolean(recommendations);
 
   return (
     <div className="space-y-5">
       {/* Generator-blok = het advies vanuit de prompt generator: de chat + de
-          aanbevolen technieken + (na een keuze) de template-velden. De groene rand
+          aanbevolen technieken + (na een keuze) de template-velden. De rode rand
           omsluit dit hele blok; de handmatige techniekenlijst valt er bewust
           buiten (zie onder). */}
       {/* Blauwe rand: deze doel-flow hoort bij de blauwe instap-tab ("Help mij
@@ -173,7 +173,7 @@ export default function GoalRecommender({
               type="button"
               onClick={handleClear}
               title="Wis je doel en begin opnieuw"
-              className="ml-auto inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-semibold text-slate-700 transition-colors hover:text-pleingroen dark:text-slate-200 dark:hover:text-pleingroen"
+              className="ml-auto inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-semibold text-slate-700 transition-colors hover:text-nadruk dark:text-slate-200 dark:hover:text-nadruk"
             >
               <Eraser size={15} />
               <span>Opschonen</span>
@@ -268,7 +268,7 @@ export default function GoalRecommender({
 
         {/* Adviesdeel binnen het generator-blok: de aanbevolen technieken en — na
             een keuze — de template-velden. Bij een advies witte achtergrond met
-            padding, zodat het naadloos onder de chat binnen dezelfde groene rand
+            padding, zodat het naadloos onder de chat binnen dezelfde rode rand
             valt. */}
         <div className={clsx(expanded ? 'space-y-5 bg-white p-5 dark:bg-slate-800 sm:p-6' : 'space-y-5')}>
       {unclearReason && (
@@ -310,10 +310,10 @@ export default function GoalRecommender({
               >
                 <div className="mb-1 flex items-center justify-between gap-2">
                   <span className="flex items-center gap-2 font-semibold text-rijksblauw-700 dark:text-rijksblauw-200">
-                    {idx === 0 && <Sparkles size={15} className="text-pleingroen" />}
+                    {idx === 0 && <Sparkles size={15} className="text-nadruk" />}
                     {technique.name}
                     {idx === 0 && (
-                      <span className="opl-badge bg-pleingroen/15 text-pleingroen">
+                      <span className="opl-badge bg-nadruk/15 text-nadruk">
                         Beste match
                       </span>
                     )}
@@ -330,8 +330,8 @@ export default function GoalRecommender({
                   </span>
                 )}
                 {rec.value && (
-                  <span className="mt-2 rounded-lg border border-pleingroen/30 bg-pleingroen/5 p-2.5 text-xs leading-relaxed text-slate-600 dark:border-pleingroen/20 dark:bg-pleingroen/10 dark:text-slate-300">
-                    <span className="font-semibold text-pleingroen">Waarom voor jouw vraagstuk: </span>
+                  <span className="mt-2 rounded-lg border border-nadruk/30 bg-nadruk/5 p-2.5 text-xs leading-relaxed text-slate-600 dark:border-nadruk/20 dark:bg-nadruk/10 dark:text-slate-300">
+                    <span className="font-semibold text-nadruk">Waarom voor jouw vraagstuk: </span>
                     {stripMarkdown(rec.value)}
                   </span>
                 )}
@@ -363,7 +363,7 @@ export default function GoalRecommender({
         </div>
       </div>
 
-      {/* Handmatige keuze — bewust BUITEN de groene rand: niet het advies van de
+      {/* Handmatige keuze — bewust BUITEN de rode rand: niet het advies van de
           generator, maar de volledige lijst voor wie zelf een techniek wil kiezen. */}
       {manualList}
     </div>

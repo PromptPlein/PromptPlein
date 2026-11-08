@@ -191,7 +191,7 @@ export default function RubricBuilder({ settings, context, onSerialized }: Rubri
               <input
                 type="radio"
                 name="rb-schaal"
-                className="mt-1 h-4 w-4 shrink-0 accent-pleingroen"
+                className="mt-1 h-4 w-4 shrink-0 accent-nadruk"
                 checked={data.schaal === s.value}
                 onChange={() =>
                   setData((d) => ({
@@ -412,7 +412,7 @@ export default function RubricBuilder({ settings, context, onSerialized }: Rubri
         <label className="flex cursor-pointer items-start gap-2.5">
           <input
             type="checkbox"
-            className="mt-0.5 h-4 w-4 shrink-0 accent-pleingroen"
+            className="mt-0.5 h-4 w-4 shrink-0 accent-nadruk"
             checked={data.bewijsverplicht}
             onChange={(e) => setData((d) => ({ ...d, bewijsverplicht: e.target.checked }))}
           />

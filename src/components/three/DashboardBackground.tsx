@@ -2,12 +2,12 @@ import { prefersReducedMotion } from '@/context/AccessibilityContext';
 import { useMemo, useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { rijksblauw, pleingroen, hexToVec3 } from '@/config/brandColors';
+import { rijksblauw, nadruk, hexToVec3 } from '@/config/brandColors';
 
 // Heldachtergrond in WebGL met twee varianten, beide decoratief (pointer-events:
 // none in de wrapper):
 //  - tegels: een raster van vierkantjes dat in golven oplicht, afgeleid van het
-//    logo. Heel af en toe kleurt een tegel groen; het midden blijft rustig zodat
+//    logo. Heel af en toe kleurt een tegel rood; het midden blijft rustig zodat
 //    de kop leesbaar blijft.
 //  - polder: hoogtelijnen zoals op een topografische kaart, die traag omhoog
 //    schuiven. Elke vierde lijn is iets sterker.
@@ -94,7 +94,7 @@ const tegelsShader = /* glsl */ `
     vec3 tileLow = mix(${hexToVec3(rijksblauw[700])}, ${hexToVec3(rijksblauw[600])}, 0.6);
     vec3 tileHigh = mix(${hexToVec3(rijksblauw[400])}, ${hexToVec3(rijksblauw[300])}, 0.25);
     vec3 tile = mix(tileLow, tileHigh, level);
-    tile = mix(tile, ${hexToVec3(pleingroen)}, step(0.988, r) * level);
+    tile = mix(tile, ${hexToVec3(nadruk)}, step(0.988, r) * level);
 
     vec2 fromCenter = (uv - 0.5) * vec2(1.0, 1.7);
     float calm = smoothstep(0.08, 0.55, length(fromCenter));

@@ -166,7 +166,7 @@ interface ChatComposerProps {
  * zelf hoeveel ruimte de tekst nodig heeft.
  *
  * Staat er tekst in het veld en is `onOptimize` meegegeven, dan verschijnt
- * rechtsboven het groene sterretje: één klik en de AI herschrijft wat er staat
+ * rechtsboven het rode sterretje: één klik en de AI herschrijft wat er staat
  * tot een scherpere vraag. De oorspronkelijke tekst blijft daarna één klik weg.
  */
 /** Aanraakscherm zonder toetsenbord erbij: Enter betekent daar iets anders. */
@@ -601,7 +601,7 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
             />
             {/* Sterretje rechtsboven: verbetert in één klik wat er staat. Verschijnt
                 pas zodra er tekst is, zodat een leeg veld rustig blijft. Zelfde
-                groen als het gereedschap "Genereren" in de menubalk. */}
+                rood als het gereedschap "Genereren" in de menubalk. */}
             {onOptimize && (text.trim().length > 0 || optimizing) && (
               <button
                 type="button"
@@ -609,8 +609,8 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
                   // right-3 laat de schuifbalk vrij; zonder balk oogt het als een
                   // bewuste marge in plaats van een knop tegen de rand.
                   'absolute right-3 top-2 flex h-7 w-7 items-center justify-center rounded-lg',
-                  'bg-pleingroen text-slate-950 shadow-sm',
-                  'transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-pleingroen/40',
+                  'bg-nadruk text-white shadow-sm',
+                  'transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-nadruk/40',
                   canOptimize && !optimizing
                     ? 'hover:shadow-md motion-safe:hover:-translate-y-px'
                     : 'cursor-default opacity-60',
@@ -797,7 +797,7 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
             moet gebeuren. Weg zodra de gebruiker hem wijzigt of verstuurt. */}
         {madePrompt && text === madePrompt.text && (
           <div className="mt-1.5 flex animate-fade-in flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-slate-700 dark:text-slate-200">
-            <Sparkles size={14} className="shrink-0 text-pleingroen" />
+            <Sparkles size={14} className="shrink-0 text-nadruk" />
             <span className="font-semibold">
               {madePrompt.framework ? `Gebouwd met ${madePrompt.framework}.` : 'Je prompt staat klaar.'}
             </span>
@@ -833,7 +833,7 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
             de gebruiker zelf verder typt of het bericht verstuurt. */}
         {canUndo && (
           <div className="mt-1.5 flex items-center gap-2 text-[0.6875rem] text-slate-500 dark:text-slate-400">
-            <Sparkles size={12} className="shrink-0 text-pleingroen" />
+            <Sparkles size={12} className="shrink-0 text-nadruk" />
             <span className="min-w-0">Je tekst is verbeterd. Lees hem na en pas gerust aan.</span>
             <button
               type="button"

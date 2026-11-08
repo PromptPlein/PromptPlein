@@ -217,7 +217,7 @@ export default function PromptCard({ prompt, author, onChanged }: PromptCardProp
           >
             <Star
               size={18}
-              className={prompt.is_favorite ? 'fill-pleingroen text-pleingroen' : ''}
+              className={prompt.is_favorite ? 'fill-nadruk text-nadruk' : ''}
             />
           </button>
         </div>

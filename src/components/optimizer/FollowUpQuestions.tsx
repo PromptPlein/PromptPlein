@@ -29,7 +29,7 @@ interface FieldBlockProps {
   tall?: boolean;
   /** Letter van het framework-onderdeel (de C van CONTEXT), of leeg. */
   marker?: string;
-  /** Is dit veld leeg, dan vragen we erom: label en groene rand. */
+  /** Is dit veld leeg, dan vragen we erom: label en rode rand. */
   askIfEmpty?: boolean;
   onChange: (value: string) => void;
   /** Start "Vul verder aan" voor dit veld. */
@@ -126,7 +126,7 @@ function FieldBlock({
           <div className="flex min-h-7 flex-wrap items-center gap-x-2 gap-y-1 pb-1">
             {meta && filled && <PrefillBadge source={meta.source} note={meta.note} />}
             {vraag && (
-              <span className="inline-flex items-center rounded-full bg-pleingroen/15 px-2 py-0.5 text-[0.6875rem] font-semibold text-slate-800 dark:text-slate-100">
+              <span className="inline-flex items-center rounded-full bg-nadruk/15 px-2 py-0.5 text-[0.6875rem] font-semibold text-slate-800 dark:text-slate-100">
                 Vul dit nog in
               </span>
             )}
@@ -157,7 +157,7 @@ function FieldBlock({
         rows={tall ? 6 : 3}
         className={clsx(
           'opl-input block min-h-full resize-y self-stretch text-[0.9375rem]',
-          vraag && 'border-2 border-pleingroen',
+          vraag && 'border-2 border-nadruk',
         )}
         value={value}
         placeholder={question.placeholder}
@@ -428,7 +428,7 @@ export default function FollowUpQuestions({
   }
 
   // De bouw-knop hoort bij de velden, dus staat hij in elke indeling in de
-  // knoppenbalk van de vragenlijst zelf. Groen: het is de afsluitende actie,
+  // knoppenbalk van de vragenlijst zelf. Rood: het is de afsluitende actie,
   // niet zomaar de volgende stap.
   const buildButton = onBuild ? (
     <button type="button" className="opl-btn-accent" onClick={onBuild}>
@@ -520,7 +520,7 @@ export default function FollowUpQuestions({
         </div>
         <p className="text-sm text-slate-500 dark:text-slate-400">
           {hasPrefill
-            ? 'We hebben deze velden alvast voor je ingevuld op basis van je prompt. Controleer en pas aan waar nodig, vooral de AI-suggesties met het groene label "Controleren".'
+            ? 'We hebben deze velden alvast voor je ingevuld op basis van je prompt. Controleer en pas aan waar nodig, vooral de AI-suggesties met het rode label "Controleren".'
             : 'Dit zijn de bouwstenen van je prompt. Klopt alles? Bouw dan de herbruikbare prompt.'}
         </p>
         <ul className="divide-y divide-slate-100 dark:divide-slate-700">

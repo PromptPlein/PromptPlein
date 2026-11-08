@@ -122,7 +122,9 @@ database. Wordt er code van daar geport, hernummer dan de migratie.
 
 Huisstijl: PromptPlein valt onder de Rijksoverheid en voert daarom de
 Rijkshuisstijl. Kleuren staan in `src/config/brandColors.js` (lintblauw `#154273`
-voor koppen en balken, donkerblauw `#01689B` voor interactie), de vormtaal in
+voor koppen en balken, donkerblauw `#01689B` voor interactie, en het token
+`nadruk` `#D2563E` als accent; dat heeft eigen tinten voor witte tekst, voor tekst
+in het rood en voor op lintblauw, zodat het contrast klopt), de vormtaal in
 `borderRadius` van de Tailwind-config. Het lettertype Rijks Sans staat in
 `src/assets/fonts/` en is niet vrij: het staat met toestemming in deze openbare repo
 omdat PromptPlein van de Rijksoverheid is, en valt net als `public/logo-rijksoverheid.*`
@@ -587,7 +589,7 @@ terug op zijn eigen omschrijving. Na het kiezen klapt de kiezer dicht; "Andere
 kiezen" opent hem boven het invulblok, zonder de invoer te wissen.
 
 De doelen zijn tabbladen: de gekozen tegel loopt zonder lijn over in het vlak
-eronder, met een groene streep bovenaan. Dezelfde streep staat op de balk met je
+eronder, met een rode streep bovenaan. Dezelfde streep staat op de balk met je
 keuze. "Help mij kiezen" staat op hetzelfde raster als de tegels en is even breed
 als de laatste. De adviseur daarachter stelt alleen technieken voor, geen frameworks
 (`TechniqueAdvisor`).

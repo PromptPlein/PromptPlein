@@ -364,7 +364,7 @@ function PairsPhase({
                   type="button"
                   onClick={() => onRemovePair(p.id)}
                   title="Verwijder dit paar"
-                  className="rounded p-1 text-slate-400 hover:bg-pleingroen/10 hover:text-pleingroen dark:text-slate-500"
+                  className="rounded p-1 text-slate-400 hover:bg-nadruk/10 hover:text-nadruk dark:text-slate-500"
                 >
                   <Trash2 size={14} />
                 </button>
@@ -501,7 +501,7 @@ function AnalysisPhase({
       {d.nietOvernemen.length > 0 && (
         <FeatureChecklist
           title="Deze details horen bij één geval; deze laat ik weg (of maak ik een [plaatshouder])"
-          accent="groen"
+          accent="nadruk"
           features={d.nietOvernemen}
           onToggle={(i) => onToggle('nietOvernemen', i)}
         />
@@ -540,7 +540,7 @@ function FeatureChecklist({
   onToggle,
 }: {
   title: string;
-  accent: 'rijksblauw' | 'groen';
+  accent: 'rijksblauw' | 'nadruk';
   features: FewShotFeature[];
   onToggle: (index: number) => void;
 }) {
@@ -558,7 +558,7 @@ function FeatureChecklist({
               <span
                 className={clsx(
                   'font-medium',
-                  accent === 'groen' ? 'text-pleingroen' : 'text-rijksblauw-700 dark:text-rijksblauw-200',
+                  accent === 'nadruk' ? 'text-nadruk' : 'text-rijksblauw-700 dark:text-rijksblauw-200',
                 )}
               >
                 {f.label}

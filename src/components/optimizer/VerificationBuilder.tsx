@@ -158,7 +158,7 @@ export default function VerificationBuilder({
             >
               <input
                 type="checkbox"
-                className="mt-1 h-4 w-4 shrink-0 accent-pleingroen"
+                className="mt-1 h-4 w-4 shrink-0 accent-nadruk"
                 checked={c.checked}
                 onChange={(e) =>
                   setData((d) => ({
@@ -210,7 +210,7 @@ export default function VerificationBuilder({
               <input
                 type="radio"
                 name="cove-regime"
-                className="mt-1 h-4 w-4 shrink-0 accent-pleingroen"
+                className="mt-1 h-4 w-4 shrink-0 accent-nadruk"
                 checked={data.regime === r.value}
                 onChange={() => setData((d) => ({ ...d, regime: r.value as SourceRegime }))}
               />

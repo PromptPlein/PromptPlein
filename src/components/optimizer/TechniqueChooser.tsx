@@ -11,7 +11,7 @@ import type { Technique } from '@/types';
  * Kiezen op doel: eerst wat je wilt bereiken, dan de frameworks en technieken die
  * daarbij passen. De doelen zijn tabbladen: de gekozen tegel loopt zonder lijn over
  * in het vlak eronder. Dat kan alleen als ze op één rij staan, dus pas vanaf lg.
- * Groen staat alleen op de streep bovenaan en op kleine iconen: als tekst op wit
+ * Rood staat alleen op de streep bovenaan en op kleine iconen: als tekst op wit
  * haalt het de contrasteis niet.
  */
 export default function TechniqueChooser({
@@ -70,7 +70,7 @@ export default function TechniqueChooser({
                 aan
                   ? // z-10 en -mb-px: de tegel legt zich over de bovenrand van het
                     // vlak heen, zodat er geen lijn tussen beide loopt.
-                    'z-10 border-slate-200 bg-white shadow-[inset_0_4px_0_0_theme(colors.pleingroen.vast)] lg:-mb-px lg:rounded-b-none lg:border-b-white dark:border-slate-700 dark:bg-slate-800 lg:dark:border-b-slate-800'
+                    'z-10 border-slate-200 bg-white shadow-[inset_0_4px_0_0_theme(colors.nadruk.vast)] lg:-mb-px lg:rounded-b-none lg:border-b-white dark:border-slate-700 dark:bg-slate-800 lg:dark:border-b-slate-800'
                   : 'border-slate-200 bg-[#e6edf3] hover:border-rijksblauw-700 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-rijksblauw-200',
               )}
             >
@@ -194,14 +194,14 @@ function TechniqueRow({
         <span className="absolute bottom-3 right-3.5 inline-flex items-center gap-1 text-[0.9375rem] font-semibold text-rijksblauw-500 dark:text-rijksblauw-200">
           {active ? (
             <>
-              Gekozen <Check size={16} className="text-pleingroen" />
+              Gekozen <Check size={16} className="text-nadruk" />
             </>
           ) : (
             <>
               Kies
               <ArrowRight
                 size={16}
-                className="transition-transform group-hover/rij:translate-x-0.5 group-hover/rij:text-pleingroen"
+                className="transition-transform group-hover/rij:translate-x-0.5 group-hover/rij:text-nadruk"
               />
             </>
           )}
