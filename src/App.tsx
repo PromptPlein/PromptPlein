@@ -16,7 +16,6 @@ import PasswordResetPage from '@/pages/auth/PasswordResetPage';
 import UpdatePasswordPage from '@/pages/auth/UpdatePasswordPage';
 import '@nldd/design-system/inline-dialog';
 import '@nldd/design-system/page';
-import '@nldd/design-system/shell';
 import '@nldd/design-system/simple-section';
 import '@nldd/design-system/skip-link';
 // De bouwer is groot en je komt er vaak niet eens: wie op de telefoon alleen de
@@ -79,7 +78,6 @@ export default function App() {
   return (
     <ReferenceDataProvider>
       <RouteFocus />
-      <nldd-shell>
         <nldd-page>
           <nldd-skip-link slot="header" text="Sla navigatie over">
             <Header />
@@ -176,7 +174,6 @@ export default function App() {
           {/* The chat uses the whole window to read in. */}
           {pathname !== '/chat' && <Footer />}
         </nldd-page>
-      </nldd-shell>
       {/* Microphone in every text field: dictate instead of type. */}
       <DictationLayer />
       <HelpShortcut />

@@ -19,7 +19,7 @@ import {
 import { isConversationActive } from '@/lib/conversationMode';
 import { matchesShortcut, SHORTCUTS } from '@/lib/shortcuts';
 import { isSpeaking, speak, stopSpeaking, toSpeakableText, useSpeakingId } from '@/lib/speech';
-import { visibleHeight } from '@/lib/viewportWatch';
+import { scrollArea } from '@/lib/chatScroll';
 import ChatAnswer from './ChatAnswer';
 import CopyMessageButton from './CopyMessageButton';
 import type { ChatMessage } from '@/types';
@@ -53,22 +53,13 @@ export interface ChatMessageListHandle {
 }
 
 /**
- * The bars of the nldd-page this list sits in: the sticky title bar above, and
- * the composer below the conversation. The last turn leaves room for both.
+ * The sticky title bar of the nldd-page this list sits in. The composer has a
+ * bar of its own under the page, outside what scrolls, so it needs no room here.
  */
-function stickyBars(el: HTMLElement) {
+function titleBarHeight(el: HTMLElement) {
   const page = el.closest('nldd-page');
   const header = page?.querySelector<HTMLElement>(':scope > [slot="header"]');
-  const footer = page?.querySelector<HTMLElement>(':scope > [slot="footer"], :scope > [data-chat-composer]');
-  return {
-    top: header?.getBoundingClientRect().height ?? 0,
-    bottom: footer?.getBoundingClientRect().height ?? 0,
-    footerEl: footer ?? null,
-  };
-}
-
-function scrollRoot() {
-  return document.scrollingElement ?? document.documentElement;
+  return header?.getBoundingClientRect().height ?? 0;
 }
 
 /** De tekst met regeleinden, als regels met een <br> ertussen. */
@@ -86,8 +77,9 @@ function withBreaks(text: string) {
  * De berichtenlijst van de chat. Elke rij is gememoïseerd: tijdens het streamen
  * verandert alleen het laatste bericht, dus alleen die rij rendert opnieuw.
  *
- * Het document scrollt, niet de lijst: de titelbalk en het tekstvak staan vast
- * in de pagina eromheen (nldd-page met sticky-header en sticky-footer).
+ * De lijst scrolt niet zelf: op een breed scherm scrolt het paneel van de chat,
+ * op de telefoon het document (zie chatScroll). De titelbalk staat vast in de
+ * pagina eromheen, het tekstvak in een eigen balk eronder.
  */
 const ChatMessageList = forwardRef<ChatMessageListHandle, {
   messages: ChatMessage[];
@@ -166,26 +158,20 @@ const ChatMessageList = forwardRef<ChatMessageListHandle, {
     if (!fill || !lastUserId) return;
     const question = content.querySelector<HTMLElement>(`[data-message-id="${lastUserId}"]`);
     if (!question) return;
-    // The question belongs right under the title bar and the composer at the
-    // bottom of the window, so the answer row makes up the difference.
-    const bars = stickyBars(content);
-    const composer = bars.footerEl?.getBoundingClientRect().bottom;
-    if (composer === undefined) return;
-    const span = composer - question.getBoundingClientRect().top;
-    const wanted = visibleHeight() - bars.top - TOP_GAP;
+    // The question belongs right under the title bar and the end of the
+    // conversation at the bottom of what you see, so the answer row makes up the
+    // difference.
+    const area = scrollArea(content);
+    const span = area.end - question.getBoundingClientRect().top;
+    const wanted = area.height - titleBarHeight(content) - TOP_GAP;
     const room = fill.getBoundingClientRect().height + wanted - span;
     fill.setAttribute('min-height', `${Math.max(0, Math.round(room))}px`);
   }, [lastUserId]);
 
   const syncJump = useCallback(() => {
-    // What is still below the window: up to the end of the composer under the
-    // conversation, or the end of the document when there is none.
-    const content = contentRef.current;
-    const composer = content ? stickyBars(content).footerEl : null;
-    const end = composer
-      ? composer.getBoundingClientRect().bottom
-      : scrollRoot().scrollHeight - window.scrollY;
-    const show = end - visibleHeight() > JUMP_THRESHOLD;
+    // What is still below what you see, up to the end of the conversation.
+    const area = scrollArea(contentRef.current);
+    const show = area.end - (area.top + area.height) > JUMP_THRESHOLD;
     if (show === showJumpRef.current) return;
     showJumpRef.current = show;
     onShowJumpRef.current?.(show);
@@ -194,62 +180,111 @@ const ChatMessageList = forwardRef<ChatMessageListHandle, {
   // Een nieuwe vraag gaat bovenaan staan en daarna blijft het scherm stil: het
   // antwoord groeit eronder en je leest in je eigen tempo vanaf het begin. Ook
   // een geopend gesprek begint bij de laatste vraag.
+  //
+  // De ruimte onder het antwoord (fitLastTurn) krijgt pas een tel later hoogte,
+  // en tot dan kapt de scroller het verschuiven af. Daarom blijft de vraag
+  // "onderweg" tot hij op zijn plek staat; elke maatwissel probeert het opnieuw.
+  const pendingRef = useRef<string | null>(null);
+  const placeQuestion = useCallback((behavior: ScrollBehavior) => {
+    const content = contentRef.current;
+    const id = pendingRef.current;
+    if (!content || !id) return;
+    const row = content.querySelector<HTMLElement>(`[data-message-id="${id}"]`);
+    if (!row) return;
+    const area = scrollArea(content);
+    const offset = row.getBoundingClientRect().top - area.top - titleBarHeight(content) - TOP_GAP;
+    if (Math.abs(offset) <= 2) {
+      pendingRef.current = null;
+      return;
+    }
+    area.scrollTo(area.scrollTop + offset, behavior);
+  }, []);
+
   useLayoutEffect(() => {
     const content = contentRef.current;
     if (!content || !lastUserId) return;
     followRef.current = false;
     stopSpeaking();
     fitLastTurn();
-    const row = content.querySelector<HTMLElement>(`[data-message-id="${lastUserId}"]`);
-    if (!row) return;
-    const { top } = stickyBars(content);
-    window.scrollTo({
-      top: window.scrollY + row.getBoundingClientRect().top - top - TOP_GAP,
-      behavior: streamingRef.current && !prefersReducedMotion() ? 'smooth' : 'auto',
-    });
-  }, [lastUserId, fitLastTurn]);
+    pendingRef.current = lastUserId;
+    placeQuestion(streamingRef.current && !prefersReducedMotion() ? 'smooth' : 'auto');
+    // Wie zelf scrolt, beslist: dan stopt het bijsturen. Het luisteren begint
+    // pas na de toets of klik waarmee de vraag verstuurd is; anders zet de Enter
+    // van het versturen het meteen weer uit.
+    const stop = () => {
+      pendingRef.current = null;
+    };
+    const timer = window.setTimeout(stop, 4000);
+    const listen = window.setTimeout(() => {
+      window.addEventListener('wheel', stop, { passive: true, once: true });
+      window.addEventListener('touchstart', stop, { passive: true, once: true });
+      window.addEventListener('keydown', stop, { once: true });
+    }, 0);
+    return () => {
+      window.clearTimeout(timer);
+      window.clearTimeout(listen);
+      window.removeEventListener('wheel', stop);
+      window.removeEventListener('touchstart', stop);
+      window.removeEventListener('keydown', stop);
+    };
+  }, [lastUserId, fitLastTurn, placeQuestion]);
 
   useEffect(() => {
     const content = contentRef.current;
     if (!content) return;
 
-    const onResize = () => {
-      fitLastTurn();
-      if (followRef.current) window.scrollTo({ top: scrollRoot().scrollHeight });
+    const onScroll = () => {
+      const { scrollTop } = scrollArea(content);
+      if (scrollTop < lastTopRef.current - 2) followRef.current = false;
+      lastTopRef.current = scrollTop;
       syncJump();
     };
 
-    const onScroll = () => {
-      if (window.scrollY < lastTopRef.current - 2) followRef.current = false;
-      lastTopRef.current = window.scrollY;
+    // Wat scrolt, hangt af van de breedte: het paneel of het document. Bij elke
+    // maatwissel kan dat veranderen, dus de luisteraar verhuist mee.
+    let target: HTMLElement | Window | null = null;
+    const bind = () => {
+      const next = scrollArea(content).target;
+      if (next === target) return;
+      target?.removeEventListener('scroll', onScroll);
+      target = next;
+      target.addEventListener('scroll', onScroll, { passive: true });
+    };
+
+    const onResize = () => {
+      bind();
+      fitLastTurn();
+      placeQuestion('auto');
+      if (followRef.current) {
+        const area = scrollArea(content);
+        area.scrollTo(area.scrollHeight);
+      }
       syncJump();
     };
 
     const observer = new ResizeObserver(onResize);
     observer.observe(content);
     window.addEventListener('resize', onResize);
-    window.addEventListener('scroll', onScroll, { passive: true });
+    bind();
     syncJump();
     return () => {
       observer.disconnect();
       window.removeEventListener('resize', onResize);
-      window.removeEventListener('scroll', onScroll);
+      target?.removeEventListener('scroll', onScroll);
       if (showJumpRef.current) {
         showJumpRef.current = false;
         onShowJumpRef.current?.(false);
       }
     };
-  }, [fitLastTurn, syncJump]);
+  }, [fitLastTurn, syncJump, placeQuestion]);
 
   useImperativeHandle(
     ref,
     () => ({
       jumpToEnd() {
         followRef.current = streamingRef.current;
-        window.scrollTo({
-          top: scrollRoot().scrollHeight,
-          behavior: streamingRef.current || prefersReducedMotion() ? 'auto' : 'smooth',
-        });
+        const area = scrollArea(contentRef.current);
+        area.scrollTo(area.scrollHeight, streamingRef.current || prefersReducedMotion() ? 'auto' : 'smooth');
         // De knop verdwijnt zo meteen; de focus mag niet met hem mee verdwijnen.
         contentRef.current?.focus({ preventScroll: true });
       },

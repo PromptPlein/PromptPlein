@@ -39,7 +39,11 @@
     </script>
   </head>
   <body>
-    <div id="root"></div>
+    <!-- De schil van het NLDD Designsysteem is zelf het element waarin React de app
+         zet: direct in de body, zodat hij de volle hoogte krijgt die het systeem
+         verwacht. Een eigen div ertussen maakt hem 0 pixels hoog zodra de panelen
+         van de chat zelf scrollen. -->
+    <nldd-shell id="root"></nldd-shell>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

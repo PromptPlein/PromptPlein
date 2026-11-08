@@ -43,12 +43,14 @@ import { detectPii, type GuardrailFinding } from '@/services/guardrails';
 import GuardrailDialog from '@/components/optimizer/GuardrailDialog';
 import { thinkingUnavailableReason } from '@/config/aiModels';
 import '@nldd/design-system/banner';
+import '@nldd/design-system/bar-split-view';
 import '@nldd/design-system/button';
 import '@nldd/design-system/container';
 import '@nldd/design-system/icon-button';
+import '@nldd/design-system/navigation-split-view';
 import '@nldd/design-system/page';
-import '@nldd/design-system/sidebar-section';
 import '@nldd/design-system/simple-section';
+import '@nldd/design-system/split-view-pane';
 import '@nldd/design-system/spacer';
 import '@nldd/design-system/tag';
 import '@nldd/design-system/text';
@@ -596,31 +598,44 @@ function ChatPageInner() {
     composerRef.current?.focus();
   }, [emptyChatReady, conversationId]);
 
+  // Bij het eerste bericht verhuist het tekstvak naar zijn balk onderaan en bouwt
+  // React het opnieuw op. Wie met muis of toetsenbord werkt, houdt de cursor erin;
+  // op een aanraakscherm blijft het toetsenbord dicht, zodat je het antwoord leest.
+  const wasPinned = useRef(chatActive);
+  useEffect(() => {
+    if (chatActive && !wasPinned.current && !window.matchMedia('(pointer: coarse)').matches) {
+      composerRef.current?.focus();
+    }
+    wasPinned.current = chatActive;
+  }, [chatActive]);
+
   // --- Layout: de zijbalk en de titelbalk ---
-  // Onder lg is de zijbalk een sheet; de terugknop van de titelbalk opent hem.
-  const sectionRef = useRef<HTMLElement & { collapsed?: boolean; show?: () => void; hide?: () => void }>(null);
+  // Lijst en gesprek staan in een gesplitst scherm (NLDD-patroon Applicatie): op
+  // een breed scherm naast elkaar, elk paneel scrolt zelf. Past de lijst er niet
+  // naast (320 + 480 pixels), dan toont het scherm één paneel tegelijk: de
+  // terugknop van de titelbalk gaat naar de lijst, een keuze daar terug naar het
+  // gesprek. Het systeem toont of verbergt die terugknop zelf.
+  const splitRef = useRef<HTMLElement & { isSingleColumn?: boolean }>(null);
   const titleBarRef = useRef<HTMLElement>(null);
   const listRef = useRef<ChatMessageListHandle>(null);
   const [collapsed, setCollapsed] = useState(false);
+  const [listOpen, setListOpen] = useState(false);
   const [showJump, setShowJump] = useState(false);
-  useNlddEvent<CustomEvent<{ collapsed: boolean }>>(sectionRef, 'collapse-change', (e) =>
-    setCollapsed(Boolean(e.detail?.collapsed)),
-  );
-  useEffect(() => {
-    // The section reflects its state once it has measured itself.
-    const el = sectionRef.current;
-    if (!el) return;
-    const sync = () => setCollapsed(el.hasAttribute('collapsed'));
-    sync();
-    const observer = new MutationObserver(sync);
-    observer.observe(el, { attributes: true, attributeFilter: ['collapsed'] });
-    return () => observer.disconnect();
-  }, [configured, settings?.enabled]);
-  useNlddEvent(titleBarRef, 'back', () => sectionRef.current?.show?.());
-  /** Een keuze in de zijbalk sluit de sheet, zodat je ziet wat je koos. */
-  const closeList = useCallback(() => {
-    if (sectionRef.current?.hasAttribute('collapsed')) sectionRef.current.hide?.();
+  const applyColumns = useCallback((single: boolean) => {
+    setCollapsed(single);
+    if (!single) setListOpen(false);
   }, []);
+  useNlddEvent<CustomEvent<{ singleColumn?: boolean }>>(splitRef, 'nldd-single-column-change', (e) =>
+    applyColumns(Boolean(e.detail?.singleColumn)),
+  );
+  // De eerste melding kan komen voordat de chat luistert: lees de stand ook zelf.
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => applyColumns(Boolean(splitRef.current?.isSingleColumn)));
+    return () => cancelAnimationFrame(frame);
+  }, [applyColumns, configured, settings?.enabled]);
+  useNlddEvent(titleBarRef, 'back', () => setListOpen(true));
+  /** Een keuze in de lijst brengt je terug naar het gesprek. */
+  const closeList = useCallback(() => setListOpen(false), []);
 
   /** Een bewaard bestand terugzetten. Het bestand blijft in de browser. */
   const pickRestoreFile = useCallback(() => {
@@ -679,20 +694,110 @@ function ChatPageInner() {
   // staat het in het midden, onder de begroeting.
   const composerPinned = chatActive;
 
+  // Het tekstvak met alles eromheen. In een lege chat staat het in de pagina,
+  // daarna in een eigen balk onder het gesprek. Bij die wissel bouwt React het
+  // opnieuw op; ChatComposer zet de cursor dan zelf terug (zie focus()).
+  const composerBlock = (
+        <nldd-container
+          data-chat-composer
+          padding-inline="16"
+          padding-block="12"
+          horizontal-alignment="center"
+        >
+          <nldd-container max-width="60ch" gap="8">
+            {showJump && (
+              <nldd-container horizontal-alignment="center">
+                <nldd-button
+                  size="sm"
+                  appearance="secondary"
+                  start-icon="arrow-down"
+                  text="Naar beneden"
+                  onClick={() => listRef.current?.jumpToEnd()}
+                ></nldd-button>
+              </nldd-container>
+            )}
+
+            {projectNeedsLogin && (
+              <nldd-banner
+                size="sm"
+                variant="warning"
+                text="Deze chat hoort bij een project. Log in om verder te gaan met de projectinstructies."
+              >
+                <nldd-button
+                  slot="actions"
+                  appearance="primary"
+                  start-icon="login"
+                  text="Inloggen"
+                  onClick={() => requireLogin('Log in om verder te gaan in deze projectchat.')}
+                ></nldd-button>
+              </nldd-banner>
+            )}
+
+            {/* Wat het geheugen deed, op de plek waar je typt. */}
+            <MemoryNoticeBar
+              notice={controller.memoryNotice}
+              onDismiss={controller.dismissMemoryNotice}
+              onLogin={() => requireLogin('Log in om dit in je geheugen op te slaan.')}
+            />
+            <ChatComposer
+              ref={composerRef}
+              disabled={composerDisabled}
+              disabledPlaceholder={
+                projectNeedsLogin ? 'Log in om verder te chatten in dit project' : undefined
+              }
+              placeholder={intakePlaceholder}
+              // Ook terwijl het doorvragen loopt: dan stopt Stop die stap.
+              streaming={controller.streaming || intake.busy}
+              extracting={controller.extracting}
+              attachments={conversation?.attachments ?? []}
+              onSend={guardedSend}
+              onRoutekaart={(text) => void controller.addRoutekaart(text)}
+              onStop={() => {
+                if (!intake.busy) {
+                  controller.stop();
+                  return;
+                }
+                const back = intake.stop();
+                if (back) composerRef.current?.fill(back);
+              }}
+              onAddFile={(file) => void controller.addAttachment(file)}
+              onRemoveAttachment={controller.removeAttachment}
+              // Sterretje alleen tonen als de beheerder de functie aan heeft staan.
+              onOptimize={settings?.optimizeEnabled ? handleOptimizeInput : undefined}
+              onContext={handleOpenContext}
+              activeProjectName={activeProject?.name}
+              thinking={thinking}
+              onToggleThinking={setThinking}
+              thinkingUnavailable={thinkingUnavailable}
+              // Wereldbol alleen tonen als de beheerder zoeken aan heeft staan.
+              webSearch={webSearch}
+              onToggleWebSearch={settings?.webSearchEnabled ? setWebSearch : undefined}
+              // Leeg gesprek: het invoerveld is het enige aanknopingspunt op
+              // het scherm en wordt daarom groter getoond.
+              prominent={!chatActive}
+              notice={PII_NOTICE}
+              // Geen uitvoergesprek: daar staan zulke woorden in de prompt die getest wordt.
+              memoryHint={conversation?.kind !== 'execution'}
+              onEnlargedChange={setComposerEnlarged}
+              badge={
+                settings ? (
+                  <ChatModelBadge provider={settings.provider} model={settings.model} />
+                ) : undefined
+              }
+            />
+          </nldd-container>
+        </nldd-container>
+  );
+
   return (
     <>
-      {/* Gesprekkenlijst en gesprek horen bij elkaar: op een breed scherm staat de
-          lijst ernaast, smaller schuift hij in als sheet. Het document scrolt; de
-          titelbalk blijft staan (sticky-header). De grijze ondergrond laat de lijst
-          en het witte gesprek als twee vlakken zien. */}
-      <nldd-sidebar-section
-        ref={sectionRef}
-        sidebar-label="Chats en projecten"
-        background="tinted"
-        width="full"
-        sm-padding-top="8"
-      >
-        <nldd-container slot="sidebar" padding="12">
+      {/* Gesprekkenlijst en gesprek in een gesplitst scherm: elk paneel scrolt
+          zelf, zodat het scherm precies past en titelbalk en tekstvak blijven
+          staan. Grijs voor de lijst, wit voor het gesprek. */}
+      <nldd-navigation-split-view ref={splitRef}>
+        <nldd-split-view-pane slot="primary-sidebar" has-content background="tinted">
+        <nldd-page accessible-label="Chats en projecten">
+        <nldd-container padding="12">
           <ChatSidebar
             entries={looseEntries}
             totalConversations={controller.index.length}
@@ -724,11 +829,16 @@ function ChatPageInner() {
             footer={storagePromise}
           />
         </nldd-container>
+        </nldd-page>
+        </nldd-split-view-pane>
 
+        <nldd-split-view-pane slot="main" has-content={!listOpen || undefined}>
+        {/* Het gesprek boven, het tekstvak in een eigen balk eronder. */}
+        <nldd-bar-split-view>
+        <nldd-split-view-pane slot="main">
         <nldd-page
           sticky-header
           background="base"
-          landmarks="region"
           accessible-label="Chat"
         >
           {/* The bar always shows the title, as an h2: the h1 with the same words
@@ -884,108 +994,22 @@ function ChatPageInner() {
             </nldd-simple-section>
           )}
 
-          {!openProject && (
-            /* nldd-page 0.18.0 cannot pin this in a sticky footer while the document
-               scrolls: in root scroll mode the footer reads --context-inset-bottom
-               inside .page__scroll, which already includes its own height, so it
-               floats one footer height above the bottom and covers the answer. Until
-               that is fixed in the design system the composer follows the
-               conversation. */
-            <nldd-container
-              data-chat-composer
-              padding-inline="16"
-              padding-block="12"
-              horizontal-alignment="center"
-            >
-              <nldd-container max-width="60ch" gap="8">
-                {showJump && (
-                  <nldd-container horizontal-alignment="center">
-                    <nldd-button
-                      size="sm"
-                      appearance="secondary"
-                      start-icon="arrow-down"
-                      text="Naar beneden"
-                      onClick={() => listRef.current?.jumpToEnd()}
-                    ></nldd-button>
-                  </nldd-container>
-                )}
-
-                {projectNeedsLogin && (
-                  <nldd-banner
-                    size="sm"
-                    variant="warning"
-                    text="Deze chat hoort bij een project. Log in om verder te gaan met de projectinstructies."
-                  >
-                    <nldd-button
-                      slot="actions"
-                      appearance="primary"
-                      start-icon="login"
-                      text="Inloggen"
-                      onClick={() => requireLogin('Log in om verder te gaan in deze projectchat.')}
-                    ></nldd-button>
-                  </nldd-banner>
-                )}
-
-                {/* Wat het geheugen deed, op de plek waar je typt. */}
-                <MemoryNoticeBar
-                  notice={controller.memoryNotice}
-                  onDismiss={controller.dismissMemoryNotice}
-                  onLogin={() => requireLogin('Log in om dit in je geheugen op te slaan.')}
-                />
-                <ChatComposer
-                  ref={composerRef}
-                  disabled={composerDisabled}
-                  disabledPlaceholder={
-                    projectNeedsLogin ? 'Log in om verder te chatten in dit project' : undefined
-                  }
-                  placeholder={intakePlaceholder}
-                  // Ook terwijl het doorvragen loopt: dan stopt Stop die stap.
-                  streaming={controller.streaming || intake.busy}
-                  extracting={controller.extracting}
-                  attachments={conversation?.attachments ?? []}
-                  onSend={guardedSend}
-                  onRoutekaart={(text) => void controller.addRoutekaart(text)}
-                  onStop={() => {
-                    if (!intake.busy) {
-                      controller.stop();
-                      return;
-                    }
-                    const back = intake.stop();
-                    if (back) composerRef.current?.fill(back);
-                  }}
-                  onAddFile={(file) => void controller.addAttachment(file)}
-                  onRemoveAttachment={controller.removeAttachment}
-                  // Sterretje alleen tonen als de beheerder de functie aan heeft staan.
-                  onOptimize={settings?.optimizeEnabled ? handleOptimizeInput : undefined}
-                  onContext={handleOpenContext}
-                  activeProjectName={activeProject?.name}
-                  thinking={thinking}
-                  onToggleThinking={setThinking}
-                  thinkingUnavailable={thinkingUnavailable}
-                  // Wereldbol alleen tonen als de beheerder zoeken aan heeft staan.
-                  webSearch={webSearch}
-                  onToggleWebSearch={settings?.webSearchEnabled ? setWebSearch : undefined}
-                  // Leeg gesprek: het invoerveld is het enige aanknopingspunt op
-                  // het scherm en wordt daarom groter getoond.
-                  prominent={!chatActive}
-                  notice={PII_NOTICE}
-                  // Geen uitvoergesprek: daar staan zulke woorden in de prompt die getest wordt.
-                  memoryHint={conversation?.kind !== 'execution'}
-                  onEnlargedChange={setComposerEnlarged}
-                  badge={
-                    settings ? (
-                      <ChatModelBadge provider={settings.provider} model={settings.model} />
-                    ) : undefined
-                  }
-                />
-              </nldd-container>
-            </nldd-container>
-          )}
+          {/* Lege chat: het tekstvak staat in het midden, onder de begroeting. */}
+          {!openProject && !composerPinned && composerBlock}
           {/* In a fresh chat the same room goes below the composer as above the
               greeting, which puts the two in the middle. */}
           {!openProject && !composerPinned && <nldd-spacer size="flexible"></nldd-spacer>}
         </nldd-page>
-      </nldd-sidebar-section>
+        </nldd-split-view-pane>
+        {/* Na het eerste bericht zakt het tekstvak naar een vaste balk onderaan. */}
+        {!openProject && composerPinned && (
+          <nldd-split-view-pane slot="tekstvak" background="base">
+            {composerBlock}
+          </nldd-split-view-pane>
+        )}
+        </nldd-bar-split-view>
+        </nldd-split-view-pane>
+      </nldd-navigation-split-view>
 
       {pendingSend && aiSettings && (
         <GuardrailDialog

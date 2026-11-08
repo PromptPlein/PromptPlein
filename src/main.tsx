@@ -9,12 +9,15 @@ import { installAutoGrowTextareas } from './lib/autoGrowTextareas';
 import { installViewportWatch } from './lib/viewportWatch';
 
 import '@nldd/design-system/styles';
+import '@nldd/design-system/shell';
 import './index.css';
 
 // Vóór de eerste render: zie de uitleg in autoGrowTextareas.
 installAutoGrowTextareas();
 installViewportWatch();
 
+// De app komt in de nldd-shell uit index.html: die staat direct in de body en
+// krijgt zo de volle hoogte (de panelen van de chat scrollen zelf).
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>

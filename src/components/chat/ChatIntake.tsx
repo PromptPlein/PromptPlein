@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import InfoDot from '@/components/common/InfoDot';
 import { prefersReducedMotion } from '@/context/AccessibilityContext';
+import { scrollArea } from '@/lib/chatScroll';
 import { MAX_INTAKE_QUESTIONS, splitPromptSections } from '@/lib/chatIntake';
 import { useNlddEvent } from '@/lib/nldd';
 import { WizardError } from './PromptInterviewParts';
@@ -235,12 +236,12 @@ export default function ChatIntake({
   const busy = Boolean(loading);
   const promptOpen = showAll ?? sections.length === 0;
 
-  // What is new stands at the bottom, so go there. The document scrolls.
+  // What is new stands at the bottom, so go there: in the pane of the chat on a
+  // wide screen, in the document on a phone (see chatScroll).
+  const rootRef = useRef<HTMLElement>(null);
   useEffect(() => {
-    window.scrollTo({
-      top: document.documentElement.scrollHeight,
-      behavior: prefersReducedMotion() ? 'auto' : 'smooth',
-    });
+    const area = scrollArea(rootRef.current);
+    area.scrollTo(area.scrollHeight, prefersReducedMotion() ? 'auto' : 'smooth');
   }, [turns.length, question, phase, loading, checking]);
 
   // Een aparte statusregel, zodat een schermlezer hoort wat er veranderde.
@@ -261,7 +262,7 @@ export default function ChatIntake({
       : `${begrip} Ik maak er een prompt van.`);
 
   return (
-    <nldd-container gap="20" aria-busy={busy || undefined}>
+    <nldd-container ref={rootRef} gap="20" aria-busy={busy || undefined}>
       <UserBubble>{goal}</UserBubble>
 
       {intro && (
