@@ -39,8 +39,7 @@ import { usePersistentDraft } from '@/lib/usePersistentDraft';
 import type { OptimizeResult, Technique } from '@/types';
 import '@nldd/design-system/activity-indicator';
 import '@nldd/design-system/container';
-import '@nldd/design-system/card';
-import '@nldd/design-system/simple-section';
+import '@nldd/design-system/hero';
 import '@nldd/design-system/spacer';
 import '@nldd/design-system/tab-bar';
 import '@nldd/design-system/title';
@@ -312,12 +311,21 @@ export default function OptimizerPage() {
   const ownActive = entryMode === 'own-prompt';
 
   return (
-    <nldd-simple-section background="tinted" horizontal-alignment="center">
-      {/* Alles staat op één witte kaart in het midden van een grijze ondergrond:
-          de pagina heeft veel tussenstappen en meldingen, en die horen bij elkaar. */}
-      <nldd-container max-width="960px">
-      <nldd-card accessible-label="Prompt maken">
-      <nldd-container padding="24" sm-padding="16">
+    <nldd-hero
+      width="full"
+      background="tinted"
+      layout="overlap"
+      main-background="base"
+      main-position="bottom-center"
+      main-width="960px"
+      media-height="clamp(120px, 24vw, 300px)"
+      overlap-size="clamp(64px, 17vw, 220px)"
+      media-src="/lijnen.jpg"
+      media-alt=""
+    >
+      {/* Het lijnenbeeld bovenaan, de witte kaart valt eroverheen: zo zag Maken er
+          op main uit. Alles staat op die ene kaart, want de pagina heeft veel
+          tussenstappen en meldingen, en die horen bij elkaar. */}
       <nldd-container>
         <nldd-container layout="row" gap="4" vertical-alignment="center">
           <nldd-title heading-level={1} size={2} text="Prompt maken"></nldd-title>
@@ -423,10 +431,7 @@ export default function OptimizerPage() {
               </nldd-container>
             </nldd-activity-indicator>
           )}
-      </nldd-container>
-      </nldd-card>
-      </nldd-container>
-    </nldd-simple-section>
+    </nldd-hero>
   );
 }
 

@@ -14,6 +14,7 @@ import '@nldd/design-system/button-group';
 import '@nldd/design-system/card';
 import '@nldd/design-system/collection';
 import '@nldd/design-system/container';
+import '@nldd/design-system/hero';
 import '@nldd/design-system/icon';
 import '@nldd/design-system/inline-dialog';
 import '@nldd/design-system/link';
@@ -22,8 +23,9 @@ import '@nldd/design-system/spacer';
 import '@nldd/design-system/title';
 
 /**
- * De startpagina in tegels op een grijze ondergrond: eerst de vier dingen die je
- * hier kunt doen, dan de categorieën als kaartjes met een aantal, dan de nieuwste prompts. Uitleg staat
+ * De startpagina volgens het NLDD-patroon Home: een hero met de vraag en de twee
+ * hoofdtaken, dan de andere taken als tegels, de categorieën als kaartjes en de
+ * nieuwste prompts, alles op een grijze ondergrond. Uitleg staat
  * niet als lopende tekst op de pagina, maar achter een infobolletje.
  */
 export default function HomePage() {
@@ -65,18 +67,39 @@ export default function HomePage() {
 
   return (
     <>
-      {/* Wat wil je doen? Vier tegels, elk één taak, elk met een eigen kleur. */}
-      <nldd-simple-section background="tinted">
-        <nldd-title slot="header" heading-level={1} size={1} text="Wat wil je doen?"></nldd-title>
-        <nldd-container layout="grid" column-count={4} md-column-count={2} sm-column-count={1} gap="16">
-          <TaskTile
-            href="/genereren"
-            icon="sparkles"
-            color="accent"
-            label="Prompt maken"
-            supporting="De AI helpt je op weg"
-            background="accent-tinted"
-          />
+      {/* De opening volgens het NLDD-patroon Home: een hero met het lijnenbeeld en
+          in het midden een donkerblauw vlak met de vraag en de twee hoofdtaken. */}
+      <nldd-hero
+        width="full"
+        background="tinted"
+        layout="contained"
+        main-background="accent"
+        main-position="top-center"
+        media-height="clamp(160px, 30vw, 380px)"
+        media-src="/lijnen.jpg"
+        media-alt=""
+      >
+        <nldd-container gap="24">
+          <nldd-title
+            color="inherit"
+            size={1}
+            heading-level={1}
+            text="Wat wil je doen?"
+            supporting-text="Maak, deel en probeer prompts voor je werk bij het Rijk."
+          ></nldd-title>
+          <nldd-button-group>
+            <nldd-button appearance="inherit-filled" start-icon="sparkles" text="Prompt maken" href="/genereren"></nldd-button>
+            {chatEnabled && (
+              <nldd-button appearance="inherit-tinted" start-icon="comment" text="Chatten" href="/chat"></nldd-button>
+            )}
+          </nldd-button-group>
+        </nldd-container>
+      </nldd-hero>
+
+      {/* De andere taken als tegels, elk met een eigen kleur. */}
+      <nldd-simple-section background="tinted" padding-top="0">
+        <nldd-title slot="header" heading-level={2} size={4} text="Verder"></nldd-title>
+        <nldd-container layout="grid" column-count={3} sm-column-count={1} gap="16">
           {chatEnabled && (
             <TaskTile href="/chat" icon="comment" color="hemelblauw" label="Chatten" supporting="Stel direct een vraag" />
           )}
