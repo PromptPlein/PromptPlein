@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Volume2 } from '@/components/common/icons';
+import { Volume2, VolumeX } from '@/components/common/icons';
 import toast from 'react-hot-toast';
 import {
   DEVICE_VOICE,
@@ -17,6 +17,7 @@ import {
   speechSupported,
   stopSpeaking,
   subscribeVoices,
+  useSpeakingId,
   type SpeechVoiceOption,
 } from '@/lib/speech';
 
@@ -90,6 +91,7 @@ export default function AccessibilitySettings() {
   const speechVoice = useSpeechVoice();
   const [voices, setVoices] = useState<SpeechVoiceOption[]>(() => listDutchVoices());
   const canSpeak = speechSupported();
+  const trying = useSpeakingId() === 'voorbeeld';
 
   useEffect(() => {
     const refresh = () => setVoices(listDutchVoices());
@@ -265,8 +267,20 @@ export default function AccessibilitySettings() {
                   </select>
                 </div>
 
-                <button type="button" className="opl-btn-secondary" onClick={tryVoice}>
-                  <Volume2 size={16} aria-hidden="true" /> Probeer de stem
+                <button
+                  type="button"
+                  className="opl-btn-secondary"
+                  onClick={trying ? stopSpeaking : tryVoice}
+                >
+                  {trying ? (
+                    <>
+                      <VolumeX size={16} aria-hidden="true" /> Stop
+                    </>
+                  ) : (
+                    <>
+                      <Volume2 size={16} aria-hidden="true" /> Probeer de stem
+                    </>
+                  )}
                 </button>
               </div>
             )}

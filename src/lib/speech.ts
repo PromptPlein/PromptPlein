@@ -277,6 +277,7 @@ function speakWithBrowser(
 
   const thisRun = run;
   let index = 0;
+  let started = false;
 
   const next = () => {
     if (thisRun !== run) return;
@@ -290,9 +291,17 @@ function speakWithBrowser(
     utterance.voice = voice;
     utterance.lang = voice.lang;
     utterance.rate = options.rate;
+    utterance.onstart = () => {
+      started = true;
+    };
     utterance.onend = next;
-    utterance.onerror = () => {
-      if (thisRun === run) stopSpeaking();
+    utterance.onerror = (event) => {
+      if (thisRun !== run) return;
+      stopSpeaking();
+      // Afgebroken door een nieuwe voorlezing of door Stop: geen fout.
+      if (event.error !== 'interrupted' && event.error !== 'canceled') {
+        toast.error('Voorlezen lukte niet met deze stem. Kies een andere stem.');
+      }
     };
     held.utterance = utterance;
     window.speechSynthesis.speak(utterance);
@@ -300,6 +309,13 @@ function speakWithBrowser(
 
   setSpeakingId(id);
   next();
+  // Sommige browsers, Safari op de iPhone voorop, slaan een uiting over zonder
+  // fout. Zonder deze controle gebeurt er dan niets en weet niemand waarom.
+  window.setTimeout(() => {
+    if (thisRun !== run || started || window.speechSynthesis.speaking) return;
+    stopSpeaking();
+    toast.error('Voorlezen begint niet in deze browser. Kies een andere stem.');
+  }, 4000);
   return 'gestart';
 }
 
