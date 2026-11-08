@@ -1,11 +1,9 @@
 import type { ReactNode } from 'react';
-import '@nldd/design-system/container';
-import '@nldd/design-system/simple-section';
+import PageColumn, { Panel } from '@/components/common/PageColumn';
 import '@nldd/design-system/spacer';
 import '@nldd/design-system/text';
-import '@nldd/design-system/title';
 
-/** Shared layout for the auth pages: the title in the section header, a narrow form column below it. */
+/** Gedeelde opbouw van de inlogpagina's: een smalle kolom in het midden, het formulier op een witte kaart. */
 export default function AuthLayout({
   title,
   subtitle,
@@ -18,9 +16,8 @@ export default function AuthLayout({
   footer?: ReactNode;
 }) {
   return (
-    <nldd-simple-section>
-      <nldd-title slot="header" heading-level={1} size={2} text={title} supporting-text={subtitle}></nldd-title>
-      <nldd-container max-width="32rem">
+    <PageColumn title={title} supporting={subtitle} icon="shield-check-mark" width="30rem">
+      <Panel>
         {children}
         {footer && (
           <>
@@ -28,7 +25,7 @@ export default function AuthLayout({
             <nldd-text size="sm" color="secondary">{footer}</nldd-text>
           </>
         )}
-      </nldd-container>
-    </nldd-simple-section>
+      </Panel>
+    </PageColumn>
   );
 }

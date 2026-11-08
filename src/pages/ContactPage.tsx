@@ -3,9 +3,9 @@ import { notify } from '@/lib/notify';
 import { useNlddEvent, useNlddValue } from '@/lib/nldd';
 import { useAuth } from '@/context/AuthContext';
 import { sendContactMessage, type ContactKind } from '@/services/contactService';
+import PageColumn, { Panel } from '@/components/common/PageColumn';
 import '@nldd/design-system/button';
 import '@nldd/design-system/button-group';
-import '@nldd/design-system/container';
 import '@nldd/design-system/form';
 import '@nldd/design-system/form-actions';
 import '@nldd/design-system/form-field';
@@ -13,9 +13,7 @@ import '@nldd/design-system/form-section';
 import '@nldd/design-system/multi-line-text-field';
 import '@nldd/design-system/radio-button-field';
 import '@nldd/design-system/radio-button-group';
-import '@nldd/design-system/simple-section';
 import '@nldd/design-system/text-field';
-import '@nldd/design-system/title';
 
 const KINDS: { value: ContactKind; label: string; hint: string }[] = [
   { value: 'bug', label: 'Bug melden', hint: 'Er gaat iets niet goed of een functie werkt niet.' },
@@ -86,16 +84,12 @@ export default function ContactPage() {
   }
 
   return (
-    <nldd-simple-section>
-      <nldd-container slot="header" max-width="42rem">
-        <nldd-title
-          heading-level={1}
-          size={2}
-          text="Contact"
-          supporting-text="Een bug gevonden of een idee voor een nieuwe functie? Laat het ons weten."
-        ></nldd-title>
-      </nldd-container>
-      <nldd-container max-width="42rem">
+    <PageColumn
+      title="Contact"
+      supporting="Een bug gevonden of een idee voor een nieuwe functie? Laat het ons weten."
+      icon="envelope"
+    >
+      <Panel>
         <nldd-form>
           <form
             noValidate
@@ -160,7 +154,7 @@ export default function ContactPage() {
             </nldd-form-actions>
           </form>
         </nldd-form>
-      </nldd-container>
-    </nldd-simple-section>
+      </Panel>
+    </PageColumn>
   );
 }

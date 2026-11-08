@@ -46,8 +46,13 @@ function UserBubble({ children }: { children: string }) {
       </nldd-visually-hidden>
       <nldd-container max-width="85%" width="fit-content">
         <nldd-box background="accent-tinted">
-          <nldd-container padding-inline="16" padding-block="10">
-            <nldd-text>{withBreaks(children)}</nldd-text>
+          {/* fit-content hier ook, net als in UserMessage: een container is een
+              inline-size query container en wordt in een fit-content-ouder anders
+              nul breed, met één woord per regel als gevolg. */}
+          <nldd-container width="fit-content" padding-inline="16" padding-block="10">
+            <nldd-text size="lg" line-height="loose">
+              {withBreaks(children)}
+            </nldd-text>
           </nldd-container>
         </nldd-box>
       </nldd-container>

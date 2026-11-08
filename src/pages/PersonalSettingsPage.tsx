@@ -5,12 +5,12 @@ import ChatInstructionSettings from '@/components/settings/ChatInstructionSettin
 import ChatIntakeSettings from '@/components/settings/ChatIntakeSettings';
 import ChatMemorySettings from '@/components/settings/ChatMemorySettings';
 import { HELP_PATH } from '@/lib/shortcuts';
+import { useAuth } from '@/context/AuthContext';
+import PageColumn, { Panel } from '@/components/common/PageColumn';
 import '@nldd/design-system/container';
 import '@nldd/design-system/link';
-import '@nldd/design-system/simple-section';
 import '@nldd/design-system/spacer';
 import '@nldd/design-system/tab-bar';
-import '@nldd/design-system/title';
 
 const PARTS = [
   { slug: 'chat', label: 'Chat', icon: 'message-rectangle-text' },
@@ -25,6 +25,7 @@ const PARTS = [
 export default function PersonalSettingsPage() {
   const { onderdeel, sub } = useParams();
   const { pathname } = useLocation();
+  const { configured, isAuthenticated } = useAuth();
   // Het oude adres van de hulppagina, van voordat die onder Toegankelijkheid viel.
   if (onderdeel === 'hulp') return <Navigate to={HELP_PATH} replace />;
   if (!PARTS.some((part) => part.slug === onderdeel)) {
@@ -37,9 +38,7 @@ export default function PersonalSettingsPage() {
   const path = pathname.replace(/\/$/, '');
 
   return (
-    <nldd-simple-section>
-      <nldd-title slot="header" heading-level={1} size={2} text="Instellingen"></nldd-title>
-      <nldd-container max-width="42rem">
+    <PageColumn title="Instellingen" icon="gear">
 
       <nldd-tab-bar navigation accessible-label="Onderdelen van de instellingen">
         {PARTS.map(({ slug, label, icon }) => (
@@ -65,18 +64,35 @@ export default function PersonalSettingsPage() {
       )}
       <nldd-spacer size="24"></nldd-spacer>
 
-      <nldd-container gap="24">
+      {/* Elk onderdeel op een eigen witte kaart. */}
+      <nldd-container gap="16">
         {onderdeel === 'chat' && (
           <>
-            <ChatIntakeSettings />
-            <ChatInstructionSettings />
-            <ChatMemorySettings />
+            <Panel>
+              <ChatIntakeSettings />
+            </Panel>
+            <Panel>
+              <ChatInstructionSettings />
+            </Panel>
+            {/* Het geheugen bestaat alleen met een account; zonder blijft de kaart weg. */}
+            {(!configured || isAuthenticated) && (
+              <Panel>
+                <ChatMemorySettings />
+              </Panel>
+            )}
           </>
         )}
-        {accessibility && !sub && <AccessibilitySettings />}
-        {accessibility && sub === 'hulp' && <AccessibilityHelp />}
+        {accessibility && !sub && (
+          <Panel>
+            <AccessibilitySettings />
+          </Panel>
+        )}
+        {accessibility && sub === 'hulp' && (
+          <Panel>
+            <AccessibilityHelp />
+          </Panel>
+        )}
       </nldd-container>
-      </nldd-container>
-    </nldd-simple-section>
+    </PageColumn>
   );
 }

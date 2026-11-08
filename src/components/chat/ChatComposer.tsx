@@ -353,10 +353,25 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
         pickFile();
       },
       focus() {
-        const el = inner();
-        if (!el || fieldRef.current?.shadowRoot?.activeElement === el) return;
-        el.focus();
-        el.setSelectionRange(el.value.length, el.value.length);
+        const place = () => {
+          const el = inner();
+          if (!el) return false;
+          if (fieldRef.current?.shadowRoot?.activeElement !== el) {
+            el.focus();
+            el.setSelectionRange(el.value.length, el.value.length);
+          }
+          return fieldRef.current?.shadowRoot?.activeElement === el;
+        };
+        if (place()) return;
+        // Het veld tekent zijn tekstvak pas na het laden van de component, en zet
+        // een uitgeschakeld vak pas een tel later weer aan. Wacht daarop, anders
+        // blijft de cursor stil weg en pakt de paginawissel de kop.
+        void customElements
+          .whenDefined('nldd-multi-line-text-field')
+          .then(() => (fieldRef.current as (HTMLElement & { updateComplete?: Promise<unknown> }) | null)?.updateComplete)
+          .then(() => {
+            place();
+          });
       },
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
