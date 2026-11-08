@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { useLayoutEffect, useRef, type RefObject } from 'react';
 import { isKeyboardOpen, VIEWPORT_EVENT, visibleHeight } from '@/lib/viewportWatch';
 
 /** Ondergrens: hieronder wordt de chat onbruikbaar klein. */
@@ -29,10 +29,13 @@ const BELOW_MARGIN_REM = 0.75;
  *
  * Op de telefoon telt de zichtbare hoogte en niet die van het venster: anders
  * valt de kaart met het tekstvak weg onder het schermtoetsenbord (`viewportWatch`).
+ *
+ * De hoogte gaat rechtstreeks op het element en niet via React: in de leesstand
+ * klapt de kop in en wordt er tijdens de animatie elk beeld opnieuw gemeten. Via
+ * state zou de hele chatpagina dan elk beeld opnieuw renderen.
  */
-export default function useFitHeight<T extends HTMLElement>(): [RefObject<T>, number | undefined] {
+export default function useFitHeight<T extends HTMLElement>(): RefObject<T> {
   const ref = useRef<T>(null);
-  const [maxHeight, setMaxHeight] = useState<number | undefined>();
 
   useLayoutEffect(() => {
     const el = ref.current;
@@ -57,7 +60,8 @@ export default function useFitHeight<T extends HTMLElement>(): [RefObject<T>, nu
         : BOTTOM_GAP_REM * rem;
       const keyboard = isKeyboardOpen();
       const available = visibleHeight() - top - footerHeight - belowHeight - bar - edge;
-      setMaxHeight(Math.round(Math.max(keyboard ? MIN_HEIGHT_KEYBOARD : MIN_HEIGHT, available)));
+      const height = Math.round(Math.max(keyboard ? MIN_HEIGHT_KEYBOARD : MIN_HEIGHT, available));
+      el.style.height = `${height}px`;
       // iOS schuift de pagina omhoog om het tekstvak te tonen. Dat is nu niet
       // meer nodig en zou de bovenkant van de chat uit beeld duwen.
       if (keyboard && window.scrollY > 0) window.scrollTo(0, 0);
@@ -83,5 +87,5 @@ export default function useFitHeight<T extends HTMLElement>(): [RefObject<T>, nu
     };
   }, []);
 
-  return [ref, maxHeight];
+  return ref;
 }

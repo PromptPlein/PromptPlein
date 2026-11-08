@@ -73,6 +73,7 @@ export default function Header() {
       <header
         className={clsx(
           'bg-white pt-[env(safe-area-inset-top)] dark:bg-slate-900',
+          // In de leesstand van de chat klapt de kop in (zie useReadingMode).
           pathname === '/chat' && 'opl-chat-kop laag:hidden',
         )}
       >

@@ -34,6 +34,7 @@ import useThinking from '@/lib/useThinking';
 import useWebSearch from '@/lib/useWebSearch';
 import useChatProjects from '@/components/chat/useChatProjects';
 import useFitHeight from '@/components/chat/useFitHeight';
+import useReadingMode from '@/components/chat/useReadingMode';
 import SavePromptModal from '@/components/prompts/SavePromptModal';
 import { looksLikeMessyPrompt } from '@/lib/promptHeuristics';
 import { consumeHandoff, optimizeChatInput } from '@/services/chatService';
@@ -98,7 +99,7 @@ function ChatPageInner() {
   const restoreInputRef = useRef<HTMLInputElement>(null);
   const handoffDone = useRef(false);
   // Hoogteplafond van de chatkaart: precies wat het venster overlaat.
-  const [cardRef, cardMaxHeight] = useFitHeight<HTMLDivElement>();
+  const cardRef = useFitHeight<HTMLDivElement>();
   // Greep op de invoerbalk, zodat een startsjabloon zijn tekst in het veld kan
   // zetten in plaats van hem meteen te versturen.
   const composerRef = useRef<ChatComposerHandle>(null);
@@ -196,6 +197,12 @@ function ChatPageInner() {
 
   const projectList = projects.projects;
   const openProject = projectList.find((p) => p.id === projectPage) ?? null;
+  // Op de telefoon: wie naar beneden leest, krijgt kop en tekstvak uit beeld.
+  const [readingHidden, showBars] = useReadingMode(
+    cardRef,
+    messages.length > 0 && !openProject,
+    conversationId,
+  );
   const settingsProject = projectList.find((p) => p.id === settingsProjectId) ?? null;
   const wizardProject = projectList.find((p) => p.id === wizard?.projectId) ?? null;
 
@@ -580,7 +587,6 @@ function ChatPageInner() {
     <div className="mx-auto w-full max-w-6xl sm:px-6 sm:py-4 lg:px-8 laag:!py-0">
       <div
         ref={cardRef}
-        style={cardMaxHeight ? { height: cardMaxHeight } : undefined}
         className="opl-card opl-chat-kaart flex h-[calc(100dvh-14rem)] overflow-hidden max-sm:rounded-none max-sm:border-0 max-sm:shadow-none"
       >
         <ChatSidebar
@@ -594,77 +600,82 @@ function ChatPageInner() {
         />
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-            <div className="opl-chat-titel flex items-center gap-2 border-b border-slate-200 px-2 py-1 dark:border-slate-700 sm:px-6 sm:py-3 lg:px-6 laag:!py-0">
-              {/* Zonder zijbalk: de lijst met chats en projecten schuift in. */}
-              <button
-                type="button"
-                className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-rijksblauw-700 hover:bg-slate-100 disabled:opacity-40 dark:text-rijksblauw-200 dark:hover:bg-slate-700 lg:hidden"
-                onClick={() => setListOpen(true)}
-                disabled={controller.streaming}
-                aria-label="Chats en projecten"
-              >
-                <Menu size={20} />
-              </button>
-              {openProject ? (
-                <FolderOpen size={18} className="hidden text-rijksblauw-500 lg:block" />
-              ) : (
-                <MessageSquare size={18} className="hidden text-rijksblauw-500 lg:block" />
-              )}
-              <h1 className="min-w-0 truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
-                {openProject
-                  ? openProject.name
-                  : conversation && messages.length > 0
-                    ? conversation.title
-                    : 'Chat'}
-              </h1>
-              {/* Uitvoergesprek: hier draait een gegenereerde prompt (neutrale
-                  systeemprompt, geen B1-huisregels) — maak dat zichtbaar. */}
-              {!openProject && conversation?.kind === 'execution' && (
-                <span
-                  className="opl-badge inline-flex shrink-0 items-center gap-1 bg-rijksoranje/10 text-rijksoranje"
-                  title="In deze chat wordt een gegenereerde prompt uitgevoerd; de prompt bepaalt zelf taal, toon en opmaak."
-                >
-                  <Play size={11} /> Uitvoering
-                </span>
-              )}
-              {/* Projectgesprek: de instructie van dit project stuurt het
-                  antwoord. Klikbaar, want vanuit een gesprek wil je regelmatig
-                  even terug naar de instructie of de bronnen. */}
-              {!openProject && activeProject && (
-                <button
-                  type="button"
-                  className="opl-badge inline-flex shrink-0 items-center gap-1 bg-rijksblauw-50 text-rijksblauw-700 hover:bg-rijksblauw-100 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200"
-                  onClick={() => handleOpenProject(activeProject.id)}
-                  title={`Deze chat draait onder de instructie van project "${activeProject.name}". Klik om het project te openen.`}
-                >
-                  <FolderOpen size={11} /> {activeProject.name}
-                </button>
-              )}
-              {!openProject && conversation && messages.length > 0 && (
-                <button
-                  type="button"
-                  className="ml-auto shrink-0 rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:opacity-40 dark:text-slate-500 dark:hover:bg-slate-700 dark:hover:text-slate-200"
-                  onClick={() => controller.exportConversation(conversation.id)}
-                  disabled={controller.streaming}
-                  aria-label="Bewaar deze chat als bestand"
-                  title="Bewaar deze chat als bestand op dit apparaat"
-                >
-                  <Download size={16} />
-                </button>
-              )}
-              <button
-                type="button"
-                className={clsx(
-                  'flex h-9 shrink-0 items-center justify-center rounded-lg px-2 text-rijksblauw-700 hover:bg-slate-100 disabled:opacity-40 dark:text-rijksblauw-200 dark:hover:bg-slate-700 lg:hidden',
-                  !(!openProject && conversation && messages.length > 0) && 'ml-auto',
-                )}
-                onClick={handleNewConversation}
-                disabled={controller.streaming}
-                aria-label="Nieuwe chat"
-                title="Nieuwe chat"
-              >
-                <Plus size={20} />
-              </button>
+            {/* Inklapbaar: in de leesstand op de telefoon schuift de titel weg. */}
+            <div className="opl-inklap opl-inklap-vast">
+              <div>
+                <div className="opl-chat-titel flex items-center gap-2 border-b border-slate-200 px-2 py-1 dark:border-slate-700 sm:px-6 sm:py-3 lg:px-6 laag:!py-0">
+                  {/* Zonder zijbalk: de lijst met chats en projecten schuift in. */}
+                  <button
+                    type="button"
+                    className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-rijksblauw-700 hover:bg-slate-100 disabled:opacity-40 dark:text-rijksblauw-200 dark:hover:bg-slate-700 lg:hidden"
+                    onClick={() => setListOpen(true)}
+                    disabled={controller.streaming}
+                    aria-label="Chats en projecten"
+                  >
+                    <Menu size={20} />
+                  </button>
+                  {openProject ? (
+                    <FolderOpen size={18} className="hidden text-rijksblauw-500 lg:block" />
+                  ) : (
+                    <MessageSquare size={18} className="hidden text-rijksblauw-500 lg:block" />
+                  )}
+                  <h1 className="min-w-0 truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                    {openProject
+                      ? openProject.name
+                      : conversation && messages.length > 0
+                        ? conversation.title
+                        : 'Chat'}
+                  </h1>
+                  {/* Uitvoergesprek: hier draait een gegenereerde prompt (neutrale
+                      systeemprompt, geen B1-huisregels) — maak dat zichtbaar. */}
+                  {!openProject && conversation?.kind === 'execution' && (
+                    <span
+                      className="opl-badge inline-flex shrink-0 items-center gap-1 bg-rijksoranje/10 text-rijksoranje"
+                      title="In deze chat wordt een gegenereerde prompt uitgevoerd; de prompt bepaalt zelf taal, toon en opmaak."
+                    >
+                      <Play size={11} /> Uitvoering
+                    </span>
+                  )}
+                  {/* Projectgesprek: de instructie van dit project stuurt het
+                      antwoord. Klikbaar, want vanuit een gesprek wil je regelmatig
+                      even terug naar de instructie of de bronnen. */}
+                  {!openProject && activeProject && (
+                    <button
+                      type="button"
+                      className="opl-badge inline-flex shrink-0 items-center gap-1 bg-rijksblauw-50 text-rijksblauw-700 hover:bg-rijksblauw-100 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200"
+                      onClick={() => handleOpenProject(activeProject.id)}
+                      title={`Deze chat draait onder de instructie van project "${activeProject.name}". Klik om het project te openen.`}
+                    >
+                      <FolderOpen size={11} /> {activeProject.name}
+                    </button>
+                  )}
+                  {!openProject && conversation && messages.length > 0 && (
+                    <button
+                      type="button"
+                      className="ml-auto shrink-0 rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:opacity-40 dark:text-slate-500 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+                      onClick={() => controller.exportConversation(conversation.id)}
+                      disabled={controller.streaming}
+                      aria-label="Bewaar deze chat als bestand"
+                      title="Bewaar deze chat als bestand op dit apparaat"
+                    >
+                      <Download size={16} />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className={clsx(
+                      'flex h-9 shrink-0 items-center justify-center rounded-lg px-2 text-rijksblauw-700 hover:bg-slate-100 disabled:opacity-40 dark:text-rijksblauw-200 dark:hover:bg-slate-700 lg:hidden',
+                      !(!openProject && conversation && messages.length > 0) && 'ml-auto',
+                    )}
+                    onClick={handleNewConversation}
+                    disabled={controller.streaming}
+                    aria-label="Nieuwe chat"
+                    title="Nieuwe chat"
+                  >
+                    <Plus size={20} />
+                  </button>
+                </div>
+              </div>
             </div>
 
             {openProject ? (
@@ -727,6 +738,7 @@ function ChatPageInner() {
                     onSaveAsPrompt={handleSaveAsPrompt}
                     nudgeMessageId={nudgeMessageId}
                     onNudgeDismiss={dismissNudge}
+                    onOpenChat={readingHidden ? showBars : undefined}
                   />
                 )}
 
@@ -748,52 +760,58 @@ function ChatPageInner() {
 
                 <div
                   className={
-                    messages.length > 0 ? undefined : composerEnlarged ? 'my-auto' : 'mb-auto'
+                    messages.length > 0
+                      ? 'opl-inklap opl-chat-invoer'
+                      : composerEnlarged
+                        ? 'my-auto'
+                        : 'mb-auto'
                   }
                 >
-                  {/* Wat het geheugen deed, op de plek waar je typt. */}
-                  <MemoryNoticeBar
-                    notice={controller.memoryNotice}
-                    onDismiss={controller.dismissMemoryNotice}
-                    onLogin={() => requireLogin('Log in om dit in je geheugen op te slaan.')}
-                  />
-                  <ChatComposer
-                    ref={composerRef}
-                    disabled={composerDisabled}
-                    disabledPlaceholder={
-                      projectNeedsLogin ? 'Log in om verder te chatten in dit project' : undefined
-                    }
-                    streaming={controller.streaming}
-                    extracting={controller.extracting}
-                    attachments={conversation?.attachments ?? []}
-                    onSend={guardedSend}
-                    onRoutekaart={(text) => void controller.addRoutekaart(text)}
-                    onStop={controller.stop}
-                    onAddFile={(file) => void controller.addAttachment(file)}
-                    onRemoveAttachment={controller.removeAttachment}
-                    // Sterretje alleen tonen als de beheerder de functie aan heeft staan.
-                    onOptimize={settings?.optimizeEnabled ? handleOptimizeInput : undefined}
-                    onContext={handleOpenContext}
-                    activeProjectName={activeProject?.name}
-                    thinking={thinking}
-                    onToggleThinking={setThinking}
-                    thinkingUnavailable={thinkingUnavailable}
-                    // Wereldbol alleen tonen als de beheerder zoeken aan heeft staan.
-                    webSearch={webSearch}
-                    onToggleWebSearch={settings?.webSearchEnabled ? setWebSearch : undefined}
-                    // Leeg gesprek: het invoerveld is het enige aanknopingspunt op
-                    // het scherm en wordt daarom groter en blauw omrand getoond.
-                    prominent={messages.length === 0}
-                    notice={PII_NOTICE}
-                    // Geen uitvoergesprek: daar staan zulke woorden in de prompt die getest wordt.
-                    memoryHint={conversation?.kind !== 'execution'}
-                    onEnlargedChange={setComposerEnlarged}
-                    badge={
-                      settings ? (
-                        <ChatModelBadge provider={settings.provider} model={settings.model} />
-                      ) : undefined
-                    }
-                  />
+                  <div>
+                    {/* Wat het geheugen deed, op de plek waar je typt. */}
+                    <MemoryNoticeBar
+                      notice={controller.memoryNotice}
+                      onDismiss={controller.dismissMemoryNotice}
+                      onLogin={() => requireLogin('Log in om dit in je geheugen op te slaan.')}
+                    />
+                    <ChatComposer
+                      ref={composerRef}
+                      disabled={composerDisabled}
+                      disabledPlaceholder={
+                        projectNeedsLogin ? 'Log in om verder te chatten in dit project' : undefined
+                      }
+                      streaming={controller.streaming}
+                      extracting={controller.extracting}
+                      attachments={conversation?.attachments ?? []}
+                      onSend={guardedSend}
+                      onRoutekaart={(text) => void controller.addRoutekaart(text)}
+                      onStop={controller.stop}
+                      onAddFile={(file) => void controller.addAttachment(file)}
+                      onRemoveAttachment={controller.removeAttachment}
+                      // Sterretje alleen tonen als de beheerder de functie aan heeft staan.
+                      onOptimize={settings?.optimizeEnabled ? handleOptimizeInput : undefined}
+                      onContext={handleOpenContext}
+                      activeProjectName={activeProject?.name}
+                      thinking={thinking}
+                      onToggleThinking={setThinking}
+                      thinkingUnavailable={thinkingUnavailable}
+                      // Wereldbol alleen tonen als de beheerder zoeken aan heeft staan.
+                      webSearch={webSearch}
+                      onToggleWebSearch={settings?.webSearchEnabled ? setWebSearch : undefined}
+                      // Leeg gesprek: het invoerveld is het enige aanknopingspunt op
+                      // het scherm en wordt daarom groter en blauw omrand getoond.
+                      prominent={messages.length === 0}
+                      notice={PII_NOTICE}
+                      // Geen uitvoergesprek: daar staan zulke woorden in de prompt die getest wordt.
+                      memoryHint={conversation?.kind !== 'execution'}
+                      onEnlargedChange={setComposerEnlarged}
+                      badge={
+                        settings ? (
+                          <ChatModelBadge provider={settings.provider} model={settings.model} />
+                        ) : undefined
+                      }
+                    />
+                  </div>
                 </div>
               </div>
             )}

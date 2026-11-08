@@ -6,6 +6,7 @@ import {
   FileText,
   Globe,
   Lightbulb,
+  MessageSquare,
   Pencil,
   RotateCcw,
   Save,
@@ -53,6 +54,7 @@ export default function ChatMessageList({
   onSaveAsPrompt,
   nudgeMessageId,
   onNudgeDismiss,
+  onOpenChat,
 }: {
   messages: ChatMessage[];
   streaming: boolean;
@@ -80,6 +82,8 @@ export default function ChatMessageList({
   /** Onder dit eigen bericht staat de bouw-een-prompt-tip (zie ChatPage). */
   nudgeMessageId?: string | null;
   onNudgeDismiss?: () => void;
+  /** Leesstand op de telefoon: kop en tekstvak zijn weg, deze knop haalt ze terug. */
+  onOpenChat?: () => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -161,6 +165,13 @@ export default function ChatMessageList({
       list.removeEventListener('scroll', onScroll);
     };
   }, [fitLastTurn]);
+
+  function openChat() {
+    onOpenChat?.();
+    // Geen focus in het tekstvak: op de telefoon legt het toetsenbord zich dan over
+    // het antwoord. De focus blijft in het gesprek, en niet op een knop die verdwijnt.
+    scrollRef.current?.focus({ preventScroll: true });
+  }
 
   function jumpToEnd() {
     const list = scrollRef.current;
@@ -258,6 +269,7 @@ export default function ChatMessageList({
           scrollen. Zie de status hieronder voor wat een schermlezer hoort. */}
       <div
         ref={scrollRef}
+        data-chat-lijst
         tabIndex={0}
         role="region"
         aria-label="Gesprek"
@@ -291,14 +303,19 @@ export default function ChatMessageList({
         </div>
       </div>
 
-      {showJump && (
-        <button
-          type="button"
-          onClick={jumpToEnd}
-          className="absolute bottom-3 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 whitespace-nowrap rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-rijksblauw-700 shadow-md hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-rijksblauw-500 dark:border-slate-600 dark:bg-slate-800 dark:text-rijksblauw-200 dark:hover:bg-slate-700"
-        >
-          <ArrowDown size={15} /> Naar beneden
-        </button>
+      {(showJump || onOpenChat) && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-3 flex flex-wrap items-center justify-center gap-2 px-4">
+          {showJump && (
+            <button type="button" onClick={jumpToEnd} className={PILL}>
+              <ArrowDown size={15} /> Naar beneden
+            </button>
+          )}
+          {onOpenChat && (
+            <button type="button" onClick={openChat} className={clsx(PILL, 'animate-fade-in')}>
+              <MessageSquare size={15} /> Open chat
+            </button>
+          )}
+        </div>
       )}
 
       <div role="status" aria-atomic="true" className="sr-only">
@@ -722,3 +739,6 @@ const ChatMessageRow = memo(function ChatMessageRow({
     </div>
   );
 });
+
+const PILL =
+  'pointer-events-auto inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-rijksblauw-700 shadow-md hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-rijksblauw-500 dark:border-slate-600 dark:bg-slate-800 dark:text-rijksblauw-200 dark:hover:bg-slate-700';

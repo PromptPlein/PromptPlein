@@ -340,6 +340,69 @@ html[data-toetsenbord='open'] .opl-app:has(.opl-chat-kop) {
 }
 
 /*
+ * Leesstand van de chat op de telefoon (useReadingMode): wie naar beneden leest,
+ * krijgt de kop, de titel en het tekstvak uit beeld. Titel en tekstvak zitten in
+ * een raster van één rij dat van 1fr naar 0fr klapt. Zo krijgt het gesprek de vrijgekomen ruimte
+ * echt, in plaats van dat er alleen iets overheen schuift. :where houdt de
+ * specificiteit op nul, zodat laag:hidden en de regels voor het toetsenbord
+ * gewoon voorgaan.
+ */
+@media (max-width: 39.99rem), (max-height: 31.25rem) {
+  :where(.opl-inklap) {
+    display: grid;
+    grid-template-rows: 1fr;
+    /* Alleen het raster mag de hoogte bepalen, niet de flexkolom eromheen. */
+    flex-shrink: 0;
+    transition:
+      grid-template-rows 0.25s ease,
+      opacity 0.25s ease;
+  }
+
+  :where(.opl-inklap) > * {
+    min-height: 0;
+  }
+
+  /* De titel knipt altijd af, anders schuift hij bij het terugkomen even over
+     het gesprek heen. Het tekstvak knipt alleen als het weg is: bij het
+     terugkomen knipt de chatkaart het onderste stuk af. */
+  :where(.opl-inklap-vast),
+  html[data-leesstand='aan'] :where(.opl-inklap) {
+    overflow: hidden;
+  }
+
+  html[data-leesstand='aan'] :where(.opl-inklap) {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+
+  /* Onder het laatste antwoord staan Kopiëren en Voorlezen. In de leesstand
+     liggen de pillen onderaan over het gesprek; met deze ruimte scrol je die
+     knoppen en de laatste regel er altijd bovenuit. Ook als de pillen met grote
+     tekst onder elkaar staan. */
+  html[data-leesstand='aan'] [data-chat-lijst] {
+    padding-bottom: 7rem;
+  }
+
+  /* De kop heeft een vaste hoogte, en daar krimpt een raster niet onder. Hij
+     klapt daarom zelf in. Zijn menu's staan hier vast in het venster, dus
+     afknippen kan altijd. */
+  .opl-chat-kop {
+    overflow: hidden;
+  }
+
+  .opl-chat-kop > div {
+    transition:
+      height 0.25s ease,
+      opacity 0.25s ease;
+  }
+
+  html[data-leesstand='aan'] .opl-chat-kop > div {
+    height: 0;
+    opacity: 0;
+  }
+}
+
+/*
  * Tabel als rijtje kaarten (zie StackTable). De kop blijft bestaan voor de
  * schermlezer, maar is onzichtbaar: de kolomnaam staat bij elke waarde.
  */
