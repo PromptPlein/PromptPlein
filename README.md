@@ -39,7 +39,9 @@ De hele interface is Nederlands.
 - **Zoeken op internet kan via een eigen server.** Met [SearXNG](infra/searxng/README.md) gaat alleen de zoekvraag naar buiten en ziet geen externe zoekdienst wie hem stelt.
 - **Taalmodel.** De AI-laag draait op Mistral, een Europese aanbieder.
 - **Toegang** wordt afgedwongen in de database met Row Level Security, niet in de frontend.
-- **Bronbestanden in projecten** staan als tekst in de database. Voor het zoeken op betekenis gaat die tekst bij het toevoegen in zijn geheel naar Mistral, zie hieronder.
+- **Bronbestanden in projecten** staan als tekst in de database. Voor het toevoegen zoekt de browser naar persoonsgegevens en biedt aan ze te vervangen. Alleen in een groot project gaat de tekst ook naar Mistral om hem doorzoekbaar te maken, zie hieronder.
+- **Bewaartermijn.** Een project dat een jaar niet is gebruikt, wordt elke nacht opgeruimd, met zijn bestanden. In de back-ups van Supabase blijft het nog staan tot die verlopen.
+- **Edge functions in de EU.** Elke aanroep vraagt om de regio `eu-west-1` (Ierland), naast de database, ook als de gebruiker buiten Europa werkt.
 
 ## Zoeken in de bronbestanden van een project
 
@@ -64,12 +66,14 @@ flowchart LR
   C -->|vectoren| B
 ```
 
-1. **Uitlezen.** De browser haalt de platte tekst uit het bestand. Het originele bestand gaat nergens heen; alleen de tekst gaat naar de database (`chat_project_files`).
-2. **Opknippen.** Een trigger in Postgres knipt de tekst in stukken van hoogstens 1600 tekens (`chat_project_file_chunks`) en maakt er een woordindex bij.
-3. **Vectoren maken.** De edge function `optimize-prompt` (mode `project-index`) stuurt de stukken in porties van 16 naar `mistral-embed`. Mistral geeft per stuk een vector terug: een reeks van 1024 getallen die de betekenis van de tekst vastlegt.
-4. **Opslaan.** De function schrijft de vectoren in de kolom `embedding` van dezelfde tabel. Daarvoor draait de extensie `pgvector` in Supabase; er is geen aparte vectordatabase.
+1. **Uitlezen.** De browser haalt de platte tekst uit het bestand. Het originele bestand gaat nergens heen.
+2. **Controle op persoonsgegevens.** Nog in de browser zoekt PromptPlein naar BSN's (met de elfproef), namen met een aanhef of veldnaam ("de heer Jansen", "Naam: Jan de Vries"), e-mailadressen, telefoonnummers, IBAN's en geboortedata. Staat er iets in, dan kies je: vervangen door een plaatshouder zoals `[BSN]`, toch toevoegen, of niet toevoegen. Een naam zonder aanhef vindt deze controle niet. Beheer zet de controle aan of uit, samen met die voor de chat.
+3. **Opslaan.** Alleen de tekst gaat naar de database (`chat_project_files`).
+4. **Opknippen.** Een trigger in Postgres knipt de tekst in stukken van hoogstens 1600 tekens (`chat_project_file_chunks`) en maakt er een woordindex bij.
+5. **Vectoren maken, alleen in een groot project.** Pas als de bestanden samen boven de 200.000 tekens komen, maakt de edge function `optimize-prompt` (mode `project-index`) de stukken doorzoekbaar: hij stuurt ze in porties van 16 naar `mistral-embed`. Een klein project zoekt nooit, dus daar gaat de tekst hiervoor niet naar Mistral. De grens staat ook in de function zelf, zodat hij niet van de browser afhangt. Mistral geeft per stuk een vector terug: een reeks van 1024 getallen die de betekenis van de tekst vastlegt.
+6. **Vectoren opslaan.** De function schrijft de vectoren in de kolom `embedding` van dezelfde tabel. Daarvoor draait de extensie `pgvector` in Supabase; er is geen aparte vectordatabase.
 
-Wordt het verwerken onderbroken, bijvoorbeeld door het venster te sluiten, dan gaat het verder bij het volgende bezoek aan de projectinstellingen of bij de volgende vraag in dat project.
+Het verwerken start zodra een project over de grens gaat, in de projectinstellingen. Wordt het onderbroken, dan maakt de eerste vraag in dat project het af. Die vraag wacht daar hoogstens 20 seconden op en zoekt daarna toch, met de woordzoeker voor wat nog geen vector heeft.
 
 ### Vraag stellen
 
@@ -98,7 +102,8 @@ Valt Mistral uit, dan zoekt de app alleen op woorden. Niemand raakt zijn bronnen
 | --- | --- |
 | Het originele bestand | Alleen in de browser, tijdens het uitlezen |
 | De tekst, de stukken en de vectoren | Postgres in Supabase, regio West-EU (Ierland) |
-| De tekst van elk stuk, bij het toevoegen | Gaat naar Mistral om de vector te berekenen |
+| De tekst van elk stuk, in een groot project | Gaat naar Mistral om de vector te berekenen |
+| Wat je bij de controle laat vervangen | Nergens, het wordt in de browser vervangen |
 | De vraag, en de stukken die meegaan | Gaan naar Mistral voor de vector en het antwoord |
 | Het gesprek zelf | Alleen in de browser |
 
@@ -110,6 +115,7 @@ Een vector is geen anonieme versie van de tekst. Met de juiste technieken is een
 - **Alleen de vector is wijzigbaar.** Van de stukken mag de eigenaar alleen de kolom `embedding` vullen. De tekst kan niemand achteraf aanpassen.
 - **De zoekfuncties draaien onder de rechten van de aanroeper** (`SECURITY INVOKER`) en zijn zonder account niet aan te roepen.
 - **Verwijderen ruimt alles op.** Verdwijnt een bestand, project of account, dan verdwijnen de stukken en vectoren mee (`ON DELETE CASCADE`).
+- **Opruimen na een jaar.** Een geplande taak (`pg_cron`, `projecten-opruimen`) verwijdert elke nacht de projecten die een jaar niet zijn gebruikt. Gebruik is: het project openen, de instellingen openen of er een vraag in stellen (`mark_chat_project_used`).
 - **Geen tekst in de logs.** De function logt bij een fout alleen de foutmelding, nooit de inhoud van een bestand.
 - **Ander embeddingmodel, alle vectoren opnieuw.** Vectoren van twee modellen zijn niet met elkaar te vergelijken.
 

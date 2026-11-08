@@ -57,11 +57,35 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured
   : null;
 
 /** Basis-URL voor Supabase Edge Functions. */
+/**
+ * De regio waar de edge functions draaien: Ierland, naast de database. Zonder
+ * deze keuze draait Supabase een function in de regio die het dichtst bij de
+ * gebruiker ligt, en wie buiten Europa werkt, stuurt zijn tekst dan door een
+ * server daar. Een query-parameter en geen header `x-region`, want die zou
+ * een CORS-preflight met een extra toegestane header vragen.
+ *
+ * Let op: bij een storing in deze regio leidt Supabase niet om. Wissel dan
+ * tijdelijk naar een andere regio in de EU, zoals `eu-central-1`.
+ */
+export const FUNCTION_REGION = 'eu-west-1';
+
+function withRegion(address: string): string {
+  try {
+    const parsed = new URL(address);
+    if (!parsed.searchParams.has('forceFunctionRegion')) {
+      parsed.searchParams.set('forceFunctionRegion', FUNCTION_REGION);
+    }
+    return parsed.toString();
+  } catch {
+    return address;
+  }
+}
+
 export function getFunctionUrl(name: string): string | null {
   const explicit = import.meta.env.VITE_OPTIMIZE_FUNCTION_URL as string | undefined;
-  if (name === 'optimize-prompt' && explicit) return explicit;
+  if (name === 'optimize-prompt' && explicit) return withRegion(explicit);
   if (!url) return null;
-  return `${url.replace(/\/$/, '')}/functions/v1/${name}`;
+  return withRegion(`${url.replace(/\/$/, '')}/functions/v1/${name}`);
 }
 
 export function getAnonKey(): string | undefined {

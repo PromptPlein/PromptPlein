@@ -3605,6 +3605,10 @@ const EMBED_MODEL = 'mistral-embed';
  * {@link embedTexts} hem.
  */
 const EMBED_BATCH_CHUNKS = 16;
+// Pas boven deze grens worden er vectoren gemaakt. Gelijk aan
+// MAX_PROJECT_CONTEXT_CHARS in chatProjectService: daaronder gaan de bestanden
+// heel mee en wordt er nooit gezocht, dus hoeft de tekst niet naar mistral-embed.
+const PROJECT_INDEX_MIN_CHARS = 200_000;
 
 /** Langste zoekvraag die we omzetten. */
 const MAX_EMBED_QUERY_CHARS = 8000;
@@ -3670,9 +3674,23 @@ function databaseRequest(req: Request, path: string, init: RequestInit = {}): Pr
 /**
  * Maakt vectoren voor de volgende portie stukken zonder vector. De client roept
  * dit aan tot `remaining` 0 is; zo past een groot bestand binnen de looptijd van
- * de functie en gaat een onderbroken verwerking later gewoon verder.
+ * de functie en gaat een onderbroken verwerking later gewoon verder. Een project
+ * onder PROJECT_INDEX_MIN_CHARS krijgt geen vectoren, wat de client ook vraagt.
  */
 async function indexProjectChunks(req: Request, projectId: string): Promise<number> {
+  const sizes = await databaseRequest(
+    req,
+    `chat_project_files?project_id=eq.${encodeURIComponent(projectId)}&select=chars`,
+  );
+  if (!sizes.ok) {
+    throw new Error(`Bestanden ophalen gaf status ${sizes.status}: ${(await sizes.text()).slice(0, 300)}`);
+  }
+  const chars = ((await sizes.json()) as Array<{ chars: number }>).reduce(
+    (sum, f) => sum + (Number(f.chars) || 0),
+    0,
+  );
+  if (chars <= PROJECT_INDEX_MIN_CHARS) return 0;
+
   const query =
     `project_id=eq.${encodeURIComponent(projectId)}&embedding=is.null` +
     `&select=id,text&order=id.asc&limit=${EMBED_BATCH_CHUNKS}`;

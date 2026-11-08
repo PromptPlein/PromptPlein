@@ -219,7 +219,23 @@ export async function addProjectFile(args: {
     .single();
   if (error) throw error;
   invalidateProjectContext(args.projectId);
+  indexed.delete(args.projectId);
   return toFile(data as FileRow);
+}
+
+const markedUsed = new Set<string>();
+
+/**
+ * Zet de laatste keer gebruik van een project op nu (migratie 0051). Een project
+ * dat een jaar niet is gebruikt, ruimt de database op. Eén keer per project per
+ * sessie is genoeg; de database schrijft hoogstens één keer per uur. Gooit nooit.
+ */
+export function markProjectUsed(projectId: string): void {
+  if (!isSupabaseConfigured || !supabase || markedUsed.has(projectId)) return;
+  markedUsed.add(projectId);
+  void supabase.rpc('mark_chat_project_used', { p_project: projectId }).then(({ error }) => {
+    if (error) markedUsed.delete(projectId);
+  });
 }
 
 /** Verwijder één bronbestand. */
@@ -293,6 +309,15 @@ async function callProjectFunction<T>(body: Record<string, unknown>): Promise<T>
 }
 
 const indexing = new Map<string, Promise<void>>();
+/** Projecten waarvan in deze sessie alle stukken een vector hebben. */
+const indexed = new Set<string>();
+
+/**
+ * Zo lang wacht de eerste vraag in een groot project op de vectoren. Daarna gaat
+ * het zoeken toch door: stukken zonder vector vindt de woordzoeker, en het
+ * verwerken loopt op de achtergrond verder.
+ */
+const INDEX_WAIT_MS = 20_000;
 
 /**
  * Maakt de stukken van een project doorzoekbaar op betekenis: de edge function
@@ -317,7 +342,10 @@ export function indexProject(
           projectId,
         });
         onProgress?.(remaining);
-        if (remaining <= 0) return;
+        if (remaining <= 0) {
+          indexed.add(projectId);
+          return;
+        }
       }
     } catch {
       onProgress?.(0);
@@ -431,10 +459,17 @@ export async function loadProjectContext(
   if (metaError) throw metaError;
   const meta = (metaData as { id: string; name: string; chars: number }[]) ?? [];
   const row = projectData as ProjectRow;
+  markProjectUsed(projectId);
 
   if (query?.trim() && meta.reduce((sum, f) => sum + f.chars, 0) > MAX_PROJECT_CONTEXT_CHARS) {
-    // Halverwege afgebroken verwerking pakt hij hier weer op, op de achtergrond.
-    void indexProject(projectId);
+    // Vectoren komen pas als een project te groot wordt, dus de eerste vraag
+    // maakt ze af. Dat kost die ene keer wat tijd; daarna is dit een snelle check.
+    if (!indexed.has(projectId)) {
+      await Promise.race([
+        indexProject(projectId),
+        new Promise((resolve) => setTimeout(resolve, INDEX_WAIT_MS)),
+      ]);
+    }
     const nameOf = new Map(meta.map((f) => [f.id, f.name]));
     const searched = await searchProjectChunks(projectId, query.trim(), nameOf);
     if (searched) {

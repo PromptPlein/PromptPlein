@@ -5,6 +5,8 @@ import toast from 'react-hot-toast';
 import Modal from '@/components/common/Modal';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { ACCEPTED_DOC_ACCEPT } from '@/lib/extractDocument';
+import { countPii, redactPii, type PiiCount } from '@/services/guardrails';
+import PiiFileDialog, { type PiiFileChoice } from '@/components/chat/PiiFileDialog';
 import { optimizeProjectInstructions } from '@/services/chatService';
 import type { ChatSettings } from '@/services/settingsService';
 import {
@@ -12,6 +14,8 @@ import {
   deleteProjectFile,
   indexProject,
   listProjectFiles,
+  markProjectUsed,
+  MAX_PROJECT_CONTEXT_CHARS,
   MAX_PROJECT_FILES,
   MAX_PROJECT_FILE_BYTES,
   MAX_PROJECT_FILE_CHARS,
@@ -39,6 +43,7 @@ export default function ProjectSettingsModal({
   onSave,
   onFilesChanged,
   chatSettings,
+  checkPii = true,
 }: {
   open: boolean;
   project: ChatProject | null;
@@ -53,6 +58,8 @@ export default function ProjectSettingsModal({
    * de rest van het scherm werkt gewoon.
    */
   chatSettings?: ChatSettings | null;
+  /** De controle op persoonsgegevens uit Beheer, AI-instellingen. Standaard aan. */
+  checkPii?: boolean;
 }) {
   const [name, setName] = useState('');
   const [instructions, setInstructions] = useState('');
@@ -71,6 +78,16 @@ export default function ProjectSettingsModal({
   const [dragging, setDragging] = useState(false);
   const [confirmDeleteFile, setConfirmDeleteFile] = useState<ChatProjectFile | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // De vraag over persoonsgegevens voor het bestand dat nu aan de beurt is.
+  const [piiAsk, setPiiAsk] = useState<{ fileName: string; found: PiiCount[] } | null>(null);
+  const piiAnswer = useRef<((choice: PiiFileChoice) => void) | null>(null);
+
+  function askPii(fileName: string, found: PiiCount[]): Promise<PiiFileChoice> {
+    return new Promise((resolve) => {
+      piiAnswer.current = resolve;
+      setPiiAsk({ fileName, found });
+    });
+  }
 
   const num = (n: number) => n.toLocaleString('nl-NL');
   const projectId = project?.id ?? null;
@@ -111,10 +128,20 @@ export default function ProjectSettingsModal({
     return loadFiles();
   }, [open, projectId, loadFiles]);
 
-  // Ook bij openen: een eerdere verwerking kan zijn afgebroken.
+  // Openen telt als gebruik, voor de bewaartermijn.
   useEffect(() => {
-    if (open && projectId) void indexProject(projectId, setIndexRemaining);
+    if (open && projectId) markProjectUsed(projectId);
   }, [open, projectId]);
+
+  // Vectoren alleen voor een project dat te groot is om heel mee te gaan: een
+  // klein project zoekt nooit, dus dan hoeft de tekst daarvoor niet naar Mistral.
+  // Ook bij openen, want een eerdere verwerking kan zijn afgebroken.
+  const filesChars = files.reduce((sum, f) => sum + f.chars, 0);
+  const needsIndex = filesChars > MAX_PROJECT_CONTEXT_CHARS;
+  useEffect(() => {
+    if (open && projectId && needsIndex) void indexProject(projectId, setIndexRemaining);
+    // files.length erbij: een nieuw bestand in een groot project heeft ook vectoren nodig.
+  }, [open, projectId, needsIndex, files.length]);
 
   // --- Het oranje sterretje: van ruwe instructie naar systeemprompt ---
   // Bewust een zwaardere slag dan het sterretje in de chat: daar wordt één
@@ -195,11 +222,20 @@ export default function ProjectSettingsModal({
       setUploading({ current: index + 1, total: batch.length });
       try {
         const doc = await extractDocument(file, MAX_PROJECT_FILE_BYTES);
-        const truncated = doc.text.length > MAX_PROJECT_FILE_CHARS;
+        // Controle vóór het versturen: wat hier wordt vervangen, komt nooit in de
+        // database of bij Mistral.
+        let text = doc.text;
+        const found = checkPii ? countPii(text) : [];
+        if (found.length > 0) {
+          const choice = await askPii(doc.name, found);
+          if (choice === 'skip') continue;
+          if (choice === 'redact') text = redactPii(text);
+        }
+        const truncated = text.length > MAX_PROJECT_FILE_CHARS;
         const added = await addProjectFile({
           projectId,
           name: doc.name,
-          text: doc.text,
+          text,
           truncated,
         });
         setFiles((cur) => [...cur, added]);
@@ -220,7 +256,6 @@ export default function ProjectSettingsModal({
     setUploading(null);
     if (done > 1) onFilesChanged();
     if (done > 0) toast.success(done === 1 ? 'Bestand toegevoegd.' : `${done} bestanden toegevoegd.`);
-    if (done > 0) await indexProject(projectId, setIndexRemaining);
   }
 
   async function removeFile(file: ChatProjectFile) {
@@ -235,7 +270,7 @@ export default function ProjectSettingsModal({
     }
   }
 
-  const totalChars = files.reduce((sum, f) => sum + f.chars, 0);
+  const totalChars = filesChars;
 
   return (
     <>
@@ -348,7 +383,8 @@ export default function ProjectSettingsModal({
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 Tot {MAX_PROJECT_FILES} bestanden van elk {MAX_PROJECT_FILE_BYTES / (1024 * 1024)} MB
-                (.txt, .md, .pdf, .docx).
+                (.txt, .md, .pdf, .docx). Een project dat een jaar niet is gebruikt, wordt
+                verwijderd.
               </p>
             </div>
             <button
@@ -468,6 +504,18 @@ export default function ProjectSettingsModal({
           </div>
         </div>
       </Modal>
+
+      {piiAsk && (
+        <PiiFileDialog
+          fileName={piiAsk.fileName}
+          found={piiAsk.found}
+          onChoose={(choice) => {
+            setPiiAsk(null);
+            piiAnswer.current?.(choice);
+            piiAnswer.current = null;
+          }}
+        />
+      )}
 
       <ConfirmDialog
         open={confirmDeleteFile !== null}

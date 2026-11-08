@@ -595,7 +595,11 @@ const ChatMessageRow = memo(function ChatMessageRow({
           <ChatAnswer text={message.content} isStreaming={isStreaming} onRepair={onRepair} />
         ) : isStreaming ? (
           <span className="text-slate-500 dark:text-slate-400">
-            {phase === 'searching' ? 'Aan het zoeken op internet…' : 'Aan het nadenken…'}
+            {phase === 'searching'
+              ? 'Aan het zoeken op internet…'
+              : phase === 'sources'
+                ? 'Bronnen doorzoeken…'
+                : 'Aan het nadenken…'}
           </span>
         ) : null}
       </div>

@@ -282,7 +282,11 @@ export default function useChatController(
             .slice(-2)
             .map((m) => m.content)
             .join('\n');
-          const result = await loadProjectContext(conv.projectId, asking);
+          // De eerste vraag in een groot project wacht op de vectoren; zeg dat.
+          if (!startText) setPhase('sources');
+          const result = await loadProjectContext(conv.projectId, asking).finally(() =>
+            setPhase(startText ? 'continuing' : webSearch ? 'searching' : null),
+          );
           project = result?.context ?? null;
           if (result?.searched) projectSources = result.context.files.map((f) => f.name);
           if (result?.searched && !startText) {

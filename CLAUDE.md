@@ -141,6 +141,12 @@ Env-variabelen (alle vier `VITE_`-prefixed, dus client-side):
 `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_ADMIN_TOKEN`,
 `VITE_OPTIMIZE_FUNCTION_URL` (optionele override van de function-URL).
 
+Edge functions draaien in `eu-west-1` (Ierland), naast de database: `getFunctionUrl`
+zet `forceFunctionRegion` op elke URL, ook op de override. Zonder die parameter kiest
+Supabase de regio die het dichtst bij de gebruiker ligt, dus buiten Europa een server
+daar. Bij een storing in die regio leidt Supabase niet om; wissel dan `FUNCTION_REGION`
+tijdelijk naar een andere EU-regio. Roep een function dus nooit aan met een eigen URL.
+
 Scripts: `npm run dev`, `npm run build` (= `tsc -b && vite build`),
 `npm run preview`, `npm run lint`.
 
@@ -466,16 +472,24 @@ woordzoeker juist beter.
 Bewust geen HNSW-index: die zoekt over alle projecten en filtert daarna pas, zodat
 treffers binnen één project wegvallen. Per project exact vergelijken is snel genoeg.
 
-Vectoren maken gebeurt in porties (`project-index`, `indexProject` in
-`chatProjectService`), bij het toevoegen en bij het openen van de projectinstellingen,
-zodat een onderbroken verwerking vanzelf verdergaat. Alles loopt met het token van de
+Vectoren komen alleen in een project boven de 200.000 tekens: een klein project zoekt
+nooit. `PROJECT_INDEX_MIN_CHARS` in de edge function bewaakt dat ook, gelijk aan
+`MAX_PROJECT_CONTEXT_CHARS`; wijzig je de een, wijzig dan de ander. Ze worden gemaakt in
+porties (`project-index`, `indexProject` in `chatProjectService`) zodra de
+projectinstellingen een groot project zien, en anders bij de eerste vraag, die daar
+hoogstens 20 seconden op wacht. Alles loopt met het token van de
 gebruiker, dus RLS bewaakt ook dit pad, en van de stukken is alleen `embedding`
 wijzigbaar. Een stuk zonder vector blijft vindbaar met de woordzoeker en een storing
 bij Mistral kost niemand zijn bronnen: `project-search` zoekt dan op woorden en daarna
 valt de client terug op `search_project_chunks`.
 
-Let op de privacy: door de vectoren gaat elk bestand bij het toevoegen in zijn geheel
-naar Mistral, ook de delen waar nooit iets over wordt gevraagd. Wissel je van
+Let op de privacy: in een groot project gaat elk bestand in zijn geheel naar Mistral,
+ook de delen waar nooit iets over wordt gevraagd. Daarom zoekt de browser vóór het
+toevoegen naar persoonsgegevens (`countPii` en `redactPii` in `guardrails`,
+`PiiFileDialog`) en biedt hij aan ze te vervangen, nog voordat er iets verstuurd
+wordt. Een project dat een jaar niet is gebruikt, ruimt `pg_cron` 's nachts op (0051,
+`last_used_at`, `mark_chat_project_used`); gebruik markeren verandert `updated_at` en
+dus de volgorde in de zijbalk niet. Wissel je van
 embeddingmodel, gooi dan alle vectoren weg: die van twee modellen zijn niet te
 vergelijken.
 

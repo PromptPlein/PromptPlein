@@ -936,6 +936,7 @@ function ChatPageInner() {
           projects.refresh();
         }}
         chatSettings={settings}
+        checkPii={aiSettings?.pii.enabled ?? true}
       />
       <ConfirmDialog
         open={confirmDeleteProject !== null}
