@@ -87,7 +87,7 @@ export default function ActivityPage() {
 
   if (!user) {
     return (
-      <nldd-simple-section>
+      <nldd-simple-section background="tinted">
         {title}
         <nldd-inline-dialog
           icon="line-chart"
@@ -102,7 +102,7 @@ export default function ActivityPage() {
 
   if (loading) {
     return (
-      <nldd-simple-section>
+      <nldd-simple-section background="tinted">
         {title}
         <nldd-inline-dialog variant="loading" text="Activiteit laden"></nldd-inline-dialog>
       </nldd-simple-section>
@@ -111,7 +111,7 @@ export default function ActivityPage() {
 
   return (
     <>
-      <nldd-simple-section>
+      <nldd-simple-section background="tinted">
         {title}
         <nldd-container layout="grid" gap="12" sm-gap="8" column-count={4} sm-column-count={2}>
           <Stat label="Prompts aangemaakt" value={stats.created} />
@@ -127,7 +127,7 @@ export default function ActivityPage() {
         />
       </nldd-simple-section>
 
-      <nldd-simple-section background="tinted">
+      <nldd-simple-section background="tinted" padding-top="0">
         <nldd-title slot="header" heading-level={2} size={4} text="Recente activiteit"></nldd-title>
         {mine.length === 0 ? (
           <nldd-inline-dialog icon="clock" horizontal-alignment="left" text="Nog geen activiteit">
@@ -136,7 +136,7 @@ export default function ActivityPage() {
             </nldd-button-group>
           </nldd-inline-dialog>
         ) : (
-          <nldd-list accessible-label="Recente activiteit">
+          <nldd-list appearance="box-base" accessible-label="Recente activiteit">
             {mine.slice(0, 20).map((e) => (
               <nldd-list-item key={e.id} size="sm">
                 <nldd-text-cell text={EVENT_LABELS[e.event_type] ?? e.event_type}></nldd-text-cell>

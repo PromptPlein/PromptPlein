@@ -208,7 +208,7 @@ export default function PromptDetailPage() {
 
   if (loading) {
     return (
-      <nldd-simple-section>
+      <nldd-simple-section background="tinted">
         <nldd-title slot="header" heading-level={1} size={2} text="Prompt laden"></nldd-title>
         <nldd-inline-dialog
           horizontal-alignment="left"
@@ -221,7 +221,7 @@ export default function PromptDetailPage() {
 
   if (!prompt) {
     return (
-      <nldd-simple-section>
+      <nldd-simple-section background="tinted">
         <nldd-inline-dialog
           heading-level={1}
           icon="search"
@@ -246,7 +246,7 @@ export default function PromptDetailPage() {
 
   return (
     <>
-      <nldd-simple-section>
+      <nldd-simple-section background="tinted">
         <nldd-container slot="header" max-width="48rem">
           {editing ? (
             <nldd-link
@@ -300,6 +300,9 @@ export default function PromptDetailPage() {
         </nldd-container>
 
         <nldd-container max-width="48rem">
+          {/* De prompt zelf op een witte kaart; reacties, deelniveaus en versies eronder. */}
+          <nldd-card accessible-label="Prompt">
+          <nldd-container padding="24" sm-padding="16">
           {editing ? (
             <nldd-form>
               <form
@@ -508,7 +511,10 @@ export default function PromptDetailPage() {
             </>
           )}
 
-          <nldd-spacer size="32"></nldd-spacer>
+          </nldd-container>
+          </nldd-card>
+
+          <nldd-spacer size="16"></nldd-spacer>
           <CollaborationPanel
             prompt={prompt}
             refreshKey={versionRefresh}

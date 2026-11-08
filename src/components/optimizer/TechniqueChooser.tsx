@@ -72,7 +72,7 @@ export default function TechniqueChooser({
           text={actief.naam}
           supporting-text={`${actief.zin}: ${lijst.length} ${lijst.length === 1 ? 'keuze' : 'keuzes'}. Een framework bouwt je hele prompt op, een techniek stuurt hoe de AI werkt.`}
         ></nldd-title>
-        <nldd-list accessible-label={`Keuzes bij ${actief.naam}`}>
+        <nldd-list appearance="box-base" accessible-label={`Keuzes bij ${actief.naam}`}>
           {lijst.map((t) => (
             <TechniqueRow
               key={t.id}
@@ -98,7 +98,7 @@ export default function TechniqueChooser({
   );
 }
 
-/** The goals as tabs; what does not fit goes behind "Meer tabs". */
+/** The goals as tabs, icon above the name like the tiles on main; what does not fit goes behind "Meer tabs". */
 function DoelTabs({
   doelen,
   actief,
@@ -115,7 +115,7 @@ function DoelTabs({
     if (doel) onKies(doel.id);
   });
   return (
-    <nldd-tab-bar ref={ref} variant="text" size="lg" accessible-label="Kies je doel">
+    <nldd-tab-bar ref={ref} variant="icon-and-text" size="lg" accessible-label="Kies je doel">
       {doelen.map((d) => (
         <nldd-tab-bar-item
           key={d.id}

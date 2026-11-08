@@ -81,7 +81,7 @@ export default function TrendingPage({ embedded = false }: { embedded?: boolean 
 
   if (loading) {
     return (
-      <nldd-simple-section>
+      <nldd-simple-section background="tinted">
         {header}
         <SkeletonGrid count={6} />
       </nldd-simple-section>
@@ -90,7 +90,7 @@ export default function TrendingPage({ embedded = false }: { embedded?: boolean 
 
   if (trending.length === 0) {
     return (
-      <nldd-simple-section>
+      <nldd-simple-section background="tinted">
         {header}
         <nldd-inline-dialog
           icon="line-chart"
@@ -108,7 +108,7 @@ export default function TrendingPage({ embedded = false }: { embedded?: boolean 
 
   return (
     <>
-      <nldd-simple-section>
+      <nldd-simple-section background="tinted">
         {header}
         <nldd-title heading-level={2} size={4} text="Populairste prompts"></nldd-title>
         <nldd-spacer size="12"></nldd-spacer>
@@ -124,7 +124,7 @@ export default function TrendingPage({ embedded = false }: { embedded?: boolean 
         </nldd-collection>
       </nldd-simple-section>
 
-      <nldd-simple-section background="tinted">
+      <nldd-simple-section background="tinted" padding-top="0">
         <nldd-title slot="header" heading-level={2} size={4} text="Meest gebruikte technieken"></nldd-title>
         <BarChartCard
           title="Optimalisaties per techniek"

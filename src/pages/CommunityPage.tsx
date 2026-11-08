@@ -6,6 +6,8 @@ import type { CommunityMember } from '@/types';
 import '@nldd/design-system/badge';
 import '@nldd/design-system/cell';
 import '@nldd/design-system/container';
+import '@nldd/design-system/icon';
+import '@nldd/design-system/card';
 import '@nldd/design-system/icon-cell';
 import '@nldd/design-system/inline-dialog';
 import '@nldd/design-system/list';
@@ -49,7 +51,7 @@ function CommunityTab() {
 
   return (
     <>
-      <nldd-simple-section>
+      <nldd-simple-section background="tinted">
         <nldd-title
           slot="header"
           heading-level={1}
@@ -61,15 +63,17 @@ function CommunityTab() {
           <nldd-tab-bar-item href="/community" text="Community" current></nldd-tab-bar-item>
           <nldd-tab-bar-item href="/trending" text="Trending"></nldd-tab-bar-item>
         </nldd-tab-bar>
+        {/* De drie aantallen als tegels. */}
         {!loading && (
-          <nldd-text color="secondary">
-            {count(members.length, 'maker', 'makers')} · {count(totalPrompts, 'prompt', 'prompts')} ·{' '}
-            {count(totalLikes, 'like', 'likes')}
-          </nldd-text>
+          <nldd-container layout="grid" column-count={3} sm-column-count={1} gap="16">
+            <StatTile icon="users" value={members.length} label={members.length === 1 ? 'Maker' : 'Makers'} />
+            <StatTile icon="file-text" value={totalPrompts} label={totalPrompts === 1 ? 'Prompt' : 'Prompts'} />
+            <StatTile icon="hand-thumbs-up" value={totalLikes} label={totalLikes === 1 ? 'Like' : 'Likes'} />
+          </nldd-container>
         )}
       </nldd-simple-section>
 
-      <nldd-one-half-one-half-section>
+      <nldd-one-half-one-half-section background="tinted" padding-top="0">
         <nldd-container slot="left">
           <nldd-title heading-level={2} size={4} text="Ranglijst"></nldd-title>
           <nldd-spacer size="12"></nldd-spacer>
@@ -82,12 +86,12 @@ function CommunityTab() {
               supporting-text="Maak de eerste prompt en verschijn hier."
             ></nldd-inline-dialog>
           ) : (
-            <nldd-list accessible-label="Ranglijst van makers">
+            <nldd-list appearance="box-base" accessible-label="Ranglijst van makers">
               {members.map((m, i) => (
                 <nldd-list-item
                   key={m.id}
                   href={`/community/${m.id}`}
-                  accessible-label={`${i + 1}. ${firstName(m.full_name)}`}
+                  accessible-label={`${firstName(m.full_name)}, plaats ${i + 1}`}
                 >
                   <nldd-cell>
                     <nldd-badge
@@ -122,9 +126,30 @@ function CommunityTab() {
         <nldd-container slot="right">
           <nldd-title heading-level={2} size={4} text="Organisatie"></nldd-title>
           <nldd-spacer size="12"></nldd-spacer>
-          <OrgTree orgs={organizations} />
+          <nldd-card accessible-label="Organisatie">
+            <nldd-container padding="16">
+              <OrgTree orgs={organizations} />
+            </nldd-container>
+          </nldd-card>
         </nldd-container>
       </nldd-one-half-one-half-section>
     </>
+  );
+}
+
+/** Eén aantal als tegel: icoon in een vlak, het getal groot en wat het telt eronder. */
+function StatTile({ icon, value, label }: { icon: string; value: number; label: string }) {
+  return (
+    <nldd-card accessible-label={`${value} ${label.toLowerCase()}`}>
+      <nldd-container padding="16" layout="row" gap="12" vertical-alignment="center">
+        <nldd-icon icon={icon} size="40" color="lichtblauw" box></nldd-icon>
+        <nldd-container>
+          <nldd-text size="display-6">{value}</nldd-text>
+          <nldd-text size="sm" color="secondary">
+            {label}
+          </nldd-text>
+        </nldd-container>
+      </nldd-container>
+    </nldd-card>
   );
 }

@@ -80,7 +80,7 @@ export default function SharePreviewPage() {
 
   if (loading || authLoading) {
     return (
-      <nldd-simple-section>
+      <nldd-simple-section background="tinted">
         <nldd-title slot="header" heading-level={1} size={2} text="Gedeelde prompt"></nldd-title>
         <nldd-activity-indicator size="32" show-text text="Prompt laden"></nldd-activity-indicator>
       </nldd-simple-section>
@@ -90,7 +90,7 @@ export default function SharePreviewPage() {
   // De deel-link bestaat echt niet (token onbekend) → genuine 'niet gevonden'.
   if (!share) {
     return (
-      <nldd-simple-section>
+      <nldd-simple-section background="tinted">
         <nldd-inline-dialog
           icon="link"
           heading-level={1}
@@ -112,7 +112,7 @@ export default function SharePreviewPage() {
   if (!prompt) {
     if (!isAuthenticated) {
       return (
-        <nldd-simple-section>
+        <nldd-simple-section background="tinted">
           <nldd-inline-dialog
             icon="lock"
             icon-color="accent"
@@ -143,7 +143,7 @@ export default function SharePreviewPage() {
     }
     // Ingelogd, maar geen toegang: de prompt hoort bij een andere afdeling/ministerie.
     return (
-      <nldd-simple-section>
+      <nldd-simple-section background="tinted">
         <nldd-inline-dialog
           icon="lock"
           icon-color="warning"
@@ -163,7 +163,7 @@ export default function SharePreviewPage() {
   const role = roleById(prompt.role_id);
 
   return (
-    <nldd-simple-section>
+    <nldd-simple-section background="tinted">
       <nldd-title
         slot="header"
         heading-level={1}

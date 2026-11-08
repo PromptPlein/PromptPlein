@@ -638,7 +638,7 @@ export default function TechniquesPage() {
   );
 
   return (
-    <nldd-simple-section>
+    <nldd-simple-section background="tinted">
       {/* Je keuze staat bovenaan, ook bij het resultaat: zo blijft zichtbaar waar
           je mee werkt en is de weg terug naar de kiezer één klik. */}
       <nldd-title
