@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
 import {
   Bookmark,
@@ -6,6 +6,7 @@ import {
   ChevronRight,
   Loader2,
   Paperclip,
+  Pencil,
   Sparkles,
   Wand2,
 } from '@/components/common/icons';
@@ -21,9 +22,13 @@ const OVER_DOORVRAGEN =
 const CARD =
   'overflow-hidden rounded-xl border border-t-4 border-slate-200 border-t-rijksoranje bg-white dark:border-slate-700 dark:border-t-rijksoranje dark:bg-slate-800';
 
-/** Een antwoordknop: één tik is het antwoord. */
+/** Een antwoord om aan te vinken: je mag er meer kiezen. */
 const OPTION =
-  'flex min-h-[2.75rem] w-full items-center justify-between gap-2 rounded-lg border border-rijksblauw-500 bg-white px-3.5 py-2 text-left font-semibold text-rijksblauw-500 transition-colors hover:bg-rijksblauw-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 focus-visible:ring-offset-2 disabled:opacity-50 dark:border-rijksblauw-300 dark:bg-transparent dark:text-rijksblauw-100 dark:hover:bg-rijksblauw-500/20 dark:focus-visible:ring-offset-slate-800';
+  'flex min-h-[2.75rem] w-full cursor-pointer items-center gap-3 rounded-lg border border-rijksblauw-500 bg-white px-3.5 py-2 text-left font-semibold text-rijksblauw-500 transition-colors hover:bg-rijksblauw-50 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-rijksblauw-500 has-[:focus-visible]:ring-offset-2 has-[:checked]:bg-rijksblauw-50 has-[:disabled]:opacity-50 dark:border-rijksblauw-300 dark:bg-transparent dark:text-rijksblauw-100 dark:hover:bg-rijksblauw-500/20 dark:has-[:checked]:bg-rijksblauw-500/20 dark:has-[:focus-visible]:ring-offset-slate-800';
+
+/** Zelf typen: geen antwoord, maar de weg naar het tekstvak. */
+const TYPE_OWN =
+  'flex min-h-[2.75rem] w-full items-center justify-between gap-2 rounded-lg border border-dashed border-rijksblauw-500 px-3.5 py-2 text-left font-semibold text-rijksblauw-500 transition-colors hover:bg-rijksblauw-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 focus-visible:ring-offset-2 dark:border-rijksblauw-300 dark:text-rijksblauw-100 dark:hover:bg-rijksblauw-500/20 dark:focus-visible:ring-offset-slate-800';
 
 const CHIP =
   'min-h-[2.75rem] rounded-lg border border-rijksblauw-500 bg-white px-3 py-1.5 text-left text-sm font-semibold text-rijksblauw-500 transition-colors hover:bg-rijksblauw-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 disabled:opacity-50 dark:border-rijksblauw-300 dark:bg-transparent dark:text-rijksblauw-100 dark:hover:bg-rijksblauw-500/20';
@@ -71,17 +76,97 @@ function Bars({ filled, total, tone }: { filled: number; total: number; tone: 'b
   );
 }
 
+/** "a", "a en b", "a, b en c": zo leest het antwoord als een zin. */
+function joinAnswers(parts: string[]): string {
+  if (parts.length <= 1) return parts[0] ?? '';
+  // Midden in de zin een kleine letter, behalve bij een afkorting als AVG.
+  const rest = parts
+    .slice(1)
+    .map((p) => (/^\p{Lu}\p{Ll}/u.test(p) ? p[0].toLowerCase() + p.slice(1) : p));
+  const all = [parts[0], ...rest];
+  return `${all.slice(0, -1).join(', ')} en ${all[all.length - 1]}`;
+}
+
+/**
+ * De antwoorden bij één vraag. Je vinkt er een of meer aan en kiest Verder. Wie
+ * iets anders wil zeggen, kiest Antwoord zelf typen: dan gaat de cursor naar het
+ * tekstvak, met wat al was aangevinkt erin.
+ */
+function QuestionOptions({
+  opties,
+  labelledBy,
+  busy,
+  onPick,
+  onTypeOwn,
+}: {
+  opties: string[];
+  labelledBy: string;
+  busy: boolean;
+  onPick: (answer: string) => void;
+  onTypeOwn: (start: string) => void;
+}) {
+  const [chosen, setChosen] = useState<string[]>([]);
+  const toggle = (optie: string) =>
+    setChosen((cur) => (cur.includes(optie) ? cur.filter((o) => o !== optie) : [...cur, optie]));
+  // In de volgorde van de lijst, niet in de volgorde van aanklikken.
+  const picked = opties.filter((o) => chosen.includes(o));
+
+  return (
+    <>
+      <fieldset className="mt-3 grid gap-2" aria-labelledby={labelledBy}>
+        {opties.map((optie) => (
+          <label key={optie} className={OPTION}>
+            <input
+              type="checkbox"
+              className="h-5 w-5 shrink-0 cursor-pointer rounded accent-rijksblauw-500 focus:outline-none"
+              checked={chosen.includes(optie)}
+              disabled={busy}
+              onChange={() => toggle(optie)}
+            />
+            <span className="min-w-0">{optie}</span>
+          </label>
+        ))}
+        <button type="button" className={TYPE_OWN} onClick={() => onTypeOwn(joinAnswers(picked))}>
+          <span className="flex items-center gap-3">
+            <Pencil size={18} className="shrink-0" /> Antwoord zelf typen
+          </span>
+          <ChevronRight size={18} className="shrink-0" />
+        </button>
+      </fieldset>
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+        <button
+          type="button"
+          className="opl-btn-primary"
+          disabled={busy || picked.length === 0}
+          onClick={() => onPick(joinAnswers(picked))}
+        >
+          Verder
+        </button>
+        <span className="text-sm text-slate-500 dark:text-slate-400">
+          {picked.length === 0
+            ? 'Kies een of meer antwoorden.'
+            : picked.length === 1
+              ? '1 antwoord gekozen'
+              : `${picked.length} antwoorden gekozen`}
+        </span>
+      </div>
+    </>
+  );
+}
+
 /**
  * Doorvragen bij het eerste bericht van een nieuwe chat, op de plek van het
  * gesprek. Dit zijn geen berichten: niets hiervan komt in de opgeslagen chat. Pas
  * de prompt die de medewerker verstuurt, is het eerste bericht.
  *
- * De vragen beantwoord je met één tik, of door zelf te typen in het tekstvak.
- * Dat tekstvak blijft onderaan staan, met de paperclip voor een bestand.
+ * De vragen beantwoord je door een of meer antwoorden aan te vinken, of door zelf
+ * te typen in het tekstvak. Dat tekstvak blijft onderaan staan, met de paperclip
+ * voor een bestand.
  */
 export default function ChatIntake({
   state,
   onPick,
+  onTypeOwn,
   onFinishQuestions,
   onSkip,
   onImprove,
@@ -94,6 +179,8 @@ export default function ChatIntake({
 }: {
   state: IntakeState;
   onPick: (answer: string) => void;
+  /** Naar het tekstvak, met wat al was aangevinkt erin. */
+  onTypeOwn: (start: string) => void;
   onFinishQuestions: () => void;
   onSkip: () => void;
   onImprove: (feedback: string) => void;
@@ -190,25 +277,20 @@ export default function ChatIntake({
             >
               {question.vraag}
             </h3>
-            {question.opties.length > 0 && (
-              <div className="mt-3 grid gap-2">
-                {question.opties.map((optie) => (
-                  <button
-                    key={optie}
-                    type="button"
-                    className={OPTION}
-                    disabled={busy}
-                    onClick={() => onPick(optie)}
-                  >
-                    {optie}
-                    <ChevronRight size={18} className="shrink-0" />
-                  </button>
-                ))}
-              </div>
+            {question.opties.length > 0 ? (
+              <QuestionOptions
+                key={question.vraag}
+                opties={question.opties}
+                labelledBy={questionId}
+                busy={busy}
+                onPick={onPick}
+                onTypeOwn={onTypeOwn}
+              />
+            ) : (
+              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                Typ je antwoord in het tekstvak.
+              </p>
             )}
-            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-              Of typ je antwoord in het tekstvak.
-            </p>
             <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
               <button type="button" className="opl-btn-secondary !px-3 !py-1.5" onClick={onAddFile}>
                 <Paperclip size={16} /> Bestand toevoegen

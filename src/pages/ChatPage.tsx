@@ -811,6 +811,13 @@ function ChatPageInner() {
                   <ChatIntake
                     state={intakeState}
                     onPick={(answer) => runGuarded('', () => intake.answer(answer))}
+                    onTypeOwn={(start) => {
+                      const composer = composerRef.current;
+                      if (!composer) return;
+                      // Wat er al staat, blijft staan; anders komen de vinkjes erin.
+                      if (start && !composer.getText().trim()) composer.fill(`${start}, `);
+                      else composer.focus();
+                    }}
                     onFinishQuestions={() => runGuarded('', intake.finishQuestions)}
                     onSkip={() => runGuarded('', intake.skip)}
                     onImprove={intake.improve}
