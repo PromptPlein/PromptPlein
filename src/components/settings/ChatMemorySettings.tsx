@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Trash2 } from '@/components/common/icons';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
@@ -11,8 +11,6 @@ import {
   memoryTokens,
   MEMORY_VECTOR_THRESHOLD_TOKENS,
 } from '@/services/memoryService';
-import { loadPersonalInstruction } from '@/services/personalInstructionService';
-import { composeChatSystemPrompt, getChatSettings } from '@/services/settingsService';
 import type { UserMemory } from '@/types';
 
 const SECTION_CLASS = 'opl-card p-5 sm:p-6';
@@ -20,8 +18,9 @@ const TITLE_CLASS = 'text-lg font-semibold text-rijksblauw-700 dark:text-rijksbl
 
 /**
  * Het geheugen van de chat: wat de gebruiker liet onthouden met "voortaan",
- * "onthoud dit" of "vanaf nu", als losse regels die hij kan verwijderen. Daaronder
- * de systeemprompt die de chat nu in een gewoon gesprek meekrijgt.
+ * "onthoud dit" of "vanaf nu", als losse regels die hij kan verwijderen.
+ *
+ * De systeemprompt staat hier bewust niet: wie hem wil zien, vraagt het de chat.
  */
 export default function ChatMemorySettings() {
   const { configured, loading: authLoading, isAuthenticated } = useAuth();
@@ -168,82 +167,6 @@ export default function ChatMemorySettings() {
           />
         </section>
       )}
-
-      <SystemPromptView canUse={canUse} />
     </>
-  );
-}
-
-/**
- * De systeemprompt van een gewoon chatgesprek, precies zoals hij naar het model
- * gaat: de regels van PromptPlein, de eigen instructie en het geheugen. Alleen
- * het chatniveau; de prompts van de bouwer en de andere onderdelen staan hier niet.
- * Wordt bij elk openen vers samengesteld, zodat een wijziging hierboven meetelt.
- */
-function SystemPromptView({ canUse }: { canUse: boolean }) {
-  const [open, setOpen] = useState(false);
-  const [text, setText] = useState('');
-  const [loading, setLoading] = useState(false);
-  const panelId = useId();
-
-  async function show() {
-    setOpen(true);
-    setLoading(true);
-    try {
-      const [settings, instruction, memories] = await Promise.all([
-        getChatSettings(),
-        canUse ? loadPersonalInstruction().catch(() => '') : Promise.resolve(''),
-        canUse ? loadMemories().catch(() => [] as UserMemory[]) : Promise.resolve([] as UserMemory[]),
-      ]);
-      setText(
-        composeChatSystemPrompt(
-          settings,
-          instruction,
-          memories.map((m) => m.text),
-        ),
-      );
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <section className={SECTION_CLASS} aria-labelledby="chat-systeemprompt">
-      <div className="flex items-center gap-1">
-        <h2 id="chat-systeemprompt" className={TITLE_CLASS}>
-          Systeemprompt
-        </h2>
-        <InfoDot
-          label="Uitleg over de systeemprompt"
-          text="Wat de chat in een gewoon gesprek meekrijgt: de regels van PromptPlein, je eigen instructie en je geheugen."
-        />
-      </div>
-      <button
-        type="button"
-        className="opl-btn-secondary mt-4"
-        aria-expanded={open}
-        aria-controls={panelId}
-        onClick={() => (open ? setOpen(false) : void show())}
-      >
-        {open ? 'Verberg systeemprompt' : 'Toon systeemprompt'}
-      </button>
-      {open && (
-        <div id={panelId} className="mt-4">
-          {loading ? (
-            <p className="text-slate-600 dark:text-slate-300" aria-busy="true">
-              Laden…
-            </p>
-          ) : (
-            <pre
-              tabIndex={0}
-              aria-label="Systeemprompt van de chat"
-              className="max-h-[28rem] overflow-auto whitespace-pre-wrap break-words rounded-lg border border-slate-200 bg-slate-50 p-3 font-sans text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-            >
-              {text}
-            </pre>
-          )}
-        </div>
-      )}
-    </section>
   );
 }

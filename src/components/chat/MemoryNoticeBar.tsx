@@ -1,15 +1,20 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BookmarkCheck, Loader2, LogIn, X } from '@/components/common/icons';
 import type { MemoryNotice } from './rememberWish';
+
+/** Zo lang blijft een melding staan als niemand er iets mee doet. */
+const NOTICE_MS = 5000;
 
 const LINK_CLASS =
   'opl-raak font-medium text-rijksblauw-700 underline hover:no-underline dark:text-rijksblauw-200';
 
 /**
- * Wat het geheugen deed, direct boven het tekstvak: daar kijkt wie typt. Blijft
- * staan tot de gebruiker hem sluit of een nieuw bericht verstuurt, zodat er geen
- * tijdslimiet aan het lezen zit (WCAG 2.2.1).
+ * Wat het geheugen deed, direct boven het tekstvak: daar kijkt wie typt. Verdwijnt
+ * na vijf seconden vanzelf, op verzoek van de eigenaar. Voor WCAG 2.2.1 pauzeert
+ * die tijd zolang de muis erop staat of de focus erin zit, en begint hij daarna
+ * opnieuw. Wie de melding mist, vindt het geheugen en Ongedaan maken ook bij
+ * Instellingen, Chat.
  *
  * Een eigen role="status", los van de berichtenlijst: zo leest een schermlezer
  * deze ene regel voor zonder het streamende antwoord op te pikken.
@@ -27,6 +32,9 @@ export default function MemoryNoticeBar({
   const [undone, setUndone] = useState<'ok' | 'failed' | null>(null);
   const [shownFor, setShownFor] = useState<MemoryNotice | null>(null);
 
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+
   // Nieuwe melding: de stand van een eerdere Ongedaan maken geldt niet meer.
   if (shownFor !== notice) {
     setShownFor(notice);
@@ -34,10 +42,25 @@ export default function MemoryNoticeBar({
     setUndoing(false);
   }
 
+  // Opslaan loopt nog of Ongedaan maken is bezig: dan nog niet weg.
+  const waiting = !notice || notice.kind === 'saving' || undoing || hovered || focused;
+  useEffect(() => {
+    if (waiting) return;
+    const timer = window.setTimeout(onDismiss, NOTICE_MS);
+    return () => window.clearTimeout(timer);
+  }, [waiting, notice, undone, onDismiss]);
+
   return (
     <div role="status" className="mx-auto max-w-[60ch]">
       {notice && (
-        <div className="mb-2 flex items-start gap-2.5 rounded-xl border border-rijksblauw-200 bg-rijksblauw-50 px-3.5 py-2.5 text-sm text-slate-800 dark:border-rijksblauw-500/40 dark:bg-rijksblauw-500/10 dark:text-slate-100">
+        <div
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
+          onFocus={() => setFocused(true)}
+          onBlur={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFocused(false);
+          }}
+          className="mb-2 flex items-start gap-2.5 rounded-xl border border-rijksblauw-200 bg-rijksblauw-50 px-3.5 py-2.5 text-sm text-slate-800 dark:border-rijksblauw-500/40 dark:bg-rijksblauw-500/10 dark:text-slate-100">
           {notice.kind === 'saving' ? (
             <Loader2 size={16} aria-hidden="true" className="mt-0.5 shrink-0 animate-spin text-rijksblauw-600 dark:text-rijksblauw-300" />
           ) : (
