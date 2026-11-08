@@ -10,7 +10,6 @@ import type {
   Optimization,
   Prompt,
   PromptFilters,
-  PromptVersion,
   Role,
   Technique,
 } from '@/types';
@@ -40,11 +39,6 @@ export async function getTechniques(includeInactive = false): Promise<Technique[
   const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as Technique[];
-}
-
-export async function getTechnique(id: string): Promise<Technique | null> {
-  const all = await getTechniques(true);
-  return all.find((t) => t.id === id) ?? null;
 }
 
 // --- Reference data CRUD (admin) ---
@@ -298,18 +292,6 @@ export async function savePromptEdit(
   return updated;
 }
 
-/** Haalt de versiegeschiedenis van een prompt op (nieuwste eerst). */
-export async function listPromptVersions(promptId: string): Promise<PromptVersion[]> {
-  if (local) return [];
-  const { data, error } = await supabase!
-    .from('prompt_versions')
-    .select('*')
-    .eq('prompt_id', promptId)
-    .order('version', { ascending: false });
-  if (error) throw error;
-  return (data as PromptVersion[]) ?? [];
-}
-
 // --- Optimizations ---
 
 export async function listOptimizations(promptId: string): Promise<Optimization[]> {
@@ -336,27 +318,4 @@ export async function saveOptimization(
 export interface TechniquePromptLink {
   technique_id: string;
   prompt_id: string;
-}
-
-/**
- * Alle techniek↔prompt-koppelingen in één keer (via de optimizations-tabel).
- * Bron voor het dashboard-overzicht "prompts per techniek": welke prompts elke
- * techniek gebruiken (en hoeveel). RLS beperkt dit automatisch tot wat de
- * gebruiker mag zien.
- */
-export async function listTechniquePromptLinks(): Promise<TechniquePromptLink[]> {
-  // Recept-only optimalisaties (plan-wizard) hebben geen gekoppelde prompt en
-  // vallen hier buiten: alleen rijen met een prompt_id zijn een echte koppeling.
-  if (local) {
-    return localStore
-      .allOptimizations()
-      .filter((o): o is typeof o & { prompt_id: string } => Boolean(o.prompt_id))
-      .map((o) => ({ technique_id: o.technique_id, prompt_id: o.prompt_id }));
-  }
-  const { data, error } = await supabase!
-    .from('optimizations')
-    .select('technique_id, prompt_id')
-    .not('prompt_id', 'is', null);
-  if (error) throw error;
-  return (data ?? []) as TechniquePromptLink[];
 }

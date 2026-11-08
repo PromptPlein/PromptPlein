@@ -162,9 +162,10 @@ zijn kleuren tijdens het draaien uit de tokens via `src/config/brandColors.js`
 (`readToken`); daar staat geen enkele hexwaarde meer in. Iconen zijn namen uit de
 vaste set van het pakket (`icon="..."`); een naam die niet bestaat, rendert niets.
 
-Env-variabelen (alle vier `VITE_`-prefixed, dus client-side):
-`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_ADMIN_TOKEN`,
-`VITE_OPTIMIZE_FUNCTION_URL` (optionele override van de function-URL).
+Env-variabelen (alle drie `VITE_`-prefixed, dus client-side en voor iedereen leesbaar):
+`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`,
+`VITE_OPTIMIZE_FUNCTION_URL` (optionele override van de function-URL). Zet hier nooit
+iets geheims in: Vite plakt elke `VITE_`-waarde in de bundel.
 
 Edge functions draaien in `eu-west-1` (Ierland), naast de database: `getFunctionUrl`
 zet `forceFunctionRegion` op elke URL, ook op de override. Zonder die parameter kiest
@@ -410,7 +411,7 @@ mode in dat bestand, niet een nieuwe function. De 43 modes, gegroepeerd:
 | Streamende vrije tekst | `generate`, `execute`, `chat` |
 | Techniek- en frameworkkeuze | `recommend`, `recommend-framework`, `framework-fit`, `technique-advisor` |
 | Veldhulp in de bouwer | `analyze`, `prefill`, `expand-field`, `title`, `metadata` |
-| PlanWizard | `plan`, `plan-step`, `plan-step-analyze`, `clarify`, `assumption-check` |
+| Doel-flow | `plan-step`, `clarify` (de oude PlanWizard-modes `plan`, `plan-step-analyze` en `assumption-check` roept de client niet meer aan) |
 | Techniekbouwers | `persona-fill`, `fewshot-example`, `fewshot-extract`, `meta-build`, `cove-scan`, `stepback-ladder`, `rubric-propose`, `skill-draft`, `skill-trigger` |
 | Chat en projecten | `chat-optimize`, `project-optimize`, `project-brief`, `project-interview`, `project-prompt`, `context-interview`, `context-prompt`, `chat-intake`, `chat-intake-check`, `memory-save`, `memory-search` |
 | Testkamer-loop | `mock-answer`, `refine`, `refine-suggest` |
@@ -578,9 +579,8 @@ Merk het voorbeeld daarom onmiskenbaar als voorbeeld, of laat het weg.
   (`AanpakKaart`) en "Andere aanpak" toont de alternatieven die de AI al gaf, zonder
   extra aanroep. Bij te weinig tekst vraagt de AI bij het tekstvak om meer, nooit
   via een lijst. Geldt voor beide tabbladen: na het gesprek bij "Ik heb een idee"
-  kiest de AI op dezelfde manier. Hier zit ook de PlanWizard (plan met stappen,
-  interview in de tool, socratische aannamecontrole) en de Testkamer, de gesloten
-  lus bouwen, testen, verbeteren met versies.
+  kiest de AI op dezelfde manier. Hier zit ook de Testkamer, de gesloten lus bouwen,
+  testen, verbeteren met versies.
 - **`/technieken`** is de trainingspagina waar de gebruiker zélf een techniek
   kiest en de velden invult. Bouw geen handmatige techniekkiezer in
   `/genereren`: dat is precies de scheiding tussen die twee pagina's.
@@ -705,8 +705,5 @@ invulplek maar een woord dat de AI zelf gebruikt (`SLOT` in `ChatComposer`).
   `project-optimize`, met de onderbouwing en de bronnen. Let op, de
   modeltabellen daarin lopen achter op `src/config/aiModels.ts`; de code is
   leidend.
-- `docs/framework-packaging-plan.md`: nog **niet** uitgevoerd. Beschrijft een
-  fase 'framework' in de PlanWizard om de prompt na afloop in een framework te
-  pakken. `PlanWizard.tsx` kent die fase nog niet.
 - `docs/archief/`: afgeronde portplannen en de oorspronkelijke bouwspecificaties.
   Historie, geen instructie. Ga er niet vanuit dat wat daar staat nog klopt.

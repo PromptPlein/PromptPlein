@@ -112,18 +112,6 @@ export async function listProjects(): Promise<ChatProject[]> {
   return ((data as ProjectRow[]) ?? []).map(toProject);
 }
 
-/** Eén project; niet gevonden (of niet van jou) -> null. */
-export async function getProject(id: string): Promise<ChatProject | null> {
-  if (!isSupabaseConfigured || !supabase) return null;
-  const { data, error } = await supabase
-    .from('chat_projects')
-    .select('id, name, instructions, created_at, updated_at, chat_project_files(count)')
-    .eq('id', id)
-    .maybeSingle();
-  if (error) throw error;
-  return data ? toProject(data as ProjectRow) : null;
-}
-
 /**
  * Maak een project aan. `user_id` moet expliciet mee: de INSERT-policy eist
  * `user_id = auth.uid()` en de kolom heeft geen default.

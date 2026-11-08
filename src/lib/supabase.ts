@@ -67,7 +67,7 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured
  * Let op: bij een storing in deze regio leidt Supabase niet om. Wissel dan
  * tijdelijk naar een andere regio in de EU, zoals `eu-central-1`.
  */
-export const FUNCTION_REGION = 'eu-west-1';
+const FUNCTION_REGION = 'eu-west-1';
 
 function withRegion(address: string): string {
   try {

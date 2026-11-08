@@ -18,7 +18,7 @@ export type AiProvider = 'auto' | 'claude' | 'openai' | 'deepseek' | 'mistral';
  * bij, samen met het item in AI_MODELS hieronder en de twee lijsten in de edge
  * function.
  */
-export const ENABLED_PROVIDERS: AiProvider[] = ['auto', 'mistral'];
+const ENABLED_PROVIDERS: AiProvider[] = ['auto', 'mistral'];
 
 /** Mag deze provider gebruikt worden? Onbekend/uitgezet → false. */
 export function isEnabledProvider(id: string | undefined): id is AiProvider {
@@ -252,7 +252,7 @@ export const PROVIDER_MODELS: Record<Exclude<AiProvider, 'auto'>, ProviderModelO
  * van oktober 2026, niet van een eigen meting. Een hernoemde of vervangen id
  * die hier niet in staat, zet de knop uit.
  */
-export const REASONING_EFFORT_MODELS: readonly string[] = [
+const REASONING_EFFORT_MODELS: readonly string[] = [
   'mistral-small-latest',
   'mistral-large-4',
   'mistral-medium-latest',
@@ -268,7 +268,7 @@ export const REASONING_EFFORT_MODELS: readonly string[] = [
  * een overstap naar een zwaarder model (DeepSeek V4 Pro, Opus, GPT-5.5), dus
  * daar kan het altijd.
  */
-export function supportsThinking(provider: AiProvider, model: string | undefined): boolean {
+function supportsThinking(provider: AiProvider, model: string | undefined): boolean {
   if (provider !== 'mistral') return true;
   const effective = isValidModelFor(provider, model) ? (model as string) : defaultModelFor(provider);
   return REASONING_EFFORT_MODELS.includes(effective);
@@ -314,7 +314,7 @@ export function defaultModelFor(provider: AiProvider): string {
  * twaalf keer zo veel. Die prijs kiest de beheerder zelf in Beheer, niet deze
  * terugval.
  */
-export const STRONGEST_MODELS: Record<Exclude<AiProvider, 'auto'>, string> = {
+const STRONGEST_MODELS: Record<Exclude<AiProvider, 'auto'>, string> = {
   claude: 'claude-opus-4-8',
   openai: 'gpt-5.5',
   deepseek: 'deepseek-v4-pro',
@@ -327,7 +327,7 @@ export const STRONGEST_MODELS: Record<Exclude<AiProvider, 'auto'>, string> = {
  * provider. Spiegel van `resolveProjectModel` in de edge function. Bij 'auto'
  * leeg: de fallback-keten bepaalt dan zelf welke provider antwoordt.
  */
-export function projectModelFor(provider: AiProvider, model: string | undefined): string {
+function projectModelFor(provider: AiProvider, model: string | undefined): string {
   if (provider === 'auto') return '';
   return model && modelIds(provider).includes(model) ? model : STRONGEST_MODELS[provider];
 }
@@ -353,7 +353,7 @@ export function modelLabel(provider: AiProvider, model: string | undefined): str
  * Formatteer een prijs per 1M tokens kort en leesbaar, bijv. "$5" of "$0,14".
  * Komma als decimaalteken (NL); hele getallen zonder decimalen.
  */
-export function formatPrice(usdPerMillion: number): string {
+function formatPrice(usdPerMillion: number): string {
   const str = Number.isInteger(usdPerMillion)
     ? String(usdPerMillion)
     : usdPerMillion.toFixed(2).replace('.', ',');

@@ -116,7 +116,7 @@ export interface SkillPublicatie {
 
 export const DEFAULT_SKILL_LICENTIE = 'EUPL-1.2';
 
-export function emptyPublicatie(): SkillPublicatie {
+function emptyPublicatie(): SkillPublicatie {
   return {
     organisatie: '',
     contact: '',
@@ -128,7 +128,7 @@ export function emptyPublicatie(): SkillPublicatie {
 }
 
 /** Een eenvoudige controle op de vorm van een e-mailadres. */
-export function isEmailAdres(value: string): boolean {
+function isEmailAdres(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
 
@@ -205,11 +205,6 @@ export function skillOpenPunten(
   if (!p.repository.trim()) punten.push({ veld: 'sk-repository', tekst: 'Plek van de repository: nog leeg' });
   if (!p.licentie.trim()) punten.push({ veld: 'sk-licentie', tekst: 'Licentie: nog leeg' });
   return punten;
-}
-
-/** Is er genoeg ingevuld om een zinvolle skill te bouwen? */
-export function skillHasContent(d: SkillData): boolean {
-  return Boolean(d.kern.trim());
 }
 
 /**

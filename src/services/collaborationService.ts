@@ -2,7 +2,6 @@ import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import type {
   Profile,
   Prompt,
-  PromptApproval,
   PromptComment,
   PromptVersion,
   VisibilityStatus,
@@ -81,72 +80,6 @@ export async function deleteComment(id: string): Promise<void> {
   const client = requireClient();
   const { error } = await client.from('prompt_comments').delete().eq('id', id);
   if (error) throw error;
-}
-
-// --- Goedkeuringsworkflow ---
-
-export async function submitForApproval(promptId: string): Promise<Prompt> {
-  const client = requireClient();
-  const { data, error } = await client
-    .from('prompts')
-    .update({ status: 'submitted', submitted_at: new Date().toISOString() })
-    .eq('id', promptId)
-    .select('*')
-    .single();
-  if (error) throw error;
-  return data as Prompt;
-}
-
-export async function decide(
-  promptId: string,
-  decision: 'approved' | 'rejected',
-  reviewerId: string,
-  note?: string,
-): Promise<Prompt> {
-  const client = requireClient();
-  const { error: logError } = await client.from('prompt_approvals').insert({
-    prompt_id: promptId,
-    status: decision,
-    reviewer_id: reviewerId,
-    note: note?.trim() || null,
-  });
-  if (logError) throw logError;
-
-  const { data, error } = await client
-    .from('prompts')
-    .update({
-      status: decision,
-      reviewed_at: new Date().toISOString(),
-      reviewed_by: reviewerId,
-    })
-    .eq('id', promptId)
-    .select('*')
-    .single();
-  if (error) throw error;
-  return data as Prompt;
-}
-
-export async function listApprovals(promptId: string): Promise<PromptApproval[]> {
-  if (!isSupabaseConfigured || !supabase) return [];
-  const { data, error } = await supabase
-    .from('prompt_approvals')
-    .select('*')
-    .eq('prompt_id', promptId)
-    .order('created_at', { ascending: false });
-  if (error) throw error;
-  return (data as PromptApproval[]) ?? [];
-}
-
-/** Alle ingediende prompts die op beoordeling wachten (admin-overzicht). */
-export async function listSubmittedPrompts(): Promise<Prompt[]> {
-  if (!isSupabaseConfigured || !supabase) return [];
-  const { data, error } = await supabase
-    .from('prompts')
-    .select('*')
-    .eq('status', 'submitted')
-    .order('submitted_at', { ascending: true });
-  if (error) throw error;
-  return (data as Prompt[]) ?? [];
 }
 
 export const PROMPT_STATUS_META: Record<

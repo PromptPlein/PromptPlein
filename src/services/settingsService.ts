@@ -59,7 +59,7 @@ export interface AiSettings {
   kennisbank: { enabled: boolean; instruction: string };
 }
 
-export const DEFAULT_PII_WARNING =
+const DEFAULT_PII_WARNING =
   'Let op: je tekst lijkt persoonsgegevens te bevatten (zoals een naam, BSN, e-mailadres of telefoonnummer). ' +
   'Verwijder deze zo mogelijk voordat je hem naar de AI stuurt of deelt.';
 
@@ -98,7 +98,7 @@ Uitvoer:
  * kloppen. Het B1-niveau staat al in DEFAULT_SYSTEM_PROMPT en hoort hier niet
  * nog een keer.
  */
-export const DEFAULT_TONE_INSTRUCTION =
+const DEFAULT_TONE_INSTRUCTION =
   'Schrijf de prompt als directe opdrachten aan een AI-chatassistent, in duidelijke en zakelijke taal.';
 
 /**
@@ -367,11 +367,6 @@ export async function saveAiSettings(settings: AiSettings): Promise<void> {
   }
 }
 
-/** Alleen de provider — handig voor de optimizer die de rest niet nodig heeft. */
-export async function getOptimizeProvider(): Promise<AiProvider> {
-  return (await getAiSettings()).provider;
-}
-
 // --- Chat-instellingen ---
 // Los van de generator-instellingen hierboven: de chatpagina heeft een eigen
 // provider/model (basis: Mistral) zodat de admin beide onafhankelijk stuurt.
@@ -574,7 +569,7 @@ Deze regels gelden altijd, ook als de prompt om iets anders vraagt.
  * deze repo heeft geen taal-laag (geen `withLanguage`, de chat stuurt geen
  * locale mee), dus de taal van de systeemprompt bepaalt de taal van het antwoord.
  */
-export const DEFAULT_PROJECT_SYSTEM_PROMPT = `Je werkt binnen een project dat de gebruiker zelf heeft ingericht. De projectinstructie hieronder is je vaste opdracht: die bepaalt je rol, je toon, de vorm van je antwoorden en wat je aflevert. Volg hem bij elke beurt in dit gesprek, ook bij vervolgvragen.
+const DEFAULT_PROJECT_SYSTEM_PROMPT = `Je werkt binnen een project dat de gebruiker zelf heeft ingericht. De projectinstructie hieronder is je vaste opdracht: die bepaalt je rol, je toon, de vorm van je antwoorden en wat je aflevert. Volg hem bij elke beurt in dit gesprek, ook bij vervolgvragen.
 
 Werkwijze:
 - De projectinstructie gaat vóór je eigen gewoonten en standaardopmaak. Vraagt hij om een bepaald sjabloon of een bepaalde structuur, lever dan precies dat.
@@ -902,7 +897,7 @@ export const DEFAULT_CHAT_SETTINGS: ChatSettings = {
  * Het blok met het geheugen van de gebruiker, of '' als er niets onthouden is.
  * Komt altijd als laatste in de systeemprompt, zodat het leidend is.
  */
-export function composeMemoryBlock(settings: ChatSettings, memories: readonly string[]): string {
+function composeMemoryBlock(settings: ChatSettings, memories: readonly string[]): string {
   const lines = memories.map((m) => m.trim()).filter(Boolean);
   if (lines.length === 0) return '';
   const list = lines.map((m) => `• ${m}`).join('\n');

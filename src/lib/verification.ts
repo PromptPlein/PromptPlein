@@ -33,7 +33,7 @@ export interface ClaimType {
  * Bewust een vaste, korte lijst: een vrij tekstveld levert "controleer de
  * feiten" op, en daar kan een klein model niets mee.
  */
-export const CLAIM_TYPES: Omit<ClaimType, 'checked' | 'voorbeeld'>[] = [
+const CLAIM_TYPES: Omit<ClaimType, 'checked' | 'voorbeeld'>[] = [
   {
     id: 'cijfers',
     label: 'Cijfers, bedragen en percentages',
@@ -147,11 +147,6 @@ export function emptyVerification(): VerificationData {
     duursteFout: '',
     gescand: false,
   };
-}
-
-/** Is er genoeg ingevuld om een zinvolle prompt te bouwen? */
-export function verificationHasContent(d: VerificationData): boolean {
-  return d.claims.some((c) => c.checked) || Boolean(d.teControleren.trim());
 }
 
 /**

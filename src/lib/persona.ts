@@ -31,7 +31,7 @@ export interface PersonaQuestion {
 export type PersonaFieldKey = string;
 
 /** De zeven standaardvragen die samen één persona scherp definiëren (fallback). */
-export const PERSONA_QUESTIONS: PersonaQuestion[] = [
+const PERSONA_QUESTIONS: PersonaQuestion[] = [
   {
     id: 'rol',
     label: 'Welke functie of rol vervult deze persoon precies?',
@@ -81,7 +81,7 @@ export const PERSONA_QUESTIONS: PersonaQuestion[] = [
  * toelichting valt terug op de toelichting van de gelijknamige standaardvraag,
  * zodat een half ingevulde techniek-definitie geen kale velden oplevert.
  */
-export function toPersonaQuestions(followUps: FollowUpQuestion[]): PersonaQuestion[] {
+function toPersonaQuestions(followUps: FollowUpQuestion[]): PersonaQuestion[] {
   return followUps
     .filter((q) => q.id?.trim() && q.label?.trim())
     .map((q) => {
@@ -122,7 +122,7 @@ export function emptyPersona(id: string): PersonaEntry {
 }
 
 /** Heeft deze persona minstens één ingevuld veld (of een hint)? */
-export function personaHasContent(
+function personaHasContent(
   p: PersonaEntry,
   questions: PersonaQuestion[] = PERSONA_QUESTIONS,
 ): boolean {

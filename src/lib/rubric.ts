@@ -105,11 +105,6 @@ export function emptyRubric(): RubricData {
   };
 }
 
-/** Is er genoeg ingevuld om een zinvolle prompt te bouwen? */
-export function rubricHasContent(d: RubricData): boolean {
-  return d.criteria.some((c) => c.naam.trim()) || Boolean(d.teBeoordelen.trim());
-}
-
 /** Hoeveel criteria hebben nog geen enkele niveaubeschrijving? Stuurt de UI-waarschuwing. */
 export function criteriaZonderNiveaus(d: RubricData): RubricCriterion[] {
   return d.criteria.filter(
