@@ -58,8 +58,13 @@ export const nadrukTekst = '#b8241a';
 /** @type {string} */
 export const nadrukTekstDonker = '#f07f74';
 
-/** Op lintblauw (menubalk), in beide modi gelijk: 3,9:1 voor iconen en strepen. @type {string} */
-export const nadrukOpBlauw = '#f07f74';
+/**
+ * Op lintblauw (menubalk, blauwe knoppen): bewust het accent zelf, op verzoek van
+ * de eigenaar. Haalt daar 2:1. De streep onder het actieve menu-item grenst ook
+ * aan de lichte pagina (4,6:1) en elk icoon staat naast een witte tekst.
+ * @type {string}
+ */
+export const nadrukOpBlauw = nadruk;
 
 /** Overige rijkshuisstijl-accenten. */
 export const rijksrood = '#d52b1e';

@@ -31,7 +31,8 @@ export default {
         rijksrood,
         // Accentkleur (bron: src/config/brandColors.js). DEFAULT voor vlakken,
         // strepen en randen; `nadruk-knop` voor een vlak met witte tekst,
-        // `nadruk-dark` voor de hover daarvan; `nadruk-vast` voor op lintblauw.
+        // `nadruk-dark` voor de hover daarvan; `nadruk-vast` voor op lintblauw
+        // (menubalk, blauwe knoppen) en schakelt niet mee met de donkere modus.
         // Tekst, iconen, vinkjes en svg-vulling volgen hieronder --accent-tekst,
         // die in de donkere modus lichter wordt.
         nadruk: {

@@ -38,7 +38,7 @@ export default function AanpakKaart({
   return (
     <section
       aria-label="Gekozen aanpak"
-      className="animate-fade-in rounded-xl border border-slate-200 bg-white px-4 pb-3 pt-4 shadow-[inset_0_4px_0_0_theme(colors.nadruk.vast)] dark:border-slate-700 dark:bg-slate-800"
+      className="animate-fade-in rounded-xl border border-slate-200 bg-white px-4 pb-3 pt-4 shadow-[inset_0_4px_0_0_theme(colors.nadruk.DEFAULT)] dark:border-slate-700 dark:bg-slate-800"
     >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <span

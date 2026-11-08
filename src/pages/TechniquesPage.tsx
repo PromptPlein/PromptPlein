@@ -633,7 +633,7 @@ export default function TechniquesPage() {
         <section
           ref={builderRef}
           aria-label="Je keuze"
-          className="mb-4 flex scroll-mt-24 flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 pb-3 pt-4 shadow-[inset_0_4px_0_0_theme(colors.nadruk.vast)] dark:border-slate-700 dark:bg-slate-800"
+          className="mb-4 flex scroll-mt-24 flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 pb-3 pt-4 shadow-[inset_0_4px_0_0_theme(colors.nadruk.DEFAULT)] dark:border-slate-700 dark:bg-slate-800"
         >
           <span
             aria-hidden="true"

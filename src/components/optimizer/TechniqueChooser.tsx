@@ -70,7 +70,7 @@ export default function TechniqueChooser({
                 aan
                   ? // z-10 en -mb-px: de tegel legt zich over de bovenrand van het
                     // vlak heen, zodat er geen lijn tussen beide loopt.
-                    'z-10 border-slate-200 bg-white shadow-[inset_0_4px_0_0_theme(colors.nadruk.vast)] lg:-mb-px lg:rounded-b-none lg:border-b-white dark:border-slate-700 dark:bg-slate-800 lg:dark:border-b-slate-800'
+                    'z-10 border-slate-200 bg-white shadow-[inset_0_4px_0_0_theme(colors.nadruk.DEFAULT)] lg:-mb-px lg:rounded-b-none lg:border-b-white dark:border-slate-700 dark:bg-slate-800 lg:dark:border-b-slate-800'
                   : 'border-slate-200 bg-[#e6edf3] hover:border-rijksblauw-700 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-rijksblauw-200',
               )}
             >

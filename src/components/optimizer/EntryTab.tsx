@@ -29,7 +29,7 @@ export default function EntryTab({
         active
           ? // z-10 en -mb-px: het tabblad legt zich over de bovenrand van het vlak
             // heen, zodat er geen lijn tussen beide loopt.
-            'z-10 border-slate-200 bg-white shadow-[inset_0_4px_0_0_theme(colors.nadruk.vast)] sm:-mb-px sm:rounded-b-none sm:border-b-white dark:border-slate-700 dark:bg-slate-800 sm:dark:border-b-slate-800'
+            'z-10 border-slate-200 bg-white shadow-[inset_0_4px_0_0_theme(colors.nadruk.DEFAULT)] sm:-mb-px sm:rounded-b-none sm:border-b-white dark:border-slate-700 dark:bg-slate-800 sm:dark:border-b-slate-800'
           : 'border-slate-200 bg-[#e6edf3] hover:border-rijksblauw-700 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-rijksblauw-200',
       )}
     >
