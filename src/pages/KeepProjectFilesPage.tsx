@@ -5,14 +5,12 @@ import '@nldd/design-system/activity-indicator';
 import '@nldd/design-system/banner';
 import '@nldd/design-system/button';
 import '@nldd/design-system/button-group';
-import '@nldd/design-system/card';
 import '@nldd/design-system/container';
 import '@nldd/design-system/icon';
 import '@nldd/design-system/link';
 import '@nldd/design-system/list';
 import '@nldd/design-system/list-item';
 import '@nldd/design-system/simple-section';
-import '@nldd/design-system/spacer';
 import '@nldd/design-system/text';
 import '@nldd/design-system/text-cell';
 import '@nldd/design-system/title';
@@ -68,15 +66,9 @@ export default function KeepProjectFilesPage() {
   }
 
   return (
-    <nldd-simple-section width="42rem">
-      <nldd-container layout="row" gap="12" vertical-alignment="center">
-        <nldd-icon icon="file-text" size="48" color="lintblauw" box></nldd-icon>
-        <nldd-title heading-level={1} size={2} text="Bronbestanden bewaren"></nldd-title>
-      </nldd-container>
-      <nldd-spacer size="24"></nldd-spacer>
-
-      <nldd-card>
-        <nldd-container padding="20" gap="16">
+    <nldd-simple-section>
+      <nldd-title slot="header" heading-level={1} size={2} text="Bronbestanden bewaren"></nldd-title>
+        <nldd-container max-width="42rem" gap="16">
           {state === 'laden' && <nldd-activity-indicator size="32" show-text text="Bezig met laden"></nldd-activity-indicator>}
 
           {state === 'onbekend' && (
@@ -153,7 +145,6 @@ export default function KeepProjectFilesPage() {
 
           {state !== 'laden' && <nldd-link href="/chat" text="Naar de chat"></nldd-link>}
         </nldd-container>
-      </nldd-card>
     </nldd-simple-section>
   );
 }

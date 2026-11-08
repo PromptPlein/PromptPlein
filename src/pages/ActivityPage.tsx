@@ -4,7 +4,8 @@ import { listEvents, eventsPerDay } from '@/services/analyticsService';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { getCurrentUser, formatDate } from '@/lib/utils';
 import type { AnalyticsEvent } from '@/types';
-import '@nldd/design-system/card';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
 import '@nldd/design-system/container';
 import '@nldd/design-system/inline-dialog';
 import '@nldd/design-system/list';
@@ -27,12 +28,10 @@ const EVENT_LABELS: Record<string, string> = {
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <nldd-card background="tinted">
-      <nldd-container padding="16" sm-padding="12" gap="4">
-        <nldd-text size="sm" color="secondary">{label}</nldd-text>
-        <nldd-text size="display-2">{value}</nldd-text>
-      </nldd-container>
-    </nldd-card>
+    <nldd-container gap="4">
+      <nldd-text size="display-2">{value}</nldd-text>
+      <nldd-text size="sm" color="secondary">{label}</nldd-text>
+    </nldd-container>
   );
 }
 
@@ -90,16 +89,13 @@ export default function ActivityPage() {
     return (
       <nldd-simple-section>
         {title}
-        <nldd-card>
-          <nldd-container padding="32" sm-padding="24">
-            <nldd-inline-dialog
-              icon="line-chart"
-              heading-level={2}
-              text="Stel eerst je naam in"
-              supporting-text="Kies Stel je naam in in het accountmenu. Daarna verschijnt hier je persoonlijke activiteit."
-            ></nldd-inline-dialog>
-          </nldd-container>
-        </nldd-card>
+        <nldd-inline-dialog
+          icon="line-chart"
+          horizontal-alignment="left"
+          heading-level={2}
+          text="Stel eerst je naam in"
+          supporting-text="Kies Stel je naam in in het accountmenu. Daarna verschijnt hier je persoonlijke activiteit."
+        ></nldd-inline-dialog>
       </nldd-simple-section>
     );
   }
@@ -134,13 +130,13 @@ export default function ActivityPage() {
       <nldd-simple-section background="tinted">
         <nldd-title slot="header" heading-level={2} size={4} text="Recente activiteit"></nldd-title>
         {mine.length === 0 ? (
-          <nldd-card>
-            <nldd-container padding="32" sm-padding="24">
-              <nldd-inline-dialog icon="clock" text="Nog geen activiteit."></nldd-inline-dialog>
-            </nldd-container>
-          </nldd-card>
+          <nldd-inline-dialog icon="clock" horizontal-alignment="left" text="Nog geen activiteit">
+            <nldd-button-group slot="actions">
+              <nldd-button appearance="primary" href="/genereren" text="Maak een prompt"></nldd-button>
+            </nldd-button-group>
+          </nldd-inline-dialog>
         ) : (
-          <nldd-list accessible-label="Recente activiteit" appearance="box-base">
+          <nldd-list accessible-label="Recente activiteit">
             {mine.slice(0, 20).map((e) => (
               <nldd-list-item key={e.id} size="sm">
                 <nldd-text-cell text={EVENT_LABELS[e.event_type] ?? e.event_type}></nldd-text-cell>

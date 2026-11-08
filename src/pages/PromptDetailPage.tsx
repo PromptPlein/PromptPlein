@@ -209,9 +209,9 @@ export default function PromptDetailPage() {
   if (loading) {
     return (
       <nldd-simple-section>
-        <nldd-title heading-level={1} size={2} text="Prompt laden"></nldd-title>
-        <nldd-spacer size="24"></nldd-spacer>
+        <nldd-title slot="header" heading-level={1} size={2} text="Prompt laden"></nldd-title>
         <nldd-inline-dialog
+          horizontal-alignment="left"
           variant="loading"
           text="Even geduld, de prompt wordt geladen."
         ></nldd-inline-dialog>

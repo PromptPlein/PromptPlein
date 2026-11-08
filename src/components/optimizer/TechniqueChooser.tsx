@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNlddEvent } from '@/lib/nldd';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { isContextPrompt } from '@/lib/techniques';
@@ -12,7 +12,6 @@ import '@nldd/design-system/list-item-segment';
 import '@nldd/design-system/popover';
 import '@nldd/design-system/spacer-cell';
 import '@nldd/design-system/tab-bar';
-import '@nldd/design-system/tag';
 import '@nldd/design-system/text';
 import '@nldd/design-system/text-cell';
 import '@nldd/design-system/title';
@@ -25,9 +24,12 @@ import '@nldd/design-system/title';
 export default function TechniqueChooser({
   selectedId,
   onSelect,
+  help,
 }: {
   selectedId: string | null;
   onSelect: (id: string) => void;
+  /** Shown right under the goals, for someone who cannot choose. */
+  help?: ReactNode;
 }) {
   const { techniques } = useReferenceData();
 
@@ -58,16 +60,19 @@ export default function TechniqueChooser({
 
   return (
     <nldd-container gap="24">
-      <DoelTabs doelen={doelen} actief={actief.id} onKies={setKeuze} />
+      <nldd-container gap="8">
+        <DoelTabs doelen={doelen} actief={actief.id} onKies={setKeuze} />
+        {help}
+      </nldd-container>
 
       <nldd-container gap="8">
         <nldd-title
           heading-level={2}
           size={4}
-          text={`${actief.naam}: ${lijst.length} ${lijst.length === 1 ? 'keuze' : 'keuzes'}`}
-          supporting-text={`${actief.zin}. Een framework bouwt je hele prompt op, een techniek stuurt hoe de AI werkt.`}
+          text={actief.naam}
+          supporting-text={`${actief.zin}: ${lijst.length} ${lijst.length === 1 ? 'keuze' : 'keuzes'}. Een framework bouwt je hele prompt op, een techniek stuurt hoe de AI werkt.`}
         ></nldd-title>
-        <nldd-list appearance="box-tinted" accessible-label={`Keuzes bij ${actief.naam}`}>
+        <nldd-list accessible-label={`Keuzes bij ${actief.naam}`}>
           {lijst.map((t) => (
             <TechniqueRow
               key={t.id}
@@ -110,7 +115,7 @@ function DoelTabs({
     if (doel) onKies(doel.id);
   });
   return (
-    <nldd-tab-bar ref={ref} variant="icon-and-text" size="lg" accessible-label="Kies je doel">
+    <nldd-tab-bar ref={ref} variant="text" size="lg" accessible-label="Kies je doel">
       {doelen.map((d) => (
         <nldd-tab-bar-item
           key={d.id}
@@ -150,20 +155,15 @@ function TechniqueRow({
       >
         <nldd-icon-cell icon={kaart.icon} color={framework ? 'accent' : 'secondary'}></nldd-icon-cell>
         <nldd-spacer-cell size="12"></nldd-spacer-cell>
-        <nldd-text-cell supporting-text={kaart.kort || undefined}>
-          <strong>{t.name}</strong>{' '}
-          <nldd-tag size="sm" color="neutral" text={framework ? 'Framework' : 'Techniek'}></nldd-tag>
-        </nldd-text-cell>
-        <nldd-spacer-cell size="12"></nldd-spacer-cell>
         <nldd-text-cell
-          hide-below="md"
-          width="fit-content"
-          color="accent"
-          text={active ? 'Gekozen' : 'Kies'}
+          overline={framework ? 'Framework' : 'Techniek'}
+          text={`**${t.name}**`}
+          supporting-text={kaart.kort || undefined}
         ></nldd-text-cell>
+        <nldd-spacer-cell size="12"></nldd-spacer-cell>
         <nldd-icon-cell
           size="20"
-          color="accent"
+          color={active ? 'accent' : 'secondary'}
           icon={active ? 'check-mark' : 'chevron-right'}
         ></nldd-icon-cell>
       </nldd-list-item-segment>

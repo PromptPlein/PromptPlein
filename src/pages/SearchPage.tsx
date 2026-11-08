@@ -211,7 +211,7 @@ export default function SearchPage() {
         <nldd-title slot="header" heading-level={1} size={2} text="Wat zoek je?"></nldd-title>
 
         <nldd-toolbar role="search" accessible-label="Zoeken en filteren">
-          <nldd-toolbar-item slot="start" min-width="240px" width="100%" max-width="560px">
+          <nldd-toolbar-item slot="start" min-width="240px" width="100%" fluid>
             <nldd-search-field
               ref={searchRef}
               placeholder="Zoek op titel of inhoud"
@@ -219,7 +219,7 @@ export default function SearchPage() {
             ></nldd-search-field>
             <MenuAction slot="overflow" icon="search" text="Zoeken" onSelect={() => searchRef.current?.focus()} />
           </nldd-toolbar-item>
-          <nldd-toolbar-item slot="end">
+          <nldd-toolbar-item slot="start">
             <nldd-button
               appearance="secondary"
               start-icon="filter"
@@ -233,7 +233,7 @@ export default function SearchPage() {
         </nldd-toolbar>
         <nldd-spacer size="16"></nldd-spacer>
 
-        <nldd-toggle-button-group accessible-label="Categorieën" size="sm">
+        <nldd-toggle-button-group accessible-label="Categorieën" size="sm" appearance="neutral-transparent">
           {categories.map((c) => {
             const active = filters.category_ids?.includes(c.id) ?? false;
             const button = (
@@ -266,8 +266,9 @@ export default function SearchPage() {
           </>
         )}
 
-        <nldd-spacer size="32"></nldd-spacer>
+      </nldd-simple-section>
 
+      <nldd-simple-section>
         {browsing ? (
           waiting ? (
             <SkeletonGrid count={6} />
@@ -285,8 +286,7 @@ export default function SearchPage() {
           )
         ) : (
           <>
-            <nldd-title heading-level={2} size={4} text="Resultaten"></nldd-title>
-            <nldd-spacer size="8"></nldd-spacer>
+            <nldd-title slot="header" heading-level={2} size={4} text="Resultaten"></nldd-title>
             <nldd-container layout="wrap" gap="12" vertical-alignment="center">
               <nldd-text size="sm" color="secondary" aria-live="polite">
                 {waiting

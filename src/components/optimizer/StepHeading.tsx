@@ -32,7 +32,7 @@ export default function StepHeading({
     <nldd-container layout="wrap" gap="4" vertical-alignment="bottom">
       <nldd-title
         heading-level={2}
-        size={5}
+        size={4}
         text={title}
         overline={step !== undefined ? `Stap ${step}` : undefined}
       ></nldd-title>

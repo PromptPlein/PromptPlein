@@ -23,6 +23,7 @@ import {
 import '@nldd/design-system/button';
 import '@nldd/design-system/button-group';
 import '@nldd/design-system/cell';
+import '@nldd/design-system/container';
 import '@nldd/design-system/dropdown';
 import '@nldd/design-system/form';
 import '@nldd/design-system/form-actions';
@@ -69,8 +70,8 @@ const RATE_LABELS: Record<number, string> = {
 const SAMPLE = 'Dit is de stem die je antwoorden voorleest in PromptPlein.';
 
 /**
- * One setting that turns on or off: an nldd-switch-field, with its explanation as
- * the help text of the field.
+ * One setting that turns on or off: an nldd-switch-field, with its explanation
+ * right under it.
  */
 export function SwitchRow({
   label,
@@ -86,10 +87,14 @@ export function SwitchRow({
   const ref = useRef<HTMLElement>(null);
   useNlddEvent<CustomEvent<{ checked: boolean }>>(ref, 'change', (e) => onChange(Boolean(e.detail?.checked)));
   return (
-    <nldd-form-field>
+    <nldd-container gap="4">
       <nldd-switch-field ref={ref} label={label} checked={checked || undefined}></nldd-switch-field>
-      {hint && <nldd-form-field-help-text>{hint}</nldd-form-field-help-text>}
-    </nldd-form-field>
+      {hint && (
+        <nldd-text size="sm" color="secondary">
+          {hint}
+        </nldd-text>
+      )}
+    </nldd-container>
   );
 }
 
@@ -180,7 +185,6 @@ export default function AccessibilitySettings() {
           <nldd-list
             ref={answerRef}
             type="radiogroup"
-            appearance="box-tinted"
             accessible-label="Wat er gebeurt als een antwoord klaar is"
           >
             {ANSWER_DONE.map((option) => (
@@ -296,7 +300,7 @@ export default function AccessibilitySettings() {
         <nldd-form-actions>
           <nldd-button-group>
             <nldd-button
-              appearance="neutral-transparent"
+              appearance="secondary"
               start-icon="undo"
               text="Zet alles terug naar de standaard"
               onClick={reset}

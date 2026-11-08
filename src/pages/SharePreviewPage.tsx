@@ -181,7 +181,7 @@ export default function SharePreviewPage() {
         <nldd-spacer size="32"></nldd-spacer>
 
         <nldd-container layout="row" gap="8" vertical-alignment="center">
-          <nldd-title heading-level={2} size={5} text="Prompt-inhoud"></nldd-title>
+          <nldd-title heading-level={2} size={4} text="Prompt-inhoud"></nldd-title>
           <nldd-spacer size="flexible" direction="horizontal"></nldd-spacer>
           <nldd-button
             appearance="primary"

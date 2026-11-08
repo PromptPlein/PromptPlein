@@ -440,7 +440,7 @@ export default function FollowUpQuestions({
           <nldd-spacer size="flexible"></nldd-spacer>
           <FieldLayoutToggle layout={layout} onChange={setLayout} />
         </nldd-container>
-        <nldd-container layout="grid" gap="16">
+        <nldd-container layout="grid" gap="16" sm-column-count={1} md-column-count={2} lg-column-count={2}>
           {questions.map((q, i) => (
             <FieldBlock
               key={q.id}

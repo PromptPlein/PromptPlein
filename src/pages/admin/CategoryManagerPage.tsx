@@ -141,13 +141,13 @@ export default function CategoryManagerPage() {
         supporting-text={`${categories.length} categorieën`}
       ></nldd-title>
       <nldd-button-group>
-        <nldd-button appearance="secondary" start-icon="upload" text="CSV importeren" onClick={() => setCsvOpen(true)}></nldd-button>
         <nldd-button
           appearance="primary"
           start-icon="plus"
           text="Nieuwe categorie"
           onClick={() => setEditor({ name: '', description: '', icon: 'Folder' })}
         ></nldd-button>
+        <nldd-button appearance="secondary" start-icon="upload" text="CSV importeren" onClick={() => setCsvOpen(true)}></nldd-button>
       </nldd-button-group>
 
       <nldd-list appearance="box-tinted" accessible-label="Categorieën">
@@ -155,7 +155,8 @@ export default function CategoryManagerPage() {
           categories.map((c) => (
             <nldd-list-item key={c.id}>
               <nldd-list-item-segment button width="full" accessible-label={`Bewerk ${c.name}`} onClick={() => setEditor({ id: c.id, name: c.name, description: c.description ?? '', icon: c.icon ?? 'Folder' })}>
-                <nldd-text-cell text={c.name} supporting-text={[c.description || 'Geen beschrijving', c.icon ? `icoon ${c.icon}` : null].filter(Boolean).join(' · ')}></nldd-text-cell>
+                <nldd-text-cell text={c.name} supporting-text={c.description || 'Geen beschrijving'}></nldd-text-cell>
+                <nldd-text-cell hide-below="md" width="fit-content" size="sm" color="secondary" text={c.icon || 'Geen icoon'}></nldd-text-cell>
               </nldd-list-item-segment>
               <nldd-list-item-segment
                 button

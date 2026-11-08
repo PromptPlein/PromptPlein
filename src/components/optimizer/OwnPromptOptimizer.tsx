@@ -58,6 +58,8 @@ import '@nldd/design-system/button-group';
 import '@nldd/design-system/cell';
 import '@nldd/design-system/container';
 import '@nldd/design-system/divider';
+import '@nldd/design-system/form';
+import '@nldd/design-system/form-actions';
 import '@nldd/design-system/form-field';
 import '@nldd/design-system/icon-cell';
 import '@nldd/design-system/inline-dialog';
@@ -363,7 +365,11 @@ export default function OwnPromptOptimizer({
    * zegt blijft leeg.
    */
   async function handleVragenUitTekst() {
-    if (!sjabloon || !ownPrompt.trim()) return;
+    if (!sjabloon || vragenVullen || recommending || prefilling) return;
+    if (!ownPrompt.trim()) {
+      notify.error('Plak eerst je voorbereide tekst hierboven.');
+      return;
+    }
     setVragenVullen(true);
     try {
       const { antwoorden, herkomst, onduidelijk } = await vragenUitVoorbereiding({
@@ -443,6 +449,11 @@ export default function OwnPromptOptimizer({
    * "Andere aanpak" beschikbaar voor als de keuze ernaast zit.
    */
   async function handleRecommend() {
+    if (recommending || prefilling) return;
+    if (kind === 'template' && !sjabloon) {
+      notify.error('Er zijn nog geen sjablonen. Vraag een beheerder er één toe te voegen.');
+      return;
+    }
     if (!promptText) {
       notify.error(sjabloon ? 'Beantwoord eerst een paar vragen.' : 'Plak eerst je eigen prompt.');
       return;
@@ -762,27 +773,29 @@ export default function OwnPromptOptimizer({
       ) : (
         <nldd-container>
           {header}
-          <nldd-spacer size="24"></nldd-spacer>
-            <nldd-container gap="24">
+          <nldd-form>
+            <form
+              noValidate
+              onSubmit={(e) => {
+                e.preventDefault();
+                void handleRecommend();
+              }}
+            >
               {unclearBlock}
-              <nldd-container gap="8">
-                <StepHeading
-                  step={1}
-                  title="Wat wordt het?"
-                  info={
-                    kindOption
-                      ? kindOption.hint
-                      : 'Kies niets, dan kiest de AI het framework dat bij je tekst past.\nSkill en Routekaart kies je zelf.'
-                  }
-                />
-                <KindPicker kind={kind} onKind={handleKind} disabled={recommending || prefilling} />
-                {(variant || kind === 'template') && <nldd-spacer size="4"></nldd-spacer>}
+              <nldd-form-field label="Wat wordt het?">
+                <KindPicker kind={kind} onKind={handleKind} />
+                <nldd-form-field-help-text>
+                  {kindOption
+                    ? kindOption.hint
+                    : 'Kies niets, dan kiest de AI het framework dat bij je tekst past. Skill en Routekaart kies je zelf.'}
+                </nldd-form-field-help-text>
+              </nldd-form-field>
+
                 {/* Vervolgkeuze bij Code en Dashboard: twee opties die elk een eigen
                     framework aanwijzen. Zichtbaar zodra de soort gekozen is, zodat je
                     ziet dát er een keuze is in plaats van hem te moeten ontdekken. */}
                 {variant && (
-                  <nldd-container gap="6">
-                    <nldd-text size="sm" weight="medium">{variant.question}</nldd-text>
+                  <nldd-form-field label={variant.question}>
                     <nldd-list type="radiogroup" appearance="box-base" accessible-label={variant.question}>
                       {[
                         { on: true, option: variant.on },
@@ -798,14 +811,13 @@ export default function OwnPromptOptimizer({
                         />
                       ))}
                     </nldd-list>
-                  </nldd-container>
+                  </nldd-form-field>
                 )}
 
                 {/* Bij Routekaart: welk vast sjabloon. Alleen als er iets te kiezen
                     valt; met één sjabloon zegt de knop zelf al wat je krijgt. */}
                 {kind === 'template' && candidates.length !== 1 && (
-                  <nldd-container gap="6">
-                    <nldd-text size="sm" weight="medium">Welk sjabloon?</nldd-text>
+                  <nldd-form-field label="Welk sjabloon?">
                     {candidates.length === 0 ? (
                       <nldd-text size="sm" color="secondary">
                         Er zijn nog geen sjablonen. Vraag een beheerder er één toe te voegen.
@@ -830,52 +842,25 @@ export default function OwnPromptOptimizer({
                         ))}
                       </nldd-list>
                     )}
-                  </nldd-container>
+                  </nldd-form-field>
                 )}
 
-              </nldd-container>
+              {renderProjectContext?.({
+                text: ownPrompt,
+                stripMention: () => setOwnPrompt(ownPrompt.replace(/@$/, '')),
+              })}
 
-              <nldd-container gap="8">
-                <StepHeading step={2} title="Jouw tekst">
-                  <nldd-button
-                    appearance="neutral-transparent"
-                    size="sm"
-                    start-icon="lightbulb"
-                    text="Voorbeelden"
-                    accessible-label="Bekijk voorbeeldprompts"
-                    popup-type="dialog"
-                    expanded={showExamples || undefined}
-                    onClick={() => setShowExamples(true)}
-                  ></nldd-button>
-                  {/* Opschonen: alleen tonen als er iets te wissen valt. */}
-                  {(ownPrompt.trim() || promptText) && (
-                    <nldd-button
-                      appearance="neutral-transparent"
-                      size="sm"
-                      start-icon="delete"
-                      text="Opschonen"
-                      accessible-label="Wis je prompt en begin opnieuw"
-                      onClick={handleClearAll}
-                    ></nldd-button>
-                  )}
-                </StepHeading>
-
-                {renderProjectContext?.({
-                  text: ownPrompt,
-                  stripMention: () => setOwnPrompt(ownPrompt.replace(/@$/, '')),
-                })}
-
-                {/* Routekaart: eerst het vak voor wat je al hebt voorbereid, dan de
-                    vragen van het sjabloon (onder het tekstvak). */}
-                <nldd-form-field
-                  label={sjabloon ? 'Heb je al iets voorbereid?' : undefined}
-                  optional={sjabloon ? true : undefined}
-                  supporting-label={
-                    sjabloon
-                      ? 'Plak hier wat je al hebt, bijvoorbeeld een uitwerking uit een andere chat, een planning of aantekeningen. De AI haalt eruit wat bij de vragen hoort en vult aan; per vraag zie je wat uit je tekst komt en wat de AI heeft bedacht.'
-                      : undefined
-                  }
-                >
+              {/* Routekaart: eerst het vak voor wat je al hebt voorbereid, dan de
+                  vragen van het sjabloon (onder het tekstvak). */}
+              <nldd-form-field
+                label={sjabloon ? 'Heb je al iets voorbereid?' : 'Jouw tekst'}
+                optional={sjabloon ? true : undefined}
+                supporting-label={
+                  sjabloon
+                    ? 'Plak hier wat je al hebt, bijvoorbeeld een uitwerking uit een andere chat, een planning of aantekeningen. De AI haalt eruit wat bij de vragen hoort en vult aan; per vraag zie je wat uit je tekst komt en wat de AI heeft bedacht.'
+                    : undefined
+                }
+              >
                   <TextArea
                     value={ownPrompt}
                     onValue={(v) => {
@@ -884,7 +869,6 @@ export default function OwnPromptOptimizer({
                     }}
                     rows={4}
                     resize="vertical"
-                    accessible-label={sjabloon ? undefined : 'Jouw tekst'}
                     placeholder={
                       sjabloon
                         ? 'Plak hier je voorbereide tekst.'
@@ -902,7 +886,30 @@ export default function OwnPromptOptimizer({
                           ? `Opzet: ${directFramework.name}`
                           : `De AI kiest uit ${candidates.length} frameworks`}
                   </nldd-form-field-help-text>
-                </nldd-form-field>
+                {/* Voorbeelden, en Opschonen als er iets te wissen valt. */}
+                <nldd-container layout="wrap" gap="4">
+                  <nldd-button
+                    appearance="neutral-transparent"
+                    size="sm"
+                    start-icon="lightbulb"
+                    text="Voorbeelden"
+                    accessible-label="Bekijk voorbeeldprompts"
+                    popup-type="dialog"
+                    expanded={showExamples || undefined}
+                    onClick={() => setShowExamples(true)}
+                  ></nldd-button>
+                  {(ownPrompt.trim() || promptText) && (
+                    <nldd-button
+                      appearance="neutral-transparent"
+                      size="sm"
+                      start-icon="delete"
+                      text="Opschonen"
+                      accessible-label="Wis je prompt en begin opnieuw"
+                      onClick={handleClearAll}
+                    ></nldd-button>
+                  )}
+                </nldd-container>
+              </nldd-form-field>
 
                 {/* De vragen van het sjabloon, elk met een eigen vak. Bovenaan de knop
                     die ze invult uit de voorbereide tekst hierboven. */}
@@ -922,7 +929,6 @@ export default function OwnPromptOptimizer({
                             text="Vul de vragen in uit je tekst"
                             loading={vragenVullen || undefined}
                             loading-text="Vragen invullen"
-                            disabled={!ownPrompt.trim() || recommending || prefilling || undefined}
                             onClick={() => void handleVragenUitTekst()}
                           ></nldd-button>
                         </nldd-tooltip>
@@ -952,15 +958,20 @@ export default function OwnPromptOptimizer({
                   </nldd-box>
                 )}
 
-                <VerantwoordGebruikHint text={promptText} />
+              <VerantwoordGebruikHint text={promptText} />
+
+              {/* Denken en Internet gelden voor het invullen en bouwen. */}
+              <nldd-container layout="wrap" gap="4" vertical-alignment="center">
+                {toggles}
               </nldd-container>
 
-              <nldd-container layout="wrap" gap="12" vertical-alignment="center">
+              <nldd-form-actions>
+                <nldd-button-group>
                   <nldd-button
                     appearance="primary"
-                    size="lg"
-                    onClick={() => void handleRecommend()}
-                    disabled={recommending || prefilling || (kind === 'template' && !sjabloon) || undefined}
+                    type="submit"
+                    loading={recommending || prefilling || undefined}
+                    loading-text="De AI is bezig"
                     start-icon={kind === 'skill' ? undefined : 'sparkles'}
                     end-icon={kind === 'skill' ? 'arrow-right' : undefined}
                     text={
@@ -971,11 +982,10 @@ export default function OwnPromptOptimizer({
                           : 'Maak mijn prompt'
                     }
                   ></nldd-button>
-                  <nldd-container layout="wrap" width="fit-content" gap="4" vertical-alignment="center">
-                    {toggles}
-                  </nldd-container>
-              </nldd-container>
-            </nldd-container>
+                </nldd-button-group>
+              </nldd-form-actions>
+            </form>
+          </nldd-form>
         </nldd-container>
       )}
 
@@ -1204,15 +1214,7 @@ function RadioRow({
 }
 
 /** "Wat wil je maken?": "AI kiest" plus de soorten, één keuze tegelijk. */
-function KindPicker({
-  kind,
-  onKind,
-  disabled,
-}: {
-  kind: PromptKind | null;
-  onKind: (kind: PromptKind | null) => void;
-  disabled: boolean;
-}) {
+function KindPicker({ kind, onKind }: { kind: PromptKind | null; onKind: (kind: PromptKind | null) => void }) {
   const ref = useRef<HTMLElement>(null);
   useNlddEvent<CustomEvent<{ selected: boolean; value: string }>>(ref, 'change', (e) => {
     if (!e.detail?.selected) return;
@@ -1222,8 +1224,8 @@ function KindPicker({
     <nldd-toggle-button-group
       ref={ref}
       type="radio"
-      accessible-label="Wat wil je maken? Kies je niets, dan bepaalt de AI het zelf."
-      disabled={disabled || undefined}
+      appearance="neutral-transparent"
+      accessible-label="Wat wordt het?"
     >
       {[null, ...PROMPT_KINDS].map((k) => {
         const option = k ? KIND_OPTIONS[k] : { label: 'AI kiest', icon: 'sparkles' };
@@ -1233,6 +1235,7 @@ function KindPicker({
             value={k ?? 'auto'}
             icon={option.icon}
             text={option.label}
+            selected-icon="check-mark"
             selected={kind === k || undefined}
           ></nldd-toggle-button>
         );

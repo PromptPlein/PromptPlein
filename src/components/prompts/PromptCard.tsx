@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useNlddEvent } from '@/lib/nldd';
 import { notify } from '@/lib/notify';
 import InfoDot from '@/components/common/InfoDot';
+import MenuAction from '@/components/common/MenuAction';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { useAuth } from '@/context/AuthContext';
 import {
@@ -21,6 +22,7 @@ import '@nldd/design-system/card';
 import '@nldd/design-system/container';
 import '@nldd/design-system/icon-button';
 import '@nldd/design-system/link';
+import '@nldd/design-system/menu';
 import '@nldd/design-system/tag';
 import '@nldd/design-system/text';
 import '@nldd/design-system/title';
@@ -69,7 +71,6 @@ export default function PromptCard({ prompt, author, onChanged }: PromptCardProp
   const role = roleById(prompt.role_id);
   const org = organizationById(author?.organization_id ?? prompt.organization_id);
 
-  const authorId = prompt.created_by_user ?? author?.id ?? null;
   const authorName = author?.full_name
     ? firstName(author.full_name)
     : prompt.created_by || 'Onbekend';
@@ -144,36 +145,25 @@ export default function PromptCard({ prompt, author, onChanged }: PromptCardProp
   return (
     <nldd-card>
       <nldd-container padding="20" gap="8">
-        <nldd-title
-          heading-level={3}
-          size={5}
-          overline={category?.name ?? 'Overig'}
-          text={prompt.title}
-        ></nldd-title>
+        {/* The title is the link to the prompt. A card that is a link itself
+            cannot hold the buttons below (its overlay covers them), so the
+            link carries the heading role that the title would. */}
+        <nldd-title size={5} overline={category?.name ?? 'Overig'}>
+          <nldd-link role="heading" aria-level={3} size="inherit" href={`/prompt/${prompt.id}`} text={prompt.title}></nldd-link>
+        </nldd-title>
         <nldd-container layout="wrap" gap="4" vertical-alignment="center">
           <nldd-tag size="sm" text={sharingLabel(prompt.sharing_level)}></nldd-tag>
           {info && <InfoDot label="Meer over deze prompt" text={info} />}
         </nldd-container>
-        <nldd-link
-          size="sm"
-          href={`/prompt/${prompt.id}`}
-          end-icon="chevron-right"
-          text="Bekijk prompt"
-          accessible-label={`Bekijk prompt ${prompt.title}`}
-        ></nldd-link>
       </nldd-container>
 
       <nldd-container slot="footer" padding-inline="20" padding-bottom="20" layout="grid" column-count={2} gap="8" vertical-alignment="center">
-        {/* Author: first name, linked to the public profile. */}
+        {/* Author: first name. The profile is one click away on the prompt page. */}
         <nldd-container layout="row" gap="8" vertical-alignment="center">
           <nldd-avatar size="28" name={authorName} decorative></nldd-avatar>
-          {authorId ? (
-            <nldd-link size="sm" href={`/community/${authorId}`} text={authorName}></nldd-link>
-          ) : (
-            <nldd-text size="sm" color="secondary">
-              {authorName}
-            </nldd-text>
-          )}
+          <nldd-text size="sm" color="secondary">
+            {authorName}
+          </nldd-text>
         </nldd-container>
 
         <nldd-container layout="row" gap="2" vertical-alignment="center" horizontal-alignment="right">
@@ -187,20 +177,6 @@ export default function PromptCard({ prompt, author, onChanged }: PromptCardProp
             selected={liked || undefined}
             disabled={likeBusy || undefined}
           ></nldd-toggle-button>
-          <nldd-icon-button
-            appearance="neutral-transparent"
-            size="sm"
-            icon="share"
-            accessible-label="Deelbare link kopiëren"
-            onClick={() => void handleShare()}
-          ></nldd-icon-button>
-          <nldd-icon-button
-            appearance="neutral-transparent"
-            size="sm"
-            icon={copied ? 'check-mark' : 'copy'}
-            accessible-label="Kopieer prompt"
-            onClick={() => void handleCopy()}
-          ></nldd-icon-button>
           <nldd-toggle-button
             ref={favoriteRef}
             appearance="neutral-transparent"
@@ -212,6 +188,17 @@ export default function PromptCard({ prompt, author, onChanged }: PromptCardProp
             selected={prompt.is_favorite || undefined}
             disabled={busy || undefined}
           ></nldd-toggle-button>
+          <nldd-icon-button
+            appearance="neutral-transparent"
+            size="sm"
+            icon="more"
+            accessible-label={`Meer acties voor ${prompt.title}`}
+          >
+            <nldd-menu slot="popup">
+              <MenuAction icon={copied ? 'check-mark' : 'copy'} text="Kopieer prompt" onSelect={() => void handleCopy()} />
+              <MenuAction icon="share" text="Kopieer deelbare link" onSelect={() => void handleShare()} />
+            </nldd-menu>
+          </nldd-icon-button>
         </nldd-container>
       </nldd-container>
     </nldd-card>

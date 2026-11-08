@@ -666,15 +666,6 @@ export default function TechniquesPage() {
                 setAdvisorOpen(false);
               }}
             ></nldd-button>
-            {clearButton}
-          </nldd-container>
-        )}
-        {!technique && (hasContent || !advisorOpen) && (
-          <nldd-container layout="wrap" gap="8">
-            {!advisorOpen && (
-              <nldd-button appearance="accent-transparent" start-icon="signpost" text="Help mij kiezen" onClick={openAdvisor}></nldd-button>
-            )}
-            {hasContent && clearButton}
           </nldd-container>
         )}
         {phase === 'output' && result ? (
@@ -708,21 +699,7 @@ export default function TechniquesPage() {
                 opent. De adviseur hoort erbij, voor wie er zelf niet uitkomt. */}
             {(!technique || chooserOpen) && (
               <nldd-container gap="24">
-                {technique && (
-                  <nldd-container gap="12">
-                    <nldd-title heading-level={2} size={3} text="Wat wil je bereiken?"></nldd-title>
-                    {!advisorOpen && (
-                      <nldd-container layout="wrap" gap="8">
-                        <nldd-button
-                          appearance="accent-transparent"
-                          start-icon="signpost"
-                          text="Help mij kiezen"
-                          onClick={openAdvisor}
-                        ></nldd-button>
-                      </nldd-container>
-                    )}
-                  </nldd-container>
-                )}
+                {technique && <nldd-title heading-level={2} size={4} text="Wat wil je bereiken?"></nldd-title>}
                 {advisorOpen && (
                   <nldd-container ref={advisorRef}>
                     <TechniqueAdvisor
@@ -734,7 +711,26 @@ export default function TechniquesPage() {
                     />
                   </nldd-container>
                 )}
-                <TechniqueChooser selectedId={techniqueId} onSelect={handleSelectTechnique} />
+                <TechniqueChooser
+                  selectedId={techniqueId}
+                  onSelect={handleSelectTechnique}
+                  help={
+                    (!advisorOpen || (!technique && hasContent)) && (
+                      <nldd-container layout="wrap" gap="8">
+                        {!advisorOpen && (
+                          <nldd-button
+                            size="sm"
+                            appearance="accent-transparent"
+                            start-icon="signpost"
+                            text="Help mij kiezen"
+                            onClick={openAdvisor}
+                          ></nldd-button>
+                        )}
+                        {!technique && hasContent && clearButton}
+                      </nldd-container>
+                    )
+                  }
+                />
               </nldd-container>
             )}
 
@@ -934,11 +930,10 @@ export default function TechniquesPage() {
                                     ? 'Vul je hier iets in, dan begint het gesprek bij jouw onderwerp.'
                                     : 'Vul je hier iets in, dan begint deze techniek met jouw onderwerp.'
                               }
-                            >
-                              <nldd-text size="sm" color="secondary">
-                                Mag leeg blijven
-                              </nldd-text>
-                            </StepHeading>
+                            />
+                            <nldd-text size="sm" color="secondary">
+                              Mag leeg blijven.
+                            </nldd-text>
                             {/* Voorbeeldprompts als startpunt, alleen bij de
                                 frameworks: daar is de context een opdracht in
                                 gewone taal, precies wat deze voorbeelden zijn.
@@ -989,8 +984,13 @@ export default function TechniquesPage() {
                                       : undefined
                                   }
                                   loading={prefilling || undefined}
-                                  disabled={!context.trim() || undefined}
-                                  onClick={() => void runPrefill(technique, context.trim())}
+                                  onClick={() => {
+                                    if (!context.trim()) {
+                                      notify.error('Schrijf eerst waar het over gaat, dan vult de AI de velden voor.');
+                                      return;
+                                    }
+                                    void runPrefill(technique, context.trim());
+                                  }}
                                 ></nldd-button>
                               ) : (
                                 <nldd-button
@@ -1172,6 +1172,8 @@ export default function TechniquesPage() {
                 ></nldd-button>
                 <ThinkingToggle value={thinking} onChange={setThinking} unavailableReason={thinkingUnavailable} />
                 {searchAvailable && <WebSearchToggle value={webSearch} onChange={setWebSearch} />}
+                <nldd-spacer size="flexible"></nldd-spacer>
+                {clearButton}
               </nldd-container>
             )}
 

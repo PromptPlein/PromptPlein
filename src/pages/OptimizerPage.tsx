@@ -317,7 +317,7 @@ export default function OptimizerPage() {
           stay readable on any background. */}
       <nldd-container slot="header">
         <nldd-container layout="row" gap="4" vertical-alignment="center">
-          <nldd-title heading-level={1} size={1} text="Prompt maken"></nldd-title>
+          <nldd-title heading-level={1} size={2} text="Prompt maken"></nldd-title>
           <InfoDot
             label="Uitleg over prompt maken"
             text={

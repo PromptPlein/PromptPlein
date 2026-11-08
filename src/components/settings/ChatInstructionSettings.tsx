@@ -116,7 +116,16 @@ export default function ChatInstructionSettings() {
         noValidate
         onSubmit={(e) => {
           e.preventDefault();
-          if (!loading && dirty && !tooLong) void store(draft, 'Instructie opgeslagen.');
+          if (loading) return;
+          if (tooLong) {
+            notify.error(`Je instructie is te lang. Hooguit ${MAX_PERSONAL_INSTRUCTION_CHARS.toLocaleString('nl-NL')} tekens.`);
+            return;
+          }
+          if (!dirty) {
+            notify('Er is niets veranderd om te bewaren.');
+            return;
+          }
+          void store(draft, 'Instructie opgeslagen.');
         }}
       >
         <nldd-form-section text="Eigen instructie" supporting-text={SUPPORT}>
@@ -159,7 +168,6 @@ export default function ChatInstructionSettings() {
                     text="Bewaar instructie"
                     loading={saving || undefined}
                     loading-text="Bezig met opslaan"
-                    disabled={loading || !dirty || tooLong || undefined}
                   ></nldd-button>
                   {saved && (
                     <nldd-button

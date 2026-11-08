@@ -128,9 +128,7 @@ export default function SignupPage() {
               options={orgOptions}
               value={organizationId}
               onChange={setOrganizationId}
-              disabled={orgsLoading || !configured}
-              placeholder={orgsLoading ? 'Ministeries laden…' : 'Kies het ministerie waar je nu voor werkt'}
-              searchPlaceholder="Zoek jouw ministerie…"
+              placeholder={orgsLoading ? 'Ministeries laden…' : 'Typ om te zoeken'}
             />
             <nldd-form-field-help-text>Kies het ministerie waar je nu voor werkt.</nldd-form-field-help-text>
           </nldd-form-field>

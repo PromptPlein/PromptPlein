@@ -87,13 +87,14 @@ export default function ContactPage() {
 
   return (
     <nldd-simple-section>
-      <nldd-title
-        slot="header"
-        heading-level={1}
-        size={2}
-        text="Contact"
-        supporting-text="Een bug gevonden of een idee voor een nieuwe functie? Laat het ons weten."
-      ></nldd-title>
+      <nldd-container slot="header" max-width="42rem">
+        <nldd-title
+          heading-level={1}
+          size={2}
+          text="Contact"
+          supporting-text="Een bug gevonden of een idee voor een nieuwe functie? Laat het ons weten."
+        ></nldd-title>
+      </nldd-container>
       <nldd-container max-width="42rem">
         <nldd-form>
           <form
@@ -151,7 +152,6 @@ export default function ContactPage() {
                 <nldd-button
                   appearance="primary"
                   type="submit"
-                  start-icon="paper-plane"
                   text="Verstuur"
                   loading={sending || undefined}
                   loading-text="Bezig met versturen"

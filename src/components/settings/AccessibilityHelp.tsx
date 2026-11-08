@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { SHORTCUTS, type Shortcut } from '@/lib/shortcuts';
+import '@nldd/design-system/cell';
 import '@nldd/design-system/container';
 import '@nldd/design-system/keyboard-shortcut';
 import '@nldd/design-system/link';
@@ -26,10 +27,52 @@ function Escape() {
   return <nldd-keyboard-shortcut keys="Escape" size="inherit" always-visible></nldd-keyboard-shortcut>;
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+const SECTIONS = [
+  { id: 'hulp-telefoon', title: 'Op de telefoon' },
+  { id: 'hulp-sneltoetsen', title: 'Sneltoetsen' },
+  { id: 'hulp-lezen', title: 'Grotere letters en meer contrast' },
+  { id: 'hulp-voorlezen', title: 'Antwoorden laten voorlezen' },
+  { id: 'hulp-inspreken', title: 'Inspreken in plaats van typen' },
+  { id: 'hulp-gesprek', title: 'Een gesprek voeren zonder handen' },
+  { id: 'hulp-doorvragen', title: 'Als de chat eerst vragen stelt' },
+  { id: 'hulp-schermlezer', title: 'Met een schermlezer' },
+  { id: 'hulp-vraag', title: 'Lukt het niet?' },
+];
+
+/** Jumps to a section of this page and keeps the address in step. */
+function jumpTo(id: string) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  history.replaceState(history.state, '', `#${id}`);
+  el.scrollIntoView({ block: 'start' });
+  el.focus({ preventScroll: true });
+}
+
+/** The table of contents at the top: one row per section of this page. */
+function Contents() {
+  return (
+    <nldd-list type="navigation" accessible-label="Op deze pagina">
+      {SECTIONS.map((section) => (
+        <nldd-list-item
+          key={section.id}
+          href={`#${section.id}`}
+          current-type="location"
+          onClick={(e) => {
+            e.preventDefault();
+            jumpTo(section.id);
+          }}
+        >
+          <nldd-text-cell text={section.title}></nldd-text-cell>
+        </nldd-list-item>
+      ))}
+    </nldd-list>
+  );
+}
+
+function Section({ id, title, children }: { id: string; title: string; children: ReactNode }) {
   return (
     <nldd-container gap="12">
-      <nldd-title heading-level={2} size={4} text={title}></nldd-title>
+      <nldd-title id={id} tabIndex={-1} heading-level={2} size={4} text={title}></nldd-title>
       {children}
     </nldd-container>
   );
@@ -81,8 +124,9 @@ export default function AccessibilityHelp() {
         Hier lees je hoe je PromptPlein gebruikt met je stem, je toetsenbord of een schermlezer.
         Alles staat uit tot je het zelf aanzet bij Instellen.
       </nldd-text>
+      <Contents />
 
-      <Section title="Op de telefoon">
+      <Section id="hulp-telefoon" title="Op de telefoon">
         <Points
           label="Op de telefoon"
           items={[
@@ -96,20 +140,17 @@ export default function AccessibilityHelp() {
         />
       </Section>
 
-      <Section title="Sneltoetsen">
-        <nldd-list appearance="box-tinted" accessible-label="Alle sneltoetsen van PromptPlein">
+      <Section id="hulp-sneltoetsen" title="Sneltoetsen">
+        <nldd-list accessible-label="Alle sneltoetsen van PromptPlein">
           {Object.values(SHORTCUTS).map((shortcut) => (
             <nldd-list-item key={shortcut.code}>
-              <nldd-text-cell text={shortcut.label}>
-                <nldd-container slot="supporting-text" gap="4">
-                  <nldd-text size="sm" color="secondary">
-                    {shortcut.where}
-                  </nldd-text>
-                  <nldd-text size="sm">
-                    <Keys shortcut={shortcut} />
-                  </nldd-text>
-                </nldd-container>
-              </nldd-text-cell>
+              <nldd-text-cell text={shortcut.label} supporting-text={shortcut.where}></nldd-text-cell>
+              {/* On a narrow screen the keys would squeeze the text; that is a
+                  phone or a strong zoom, where a keyboard shortcut is rarely used. */}
+              <nldd-spacer-cell size="12" hide-below="30rem"></nldd-spacer-cell>
+              <nldd-cell hide-below="30rem">
+                <Keys shortcut={shortcut} />
+              </nldd-cell>
             </nldd-list-item>
           ))}
         </nldd-list>
@@ -118,7 +159,7 @@ export default function AccessibilityHelp() {
         </nldd-text>
       </Section>
 
-      <Section title="Grotere letters en meer contrast">
+      <Section id="hulp-lezen" title="Grotere letters en meer contrast">
         <nldd-text>
           Ga naar <nldd-link href="/instellingen/toegankelijkheid">Instellen</nldd-link>. Daar kies je de
           tekstgrootte en minder beweging. Dit werkt ook zonder account en blijft
@@ -130,7 +171,7 @@ export default function AccessibilityHelp() {
         </nldd-text>
       </Section>
 
-      <Section title="Antwoorden laten voorlezen">
+      <Section id="hulp-voorlezen" title="Antwoorden laten voorlezen">
         <nldd-text>Voorlezen staat uit. Bij Instellen zet je het op een van deze manieren aan:</nldd-text>
         <Points
           label="Manieren om voorlezen aan te zetten"
@@ -148,7 +189,7 @@ export default function AccessibilityHelp() {
         </nldd-text>
       </Section>
 
-      <Section title="Inspreken in plaats van typen">
+      <Section id="hulp-inspreken" title="Inspreken in plaats van typen">
         <nldd-text>Hiervoor moet je ingelogd zijn.</nldd-text>
         <Steps
           label="Stappen om in te spreken"
@@ -169,7 +210,7 @@ export default function AccessibilityHelp() {
         </nldd-text>
       </Section>
 
-      <Section title="Een gesprek voeren zonder handen">
+      <Section id="hulp-gesprek" title="Een gesprek voeren zonder handen">
         <nldd-text>
           In een gesprek praat je met de chat en hoef je geen toetsen te gebruiken. Hiervoor moet je
           ingelogd zijn.
@@ -202,7 +243,7 @@ export default function AccessibilityHelp() {
         </nldd-text>
       </Section>
 
-      <Section title="Als de chat eerst vragen stelt">
+      <Section id="hulp-doorvragen" title="Als de chat eerst vragen stelt">
         <nldd-text>
           Bij het eerste bericht van een nieuwe chat stelt de chat soms eerst een paar vragen. Daarna
           maakt hij er een prompt van.
@@ -218,7 +259,7 @@ export default function AccessibilityHelp() {
         />
       </Section>
 
-      <Section title="Met een schermlezer">
+      <Section id="hulp-schermlezer" title="Met een schermlezer">
         <Points
           label="Met een schermlezer"
           items={[
@@ -229,7 +270,7 @@ export default function AccessibilityHelp() {
         />
       </Section>
 
-      <Section title="Lukt het niet?">
+      <Section id="hulp-vraag" title="Lukt het niet?">
         <nldd-text>
           Werkt iets niet, of mis je iets? Laat het ons weten via <nldd-link href="/contact">Contact</nldd-link>.
         </nldd-text>

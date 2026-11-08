@@ -44,7 +44,11 @@ import type {
 import '@nldd/design-system/banner';
 import '@nldd/design-system/box';
 import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
 import '@nldd/design-system/container';
+import '@nldd/design-system/form';
+import '@nldd/design-system/form-actions';
+import '@nldd/design-system/form-field';
 import '@nldd/design-system/icon-cell';
 import '@nldd/design-system/list';
 import '@nldd/design-system/list-item';
@@ -768,17 +772,29 @@ export default function GoalDialog({
       ) : (
         <nldd-container gap="24">
           {header}
-          <nldd-container gap="20">
-              <nldd-container gap="8">
-                <StepHeading
-                  title="Wat wil je bereiken?"
-                  htmlFor="goal-dialog-input"
-                  info="We stellen eerst een paar vragen. Daarna kiest de AI de aanpak en vult de velden voor je in."
-                >
+          <nldd-form>
+            <form
+              noValidate
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleStart();
+              }}
+            >
+              <nldd-form-field
+                label="Wat wil je bereiken?"
+                supporting-label="We stellen eerst een paar vragen. Daarna kiest de AI de aanpak en vult de velden voor je in."
+              >
+                {renderProjectContext?.({
+                  text: goal,
+                  stripMention: () => setGoal(goal.replace(/@$/, '')),
+                })}
+                <GoalInput value={goal} onChange={setGoal} disabled={inputDisabled} />
+                <nldd-container layout="wrap" gap="4">
                   <nldd-button
                     size="sm"
                     appearance="neutral-transparent"
                     start-icon="lightbulb"
+                    type="button"
                     text="Voorbeelden"
                     expanded={showExamples || undefined}
                     onClick={() => setShowExamples((v) => !v)}
@@ -787,13 +803,15 @@ export default function GoalDialog({
                     <nldd-button
                       size="sm"
                       appearance="neutral-transparent"
-                      start-icon="trash"
+                      start-icon="delete"
+                      type="button"
                       text="Opschonen"
                       accessible-label="Opschonen: wis je doel en begin opnieuw"
                       onClick={handleClear}
                     ></nldd-button>
                   )}
-                </StepHeading>
+                </nldd-container>
+              </nldd-form-field>
 
                 {showExamples && (
                   <nldd-container gap="8">
@@ -838,12 +856,6 @@ export default function GoalDialog({
                   </nldd-container>
                 )}
 
-                {renderProjectContext?.({
-                  text: goal,
-                  stripMention: () => setGoal(goal.replace(/@$/, '')),
-                })}
-
-                <GoalInput value={goal} onChange={setGoal} disabled={inputDisabled} />
                 <VerantwoordGebruikHint text={goal} />
 
                 {/* Hervat-melding: er staat nog een niet-afgemaakt gesprek klaar. */}
@@ -854,25 +866,25 @@ export default function GoalDialog({
                     icon="arrow-clockwise"
                     text={`Je hebt nog een lopend gesprek met ${resumable.transcript.length} beantwoorde vragen. Verder waar je gebleven was?`}
                   >
-                    <nldd-button slot="actions" text="Hervatten" onClick={resumeRun}></nldd-button>
-                    <nldd-button slot="actions" text="Verwijder" onClick={discardRun}></nldd-button>
+                    <nldd-button slot="actions" type="button" text="Hervatten" onClick={resumeRun}></nldd-button>
+                    <nldd-button slot="actions" type="button" text="Verwijder" onClick={discardRun}></nldd-button>
                   </nldd-banner>
                 )}
-              </nldd-container>
 
               {phase === 'goal' && (
-                <nldd-container layout="wrap" gap="6" vertical-alignment="center">
-                  <nldd-button
-                    appearance="primary"
-                    size="lg"
-                    start-icon="comment"
-                    text="Start het gesprek"
-                    onClick={handleStart}
-                  ></nldd-button>
-                  {toggles}
-                </nldd-container>
+                <>
+                  <nldd-container layout="wrap" gap="4" vertical-alignment="center">
+                    {toggles}
+                  </nldd-container>
+                  <nldd-form-actions>
+                    <nldd-button-group>
+                      <nldd-button appearance="primary" type="submit" start-icon="comment" text="Start het gesprek"></nldd-button>
+                    </nldd-button-group>
+                  </nldd-form-actions>
+                </>
               )}
-          </nldd-container>
+            </form>
+          </nldd-form>
         </nldd-container>
       )}
 
@@ -1064,7 +1076,6 @@ function GoalInput({
     <nldd-multi-line-text-field
       ref={ref}
       id="goal-dialog-input"
-      accessible-label="Wat wil je bereiken?"
       rows={5}
       disabled={disabled || undefined}
       placeholder="Bijv. er moet een projectplan geschreven worden voor de invoering van een nieuwe interne tool"

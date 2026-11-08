@@ -100,27 +100,29 @@ export default function ChatMemorySettings() {
               variant="alert"
               text="Je geheugen kon niet worden opgehaald. Probeer het later opnieuw."
             ></nldd-inline-dialog>
+          ) : loading ? (
+            <nldd-text size="sm" color="secondary">
+              Laden…
+            </nldd-text>
+          ) : memories.length === 0 ? (
+            <nldd-text size="sm" color="secondary">
+              Nog niets onthouden.
+            </nldd-text>
           ) : (
-            <nldd-list appearance="box-tinted" accessible-label="Onthouden wensen">
-              {!loading &&
-                memories.map((memory) => (
-                  <nldd-list-item key={memory.id}>
-                    <nldd-text-cell text={memory.text}></nldd-text-cell>
-                    <nldd-list-item-segment
-                      button
-                      accessible-label={`Verwijder: ${memory.text}`}
-                      disabled={busy !== null || undefined}
-                      onClick={() => void remove(memory)}
-                    >
-                      <nldd-icon-cell icon="trash" size="20" color="secondary"></nldd-icon-cell>
-                    </nldd-list-item-segment>
-                  </nldd-list-item>
-                ))}
-              <nldd-inline-dialog
-                slot="empty"
-                variant={loading ? 'loading' : undefined}
-                text={loading ? 'Laden' : 'Nog niets onthouden.'}
-              ></nldd-inline-dialog>
+            <nldd-list accessible-label="Onthouden wensen">
+              {memories.map((memory) => (
+                <nldd-list-item key={memory.id}>
+                  <nldd-text-cell text={memory.text}></nldd-text-cell>
+                  <nldd-list-item-segment
+                    button
+                    accessible-label={`Verwijder: ${memory.text}`}
+                    disabled={busy !== null || undefined}
+                    onClick={() => void remove(memory)}
+                  >
+                    <nldd-icon-cell icon="trash" size="20" color="secondary"></nldd-icon-cell>
+                  </nldd-list-item-segment>
+                </nldd-list-item>
+              ))}
             </nldd-list>
           )}
 
