@@ -35,7 +35,7 @@ export default function MemoryNoticeBar({
   }
 
   return (
-    <div role="status">
+    <div role="status" className="mx-auto max-w-[60ch]">
       {notice && (
         <div className="mb-2 flex items-start gap-2.5 rounded-xl border border-rijksblauw-200 bg-rijksblauw-50 px-3.5 py-2.5 text-sm text-slate-800 dark:border-rijksblauw-500/40 dark:bg-rijksblauw-500/10 dark:text-slate-100">
           {notice.kind === 'saving' ? (
