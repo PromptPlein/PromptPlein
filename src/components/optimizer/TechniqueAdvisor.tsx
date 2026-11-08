@@ -187,12 +187,12 @@ export default function TechniqueAdvisor({
     : [];
 
   return (
-    <section className="animate-fade-in scroll-mt-24 overflow-hidden rounded-2xl border border-rijksoranje/40 bg-white shadow-sm dark:border-rijksoranje/30 dark:bg-slate-800">
-      <div className="h-1 w-full bg-rijksoranje" />
+    <section className="animate-fade-in scroll-mt-24 overflow-hidden rounded-2xl border border-pleingroen/40 bg-white shadow-sm dark:border-pleingroen/30 dark:bg-slate-800">
+      <div className="h-1 w-full bg-pleingroen" />
       <div className="p-6">
         <div className="mb-4 flex items-start justify-between gap-3">
           <div className="flex items-start gap-3">
-            <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-rijksoranje text-white">
+            <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-pleingroen text-slate-950">
               <Compass size={14} />
             </span>
             <div>
@@ -250,7 +250,7 @@ export default function TechniqueAdvisor({
 
         {busy && (
           <p className="flex items-center gap-2 rounded-lg border border-dashed border-slate-300 px-4 py-6 text-sm text-slate-500 dark:border-slate-600 dark:text-slate-400">
-            <Loader2 size={16} className="animate-spin text-rijksoranje" />
+            <Loader2 size={16} className="animate-spin text-pleingroen" />
             {turns.length === 0 ? 'De AI kijkt naar je vraagstuk…' : 'De AI weegt je antwoord…'}
           </p>
         )}
@@ -258,7 +258,7 @@ export default function TechniqueAdvisor({
         {/* De openstaande vraag. */}
         {!busy && !advies && question && (
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-rijksoranje">
+            <p className="text-xs font-semibold uppercase tracking-wide text-pleingroen">
               Vraag {turns.length + 1} van maximaal {MAX_QUESTIONS}
             </p>
             <p className="mt-1 text-base font-medium text-slate-800 dark:text-slate-100">
@@ -275,7 +275,7 @@ export default function TechniqueAdvisor({
                     key={optie}
                     type="button"
                     onClick={() => submit(optie)}
-                    className="rounded-full border border-rijksblauw-200 bg-rijksblauw-50/60 px-3 py-1.5 text-sm text-rijksblauw-700 transition-colors hover:border-rijksoranje hover:bg-rijksoranje/10 hover:text-rijksoranje dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10 dark:text-rijksblauw-200 dark:hover:border-rijksoranje/60 dark:hover:text-rijksoranje"
+                    className="rounded-full border border-rijksblauw-200 bg-rijksblauw-50/60 px-3 py-1.5 text-sm text-rijksblauw-700 transition-colors hover:border-pleingroen hover:bg-pleingroen/10 hover:text-pleingroen dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10 dark:text-rijksblauw-200 dark:hover:border-pleingroen/60 dark:hover:text-pleingroen"
                   >
                     {optie}
                   </button>
@@ -301,7 +301,7 @@ export default function TechniqueAdvisor({
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
                 <button
                   type="button"
-                  className="text-sm font-medium text-slate-500 hover:text-rijksoranje hover:underline dark:text-slate-400"
+                  className="text-sm font-medium text-slate-500 hover:text-pleingroen hover:underline dark:text-slate-400"
                   onClick={() => void runTurn(turns, true)}
                 >
                   Sla de rest over en adviseer nu
@@ -313,7 +313,7 @@ export default function TechniqueAdvisor({
                   <button
                     type="button"
                     onClick={restart}
-                    className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-rijksoranje hover:underline dark:text-slate-400"
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-pleingroen hover:underline dark:text-slate-400"
                   >
                     <Eraser size={14} /> Opnieuw beginnen
                   </button>
@@ -337,13 +337,13 @@ export default function TechniqueAdvisor({
             <button
               type="button"
               onClick={() => onChoose(geadviseerd, advies.context)}
-              className="w-full rounded-xl border-2 border-rijksoranje bg-rijksoranje/5 p-4 text-left transition-colors hover:bg-rijksoranje/10 dark:bg-rijksoranje/10"
+              className="w-full rounded-xl border-2 border-pleingroen bg-pleingroen/5 p-4 text-left transition-colors hover:bg-pleingroen/10 dark:bg-pleingroen/10"
             >
               <span className="flex items-center gap-2">
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-rijksoranje text-white">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-pleingroen text-slate-950">
                   <Check size={12} />
                 </span>
-                <span className="text-xs font-semibold uppercase tracking-wide text-rijksoranje">
+                <span className="text-xs font-semibold uppercase tracking-wide text-pleingroen">
                   Prompttechniek
                 </span>
               </span>
@@ -355,7 +355,7 @@ export default function TechniqueAdvisor({
                   {advies.reden}
                 </span>
               )}
-              <span className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-rijksoranje">
+              <span className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-pleingroen">
                 <Sparkles size={15} /> Hiermee verder
               </span>
             </button>
@@ -377,7 +377,7 @@ export default function TechniqueAdvisor({
                         key={k.id}
                         type="button"
                         onClick={() => onChoose(t, advies.context)}
-                        className="w-full rounded-lg border border-slate-200 p-3 text-left transition-colors hover:border-rijksoranje/50 hover:bg-rijksoranje/5 dark:border-slate-700 dark:hover:border-rijksoranje/40"
+                        className="w-full rounded-lg border border-slate-200 p-3 text-left transition-colors hover:border-pleingroen/50 hover:bg-pleingroen/5 dark:border-slate-700 dark:hover:border-pleingroen/40"
                       >
                         <span className="block text-sm font-semibold text-slate-800 dark:text-slate-100">
                           {t.name}
@@ -397,7 +397,7 @@ export default function TechniqueAdvisor({
             <button
               type="button"
               onClick={restart}
-              className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-rijksoranje hover:underline dark:text-slate-400"
+              className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-pleingroen hover:underline dark:text-slate-400"
             >
               <RotateCcw size={14} /> Opnieuw beginnen
             </button>
@@ -431,7 +431,7 @@ export default function TechniqueAdvisor({
                     </span>
                     <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
                       <span
-                        className="block h-full rounded-full bg-rijksoranje"
+                        className="block h-full rounded-full bg-pleingroen"
                         style={{ width: `${Math.max(4, k.zekerheid)}%` }}
                       />
                     </span>

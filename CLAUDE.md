@@ -587,7 +587,7 @@ terug op zijn eigen omschrijving. Na het kiezen klapt de kiezer dicht; "Andere
 kiezen" opent hem boven het invulblok, zonder de invoer te wissen.
 
 De doelen zijn tabbladen: de gekozen tegel loopt zonder lijn over in het vlak
-eronder, met een oranje streep bovenaan. Dezelfde streep staat op de balk met je
+eronder, met een groene streep bovenaan. Dezelfde streep staat op de balk met je
 keuze. "Help mij kiezen" staat op hetzelfde raster als de tegels en is even breed
 als de laatste. De adviseur daarachter stelt alleen technieken voor, geen frameworks
 (`TechniqueAdvisor`).

@@ -782,7 +782,7 @@ export default function GoalDialog({
                   title="Bekijk voorbeelden"
                   className="inline-flex items-center gap-1.5 rounded-full px-1.5 py-0.5 text-sm font-medium text-rijksblauw-500 transition-colors hover:underline dark:text-rijksblauw-200"
                 >
-                  <Lightbulb size={16} className="text-rijksoranje" />
+                  <Lightbulb size={16} className="text-pleingroen" />
                   <span>Voorbeelden</span>
                 </button>
                 {goal.trim() && (
@@ -909,7 +909,7 @@ export default function GoalDialog({
                   onClick={handleStart}
                   disabled={!goal.trim()}
                 >
-                  <MessageCircleQuestion size={20} className="text-rijksoranje-vast" /> Start het
+                  <MessageCircleQuestion size={20} className="text-pleingroen-vast" /> Start het
                   gesprek
                 </button>
               </div>
@@ -1053,7 +1053,7 @@ export default function GoalDialog({
                         className="opl-btn-primary min-h-12 px-6 text-base"
                         onClick={() => void compose(chosenFramework.id)}
                       >
-                        <Sparkles size={20} className="text-rijksoranje-vast" /> Bouw prompt
+                        <Sparkles size={20} className="text-pleingroen-vast" /> Bouw prompt
                       </button>
                     </div>
                   </div>

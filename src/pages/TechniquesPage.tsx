@@ -633,7 +633,7 @@ export default function TechniquesPage() {
         <section
           ref={builderRef}
           aria-label="Je keuze"
-          className="mb-4 flex scroll-mt-24 flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 pb-3 pt-4 shadow-[inset_0_4px_0_0_theme(colors.rijksoranje.vast)] dark:border-slate-700 dark:bg-slate-800"
+          className="mb-4 flex scroll-mt-24 flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 pb-3 pt-4 shadow-[inset_0_4px_0_0_theme(colors.pleingroen.vast)] dark:border-slate-700 dark:bg-slate-800"
         >
           <span
             aria-hidden="true"
@@ -656,7 +656,7 @@ export default function TechniquesPage() {
                 type="button"
                 onClick={handleClearAll}
                 title="Wis je invoer en begin opnieuw"
-                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-rijksblauw-700 transition-colors hover:text-rijksoranje dark:text-rijksblauw-200"
+                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-rijksblauw-700 transition-colors hover:text-pleingroen dark:text-rijksblauw-200"
               >
                 <Eraser size={15} /> Opschonen
               </button>
@@ -727,7 +727,7 @@ export default function TechniquesPage() {
                       type="button"
                       onClick={handleClearAll}
                       title="Wis je invoer en begin opnieuw"
-                      className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-rijksblauw-700 transition-colors hover:text-rijksoranje dark:text-rijksblauw-200"
+                      className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-rijksblauw-700 transition-colors hover:text-pleingroen dark:text-rijksblauw-200"
                     >
                       <Eraser size={15} /> Opschonen
                     </button>
@@ -744,7 +744,7 @@ export default function TechniquesPage() {
                     }}
                     className="opl-btn-primary min-h-12 w-full justify-center px-3 text-base sm:w-auto sm:justify-self-start lg:w-full"
                   >
-                    <Compass size={20} className="text-rijksoranje-vast" /> Help mij kiezen
+                    <Compass size={20} className="text-pleingroen-vast" /> Help mij kiezen
                   </button>
                 )}
               </div>
@@ -992,7 +992,7 @@ export default function TechniquesPage() {
                               }}
                             />
                           )}
-                          {/* Met het oranje sterretje uit de chat erbij: wat de gebruiker in
+                          {/* Met het groene sterretje uit de chat erbij: wat de gebruiker in
                               steekwoorden neerzet, staat hier vaak nog niet uitgeschreven,
                               en juist deze tekst bepaalt wat de AI van de techniek maakt. */}
                           <OptimizableTextarea
@@ -1177,7 +1177,7 @@ export default function TechniquesPage() {
                               : Object.keys(aanvullingen).length > 0
                                 ? `De AI stelt bij ${Object.keys(aanvullingen).length} ${
                                     Object.keys(aanvullingen).length === 1 ? 'veld' : 'velden'
-                                  } een aanvulling voor; die staat oranje onder het veld. Voeg toe wat klopt, de rest verwerp je.`
+                                  } een aanvulling voor; die staat in het groen onder het veld. Voeg toe wat klopt, de rest verwerp je.`
                                 : 'De AI had niets aan te vullen.'}
                           </p>
                         </div>

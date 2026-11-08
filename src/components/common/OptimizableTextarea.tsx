@@ -23,7 +23,7 @@ interface OptimizableTextareaProps
 }
 
 /**
- * Een tekstvak met hetzelfde oranje sterretje als het invoerveld van de chat:
+ * Een tekstvak met hetzelfde groene sterretje als het invoerveld van de chat:
  * één klik en de AI schrijft uit wat de gebruiker in steekwoorden heeft
  * neergezet. De oorspronkelijke tekst blijft daarna één klik weg.
  *
@@ -107,14 +107,14 @@ const OptimizableTextarea = forwardRef<HTMLTextAreaElement, OptimizableTextareaP
           className={clsx(className, available && 'pr-12')}
         />
         {/* Verschijnt pas zodra er tekst staat, zodat een leeg veld rustig
-            blijft. Zelfde oranje verloop als in de chat. */}
+            blijft. Zelfde groen als in de chat. */}
         {available && (value.trim().length > 0 || optimizing) && (
           <button
             type="button"
             className={clsx(
               'absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-lg',
-              'bg-rijksoranje text-white shadow-sm',
-              'transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-rijksoranje/40',
+              'bg-pleingroen text-slate-950 shadow-sm',
+              'transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-pleingroen/40',
               canOptimize
                 ? 'hover:shadow-md motion-safe:hover:-translate-y-px'
                 : 'cursor-default opacity-60',
@@ -141,7 +141,7 @@ const OptimizableTextarea = forwardRef<HTMLTextAreaElement, OptimizableTextareaP
             zodra de gebruiker zelf verder typt. */}
         {canUndo && (
           <div className="mt-1.5 flex items-center gap-2 text-[0.6875rem] text-slate-500 dark:text-slate-400">
-            <Sparkles size={12} className="shrink-0 text-rijksoranje" />
+            <Sparkles size={12} className="shrink-0 text-pleingroen" />
             <span className="min-w-0">Je tekst is verbeterd. Lees hem na en pas gerust aan.</span>
             <button
               type="button"

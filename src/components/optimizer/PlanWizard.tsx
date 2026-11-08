@@ -1294,7 +1294,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
                     type="button"
                     onClick={handleClear}
                     title="Wis je doel en begin opnieuw"
-                    className="ml-auto inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-semibold text-slate-700 transition-colors hover:text-rijksoranje dark:text-slate-200 dark:hover:text-rijksoranje"
+                    className="ml-auto inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-semibold text-slate-700 transition-colors hover:text-pleingroen dark:text-slate-200 dark:hover:text-pleingroen"
                   >
                     <Eraser size={15} />
                     <span>Opschonen</span>
@@ -1682,7 +1682,7 @@ function ReviewStepRow({
             </span>
           )}
           {step.interactive && (
-            <span className="opl-badge bg-rijksoranje/15 text-rijksoranje">vraag na vraag</span>
+            <span className="opl-badge bg-pleingroen/15 text-pleingroen">vraag na vraag</span>
           )}
         </div>
         {step.rationale && (
@@ -1698,7 +1698,7 @@ function ReviewStepRow({
           onClick={() => onRemove(step.id)}
           title="Verwijder deze stap"
           aria-label={`Verwijder stap ${index + 1}`}
-          className="shrink-0 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-rijksoranje/10 hover:text-rijksoranje disabled:opacity-40 dark:text-slate-500"
+          className="shrink-0 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-pleingroen/10 hover:text-pleingroen disabled:opacity-40 dark:text-slate-500"
         >
           <Trash2 size={15} />
         </button>
@@ -2287,7 +2287,7 @@ function AssumptionReview({
     <div className="space-y-4">
       <div>
         <p className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
-          <Lightbulb size={16} className="text-rijksoranje" /> Socratische controle: aannames in
+          <Lightbulb size={16} className="text-pleingroen" /> Socratische controle: aannames in
           het resultaat
         </p>
         <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
@@ -2444,7 +2444,7 @@ function StepRow({
                     type="button"
                     onClick={onRegenerate}
                     title="Doorloop deze stap opnieuw (latere stappen worden ook opnieuw gedaan)"
-                    className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-rijksoranje dark:text-slate-400"
+                    className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-pleingroen dark:text-slate-400"
                   >
                     <RotateCw size={13} /> Opnieuw
                   </button>

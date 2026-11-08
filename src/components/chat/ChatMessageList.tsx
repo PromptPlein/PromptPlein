@@ -507,7 +507,7 @@ function UserMessage({
         // rechtsboven, de knop recht onder de tekst. Geen flex-wrap, want dan
         // springt de knop per schermbreedte naar een andere plek.
         <div className="mt-1.5 flex items-start gap-2 rounded-lg border border-rijksblauw-200 bg-rijksblauw-50/60 py-2 pl-3 pr-1 text-xs text-slate-600 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10 dark:text-slate-300">
-          <Lightbulb size={14} className="mt-px shrink-0 text-rijksoranje" />
+          <Lightbulb size={14} className="mt-px shrink-0 text-pleingroen" />
           <div className="min-w-0 flex-1">
             <p>
               Tip: dit lijkt op een opdracht. In de generator bouw je er een sterkere, herbruikbare

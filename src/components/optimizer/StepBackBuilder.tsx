@@ -165,7 +165,7 @@ export default function StepBackBuilder({ settings, context, onSerialized }: Ste
                   }
                   className={`w-full rounded-lg border p-3 text-left transition-colors ${
                     gekozen
-                      ? 'border-rijksoranje bg-rijksoranje/5 dark:border-rijksoranje/60 dark:bg-rijksoranje/10'
+                      ? 'border-pleingroen bg-pleingroen/5 dark:border-pleingroen/60 dark:bg-pleingroen/10'
                       : 'border-slate-200 hover:border-rijksblauw-300 dark:border-slate-700 dark:hover:border-rijksblauw-500/40'
                   }`}
                 >
@@ -238,7 +238,7 @@ export default function StepBackBuilder({ settings, context, onSerialized }: Ste
                 className={`flex items-start gap-2 rounded-lg border p-2.5 ${
                   c.status === 'vast'
                     ? 'border-slate-300 bg-slate-50 dark:border-slate-600 dark:bg-slate-900/40'
-                    : 'border-rijksoranje/40 bg-rijksoranje/5 dark:border-rijksoranje/40 dark:bg-rijksoranje/10'
+                    : 'border-pleingroen/40 bg-pleingroen/5 dark:border-pleingroen/40 dark:bg-pleingroen/10'
                 }`}
               >
                 <button
@@ -252,7 +252,7 @@ export default function StepBackBuilder({ settings, context, onSerialized }: Ste
                   className={`mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[0.6875rem] font-semibold transition-colors ${
                     c.status === 'vast'
                       ? 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200'
-                      : 'bg-rijksoranje/20 text-rijksoranje-dark dark:text-rijksoranje'
+                      : 'bg-pleingroen/20 text-pleingroen'
                   }`}
                 >
                   {c.status === 'vast' ? <Lock size={11} /> : <Unlock size={11} />}

@@ -28,7 +28,7 @@ const HERKOMST_LABEL: Record<VraagHerkomst, { tekst: string; className: string }
   },
   ai: {
     tekst: 'Bedacht door de AI',
-    className: 'bg-orange-50 text-orange-800 dark:bg-orange-500/15 dark:text-orange-200',
+    className: 'bg-pleingroen/15 text-pleingroen',
   },
 };
 

@@ -1,11 +1,10 @@
 import {
   rijksblauw,
-  rijksoranje,
-  rijksoranjeDonker,
+  pleingroen,
+  pleingroenHover,
+  pleingroenTekst,
   rijksrood,
   rijksgroen,
-  accentDonker,
-  accentDonkerHover,
 } from './src/config/brandColors.js';
 import plugin from 'tailwindcss/plugin';
 
@@ -27,15 +26,14 @@ export default {
         // Rijkshuisstijl-palet (Nederlandse overheid) — bron: src/config/brandColors.js
         rijksblauw,
         rijksrood,
-        // `rijksoranje` blijft als `bg-rijksoranje` werken via DEFAULT;
-        // `rijksoranje-dark` voor hover/gradient-einde. Via een CSS-variabele,
-        // zodat de donkere modus een ander accent krijgt (zie plugin onderaan).
-        // `rijksoranje-vast` schakelt niet mee: op lintblauw, dat in beide modi
-        // gelijk blijft, haalt alleen het felle oranje de 3:1 van een icoon.
-        rijksoranje: {
+        // Het groen uit het logo. `pleingroen-dark` is de hover van een vlak.
+        // Tekst, iconen, vinkjes en svg-vulling krijgen hieronder een eigen
+        // variabele: de logokleur haalt op wit maar 2,5:1. `pleingroen-vast`
+        // schakelt niet mee, voor op lintblauw (4,1:1 in beide modi).
+        pleingroen: {
           DEFAULT: 'rgb(var(--accent) / <alpha-value>)',
           dark: 'rgb(var(--accent-hover) / <alpha-value>)',
-          vast: rijksoranje,
+          vast: pleingroen,
         },
         rijksgroen,
       },
@@ -50,6 +48,13 @@ export default {
           400: 'rgb(var(--tekst-400) / <alpha-value>)',
           500: 'rgb(var(--tekst-500) / <alpha-value>)',
         },
+        pleingroen: { DEFAULT: 'rgb(var(--accent-tekst) / <alpha-value>)' },
+      },
+      accentColor: {
+        pleingroen: { DEFAULT: 'rgb(var(--accent-tekst) / <alpha-value>)' },
+      },
+      fill: {
+        pleingroen: { DEFAULT: 'rgb(var(--accent-tekst) / <alpha-value>)' },
       },
       placeholderColor: {
         slate: {
@@ -103,14 +108,16 @@ export default {
       addVariant('opl-geen-muis', '@media (hover: none)');
       addBase({
         ':root': {
-          '--accent': rgbTriplet(rijksoranje),
-          '--accent-hover': rgbTriplet(rijksoranjeDonker),
+          '--accent': rgbTriplet(pleingroen),
+          '--accent-hover': rgbTriplet(pleingroenHover),
+          '--accent-tekst': rgbTriplet(pleingroenTekst),
           '--tekst-400': rgbTriplet('#566377'),
           '--tekst-500': rgbTriplet('#526075'),
         },
         'html.dark': {
-          '--accent': rgbTriplet(accentDonker),
-          '--accent-hover': rgbTriplet(accentDonkerHover),
+          '--accent': rgbTriplet(pleingroen),
+          '--accent-hover': rgbTriplet(pleingroenHover),
+          '--accent-tekst': rgbTriplet(pleingroen),
           '--tekst-400': rgbTriplet('#afbccd'),
           '--tekst-500': rgbTriplet('#a3b1c5'),
         },

@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react';
 import { rijksblauw } from '@/config/brandColors';
 
 // Paginaachtergrond met regels uit promptsjablonen die traag voorbijschuiven. De
-// invulvelden ({doelgroep}) staan in oranje. Canvas 2D, dus zonder three.js.
+// invulvelden ({doelgroep}) staan in het groen uit het logo. Canvas 2D, dus zonder three.js.
 // Decoratief: pointer-events staat uit en de canvas is verborgen voor schermlezers.
 
 const FRAGMENTS = [
@@ -27,7 +27,7 @@ const ROW_PX = 40;
 const FONT_PX = 13;
 const FONT_FAMILY = 'ui-monospace, "SF Mono", Menlo, Consolas, monospace';
 const TEXT_COLOR = 'rgba(153, 199, 221, 0.24)';
-const VARIABLE_COLOR = 'rgba(225, 112, 0, 0.62)';
+const VARIABLE_COLOR = 'rgba(124, 173, 175, 0.7)';
 const VIGNETTE_RGB = '1, 29, 46';
 
 type Segment = { text: string; isVariable: boolean; width: number };

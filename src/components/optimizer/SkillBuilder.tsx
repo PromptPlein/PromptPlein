@@ -346,7 +346,7 @@ export default function SkillBuilder({ settings, context, onSerialized, onChange
                     <input
                       type="radio"
                       name="sk-strakheid"
-                      className="mt-1 h-4 w-4 shrink-0 accent-rijksoranje"
+                      className="mt-1 h-4 w-4 shrink-0 accent-pleingroen"
                       checked={data.strakheid === s.value}
                       onChange={() => setData((d) => ({ ...d, strakheid: s.value }))}
                     />
@@ -571,7 +571,7 @@ export default function SkillBuilder({ settings, context, onSerialized, onChange
                   <input
                     type="radio"
                     name="sk-licentie-keuze"
-                    className="h-4 w-4 accent-rijksoranje"
+                    className="h-4 w-4 accent-pleingroen"
                     checked={!eigenLicentie}
                     onChange={() => {
                       setEigenLicentie(false);
@@ -584,7 +584,7 @@ export default function SkillBuilder({ settings, context, onSerialized, onChange
                   <input
                     type="radio"
                     name="sk-licentie-keuze"
-                    className="h-4 w-4 accent-rijksoranje"
+                    className="h-4 w-4 accent-pleingroen"
                     checked={eigenLicentie}
                     onChange={() => {
                       setEigenLicentie(true);
@@ -614,7 +614,7 @@ export default function SkillBuilder({ settings, context, onSerialized, onChange
                   <input
                     type="radio"
                     name="sk-goedkeuring"
-                    className="h-4 w-4 accent-rijksoranje"
+                    className="h-4 w-4 accent-pleingroen"
                     checked={!goedgekeurd}
                     onChange={() => {
                       setGoedgekeurd(false);
@@ -627,7 +627,7 @@ export default function SkillBuilder({ settings, context, onSerialized, onChange
                   <input
                     type="radio"
                     name="sk-goedkeuring"
-                    className="h-4 w-4 accent-rijksoranje"
+                    className="h-4 w-4 accent-pleingroen"
                     checked={goedgekeurd}
                     onChange={() => setGoedgekeurd(true)}
                   />

@@ -110,12 +110,13 @@ html.dark body {
   }
 
   /*
-   * Oranje accentknop voor de afsluitende actie van een blok (bouwen,
-   * optimaliseren). Springt eruit naast de blauwe navigatieknoppen ernaast.
+   * Groene accentknop (het groen uit het logo) voor de afsluitende actie van
+   * een blok (bouwen, optimaliseren). Springt eruit naast de blauwe
+   * navigatieknoppen ernaast. De tekst blijft donker: wit haalt op dit groen
+   * geen 4,5:1, ook niet bij hover.
    */
   .opl-btn-accent {
-    @apply opl-btn bg-rijksoranje text-slate-950 hover:bg-rijksoranje-dark focus:ring-rijksoranje
-      dark:hover:text-white;
+    @apply opl-btn bg-pleingroen text-slate-950 hover:bg-pleingroen-dark focus:ring-pleingroen;
   }
 
   .opl-btn-secondary {

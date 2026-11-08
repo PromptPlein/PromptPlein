@@ -31,7 +31,7 @@ export default function MakeProgress({
   return (
     <section
       aria-label="De AI is bezig"
-      className="animate-fade-in rounded-xl border border-slate-200 bg-white p-5 shadow-[inset_0_4px_0_0_theme(colors.rijksoranje.vast)] dark:border-slate-700 dark:bg-slate-800"
+      className="animate-fade-in rounded-xl border border-slate-200 bg-white p-5 shadow-[inset_0_4px_0_0_theme(colors.pleingroen.vast)] dark:border-slate-700 dark:bg-slate-800"
     >
       <h2 className="text-xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
         De AI maakt je prompt klaar
@@ -58,7 +58,7 @@ export default function MakeProgress({
                 className={clsx(
                   'flex h-6 w-6 shrink-0 items-center justify-center rounded-full',
                   klaar && 'bg-rijksblauw-500 text-white',
-                  bezig && 'text-rijksoranje',
+                  bezig && 'text-pleingroen',
                   !klaar && !bezig && 'border-2 border-slate-300 dark:border-slate-600',
                 )}
               >

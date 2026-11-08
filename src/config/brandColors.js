@@ -16,7 +16,9 @@
  *
  * Lintblauw  #154273 = hoofdkleur: koppen, kop- en voetbalk, primaire knop
  * Donkerblauw #01689B = interactief: links, focus, accenten
- * Oranje     #E17000 = secundair; tekst erop is donker, wit haalt 3,22:1
+ * Pleingroen #7CADAF = accent, het groen uit het logo; tekst erop is donker.
+ *   Op wit haalt het maar 2,5:1, dus tekst en iconen krijgen de donkere tint
+ *   pleingroenTekst (6:1). Vlakken, strepen en randen houden de logokleur.
  */
 
 /**
@@ -37,23 +39,19 @@ export const rijksblauw = {
   900: '#162945',
 };
 
-/** Secundaire merkkleur. @type {string} */
-export const rijksoranje = '#e17000';
+/** Accentkleur: het groen uit het beeldmerk van PromptPlein. @type {string} */
+export const pleingroen = '#7cadaf';
 
-/** Donkere variant van de secundaire kleur (hover/gradient-eind). @type {string} */
-export const rijksoranjeDonker = '#c45f00';
+/** Hover van een vlak in de accentkleur; donkere tekst erop haalt 6,7:1. @type {string} */
+export const pleingroenHover = '#5da0a2';
 
 /**
- * Accentkleur in de donkere modus. Het felle rijksoranje springt op de
- * donkerblauwe ondergrond te hard naar voren, dus daar staat een dieper,
- * gebrand oranje. Tailwind schakelt via een CSS-variabele om, zodat elke
- * `rijksoranje`-klasse meegaat.
+ * Tekst en iconen in de accentkleur op een lichte ondergrond. De logokleur haalt
+ * daar 2,5:1; deze tint 6:1 op wit en 5:1 op een licht groen vlak. In de donkere
+ * modus is dat omgekeerd en staat de logokleur zelf er (5,9:1 op slate-800).
  * @type {string}
  */
-export const accentDonker = '#c75a1a';
-
-/** Donkere variant van het accent in de donkere modus. @type {string} */
-export const accentDonkerHover = '#a84a12';
+export const pleingroenTekst = '#356c6e';
 
 /** Overige rijkshuisstijl-accenten. */
 export const rijksrood = '#d52b1e';
@@ -77,7 +75,7 @@ export const brand = {
   primaryDarker: rijksblauw[800],
   primaryLight: rijksblauw[400],
   primaryLighter: rijksblauw[200],
-  secondary: rijksoranje,
+  secondary: pleingroen,
 };
 
 /**
@@ -87,7 +85,7 @@ export const brand = {
  */
 export const categoryPalette = [
   rijksblauw[500],
-  rijksoranje,
+  pleingroen,
   rijksgroen,
   rijksrood,
   hemelblauw,
@@ -127,7 +125,7 @@ export const ecosystemPalette = [
   rijksblauw[500],
   hemelblauw,
   rijksgroen,
-  rijksoranje,
+  pleingroen,
   paars,
   mintgroen,
   violet,

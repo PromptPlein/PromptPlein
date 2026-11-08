@@ -20,7 +20,7 @@ const OVER_DOORVRAGEN =
   'Bij het eerste bericht van een nieuwe chat kijkt de AI of hij genoeg weet. Je zet dit uit bij Instellingen, Chat.';
 
 const CARD =
-  'overflow-hidden rounded-xl border border-t-4 border-slate-200 border-t-rijksoranje bg-white dark:border-slate-700 dark:border-t-rijksoranje dark:bg-slate-800';
+  'overflow-hidden rounded-xl border border-t-4 border-slate-200 border-t-pleingroen bg-white dark:border-slate-700 dark:border-t-pleingroen dark:bg-slate-800';
 
 /** Een antwoord om aan te vinken: je mag er meer kiezen. */
 const OPTION =
@@ -340,7 +340,7 @@ export default function ChatIntake({
                           'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded',
                           !beoordeeld && 'bg-slate-100 dark:bg-slate-700',
                           beoordeeld && !zwak && 'bg-rijksgroen text-white',
-                          zwak && 'border-2 border-dashed border-rijksoranje',
+                          zwak && 'border-2 border-dashed border-pleingroen',
                         )}
                       >
                         {beoordeeld && !zwak && <Check size={14} strokeWidth={3} />}

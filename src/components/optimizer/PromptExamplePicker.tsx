@@ -43,7 +43,7 @@ export default function PromptExamplePicker({
         title={`${PROMPT_EXAMPLES.length} prompts uit het rijkswerk. Je past ze daarna aan naar je eigen dossier.`}
         className="inline-flex min-h-8 items-center gap-1.5 text-sm font-medium text-rijksblauw-500 transition-colors hover:underline dark:text-rijksblauw-200"
       >
-        <Lightbulb size={16} className="shrink-0 text-rijksoranje" />
+        <Lightbulb size={16} className="shrink-0 text-pleingroen" />
         {picked ? `Voorbeeld gekozen: ${picked}` : 'Begin met een voorbeeld'}
         <ChevronDown
           size={14}

@@ -8,10 +8,9 @@ export type RijksblauwTint =
   | 50 | 100 | 200 | 300 | 400 | 500 | 600 | 700 | 800 | 900;
 
 export const rijksblauw: Record<RijksblauwTint, string>;
-export const rijksoranje: string;
-export const rijksoranjeDonker: string;
-export const accentDonker: string;
-export const accentDonkerHover: string;
+export const pleingroen: string;
+export const pleingroenHover: string;
+export const pleingroenTekst: string;
 export const rijksrood: string;
 export const rijksgroen: string;
 export const hemelblauw: string;

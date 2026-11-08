@@ -13,7 +13,7 @@ interface Check {
 
 const STATUS_META: Record<Health, { icon: typeof CheckCircle2; classes: string; ring: string }> = {
   ok: { icon: CheckCircle2, classes: 'text-rijksgroen', ring: 'bg-rijksgroen' },
-  warn: { icon: AlertTriangle, classes: 'text-rijksoranje', ring: 'bg-rijksoranje' },
+  warn: { icon: AlertTriangle, classes: 'text-amber-600 dark:text-amber-400', ring: 'bg-amber-500' },
   error: { icon: XCircle, classes: 'text-rijksrood', ring: 'bg-rijksrood' },
   checking: { icon: Loader2, classes: 'text-slate-400', ring: 'bg-slate-300' },
 };

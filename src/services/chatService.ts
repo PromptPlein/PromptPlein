@@ -242,7 +242,7 @@ export async function sendChatMessage(args: {
 
 /**
  * Verbetert in één klik de tekst die de gebruiker in het invoerveld heeft
- * staan (het oranje sterretje). Bewust een lichte herschrijving, geen
+ * staan (het groene sterretje). Bewust een lichte herschrijving, geen
  * generator: het resultaat blijft één verstuurbaar chatbericht.
  *
  * Gooit nooit; bij een fout komt de oorspronkelijke tekst terug met een
@@ -310,7 +310,7 @@ export async function optimizeChatInput(args: {
 }
 
 /**
- * Maakt van de ruwe projectinstructie een volwaardige systeemprompt (het oranje
+ * Maakt van de ruwe projectinstructie een volwaardige systeemprompt (het groene
  * sterretje in de projectinstellingen). Anders dan `optimizeChatInput` hierboven
  * is dit géén lichte herschrijving: het resultaat stuurt élk gesprek in het
  * project, dus rol, eindproduct, werkwijze, vorm en grenzen worden echt

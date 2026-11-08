@@ -193,7 +193,7 @@ export default function PromptsPage() {
                       <span className="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-800 dark:text-slate-100">
                         {p.titel}
                         {aangepast && (
-                          <span className="rounded-full bg-rijksoranje/15 px-1.5 py-0.5 text-[0.625rem] font-semibold text-rijksoranje-dark dark:text-rijksoranje">
+                          <span className="rounded-full bg-pleingroen/15 px-1.5 py-0.5 text-[0.625rem] font-semibold text-pleingroen">
                             aangepast
                           </span>
                         )}

@@ -415,7 +415,7 @@ export interface ChatSettings {
   temperature: number;
   /**
    * Mag de gebruiker zijn getypte tekst in één klik laten verbeteren (het
-   * oranje sterretje rechtsboven in het invoerveld)? Uit = knop verdwijnt.
+   * groene sterretje rechtsboven in het invoerveld)? Uit = knop verdwijnt.
    */
   optimizeEnabled: boolean;
   /**
@@ -426,7 +426,7 @@ export interface ChatSettings {
   optimizeSystemPrompt: string;
   /**
    * Mag de gebruiker zijn projectinstructie in één klik laten omschrijven tot
-   * een volwaardige systeemprompt (het oranje sterretje in het veld
+   * een volwaardige systeemprompt (het groene sterretje in het veld
    * "Projectinstructie")? Uit = knop verdwijnt.
    */
   projectOptimizeEnabled: boolean;

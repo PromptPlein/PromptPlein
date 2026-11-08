@@ -63,7 +63,7 @@ export default function TrendingPage({ embedded = false }: { embedded?: boolean 
     <div className={embedded ? '' : 'mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8'}>
       {!embedded && (
         <div className="mb-6 flex items-center gap-2">
-          <Flame className="text-rijksoranje" />
+          <Flame className="text-pleingroen" />
           <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Trending</h1>
         </div>
       )}

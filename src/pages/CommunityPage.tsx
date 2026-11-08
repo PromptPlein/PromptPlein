@@ -108,7 +108,7 @@ function CommunityTab() {
         {/* Ranglijst */}
         <section className="min-w-0">
           <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold text-slate-700 dark:text-slate-200">
-            <Trophy size={18} className="text-rijksoranje" /> Ranglijst
+            <Trophy size={18} className="text-pleingroen" /> Ranglijst
           </h2>
           {loading ? (
             <div className="opl-card p-6 text-sm text-slate-400 dark:text-slate-500">Laden…</div>
@@ -127,7 +127,7 @@ function CommunityTab() {
                     <span
                       className={
                         i < 3
-                          ? 'flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-rijksoranje/15 text-sm font-bold text-rijksoranje'
+                          ? 'flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-pleingroen/15 text-sm font-bold text-pleingroen'
                           : 'flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-500 dark:bg-slate-700 dark:text-slate-300'
                       }
                     >

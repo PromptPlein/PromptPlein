@@ -513,7 +513,7 @@ function ChatPageInner() {
     },
     [projectPage, navigate],
   );
-  // --- Snel verbeteren van de getypte tekst (het oranje sterretje) ---
+  // --- Snel verbeteren van de getypte tekst (het groene sterretje) ---
   // Lichte herschrijving in het invoerveld zelf; de volledige generator zit
   // achter de nudge en "Bouw hier een prompt van". Faalt de aanroep, dan blijft
   // de tekst van de gebruiker staan met een niet-blokkerende melding.
@@ -725,7 +725,7 @@ function ChatPageInner() {
                       systeemprompt, geen B1-huisregels) — maak dat zichtbaar. */}
                   {!openProject && conversation?.kind === 'execution' && (
                     <span
-                      className="opl-badge inline-flex shrink-0 items-center gap-1 bg-rijksoranje/10 text-rijksoranje"
+                      className="opl-badge inline-flex shrink-0 items-center gap-1 bg-pleingroen/10 text-pleingroen"
                       title="In deze chat wordt een gegenereerde prompt uitgevoerd; de prompt bepaalt zelf taal, toon en opmaak."
                     >
                       <Play size={11} /> Uitvoering
