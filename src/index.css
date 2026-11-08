@@ -341,8 +341,8 @@ html[data-toetsenbord='open'] .opl-app:has(.opl-chat-kop) {
 
 /*
  * Leesstand van de chat op de telefoon (useReadingMode): wie naar beneden leest,
- * krijgt de kop van de app en de titelbalk uit beeld. Het tekstvak blijft
- * staan. De titel zit in een raster van één rij dat van 1fr naar 0fr klapt. Zo
+ * krijgt de kop van de app, de titelbalk en het menu onderaan uit beeld. Het
+ * tekstvak blijft staan en zakt mee naar de onderrand. De titel zit in een raster van één rij dat van 1fr naar 0fr klapt. Zo
  * krijgt het gesprek de vrijgekomen ruimte echt, in plaats van dat er alleen iets
  * overheen schuift. :where houdt de specificiteit op nul, zodat laag:hidden en
  * de regels voor het toetsenbord gewoon voorgaan.
@@ -384,6 +384,39 @@ html[data-toetsenbord='open'] .opl-app:has(.opl-chat-kop) {
   html[data-leesstand='aan'] .opl-chat-kop > div {
     height: 0;
     opacity: 0;
+  }
+}
+
+/* Het menu onderaan bestaat alleen in staande stand. Het schuift naar beneden
+   weg en de pagina geeft zijn ruimte vrij. Hij blijft bereikbaar: krijgt een
+   menu-item de focus, dan komt hij terug.
+
+   Die ruimte schuift even soepel mee als het menu zelf, zodat het tekstvak
+   gelijk met het menu zakt in plaats van te springen. Daarvoor is --onderbalk
+   een geregistreerde lengte, en de overgang geldt alleen tijdens het wisselen:
+   bij het openen van het toetsenbord moet de ruimte meteen weg zijn. */
+@property --onderbalk {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+
+@media (max-width: 39.99rem) {
+  .opl-onderbalk {
+    transition: transform 0.25s ease;
+  }
+
+  /* De thuisbalk van de iPhone blijft wel vrij. */
+  html[data-leesstand='aan'] {
+    --onderbalk: env(safe-area-inset-bottom, 0px);
+  }
+
+  html[data-leesstand-wissel] {
+    transition: --onderbalk 0.25s ease;
+  }
+
+  html[data-leesstand='aan'] .opl-onderbalk {
+    transform: translateY(100%);
   }
 }
 

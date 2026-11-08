@@ -12,6 +12,8 @@ const MIN_HEIGHT_KEYBOARD = 100;
 const BOTTOM_GAP_REM = 1;
 /** De marge boven het element met `data-fit-below` (`mt-3`), in rem. */
 const BELOW_MARGIN_REM = 0.75;
+/** Zo lang schuift de ruimte van het menu mee in de leesstand (0.25 s), met marge. */
+const FOLLOW_MS = 350;
 
 /**
  * Berekent hoeveel hoogte er voor de chatkaart overblijft: de vensterhoogte
@@ -77,12 +79,28 @@ export default function useFitHeight<T extends HTMLElement>(): RefObject<T> {
     document
       .querySelectorAll('header, footer, [data-fit-below]')
       .forEach((node) => observer.observe(node));
+    // De leesstand van de chat haalt het menu onderaan weg (useReadingMode). Zijn
+    // ruimte schuift dan geleidelijk mee, dus meet elk beeld tot dat klaar is.
+    let frame = 0;
+    const follow = () => {
+      cancelAnimationFrame(frame);
+      const end = performance.now() + FOLLOW_MS;
+      const step = () => {
+        measure();
+        if (performance.now() < end) frame = requestAnimationFrame(step);
+      };
+      frame = requestAnimationFrame(step);
+    };
+    const modeObserver = new MutationObserver(follow);
+    modeObserver.observe(document.documentElement, { attributeFilter: ['data-leesstand'] });
 
     return () => {
       window.removeEventListener('resize', measure);
       window.removeEventListener('orientationchange', measure);
       window.removeEventListener(VIEWPORT_EVENT, measure);
       observer.disconnect();
+      modeObserver.disconnect();
+      cancelAnimationFrame(frame);
     };
   }, []);
 

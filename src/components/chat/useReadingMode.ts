@@ -8,14 +8,19 @@ const HIDE_AFTER = 48;
 /** Zo ver omlaag brengt hem terug. Kleiner, want terugkrijgen moet makkelijk zijn. */
 const SHOW_AFTER = 24;
 /** Wat hier de focus krijgt, staat in de leesstand uit beeld en komt dus terug. */
-const TOP = '.opl-chat-kop, .opl-chat-titel';
+const BARS = '.opl-chat-kop, .opl-chat-titel, .opl-onderbalk';
+/** Zo lang duurt het in- en uitklappen (0.25 s in index.css), met wat marge. */
+const ANIMATE_MS = 400;
 
 /**
  * Leesstand van de chat op de telefoon. Wie het gesprek naar beneden scrolt,
- * krijgt de kop van de app en de titelbalk uit beeld; omhoog scrollen haalt ze
- * terug. Het tekstvak blijft altijd staan: de chat zelf verdwijnt nooit. De
- * stand staat als `data-leesstand` op `<html>`, zodat ook de kop van de app
- * (buiten de chatpagina) meedoet. De animatie staat in `index.css`.
+ * krijgt de kop van de app, de titelbalk en het menu onderaan uit beeld; omhoog
+ * scrollen haalt ze terug. Het tekstvak blijft altijd staan: de chat zelf
+ * verdwijnt nooit, hij zakt alleen mee naar de onderrand. De stand staat als
+ * `data-leesstand` op `<html>`, zodat ook de kop en het menu van de app (buiten
+ * de chatpagina) meedoen. De animatie staat in `index.css`; tijdens het wisselen
+ * staat `data-leesstand-wissel` op `<html>`, zodat de ruimte van het menu
+ * geleidelijk meeschuift en het tekstvak niet springt (`useFitHeight` volgt).
  *
  * Het gesprek schuift mee in de richting van de vinger: bij wegschuiven gaat de
  * tekst omhoog, bij terugkomen omlaag. Daarom hoeft de scrollpositie niet
@@ -25,8 +30,8 @@ const TOP = '.opl-chat-kop, .opl-chat-titel';
  * antwoord dat de lijst laat meescrollen, of een lijst die bij het inklappen
  * groter wordt, verandert de positie ook. Dan zou de stand heen en weer springen.
  *
- * Geeft iemand de focus aan de kop of de titelbalk, met tab of met VoiceOver,
- * dan komen ze terug.
+ * Geeft iemand de focus aan de kop, de titelbalk of het menu, met tab of met
+ * VoiceOver, dan komen ze terug.
  */
 export default function useReadingMode(
   rootRef: RefObject<HTMLElement>,
@@ -49,12 +54,26 @@ export default function useReadingMode(
     set(false);
   }, [resetKey, set]);
 
+  const first = useRef(true);
   useEffect(() => {
     const root = document.documentElement;
     if (hidden) root.dataset.leesstand = 'aan';
     else delete root.dataset.leesstand;
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    root.dataset.leesstandWissel = '';
+    const timer = window.setTimeout(() => delete root.dataset.leesstandWissel, ANIMATE_MS);
+    return () => window.clearTimeout(timer);
   }, [hidden]);
-  useEffect(() => () => void delete document.documentElement.dataset.leesstand, []);
+  useEffect(
+    () => () => {
+      delete document.documentElement.dataset.leesstand;
+      delete document.documentElement.dataset.leesstandWissel;
+    },
+    [],
+  );
 
   useEffect(() => {
     const card = rootRef.current;
@@ -103,7 +122,7 @@ export default function useReadingMode(
     };
 
     const onFocusIn = (e: FocusEvent) => {
-      if (hiddenRef.current && e.target instanceof Element && e.target.closest(TOP)) set(false);
+      if (hiddenRef.current && e.target instanceof Element && e.target.closest(BARS)) set(false);
     };
     // Toetsenbord open of geen telefoon meer: dan hoort alles gewoon in beeld.
     const onViewport = () => {
