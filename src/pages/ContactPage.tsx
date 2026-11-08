@@ -1,14 +1,13 @@
-import { useEffect, useState } from 'react';
-import { Bug, Lightbulb, Mail, MessageSquare, Send } from '@/components/common/icons';
+import { useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
-import clsx from 'clsx';
+import { useNlddEvent, useNlddValue } from '@/lib/nldd';
 import { useAuth } from '@/context/AuthContext';
 import { sendContactMessage, type ContactKind } from '@/services/contactService';
 
-const KINDS: { value: ContactKind; label: string; icon: typeof Bug; hint: string }[] = [
-  { value: 'bug', label: 'Bug melden', icon: Bug, hint: 'Er gaat iets niet goed of een functie werkt niet.' },
-  { value: 'feature', label: 'Feature voorstellen', icon: Lightbulb, hint: 'Een idee of wens om PromptPlein beter te maken.' },
-  { value: 'other', label: 'Iets anders', icon: MessageSquare, hint: 'Een vraag of opmerking.' },
+const KINDS: { value: ContactKind; label: string; hint: string }[] = [
+  { value: 'bug', label: 'Bug melden', hint: 'Er gaat iets niet goed of een functie werkt niet.' },
+  { value: 'feature', label: 'Feature voorstellen', hint: 'Een idee of wens om PromptPlein beter te maken.' },
+  { value: 'other', label: 'Iets anders', hint: 'Een vraag of opmerking.' },
 ];
 
 export default function ContactPage() {
@@ -18,6 +17,16 @@ export default function ContactPage() {
   const [message, setMessage] = useState('');
   const [replyTo, setReplyTo] = useState('');
   const [sending, setSending] = useState(false);
+  const kindRef = useRef<HTMLElement>(null);
+  const subjectRef = useRef<HTMLElement & { value?: string }>(null);
+  const messageRef = useRef<HTMLElement & { value?: string }>(null);
+  const replyRef = useRef<HTMLElement & { value?: string }>(null);
+  useNlddEvent<CustomEvent<{ checked: boolean; value: string }>>(kindRef, 'change', (e) => {
+    if (e.detail?.checked) setKind(e.detail.value as ContactKind);
+  });
+  useNlddValue(subjectRef, subject, setSubject);
+  useNlddValue(messageRef, message, setMessage);
+  useNlddValue(replyRef, replyTo, setReplyTo);
 
   // Vul het antwoordadres voor met het e-mailadres van de ingelogde gebruiker.
   useEffect(() => {
@@ -64,94 +73,81 @@ export default function ContactPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6">
-      <div className="mb-6 flex items-center gap-3">
-        <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-rijksblauw-50 text-rijksblauw-600 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-300">
-          <Mail size={26} />
-        </span>
-        <div>
-          <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Contact</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Een bug gevonden of een idee voor een nieuwe functie? Laat het ons weten.
-          </p>
-        </div>
-      </div>
+    <nldd-container max-width="42rem" padding-inline="16" padding-block="32" class="mx-auto">
+      <nldd-title
+        heading-level={1}
+        size={2}
+        text="Contact"
+        supporting-text="Een bug gevonden of een idee voor een nieuwe functie? Laat het ons weten."
+      ></nldd-title>
+      <nldd-spacer size="24"></nldd-spacer>
+      <nldd-card>
+        <nldd-container padding="20" sm-padding="16">
+          <nldd-form>
+            <form
+              noValidate
+              onSubmit={(e) => {
+                e.preventDefault();
+                void submit();
+              }}
+            >
+              <nldd-form-field label="Waar gaat het over?">
+                <nldd-radio-button-group ref={kindRef} name="kind">
+                  {KINDS.map(({ value, label }) => (
+                    <nldd-radio-button-field
+                      key={value}
+                      value={value}
+                      label={label}
+                      checked={kind === value || undefined}
+                    ></nldd-radio-button-field>
+                  ))}
+                </nldd-radio-button-group>
+                <nldd-form-field-help-text>{KINDS.find((k) => k.value === kind)?.hint}</nldd-form-field-help-text>
+              </nldd-form-field>
 
-      <div className="opl-card space-y-5 p-5">
-        <div>
-          <label className="opl-label">Waar gaat het over?</label>
-          <div className="mt-1 grid grid-cols-1 gap-2 sm:grid-cols-3">
-            {KINDS.map(({ value, label, icon: Icon }) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setKind(value)}
-                className={clsx(
-                  'flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium transition',
-                  kind === value
-                    ? 'border-rijksblauw-500 bg-rijksblauw-50 text-rijksblauw-700 dark:border-rijksblauw-400 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200'
-                    : 'border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800',
-                )}
-              >
-                <Icon size={16} className={kind === value ? 'text-rijksblauw-500' : 'text-slate-400'} />
-                {label}
-              </button>
-            ))}
-          </div>
-          <p className="mt-1.5 text-xs text-slate-400 dark:text-slate-500">
-            {KINDS.find((k) => k.value === kind)?.hint}
-          </p>
-        </div>
+              <nldd-form-field label="Onderwerp" optional>
+                <nldd-text-field
+                  ref={subjectRef}
+                  maxlength="150"
+                  placeholder={kind === 'bug' ? 'Bijv. Knop “Opslaan” doet niets' : 'Korte titel'}
+                ></nldd-text-field>
+              </nldd-form-field>
 
-        <div>
-          <label className="opl-label" htmlFor="contact-subject">Onderwerp</label>
-          <input
-            id="contact-subject"
-            className="opl-input"
-            placeholder={kind === 'bug' ? 'Bijv. Knop “Opslaan” doet niets' : 'Korte titel'}
-            value={subject}
-            onChange={(e) => setSubject(e.target.value)}
-            maxLength={150}
-          />
-        </div>
+              <nldd-form-field label="Bericht">
+                <nldd-multi-line-text-field
+                  ref={messageRef}
+                  rows={6}
+                  placeholder={
+                    kind === 'bug'
+                      ? 'Wat ging er mis? Welke stappen leidden ertoe en wat verwachtte je?'
+                      : 'Beschrijf je idee of vraag zo concreet mogelijk.'
+                  }
+                ></nldd-multi-line-text-field>
+              </nldd-form-field>
 
-        <div>
-          <label className="opl-label" htmlFor="contact-message">Bericht</label>
-          <textarea
-            id="contact-message"
-            className="opl-input min-h-[140px]"
-            placeholder={
-              kind === 'bug'
-                ? 'Wat ging er mis? Welke stappen leidden ertoe en wat verwachtte je?'
-                : 'Beschrijf je idee of vraag zo concreet mogelijk.'
-            }
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-          />
-        </div>
+              <nldd-form-field label="Jouw e-mailadres">
+                <nldd-text-field ref={replyRef} type="email" autocomplete="email"></nldd-text-field>
+                <nldd-form-field-help-text>
+                  We gebruiken je e-mailadres alleen om op je bericht te reageren.
+                </nldd-form-field-help-text>
+              </nldd-form-field>
 
-        <div>
-          <label className="opl-label" htmlFor="contact-reply">Jouw e-mailadres</label>
-          <input
-            id="contact-reply"
-            type="email"
-            required
-            className="opl-input"
-            placeholder="naam@voorbeeld.nl"
-            value={replyTo}
-            onChange={(e) => setReplyTo(e.target.value)}
-          />
-          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-            We gebruiken je e-mailadres alleen om op je bericht te reageren.
-          </p>
-        </div>
-
-        <div className="flex justify-end">
-          <button className="opl-btn-primary" onClick={submit} disabled={sending}>
-            <Send size={16} /> {sending ? 'Versturen…' : 'Versturen'}
-          </button>
-        </div>
-      </div>
-    </div>
+              <nldd-form-actions>
+                <nldd-button-group>
+                  <nldd-button
+                    appearance="primary"
+                    type="submit"
+                    start-icon="paper-plane"
+                    text="Verstuur"
+                    loading={sending || undefined}
+                    loading-text="Bezig met versturen"
+                  ></nldd-button>
+                </nldd-button-group>
+              </nldd-form-actions>
+            </form>
+          </nldd-form>
+        </nldd-container>
+      </nldd-card>
+    </nldd-container>
   );
 }

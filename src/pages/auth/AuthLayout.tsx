@@ -1,8 +1,6 @@
-import { Link } from 'react-router-dom';
-import { ShieldCheck, ArrowLeft } from '@/components/common/icons';
 import type { ReactNode } from 'react';
 
-/** Gedeelde, gecentreerde kaart-layout voor de auth-pagina's. */
+/** Shared, centered layout for the auth pages. */
 export default function AuthLayout({
   title,
   subtitle,
@@ -15,23 +13,25 @@ export default function AuthLayout({
   footer?: ReactNode;
 }) {
   return (
-    <div className="mx-auto flex max-w-md flex-col items-center px-4 py-16">
-      <span className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-rijksblauw-500 text-white">
-        <ShieldCheck size={28} />
-      </span>
-      <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">{title}</h1>
-      {subtitle && <p className="mt-1 text-center text-sm text-slate-500 dark:text-slate-400">{subtitle}</p>}
-
-      <div className="mt-6 w-full">{children}</div>
-
-      {footer && <div className="mt-4 w-full text-center text-sm text-slate-500 dark:text-slate-400">{footer}</div>}
-
-      <Link
-        to="/"
-        className="mt-6 inline-flex items-center gap-1 max-sm:mt-3 text-sm text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100"
-      >
-        <ArrowLeft size={14} /> Terug naar de app
-      </Link>
-    </div>
+    <nldd-container max-width="28rem" padding-inline="16" padding-block="64" sm-padding-block="32" class="mx-auto">
+      <nldd-icon icon="shield-check-mark" size="56" color="lintblauw" box></nldd-icon>
+      <nldd-spacer size="16"></nldd-spacer>
+      <nldd-title heading-level={1} size={2} text={title} supporting-text={subtitle}></nldd-title>
+      <nldd-spacer size="24"></nldd-spacer>
+      {children}
+      {footer && (
+        <>
+          <nldd-spacer size="16"></nldd-spacer>
+          <nldd-text size="sm" color="secondary">{footer}</nldd-text>
+        </>
+      )}
+      <nldd-spacer size="24"></nldd-spacer>
+      <nldd-link
+        href="/"
+        size="sm"
+        start-icon="arrow-left"
+        text="Terug naar de app"
+      ></nldd-link>
+    </nldd-container>
   );
 }

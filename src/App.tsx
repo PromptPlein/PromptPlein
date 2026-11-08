@@ -1,5 +1,6 @@
-import { lazy, Suspense } from 'react';
-import { Link, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom';
+import { lazy, Suspense, useEffect } from 'react';
+import { Link, Routes, Route, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { installNlddRouterLinks } from '@/lib/nldd';
 import { ReferenceDataProvider } from '@/context/ReferenceDataContext';
 import ErrorBoundary from '@/components/common/ErrorBoundary';
 import Header from '@/components/common/Header';
@@ -68,6 +69,8 @@ function PageFallback() {
 
 export default function App() {
   const { pathname } = useLocation();
+  const navigate = useNavigate();
+  useEffect(() => installNlddRouterLinks(navigate), [navigate]);
 
   return (
     <ReferenceDataProvider>
