@@ -519,28 +519,33 @@ function UserMessage({
           structuur (zie looksLikeMessyPrompt). Subtiel, en definitief weg te
           klikken. */}
       {showNudge && onImprove && (
-        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 rounded-lg border border-rijksblauw-200 bg-rijksblauw-50/60 px-3 py-2 text-xs text-slate-600 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10 dark:text-slate-300">
-          <Lightbulb size={14} className="shrink-0 text-rijksoranje" />
-          <span className="min-w-0 flex-1 basis-48">
-            Tip: dit lijkt op een opdracht. In de generator bouw je er een sterkere, herbruikbare
-            prompt van.
-          </span>
-          <button
-            type="button"
-            className="shrink-0 font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
-            onClick={() => onImprove(message.content)}
-          >
-            Bouw in generator
-          </button>
+        // Vaste opbouw, op elke breedte gelijk: lampje en tekst links, het kruisje
+        // rechtsboven, de knop recht onder de tekst. Geen flex-wrap, want dan
+        // springt de knop per schermbreedte naar een andere plek.
+        <div className="mt-1.5 flex items-start gap-2 rounded-lg border border-rijksblauw-200 bg-rijksblauw-50/60 py-2 pl-3 pr-1 text-xs text-slate-600 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10 dark:text-slate-300">
+          <Lightbulb size={14} className="mt-px shrink-0 text-rijksoranje" />
+          <div className="min-w-0 flex-1">
+            <p>
+              Tip: dit lijkt op een opdracht. In de generator bouw je er een sterkere, herbruikbare
+              prompt van.
+            </p>
+            <button
+              type="button"
+              className="mt-1.5 inline-flex items-center gap-1 font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
+              onClick={() => onImprove(message.content)}
+            >
+              Bouw in generator <ArrowRight size={12} />
+            </button>
+          </div>
           {onNudgeDismiss && (
             <button
               type="button"
-              className="shrink-0 rounded p-0.5 text-slate-400 hover:bg-slate-200 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300"
+              className="flex shrink-0 items-center justify-center rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300"
               onClick={onNudgeDismiss}
               aria-label="Verberg deze tip voortaan"
               title="Verberg deze tip voortaan"
             >
-              <X size={12} />
+              <X size={14} />
             </button>
           )}
         </div>
