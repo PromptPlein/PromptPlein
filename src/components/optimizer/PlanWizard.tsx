@@ -18,7 +18,7 @@ import {
   Wand2,
 } from '@/components/common/icons';
 import clsx from 'clsx';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import {
   analyzePlanStep,
@@ -371,7 +371,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
   /** Vraag de AI om een plan; guardrail-check eerst. */
   function handlePlan() {
     if (!goal.trim()) {
-      toast.error('Beschrijf eerst wat je wilt bereiken.');
+      notify.error('Beschrijf eerst wat je wilt bereiken.');
       return;
     }
     const findings: GuardrailFinding[] = [
@@ -429,9 +429,9 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
         setPhase('goal');
         return;
       }
-      if (res.error) toast(res.error, { icon: '⚠️' });
+      if (res.error) notify(res.error, { icon: '⚠️' });
       if (!res.plan || res.plan.steps.length === 0) {
-        toast('Geen plan gevonden. Probeer je doel iets concreter te maken.', { icon: 'ℹ️' });
+        notify('Geen plan gevonden. Probeer je doel iets concreter te maken.', { icon: 'ℹ️' });
         setPhase('goal');
         return;
       }
@@ -445,7 +445,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
       });
       setPhase('plan-review');
     } catch {
-      toast.error('Plan opstellen mislukt. Probeer het opnieuw.');
+      notify.error('Plan opstellen mislukt. Probeer het opnieuw.');
       setPhase('goal');
     }
   }
@@ -612,7 +612,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
       if (prefillRunRef.current !== runId) return;
       // Niets ingevuld door een storing bij de AI-dienst: dat zeggen we, anders
       // ziet de gebruiker alleen lege velden en weet hij niet waarom.
-      if (res.error) toast(res.error, { icon: 'ℹ️' });
+      if (res.error) notify(res.error, { icon: 'ℹ️' });
       if (res.unclear || res.fields.length === 0) return;
       setStepAnswers(Object.fromEntries(res.fields.map((f) => [f.id, f.value])));
       setStepFieldMeta(
@@ -926,7 +926,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
     if (!plan || !interviewQuestion) return;
     const answer = interviewAnswer.trim();
     if (!answer) {
-      toast.error('Vul eerst een antwoord in, of rond het interview af.');
+      notify.error('Vul eerst een antwoord in, of rond het interview af.');
       return;
     }
     const findings: GuardrailFinding[] = [
@@ -988,7 +988,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
       preferredModel: settings.model,
     });
     if (res.unclear) {
-      toast.error(
+      notify.error(
         res.reason?.trim() ||
           (fromDocument
             ? 'Uit het document kon geen bruikbare structuur worden gehaald.'
@@ -997,7 +997,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
       return false;
     }
     if (res.fields.length === 0) {
-      toast(
+      notify(
         fromDocument
           ? 'Geen velden ingevuld uit het document. Vul ze zelf aan.'
           : 'Geen velden ingevuld op basis van je omschrijving. Vul ze zelf aan.',
@@ -1005,7 +1005,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
       );
       return false;
     }
-    if (res.error) toast(res.error, { icon: '⚠️' });
+    if (res.error) notify(res.error, { icon: '⚠️' });
     // Voeg de afgeleide waarden toe (bestaande, door de gebruiker ingevulde velden
     // niet overschrijven — die zijn leidend).
     setStepAnswers((prev) => {
@@ -1242,7 +1242,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
       });
       if (res.unclear || !res.optimized_content?.trim()) {
         // Aanscherpen lukte niet → val terug op het al goedgekeurde resultaat.
-        toast('Aanscherpen lukte niet; de eerdere prompt is gebruikt.', { icon: 'ℹ️' });
+        notify('Aanscherpen lukte niet; de eerdere prompt is gebruikt.', { icon: 'ℹ️' });
         clearRunDraft();
         onResult(pendingResult, technique);
         return;
@@ -1250,7 +1250,7 @@ export default function PlanWizard({ settings, onResult, header }: PlanWizardPro
       clearRunDraft();
       onResult({ ...res, recipe: pendingResult.recipe }, technique);
     } catch {
-      toast('Aanscherpen lukte niet; de eerdere prompt is gebruikt.', { icon: 'ℹ️' });
+      notify('Aanscherpen lukte niet; de eerdere prompt is gebruikt.', { icon: 'ℹ️' });
       clearRunDraft();
       onResult(pendingResult, technique);
     }

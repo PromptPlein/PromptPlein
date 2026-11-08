@@ -15,7 +15,7 @@ import {
   ThumbsUp,
   Building2,
 } from '@/components/common/icons';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import ShareModal from '@/components/share/ShareModal';
 import ExportModal from '@/components/export/ExportModal';
 import CollaborationPanel from '@/components/collaboration/CollaborationPanel';
@@ -108,7 +108,7 @@ export default function PromptDetailPage() {
   async function handleCopy(text: string) {
     await copyToClipboard(text);
     setCopied(true);
-    toast.success('Gekopieerd');
+    notify.success('Gekopieerd');
     setTimeout(() => setCopied(false), 1500);
   }
 
@@ -121,7 +121,7 @@ export default function PromptDetailPage() {
   async function handleLike() {
     if (!prompt) return;
     if (configured && !user) {
-      toast.error('Log in om een prompt te liken.');
+      notify.error('Log in om een prompt te liken.');
       navigate('/auth/login');
       return;
     }
@@ -137,7 +137,7 @@ export default function PromptDetailPage() {
     } catch {
       setLiked(prevLiked);
       setLikeCount(prevCount);
-      toast.error('Liken mislukt');
+      notify.error('Liken mislukt');
     } finally {
       setLikeBusy(false);
     }
@@ -147,7 +147,7 @@ export default function PromptDetailPage() {
     if (!prompt) return;
     if (!confirm('Weet je zeker dat je deze prompt wilt verwijderen?')) return;
     await deletePrompt(prompt.id);
-    toast.success('Prompt verwijderd');
+    notify.success('Prompt verwijderd');
     navigate('/zoeken');
   }
 
@@ -166,7 +166,7 @@ export default function PromptDetailPage() {
   async function handleSaveEdit() {
     if (!prompt) return;
     if (!draftTitle.trim()) {
-      toast.error('Een titel is verplicht.');
+      notify.error('Een titel is verplicht.');
       return;
     }
     setSaving(true);
@@ -179,9 +179,9 @@ export default function PromptDetailPage() {
       setPrompt(updated);
       setEditing(false);
       setVersionRefresh((n) => n + 1); // versiegeschiedenis verversen
-      toast.success('Prompt opgeslagen');
+      notify.success('Prompt opgeslagen');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Opslaan mislukt');
+      notify.error(err instanceof Error ? err.message : 'Opslaan mislukt');
     } finally {
       setSaving(false);
     }

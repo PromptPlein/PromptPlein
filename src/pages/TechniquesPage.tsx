@@ -10,7 +10,7 @@ import {
   Sparkles,
 } from '@/components/common/icons';
 import clsx from 'clsx';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import TechniqueChooser from '@/components/optimizer/TechniqueChooser';
 import TechniqueAdvisor from '@/components/optimizer/TechniqueAdvisor';
 import FollowUpQuestions, { type FieldMeta } from '@/components/optimizer/FollowUpQuestions';
@@ -270,12 +270,12 @@ export default function TechniquesPage() {
         preferredModel: settingsRef.current.model,
       });
       if (onduidelijk) {
-        toast(onduidelijk, { icon: 'ℹ️' });
+        notify(onduidelijk, { icon: 'ℹ️' });
         return;
       }
       const nieuw = Object.entries(antwoorden).filter(([id]) => !sjabloonAntwoorden[id]?.trim());
       if (nieuw.length === 0) {
-        toast('Je tekst gaf geen antwoord op de vragen die nog leeg waren.', { icon: 'ℹ️' });
+        notify('Je tekst gaf geen antwoord op de vragen die nog leeg waren.', { icon: 'ℹ️' });
         return;
       }
       setSjabloonAntwoorden((prev) => ({ ...Object.fromEntries(nieuw), ...prev }));
@@ -287,13 +287,13 @@ export default function TechniquesPage() {
         sjabloonAntwoorden[q.id]?.trim(),
       ).length;
       const leeg = technique.follow_up_questions.length - alIngevuld - nieuw.length;
-      toast.success(
+      notify.success(
         leeg > 0
           ? `${nieuw.length} vragen ingevuld uit je tekst. Kijk ze na; ${leeg} vragen zijn nog leeg.`
           : `${nieuw.length} vragen ingevuld uit je tekst. Kijk na wat de AI heeft aangevuld en klik dan op Klaar.`,
       );
     } catch {
-      toast.error('Vragen invullen uit je tekst mislukt. Probeer het opnieuw.');
+      notify.error('Vragen invullen uit je tekst mislukt. Probeer het opnieuw.');
     } finally {
       setVragenVullen(false);
     }
@@ -387,7 +387,7 @@ export default function TechniquesPage() {
         );
         return;
       }
-      if (res.error) toast(res.error, { icon: 'ℹ️' });
+      if (res.error) notify(res.error, { icon: 'ℹ️' });
       setAnswers(Object.fromEntries(res.fields.map((f) => [f.id, f.value])));
       setFieldMeta(
         Object.fromEntries(res.fields.map((f) => [f.id, { source: f.source, note: f.note }])),
@@ -428,7 +428,7 @@ export default function TechniquesPage() {
         return false;
       }
       if (res.fields.length === 0) {
-        toast(
+        notify(
           fromDocument
             ? 'Geen velden ingevuld uit het document. Vul ze zelf aan.'
             : 'Geen velden ingevuld op basis van je omschrijving. Vul ze zelf aan.',
@@ -436,7 +436,7 @@ export default function TechniquesPage() {
         );
         return false;
       }
-      if (res.error) toast(res.error, { icon: '⚠️' });
+      if (res.error) notify(res.error, { icon: '⚠️' });
       setAnswers((prev) => {
         const next = { ...prev };
         for (const f of res.fields) if (!next[f.id]?.trim()) next[f.id] = f.value;
@@ -449,7 +449,7 @@ export default function TechniquesPage() {
       });
       return true;
     } catch {
-      toast.error(
+      notify.error(
         fromDocument ? 'Document verwerken mislukt.' : 'Voorstellen van een structuur mislukt.',
       );
       return false;
@@ -471,11 +471,11 @@ export default function TechniquesPage() {
   /** Toetst eerst de guardrails; bij een treffer wordt om bevestiging gevraagd. */
   function handleGenerate() {
     if (!technique) {
-      toast.error('Kies eerst een techniek.');
+      notify.error('Kies eerst een techniek.');
       return;
     }
     if (structureFormat(technique) === 'skill' && !skillData?.kern.trim()) {
-      toast.error('Beschrijf eerst wat je de AI telkens opnieuw uitlegt.');
+      notify.error('Beschrijf eerst wat je de AI telkens opnieuw uitlegt.');
       return;
     }
     const toCheck = [contextText, builderText, ...Object.values(answers)]
@@ -572,7 +572,7 @@ export default function TechniquesPage() {
         setPhase('output');
       }, 400);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Prompt bouwen mislukt');
+      notify.error(err instanceof Error ? err.message : 'Prompt bouwen mislukt');
     } finally {
       setOptimizing(false);
     }
@@ -608,7 +608,7 @@ export default function TechniquesPage() {
     setPhase('input');
     setThinking(false);
     setWebSearch(false);
-    toast.success('Alles opgeschoond. Je begint met een schone lei.');
+    notify.success('Alles opgeschoond. Je begint met een schone lei.');
   }
 
   // Ook een lopend adviesgesprek telt als invoer: anders staat de knop er juist

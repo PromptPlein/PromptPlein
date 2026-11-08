@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import DictationButton from './DictationButton';
 import { CUE_MS, playCue } from '@/lib/audioCue';
 import { matchesShortcut, SHORTCUTS } from '@/lib/shortcuts';
@@ -67,7 +67,7 @@ export default function DictationLayer() {
       // Het veld is intussen verdwenen (dialoog dicht, andere pagina): de tekst
       // gaat niet verloren maar naar het klembord.
       void navigator.clipboard?.writeText(text).catch(() => undefined);
-      toast('Het veld is er niet meer. De tekst staat op je klembord.');
+      notify('Het veld is er niet meer. De tekst staat op je klembord.');
     }
   });
   const { available, state, cancel, start, toggle } = dictation;
@@ -192,12 +192,12 @@ export default function DictationLayer() {
       if (!isDictationField(field)) {
         if (document.querySelector('[data-dictation="off"]')) return;
         e.preventDefault();
-        toast('Ga eerst met de cursor naar een tekstvak.');
+        notify('Ga eerst met de cursor naar een tekstvak.');
         return;
       }
       e.preventDefault();
       if (!available) {
-        toast.error('Log in om te kunnen dicteren.');
+        notify.error('Log in om te kunnen dicteren.');
         return;
       }
       setLocked(field);

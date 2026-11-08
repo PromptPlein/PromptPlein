@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, Pencil, Trash2, Upload, ImageOff } from '@/components/common/icons';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import clsx from 'clsx';
 import Modal from '@/components/common/Modal';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
@@ -64,7 +64,7 @@ export default function OrganizationManagerPage() {
     try {
       setOrgs(await listOrganizations(true));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Laden mislukt');
+      notify.error(err instanceof Error ? err.message : 'Laden mislukt');
     } finally {
       setLoading(false);
     }
@@ -76,7 +76,7 @@ export default function OrganizationManagerPage() {
   async function save() {
     if (!editor) return;
     if (!editor.name.trim()) {
-      toast.error('Naam is verplicht');
+      notify.error('Naam is verplicht');
       return;
     }
 
@@ -87,7 +87,7 @@ export default function OrganizationManagerPage() {
       try {
         logoUrl = await uploadOrgLogo(pendingLogo, editor.code || editor.name);
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Logo uploaden mislukt');
+        notify.error(err instanceof Error ? err.message : 'Logo uploaden mislukt');
         setSavingLogo(false);
         return;
       }
@@ -116,7 +116,7 @@ export default function OrganizationManagerPage() {
           entity_id: editor.id,
           changes: { ...payload },
         });
-        toast.success('Organisatie bijgewerkt');
+        notify.success('Organisatie bijgewerkt');
       } else {
         const created = await createOrganization(payload);
         await logAdminAction({
@@ -125,13 +125,13 @@ export default function OrganizationManagerPage() {
           entity_id: created.id,
           changes: { ...payload },
         });
-        toast.success('Organisatie toegevoegd');
+        notify.success('Organisatie toegevoegd');
       }
       setPendingLogo(null);
       setEditor(null);
       await load();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Opslaan mislukt');
+      notify.error(err instanceof Error ? err.message : 'Opslaan mislukt');
     }
   }
 
@@ -145,7 +145,7 @@ export default function OrganizationManagerPage() {
   function pickFile(file: File | null | undefined) {
     if (!file) return;
     if (!file.type.startsWith('image/')) {
-      toast.error('Kies een afbeeldingsbestand.');
+      notify.error('Kies een afbeeldingsbestand.');
       return;
     }
     setCropSrc(URL.createObjectURL(file));
@@ -176,10 +176,10 @@ export default function OrganizationManagerPage() {
         entity_type: 'organization',
         entity_id: o.id,
       });
-      toast.success('Organisatie verwijderd');
+      notify.success('Organisatie verwijderd');
       await load();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Verwijderen mislukt');
+      notify.error(err instanceof Error ? err.message : 'Verwijderen mislukt');
     }
   }
 

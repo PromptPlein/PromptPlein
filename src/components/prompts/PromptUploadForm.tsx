@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { useAuth } from '@/context/AuthContext';
 import { useAuthGuard } from '@/hooks/useAuthGuard';
@@ -67,14 +67,14 @@ export default function PromptUploadForm({ onCreated, onCancel }: PromptUploadFo
         user_identifier: input.created_by,
         prompt_id: prompt.id,
       });
-      toast.success('Prompt opgeslagen');
+      notify.success('Prompt opgeslagen');
       clearTitle();
       clearDescription();
       clearContent();
       onCreated(prompt);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Opslaan mislukt';
-      toast.error(msg);
+      notify.error(msg);
     } finally {
       setSubmitting(false);
     }
@@ -142,9 +142,9 @@ export default function PromptUploadForm({ onCreated, onCancel }: PromptUploadFo
               ? async (term) => {
                   try {
                     await requestCategory({ name: term, requestedBy: user.id });
-                    toast.success(`Aanvraag voor “${term}” verstuurd; een beheerder beoordeelt hem.`);
+                    notify.success(`Aanvraag voor “${term}” verstuurd; een beheerder beoordeelt hem.`);
                   } catch (err) {
-                    toast.error(err instanceof Error ? err.message : 'Aanvraag mislukt');
+                    notify.error(err instanceof Error ? err.message : 'Aanvraag mislukt');
                   }
                 }
               : undefined
@@ -173,9 +173,9 @@ export default function PromptUploadForm({ onCreated, onCancel }: PromptUploadFo
               ? async (term) => {
                   try {
                     await requestFunction({ name: term, requestedBy: user.id });
-                    toast.success(`Aanvraag voor “${term}” verstuurd; een beheerder beoordeelt hem.`);
+                    notify.success(`Aanvraag voor “${term}” verstuurd; een beheerder beoordeelt hem.`);
                   } catch (err) {
-                    toast.error(err instanceof Error ? err.message : 'Aanvraag mislukt');
+                    notify.error(err instanceof Error ? err.message : 'Aanvraag mislukt');
                   }
                 }
               : undefined

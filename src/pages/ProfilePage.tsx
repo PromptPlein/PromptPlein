@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { UserCircle2 } from '@/components/common/icons';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import { useAuth } from '@/context/AuthContext';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { updateOwnProfile } from '@/services/authService';
@@ -40,9 +40,9 @@ export default function ProfilePage() {
         function_id: functionId,
       });
       await refreshProfile();
-      toast.success('Profiel opgeslagen');
+      notify.success('Profiel opgeslagen');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Opslaan mislukt');
+      notify.error(err instanceof Error ? err.message : 'Opslaan mislukt');
     } finally {
       setSaving(false);
     }
@@ -120,9 +120,9 @@ export default function ProfilePage() {
               if (!user) return;
               try {
                 await requestFunction({ name: term, requestedBy: user.id });
-                toast.success(`Aanvraag voor “${term}” verstuurd; een beheerder beoordeelt hem.`);
+                notify.success(`Aanvraag voor “${term}” verstuurd; een beheerder beoordeelt hem.`);
               } catch (err) {
-                toast.error(err instanceof Error ? err.message : 'Aanvraag mislukt');
+                notify.error(err instanceof Error ? err.message : 'Aanvraag mislukt');
               }
             }}
             requestNewLabel={(term) => `“${term}” als nieuwe functie aanvragen`}

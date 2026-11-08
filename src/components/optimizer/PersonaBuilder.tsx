@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Loader2, Plus, Sparkles, Trash2, UserRound } from '@/components/common/icons';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import PrefillBadge from './PrefillBadge';
 import { fillPersona } from '@/services/optimizeService';
 import type { AiSettings } from '@/services/settingsService';
@@ -109,7 +109,7 @@ export default function PersonaBuilder({
     if (!persona) return;
     const hint = persona.hint.trim();
     if (!hint) {
-      toast.error('Geef eerst een korte aanduiding, bijv. "mijn teammanager".');
+      notify.error('Geef eerst een korte aanduiding, bijv. "mijn teammanager".');
       return;
     }
     setBusyId(pid);
@@ -124,11 +124,11 @@ export default function PersonaBuilder({
         preferredModel: settings.model,
       });
       if (res.unclear) {
-        toast.error(res.reason?.trim() || 'De aanduiding is nog te vaag om in te vullen.');
+        notify.error(res.reason?.trim() || 'De aanduiding is nog te vaag om in te vullen.');
         return;
       }
       if (!res.success || res.fields.length === 0) {
-        toast.error(res.error ?? 'Invullen mislukt. Probeer een iets concretere aanduiding.');
+        notify.error(res.error ?? 'Invullen mislukt. Probeer een iets concretere aanduiding.');
         return;
       }
       // Vul de velden in (bestaande, door de gebruiker ingevulde velden niet overschrijven).
@@ -152,7 +152,7 @@ export default function PersonaBuilder({
         }),
       );
       setAiFields((prev) => ({ ...prev, [pid]: touched }));
-      toast.success('Persona ingevuld met AI. Controleer en pas aan waar nodig.');
+      notify.success('Persona ingevuld met AI. Controleer en pas aan waar nodig.');
     } finally {
       setBusyId(null);
     }

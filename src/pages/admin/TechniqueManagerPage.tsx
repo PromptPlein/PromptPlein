@@ -11,7 +11,7 @@ import {
   Info,
   X,
 } from '@/components/common/icons';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import {
   DndContext,
   closestCenter,
@@ -303,7 +303,7 @@ export default function TechniqueManagerPage() {
   async function handleSave() {
     if (!editor) return;
     if (!editor.name.trim()) {
-      toast.error('Naam is verplicht');
+      notify.error('Naam is verplicht');
       return;
     }
     // Technieken met een eigen bouwer kennen geen vragenlijst: sla er geen op, ook
@@ -323,7 +323,7 @@ export default function TechniqueManagerPage() {
 
     const ids = followUps.map((q) => q.id);
     if (new Set(ids).size !== ids.length) {
-      toast.error('Elke vraag moet een uniek veld-id hebben.');
+      notify.error('Elke vraag moet een uniek veld-id hebben.');
       return;
     }
 
@@ -347,7 +347,7 @@ export default function TechniqueManagerPage() {
           entity_id: editor.id,
           changes: { name: payload.name },
         });
-        toast.success('Techniek bijgewerkt');
+        notify.success('Techniek bijgewerkt');
       } else {
         const created = await createTechnique({ ...payload, follow_up_questions: followUps });
         await logAdminAction({
@@ -356,20 +356,20 @@ export default function TechniqueManagerPage() {
           entity_id: created.id,
           changes: { name: payload.name },
         });
-        toast.success('Techniek aangemaakt');
+        notify.success('Techniek aangemaakt');
       }
       setEditor(null);
       await load();
       await refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Opslaan mislukt');
+      notify.error(err instanceof Error ? err.message : 'Opslaan mislukt');
     }
   }
 
   async function handleDelete(t: Technique) {
     await deleteTechnique(t.id);
     await logAdminAction({ action: 'delete_technique', entity_type: 'technique', entity_id: t.id });
-    toast.success('Techniek verwijderd');
+    notify.success('Techniek verwijderd');
     await load();
     await refresh();
   }
@@ -395,7 +395,7 @@ export default function TechniqueManagerPage() {
       );
       await refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Volgorde opslaan mislukt');
+      notify.error(err instanceof Error ? err.message : 'Volgorde opslaan mislukt');
       await load(); // herstel naar de server-waarheid bij een fout
     }
   }

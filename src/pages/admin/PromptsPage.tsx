@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Check, ChevronDown, FileCode2, Loader2, RotateCcw, Search } from '@/components/common/icons';
 import clsx from 'clsx';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import { Link } from 'react-router-dom';
 import {
   getPromptCatalog,
@@ -87,9 +87,9 @@ export default function PromptsPage() {
         /* audit is best-effort */
       });
       setSaved(nextOverrides);
-      toast.success('Prompts opgeslagen. Binnen een halve minuut gebruikt de AI de nieuwe tekst.');
+      notify.success('Prompts opgeslagen. Binnen een halve minuut gebruikt de AI de nieuwe tekst.');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Opslaan mislukt');
+      notify.error(err instanceof Error ? err.message : 'Opslaan mislukt');
     } finally {
       setSaving(false);
     }

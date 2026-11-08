@@ -1,6 +1,6 @@
 import { useRef, useState, type FormEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import { useAuth } from '@/context/AuthContext';
 import { useNlddValue } from '@/lib/nldd';
 import AuthLayout from './AuthLayout';
@@ -24,16 +24,16 @@ export default function LoginPage() {
     e.preventDefault();
     if (busy) return;
     if (!configured) {
-      toast.error('Inloggen kan nu niet: er is geen backend ingesteld.');
+      notify.error('Inloggen kan nu niet: er is geen backend ingesteld.');
       return;
     }
     setBusy(true);
     try {
       await signIn(email.trim(), password);
-      toast.success('Welkom terug!');
+      notify.success('Welkom terug!');
       navigate(redirectTo, { replace: true });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Inloggen mislukt.');
+      notify.error(err instanceof Error ? err.message : 'Inloggen mislukt.');
     } finally {
       setBusy(false);
     }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AlertTriangle, Loader2, ScanLine, ShieldCheck } from '@/components/common/icons';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import { scanClaims } from '@/services/optimizeService';
 import type { AiSettings } from '@/services/settingsService';
 import {
@@ -62,12 +62,12 @@ export default function VerificationBuilder({
         preferredModel: settings.model,
       });
       if (!res.success) {
-        toast.error(res.error ?? 'De scan is niet gelukt. Vink zelf aan wat gecontroleerd moet worden.');
+        notify.error(res.error ?? 'De scan is niet gelukt. Vink zelf aan wat gecontroleerd moet worden.');
         return;
       }
       const gevonden = new Map((res.gevonden ?? []).map((g) => [g.id, g.voorbeeld]));
       if (gevonden.size === 0) {
-        toast('Geen controleerbare beweringen herkend. Vink zelf aan wat er wél in staat.', {
+        notify('Geen controleerbare beweringen herkend. Vink zelf aan wat er wél in staat.', {
           icon: 'ℹ️',
         });
       }

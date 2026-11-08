@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AlertTriangle, ChevronDown, ChevronRight, Loader2, Plus, Ruler, Sparkles, Trash2 } from '@/components/common/icons';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import { proposeRubric } from '@/services/optimizeService';
 import type { AiSettings } from '@/services/settingsService';
 import {
@@ -57,7 +57,7 @@ export default function RubricBuilder({ settings, context, onSerialized }: Rubri
   /** Laat de AI criteria voorstellen bij dit soort stuk. */
   async function suggestCriteria() {
     if (!data.teBeoordelen.trim()) {
-      toast.error('Beschrijf eerst wat je beoordeelt.');
+      notify.error('Beschrijf eerst wat je beoordeelt.');
       return;
     }
     setBusy('criteria');
@@ -71,11 +71,11 @@ export default function RubricBuilder({ settings, context, onSerialized }: Rubri
         preferredModel: settings.model,
       });
       if (res.unclear) {
-        toast.error(res.reason?.trim() || 'De omschrijving is nog niet duidelijk genoeg.');
+        notify.error(res.reason?.trim() || 'De omschrijving is nog niet duidelijk genoeg.');
         return;
       }
       if (!res.success || !res.criteria?.length) {
-        toast.error(res.error ?? 'Er konden geen criteria worden voorgesteld.');
+        notify.error(res.error ?? 'Er konden geen criteria worden voorgesteld.');
         return;
       }
       setData((d) => ({
@@ -100,7 +100,7 @@ export default function RubricBuilder({ settings, context, onSerialized }: Rubri
   /** Schrijf per criterium een beschrijving per schaalpunt; de kern van de rubric. */
   async function fillLevels() {
     if (gevuldeCriteria.length === 0) {
-      toast.error('Voeg eerst minstens één criterium toe.');
+      notify.error('Voeg eerst minstens één criterium toe.');
       return;
     }
     setBusy('niveaus');
@@ -115,7 +115,7 @@ export default function RubricBuilder({ settings, context, onSerialized }: Rubri
         preferredModel: settings.model,
       });
       if (!res.success || !res.criteria?.length) {
-        toast.error(res.error ?? 'De niveaubeschrijvingen konden niet worden gemaakt.');
+        notify.error(res.error ?? 'De niveaubeschrijvingen konden niet worden gemaakt.');
         return;
       }
       // Match op naam: de AI krijgt de criteria in dezelfde volgorde terug,

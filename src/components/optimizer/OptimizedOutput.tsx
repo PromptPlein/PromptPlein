@@ -14,7 +14,7 @@ import {
   Brain,
 } from '@/components/common/icons';
 import clsx from 'clsx';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import { Link, useNavigate } from 'react-router-dom';
 import { copyToClipboard } from '@/lib/utils';
 import { downloadText, downloadZip } from '@/lib/download';
@@ -90,7 +90,7 @@ export default function OptimizedOutput({
   async function handleCopy() {
     await copyToClipboard(result.optimized_content);
     setCopied(true);
-    toast.success(skill ? 'Skill gekopieerd' : 'Prompt gekopieerd');
+    notify.success(skill ? 'Skill gekopieerd' : 'Prompt gekopieerd');
     setTimeout(() => setCopied(false), 1500);
   }
 
@@ -129,7 +129,7 @@ export default function OptimizedOutput({
         }),
       );
     } catch {
-      toast.error('Het pakket kon niet worden gemaakt. Download SKILL.md los.');
+      notify.error('Het pakket kon niet worden gemaakt. Download SKILL.md los.');
     }
   }
 

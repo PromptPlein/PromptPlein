@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import { useAuth } from '@/context/AuthContext';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { buildOrgOptions, orgOptionToSearchable } from '@/lib/orgTree';
@@ -32,11 +32,11 @@ export default function SignupPage() {
     e.preventDefault();
     if (busy) return;
     if (password.length < 8) {
-      toast.error('Kies een wachtwoord van minimaal 8 tekens.');
+      notify.error('Kies een wachtwoord van minimaal 8 tekens.');
       return;
     }
     if (!organizationId) {
-      toast.error('Kies je ministerie.');
+      notify.error('Kies je ministerie.');
       return;
     }
     setBusy(true);
@@ -47,10 +47,10 @@ export default function SignupPage() {
         fullName: fullName.trim() || undefined,
         organizationId,
       });
-      toast.success('Account aangemaakt. Controleer je e-mail om te bevestigen.');
+      notify.success('Account aangemaakt. Controleer je e-mail om te bevestigen.');
       navigate('/auth/login', { replace: true, state: from ? { from } : undefined });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Registreren mislukt.');
+      notify.error(err instanceof Error ? err.message : 'Registreren mislukt.');
     } finally {
       setBusy(false);
     }

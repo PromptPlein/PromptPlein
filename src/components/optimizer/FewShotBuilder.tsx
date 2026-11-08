@@ -12,7 +12,7 @@ import {
   Wand2,
 } from '@/components/common/icons';
 import clsx from 'clsx';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import OptimizableTextarea from '@/components/common/OptimizableTextarea';
 import { generateFewShotExample, extractFewShot } from '@/services/optimizeService';
 import type { AiSettings } from '@/services/settingsService';
@@ -121,9 +121,9 @@ export default function FewShotBuilder({ settings, onSerialized, initialContext 
       if (res.success && res.example) {
         updatePair(targetId, 'input', res.example.input);
         updatePair(targetId, 'output', res.example.output);
-        toast.success('Voorstel ingevuld. Pas het aan tot het klopt voor jouw situatie.');
+        notify.success('Voorstel ingevuld. Pas het aan tot het klopt voor jouw situatie.');
       } else {
-        toast.error(res.error ?? 'Kon geen voorstel maken.');
+        notify.error(res.error ?? 'Kon geen voorstel maken.');
       }
     } finally {
       setSuggesting(null);
@@ -134,7 +134,7 @@ export default function FewShotBuilder({ settings, onSerialized, initialContext 
   async function runAnalysis() {
     const pairs = filledPairs(d).map((p) => ({ input: p.input, output: p.output }));
     if (pairs.length === 0) {
-      toast.error('Vul eerst minstens één input en output in.');
+      notify.error('Vul eerst minstens één input en output in.');
       return;
     }
     const key = analysisKey(d);
@@ -147,7 +147,7 @@ export default function FewShotBuilder({ settings, onSerialized, initialContext 
         preferredModel: settings.model,
       });
       if (!res.success) {
-        toast.error(res.error ?? 'Analyse mislukt.');
+        notify.error(res.error ?? 'Analyse mislukt.');
         return;
       }
       // De voorgestelde kenmerken staan standaard aan (overnemen), de

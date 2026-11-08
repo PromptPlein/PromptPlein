@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Brain, Check, Info, Loader2, RotateCw, Sparkles, X } from '@/components/common/icons';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import { buildMetaPrompt } from '@/services/optimizeService';
 import type { AiSettings } from '@/services/settingsService';
 import RichText from './RichText';
@@ -48,7 +48,7 @@ export default function MetaBuilder({ settings, goal, onSerialized }: MetaBuilde
 
   async function build(withFeedback?: string) {
     if (!request.trim()) {
-      toast.error('Beschrijf eerst wat je nodig hebt.');
+      notify.error('Beschrijf eerst wat je nodig hebt.');
       return;
     }
     setBusy(true);
@@ -60,11 +60,11 @@ export default function MetaBuilder({ settings, goal, onSerialized }: MetaBuilde
         preferredModel: settings.model,
       });
       if (res.unclear) {
-        toast.error(res.reason?.trim() || 'Je verzoek is nog niet duidelijk genoeg.');
+        notify.error(res.reason?.trim() || 'Je verzoek is nog niet duidelijk genoeg.');
         return;
       }
       if (!res.success || !res.prompt) {
-        toast.error(res.error ?? 'De prompt kon niet worden gebouwd.');
+        notify.error(res.error ?? 'De prompt kon niet worden gebouwd.');
         return;
       }
       setPrompt(res.prompt);

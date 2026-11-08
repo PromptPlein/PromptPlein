@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Check, ChevronDown, ClipboardCopy, Download, ListChecks, Sparkles } from '@/components/common/icons';
 import clsx from 'clsx';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import { stripMarkdown, copyToClipboard } from '@/lib/utils';
 
 /**
@@ -58,10 +58,10 @@ export default function BriefSummary({
     try {
       await copyToClipboard(brief.trim());
       setCopied(true);
-      toast.success('Samenvatting gekopieerd.');
+      notify.success('Samenvatting gekopieerd.');
       window.setTimeout(() => setCopied(false), 2000);
     } catch {
-      toast.error('Kopiëren mislukt.');
+      notify.error('Kopiëren mislukt.');
     }
   }
 
@@ -75,7 +75,7 @@ export default function BriefSummary({
     a.download = fileNameFor(goal);
     a.click();
     URL.revokeObjectURL(url);
-    toast.success('Samenvatting opgeslagen.');
+    notify.success('Samenvatting opgeslagen.');
   }
 
   return (

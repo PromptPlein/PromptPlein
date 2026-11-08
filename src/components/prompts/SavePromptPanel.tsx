@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Loader2, Save, Sparkles } from '@/components/common/icons';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import { Link } from 'react-router-dom';
 import { getCurrentUser } from '@/lib/utils';
 import { createPrompt } from '@/services/repository';
@@ -125,11 +125,11 @@ export default function SavePromptPanel({
   async function submitCategoryRequest() {
     const name = catRequestName.trim();
     if (!name) {
-      toast.error('Geef de categorie een naam.');
+      notify.error('Geef de categorie een naam.');
       return;
     }
     if (!user) {
-      toast.error('Log in om een categorie aan te vragen.');
+      notify.error('Log in om een categorie aan te vragen.');
       return;
     }
     setCatRequestBusy(true);
@@ -142,9 +142,9 @@ export default function SavePromptPanel({
       setPendingCategory(name);
       setShowCatRequest(false);
       setCatRequestName('');
-      toast.success(`Aanvraag voor “${name}” verstuurd; een beheerder beoordeelt hem.`);
+      notify.success(`Aanvraag voor “${name}” verstuurd; een beheerder beoordeelt hem.`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Aanvraag mislukt');
+      notify.error(err instanceof Error ? err.message : 'Aanvraag mislukt');
     } finally {
       setCatRequestBusy(false);
     }
@@ -154,11 +154,11 @@ export default function SavePromptPanel({
   async function submitRoleRequest() {
     const name = roleRequestName.trim();
     if (!name) {
-      toast.error('Geef de functie een naam.');
+      notify.error('Geef de functie een naam.');
       return;
     }
     if (!user) {
-      toast.error('Log in om een functie aan te vragen.');
+      notify.error('Log in om een functie aan te vragen.');
       return;
     }
     setRoleRequestBusy(true);
@@ -170,9 +170,9 @@ export default function SavePromptPanel({
       setPendingRole(name);
       setShowRoleRequest(false);
       setRoleRequestName('');
-      toast.success(`Aanvraag voor “${name}” verstuurd; een beheerder beoordeelt hem.`);
+      notify.success(`Aanvraag voor “${name}” verstuurd; een beheerder beoordeelt hem.`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Aanvraag mislukt');
+      notify.error(err instanceof Error ? err.message : 'Aanvraag mislukt');
     } finally {
       setRoleRequestBusy(false);
     }
@@ -180,21 +180,21 @@ export default function SavePromptPanel({
 
   async function handleSave() {
     if (!title.trim()) {
-      toast.error('Geef je prompt een titel.');
+      notify.error('Geef je prompt een titel.');
       return;
     }
     // Opslaan vereist een ingelogde gebruiker: de RLS-policy op `prompts` staat
     // alleen inserts toe voor de rol `authenticated`. Zonder sessie geeft Supabase
     // een 403 die voor de gebruiker nietszeggend is — vang dat hier af.
     if (!isAuthenticated) {
-      toast.error('Log in om deze prompt op te slaan in de bibliotheek.');
+      notify.error('Log in om deze prompt op te slaan in de bibliotheek.');
       return;
     }
     // Afdeling/ministerie delen vereist een organisatie om op te richten — anders
     // weet niemand met welke afdeling de template gedeeld is.
     const needsOrg = sharingLevels.includes('department') || sharingLevels.includes('ministry');
     if (needsOrg && !organizationId) {
-      toast.error('Kies een organisatie om de prompt met je afdeling of ministerie te delen.');
+      notify.error('Kies een organisatie om de prompt met je afdeling of ministerie te delen.');
       return;
     }
     setSaving(true);
@@ -209,10 +209,10 @@ export default function SavePromptPanel({
         sharing_levels: sharingLevels,
         created_by: profile?.full_name || getCurrentUser() || 'Onbekend',
       });
-      toast.success('Prompt opgeslagen in de bibliotheek');
+      notify.success('Prompt opgeslagen in de bibliotheek');
       onSaved(prompt);
     } catch (err) {
-      toast.error(humanizeSaveError(err));
+      notify.error(humanizeSaveError(err));
     } finally {
       setSaving(false);
     }

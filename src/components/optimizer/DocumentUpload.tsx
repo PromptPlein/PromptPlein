@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { Check, FileUp, Loader2, Sparkles } from '@/components/common/icons';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 
 /**
  * Upload-zone voor een voorbeelddocument (Template-based Output). Extraheert de
@@ -38,11 +38,11 @@ export default function DocumentUpload({
     try {
       const { extractDocument } = await import('@/lib/extractDocument');
       const doc = await extractDocument(file);
-      toast.success(`"${doc.name}" ingelezen (${doc.chars.toLocaleString('nl-NL')} tekens).`);
+      notify.success(`"${doc.name}" ingelezen (${doc.chars.toLocaleString('nl-NL')} tekens).`);
       const ok = await onPrefill(doc.text);
       if (ok) setDoneName(doc.name);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Document inlezen mislukt.');
+      notify.error(err instanceof Error ? err.message : 'Document inlezen mislukt.');
     } finally {
       setBusy(false);
       if (inputRef.current) inputRef.current.value = '';
@@ -58,7 +58,7 @@ export default function DocumentUpload({
       const ok = await onDescribe(text);
       if (ok) setBriefDone(true);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Voorstellen van een structuur mislukt.');
+      notify.error(err instanceof Error ? err.message : 'Voorstellen van een structuur mislukt.');
     } finally {
       setBriefBusy(false);
     }

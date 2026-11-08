@@ -9,7 +9,7 @@ import {
   Sparkles,
   Wand2,
 } from '@/components/common/icons';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import { draftSkill, sharpenSkillDescription, testSkillTrigger } from '@/services/optimizeService';
 import type { AiSettings } from '@/services/settingsService';
 import { useAuth } from '@/context/AuthContext';
@@ -125,7 +125,7 @@ export default function SkillBuilder({ settings, context, onSerialized, onChange
   /** Laat de AI de overige velden voorstellen; zelf ingevulde velden blijven staan. */
   async function runDraft() {
     if (!data.kern.trim()) {
-      toast.error('Beschrijf eerst wat je de AI telkens opnieuw uitlegt.');
+      notify.error('Beschrijf eerst wat je de AI telkens opnieuw uitlegt.');
       return;
     }
     setBusy('draft');
@@ -138,11 +138,11 @@ export default function SkillBuilder({ settings, context, onSerialized, onChange
         preferredModel: settings.model,
       });
       if (res.unclear) {
-        toast.error(res.reason?.trim() || 'Je omschrijving is nog niet duidelijk genoeg.');
+        notify.error(res.reason?.trim() || 'Je omschrijving is nog niet duidelijk genoeg.');
         return;
       }
       if (!res.success || !res.velden) {
-        toast.error(res.error ?? 'Het voorstel kon niet worden gemaakt.');
+        notify.error(res.error ?? 'Het voorstel kon niet worden gemaakt.');
         return;
       }
       // Alleen lege velden krijgen een voorstel of een vraag; wat de gebruiker
@@ -183,7 +183,7 @@ export default function SkillBuilder({ settings, context, onSerialized, onChange
   /** Laat de AI testverzoeken bedenken op de grens van de beschrijving. */
   async function runTest() {
     if (!data.beschrijving.trim()) {
-      toast.error('Schrijf eerst een beschrijving.');
+      notify.error('Schrijf eerst een beschrijving.');
       return;
     }
     setBusy('test');
@@ -197,7 +197,7 @@ export default function SkillBuilder({ settings, context, onSerialized, onChange
         preferredModel: settings.model,
       });
       if (!res.success || !res.verzoeken?.length) {
-        toast.error(res.error ?? 'De testverzoeken konden niet worden gemaakt.');
+        notify.error(res.error ?? 'De testverzoeken konden niet worden gemaakt.');
         return;
       }
       // Door elkaar: het model zet de verzoeken die erbij horen graag bovenaan,
@@ -224,12 +224,12 @@ export default function SkillBuilder({ settings, context, onSerialized, onChange
         preferredModel: settings.model,
       });
       if (!res.success || !res.beschrijving) {
-        toast.error(res.error ?? 'De beschrijving kon niet worden aangescherpt.');
+        notify.error(res.error ?? 'De beschrijving kon niet worden aangescherpt.');
         return;
       }
       setData((d) => ({ ...d, beschrijving: res.beschrijving! }));
       setTests([]);
-      toast.success('Beschrijving aangescherpt. Test hem opnieuw om te zien of alles nu klopt.');
+      notify.success('Beschrijving aangescherpt. Test hem opnieuw om te zien of alles nu klopt.');
     } finally {
       setBusy(null);
     }

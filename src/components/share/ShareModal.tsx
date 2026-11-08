@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Copy, Check, Mail, Loader2 } from '@/components/common/icons';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import Modal from '@/components/common/Modal';
 import { buildMailto, createShareLink, shareUrl } from '@/services/shareService';
 import { copyToClipboard, getCurrentUser } from '@/lib/utils';
@@ -29,7 +29,7 @@ export default function ShareModal({ open, onClose, prompt }: ShareModalProps) {
     setLoading(true);
     createShareLink(prompt.id, getCurrentUser())
       .then((share) => active && setUrl(shareUrl(share.share_token)))
-      .catch(() => active && toast.error('Kon geen deel-link maken'))
+      .catch(() => active && notify.error('Kon geen deel-link maken'))
       .finally(() => active && setLoading(false));
     return () => {
       active = false;
@@ -40,7 +40,7 @@ export default function ShareModal({ open, onClose, prompt }: ShareModalProps) {
     if (!url) return;
     await copyToClipboard(url);
     setCopied(true);
-    toast.success('Link gekopieerd');
+    notify.success('Link gekopieerd');
     setTimeout(() => setCopied(false), 1500);
   }
 

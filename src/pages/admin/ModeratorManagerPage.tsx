@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Pencil, ShieldCheck, Search } from '@/components/common/icons';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import clsx from 'clsx';
 import Modal from '@/components/common/Modal';
 import {
@@ -66,7 +66,7 @@ export default function ModeratorManagerPage() {
       setMinistries(orgs.filter((o) => o.organization_type === 'ministry'));
       setModerators(mods);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Laden mislukt');
+      notify.error(err instanceof Error ? err.message : 'Laden mislukt');
     } finally {
       setLoading(false);
     }
@@ -130,11 +130,11 @@ export default function ModeratorManagerPage() {
         });
       }
 
-      toast.success('Moderator-toewijzing bijgewerkt');
+      notify.success('Moderator-toewijzing bijgewerkt');
       setEditor(null);
       await load();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Opslaan mislukt');
+      notify.error(err instanceof Error ? err.message : 'Opslaan mislukt');
     } finally {
       setSaving(false);
     }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Download, Printer, FileText, CheckCircle2, Clock, XCircle, Building2, Users } from '@/components/common/icons';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import { BarChartCard, LineChartCard, PieChartCard } from '@/components/analytics/Charts';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import {
@@ -45,7 +45,7 @@ export default function ReportsPage() {
   useEffect(() => {
     loadReportData()
       .then(setData)
-      .catch((err) => toast.error(err instanceof Error ? err.message : 'Laden mislukt'))
+      .catch((err) => notify.error(err instanceof Error ? err.message : 'Laden mislukt'))
       .finally(() => setLoading(false));
   }, []);
 

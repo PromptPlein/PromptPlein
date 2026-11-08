@@ -20,7 +20,7 @@ import {
   Landmark,
 } from '@/components/common/icons';
 import clsx from 'clsx';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import {
   AI_MODELS,
   API_PORTALS,
@@ -163,9 +163,9 @@ export default function SettingsPage() {
         });
         setChatInitial(chat);
       }
-      toast.success('AI-instellingen opgeslagen. Gelden voor alle gebruikers.');
+      notify.success('AI-instellingen opgeslagen. Gelden voor alle gebruikers.');
     } catch {
-      toast.error('Opslaan mislukt. Probeer het opnieuw.');
+      notify.error('Opslaan mislukt. Probeer het opnieuw.');
     } finally {
       setSaving(false);
     }

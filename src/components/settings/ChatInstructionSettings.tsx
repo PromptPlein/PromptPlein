@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import { AlertTriangle } from '@/components/common/icons';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import InfoDot from '@/components/common/InfoDot';
@@ -69,7 +69,7 @@ export default function ChatInstructionSettings() {
       setDraft(clean);
       setStatus(message);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Opslaan mislukt');
+      notify.error(err instanceof Error ? err.message : 'Opslaan mislukt');
     } finally {
       setSaving(false);
     }

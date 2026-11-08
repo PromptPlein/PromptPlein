@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Check, X, Globe2, Pencil, Save } from '@/components/common/icons';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import clsx from 'clsx';
 import {
   listVisibility,
@@ -72,12 +72,12 @@ export default function VisibilityApprovalPanel({
     setSaving(true);
     try {
       await updatePromptVisibility(promptId, draftLevels, organizationId);
-      toast.success('Zichtbaarheid bijgewerkt');
+      notify.success('Zichtbaarheid bijgewerkt');
       setEditing(false);
       await reload();
       onChanged?.();
     } catch (err) {
-      toast.error(
+      notify.error(
         err instanceof Error ? err.message : 'Aanpassen van de zichtbaarheid mislukt.',
       );
     } finally {
@@ -95,10 +95,10 @@ export default function VisibilityApprovalPanel({
         entity_id: row.id,
         changes: { prompt_id: promptId, level: row.level, note: notes[row.id] || null },
       });
-      toast.success(decision === 'approved' ? 'Niveau goedgekeurd' : 'Niveau afgewezen');
+      notify.success(decision === 'approved' ? 'Niveau goedgekeurd' : 'Niveau afgewezen');
       await reload();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Je hebt geen rechten om dit niveau te beoordelen.');
+      notify.error(err instanceof Error ? err.message : 'Je hebt geen rechten om dit niveau te beoordelen.');
     } finally {
       setBusyId(null);
     }

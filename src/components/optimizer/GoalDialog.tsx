@@ -15,7 +15,7 @@ import StepHeading from '@/components/optimizer/StepHeading';
 import AanpakKaart, { type AanpakOptie } from '@/components/optimizer/AanpakKaart';
 import MakeProgress from '@/components/optimizer/MakeProgress';
 import { compactFieldLabel } from '@/lib/fieldLabel';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import {
   generatePrompt,
@@ -291,9 +291,9 @@ export default function GoalDialog({
   async function copyExample(text: string) {
     try {
       await copyToClipboard(text);
-      toast.success('Voorbeeld gekopieerd.');
+      notify.success('Voorbeeld gekopieerd.');
     } catch {
-      toast.error('Kopiëren mislukt.');
+      notify.error('Kopiëren mislukt.');
     }
   }
 
@@ -353,7 +353,7 @@ export default function GoalDialog({
   /** Start het gesprek; guardrail-check op de doelbeschrijving eerst. */
   function handleStart() {
     if (!goal.trim()) {
-      toast.error('Beschrijf eerst wat je wilt bereiken.');
+      notify.error('Beschrijf eerst wat je wilt bereiken.');
       return;
     }
     const findings: GuardrailFinding[] = [
@@ -465,7 +465,7 @@ export default function GoalDialog({
         projectContext,
       });
       if (!invented) {
-        toast.error('Er kon geen testantwoord worden verzonnen.');
+        notify.error('Er kon geen testantwoord worden verzonnen.');
         return;
       }
       setAnswer(stripMarkdown(invented));
@@ -479,7 +479,7 @@ export default function GoalDialog({
     if (!question) return;
     const a = answer.trim();
     if (!a) {
-      toast.error('Vul eerst een antwoord in, of rond het gesprek af.');
+      notify.error('Vul eerst een antwoord in, of rond het gesprek af.');
       return;
     }
     const findings: GuardrailFinding[] = [
@@ -615,12 +615,12 @@ export default function GoalDialog({
       setFieldMeta(
         Object.fromEntries(res.fields.map((f) => [f.id, { source: f.source, note: f.note }])),
       );
-      if (res.error) toast(res.error, { icon: 'ℹ️' });
+      if (res.error) notify(res.error, { icon: 'ℹ️' });
     } catch {
       // Voor-invullen is een hulpmiddel, geen voorwaarde: bij een fout tonen we
       // gewoon de lege velden zodat de gebruiker verder kan.
       setPrefill({ summary: '', fields: [], success: false, provider: 'local-template' });
-      toast('De velden konden niet worden voor-ingevuld; vul ze zelf aan.', { icon: 'ℹ️' });
+      notify('De velden konden niet worden voor-ingevuld; vul ze zelf aan.', { icon: 'ℹ️' });
     } finally {
       setPrefilling(false);
     }
@@ -845,7 +845,7 @@ export default function GoalDialog({
                               onClick={() => {
                                 setGoal(ex.goal);
                                 setShowExamples(false);
-                                toast.success('Voorbeeld ingevuld.');
+                                notify.success('Voorbeeld ingevuld.');
                               }}
                               title="Gebruik dit voorbeeld in het invoerveld"
                               className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-rijksblauw-600 transition-colors hover:bg-rijksblauw-50 dark:text-rijksblauw-300 dark:hover:bg-rijksblauw-500/15"

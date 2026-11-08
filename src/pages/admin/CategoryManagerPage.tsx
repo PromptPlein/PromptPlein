@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Plus, Pencil, Trash2, ArrowUp, ArrowDown, Upload } from '@/components/common/icons';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import Modal from '@/components/common/Modal';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { useReferenceData } from '@/context/ReferenceDataContext';
@@ -52,7 +52,7 @@ export default function CategoryManagerPage() {
 
   async function save() {
     if (!editor?.name.trim()) {
-      toast.error('Naam is verplicht');
+      notify.error('Naam is verplicht');
       return;
     }
     const payload = {
@@ -63,11 +63,11 @@ export default function CategoryManagerPage() {
     if (editor.id) {
       await updateCategory(editor.id, payload);
       await logAdminAction({ action: 'update_category', entity_type: 'category', entity_id: editor.id, changes: payload });
-      toast.success('Categorie bijgewerkt');
+      notify.success('Categorie bijgewerkt');
     } else {
       const created = await createCategory(payload);
       await logAdminAction({ action: 'create_category', entity_type: 'category', entity_id: created.id, changes: payload });
-      toast.success('Categorie toegevoegd');
+      notify.success('Categorie toegevoegd');
     }
     setEditor(null);
     await load();
@@ -77,7 +77,7 @@ export default function CategoryManagerPage() {
   async function remove(c: Category) {
     await deleteCategory(c.id);
     await logAdminAction({ action: 'delete_category', entity_type: 'category', entity_id: c.id });
-    toast.success('Categorie verwijderd');
+    notify.success('Categorie verwijderd');
     await load();
     await refresh();
   }
@@ -104,7 +104,7 @@ export default function CategoryManagerPage() {
       count++;
     }
     await logAdminAction({ action: 'bulk_import_categories', entity_type: 'category', changes: { count } });
-    toast.success(`${count} categorieën geïmporteerd`);
+    notify.success(`${count} categorieën geïmporteerd`);
     setCsv('');
     setCsvOpen(false);
     await load();

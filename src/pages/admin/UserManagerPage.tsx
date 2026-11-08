@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Pencil, ShieldCheck, ShieldOff } from '@/components/common/icons';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import clsx from 'clsx';
 import Modal from '@/components/common/Modal';
 import { useAuth } from '@/context/AuthContext';
@@ -60,7 +60,7 @@ export default function UserManagerPage() {
       setProfiles(p);
       setOrgs(o);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Laden mislukt');
+      notify.error(err instanceof Error ? err.message : 'Laden mislukt');
     } finally {
       setLoading(false);
     }
@@ -88,11 +88,11 @@ export default function UserManagerPage() {
           is_active: editor.is_active,
         },
       });
-      toast.success('Gebruiker bijgewerkt');
+      notify.success('Gebruiker bijgewerkt');
       setEditor(null);
       await load();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Opslaan mislukt');
+      notify.error(err instanceof Error ? err.message : 'Opslaan mislukt');
     }
   }
 

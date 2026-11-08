@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FileText, Loader2, RotateCcw, Scissors, Sparkles, Trash2, Upload } from '@/components/common/icons';
 import clsx from 'clsx';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import Modal from '@/components/common/Modal';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { ACCEPTED_DOC_ACCEPT } from '@/lib/extractDocument';
@@ -113,7 +113,7 @@ export default function ProjectSettingsModal({
         if (active) setFiles(list);
       })
       .catch(() => {
-        if (active) toast.error('De bestanden konden niet worden geladen.');
+        if (active) notify.error('De bestanden konden niet worden geladen.');
       })
       .finally(() => {
         if (active) setLoadingFiles(false);
@@ -165,16 +165,16 @@ export default function ProjectSettingsModal({
         settings: chatSettings,
       });
       if (result.error) {
-        toast.error(result.error);
+        notify.error(result.error);
         return;
       }
       if (!result.changed || !result.text.trim()) {
-        toast('Je instructie was al compleet genoeg.', { icon: '✨' });
+        notify('Je instructie was al compleet genoeg.', { icon: '✨' });
         return;
       }
       setInstructions(result.text);
       setBeforeOptimize({ before, after: result.text });
-      toast.success('Instructie herschreven. Lees hem na en sla op als hij klopt.');
+      notify.success('Instructie herschreven. Lees hem na en sla op als hij klopt.');
     } finally {
       setOptimizing(false);
     }
@@ -190,14 +190,14 @@ export default function ProjectSettingsModal({
     if (!project || saving || optimizing) return;
     const trimmed = name.trim();
     if (!trimmed) {
-      toast.error('Geef het project een naam.');
+      notify.error('Geef het project een naam.');
       return;
     }
     setSaving(true);
     const ok = await onSave({ name: trimmed, instructions });
     setSaving(false);
     if (ok) {
-      toast.success('Project opgeslagen.');
+      notify.success('Project opgeslagen.');
       onClose();
     }
   }
@@ -207,11 +207,11 @@ export default function ProjectSettingsModal({
     if (!projectId || uploading || list.length === 0) return;
     const room = MAX_PROJECT_FILES - files.length;
     if (room <= 0) {
-      toast.error(`Maximaal ${MAX_PROJECT_FILES} bestanden per project.`);
+      notify.error(`Maximaal ${MAX_PROJECT_FILES} bestanden per project.`);
       return;
     }
     if (list.length > room) {
-      toast.error(`Er passen nog ${room} bestanden in dit project.`);
+      notify.error(`Er passen nog ${room} bestanden in dit project.`);
     }
     const batch = list.slice(0, room);
     let done = 0;
@@ -244,18 +244,18 @@ export default function ProjectSettingsModal({
         // en mag het bij annuleren niet worden opgeruimd.
         if (done === 1) onFilesChanged();
         if (truncated) {
-          toast(
+          notify(
             `"${doc.name}" was te groot en is afgekapt op ${num(MAX_PROJECT_FILE_CHARS)} tekens.`,
             { icon: '✂️' },
           );
         }
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : `"${file.name}" kon niet worden toegevoegd.`);
+        notify.error(err instanceof Error ? err.message : `"${file.name}" kon niet worden toegevoegd.`);
       }
     }
     setUploading(null);
     if (done > 1) onFilesChanged();
-    if (done > 0) toast.success(done === 1 ? 'Bestand toegevoegd.' : `${done} bestanden toegevoegd.`);
+    if (done > 0) notify.success(done === 1 ? 'Bestand toegevoegd.' : `${done} bestanden toegevoegd.`);
   }
 
   async function removeFile(file: ChatProjectFile) {
@@ -264,9 +264,9 @@ export default function ProjectSettingsModal({
       await deleteProjectFile(projectId, file.id);
       setFiles((cur) => cur.filter((f) => f.id !== file.id));
       onFilesChanged();
-      toast.success(`"${file.name}" verwijderd.`);
+      notify.success(`"${file.name}" verwijderd.`);
     } catch {
-      toast.error('Het bestand kon niet worden verwijderd.');
+      notify.error('Het bestand kon niet worden verwijderd.');
     }
   }
 

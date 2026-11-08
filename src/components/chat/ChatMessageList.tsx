@@ -16,7 +16,7 @@ import {
   X,
 } from '@/components/common/icons';
 import clsx from 'clsx';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import {
   prefersReducedMotion,
   useAccessibility,
@@ -211,7 +211,7 @@ export default function ChatMessageList({
         voice: speechVoice,
         rate: settings.speechRate,
       });
-      if (result === 'geen-stem') toast.error(NO_VOICE_MESSAGE);
+      if (result === 'geen-stem') notify.error(NO_VOICE_MESSAGE);
     }
     // Alleen de overgang van streaming telt, niet elke wijziging in de instellingen.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -233,7 +233,7 @@ export default function ChatMessageList({
       }
       const { messages: all, speechOn: allowed, speechVoice: voice, rate } = readLatest.current;
       if (!allowed) {
-        toast('Zet voorlezen eerst aan bij Toegankelijkheid.');
+        notify('Zet voorlezen eerst aan bij Toegankelijkheid.');
         return;
       }
       const answer = [...all].reverse().find((m) => m.role === 'assistant' && m.content.trim());
@@ -242,8 +242,8 @@ export default function ChatMessageList({
         return;
       }
       const result = speak(answer.id, toSpeakableText(answer.content), { voice, rate });
-      if (result === 'geen-stem') toast.error(NO_VOICE_MESSAGE);
-      if (result === 'niet-ondersteund') toast.error('Deze browser kan niet voorlezen.');
+      if (result === 'geen-stem') notify.error(NO_VOICE_MESSAGE);
+      if (result === 'niet-ondersteund') notify.error('Deze browser kan niet voorlezen.');
     };
     document.addEventListener('keydown', onKeyDown);
     return () => {
@@ -328,8 +328,8 @@ function SpeakButton({ messageId, text }: { messageId: string; text: string }) {
       voice: speechVoice,
       rate: settings.speechRate,
     });
-    if (result === 'geen-stem') toast.error(NO_VOICE_MESSAGE);
-    if (result === 'niet-ondersteund') toast.error('Deze browser kan niet voorlezen.');
+    if (result === 'geen-stem') notify.error(NO_VOICE_MESSAGE);
+    if (result === 'niet-ondersteund') notify.error('Deze browser kan niet voorlezen.');
   }
 
   return (

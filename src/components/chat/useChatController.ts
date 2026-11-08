@@ -3,7 +3,7 @@
 // ingebedde chat in de generator (Fase 3) dezelfde logica kan hergebruiken.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import { v4 as uuid } from 'uuid';
 import { defaultModelFor } from '@/config/aiModels';
 import {
@@ -197,7 +197,7 @@ export default function useChatController(
       const ok = saveConversation(userId, conv);
       if (!ok && !quotaWarnedRef.current) {
         quotaWarnedRef.current = true;
-        toast.error(
+        notify.error(
           'Opslaan op dit apparaat lukt niet; deze chat gaat verloren zodra je de pagina verlaat.',
         );
       }
@@ -299,14 +299,14 @@ export default function useChatController(
           project = result?.context ?? null;
           if (result?.searched) projectSources = result.context.files.map((f) => f.name);
           if (result?.searched && !startText) {
-            toast(
+            notify(
               'Groot project: alleen de stukken die bij je vraag passen gaan mee in dit antwoord.',
               { icon: '🔍' },
             );
           } else if (result?.skipped.length && !startText) {
             // Stil afkappen zou de gebruiker laten denken dat het model alles
             // gelezen heeft; daarom benoemen we wat er buiten het budget viel.
-            toast(
+            notify(
               `Te veel bronmateriaal: ${result.skipped.join(', ')} gaat niet mee in dit antwoord.`,
               { icon: '✂️' },
             );
@@ -549,14 +549,14 @@ export default function useChatController(
       if (!text || streamingRef.current) return;
       const data = parseRoutekaart(text);
       if (!data) {
-        toast.error('In dit bericht staat geen volledige routekaart (KOP, haltes en FINISH).');
+        notify.error('In dit bericht staat geen volledige routekaart (KOP, haltes en FINISH).');
         return;
       }
       let html: string;
       try {
         html = await buildRoutekaartHtml(data);
       } catch {
-        toast.error('De routekaart kon niet worden gemaakt.');
+        notify.error('De routekaart kon niet worden gemaakt.');
         return;
       }
       const base = conversationRef.current ?? createConversation(defaultKind);
@@ -673,7 +673,7 @@ export default function useChatController(
       if (conversationRef.current?.id === id) return;
       const loaded = loadConversation(userId, id);
       if (!loaded) {
-        toast.error('Deze chat kon niet worden geladen.');
+        notify.error('Deze chat kon niet worden geladen.');
         refreshIndex();
         return;
       }
@@ -688,7 +688,7 @@ export default function useChatController(
       deleteConversation(userId, id);
       refreshIndex();
       if (conversationRef.current?.id === id) update(createConversation());
-      toast.success('Chat verwijderd van dit apparaat.');
+      notify.success('Chat verwijderd van dit apparaat.');
     },
     [userId, update, refreshIndex],
   );
@@ -698,13 +698,13 @@ export default function useChatController(
     deleteAllConversations(userId);
     refreshIndex();
     update(createConversation());
-    toast.success('Alle chats verwijderd van dit apparaat.');
+    notify.success('Alle chats verwijderd van dit apparaat.');
   }, [userId, update, refreshIndex]);
 
   const exportHistory = useCallback(() => {
     const backup = buildChatBackup(userId);
     if (backup.conversations.length === 0) {
-      toast.error('Er zijn nog geen chats om te bewaren.');
+      notify.error('Er zijn nog geen chats om te bewaren.');
       return;
     }
     downloadText(
@@ -712,7 +712,7 @@ export default function useChatController(
       JSON.stringify(backup, null, 2),
       'application/json',
     );
-    toast.success(
+    notify.success(
       backup.conversations.length === 1
         ? '1 chat bewaard als bestand op dit apparaat.'
         : `${backup.conversations.length} chats bewaard als bestand op dit apparaat.`,
@@ -724,7 +724,7 @@ export default function useChatController(
       const conv =
         conversationRef.current?.id === id ? conversationRef.current : loadConversation(userId, id);
       if (!conv || conv.messages.length === 0) {
-        toast.error('Deze chat is leeg of kon niet worden geladen.');
+        notify.error('Deze chat is leeg of kon niet worden geladen.');
         return;
       }
       const slug =
@@ -746,7 +746,7 @@ export default function useChatController(
       try {
         data = JSON.parse(await file.text());
       } catch {
-        toast.error('Dit bestand kon niet worden gelezen. Kies een bestand dat je eerder hebt bewaard.');
+        notify.error('Dit bestand kon niet worden gelezen. Kies een bestand dat je eerder hebt bewaard.');
         return;
       }
       try {
@@ -762,9 +762,9 @@ export default function useChatController(
           unchanged > 0 ? `${unchanged} stond${unchanged === 1 ? '' : 'en'} er al` : '',
           dropped > 0 ? `${dropped} niet bewaard (opslag vol of meer dan ${MAX_CONVERSATIONS} chats)` : '',
         ].filter(Boolean);
-        toast.success(`${parts.join(', ')}.`);
+        notify.success(`${parts.join(', ')}.`);
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Terugzetten is niet gelukt.');
+        notify.error(err instanceof Error ? err.message : 'Terugzetten is niet gelukt.');
       }
     },
     [userId, refreshIndex, update],
@@ -775,7 +775,7 @@ export default function useChatController(
       const cur = conversationRef.current;
       if (!cur || extracting) return;
       if (cur.attachments.length >= MAX_CHAT_ATTACHMENTS) {
-        toast.error(`Maximaal ${MAX_CHAT_ATTACHMENTS} bijlagen per chat.`);
+        notify.error(`Maximaal ${MAX_CHAT_ATTACHMENTS} bijlagen per chat.`);
         return;
       }
       setExtracting(true);
@@ -800,15 +800,15 @@ export default function useChatController(
         update(next);
         persistNow(next);
         if (truncated) {
-          toast(
+          notify(
             `"${doc.name}" is ingekort tot ${MAX_CHAT_ATTACHMENT_CHARS.toLocaleString('nl-NL')} tekens.`,
             { icon: '✂️' },
           );
         } else {
-          toast.success(`"${doc.name}" toegevoegd (${text.length.toLocaleString('nl-NL')} tekens).`);
+          notify.success(`"${doc.name}" toegevoegd (${text.length.toLocaleString('nl-NL')} tekens).`);
         }
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Het bestand kon niet worden gelezen.');
+        notify.error(err instanceof Error ? err.message : 'Het bestand kon niet worden gelezen.');
       } finally {
         setExtracting(false);
       }

@@ -14,7 +14,7 @@ import {
 } from '@/components/common/icons';
 import InfoDot from '@/components/common/InfoDot';
 import { useNavigate } from 'react-router-dom';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import { useAuth } from '@/context/AuthContext';
 import { AuthLoading } from '@/components/auth/RequireAuth';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
@@ -327,7 +327,7 @@ function ChatPageInner() {
   const navigate = useNavigate();
   const requireLogin = useCallback(
     (reason: string) => {
-      toast(reason);
+      notify(reason);
       navigate('/auth/login', { state: { from: '/chat' } });
     },
     [navigate],
@@ -435,7 +435,7 @@ function ChatPageInner() {
       if (!ok) return false;
       draftProjectRef.current = null;
       setWizard(null);
-      toast.success('Je prompt staat in het project.');
+      notify.success('Je prompt staat in het project.');
       return true;
     },
     [wizard, projects],
@@ -486,7 +486,7 @@ function ChatPageInner() {
     if (projectPage === confirmDeleteProject) setProjectPage(null);
     if (settingsProjectId === confirmDeleteProject) setSettingsProjectId(null);
     if (draftProjectRef.current === confirmDeleteProject) draftProjectRef.current = null;
-    toast.success('Project verwijderd.');
+    notify.success('Project verwijderd.');
   }, [confirmDeleteProject, projects, projectPage, settingsProjectId]);
 
   const activeProject = conversation?.projectId
@@ -521,8 +521,8 @@ function ChatPageInner() {
     async (text: string) => {
       if (!settings) return { text, changed: false };
       const res = await optimizeChatInput({ text, settings });
-      if (res.error) toast.error(res.error);
-      else if (!res.changed) toast('Je tekst was al duidelijk genoeg.', { icon: '✨' });
+      if (res.error) notify.error(res.error);
+      else if (!res.changed) notify('Je tekst was al duidelijk genoeg.', { icon: '✨' });
       return { text: res.text, changed: res.changed, error: res.error };
     },
     [settings],

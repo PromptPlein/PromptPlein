@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import { requestPasswordReset } from '@/services/authService';
 import { useAuth } from '@/context/AuthContext';
 import AuthLayout from './AuthLayout';
@@ -18,9 +18,9 @@ export default function PasswordResetPage() {
     try {
       await requestPasswordReset(email.trim());
       setSent(true);
-      toast.success('Als dit adres bestaat, is er een herstelmail verstuurd.');
+      notify.success('Als dit adres bestaat, is er een herstelmail verstuurd.');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Versturen mislukt.');
+      notify.error(err instanceof Error ? err.message : 'Versturen mislukt.');
     } finally {
       setBusy(false);
     }

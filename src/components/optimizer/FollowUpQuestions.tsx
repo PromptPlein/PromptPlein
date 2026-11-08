@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { ArrowLeft, ArrowRight, Check, Loader2, Pencil, Sparkles, Wand2 } from '@/components/common/icons';
 import clsx from 'clsx';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import InfoDot from '@/components/common/InfoDot';
 import PrefillBadge from './PrefillBadge';
 import PrefillLoader from './PrefillLoader';
@@ -403,12 +403,12 @@ export default function FollowUpQuestions({
         // Niet direct toepassen: toon een voorstel dat de gebruiker beoordeelt.
         setProposal({ fieldId: q.id, proposed: res.value.trim(), improvements: res.improvements });
       } else if (res.success) {
-        toast('Dit veld is al goed ingevuld.', { icon: '👍' });
+        notify('Dit veld is al goed ingevuld.', { icon: '👍' });
       } else {
-        toast.error(res.error ?? 'Aanvullen lukte niet; probeer het opnieuw.');
+        notify.error(res.error ?? 'Aanvullen lukte niet; probeer het opnieuw.');
       }
     } catch {
-      toast.error('Aanvullen lukte niet; probeer het opnieuw.');
+      notify.error('Aanvullen lukte niet; probeer het opnieuw.');
     } finally {
       setExpandingId(null);
     }
@@ -419,7 +419,7 @@ export default function FollowUpQuestions({
     if (!proposal) return;
     editField(proposal.fieldId, proposal.proposed);
     setProposal(null);
-    toast.success('AI-voorstel overgenomen.');
+    notify.success('AI-voorstel overgenomen.');
   }
 
   /** Verwerp het openstaande voorstel: het veld blijft ongewijzigd. */

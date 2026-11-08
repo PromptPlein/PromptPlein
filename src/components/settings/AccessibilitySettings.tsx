@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Volume2, VolumeX } from '@/components/common/icons';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import {
   DEVICE_VOICE,
   NATURAL_VOICE,
@@ -109,7 +109,7 @@ export default function AccessibilitySettings() {
       voice: speechVoice,
       rate: settings.speechRate,
     });
-    if (result === 'geen-stem') toast.error('Kies eerst een stem.');
+    if (result === 'geen-stem') notify.error('Kies eerst een stem.');
   }
 
   const sectionClass = 'opl-card p-5 sm:p-6';

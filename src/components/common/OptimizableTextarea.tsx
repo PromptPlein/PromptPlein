@@ -6,7 +6,7 @@ import {
 } from 'react';
 import { Loader2, Sparkles, Undo2 } from '@/components/common/icons';
 import clsx from 'clsx';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import { useAuth } from '@/context/AuthContext';
 import { optimizeChatInput } from '@/services/chatService';
 import { getChatSettingsCached, type ChatSettings } from '@/services/settingsService';
@@ -73,11 +73,11 @@ const OptimizableTextarea = forwardRef<HTMLTextAreaElement, OptimizableTextareaP
       try {
         const res = await optimizeChatInput({ text: before, settings });
         if (res.error) {
-          toast.error(res.error);
+          notify.error(res.error);
           return;
         }
         if (!res.changed || !res.text.trim()) {
-          toast('Je tekst was al duidelijk genoeg.', { icon: '✨' });
+          notify('Je tekst was al duidelijk genoeg.', { icon: '✨' });
           return;
         }
         onValueChange(res.text);

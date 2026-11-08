@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Plus, Pencil, Trash2, ArrowUp, ArrowDown, Upload } from '@/components/common/icons';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import Modal from '@/components/common/Modal';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { useReferenceData } from '@/context/ReferenceDataContext';
@@ -35,18 +35,18 @@ export default function RoleManagerPage() {
 
   async function save() {
     if (!editor?.name.trim()) {
-      toast.error('Naam is verplicht');
+      notify.error('Naam is verplicht');
       return;
     }
     const payload = { name: editor.name.trim(), description: editor.description.trim() };
     if (editor.id) {
       await updateRole(editor.id, payload);
       await logAdminAction({ action: 'update_role', entity_type: 'role', entity_id: editor.id, changes: payload });
-      toast.success('Functie bijgewerkt');
+      notify.success('Functie bijgewerkt');
     } else {
       const created = await createRole(payload);
       await logAdminAction({ action: 'create_role', entity_type: 'role', entity_id: created.id, changes: payload });
-      toast.success('Functie toegevoegd');
+      notify.success('Functie toegevoegd');
     }
     setEditor(null);
     await load();
@@ -56,7 +56,7 @@ export default function RoleManagerPage() {
   async function remove(r: Role) {
     await deleteRole(r.id);
     await logAdminAction({ action: 'delete_role', entity_type: 'role', entity_id: r.id });
-    toast.success('Functie verwijderd');
+    notify.success('Functie verwijderd');
     await load();
     await refresh();
   }
@@ -86,7 +86,7 @@ export default function RoleManagerPage() {
       count++;
     }
     await logAdminAction({ action: 'bulk_import_roles', entity_type: 'role', changes: { count } });
-    toast.success(`${count} functies geïmporteerd`);
+    notify.success(`${count} functies geïmporteerd`);
     setCsv('');
     setCsvOpen(false);
     await load();

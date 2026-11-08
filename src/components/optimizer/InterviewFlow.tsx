@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Check } from '@/components/common/icons';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import { runPlanStep } from '@/services/optimizeService';
 import { structureFormat } from '@/lib/techniques';
 import { stripMarkdown } from '@/lib/utils';
@@ -105,7 +105,7 @@ export default function InterviewFlow({
     if (!question) return;
     const a = answer.trim();
     if (!a) {
-      toast.error('Vul eerst een antwoord in, of rond af.');
+      notify.error('Vul eerst een antwoord in, of rond af.');
       return;
     }
     const findings: GuardrailFinding[] = [
@@ -114,7 +114,7 @@ export default function InterviewFlow({
     ];
     if (findings.length > 0) {
       // In deze losse flow tonen we de finding als toast i.p.v. een dialoog.
-      toast(`Let op: mogelijk gevoelige inhoud (${findings.map((f) => f.label).join(', ')}).`, {
+      notify(`Let op: mogelijk gevoelige inhoud (${findings.map((f) => f.label).join(', ')}).`, {
         icon: '⚠️',
       });
     }

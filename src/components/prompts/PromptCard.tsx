@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Copy, Star, Check, Share2, ThumbsUp } from '@/components/common/icons';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import InfoDot from '@/components/common/InfoDot';
 import { categoryIcon } from '@/lib/categoryIcons';
 import { useReferenceData } from '@/context/ReferenceDataContext';
@@ -58,7 +58,7 @@ export default function PromptCard({ prompt, author, onChanged }: PromptCardProp
     e.preventDefault();
     await copyToClipboard(prompt.content);
     setCopied(true);
-    toast.success('Prompt gekopieerd');
+    notify.success('Prompt gekopieerd');
     setTimeout(() => setCopied(false), 1500);
   }
 
@@ -74,9 +74,9 @@ export default function PromptCard({ prompt, author, onChanged }: PromptCardProp
         prompt_id: prompt.id,
         metadata: { is_favorite: updated.is_favorite },
       });
-      toast.success(updated.is_favorite ? 'Toegevoegd aan favorieten' : 'Verwijderd uit favorieten');
+      notify.success(updated.is_favorite ? 'Toegevoegd aan favorieten' : 'Verwijderd uit favorieten');
     } catch {
-      toast.error('Bijwerken mislukt');
+      notify.error('Bijwerken mislukt');
     } finally {
       setBusy(false);
     }
@@ -86,7 +86,7 @@ export default function PromptCard({ prompt, author, onChanged }: PromptCardProp
     e.preventDefault();
     // Met echte backend is liken alleen voor ingelogde gebruikers.
     if (configured && !user) {
-      toast.error('Log in om een prompt te liken.');
+      notify.error('Log in om een prompt te liken.');
       navigate('/auth/login');
       return;
     }
@@ -103,7 +103,7 @@ export default function PromptCard({ prompt, author, onChanged }: PromptCardProp
     } catch {
       setLiked(prevLiked);
       setLikeCount(prevCount);
-      toast.error('Liken mislukt');
+      notify.error('Liken mislukt');
     } finally {
       setLikeBusy(false);
     }
@@ -113,7 +113,7 @@ export default function PromptCard({ prompt, author, onChanged }: PromptCardProp
     e.preventDefault();
     const url = `${window.location.origin}/prompt/${prompt.id}`;
     await copyToClipboard(url);
-    toast.success('Deelbare link gekopieerd');
+    notify.success('Deelbare link gekopieerd');
   }
 
   const CategoryIcon = categoryIcon(category?.icon);

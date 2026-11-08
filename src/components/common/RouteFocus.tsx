@@ -25,7 +25,8 @@ export default function RouteFocus() {
     // Terug in de browser: die zet de scrollstand zelf terug.
     if (navigationType !== 'POP') window.scrollTo(0, 0);
 
-    const main = document.getElementById('inhoud');
+    // The content is the default slot of nldd-page, so it sits in the light DOM.
+    const main = document.querySelector<HTMLElement>('nldd-page');
     if (!main) return;
 
     const deadline = Date.now() + MAX_WAIT_MS;
@@ -33,7 +34,7 @@ export default function RouteFocus() {
     const focusHeading = () => {
       // Alleen een kop die je kunt zien: terwijl een pagina laadt, verbergt React de
       // vorige en staat die kop dus nog gewoon in de DOM.
-      const heading = Array.from(main.querySelectorAll<HTMLElement>('h1')).find(
+      const heading = Array.from(main.querySelectorAll<HTMLElement>('nldd-title[heading-level="1"], h1')).find(
         (el) => el.getClientRects().length > 0,
       );
       if (!heading && Date.now() < deadline) {

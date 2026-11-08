@@ -5,7 +5,7 @@ import {
   Trash2,
   ChevronDown,
 } from '@/components/common/icons';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import clsx from 'clsx';
 import { useAuth } from '@/context/AuthContext';
 import { formatDate } from '@/lib/utils';
@@ -77,7 +77,7 @@ export default function CollaborationPanel({
       setNewComment('');
       await reload();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Reactie plaatsen mislukt');
+      notify.error(err instanceof Error ? err.message : 'Reactie plaatsen mislukt');
     } finally {
       setBusy(false);
     }

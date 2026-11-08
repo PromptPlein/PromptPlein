@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ArrowUpNarrowWide, Loader2, Lock, Plus, Trash2, Unlock } from '@/components/common/icons';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import { proposeLadder } from '@/services/optimizeService';
 import type { AiSettings } from '@/services/settingsService';
 import {
@@ -52,7 +52,7 @@ export default function StepBackBuilder({ settings, context, onSerialized }: Ste
   /** Laat de AI drie treden voorstellen en de randvoorwaarden splitsen. */
   async function runLadder() {
     if (!data.concreteVraag.trim()) {
-      toast.error('Beschrijf eerst welke vraag of opdracht voorligt.');
+      notify.error('Beschrijf eerst welke vraag of opdracht voorligt.');
       return;
     }
     setBusy(true);
@@ -64,11 +64,11 @@ export default function StepBackBuilder({ settings, context, onSerialized }: Ste
         preferredModel: settings.model,
       });
       if (res.unclear) {
-        toast.error(res.reason?.trim() || 'De opdracht is nog niet duidelijk genoeg.');
+        notify.error(res.reason?.trim() || 'De opdracht is nog niet duidelijk genoeg.');
         return;
       }
       if (!res.success || !res.ladder?.length) {
-        toast.error(res.error ?? 'De stap-terug-vragen konden niet worden gemaakt.');
+        notify.error(res.error ?? 'De stap-terug-vragen konden niet worden gemaakt.');
         return;
       }
       setData((d) => ({

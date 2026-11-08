@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Check, X, Inbox, Briefcase } from '@/components/common/icons';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import { useAuth } from '@/context/AuthContext';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { formatDate } from '@/lib/utils';
@@ -25,7 +25,7 @@ export default function FunctionRequestQueuePage() {
     try {
       setRequests(await listPendingFunctionRequests());
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Laden mislukt');
+      notify.error(err instanceof Error ? err.message : 'Laden mislukt');
     } finally {
       setLoading(false);
     }
@@ -45,11 +45,11 @@ export default function FunctionRequestQueuePage() {
         entity_id: req.id,
         changes: { name: req.name, created_role_id: role.id, note: notes[req.id] || null },
       });
-      toast.success(`Functie “${req.name}” toegevoegd`);
+      notify.success(`Functie “${req.name}” toegevoegd`);
       setRequests((prev) => prev.filter((x) => x.id !== req.id));
       await refresh(); // nieuwe functie meteen beschikbaar in keuzelijsten
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Goedkeuren mislukt');
+      notify.error(err instanceof Error ? err.message : 'Goedkeuren mislukt');
     } finally {
       setBusyId(null);
     }
@@ -66,10 +66,10 @@ export default function FunctionRequestQueuePage() {
         entity_id: req.id,
         changes: { name: req.name, note: notes[req.id] || null },
       });
-      toast.success('Aanvraag afgewezen');
+      notify.success('Aanvraag afgewezen');
       setRequests((prev) => prev.filter((x) => x.id !== req.id));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Afwijzen mislukt');
+      notify.error(err instanceof Error ? err.message : 'Afwijzen mislukt');
     } finally {
       setBusyId(null);
     }

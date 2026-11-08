@@ -22,7 +22,7 @@ import {
   type LucideIcon,
 } from '@/components/common/icons';
 import clsx from 'clsx';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import VerantwoordGebruikHint from '@/components/optimizer/VerantwoordGebruikHint';
 import StepHeading from '@/components/optimizer/StepHeading';
@@ -319,16 +319,16 @@ export default function OwnPromptOptimizer({
     resetDownstream();
     setComposerOpen(true);
     setShowExamples(false);
-    toast.success('Alles opgeschoond. Je begint met een schone lei.');
+    notify.success('Alles opgeschoond. Je begint met een schone lei.');
   }
 
   /** Kopieer een voorbeeldprompt naar het klembord. */
   async function copyExample(text: string) {
     try {
       await copyToClipboard(text);
-      toast.success('Voorbeeld gekopieerd.');
+      notify.success('Voorbeeld gekopieerd.');
     } catch {
-      toast.error('Kopiëren mislukt.');
+      notify.error('Kopiëren mislukt.');
     }
   }
 
@@ -337,7 +337,7 @@ export default function OwnPromptOptimizer({
     setOwnPrompt(text);
     resetDownstream(); // nieuwe inhoud = oude aanbeveling/analyse vervalt
     setShowExamples(false);
-    toast.success('Voorbeeld ingevuld.');
+    notify.success('Voorbeeld ingevuld.');
   }
 
   // Loopt het invullen van de vragen uit de voorbereide tekst?
@@ -364,12 +364,12 @@ export default function OwnPromptOptimizer({
         preferredModel: settings.model,
       });
       if (onduidelijk) {
-        toast(onduidelijk, { icon: 'ℹ️' });
+        notify(onduidelijk, { icon: 'ℹ️' });
         return;
       }
       const nieuw = Object.entries(antwoorden).filter(([id]) => !sjabloonAntwoorden[id]?.trim());
       if (nieuw.length === 0) {
-        toast('Je tekst gaf geen antwoord op de vragen die nog leeg waren.', { icon: 'ℹ️' });
+        notify('Je tekst gaf geen antwoord op de vragen die nog leeg waren.', { icon: 'ℹ️' });
         return;
       }
       setSjabloonDraft(JSON.stringify({ ...Object.fromEntries(nieuw), ...sjabloonAntwoorden }));
@@ -382,13 +382,13 @@ export default function OwnPromptOptimizer({
         sjabloonAntwoorden[q.id]?.trim(),
       ).length;
       const leeg = sjabloon.follow_up_questions.length - alIngevuld - nieuw.length;
-      toast.success(
+      notify.success(
         leeg > 0
           ? `${nieuw.length} vragen ingevuld uit je tekst. Kijk ze na; ${leeg} vragen zijn nog leeg.`
           : `${nieuw.length} vragen ingevuld uit je tekst. Kijk na wat de AI heeft aangevuld en klik dan op Velden invullen.`,
       );
     } catch {
-      toast.error('Vragen invullen uit je tekst mislukt. Probeer het opnieuw.');
+      notify.error('Vragen invullen uit je tekst mislukt. Probeer het opnieuw.');
     } finally {
       setVragenVullen(false);
     }
@@ -433,7 +433,7 @@ export default function OwnPromptOptimizer({
    */
   async function handleRecommend() {
     if (!promptText) {
-      toast.error(sjabloon ? 'Beantwoord eerst een paar vragen.' : 'Plak eerst je eigen prompt.');
+      notify.error(sjabloon ? 'Beantwoord eerst een paar vragen.' : 'Plak eerst je eigen prompt.');
       return;
     }
     if (kind === 'skill') {
@@ -465,7 +465,7 @@ export default function OwnPromptOptimizer({
         onPhase: setSearchPhase,
       });
       setRecommendations(res.recommendations);
-      if (res.error) toast(res.error, { icon: '⚠️' });
+      if (res.error) notify(res.error, { icon: '⚠️' });
       // Geen duidelijke match: geen lijst tonen, maar de trefwoorden laten beslissen.
       // Is de tekst echt onduidelijk, dan zegt het invullen dat hierna zelf.
       keuze =
@@ -473,7 +473,7 @@ export default function OwnPromptOptimizer({
         localFrameworkGuess(ownPrompt, candidates)[0]?.id ??
         candidates[0]?.id;
     } catch {
-      toast.error('De AI kon je tekst niet verwerken. Probeer het opnieuw.');
+      notify.error('De AI kon je tekst niet verwerken. Probeer het opnieuw.');
       setComposerOpen(true);
     } finally {
       setRecommending(false);
@@ -630,9 +630,9 @@ export default function OwnPromptOptimizer({
       setFieldMeta(
         Object.fromEntries(res.fields.map((f) => [f.id, { source: f.source, note: f.note }])),
       );
-      if (res.error) toast(res.error, { icon: 'ℹ️' });
+      if (res.error) notify(res.error, { icon: 'ℹ️' });
     } catch {
-      toast.error('Voor-invullen mislukt. Probeer het opnieuw.');
+      notify.error('Voor-invullen mislukt. Probeer het opnieuw.');
       setComposerOpen(true);
     } finally {
       setPrefilling(false);
@@ -685,7 +685,7 @@ export default function OwnPromptOptimizer({
       }
       onResult(res, technique);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Optimaliseren mislukt');
+      notify.error(err instanceof Error ? err.message : 'Optimaliseren mislukt');
     } finally {
       setGenerating(false);
     }

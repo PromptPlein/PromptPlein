@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react';
-import { Link, Routes, Route, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { installNlddRouterLinks } from '@/lib/nldd';
 import { ReferenceDataProvider } from '@/context/ReferenceDataContext';
 import ErrorBoundary from '@/components/common/ErrorBoundary';
@@ -8,7 +8,6 @@ import Footer from '@/components/common/Footer';
 import DictationLayer from '@/components/common/DictationLayer';
 import HelpShortcut from '@/components/common/HelpShortcut';
 import RouteFocus from '@/components/common/RouteFocus';
-import { HELP_PATH } from '@/lib/shortcuts';
 import HomePage from '@/pages/HomePage';
 import RequireAuth from '@/components/auth/RequireAuth';
 import LoginPage from '@/pages/auth/LoginPage';
@@ -61,9 +60,9 @@ function RedirectToGenereren() {
 
 function PageFallback() {
   return (
-    <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-      <div className="skeleton h-64 w-full rounded-xl" />
-    </div>
+    <nldd-simple-section>
+      <nldd-inline-dialog variant="loading" text="Pagina laden"></nldd-inline-dialog>
+    </nldd-simple-section>
   );
 }
 
@@ -74,18 +73,12 @@ export default function App() {
 
   return (
     <ReferenceDataProvider>
-      {/* min-h-full en geen min-h-dvh: naast de zwevende balk van Safari is dvh
-          hoger dan wat je ziet, en dan kan een pagina die precies past toch schuiven. */}
-      <div id="app-shell" className="opl-app flex min-h-full flex-col">
-        <RouteFocus />
-        <a href="#inhoud" className="opl-skip-link">
-          Naar de inhoud
-        </a>
-        <Link to={HELP_PATH} className="opl-skip-link">
-          Hulp bij toegankelijkheid
-        </Link>
-        <Header />
-        <main id="inhoud" tabIndex={-1} className="flex-1 focus:outline-none">
+      <RouteFocus />
+      <nldd-shell>
+        <nldd-page>
+          <nldd-skip-link slot="header" text="Sla navigatie over">
+            <Header />
+          </nldd-skip-link>
           <ErrorBoundary>
             <Suspense fallback={<PageFallback />}>
             <Routes>
@@ -145,11 +138,7 @@ export default function App() {
               <Route element={<RequireAuth role="admin" allowModerator />}>
                 <Route
                   path="/goedkeuringen"
-                  element={
-                    <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 lg:px-8">
-                      <ApprovalQueuePage />
-                    </div>
-                  }
+                  element={<ApprovalQueuePage />}
                 />
               </Route>
 
@@ -179,14 +168,13 @@ export default function App() {
             </Routes>
             </Suspense>
           </ErrorBoundary>
-        </main>
-        {/* De chat gebruikt het hele venster om te lezen. De tekst uit de footer
-            staat daar onder de kaart. */}
-        {pathname !== '/chat' && <Footer />}
-        {/* Microfoontje rechtsonder in elk tekstvak: inspreken in plaats van typen. */}
-        <DictationLayer />
-        <HelpShortcut />
-      </div>
+          {/* The chat uses the whole window to read in. */}
+          {pathname !== '/chat' && <Footer />}
+        </nldd-page>
+      </nldd-shell>
+      {/* Microphone in every text field: dictate instead of type. */}
+      <DictationLayer />
+      <HelpShortcut />
     </ReferenceDataProvider>
   );
 }

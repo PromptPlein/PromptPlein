@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import { NATURAL_VOICE } from '@/context/AccessibilityContext';
 import { splitAnswer } from '@/lib/chatFiles';
 import { SpeechLoginRequiredError, synthesizeSpeech } from '@/services/speechService';
@@ -236,9 +236,9 @@ async function speakNatural(id: string, chunks: string[], audio: HTMLAudioElemen
     if (thisRun !== run) return;
     const result = speakWithBrowser(id, chunks.slice(index).join(' '), { voice: null, rate });
     if (result !== 'gestart') {
-      toast.error('Voorlezen lukte niet.');
+      notify.error('Voorlezen lukte niet.');
     } else if (!(err instanceof SpeechLoginRequiredError)) {
-      toast.error('De stem Lotte werkt nu niet. De stem van je apparaat leest verder.');
+      notify.error('De stem Lotte werkt nu niet. De stem van je apparaat leest verder.');
     }
   }
 }
@@ -300,7 +300,7 @@ function speakWithBrowser(
       stopSpeaking();
       // Afgebroken door een nieuwe voorlezing of door Stop: geen fout.
       if (event.error !== 'interrupted' && event.error !== 'canceled') {
-        toast.error('Voorlezen lukte niet met deze stem. Kies een andere stem.');
+        notify.error('Voorlezen lukte niet met deze stem. Kies een andere stem.');
       }
     };
     held.utterance = utterance;
@@ -314,7 +314,7 @@ function speakWithBrowser(
   window.setTimeout(() => {
     if (thisRun !== run || started || window.speechSynthesis.speaking) return;
     stopSpeaking();
-    toast.error('Voorlezen begint niet in deze browser. Kies een andere stem.');
+    notify.error('Voorlezen begint niet in deze browser. Kies een andere stem.');
   }, 4000);
   return 'gestart';
 }

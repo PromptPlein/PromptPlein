@@ -1,5 +1,5 @@
 import { FileText, FileType2, FileCode2, FileJson, Hash } from '@/components/common/icons';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import Modal from '@/components/common/Modal';
 import { exportPrompt, type ExportFormat, type ExportMeta } from '@/services/exportService';
 import type { Prompt } from '@/types';
@@ -31,10 +31,10 @@ export default function ExportModal({
   function handle(format: ExportFormat) {
     try {
       exportPrompt(prompt, format, meta);
-      if (format !== 'pdf') toast.success('Export gestart');
+      if (format !== 'pdf') notify.success('Export gestart');
       onClose();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Export mislukt');
+      notify.error(err instanceof Error ? err.message : 'Export mislukt');
     }
   }
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import { Trash2 } from '@/components/common/icons';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import InfoDot from '@/components/common/InfoDot';
@@ -60,7 +60,7 @@ export default function ChatMemorySettings() {
       setMemories((list) => list.filter((m) => m.id !== memory.id));
       setStatus('Verwijderd.');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Verwijderen mislukt');
+      notify.error(err instanceof Error ? err.message : 'Verwijderen mislukt');
     } finally {
       setBusy(null);
     }
@@ -74,7 +74,7 @@ export default function ChatMemorySettings() {
       setMemories([]);
       setStatus('Geheugen gewist.');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Wissen mislukt');
+      notify.error(err instanceof Error ? err.message : 'Wissen mislukt');
     } finally {
       setBusy(null);
     }

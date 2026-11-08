@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Check, X, Inbox, ExternalLink } from '@/components/common/icons';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import clsx from 'clsx';
 import { formatDate, visibilityMeta } from '@/lib/utils';
 import { listPendingForModeration, decideVisibility } from '@/services/visibilityService';
@@ -24,7 +24,7 @@ export default function ApprovalQueuePage() {
       // (moderator: het ministerie van je tak; beheerder: alles).
       setRows(await listPendingForModeration());
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Laden mislukt');
+      notify.error(err instanceof Error ? err.message : 'Laden mislukt');
     } finally {
       setLoading(false);
     }
@@ -43,10 +43,10 @@ export default function ApprovalQueuePage() {
         entity_id: row.id,
         changes: { prompt_id: row.prompt_id, level: row.level, note: notes[row.id] || null },
       });
-      toast.success(decision === 'approved' ? 'Goedgekeurd' : 'Afgewezen');
+      notify.success(decision === 'approved' ? 'Goedgekeurd' : 'Afgewezen');
       setRows((prev) => prev.filter((x) => x.id !== row.id));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Beslissing mislukt');
+      notify.error(err instanceof Error ? err.message : 'Beslissing mislukt');
     } finally {
       setBusyId(null);
     }

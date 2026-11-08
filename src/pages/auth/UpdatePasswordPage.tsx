@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff } from '@/components/common/icons';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import { updatePassword } from '@/services/authService';
 import { useAuth } from '@/context/AuthContext';
 import AuthLayout from './AuthLayout';
@@ -35,20 +35,20 @@ export default function UpdatePasswordPage() {
     e.preventDefault();
     if (busy) return;
     if (password.length < MIN_LENGTH) {
-      toast.error(`Gebruik minstens ${MIN_LENGTH} tekens.`);
+      notify.error(`Gebruik minstens ${MIN_LENGTH} tekens.`);
       return;
     }
     if (password !== confirm) {
-      toast.error('De wachtwoorden komen niet overeen.');
+      notify.error('De wachtwoorden komen niet overeen.');
       return;
     }
     setBusy(true);
     try {
       await updatePassword(password);
-      toast.success('Wachtwoord bijgewerkt. Je kunt nu inloggen.');
+      notify.success('Wachtwoord bijgewerkt. Je kunt nu inloggen.');
       navigate('/auth/login', { replace: true });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Bijwerken mislukt.');
+      notify.error(err instanceof Error ? err.message : 'Bijwerken mislukt.');
     } finally {
       setBusy(false);
     }

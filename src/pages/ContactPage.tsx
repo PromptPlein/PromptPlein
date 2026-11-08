@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import { useNlddEvent, useNlddValue } from '@/lib/nldd';
 import { useAuth } from '@/context/AuthContext';
 import { sendContactMessage, type ContactKind } from '@/services/contactService';
@@ -35,15 +35,15 @@ export default function ContactPage() {
 
   async function submit() {
     if (!replyTo.trim()) {
-      toast.error('Vul je e-mailadres in zodat we kunnen reageren.');
+      notify.error('Vul je e-mailadres in zodat we kunnen reageren.');
       return;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(replyTo.trim())) {
-      toast.error('Vul een geldig e-mailadres in.');
+      notify.error('Vul een geldig e-mailadres in.');
       return;
     }
     if (!message.trim()) {
-      toast.error('Schrijf eerst een bericht.');
+      notify.error('Schrijf eerst een bericht.');
       return;
     }
     setSending(true);
@@ -57,16 +57,16 @@ export default function ContactPage() {
       });
 
       if (result.sent) {
-        toast.success('Bedankt! Je bericht is verstuurd.');
+        notify.success('Bedankt! Je bericht is verstuurd.');
         setSubject('');
         setMessage('');
       } else if (result.mailto) {
         // Server-verzending niet beschikbaar → open de eigen mailclient.
-        toast('We openen je e-mailprogramma om het bericht te versturen.');
+        notify('We openen je e-mailprogramma om het bericht te versturen.');
         window.location.href = result.mailto;
       }
     } catch {
-      toast.error('Versturen mislukt. Probeer het later opnieuw.');
+      notify.error('Versturen mislukt. Probeer het later opnieuw.');
     } finally {
       setSending(false);
     }

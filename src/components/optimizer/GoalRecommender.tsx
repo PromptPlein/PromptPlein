@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { AlertTriangle, Check, ClipboardCopy, Eraser, Info, Loader2, Sparkles, Wand2 } from '@/components/common/icons';
 import clsx from 'clsx';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import HoverPreview from '@/components/common/HoverPreview';
 import { GOAL_EXAMPLES, categoryOf } from '@/data/goalExamples';
@@ -69,9 +69,9 @@ export default function GoalRecommender({
   async function copyExample(text: string) {
     try {
       await copyToClipboard(text);
-      toast.success('Voorbeeld gekopieerd.');
+      notify.success('Voorbeeld gekopieerd.');
     } catch {
-      toast.error('Kopiëren mislukt.');
+      notify.error('Kopiëren mislukt.');
     }
   }
 
@@ -79,7 +79,7 @@ export default function GoalRecommender({
   function applyExample(text: string) {
     onGoalChange(text);
     setShowExamples(false);
-    toast.success('Voorbeeld ingevuld.');
+    notify.success('Voorbeeld ingevuld.');
   }
 
   /** Opschonen: wis de lokale aanbevelingen/meldingen én laat de pagina de rest leegmaken. */
@@ -92,7 +92,7 @@ export default function GoalRecommender({
 
   async function handleRecommend() {
     if (!goal.trim()) {
-      toast.error('Beschrijf eerst wat je wilt bereiken.');
+      notify.error('Beschrijf eerst wat je wilt bereiken.');
       return;
     }
     setLoading(true);
@@ -112,12 +112,12 @@ export default function GoalRecommender({
         return;
       }
       setRecommendations(res.recommendations);
-      if (res.error) toast(res.error, { icon: '⚠️' });
+      if (res.error) notify(res.error, { icon: '⚠️' });
       if (res.recommendations.length === 0) {
-        toast('Geen duidelijke match. Kies hieronder zelf een techniek.', { icon: 'ℹ️' });
+        notify('Geen duidelijke match. Kies hieronder zelf een techniek.', { icon: 'ℹ️' });
       }
     } catch {
-      toast.error('Aanbeveling mislukt. Probeer het opnieuw.');
+      notify.error('Aanbeveling mislukt. Probeer het opnieuw.');
     } finally {
       setLoading(false);
     }
