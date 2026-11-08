@@ -100,15 +100,15 @@ export default function InfoDot({
         onFocus={() => setHover(true)}
         onBlur={() => setHover(false)}
         className={clsx(
-          'group/info inline-flex h-[32px] w-[32px] shrink-0 items-center justify-center rounded-full focus:outline-none',
+          'group/info inline-flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-full focus:outline-none',
           className,
         )}
       >
         <span
           aria-hidden="true"
           className={clsx(
-            'flex h-[22px] w-[22px] items-center justify-center rounded-full border-2 text-[13px] font-bold leading-none transition-colors',
-            'group-focus-visible/info:ring-2 group-focus-visible/info:ring-rijksblauw-500 group-focus-visible/info:ring-offset-2 dark:group-focus-visible/info:ring-offset-slate-900',
+            'flex h-[16px] w-[16px] items-center justify-center rounded-full border-[1.5px] text-[10px] font-bold leading-none transition-colors',
+            'group-focus-visible/info:ring-2 group-focus-visible/info:ring-rijksblauw-500 group-focus-visible/info:ring-offset-1 dark:group-focus-visible/info:ring-offset-slate-900',
             open
               ? 'border-rijksblauw-700 bg-rijksblauw-700 text-white dark:border-rijksblauw-200 dark:bg-rijksblauw-200 dark:text-slate-900'
               : 'border-rijksblauw-500 text-rijksblauw-500 group-hover/info:border-rijksblauw-700 group-hover/info:text-rijksblauw-700 dark:border-rijksblauw-200 dark:text-rijksblauw-200',

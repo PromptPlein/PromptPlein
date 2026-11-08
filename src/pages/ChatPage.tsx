@@ -53,7 +53,7 @@ import GuardrailDialog from '@/components/optimizer/GuardrailDialog';
 import { thinkingUnavailableReason } from '@/config/aiModels';
 
 /** Staat in de kaart, zodat hij altijd bij het typen in beeld is. */
-const PII_NOTICE = 'Niet voor verwerking van persoonsgegevens.';
+const PII_NOTICE = 'Verwerk geen persoonsgegevens.';
 
 /** Permanente afmelding voor de bouw-een-prompt-tip (per apparaat). */
 const NUDGE_DISMISSED_KEY = 'opl.ui.chatNudgeDismissed';

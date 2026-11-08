@@ -35,8 +35,10 @@ import { hasMemoryTrigger } from '@/lib/memoryTriggers';
 import ComposerPlusMenu from './ComposerPlusMenu';
 import ConversationToggle from './ConversationToggle';
 import { useChatVoice } from './useChatVoice';
-import { MAX_CHAT_ATTACHMENTS } from './useChatController';
+import { MAX_CHAT_ATTACHMENTS, MAX_CHAT_ATTACHMENT_BYTES } from './useChatController';
 import type { ChatAttachment } from '@/types';
+
+const MAX_MB = MAX_CHAT_ATTACHMENT_BYTES / (1024 * 1024);
 
 /**
  * Bovengrens van het tekstvak. Daarboven groeit het niet verder mee en scrollt
@@ -637,7 +639,7 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
               addFileHint={
                 attachments.length >= MAX_CHAT_ATTACHMENTS
                   ? `Maximaal ${MAX_CHAT_ATTACHMENTS} per chat`
-                  : 'PDF, Word of tekst, tot 10 MB'
+                  : `PDF, Word of tekst, tot ${MAX_MB} MB`
               }
               onAddFile={() => fileInputRef.current?.click()}
               onContext={() => onContext?.('context')}
@@ -842,7 +844,7 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
             className="-ml-1"
             text={
               allowAttachments
-                ? `${enterHint}\nBijlagen: maximaal ${MAX_CHAT_ATTACHMENTS}, elk tot 10 MB. Sleep ze hierheen of kies Bestand achter de plus. Ze blijven de hele chat beschikbaar.`
+                ? `${enterHint}\nBijlagen: maximaal ${MAX_CHAT_ATTACHMENTS}, elk tot ${MAX_MB} MB. Sleep ze hierheen of kies Bestand achter de plus. Ze blijven de hele chat beschikbaar.`
                 : enterHint
             }
           />

@@ -44,6 +44,8 @@ import type {
 export const MAX_CHAT_ATTACHMENTS = 3;
 /** Maximale tekstomvang per bijlage (zelfde grens als server-side). */
 export const MAX_CHAT_ATTACHMENT_CHARS = 50_000;
+/** Maximale bestandsgrootte per bijlage, gelijk aan een bronbestand in een project. */
+export const MAX_CHAT_ATTACHMENT_BYTES = 50 * 1024 * 1024;
 /**
  * Zo vaak schrijft de chat een afgebroken antwoord vanzelf verder. Elke ronde
  * is hooguit 8192 tokens (MODE_MAX_TOKENS.chat in de edge function), dus vijf
@@ -780,7 +782,7 @@ export default function useChatController(
       try {
         // Dynamische import: pdfjs/mammoth blijven buiten de startbundel.
         const { extractDocument } = await import('@/lib/extractDocument');
-        const doc = await extractDocument(file);
+        const doc = await extractDocument(file, MAX_CHAT_ATTACHMENT_BYTES);
         const truncated = doc.text.length > MAX_CHAT_ATTACHMENT_CHARS;
         const text = truncated ? doc.text.slice(0, MAX_CHAT_ATTACHMENT_CHARS) : doc.text;
         const attachment: ChatAttachment = {
