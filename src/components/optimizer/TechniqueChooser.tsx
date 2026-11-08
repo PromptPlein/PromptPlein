@@ -11,7 +11,7 @@ import '@nldd/design-system/list-item';
 import '@nldd/design-system/list-item-segment';
 import '@nldd/design-system/popover';
 import '@nldd/design-system/spacer-cell';
-import '@nldd/design-system/tab-bar';
+import '@nldd/design-system/segmented-control';
 import '@nldd/design-system/text';
 import '@nldd/design-system/text-cell';
 import '@nldd/design-system/title';
@@ -98,7 +98,10 @@ export default function TechniqueChooser({
   );
 }
 
-/** The goals as tabs, icon above the name like the tiles on main; what does not fit goes behind "Meer tabs". */
+/**
+ * De doelen als één balk over de volle breedte, icoon boven de naam. Een
+ * segmented control en geen tabbalk: die laatste kan niet rekken.
+ */
 function DoelTabs({
   doelen,
   actief,
@@ -109,22 +112,24 @@ function DoelTabs({
   onKies: (doel: TechniekDoel) => void;
 }) {
   const ref = useRef<HTMLElement>(null);
-  useNlddEvent<CustomEvent<{ item: HTMLElement }>>(ref, 'tabchange', (e) => {
-    const text = e.detail?.item?.getAttribute('text');
-    const doel = doelen.find((d) => d.naam === text);
+  useNlddEvent<CustomEvent<{ value?: string }>>(ref, 'change', (e) => {
+    const doel = doelen.find((d) => d.id === e.detail?.value);
     if (doel) onKies(doel.id);
   });
   return (
-    <nldd-tab-bar ref={ref} variant="icon-and-text" size="lg" accessible-label="Kies je doel">
+    <nldd-segmented-control
+      ref={ref}
+      width="full"
+      size="lg"
+      variant="icon-and-text"
+      appearance="neutral-base"
+      value={actief}
+      accessible-label="Kies je doel"
+    >
       {doelen.map((d) => (
-        <nldd-tab-bar-item
-          key={d.id}
-          text={d.naam}
-          icon={d.icon}
-          current={d.id === actief || undefined}
-        ></nldd-tab-bar-item>
+        <nldd-segmented-control-item key={d.id} value={d.id} text={d.naam} icon={d.icon}></nldd-segmented-control-item>
       ))}
-    </nldd-tab-bar>
+    </nldd-segmented-control>
   );
 }
 

@@ -10,6 +10,7 @@ import type { AnalyticsEvent, Prompt } from '@/types';
 import '@nldd/design-system/button';
 import '@nldd/design-system/button-group';
 import '@nldd/design-system/collection';
+import '@nldd/design-system/hero';
 import '@nldd/design-system/inline-dialog';
 import '@nldd/design-system/simple-section';
 import '@nldd/design-system/spacer';
@@ -63,35 +64,53 @@ export default function TrendingPage({ embedded = false }: { embedded?: boolean 
 
   const { enriched, authors } = usePromptCommunity(trending);
 
+  // De opening zoals bij Community: het lijnenbeeld met een donkerblauw vlak,
+  // en de tabbladen eronder, zodat wisselen tussen de twee niets laat springen.
   const header = embedded ? null : (
     <>
-      <nldd-title
-        slot="header"
-        heading-level={1}
-        size={2}
-        text="Trending"
-        supporting-text="De prompts en technieken waar collega’s nu het meest mee werken."
-      ></nldd-title>
-      <nldd-tab-bar slot="header" navigation accessible-label="Onderdelen van Community">
-        <nldd-tab-bar-item href="/community" text="Community"></nldd-tab-bar-item>
-        <nldd-tab-bar-item href="/trending" text="Trending" current></nldd-tab-bar-item>
-      </nldd-tab-bar>
+      <nldd-hero
+        width="full"
+        background="tinted"
+        layout="contained"
+        main-background="accent"
+        main-position="top-center"
+        media-height="clamp(180px, 26vw, 320px)"
+        media-src="/lijnen.jpg"
+        media-alt=""
+      >
+        <nldd-title
+          color="inherit"
+          heading-level={1}
+          size={1}
+          text="Trending"
+          supporting-text="De prompts en technieken waar collega’s nu het meest mee werken."
+        ></nldd-title>
+      </nldd-hero>
+      <nldd-simple-section background="tinted" padding-top="0">
+        <nldd-tab-bar navigation accessible-label="Onderdelen van Community">
+          <nldd-tab-bar-item href="/community" text="Community"></nldd-tab-bar-item>
+          <nldd-tab-bar-item href="/trending" text="Trending" current></nldd-tab-bar-item>
+        </nldd-tab-bar>
+      </nldd-simple-section>
     </>
   );
 
   if (loading) {
     return (
-      <nldd-simple-section background="tinted">
+      <>
         {header}
-        <SkeletonGrid count={6} />
-      </nldd-simple-section>
+        <nldd-simple-section background="tinted" padding-top={embedded ? undefined : '0'}>
+          <SkeletonGrid count={6} />
+        </nldd-simple-section>
+      </>
     );
   }
 
   if (trending.length === 0) {
     return (
-      <nldd-simple-section background="tinted">
-        {header}
+      <>
+      {header}
+      <nldd-simple-section background="tinted" padding-top={embedded ? undefined : '0'}>
         <nldd-inline-dialog
           icon="line-chart"
           horizontal-alignment="left"
@@ -103,13 +122,14 @@ export default function TrendingPage({ embedded = false }: { embedded?: boolean 
           </nldd-button-group>
         </nldd-inline-dialog>
       </nldd-simple-section>
+      </>
     );
   }
 
   return (
     <>
-      <nldd-simple-section background="tinted">
-        {header}
+      {header}
+      <nldd-simple-section background="tinted" padding-top={embedded ? undefined : '0'}>
         <nldd-title heading-level={2} size={4} text="Populairste prompts"></nldd-title>
         <nldd-spacer size="12"></nldd-spacer>
         <nldd-collection item-min-width="18rem">

@@ -31,6 +31,7 @@ import '@nldd/design-system/button';
 import '@nldd/design-system/collection';
 import '@nldd/design-system/container';
 import '@nldd/design-system/dropdown';
+import '@nldd/design-system/hero';
 import '@nldd/design-system/inline-dialog';
 import '@nldd/design-system/link';
 import '@nldd/design-system/search-field';
@@ -207,9 +208,20 @@ export default function SearchPage() {
 
   return (
     <>
-      {/* Zoekvak en categorieën in een smalle kolom in het midden. */}
-      <nldd-simple-section background="tinted" horizontal-alignment="center">
-        <nldd-container max-width="768px">
+      {/* Zoekvak en categorieën op een witte kaart over het lijnenbeeld, zoals Maken. */}
+      <nldd-hero
+        width="full"
+        background="tinted"
+        layout="overlap"
+        main-background="base"
+        main-position="bottom-center"
+        main-width="768px"
+        media-height="clamp(120px, 24vw, 300px)"
+        overlap-size="clamp(64px, 17vw, 220px)"
+        media-src="/lijnen.jpg"
+        media-alt=""
+      >
+        <nldd-container>
         <nldd-title heading-level={1} size={2} text="Wat zoek je?"></nldd-title>
         <nldd-spacer size="24"></nldd-spacer>
 
@@ -269,9 +281,9 @@ export default function SearchPage() {
           </>
         )}
         </nldd-container>
-      </nldd-simple-section>
+      </nldd-hero>
 
-      <nldd-simple-section background="tinted" padding-top="0">
+      <nldd-simple-section background="tinted">
         {browsing ? (
           waiting ? (
             <SkeletonGrid count={6} />

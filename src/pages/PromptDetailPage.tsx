@@ -29,6 +29,7 @@ import '@nldd/design-system/form-actions';
 import '@nldd/design-system/form-field';
 import '@nldd/design-system/icon';
 import '@nldd/design-system/icon-button';
+import '@nldd/design-system/hero';
 import '@nldd/design-system/inline-dialog';
 import '@nldd/design-system/link';
 import '@nldd/design-system/modal-dialog';
@@ -246,8 +247,21 @@ export default function PromptDetailPage() {
 
   return (
     <>
-      <nldd-simple-section background="tinted">
-        <nldd-container slot="header" max-width="48rem">
+      {/* De prompt op een witte kaart over het lijnenbeeld, zoals Maken. */}
+      <nldd-hero
+        width="full"
+        background="tinted"
+        layout="overlap"
+        main-background="base"
+        main-position="bottom-center"
+        main-width="48rem"
+        media-height="clamp(120px, 24vw, 300px)"
+        overlap-size="clamp(64px, 17vw, 220px)"
+        media-src="/lijnen.jpg"
+        media-alt=""
+      >
+      <nldd-container>
+        <nldd-container>
           {editing ? (
             <nldd-link
               href={`/prompt/${prompt.id}`}
@@ -298,11 +312,7 @@ export default function PromptDetailPage() {
             ></nldd-tag>
           </nldd-container>
         </nldd-container>
-
-        <nldd-container max-width="48rem">
-          {/* De prompt zelf op een witte kaart; reacties, deelniveaus en versies eronder. */}
-          <nldd-card accessible-label="Prompt">
-          <nldd-container padding="24" sm-padding="16">
+        <nldd-spacer size="24"></nldd-spacer>
           {editing ? (
             <nldd-form>
               <form
@@ -511,10 +521,12 @@ export default function PromptDetailPage() {
             </>
           )}
 
-          </nldd-container>
-          </nldd-card>
+      </nldd-container>
+      </nldd-hero>
 
-          <nldd-spacer size="16"></nldd-spacer>
+      {/* Reacties, deelniveaus en versies eronder, in dezelfde breedte. */}
+      <nldd-simple-section background="tinted" horizontal-alignment="center">
+        <nldd-container max-width="48rem">
           <CollaborationPanel
             prompt={prompt}
             refreshKey={versionRefresh}
