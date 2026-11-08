@@ -3893,7 +3893,6 @@ async function saveMemories(
   req: Request,
   input: { message: string; previousUser?: string; previousAssistant?: string },
   preferredProvider: PreferredProvider | undefined,
-  preferredModel: string | undefined,
 ): Promise<{ saved: MemoryRow[]; replaced: MemoryRow[] } | null> {
   const existing = await memoriesToCompare(req, input.message);
   const earlier =
@@ -3912,7 +3911,10 @@ async function saveMemories(
         userMessage,
         MEMORY_EXTRACT_SYSTEM_PROMPT,
         0.1,
-        resolveModel(candidate, preferredProvider, preferredModel),
+        // Bewust het standaardmodel en niet het chatmodel: één korte regel
+        // opschrijven kan Small 4 goed, en het antwoord in de chat wacht hierop.
+        // Met Medium 3.5 duurde het opslaan in productie langer dan 10 seconden.
+        resolveModel(candidate, undefined, undefined),
         512,
         undefined,
         20_000,
@@ -9587,7 +9589,6 @@ Deno.serve(async (req: Request) => {
             previousAssistant: text(previousAssistant, 2000),
           },
           body.preferredProvider,
-          body.preferredModel,
         );
         if (!result) return json(200, { success: false, error: 'De wens kon niet worden opgeschreven' });
         return json(200, { success: true, ...result });

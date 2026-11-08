@@ -7,8 +7,13 @@ import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { detectPii } from '@/services/guardrails';
 import { rememberFromMessage } from '@/services/memoryService';
 
-/** Zo lang wacht het antwoord op het opslaan. Daarna loopt het opslaan op de achtergrond door. */
-const REMEMBER_WAIT_MS = 10_000;
+/**
+ * Zo lang wacht het antwoord op het opslaan. Daarna loopt het opslaan op de
+ * achtergrond door. Ruim, want de chat bevestigt de wens uit zijn geheugenblok:
+ * begint hij te vroeg, dan staat de nieuwe wens daar nog niet in en noemt hij
+ * een oude.
+ */
+const REMEMBER_WAIT_MS = 25_000;
 
 /** Wat de chat boven het tekstvak laat zien over het geheugen. */
 export type MemoryNotice =
