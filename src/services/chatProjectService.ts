@@ -227,7 +227,7 @@ const markedUsed = new Set<string>();
 
 /**
  * Zet de laatste keer gebruik van een project op nu (migratie 0051). Een project
- * dat een jaar niet is gebruikt, ruimt de database op. Eén keer per project per
+ * dat drie maanden niet is gebruikt, verliest zijn bronbestanden (0053). Eén keer per project per
  * sessie is genoeg; de database schrijft hoogstens één keer per uur. Gooit nooit.
  */
 export function markProjectUsed(projectId: string): void {
@@ -236,6 +236,37 @@ export function markProjectUsed(projectId: string): void {
   void supabase.rpc('mark_chat_project_used', { p_project: projectId }).then(({ error }) => {
     if (error) markedUsed.delete(projectId);
   });
+}
+
+/** Bewaartermijn van de bronbestanden van een project (migratie 0053). */
+export interface ProjectRetention {
+  name: string;
+  fileCount: number;
+  /** De dag waarop de bestanden weggaan; alleen gezet na de waarschuwingsmail. */
+  deleteOn: string | null;
+  /** Zonder gebruik blijven de bestanden in elk geval tot deze dag staan. */
+  keepUntil: string;
+}
+
+/** Stand van de bewaartermijn; niet gevonden (of niet van jou) -> null. */
+export async function getProjectRetention(projectId: string): Promise<ProjectRetention | null> {
+  const client = requireClient();
+  const { data, error } = await client.rpc('chat_project_retention', { p_project: projectId });
+  if (error) throw error;
+  const row = (data as { name: string; file_count: number; delete_on: string | null; keep_until: string }[])?.[0];
+  if (!row) return null;
+  return { name: row.name, fileCount: row.file_count, deleteOn: row.delete_on, keepUntil: row.keep_until };
+}
+
+/**
+ * De knop Bestanden bewaren. De database legt het besluit vast in het logboek
+ * en geeft de dag terug tot wanneer de bestanden in elk geval blijven staan.
+ */
+export async function keepProjectFiles(projectId: string): Promise<string> {
+  const client = requireClient();
+  const { data, error } = await client.rpc('keep_chat_project_files', { p_project: projectId });
+  if (error) throw error;
+  return data as string;
 }
 
 /** Verwijder één bronbestand. */

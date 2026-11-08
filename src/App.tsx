@@ -28,6 +28,7 @@ const CommunityPage = lazy(() => import('@/pages/CommunityPage'));
 const PublicProfilePage = lazy(() => import('@/pages/PublicProfilePage'));
 const ChatPage = lazy(() => import('@/pages/ChatPage'));
 const PersonalSettingsPage = lazy(() => import('@/pages/PersonalSettingsPage'));
+const KeepProjectFilesPage = lazy(() => import('@/pages/KeepProjectFilesPage'));
 // De techniekenlijst met invulvelden (training): eigen instap naast /genereren.
 const TechniquesPage = lazy(() => import('@/pages/TechniquesPage'));
 
@@ -133,6 +134,7 @@ export default function App() {
                 <Route path="/bibliotheek" element={<MyLibraryPage />} />
                 <Route path="/profiel" element={<ProfilePage />} />
                 <Route path="/netwerk" element={<NetworkPage />} />
+                <Route path="/bronnen-bewaren/:projectId" element={<KeepProjectFilesPage />} />
               </Route>
 
               {/* Goedkeuringen — toegankelijk voor admins én moderatoren.

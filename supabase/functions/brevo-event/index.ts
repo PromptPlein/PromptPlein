@@ -4,8 +4,8 @@
 // Brevo. Bewust geen automation: dat is voor Brevo marketing, dus wie zich ergens
 // in dit gedeelde account uitschrijft zou deze meldingen missen. Dit zijn berichten
 // over een eigen aanvraag of een taak als beoordelaar, dus zonder uitschrijflink.
-// Wordt aangeroepen door de database-triggers uit migratie 0048 (via pg_net), niet
-// vanuit de browser.
+// Wordt aangeroepen door de database-triggers uit migratie 0048 en de nachtelijke
+// opruimtaak uit 0053 (via pg_net), niet vanuit de browser.
 //
 // Beveiliging: de trigger stuurt hetzelfde gedeelde geheim mee als
 // register-brevo-contact, in de header `x-webhook-secret`.
@@ -30,6 +30,8 @@ const TEMPLATES: Record<string, number> = {
   promptplein_aanvraag_ingediend: 70,
   promptplein_aanvraag_goedgekeurd: 71,
   promptplein_aanvraag_afgewezen: 72,
+  // Bewaartermijn van bronbestanden (0053): een week voor het verwijderen.
+  promptplein_bronnen_verlopen: 104,
 };
 
 const SENDER = { name: 'PromptPlein', email: 'roy@awaren.nl' };

@@ -19,6 +19,7 @@ const TITLES: [prefix: string, title: string][] = [
   ['/contact', 'Contact'],
   ['/profiel', 'Mijn profiel'],
   ['/netwerk', 'Netwerk'],
+  ['/bronnen-bewaren/', 'Bronbestanden bewaren'],
   ['/goedkeuringen', 'Goedkeuringen'],
   ['/auth/login', 'Inloggen'],
   ['/auth/registreren', 'Registreren'],

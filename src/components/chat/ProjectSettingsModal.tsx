@@ -383,8 +383,8 @@ export default function ProjectSettingsModal({
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 Tot {MAX_PROJECT_FILES} bestanden van elk {MAX_PROJECT_FILE_BYTES / (1024 * 1024)} MB
-                (.txt, .md, .pdf, .docx). Een project dat een jaar niet is gebruikt, wordt
-                verwijderd.
+                (.txt, .md, .pdf, .docx). Gebruik je een project drie maanden niet, dan worden
+                de bestanden verwijderd. Je krijgt een week vooraf een mail. Het project blijft staan.
               </p>
             </div>
             <button

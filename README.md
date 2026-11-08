@@ -40,7 +40,7 @@ De hele interface is Nederlands.
 - **Taalmodel.** De AI-laag draait op Mistral, een Europese aanbieder.
 - **Toegang** wordt afgedwongen in de database met Row Level Security, niet in de frontend.
 - **Bronbestanden in projecten** staan als tekst in de database. Voor het toevoegen zoekt de browser naar persoonsgegevens en biedt aan ze te vervangen. Alleen in een groot project gaat de tekst ook naar Mistral om hem doorzoekbaar te maken, zie hieronder.
-- **Bewaartermijn.** Een project dat een jaar niet is gebruikt, wordt elke nacht opgeruimd, met zijn bestanden. In de back-ups van Supabase blijft het nog staan tot die verlopen.
+- **Bewaartermijn.** Van een project dat drie maanden niet is gebruikt, worden de bronbestanden verwijderd. Het project zelf blijft staan. Een week vooraf krijgt de eigenaar een mail met een knop om de bestanden te bewaren; die keuze wordt vastgelegd. In de back-ups van Supabase blijven de bestanden nog staan tot die verlopen.
 - **Edge functions in de EU.** Elke aanroep vraagt om de regio `eu-west-1` (Ierland), naast de database, ook als de gebruiker buiten Europa werkt.
 
 ## Zoeken in de bronbestanden van een project
@@ -115,7 +115,7 @@ Een vector is geen anonieme versie van de tekst. Met de juiste technieken is een
 - **Alleen de vector is wijzigbaar.** Van de stukken mag de eigenaar alleen de kolom `embedding` vullen. De tekst kan niemand achteraf aanpassen.
 - **De zoekfuncties draaien onder de rechten van de aanroeper** (`SECURITY INVOKER`) en zijn zonder account niet aan te roepen.
 - **Verwijderen ruimt alles op.** Verdwijnt een bestand, project of account, dan verdwijnen de stukken en vectoren mee (`ON DELETE CASCADE`).
-- **Opruimen na een jaar.** Een geplande taak (`pg_cron`, `projecten-opruimen`) verwijdert elke nacht de projecten die een jaar niet zijn gebruikt. Gebruik is: het project openen, de instellingen openen of er een vraag in stellen (`mark_chat_project_used`).
+- **Opruimen na drie maanden.** Een geplande taak (`pg_cron`, `projecten-opruimen`) waarschuwt elke nacht per mail wat over een week aan de beurt is en verwijdert de bronbestanden van projecten die een week eerder zijn gewaarschuwd (0053, `chat_project_retention_log`). Gebruik is: het project openen, de instellingen openen of er een vraag in stellen (`mark_chat_project_used`).
 - **Geen tekst in de logs.** De function logt bij een fout alleen de foutmelding, nooit de inhoud van een bestand.
 - **Ander embeddingmodel, alle vectoren opnieuw.** Vectoren van twee modellen zijn niet met elkaar te vergelijken.
 

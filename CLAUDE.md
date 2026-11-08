@@ -169,6 +169,9 @@ categorieën en functies. De indiener krijgt altijd een besluitmail, ook als die
 aanvraag afhandelt (0050). Een nieuw soort aanvraag krijgt dus een eigen trigger. In de mail staan
 de gegevens als `params.voornaam`, `soort`, `titel`, `bereik`, `aanvrager`, `toelichting` en `link`.
 
+Template 104 waarschuwt een week voordat de bronbestanden van een project verdwijnen (0053), ook
+transactioneel en zonder uitschrijflink, met `params.titel`, `aantal`, `datum` en `link`.
+
 ## Twee draaimodi
 
 `src/lib/supabase.ts` exporteert `isSupabaseConfigured`. Ontbreken de
@@ -511,9 +514,13 @@ Let op de privacy: in een groot project gaat elk bestand in zijn geheel naar Mis
 ook de delen waar nooit iets over wordt gevraagd. Daarom zoekt de browser vóór het
 toevoegen naar persoonsgegevens (`countPii` en `redactPii` in `guardrails`,
 `PiiFileDialog`) en biedt hij aan ze te vervangen, nog voordat er iets verstuurd
-wordt. Een project dat een jaar niet is gebruikt, ruimt `pg_cron` 's nachts op (0051,
-`last_used_at`, `mark_chat_project_used`); gebruik markeren verandert `updated_at` en
-dus de volgorde in de zijbalk niet. Wissel je van
+wordt. Wordt een project drie maanden niet gebruikt, dan wist `pg_cron` 's nachts zijn
+bronbestanden (0053, `last_used_at`, `mark_chat_project_used`); het project zelf blijft
+staan. Een week vooraf gaat er een mail met een link naar `/bronnen-bewaren/<id>`. Daar
+staat de knop Bestanden bewaren; de link zelf bewaart niets, want mailscanners openen
+links vanzelf. Waarschuwen, bewaren en verwijderen komen in `chat_project_retention_log`.
+Er wordt nooit verwijderd zonder waarschuwing een week eerder. Gebruik markeren verandert
+`updated_at` en dus de volgorde in de zijbalk niet. Wissel je van
 embeddingmodel, gooi dan alle vectoren weg: die van twee modellen zijn niet te
 vergelijken.
 
