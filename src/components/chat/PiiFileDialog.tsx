@@ -45,15 +45,28 @@ export default function PiiFileDialog({
           </p>
         </div>
       </div>
-      <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <button type="button" className="opl-btn-secondary" onClick={() => onChoose('skip')}>
-          Niet toevoegen
+      {/* Onder elkaar: drie knoppen naast elkaar breken in dit venster af. */}
+      <div className="mt-6 flex flex-col gap-2">
+        <button
+          type="button"
+          className="opl-btn-primary w-full justify-center"
+          onClick={() => onChoose('redact')}
+        >
+          Vervangen en toevoegen
         </button>
-        <button type="button" className="opl-btn-secondary" onClick={() => onChoose('keep')}>
+        <button
+          type="button"
+          className="opl-btn-secondary w-full justify-center"
+          onClick={() => onChoose('keep')}
+        >
           Toevoegen zoals het is
         </button>
-        <button type="button" className="opl-btn-primary" onClick={() => onChoose('redact')}>
-          Vervangen en toevoegen
+        <button
+          type="button"
+          className="opl-btn-secondary w-full justify-center"
+          onClick={() => onChoose('skip')}
+        >
+          Niet toevoegen
         </button>
       </div>
     </Modal>
