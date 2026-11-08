@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { useLocation, useNavigationType } from 'react-router-dom';
 import { pageTitle } from '@/lib/pageTitles';
+import '@nldd/design-system/page';
+import '@nldd/design-system/title';
 
 /** Zo lang wachten we op de kop van een pagina die nog moet laden. */
 const MAX_WAIT_MS = 4000;

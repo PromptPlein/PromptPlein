@@ -1,6 +1,9 @@
 import { useAccessibility } from '@/context/AccessibilityContext';
 import { ariaShortcut, shortcutKeys, SHORTCUTS } from '@/lib/shortcuts';
 import type { ConversationPhase } from './useChatVoice';
+import '@nldd/design-system/toggle-button';
+import '@nldd/design-system/tooltip';
+import '@nldd/design-system/visually-hidden';
 
 const PHASE_LABEL: Record<ConversationPhase, string> = {
   luistert: 'Ik luister',

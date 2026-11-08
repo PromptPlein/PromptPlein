@@ -1,4 +1,6 @@
 import { modelLabel, PROVIDER_LABELS, type AiProvider } from '@/config/aiModels';
+import '@nldd/design-system/tag';
+import '@nldd/design-system/tooltip';
 
 /**
  * Badge in de chat: welk model er antwoordt (bijv. "Mistral · Mistral Small 4").

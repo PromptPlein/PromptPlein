@@ -1,4 +1,10 @@
 import type { PrefillResult } from '@/types';
+import '@nldd/design-system/card';
+import '@nldd/design-system/container';
+import '@nldd/design-system/icon';
+import '@nldd/design-system/link';
+import '@nldd/design-system/text';
+import '@nldd/design-system/tooltip';
 
 /**
  * What the internet search turned up while filling in the fields: the queries,

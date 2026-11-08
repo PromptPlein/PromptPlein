@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNlddEvent } from '@/lib/nldd';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/container';
+import '@nldd/design-system/icon-button';
+import '@nldd/design-system/segmented-control';
+import '@nldd/design-system/slider';
+import '@nldd/design-system/text';
 
 /** A design-system color token, read at runtime for drawing on the canvas. */
 function token(name: string): string {

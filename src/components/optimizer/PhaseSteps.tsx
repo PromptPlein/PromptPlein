@@ -1,3 +1,4 @@
+import '@nldd/design-system/step-bar';
 interface PhaseStepsProps {
   /** De stappen in volgorde, van eerste naar laatste. */
   steps: string[];

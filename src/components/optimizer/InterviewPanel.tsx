@@ -8,6 +8,24 @@ import { detectPii, detectBlockedTopics, type GuardrailFinding } from '@/service
 import type { AiSettings } from '@/services/settingsService';
 import InterviewSteps from './InterviewSteps';
 import type { PlanStep, Technique, TranscriptTurn } from '@/types';
+import '@nldd/design-system/activity-indicator';
+import '@nldd/design-system/banner';
+import '@nldd/design-system/box';
+import '@nldd/design-system/button';
+import '@nldd/design-system/card';
+import '@nldd/design-system/code-viewer';
+import '@nldd/design-system/container';
+import '@nldd/design-system/form-field';
+import '@nldd/design-system/icon';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/multi-line-text-field';
+import '@nldd/design-system/progress-bar';
+import '@nldd/design-system/spacer';
+import '@nldd/design-system/tag';
+import '@nldd/design-system/text';
+import '@nldd/design-system/text-cell';
+import '@nldd/design-system/tooltip';
 
 /**
  * De pure UI van het vraag-na-vraag-interview: het gesprek tot nu toe, de huidige

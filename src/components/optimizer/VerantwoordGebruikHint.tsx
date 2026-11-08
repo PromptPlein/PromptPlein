@@ -1,5 +1,9 @@
 import { useMemo } from 'react';
 import { detectVerantwoordSignalen } from '@/lib/verantwoordGebruik';
+import '@nldd/design-system/banner';
+import '@nldd/design-system/container';
+import '@nldd/design-system/link';
+import '@nldd/design-system/text';
 
 /**
  * Pointer under the builder's input field: when the task touches decisions about

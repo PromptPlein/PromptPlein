@@ -1,4 +1,6 @@
 import type { PrefillSource } from '@/types';
+import '@nldd/design-system/tag';
+import '@nldd/design-system/tooltip';
 
 interface PrefillBadgeProps {
   source: PrefillSource;

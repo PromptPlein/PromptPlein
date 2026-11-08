@@ -2,6 +2,14 @@ import { useEffect, useState } from 'react';
 import { listAuditEntries } from '@/services/adminService';
 import { formatDate } from '@/lib/utils';
 import type { AuditLogEntry } from '@/types';
+import '@nldd/design-system/activity-indicator';
+import '@nldd/design-system/cell';
+import '@nldd/design-system/container';
+import '@nldd/design-system/inline-dialog';
+import '@nldd/design-system/table';
+import '@nldd/design-system/tag';
+import '@nldd/design-system/text-cell';
+import '@nldd/design-system/title';
 
 export default function AuditLogPage() {
   const [entries, setEntries] = useState<AuditLogEntry[]>([]);

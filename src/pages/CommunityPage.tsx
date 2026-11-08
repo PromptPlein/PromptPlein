@@ -5,6 +5,22 @@ import { useNlddEvent } from '@/lib/nldd';
 import { listCommunityMembers, firstName } from '@/services/communityService';
 import TrendingPage from '@/pages/TrendingPage';
 import type { CommunityMember } from '@/types';
+import '@nldd/design-system/badge';
+import '@nldd/design-system/card';
+import '@nldd/design-system/cell';
+import '@nldd/design-system/container';
+import '@nldd/design-system/icon-cell';
+import '@nldd/design-system/inline-dialog';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/one-half-one-half-section';
+import '@nldd/design-system/simple-section';
+import '@nldd/design-system/spacer';
+import '@nldd/design-system/spacer-cell';
+import '@nldd/design-system/tab-bar';
+import '@nldd/design-system/text';
+import '@nldd/design-system/text-cell';
+import '@nldd/design-system/title';
 
 type Tab = 'community' | 'trending';
 

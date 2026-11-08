@@ -1,6 +1,13 @@
 import { useMemo, useState } from 'react';
 import { ORG_TYPE_LABELS } from '@/services/orgService';
 import type { Organization } from '@/types';
+import '@nldd/design-system/icon-cell';
+import '@nldd/design-system/inline-dialog';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/list-item-segment';
+import '@nldd/design-system/spacer-cell';
+import '@nldd/design-system/text-cell';
 
 /**
  * Tree of the organizations: Rijksoverheid on top, the ministries below it and

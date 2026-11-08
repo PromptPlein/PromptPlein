@@ -4,6 +4,9 @@ import { useAuth } from '@/context/AuthContext';
 import { getChatSettingsCached } from '@/services/settingsService';
 import UserMenu from './UserMenu';
 import NotificationBell from './NotificationBell';
+import '@nldd/design-system/menu-bar';
+import '@nldd/design-system/menu-bar-item';
+import '@nldd/design-system/top-navigation-bar';
 
 /** Warm the lazy ChatPage chunk as soon as someone points at the menu item. */
 function prefetchChatPage() {

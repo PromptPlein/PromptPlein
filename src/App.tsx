@@ -14,6 +14,11 @@ import LoginPage from '@/pages/auth/LoginPage';
 import SignupPage from '@/pages/auth/SignupPage';
 import PasswordResetPage from '@/pages/auth/PasswordResetPage';
 import UpdatePasswordPage from '@/pages/auth/UpdatePasswordPage';
+import '@nldd/design-system/inline-dialog';
+import '@nldd/design-system/page';
+import '@nldd/design-system/shell';
+import '@nldd/design-system/simple-section';
+import '@nldd/design-system/skip-link';
 // De bouwer is groot en je komt er vaak niet eens: wie op de telefoon alleen de
 // chat of de start opent, hoeft hem niet te laden.
 const OptimizerPage = lazy(() => import('@/pages/OptimizerPage'));

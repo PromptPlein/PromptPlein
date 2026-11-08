@@ -3,6 +3,14 @@ import { downloadText } from '@/lib/download';
 import { htmlFileName, htmlLooksComplete } from '@/lib/chatFiles';
 import { checkHtml, repairRequest, type FileCheckResult } from '@/lib/fileCheck';
 import CopyMessageButton from './CopyMessageButton';
+import '@nldd/design-system/activity-indicator';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/card';
+import '@nldd/design-system/code-viewer';
+import '@nldd/design-system/container';
+import '@nldd/design-system/icon';
+import '@nldd/design-system/text';
 
 /** Zoveel regels van het eind van het bestand staan in beeld terwijl het groeit. */
 const TAIL_LINES = 12;

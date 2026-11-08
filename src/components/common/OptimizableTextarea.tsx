@@ -11,6 +11,11 @@ import { useNlddValue } from '@/lib/nldd';
 import { useAuth } from '@/context/AuthContext';
 import { optimizeChatInput } from '@/services/chatService';
 import { getChatSettingsCached, type ChatSettings } from '@/services/settingsService';
+import '@nldd/design-system/button';
+import '@nldd/design-system/container';
+import '@nldd/design-system/multi-line-text-field';
+import '@nldd/design-system/text';
+import '@nldd/design-system/tooltip';
 
 interface OptimizableTextareaProps
   extends Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, 'value' | 'onChange'> {

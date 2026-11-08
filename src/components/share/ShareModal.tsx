@@ -7,6 +7,18 @@ import { buildMailto, createShareLink, shareUrl } from '@/services/shareService'
 import { copyToClipboard, getCurrentUser } from '@/lib/utils';
 import { brand } from '@/config/brandColors';
 import type { Prompt } from '@/types';
+import '@nldd/design-system/activity-indicator';
+import '@nldd/design-system/button';
+import '@nldd/design-system/card';
+import '@nldd/design-system/container';
+import '@nldd/design-system/form-field';
+import '@nldd/design-system/icon-button';
+import '@nldd/design-system/page';
+import '@nldd/design-system/sheet';
+import '@nldd/design-system/simple-section';
+import '@nldd/design-system/text';
+import '@nldd/design-system/text-field';
+import '@nldd/design-system/top-title-bar';
 
 interface ShareModalProps {
   open: boolean;

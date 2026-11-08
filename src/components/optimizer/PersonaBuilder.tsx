@@ -15,6 +15,17 @@ import {
 } from '@/lib/persona';
 import BuilderIntro from './BuilderIntro';
 import InfoDot from '@/components/common/InfoDot';
+import '@nldd/design-system/box';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/container';
+import '@nldd/design-system/divider';
+import '@nldd/design-system/icon-button';
+import '@nldd/design-system/multi-line-text-field';
+import '@nldd/design-system/spacer';
+import '@nldd/design-system/text';
+import '@nldd/design-system/text-field';
+import '@nldd/design-system/title';
 
 /** Client-side unieke id voor een nieuwe persona-kaart. */
 function newId(): string {

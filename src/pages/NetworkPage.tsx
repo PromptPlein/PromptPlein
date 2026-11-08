@@ -5,6 +5,14 @@ import { useNlddEvent } from '@/lib/nldd';
 import { listOrganizations } from '@/services/orgService';
 import { listPrompts } from '@/services/repository';
 import type { Organization, Prompt } from '@/types';
+import '@nldd/design-system/activity-indicator';
+import '@nldd/design-system/card';
+import '@nldd/design-system/container';
+import '@nldd/design-system/simple-section';
+import '@nldd/design-system/spacer';
+import '@nldd/design-system/tab-bar';
+import '@nldd/design-system/text';
+import '@nldd/design-system/title';
 
 const OrgChart = lazy(() => import('@/components/network/OrgChart'));
 const PromptEcosystem = lazy(() => import('@/components/three/PromptEcosystem'));

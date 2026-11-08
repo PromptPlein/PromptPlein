@@ -11,6 +11,16 @@ import { visibilityMeta } from '@/lib/utils';
 import { logAdminAction } from '@/services/adminService';
 import VisibilityPicker from '@/components/prompts/VisibilityPicker';
 import type { PromptVisibility, VisibilityLevel, VisibilityStatus } from '@/types';
+import '@nldd/design-system/badge';
+import '@nldd/design-system/box';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/card';
+import '@nldd/design-system/container';
+import '@nldd/design-system/form-field';
+import '@nldd/design-system/multi-line-text-field';
+import '@nldd/design-system/text';
+import '@nldd/design-system/title';
 
 const STATUS_COLOR: Record<VisibilityStatus, 'success' | 'warning' | 'critical'> = {
   approved: 'success',

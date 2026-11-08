@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNlddEvent } from '@/lib/nldd';
+import '@nldd/design-system/icon-button';
+import '@nldd/design-system/tooltip';
 
 /**
  * The info dot: a small round button that shows one short explanation, so a

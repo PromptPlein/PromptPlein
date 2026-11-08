@@ -1,3 +1,4 @@
+import '@nldd/design-system/step-bar';
 /**
  * The fixed line of questions of the brainstorm session, in the order the AI
  * walks it. The names come verbatim from the protocol of the clarify mode: the

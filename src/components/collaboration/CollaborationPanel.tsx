@@ -11,6 +11,22 @@ import {
 } from '@/services/collaborationService';
 import VisibilityApprovalPanel from '@/components/collaboration/VisibilityApprovalPanel';
 import type { Prompt, PromptComment, PromptVersion } from '@/types';
+import '@nldd/design-system/button';
+import '@nldd/design-system/card';
+import '@nldd/design-system/cell';
+import '@nldd/design-system/code-viewer';
+import '@nldd/design-system/container';
+import '@nldd/design-system/form';
+import '@nldd/design-system/icon-cell';
+import '@nldd/design-system/inline-dialog';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/list-item-segment';
+import '@nldd/design-system/spacer';
+import '@nldd/design-system/text';
+import '@nldd/design-system/text-cell';
+import '@nldd/design-system/text-field';
+import '@nldd/design-system/title';
 
 /**
  * Comments are switched off: prompts can be read and liked, not commented on

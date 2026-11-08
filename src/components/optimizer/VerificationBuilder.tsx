@@ -14,6 +14,20 @@ import {
 } from '@/lib/verification';
 import BuilderIntro from './BuilderIntro';
 import InfoDot from '@/components/common/InfoDot';
+import '@nldd/design-system/button';
+import '@nldd/design-system/cell';
+import '@nldd/design-system/checkbox';
+import '@nldd/design-system/container';
+import '@nldd/design-system/icon';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/multi-line-text-field';
+import '@nldd/design-system/radio-button';
+import '@nldd/design-system/spacer-cell';
+import '@nldd/design-system/text';
+import '@nldd/design-system/text-cell';
+import '@nldd/design-system/text-field';
+import '@nldd/design-system/tooltip';
 
 interface VerificationBuilderProps {
   settings: AiSettings;

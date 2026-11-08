@@ -4,6 +4,17 @@ import { listEvents, eventsPerDay } from '@/services/analyticsService';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { getCurrentUser, formatDate } from '@/lib/utils';
 import type { AnalyticsEvent } from '@/types';
+import '@nldd/design-system/card';
+import '@nldd/design-system/container';
+import '@nldd/design-system/inline-dialog';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/simple-section';
+import '@nldd/design-system/spacer';
+import '@nldd/design-system/spacer-cell';
+import '@nldd/design-system/text';
+import '@nldd/design-system/text-cell';
+import '@nldd/design-system/title';
 
 const EVENT_LABELS: Record<string, string> = {
   prompt_created: 'Prompt aangemaakt',

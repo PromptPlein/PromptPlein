@@ -1,5 +1,8 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNlddEvent } from '@/lib/nldd';
+import '@nldd/design-system/combo-box';
+import '@nldd/design-system/form-field';
+import '@nldd/design-system/menu';
 
 export interface SearchableOption {
   id: string;

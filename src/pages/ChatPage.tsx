@@ -42,6 +42,20 @@ import {
 import { detectPii, type GuardrailFinding } from '@/services/guardrails';
 import GuardrailDialog from '@/components/optimizer/GuardrailDialog';
 import { thinkingUnavailableReason } from '@/config/aiModels';
+import '@nldd/design-system/banner';
+import '@nldd/design-system/button';
+import '@nldd/design-system/container';
+import '@nldd/design-system/icon-button';
+import '@nldd/design-system/page';
+import '@nldd/design-system/sidebar-section';
+import '@nldd/design-system/simple-section';
+import '@nldd/design-system/spacer';
+import '@nldd/design-system/tag';
+import '@nldd/design-system/text';
+import '@nldd/design-system/title';
+import '@nldd/design-system/tooltip';
+import '@nldd/design-system/top-title-bar';
+import '@nldd/design-system/visually-hidden';
 
 /** Staat in de kaart, zodat hij altijd bij het typen in beeld is. */
 const PII_NOTICE = 'Verwerk geen persoonsgegevens.';

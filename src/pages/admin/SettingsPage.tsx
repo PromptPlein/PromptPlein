@@ -35,6 +35,30 @@ import {
   type ChatSettings,
 } from '@/services/settingsService';
 import { logAdminAction } from '@/services/adminService';
+import '@nldd/design-system/banner';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/container';
+import '@nldd/design-system/divider';
+import '@nldd/design-system/form';
+import '@nldd/design-system/form-actions';
+import '@nldd/design-system/form-field';
+import '@nldd/design-system/inline-dialog';
+import '@nldd/design-system/link';
+import '@nldd/design-system/link-group';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/menu';
+import '@nldd/design-system/multi-line-text-field';
+import '@nldd/design-system/slider';
+import '@nldd/design-system/switch-field';
+import '@nldd/design-system/tab-bar';
+import '@nldd/design-system/text';
+import '@nldd/design-system/text-cell';
+import '@nldd/design-system/text-field';
+import '@nldd/design-system/title';
+import '@nldd/design-system/token';
+import '@nldd/design-system/toolbar';
 
 const TABS = [
   { id: 'bouwer', label: 'Bouwer' },

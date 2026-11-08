@@ -1,6 +1,13 @@
 import type { CSSProperties, MouseEvent } from 'react';
 import VoiceLevelMeter from './VoiceLevelMeter';
 import { formatDictationTime, type DictationState } from '@/lib/useDictation';
+import '@nldd/design-system/activity-indicator';
+import '@nldd/design-system/badge';
+import '@nldd/design-system/container';
+import '@nldd/design-system/icon-button';
+import '@nldd/design-system/text';
+import '@nldd/design-system/tooltip';
+import '@nldd/design-system/visually-hidden';
 
 interface DictationButtonProps {
   state: DictationState;

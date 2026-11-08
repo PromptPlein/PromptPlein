@@ -1,4 +1,5 @@
 import { HELP_PATH } from '@/lib/shortcuts';
+import '@nldd/design-system/page-footer';
 
 export default function Footer() {
   return (

@@ -1,4 +1,6 @@
 import { useEffect, useRef } from 'react';
+import '@nldd/design-system/container';
+import '@nldd/design-system/progress-bar';
 
 /** Every this many milliseconds the meter takes a new reading. */
 const STEP_MS = 70;

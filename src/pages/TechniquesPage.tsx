@@ -59,6 +59,17 @@ import { activityIdentifier, stripMarkdown } from '@/lib/utils';
 import type { SkillData } from '@/lib/skill';
 import { defaultModelFor, isEnabledProvider, thinkingUnavailableReason } from '@/config/aiModels';
 import type { OptimizeResult, Technique } from '@/types';
+import '@nldd/design-system/banner';
+import '@nldd/design-system/box';
+import '@nldd/design-system/button';
+import '@nldd/design-system/card';
+import '@nldd/design-system/container';
+import '@nldd/design-system/icon';
+import '@nldd/design-system/inline-dialog';
+import '@nldd/design-system/simple-section';
+import '@nldd/design-system/spacer';
+import '@nldd/design-system/text';
+import '@nldd/design-system/title';
 
 /**
  * Werken mét de prompttechnieken zelf: de volledige lijst frameworks en losse

@@ -3,6 +3,19 @@ import InfoDot from '@/components/common/InfoDot';
 import MenuAction from '@/components/common/MenuAction';
 import { formatDate } from '@/lib/utils';
 import type { ChatIndexEntry, ChatProject } from '@/types';
+import '@nldd/design-system/button';
+import '@nldd/design-system/container';
+import '@nldd/design-system/icon-button';
+import '@nldd/design-system/icon-cell';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/list-item-segment';
+import '@nldd/design-system/menu';
+import '@nldd/design-system/spacer';
+import '@nldd/design-system/spacer-cell';
+import '@nldd/design-system/text';
+import '@nldd/design-system/text-cell';
+import '@nldd/design-system/title';
 
 /**
  * Kopregel van een lijst met het plusje rechts op dezelfde hoogte.

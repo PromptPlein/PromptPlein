@@ -14,6 +14,21 @@ import {
 } from '@/services/repository';
 import { logAdminAction } from '@/services/adminService';
 import type { Category } from '@/types';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/container';
+import '@nldd/design-system/dropdown';
+import '@nldd/design-system/form';
+import '@nldd/design-system/form-actions';
+import '@nldd/design-system/form-field';
+import '@nldd/design-system/icon-cell';
+import '@nldd/design-system/inline-dialog';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/list-item-segment';
+import '@nldd/design-system/menu';
+import '@nldd/design-system/text-cell';
+import '@nldd/design-system/title';
 
 interface Editor {
   id?: string;
@@ -135,60 +150,37 @@ export default function CategoryManagerPage() {
         ></nldd-button>
       </nldd-button-group>
 
-      {loading ? (
-        <nldd-container min-height="12rem">
-          <nldd-activity-indicator></nldd-activity-indicator>
-        </nldd-container>
-      ) : (
-        <nldd-table
-          accessible-label="Categorieën"
-          columns="minmax(10rem,1fr) minmax(10rem,2fr) 8rem auto"
-          sm-columns="minmax(0,1fr) auto"
-        >
-          <nldd-table-row slot="header">
-            <nldd-text-cell text="Naam"></nldd-text-cell>
-            <nldd-text-cell text="Beschrijving" hide-below="md"></nldd-text-cell>
-            <nldd-text-cell text="Icoon" hide-below="md"></nldd-text-cell>
-            <nldd-cell>
-              <nldd-visually-hidden>Acties</nldd-visually-hidden>
-            </nldd-cell>
-          </nldd-table-row>
-          {categories.map((c, i) => (
-            <nldd-table-row key={c.id}>
-              <nldd-text-cell row-header text={c.name}></nldd-text-cell>
-              <nldd-text-cell text={c.description || 'Geen beschrijving'} color="secondary" hide-below="md"></nldd-text-cell>
-              <nldd-text-cell text={c.icon || 'Geen'} color="secondary" hide-below="md"></nldd-text-cell>
-              <nldd-cell horizontal-alignment="right">
-                <nldd-container layout="row" gap="4">
-                  <nldd-icon-button
-                    size="sm"
-                    appearance="neutral-transparent"
-                    icon="pencil"
-                    accessible-label={`Bewerk ${c.name}`}
-                    onClick={() =>
-                      setEditor({ id: c.id, name: c.name, description: c.description ?? '', icon: c.icon ?? 'Folder' })
-                    }
-                  ></nldd-icon-button>
-                  <nldd-icon-button size="sm" appearance="neutral-transparent" icon="ellipsis" accessible-label={`Meer acties voor ${c.name}`}>
-                    <nldd-menu slot="popup" placement="bottom-end">
-                      <MenuAction icon="arrow-up" text="Omhoog" disabled={i === 0 || undefined} onSelect={() => move(c, -1)} />
-                      <MenuAction
-                        icon="arrow-down"
-                        text="Omlaag"
-                        disabled={i === categories.length - 1 || undefined}
-                        onSelect={() => move(c, 1)}
-                      />
-                      <nldd-menu-divider></nldd-menu-divider>
-                      <MenuAction icon="trash" text="Verwijder" destructive onSelect={() => setToDelete(c)} />
-                    </nldd-menu>
-                  </nldd-icon-button>
-                </nldd-container>
-              </nldd-cell>
-            </nldd-table-row>
+      <nldd-list appearance="box-tinted" accessible-label="Categorieën">
+        {!loading &&
+          categories.map((c) => (
+            <nldd-list-item key={c.id}>
+              <nldd-list-item-segment button width="full" accessible-label={`Bewerk ${c.name}`} onClick={() => setEditor({ id: c.id, name: c.name, description: c.description ?? '', icon: c.icon ?? 'Folder' })}>
+                <nldd-text-cell text={c.name} supporting-text={[c.description || 'Geen beschrijving', c.icon ? `icoon ${c.icon}` : null].filter(Boolean).join(' · ')}></nldd-text-cell>
+              </nldd-list-item-segment>
+              <nldd-list-item-segment
+                button
+                popovertarget={`categorie-acties-${c.id}`}
+                accessible-label={`Acties voor ${c.name}`}
+              >
+                <nldd-icon-cell icon="ellipsis" size="20" color="secondary"></nldd-icon-cell>
+              </nldd-list-item-segment>
+            </nldd-list-item>
           ))}
-          <nldd-inline-dialog slot="empty" icon="categories" text="Nog geen categorieën."></nldd-inline-dialog>
-        </nldd-table>
-      )}
+        {loading ? (
+          <nldd-inline-dialog slot="empty" variant="loading" text="Categorieën laden"></nldd-inline-dialog>
+        ) : (
+          <nldd-inline-dialog slot="empty" icon="categories" text="Nog geen categorieën"></nldd-inline-dialog>
+        )}
+      </nldd-list>
+      {categories.map((c, i) => (
+        <nldd-menu key={c.id} id={`categorie-acties-${c.id}`} placement="bottom-end">
+          <MenuAction icon="pencil" text="Bewerk" onSelect={() => setEditor({ id: c.id, name: c.name, description: c.description ?? '', icon: c.icon ?? 'Folder' })} />
+          <MenuAction icon="arrow-up" text="Omhoog" disabled={i === 0 || undefined} onSelect={() => move(c, -1)} />
+          <MenuAction icon="arrow-down" text="Omlaag" disabled={i === categories.length - 1 || undefined} onSelect={() => move(c, 1)} />
+          <nldd-menu-divider></nldd-menu-divider>
+          <MenuAction icon="trash" text="Verwijder" destructive onSelect={() => setToDelete(c)} />
+        </nldd-menu>
+      ))}
 
       <AdminSheet
         open={!!editor}

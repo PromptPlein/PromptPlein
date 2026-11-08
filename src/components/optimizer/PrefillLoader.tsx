@@ -3,6 +3,13 @@ import ModelStatus from './ModelStatus';
 import PhaseSteps from './PhaseSteps';
 import type { PrefillPhase } from '@/services/optimizeService';
 import type { PrefilledField } from '@/types';
+import '@nldd/design-system/activity-indicator';
+import '@nldd/design-system/box';
+import '@nldd/design-system/container';
+import '@nldd/design-system/icon';
+import '@nldd/design-system/link';
+import '@nldd/design-system/progress-bar';
+import '@nldd/design-system/text';
 
 interface PrefillLoaderProps {
   /** Alleen de velden: de kop en de stappen staan al in MakeProgress. */

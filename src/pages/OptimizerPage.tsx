@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import GoalDialog from '@/components/optimizer/GoalDialog';
-import DailyBackground from '@/components/common/DailyBackground';
 import InfoDot from '@/components/common/InfoDot';
 import ThinkingToggle from '@/components/common/ThinkingToggle';
 import WebSearchToggle from '@/components/common/WebSearchToggle';
@@ -38,6 +37,12 @@ import { thinkingUnavailableReason } from '@/config/aiModels';
 import { activityIdentifier } from '@/lib/utils';
 import { usePersistentDraft } from '@/lib/usePersistentDraft';
 import type { OptimizeResult, Technique } from '@/types';
+import '@nldd/design-system/activity-indicator';
+import '@nldd/design-system/container';
+import '@nldd/design-system/simple-section';
+import '@nldd/design-system/spacer';
+import '@nldd/design-system/tab-bar';
+import '@nldd/design-system/title';
 
 /**
  * Welke instap actief is. Beide zijn automatisch: de gebruiker levert inhoud
@@ -310,7 +315,6 @@ export default function OptimizerPage() {
       {/* The moving background of the day. All content sits on an opaque card:
           this page has many intermediate steps and messages, and they have to
           stay readable on any background. */}
-      <DailyBackground />
       <nldd-container slot="header">
         <nldd-container layout="row" gap="4" vertical-alignment="center">
           <nldd-title heading-level={1} size={1} text="Prompt maken"></nldd-title>

@@ -13,6 +13,13 @@ import { useNlddValue } from '@/lib/nldd';
 import SearchableSelect from '@/components/common/SearchableSelect';
 import VisibilityPicker from '@/components/prompts/VisibilityPicker';
 import type { NewPromptInput, Prompt, VisibilityLevel } from '@/types';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/form';
+import '@nldd/design-system/form-actions';
+import '@nldd/design-system/form-field';
+import '@nldd/design-system/multi-line-text-field';
+import '@nldd/design-system/text-field';
 
 interface PromptUploadFormProps {
   onCreated: (prompt: Prompt) => void;

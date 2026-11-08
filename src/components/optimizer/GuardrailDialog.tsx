@@ -1,6 +1,10 @@
 import { useRef } from 'react';
 import { useNlddEvent } from '@/lib/nldd';
 import type { GuardrailFinding } from '@/services/guardrails';
+import '@nldd/design-system/button';
+import '@nldd/design-system/container';
+import '@nldd/design-system/modal-dialog';
+import '@nldd/design-system/text';
 
 interface GuardrailDialogProps {
   findings: GuardrailFinding[];

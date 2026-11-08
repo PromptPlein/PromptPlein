@@ -1,5 +1,15 @@
 import type { ReactNode } from 'react';
 import { SHORTCUTS, type Shortcut } from '@/lib/shortcuts';
+import '@nldd/design-system/container';
+import '@nldd/design-system/keyboard-shortcut';
+import '@nldd/design-system/link';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/spacer-cell';
+import '@nldd/design-system/step-cell';
+import '@nldd/design-system/text';
+import '@nldd/design-system/text-cell';
+import '@nldd/design-system/title';
 
 function Keys({ shortcut }: { shortcut: Shortcut }) {
   return (

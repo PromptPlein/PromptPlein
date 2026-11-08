@@ -3,6 +3,11 @@ import { useNlddValue } from '@/lib/nldd';
 import { splitFieldLabel } from '@/lib/fieldLabel';
 import type { VraagHerkomst } from '@/services/optimizeService';
 import type { Technique } from '@/types';
+import '@nldd/design-system/container';
+import '@nldd/design-system/form-field';
+import '@nldd/design-system/multi-line-text-field';
+import '@nldd/design-system/tag';
+import '@nldd/design-system/text';
 
 interface SjabloonVragenProps {
   technique: Pick<Technique, 'id' | 'follow_up_questions'>;

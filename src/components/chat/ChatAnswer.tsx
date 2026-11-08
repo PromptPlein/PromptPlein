@@ -3,6 +3,10 @@ import RichText from '@/components/optimizer/RichText';
 import { splitAnswer } from '@/lib/chatFiles';
 import { checkCode } from '@/lib/fileCheck';
 import ChatFileCard from './ChatFileCard';
+import '@nldd/design-system/code-viewer';
+import '@nldd/design-system/container';
+import '@nldd/design-system/icon';
+import '@nldd/design-system/text';
 
 /** The grammars nldd-code-viewer highlights, keyed by the names a model writes after the backticks. */
 const VIEWER_LANGUAGES: Record<string, string> = {

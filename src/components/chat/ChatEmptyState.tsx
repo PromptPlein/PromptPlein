@@ -1,6 +1,9 @@
 import { useAuth } from '@/context/AuthContext';
 import { greeting } from '@/lib/greeting';
 import { firstName } from '@/services/communityService';
+import '@nldd/design-system/container';
+import '@nldd/design-system/image';
+import '@nldd/design-system/title';
 
 /**
  * Lege staat van een nieuw gesprek: het merkteken en één vraag, met het tekstvak

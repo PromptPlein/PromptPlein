@@ -23,6 +23,18 @@ import { visibleHeight } from '@/lib/viewportWatch';
 import ChatAnswer from './ChatAnswer';
 import CopyMessageButton from './CopyMessageButton';
 import type { ChatMessage } from '@/types';
+import '@nldd/design-system/banner';
+import '@nldd/design-system/box';
+import '@nldd/design-system/button';
+import '@nldd/design-system/container';
+import '@nldd/design-system/icon';
+import '@nldd/design-system/link';
+import '@nldd/design-system/multi-line-text-field';
+import '@nldd/design-system/page';
+import '@nldd/design-system/text';
+import '@nldd/design-system/title';
+import '@nldd/design-system/tooltip';
+import '@nldd/design-system/visually-hidden';
 
 /** Ruimte boven de vraag zodra die bovenaan staat. */
 const TOP_GAP = 16;

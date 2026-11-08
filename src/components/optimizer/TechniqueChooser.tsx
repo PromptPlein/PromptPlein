@@ -4,6 +4,18 @@ import { useReferenceData } from '@/context/ReferenceDataContext';
 import { isContextPrompt } from '@/lib/techniques';
 import { TECHNIEK_DOELEN, techniekKaart, type DoelTegel, type TechniekDoel } from '@/lib/techniekDoelen';
 import type { Technique } from '@/types';
+import '@nldd/design-system/container';
+import '@nldd/design-system/icon-cell';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/list-item-segment';
+import '@nldd/design-system/popover';
+import '@nldd/design-system/spacer-cell';
+import '@nldd/design-system/tab-bar';
+import '@nldd/design-system/tag';
+import '@nldd/design-system/text';
+import '@nldd/design-system/text-cell';
+import '@nldd/design-system/title';
 
 /**
  * Kiezen op doel: eerst wat je wilt bereiken, dan de frameworks en technieken die

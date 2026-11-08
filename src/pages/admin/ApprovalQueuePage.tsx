@@ -7,6 +7,20 @@ import { listPendingForModeration, decideVisibility } from '@/services/visibilit
 import { VISIBILITY_STATUS_META } from '@/services/collaborationService';
 import { logAdminAction } from '@/services/adminService';
 import type { Prompt, PromptVisibility, VisibilityStatus } from '@/types';
+import '@nldd/design-system/activity-indicator';
+import '@nldd/design-system/badge';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/card';
+import '@nldd/design-system/code-viewer';
+import '@nldd/design-system/container';
+import '@nldd/design-system/form-field';
+import '@nldd/design-system/inline-dialog';
+import '@nldd/design-system/link';
+import '@nldd/design-system/simple-section';
+import '@nldd/design-system/tag';
+import '@nldd/design-system/text';
+import '@nldd/design-system/title';
 
 type PendingRow = PromptVisibility & { prompt: Prompt | null };
 

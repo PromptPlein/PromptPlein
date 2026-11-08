@@ -13,6 +13,24 @@ import { structureFormat } from '@/lib/techniques';
 import { compactFieldLabel } from '@/lib/fieldLabel';
 import type { AiProvider } from '@/config/aiModels';
 import type { FollowUpQuestion, PrefilledField, PrefillSource, Technique } from '@/types';
+import '@nldd/design-system/badge';
+import '@nldd/design-system/box';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/cell';
+import '@nldd/design-system/container';
+import '@nldd/design-system/icon';
+import '@nldd/design-system/icon-cell';
+import '@nldd/design-system/inline-dialog';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/list-item-segment';
+import '@nldd/design-system/multi-line-text-field';
+import '@nldd/design-system/spacer';
+import '@nldd/design-system/step-bar';
+import '@nldd/design-system/text';
+import '@nldd/design-system/text-cell';
+import '@nldd/design-system/title';
 
 /** Herkomst + toelichting van een voor-ingevuld veld, per veld-id. */
 export type FieldMeta = Record<string, { source: PrefillSource; note?: string }>;

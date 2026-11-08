@@ -16,6 +16,15 @@ import { toggleLike } from '@/services/likeService';
 import { firstName } from '@/services/communityService';
 import { trackEvent } from '@/services/analyticsService';
 import type { Prompt, PublicProfile } from '@/types';
+import '@nldd/design-system/avatar';
+import '@nldd/design-system/card';
+import '@nldd/design-system/container';
+import '@nldd/design-system/icon-button';
+import '@nldd/design-system/link';
+import '@nldd/design-system/tag';
+import '@nldd/design-system/text';
+import '@nldd/design-system/title';
+import '@nldd/design-system/toggle-button';
 
 interface PromptCardProps {
   prompt: Prompt;

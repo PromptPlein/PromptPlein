@@ -1,4 +1,9 @@
 import type { ReactNode } from 'react';
+import '@nldd/design-system/container';
+import '@nldd/design-system/simple-section';
+import '@nldd/design-system/spacer';
+import '@nldd/design-system/text';
+import '@nldd/design-system/title';
 
 /** Shared layout for the auth pages: the title in the section header, a narrow form column below it. */
 export default function AuthLayout({

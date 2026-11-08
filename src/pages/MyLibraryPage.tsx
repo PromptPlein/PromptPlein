@@ -8,6 +8,16 @@ import { usePromptCommunity } from '@/hooks/usePromptCommunity';
 import { useAuth } from '@/context/AuthContext';
 import { useNlddEvent } from '@/lib/nldd';
 import type { Prompt } from '@/types';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/card';
+import '@nldd/design-system/collection';
+import '@nldd/design-system/container';
+import '@nldd/design-system/inline-dialog';
+import '@nldd/design-system/simple-section';
+import '@nldd/design-system/spacer';
+import '@nldd/design-system/tab-bar';
+import '@nldd/design-system/title';
 
 type Tab = 'mine' | 'favorites';
 

@@ -15,6 +15,11 @@ import {
   reportToCsv,
   type ReportData,
 } from '@/services/reportService';
+import '@nldd/design-system/activity-indicator';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/container';
+import '@nldd/design-system/title';
 
 const PAGE_TITLE = 'Bestuurlijke rapportage';
 const PAGE_INTRO = 'Overzicht van prompts, organisaties en goedkeuringen.';

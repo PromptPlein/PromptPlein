@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import type { Category, Prompt } from '@/types';
 import { useTheme } from '@/context/ThemeContext';
 import { ecosystemPalette, readToken } from '@/config/brandColors';
+import '@nldd/design-system/inline-dialog';
 
 const PALETTE = ecosystemPalette;
 

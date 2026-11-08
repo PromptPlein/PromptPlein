@@ -1,13 +1,6 @@
 import MenuAction from './MenuAction';
+import '@nldd/design-system/menu';
 
-/**
- * Kept for callers that still import them: rows of a menu are nldd-menu-item
- * elements now, which bring their own look.
- * @deprecated
- */
-export const MENU_ROW = '';
-/** @deprecated See {@link MENU_ROW}. */
-export const MENU_ICON = '';
 
 /**
  * A row in a menu that turns something on or off: an nldd-menu-item of type

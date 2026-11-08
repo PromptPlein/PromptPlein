@@ -1,3 +1,13 @@
+import '@nldd/design-system/activity-indicator';
+import '@nldd/design-system/box';
+import '@nldd/design-system/cell';
+import '@nldd/design-system/container';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/spacer-cell';
+import '@nldd/design-system/step-cell';
+import '@nldd/design-system/text-cell';
+import '@nldd/design-system/title';
 export type MakeStage = 'lezen' | 'kiezen' | 'invullen';
 
 const VOLGORDE: MakeStage[] = ['lezen', 'kiezen', 'invullen'];

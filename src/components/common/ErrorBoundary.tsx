@@ -1,4 +1,8 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import '@nldd/design-system/button';
+import '@nldd/design-system/container';
+import '@nldd/design-system/inline-dialog';
+import '@nldd/design-system/simple-section';
 
 interface Props {
   children: ReactNode;

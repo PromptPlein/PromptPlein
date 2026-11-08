@@ -13,6 +13,14 @@ import {
 } from '@/services/analyticsService';
 import type { AnalyticsEvent, Prompt } from '@/types';
 import { formatDate } from '@/lib/utils';
+import '@nldd/design-system/activity-indicator';
+import '@nldd/design-system/card';
+import '@nldd/design-system/container';
+import '@nldd/design-system/inline-dialog';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/text-cell';
+import '@nldd/design-system/title';
 
 const EVENT_LABELS: Record<string, string> = {
   prompt_created: 'Prompt aangemaakt',

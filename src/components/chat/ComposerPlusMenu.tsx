@@ -1,6 +1,8 @@
 import MenuAction from '@/components/common/MenuAction';
 import ThinkingToggle from '@/components/common/ThinkingToggle';
 import WebSearchToggle from '@/components/common/WebSearchToggle';
+import '@nldd/design-system/icon-button';
+import '@nldd/design-system/menu';
 
 /**
  * De plusknop van het tekstvak: één overzicht van alles wat je aan een bericht

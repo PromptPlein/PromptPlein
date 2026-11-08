@@ -7,6 +7,10 @@ import { listEvents, topTechniques } from '@/services/analyticsService';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { usePromptCommunity } from '@/hooks/usePromptCommunity';
 import type { AnalyticsEvent, Prompt } from '@/types';
+import '@nldd/design-system/collection';
+import '@nldd/design-system/inline-dialog';
+import '@nldd/design-system/simple-section';
+import '@nldd/design-system/title';
 
 /**
  * `embedded` laat de eigen paginakop weg en de buitenmarges versmallen, zodat

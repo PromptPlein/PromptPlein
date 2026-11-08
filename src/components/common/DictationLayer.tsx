@@ -4,6 +4,7 @@ import { notify } from '@/lib/notify';
 import { CUE_MS, playCue } from '@/lib/audioCue';
 import { matchesShortcut, SHORTCUTS } from '@/lib/shortcuts';
 import { insertDictatedText, useDictation } from '@/lib/useDictation';
+import '@nldd/design-system/notification';
 
 // The class comes from the registry, as in notify.ts: a second import of the
 // subpath would define the elements twice.

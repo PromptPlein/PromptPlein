@@ -3,6 +3,19 @@ import { notify } from '@/lib/notify';
 import { useNlddEvent, useNlddValue } from '@/lib/nldd';
 import { useAuth } from '@/context/AuthContext';
 import { sendContactMessage, type ContactKind } from '@/services/contactService';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/container';
+import '@nldd/design-system/form';
+import '@nldd/design-system/form-actions';
+import '@nldd/design-system/form-field';
+import '@nldd/design-system/form-section';
+import '@nldd/design-system/multi-line-text-field';
+import '@nldd/design-system/radio-button-field';
+import '@nldd/design-system/radio-button-group';
+import '@nldd/design-system/simple-section';
+import '@nldd/design-system/text-field';
+import '@nldd/design-system/title';
 
 const KINDS: { value: ContactKind; label: string; hint: string }[] = [
   { value: 'bug', label: 'Bug melden', hint: 'Er gaat iets niet goed of een functie werkt niet.' },

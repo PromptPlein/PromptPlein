@@ -1,6 +1,21 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { getProjectRetention, keepProjectFiles, type ProjectRetention } from '@/services/chatProjectService';
+import '@nldd/design-system/activity-indicator';
+import '@nldd/design-system/banner';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/card';
+import '@nldd/design-system/container';
+import '@nldd/design-system/icon';
+import '@nldd/design-system/link';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/simple-section';
+import '@nldd/design-system/spacer';
+import '@nldd/design-system/text';
+import '@nldd/design-system/text-cell';
+import '@nldd/design-system/title';
 
 /**
  * Hier komt de link uit de mail "Je bronbestanden worden over een week

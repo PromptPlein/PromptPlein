@@ -1,4 +1,5 @@
 import type { NLDDNotification } from '@nldd/design-system/notification';
+import '@nldd/design-system/notification';
 
 // The class comes from the registry, not from a second import: Vite bundles a
 // subpath apart from the package entry, and the elements would be defined twice.

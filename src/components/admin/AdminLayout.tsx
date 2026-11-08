@@ -2,6 +2,17 @@ import { useEffect, useRef, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { useNlddEvent } from '@/lib/nldd';
+import '@nldd/design-system/button';
+import '@nldd/design-system/container';
+import '@nldd/design-system/divider';
+import '@nldd/design-system/icon-cell';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/sidebar-section';
+import '@nldd/design-system/spacer';
+import '@nldd/design-system/spacer-cell';
+import '@nldd/design-system/text-cell';
+import '@nldd/design-system/title';
 
 const adminNav = [
   { to: '/admin', label: 'Dashboard', icon: 'square-grid-2x2', end: true },
@@ -64,23 +75,27 @@ export default function AdminLayout() {
         <nldd-list type="navigation" accessible-label="Beheer" dividers="never">
           {adminNav.map((item) => (
             <nldd-list-item key={item.to} size="sm" href={item.to} current={item === current || undefined}>
-              <nldd-icon-cell icon={item.icon} size="20"></nldd-icon-cell>
+              <nldd-icon-cell icon={item.icon} size="20" color="secondary"></nldd-icon-cell>
+              <nldd-spacer-cell size="12"></nldd-spacer-cell>
               <nldd-text-cell text={item.label}></nldd-text-cell>
             </nldd-list-item>
           ))}
         </nldd-list>
         <nldd-divider></nldd-divider>
-        <nldd-button
-          appearance="neutral-transparent"
-          start-icon="logout"
-          text="Uitloggen"
-          width="full"
-          horizontal-alignment="left"
-          onClick={() => {
-            void signOut();
-            navigate('/');
-          }}
-        ></nldd-button>
+        <nldd-list accessible-label="Account" dividers="never">
+          <nldd-list-item
+            size="sm"
+            button
+            onClick={() => {
+              void signOut();
+              navigate('/');
+            }}
+          >
+            <nldd-icon-cell icon="logout" size="20" color="secondary"></nldd-icon-cell>
+            <nldd-spacer-cell size="12"></nldd-spacer-cell>
+            <nldd-text-cell text="Uitloggen"></nldd-text-cell>
+          </nldd-list-item>
+        </nldd-list>
       </nldd-container>
 
       {collapsed && (

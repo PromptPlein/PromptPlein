@@ -5,6 +5,25 @@ import { MAX_INTAKE_QUESTIONS, splitPromptSections } from '@/lib/chatIntake';
 import { useNlddEvent } from '@/lib/nldd';
 import { WizardError } from './PromptInterviewParts';
 import type { IntakeState } from './useChatIntake';
+import '@nldd/design-system/activity-indicator';
+import '@nldd/design-system/box';
+import '@nldd/design-system/button';
+import '@nldd/design-system/card';
+import '@nldd/design-system/cell';
+import '@nldd/design-system/checkbox';
+import '@nldd/design-system/code-viewer';
+import '@nldd/design-system/container';
+import '@nldd/design-system/icon';
+import '@nldd/design-system/icon-cell';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/progress-bar';
+import '@nldd/design-system/spacer';
+import '@nldd/design-system/spacer-cell';
+import '@nldd/design-system/text';
+import '@nldd/design-system/text-cell';
+import '@nldd/design-system/title';
+import '@nldd/design-system/visually-hidden';
 
 const OVER_DOORVRAGEN =
   'Bij het eerste bericht van een nieuwe chat kijkt de AI of hij genoeg weet. Je zet dit uit bij Instellingen, Chat.';

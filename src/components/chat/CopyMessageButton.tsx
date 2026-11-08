@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { copyToClipboard } from '@/lib/utils';
+import '@nldd/design-system/button';
+import '@nldd/design-system/icon-button';
 
 interface CopyMessageButtonProps {
   /** De tekst die naar het klembord gaat. */

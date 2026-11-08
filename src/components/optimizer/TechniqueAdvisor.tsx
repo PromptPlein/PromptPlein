@@ -4,6 +4,24 @@ import { adviseTechnique } from '@/services/optimizeService';
 import type { AiSettings } from '@/services/settingsService';
 import { isContextPrompt, isSkillCreator } from '@/lib/techniques';
 import type { AdvisorAdvies, AdvisorCandidate, AdvisorQuestion, Technique } from '@/types';
+import '@nldd/design-system/banner';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/card';
+import '@nldd/design-system/container';
+import '@nldd/design-system/divider';
+import '@nldd/design-system/icon';
+import '@nldd/design-system/icon-button';
+import '@nldd/design-system/icon-cell';
+import '@nldd/design-system/inline-dialog';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/multi-line-text-field';
+import '@nldd/design-system/progress-bar';
+import '@nldd/design-system/spacer';
+import '@nldd/design-system/text';
+import '@nldd/design-system/text-cell';
+import '@nldd/design-system/title';
 
 /** Zelfde budget als in de edge function; alleen voor de voortgangsregel. */
 const MAX_QUESTIONS = 4;

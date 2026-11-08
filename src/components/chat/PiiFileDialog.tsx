@@ -2,6 +2,10 @@ import { useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useNlddEvent } from '@/lib/nldd';
 import type { PiiCount } from '@/services/guardrails';
+import '@nldd/design-system/button';
+import '@nldd/design-system/container';
+import '@nldd/design-system/modal-dialog';
+import '@nldd/design-system/text';
 
 export type PiiFileChoice = 'redact' | 'keep' | 'skip';
 

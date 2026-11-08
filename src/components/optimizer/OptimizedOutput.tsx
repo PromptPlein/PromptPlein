@@ -13,6 +13,23 @@ import SavePromptPanel from '@/components/prompts/SavePromptPanel';
 import RoutekaartResult from '@/components/optimizer/RoutekaartResult';
 import { isSjabloon, sjabloonNaam } from '@/lib/techniques';
 import type { OptimizeResult, Prompt, PromptDialogue, Technique } from '@/types';
+import '@nldd/design-system/badge';
+import '@nldd/design-system/banner';
+import '@nldd/design-system/button';
+import '@nldd/design-system/card';
+import '@nldd/design-system/cell';
+import '@nldd/design-system/code-viewer';
+import '@nldd/design-system/container';
+import '@nldd/design-system/icon-cell';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/segmented-control';
+import '@nldd/design-system/spacer-cell';
+import '@nldd/design-system/tag';
+import '@nldd/design-system/text';
+import '@nldd/design-system/text-cell';
+import '@nldd/design-system/title';
+import '@nldd/design-system/tooltip';
 
 interface OptimizedOutputProps {
   result: OptimizeResult;

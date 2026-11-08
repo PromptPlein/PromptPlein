@@ -20,6 +20,16 @@ import {
 import { downloadText } from '@/lib/download';
 import { formatDate } from '@/lib/utils';
 import type { AnalyticsEvent, BehaviorLog } from '@/types';
+import '@nldd/design-system/activity-indicator';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/card';
+import '@nldd/design-system/container';
+import '@nldd/design-system/inline-dialog';
+import '@nldd/design-system/table';
+import '@nldd/design-system/text';
+import '@nldd/design-system/text-cell';
+import '@nldd/design-system/title';
 
 const EVENT_LABELS: Record<string, string> = {
   prompt_created: 'Prompt aangemaakt',

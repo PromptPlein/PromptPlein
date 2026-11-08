@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import ModelStatus from './ModelStatus';
 import PhaseSteps from './PhaseSteps';
+import '@nldd/design-system/activity-indicator';
+import '@nldd/design-system/box';
+import '@nldd/design-system/code-viewer';
+import '@nldd/design-system/container';
+import '@nldd/design-system/icon';
+import '@nldd/design-system/progress-bar';
+import '@nldd/design-system/text';
 
 interface OptimizingLoaderProps {
   /** Naam van de gekozen techniek/raamwerk, voor een persoonlijke melding. */

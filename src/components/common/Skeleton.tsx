@@ -1,3 +1,6 @@
+import '@nldd/design-system/activity-indicator';
+import '@nldd/design-system/card';
+import '@nldd/design-system/container';
 /** The place of one card that is still loading. */
 export function SkeletonCard() {
   return (

@@ -5,6 +5,12 @@ import ChatInstructionSettings from '@/components/settings/ChatInstructionSettin
 import ChatIntakeSettings from '@/components/settings/ChatIntakeSettings';
 import ChatMemorySettings from '@/components/settings/ChatMemorySettings';
 import { HELP_PATH } from '@/lib/shortcuts';
+import '@nldd/design-system/container';
+import '@nldd/design-system/link';
+import '@nldd/design-system/simple-section';
+import '@nldd/design-system/spacer';
+import '@nldd/design-system/tab-bar';
+import '@nldd/design-system/title';
 
 const PARTS = [
   { slug: 'chat', label: 'Chat', icon: 'message-rectangle-text' },

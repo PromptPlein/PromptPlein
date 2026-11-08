@@ -5,6 +5,15 @@ import { useNlddValue } from '@/lib/nldd';
 import { updatePassword } from '@/services/authService';
 import { useAuth } from '@/context/AuthContext';
 import AuthLayout from './AuthLayout';
+import '@nldd/design-system/banner';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/form';
+import '@nldd/design-system/form-actions';
+import '@nldd/design-system/form-field';
+import '@nldd/design-system/link';
+import '@nldd/design-system/password-field';
+import '@nldd/design-system/spacer';
 
 const MIN_LENGTH = 8;
 

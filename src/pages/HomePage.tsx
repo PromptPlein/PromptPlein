@@ -9,6 +9,23 @@ import UploadModal from '@/components/prompts/UploadModal';
 import PromptCard from '@/components/prompts/PromptCard';
 import { SkeletonGrid } from '@/components/common/Skeleton';
 import type { Prompt } from '@/types';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/card';
+import '@nldd/design-system/collection';
+import '@nldd/design-system/container';
+import '@nldd/design-system/icon';
+import '@nldd/design-system/icon-cell';
+import '@nldd/design-system/inline-dialog';
+import '@nldd/design-system/link';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/one-third-two-thirds-section';
+import '@nldd/design-system/simple-section';
+import '@nldd/design-system/spacer';
+import '@nldd/design-system/spacer-cell';
+import '@nldd/design-system/text-cell';
+import '@nldd/design-system/title';
 
 /**
  * De startpagina in tegels: eerst de vier dingen die je hier kunt doen, dan de

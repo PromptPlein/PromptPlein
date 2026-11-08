@@ -1,4 +1,11 @@
 import { providerShortLabel } from '@/config/aiModels';
+import '@nldd/design-system/activity-indicator';
+import '@nldd/design-system/card';
+import '@nldd/design-system/container';
+import '@nldd/design-system/icon';
+import '@nldd/design-system/progress-bar';
+import '@nldd/design-system/spacer';
+import '@nldd/design-system/text';
 
 interface ModelStatusProps {
   /**

@@ -1,5 +1,7 @@
 import { useRef, type ComponentProps } from 'react';
 import { useNlddValue } from '@/lib/nldd';
+import '@nldd/design-system/multi-line-text-field';
+import '@nldd/design-system/text-field';
 
 type FieldRef = HTMLElement & { value?: string };
 

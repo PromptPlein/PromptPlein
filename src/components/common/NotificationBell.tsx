@@ -10,6 +10,8 @@ import {
 } from '@/services/notificationService';
 import type { AppNotification, NotificationType } from '@/types';
 import MenuAction from './MenuAction';
+import '@nldd/design-system/menu';
+import '@nldd/design-system/menu-bar-item';
 
 const ICONS: Record<NotificationType, string> = {
   approval: 'clipboard-bullet-list',

@@ -1,6 +1,22 @@
 import { useEffect, useRef, type RefObject } from 'react';
 import type { ProjectInterviewStep } from '@/services/projectPromptService';
 import { useNlddEvent, useNlddValue } from '@/lib/nldd';
+import '@nldd/design-system/banner';
+import '@nldd/design-system/box';
+import '@nldd/design-system/button';
+import '@nldd/design-system/cell';
+import '@nldd/design-system/checkbox';
+import '@nldd/design-system/container';
+import '@nldd/design-system/inline-dialog';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/multi-line-text-field';
+import '@nldd/design-system/spacer';
+import '@nldd/design-system/spacer-cell';
+import '@nldd/design-system/step-bar';
+import '@nldd/design-system/text';
+import '@nldd/design-system/text-cell';
+import '@nldd/design-system/title';
 
 /**
  * Enter submits, Shift+Enter starts a new line. The keydown of the textarea inside

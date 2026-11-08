@@ -11,6 +11,13 @@ import { useReferenceData } from '@/context/ReferenceDataContext';
 import SearchableSelect from '@/components/common/SearchableSelect';
 import VisibilityPicker from '@/components/prompts/VisibilityPicker';
 import type { Prompt, Technique, VisibilityLevel } from '@/types';
+import '@nldd/design-system/banner';
+import '@nldd/design-system/box';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/container';
+import '@nldd/design-system/form-field';
+import '@nldd/design-system/text-field';
 
 interface SavePromptPanelProps {
   /** De prompt-inhoud die wordt opgeslagen. */

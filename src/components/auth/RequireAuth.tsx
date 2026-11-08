@@ -1,6 +1,9 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import type { AppRole } from '@/types';
+import '@nldd/design-system/activity-indicator';
+import '@nldd/design-system/container';
+import '@nldd/design-system/simple-section';
 
 /** Loading indicator while the session is being checked. */
 export function AuthLoading() {

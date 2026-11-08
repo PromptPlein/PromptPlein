@@ -1,5 +1,7 @@
 import { setChatIntakeEnabled, useChatIntakeEnabled } from '@/lib/chatIntake';
 import { SwitchRow } from './AccessibilitySettings';
+import '@nldd/design-system/form';
+import '@nldd/design-system/form-section';
 
 /**
  * Doorvragen bij het eerste bericht van een nieuwe chat aan of uit. Staat in deze

@@ -2,6 +2,14 @@ import { useRef } from 'react';
 import { useNlddEvent } from '@/lib/nldd';
 import { VISIBILITY_LEVELS } from '@/lib/utils';
 import type { VisibilityLevel } from '@/types';
+import '@nldd/design-system/cell';
+import '@nldd/design-system/checkbox';
+import '@nldd/design-system/form-section';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/spacer-cell';
+import '@nldd/design-system/tag';
+import '@nldd/design-system/text-cell';
 
 /**
  * Shared multi-select for the sharing levels of a prompt. Used EVERYWHERE a

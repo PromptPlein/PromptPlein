@@ -1,6 +1,16 @@
 import { useState } from 'react';
 import { notify } from '@/lib/notify';
 import { stripMarkdown, copyToClipboard } from '@/lib/utils';
+import '@nldd/design-system/box';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/card';
+import '@nldd/design-system/container';
+import '@nldd/design-system/divider';
+import '@nldd/design-system/icon';
+import '@nldd/design-system/icon-button';
+import '@nldd/design-system/text';
+import '@nldd/design-system/tooltip';
 
 /**
  * Recognizes the headings the task description is built from (DOEL:, CONTEXT:,

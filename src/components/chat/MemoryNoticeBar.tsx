@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type ComponentProps } from 'react';
 import { useNlddEvent } from '@/lib/nldd';
 import type { MemoryNotice } from './rememberWish';
+import '@nldd/design-system/banner';
+import '@nldd/design-system/button';
 
 /** Zo lang blijft een melding staan als niemand er iets mee doet. */
 const NOTICE_MS = 5000;

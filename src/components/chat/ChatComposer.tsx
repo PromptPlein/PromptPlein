@@ -23,6 +23,17 @@ import ConversationToggle from './ConversationToggle';
 import { useChatVoice } from './useChatVoice';
 import { MAX_CHAT_ATTACHMENTS, MAX_CHAT_ATTACHMENT_BYTES } from './useChatController';
 import type { ChatAttachment } from '@/types';
+import '@nldd/design-system/banner';
+import '@nldd/design-system/button';
+import '@nldd/design-system/container';
+import '@nldd/design-system/icon';
+import '@nldd/design-system/icon-button';
+import '@nldd/design-system/multi-line-text-field';
+import '@nldd/design-system/spacer';
+import '@nldd/design-system/text';
+import '@nldd/design-system/toggle-button';
+import '@nldd/design-system/token';
+import '@nldd/design-system/tooltip';
 
 const MAX_MB = MAX_CHAT_ATTACHMENT_BYTES / (1024 * 1024);
 

@@ -1,5 +1,9 @@
 import { type ReactNode } from 'react';
 import InfoDot from '@/components/common/InfoDot';
+import '@nldd/design-system/container';
+import '@nldd/design-system/form-field';
+import '@nldd/design-system/spacer';
+import '@nldd/design-system/title';
 
 /**
  * Kop van één genummerde stap in "Prompt maken": het nummer boven een korte

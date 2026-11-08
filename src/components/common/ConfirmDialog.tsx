@@ -1,6 +1,9 @@
 import { useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useNlddEvent } from '@/lib/nldd';
+import '@nldd/design-system/button';
+import '@nldd/design-system/container';
+import '@nldd/design-system/modal-dialog';
 
 interface ConfirmDialogProps {
   open: boolean;

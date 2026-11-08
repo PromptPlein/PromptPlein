@@ -41,6 +41,20 @@ import type {
   TechniqueRecommendation,
   TranscriptTurn,
 } from '@/types';
+import '@nldd/design-system/banner';
+import '@nldd/design-system/box';
+import '@nldd/design-system/button';
+import '@nldd/design-system/container';
+import '@nldd/design-system/icon-cell';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/list-item-segment';
+import '@nldd/design-system/multi-line-text-field';
+import '@nldd/design-system/spacer';
+import '@nldd/design-system/spacer-cell';
+import '@nldd/design-system/tag';
+import '@nldd/design-system/text';
+import '@nldd/design-system/text-cell';
 
 /** localStorage-sleutel voor een lopend gesprek (hervatten na herladen). */
 const RUN_STORAGE_KEY = 'opl.goalDialog';

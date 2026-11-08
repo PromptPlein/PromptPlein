@@ -19,6 +19,29 @@ import { getLikeInfo, toggleLike } from '@/services/likeService';
 import { getPublicProfile, firstName } from '@/services/communityService';
 import { copyToClipboard, formatDate, sharingLabel } from '@/lib/utils';
 import type { Optimization, Prompt, PublicProfile, SharingLevel } from '@/types';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/card';
+import '@nldd/design-system/code-viewer';
+import '@nldd/design-system/container';
+import '@nldd/design-system/form';
+import '@nldd/design-system/form-actions';
+import '@nldd/design-system/form-field';
+import '@nldd/design-system/icon';
+import '@nldd/design-system/icon-button';
+import '@nldd/design-system/inline-dialog';
+import '@nldd/design-system/link';
+import '@nldd/design-system/modal-dialog';
+import '@nldd/design-system/multi-line-text-field';
+import '@nldd/design-system/simple-section';
+import '@nldd/design-system/spacer';
+import '@nldd/design-system/tag';
+import '@nldd/design-system/text';
+import '@nldd/design-system/text-field';
+import '@nldd/design-system/title';
+import '@nldd/design-system/toggle-button';
+import '@nldd/design-system/toolbar';
+import '@nldd/design-system/tooltip';
 
 const SHARING_TAG_COLOR: Record<SharingLevel, 'neutral' | 'hemelblauw' | 'violet' | 'groen'> = {
   private: 'neutral',

@@ -1,5 +1,6 @@
 import { memo, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import '@nldd/design-system/rich-text';
 
 /**
  * Lightweight renderer for the markdown the AI returns: headings, bold, italic,

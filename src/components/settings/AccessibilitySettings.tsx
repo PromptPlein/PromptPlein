@@ -20,6 +20,24 @@ import {
   useSpeakingId,
   type SpeechVoiceOption,
 } from '@/lib/speech';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/cell';
+import '@nldd/design-system/dropdown';
+import '@nldd/design-system/form';
+import '@nldd/design-system/form-actions';
+import '@nldd/design-system/form-field';
+import '@nldd/design-system/form-section';
+import '@nldd/design-system/inline-dialog';
+import '@nldd/design-system/keyboard-shortcut';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/radio-button';
+import '@nldd/design-system/segmented-control';
+import '@nldd/design-system/spacer-cell';
+import '@nldd/design-system/switch-field';
+import '@nldd/design-system/text';
+import '@nldd/design-system/text-cell';
 
 const TEXT_SCALES: { value: TextScale; label: string }[] = [
   { value: 'normaal', label: 'Normaal' },

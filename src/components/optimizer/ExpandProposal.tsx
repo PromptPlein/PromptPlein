@@ -1,4 +1,14 @@
 import { Fragment } from 'react';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/card';
+import '@nldd/design-system/container';
+import '@nldd/design-system/icon';
+import '@nldd/design-system/icon-cell';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/text';
+import '@nldd/design-system/text-cell';
 
 interface ExpandProposalProps {
   /** Naam van het veld waar dit voorstel bij hoort; staat in de koptekst. */

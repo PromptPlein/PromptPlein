@@ -6,6 +6,14 @@ import { useAuth } from '@/context/AuthContext';
 import { getCurrentUser, setCurrentUser } from '@/lib/utils';
 import { useNlddEvent, useNlddValue } from '@/lib/nldd';
 import MenuAction from './MenuAction';
+import '@nldd/design-system/button';
+import '@nldd/design-system/container';
+import '@nldd/design-system/form-field';
+import '@nldd/design-system/identity';
+import '@nldd/design-system/menu';
+import '@nldd/design-system/menu-bar-item';
+import '@nldd/design-system/modal-dialog';
+import '@nldd/design-system/text-field';
 
 const THEMES: { value: ThemeChoice; label: string; icon: string }[] = [
   { value: 'light', label: 'Licht', icon: 'sun' },

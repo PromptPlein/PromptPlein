@@ -23,6 +23,21 @@ import {
   WizardWaiting,
 } from './PromptInterviewParts';
 import { usePromptInterview } from './usePromptInterview';
+import '@nldd/design-system/button';
+import '@nldd/design-system/card';
+import '@nldd/design-system/container';
+import '@nldd/design-system/form-field';
+import '@nldd/design-system/icon';
+import '@nldd/design-system/multi-line-text-field';
+import '@nldd/design-system/page';
+import '@nldd/design-system/sheet';
+import '@nldd/design-system/simple-section';
+import '@nldd/design-system/spacer';
+import '@nldd/design-system/text';
+import '@nldd/design-system/text-field';
+import '@nldd/design-system/title';
+import '@nldd/design-system/toggle-button';
+import '@nldd/design-system/top-title-bar';
 
 type Step = 'keuze' | 'taak' | 'vragen' | 'voorstel';
 

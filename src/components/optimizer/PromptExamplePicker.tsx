@@ -3,6 +3,20 @@ import { createPortal } from 'react-dom';
 import { useNlddEvent } from '@/lib/nldd';
 import { PROMPT_CATEGORIES } from '@/data/promptCategories';
 import { PROMPT_EXAMPLES, type PromptExample } from '@/data/promptExamples';
+import '@nldd/design-system/button';
+import '@nldd/design-system/container';
+import '@nldd/design-system/icon-cell';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/list-item-segment';
+import '@nldd/design-system/page';
+import '@nldd/design-system/popover';
+import '@nldd/design-system/sheet';
+import '@nldd/design-system/simple-section';
+import '@nldd/design-system/text';
+import '@nldd/design-system/text-cell';
+import '@nldd/design-system/tooltip';
+import '@nldd/design-system/top-title-bar';
 
 /**
  * Example prompts as a starting point for the context field of a framework.

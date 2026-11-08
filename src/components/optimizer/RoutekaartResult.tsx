@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import ChatFileCard from '@/components/chat/ChatFileCard';
 import { buildRoutekaartHtml, parseRoutekaart, routekaartBestandsnaam } from '@/lib/routekaart';
+import '@nldd/design-system/activity-indicator';
+import '@nldd/design-system/card';
+import '@nldd/design-system/container';
+import '@nldd/design-system/icon';
+import '@nldd/design-system/text';
 
 /**
  * The route map as a file, right under the filled-in task in the builder. The

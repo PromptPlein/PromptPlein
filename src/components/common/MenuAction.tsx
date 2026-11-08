@@ -1,5 +1,6 @@
 import { useRef, type ComponentProps } from 'react';
 import { useNlddEvent } from '@/lib/nldd';
+import '@nldd/design-system/menu';
 
 type Props = Omit<ComponentProps<'nldd-menu-item'>, 'onSelect'> & { onSelect: () => void };
 

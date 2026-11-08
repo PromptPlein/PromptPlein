@@ -1,6 +1,11 @@
 import { useId, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useNlddEvent } from '@/lib/nldd';
+import '@nldd/design-system/page';
+import '@nldd/design-system/sheet';
+import '@nldd/design-system/simple-section';
+import '@nldd/design-system/title';
+import '@nldd/design-system/top-title-bar';
 
 interface ModalProps {
   open: boolean;

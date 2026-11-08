@@ -8,6 +8,17 @@ import { APP_ROLE_LABELS } from '@/services/orgService';
 import { requestFunction } from '@/services/functionRequestService';
 import { buildOrgOptions, orgOptionToSearchable } from '@/lib/orgTree';
 import SearchableSelect from '@/components/common/SearchableSelect';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/container';
+import '@nldd/design-system/form';
+import '@nldd/design-system/form-actions';
+import '@nldd/design-system/form-field';
+import '@nldd/design-system/simple-section';
+import '@nldd/design-system/spacer';
+import '@nldd/design-system/text';
+import '@nldd/design-system/text-field';
+import '@nldd/design-system/title';
 
 export default function ProfilePage() {
   const { user, profile, refreshProfile } = useAuth();

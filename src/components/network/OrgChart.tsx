@@ -3,6 +3,17 @@ import type { Organization, OrganizationType } from '@/types';
 import { useTheme } from '@/context/ThemeContext';
 import { orgTypeTokens, readRawToken, readToken, type Scheme } from '@/config/brandColors';
 import { useNlddValue } from '@/lib/nldd';
+import '@nldd/design-system/box';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/container';
+import '@nldd/design-system/icon';
+import '@nldd/design-system/icon-button';
+import '@nldd/design-system/image';
+import '@nldd/design-system/inline-dialog';
+import '@nldd/design-system/search-field';
+import '@nldd/design-system/text';
+import '@nldd/design-system/title';
 
 /**
  * A quiet 2D organization chart of the network, drawn on a canvas.

@@ -5,6 +5,18 @@ import { usePromptCommunity } from '@/hooks/usePromptCommunity';
 import { getPublicProfile, listPromptsByAuthor, firstName } from '@/services/communityService';
 import PromptCard from '@/components/prompts/PromptCard';
 import type { Organization, Prompt, PublicProfile } from '@/types';
+import '@nldd/design-system/activity-indicator';
+import '@nldd/design-system/avatar';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/collection';
+import '@nldd/design-system/container';
+import '@nldd/design-system/inline-dialog';
+import '@nldd/design-system/link';
+import '@nldd/design-system/simple-section';
+import '@nldd/design-system/spacer';
+import '@nldd/design-system/text';
+import '@nldd/design-system/title';
 
 export default function PublicProfilePage() {
   const { userId } = useParams<{ userId: string }>();

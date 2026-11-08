@@ -2,6 +2,16 @@ import { useState } from 'react';
 import InfoDot from '@/components/common/InfoDot';
 import type { Technique } from '@/types';
 import { techniekKaart } from '@/lib/techniekDoelen';
+import '@nldd/design-system/button';
+import '@nldd/design-system/card';
+import '@nldd/design-system/container';
+import '@nldd/design-system/divider';
+import '@nldd/design-system/icon';
+import '@nldd/design-system/icon-cell';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/text';
+import '@nldd/design-system/text-cell';
 
 export interface AanpakOptie {
   id: string;

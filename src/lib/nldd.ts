@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react';
+import '@nldd/design-system/dropdown';
 
 /**
  * Listens for an event on an nldd-* element. React's own handlers do not reach

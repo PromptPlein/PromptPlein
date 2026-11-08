@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import { useNlddEvent } from '@/lib/nldd';
 import type { FieldLayout } from '@/lib/useFieldLayout';
+import '@nldd/design-system/segmented-control';
 
 interface FieldLayoutToggleProps {
   layout: FieldLayout;

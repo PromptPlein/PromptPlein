@@ -21,6 +21,27 @@ import {
 } from '@/lib/skill';
 import BuilderIntro from './BuilderIntro';
 import InfoDot from '@/components/common/InfoDot';
+import '@nldd/design-system/badge';
+import '@nldd/design-system/banner';
+import '@nldd/design-system/button';
+import '@nldd/design-system/cell';
+import '@nldd/design-system/container';
+import '@nldd/design-system/divider';
+import '@nldd/design-system/form-field';
+import '@nldd/design-system/icon';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/multi-line-text-field';
+import '@nldd/design-system/radio-button';
+import '@nldd/design-system/radio-button-field';
+import '@nldd/design-system/radio-button-group';
+import '@nldd/design-system/segmented-control';
+import '@nldd/design-system/spacer';
+import '@nldd/design-system/spacer-cell';
+import '@nldd/design-system/text';
+import '@nldd/design-system/text-cell';
+import '@nldd/design-system/text-field';
+import '@nldd/design-system/title';
 
 interface SkillBuilderProps {
   settings: AiSettings;

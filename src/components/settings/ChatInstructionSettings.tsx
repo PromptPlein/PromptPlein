@@ -10,6 +10,15 @@ import {
   MAX_PERSONAL_INSTRUCTION_CHARS,
   savePersonalInstruction,
 } from '@/services/personalInstructionService';
+import '@nldd/design-system/banner';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/form';
+import '@nldd/design-system/form-actions';
+import '@nldd/design-system/form-field';
+import '@nldd/design-system/form-section';
+import '@nldd/design-system/inline-dialog';
+import '@nldd/design-system/multi-line-text-field';
 
 /**
  * Eigen instructie voor de chat. Staat op de server, en daarom is ingelogd zijn

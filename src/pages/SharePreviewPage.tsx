@@ -7,6 +7,18 @@ import { useReferenceData } from '@/context/ReferenceDataContext';
 import { useAuth } from '@/context/AuthContext';
 import { copyToClipboard, formatDate, sharingLabel } from '@/lib/utils';
 import type { EmailShare, Prompt, SharingLevel } from '@/types';
+import '@nldd/design-system/activity-indicator';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/code-viewer';
+import '@nldd/design-system/container';
+import '@nldd/design-system/inline-dialog';
+import '@nldd/design-system/link';
+import '@nldd/design-system/simple-section';
+import '@nldd/design-system/spacer';
+import '@nldd/design-system/tag';
+import '@nldd/design-system/text';
+import '@nldd/design-system/title';
 
 const SHARING_TAG_COLOR: Record<SharingLevel, 'neutral' | 'hemelblauw' | 'violet' | 'groen'> = {
   private: 'neutral',

@@ -1,5 +1,8 @@
 import { type ReactNode } from 'react';
 import InfoDot from '@/components/common/InfoDot';
+import '@nldd/design-system/container';
+import '@nldd/design-system/icon';
+import '@nldd/design-system/text';
 
 /**
  * Korte kop boven een techniekbouwer: wat je hier doet in een paar woorden, de

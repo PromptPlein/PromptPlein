@@ -3,6 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import Modal from '@/components/common/Modal';
 import SavePromptPanel from '@/components/prompts/SavePromptPanel';
 import type { Prompt } from '@/types';
+import '@nldd/design-system/banner';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/container';
 
 interface SavePromptModalProps {
   open: boolean;

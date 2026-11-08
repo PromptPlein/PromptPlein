@@ -7,8 +7,7 @@ import { ThemeProvider } from './context/ThemeContext';
 import { AccessibilityProvider } from './context/AccessibilityContext';
 import { installAutoGrowTextareas } from './lib/autoGrowTextareas';
 import { installViewportWatch } from './lib/viewportWatch';
-// Registers every nldd-* element; the stylesheet brings tokens, fonts and reset.
-import '@nldd/design-system';
+
 import '@nldd/design-system/styles';
 import './index.css';
 

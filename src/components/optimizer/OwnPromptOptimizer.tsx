@@ -50,6 +50,34 @@ import type {
   Technique,
   TechniqueRecommendation,
 } from '@/types';
+import '@nldd/design-system/activity-indicator';
+import '@nldd/design-system/banner';
+import '@nldd/design-system/box';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/cell';
+import '@nldd/design-system/container';
+import '@nldd/design-system/divider';
+import '@nldd/design-system/form-field';
+import '@nldd/design-system/icon-cell';
+import '@nldd/design-system/inline-dialog';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/list-item-segment';
+import '@nldd/design-system/multi-line-text-field';
+import '@nldd/design-system/page';
+import '@nldd/design-system/radio-button';
+import '@nldd/design-system/sheet';
+import '@nldd/design-system/simple-section';
+import '@nldd/design-system/spacer';
+import '@nldd/design-system/spacer-cell';
+import '@nldd/design-system/text';
+import '@nldd/design-system/text-cell';
+import '@nldd/design-system/title';
+import '@nldd/design-system/toggle-button';
+import '@nldd/design-system/toggle-button-group';
+import '@nldd/design-system/tooltip';
+import '@nldd/design-system/top-title-bar';
 
 interface OwnPromptOptimizerProps {
   /** Admin-bepaalde AI-instellingen (provider, systeemprompt, toon, temperatuur). */

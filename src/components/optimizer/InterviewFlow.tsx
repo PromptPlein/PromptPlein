@@ -7,6 +7,13 @@ import { detectPii, detectBlockedTopics, type GuardrailFinding } from '@/service
 import type { AiSettings } from '@/services/settingsService';
 import { InterviewPanel } from './InterviewPanel';
 import type { PlanStep, Technique, TranscriptTurn } from '@/types';
+import '@nldd/design-system/banner';
+import '@nldd/design-system/box';
+import '@nldd/design-system/button';
+import '@nldd/design-system/code-viewer';
+import '@nldd/design-system/container';
+import '@nldd/design-system/icon';
+import '@nldd/design-system/text';
 
 /**
  * Zelfstandig vraag-na-vraag-interview voor de losse techniek-keuze (Chain-of-

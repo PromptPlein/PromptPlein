@@ -10,6 +10,18 @@ import {
   MEMORY_VECTOR_THRESHOLD_TOKENS,
 } from '@/services/memoryService';
 import type { UserMemory } from '@/types';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/form';
+import '@nldd/design-system/form-actions';
+import '@nldd/design-system/form-section';
+import '@nldd/design-system/icon-cell';
+import '@nldd/design-system/inline-dialog';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/list-item-segment';
+import '@nldd/design-system/text';
+import '@nldd/design-system/text-cell';
 
 /**
  * Het geheugen van de chat: wat de gebruiker liet onthouden met "voortaan",

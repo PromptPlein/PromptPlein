@@ -17,6 +17,17 @@ import type { ReactNode } from 'react';
 import type { CountByLabel } from '@/services/analyticsService';
 import { prefersReducedMotion } from '@/context/AccessibilityContext';
 import { tooltipStyle, useChartColors } from './chartColors';
+import '@nldd/design-system/badge';
+import '@nldd/design-system/card';
+import '@nldd/design-system/cell';
+import '@nldd/design-system/container';
+import '@nldd/design-system/inline-dialog';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/spacer-cell';
+import '@nldd/design-system/text';
+import '@nldd/design-system/text-cell';
+import '@nldd/design-system/title';
 
 type HeadingLevel = 2 | 3 | 4;
 

@@ -8,6 +8,20 @@ import { useReferenceData } from '@/context/ReferenceDataContext';
 import { createRole, deleteRole, getRoles, updateRole } from '@/services/repository';
 import { logAdminAction } from '@/services/adminService';
 import type { Role } from '@/types';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/container';
+import '@nldd/design-system/form';
+import '@nldd/design-system/form-actions';
+import '@nldd/design-system/form-field';
+import '@nldd/design-system/icon-cell';
+import '@nldd/design-system/inline-dialog';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/list-item-segment';
+import '@nldd/design-system/menu';
+import '@nldd/design-system/text-cell';
+import '@nldd/design-system/title';
 
 interface Editor {
   id?: string;
@@ -101,47 +115,37 @@ export default function RoleManagerPage() {
         <nldd-button appearance="primary" start-icon="plus" text="Nieuwe functie" onClick={() => setEditor({ name: '', description: '' })}></nldd-button>
       </nldd-button-group>
 
-      {loading ? (
-        <nldd-container min-height="12rem">
-          <nldd-activity-indicator></nldd-activity-indicator>
-        </nldd-container>
-      ) : (
-        <nldd-table accessible-label="Functies" columns="minmax(10rem,1fr) minmax(10rem,2fr) auto" sm-columns="minmax(0,1fr) auto">
-          <nldd-table-row slot="header">
-            <nldd-text-cell text="Naam"></nldd-text-cell>
-            <nldd-text-cell text="Beschrijving" hide-below="md"></nldd-text-cell>
-            <nldd-cell>
-              <nldd-visually-hidden>Acties</nldd-visually-hidden>
-            </nldd-cell>
-          </nldd-table-row>
-          {roles.map((r, i) => (
-            <nldd-table-row key={r.id}>
-              <nldd-text-cell row-header text={r.name}></nldd-text-cell>
-              <nldd-text-cell text={r.description || 'Geen beschrijving'} color="secondary" hide-below="md"></nldd-text-cell>
-              <nldd-cell horizontal-alignment="right">
-                <nldd-container layout="row" gap="4">
-                  <nldd-icon-button
-                    size="sm"
-                    appearance="neutral-transparent"
-                    icon="pencil"
-                    accessible-label={`Bewerk ${r.name}`}
-                    onClick={() => setEditor({ id: r.id, name: r.name, description: r.description ?? '' })}
-                  ></nldd-icon-button>
-                  <nldd-icon-button size="sm" appearance="neutral-transparent" icon="ellipsis" accessible-label={`Meer acties voor ${r.name}`}>
-                    <nldd-menu slot="popup" placement="bottom-end">
-                      <MenuAction icon="arrow-up" text="Omhoog" disabled={i === 0 || undefined} onSelect={() => move(r, -1)} />
-                      <MenuAction icon="arrow-down" text="Omlaag" disabled={i === roles.length - 1 || undefined} onSelect={() => move(r, 1)} />
-                      <nldd-menu-divider></nldd-menu-divider>
-                      <MenuAction icon="trash" text="Verwijder" destructive onSelect={() => setToDelete(r)} />
-                    </nldd-menu>
-                  </nldd-icon-button>
-                </nldd-container>
-              </nldd-cell>
-            </nldd-table-row>
+      <nldd-list appearance="box-tinted" accessible-label="Functies">
+        {!loading &&
+          roles.map((r) => (
+            <nldd-list-item key={r.id}>
+              <nldd-list-item-segment button width="full" accessible-label={`Bewerk ${r.name}`} onClick={() => setEditor({ id: r.id, name: r.name, description: r.description ?? '' })}>
+                <nldd-text-cell text={r.name} supporting-text={r.description || 'Geen beschrijving'}></nldd-text-cell>
+              </nldd-list-item-segment>
+              <nldd-list-item-segment
+                button
+                popovertarget={`functie-acties-${r.id}`}
+                accessible-label={`Acties voor ${r.name}`}
+              >
+                <nldd-icon-cell icon="ellipsis" size="20" color="secondary"></nldd-icon-cell>
+              </nldd-list-item-segment>
+            </nldd-list-item>
           ))}
-          <nldd-inline-dialog slot="empty" icon="users" text="Nog geen functies."></nldd-inline-dialog>
-        </nldd-table>
-      )}
+        {loading ? (
+          <nldd-inline-dialog slot="empty" variant="loading" text="Functies laden"></nldd-inline-dialog>
+        ) : (
+          <nldd-inline-dialog slot="empty" icon="users" text="Nog geen functies"></nldd-inline-dialog>
+        )}
+      </nldd-list>
+      {roles.map((r, i) => (
+        <nldd-menu key={r.id} id={`functie-acties-${r.id}`} placement="bottom-end">
+          <MenuAction icon="pencil" text="Bewerk" onSelect={() => setEditor({ id: r.id, name: r.name, description: r.description ?? '' })} />
+          <MenuAction icon="arrow-up" text="Omhoog" disabled={i === 0 || undefined} onSelect={() => move(r, -1)} />
+          <MenuAction icon="arrow-down" text="Omlaag" disabled={i === roles.length - 1 || undefined} onSelect={() => move(r, 1)} />
+          <nldd-menu-divider></nldd-menu-divider>
+          <MenuAction icon="trash" text="Verwijder" destructive onSelect={() => setToDelete(r)} />
+        </nldd-menu>
+      ))}
 
       <AdminSheet open={!!editor} onClose={() => setEditor(null)} title={editor?.id ? 'Functie bewerken' : 'Nieuwe functie'} width="480px">
         <nldd-form>

@@ -2,6 +2,9 @@ import { useRef, useState } from 'react';
 import { useNlddEvent } from '@/lib/nldd';
 import ConfirmDialog from './ConfirmDialog';
 import MenuSwitchRow from './MenuSwitchRow';
+import '@nldd/design-system/text';
+import '@nldd/design-system/toggle-button';
+import '@nldd/design-system/tooltip';
 
 interface ThinkingToggleProps {
   /** Staat denken aan? */
