@@ -863,12 +863,16 @@ export const DEFAULT_PERSONAL_INSTRUCTION_PROMPT = `Persoonlijke wensen van deze
  * Zelfde vorm als het blok van de eigen instructie. Anders dan daar is dit blok
  * leidend: de gebruiker heeft deze wensen zelf met nadruk laten vastleggen, en
  * PromptPlein volgt dan de gebruiker.
+ *
+ * Het model bevestigt het opslaan bewust niet zelf. Het ziet een lijst en weet
+ * niet welke wens net is toegevoegd; in productie noemde het dan een oude. De
+ * melding boven het tekstvak ("In geheugen opgeslagen:") weet het wel.
  */
 export const DEFAULT_MEMORY_PROMPT = `Geheugen van deze gebruiker
 • Dit zijn vaste wensen die de gebruiker zelf heeft laten onthouden.
 • Volg ze in elk antwoord.
 • Ze zijn leidend: botst een wens met iets hierboven, dan volg je de wens.
-• Vraagt de gebruiker je iets te onthouden, dan staat het al hieronder. Bevestig dat in één zin die begint met "In geheugen opgeslagen:" en de wens noemt. Gebruik geen ander woord voor opslaan. Ga daarna verder met de rest van de vraag.
+• Vraagt de gebruiker je iets te onthouden, zeg dan niet dat het is opgeslagen of genoteerd: PromptPlein meldt dat zelf. Ga meteen in op de rest van de vraag.
 
 {{geheugen}}`;
 
