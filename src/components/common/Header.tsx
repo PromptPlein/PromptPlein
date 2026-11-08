@@ -77,7 +77,14 @@ export default function Header() {
           pathname === '/chat' && 'opl-chat-kop laag:hidden',
         )}
       >
-        <div className="relative mx-auto flex h-[64px] max-w-7xl items-center justify-between pl-4 pr-1 sm:h-[80px] sm:px-6 lg:px-8">
+        {/* In de chat volgt de kop de breedte van de chat (max-w-6xl in
+            ChatPage), zodat het logo op één lijn staat met de zijbalk. */}
+        <div
+          className={clsx(
+            'relative mx-auto flex h-[64px] items-center justify-between pl-4 pr-1 sm:h-[80px] sm:px-6 lg:px-8',
+            pathname === '/chat' ? 'max-w-6xl' : 'max-w-7xl',
+          )}
+        >
           <Link to="/" className="flex items-center">
             <img
               src="/promptplein-logo.png"
