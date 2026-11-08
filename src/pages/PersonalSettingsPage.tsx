@@ -4,6 +4,7 @@ import { Accessibility, MessageSquare, Settings2 } from '@/components/common/ico
 import AccessibilityHelp from '@/components/settings/AccessibilityHelp';
 import AccessibilitySettings from '@/components/settings/AccessibilitySettings';
 import ChatInstructionSettings from '@/components/settings/ChatInstructionSettings';
+import ChatIntakeSettings from '@/components/settings/ChatIntakeSettings';
 import ChatMemorySettings from '@/components/settings/ChatMemorySettings';
 import { HELP_PATH } from '@/lib/shortcuts';
 
@@ -93,6 +94,7 @@ export default function PersonalSettingsPage() {
 
       {onderdeel === 'chat' && (
         <>
+          <ChatIntakeSettings />
           <ChatInstructionSettings />
           <ChatMemorySettings />
         </>

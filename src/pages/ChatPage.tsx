@@ -25,6 +25,8 @@ import ChatMessageList from '@/components/chat/ChatMessageList';
 import ChatModelBadge from '@/components/chat/ChatModelBadge';
 import ChatSidebar from '@/components/chat/ChatSidebar';
 import ChatContextWizard, { type ContextPrompt } from '@/components/chat/ChatContextWizard';
+import ChatIntake from '@/components/chat/ChatIntake';
+import useChatIntake from '@/components/chat/useChatIntake';
 import ProjectPromptWizard from '@/components/chat/ProjectPromptWizard';
 import ProjectSettingsModal from '@/components/chat/ProjectSettingsModal';
 import ProjectView from '@/components/chat/ProjectView';
@@ -37,6 +39,9 @@ import useFitHeight from '@/components/chat/useFitHeight';
 import useReadingMode from '@/components/chat/useReadingMode';
 import SavePromptModal from '@/components/prompts/SavePromptModal';
 import { looksLikeMessyPrompt } from '@/lib/promptHeuristics';
+import { shouldJudgeFirstMessage, useChatIntakeEnabled } from '@/lib/chatIntake';
+import { isConversationActive } from '@/lib/conversationMode';
+import { useReferenceData } from '@/context/ReferenceDataContext';
 import { consumeHandoff, optimizeChatInput } from '@/services/chatService';
 import {
   consumeNewProjectHandoff,
@@ -55,6 +60,9 @@ import { thinkingUnavailableReason } from '@/config/aiModels';
 
 /** Staat in de kaart, zodat hij altijd bij het typen in beeld is. */
 const PII_NOTICE = 'Verwerk geen persoonsgegevens.';
+
+/** Zoveel tekst per bijlage leest het doorvragen mee, net als de context prompt. */
+const MAX_INTAKE_ATTACHMENT_EXCERPT = 6_000;
 
 /** Permanente afmelding voor de bouw-een-prompt-tip (per apparaat). */
 const NUDGE_DISMISSED_KEY = 'opl.ui.chatNudgeDismissed';
@@ -163,14 +171,19 @@ function ChatPageInner() {
   }, []);
   const checkedAttachments = useRef(new Set<string>());
   const [pendingSend, setPendingSend] = useState<{
-    text: string;
     findings: GuardrailFinding[];
     attachmentIds: string[];
-    replaceId?: string;
+    proceed: () => void;
+    /** Bij annuleren terug in het tekstvak. */
+    refill?: string;
   } | null>(null);
 
-  /** Met `replaceId` vervangt de tekst dat eigen bericht in plaats van erachter te komen. */
-  function guardedSend(text: string, replaceId?: string) {
+  /**
+   * Eerst de controle, dan `proceed`. Ook het doorvragen loopt hierdoor: een
+   * bijlage die tussendoor is toegevoegd, gaat pas als bronmateriaal naar de AI
+   * nadat hij is gecontroleerd.
+   */
+  function runGuarded(text: string, proceed: () => void, refill?: string) {
     const fresh = (conversation?.attachments ?? []).filter(
       (a) => !checkedAttachments.current.has(a.id),
     );
@@ -178,13 +191,97 @@ function ChatPageInner() {
       ? detectPii([text, ...fresh.map((a) => a.text)].join('\n'))
       : [];
     if (findings.length > 0) {
-      setPendingSend({ text, findings, attachmentIds: fresh.map((a) => a.id), replaceId });
+      setPendingSend({ findings, attachmentIds: fresh.map((a) => a.id), proceed, refill });
       return;
     }
     fresh.forEach((a) => checkedAttachments.current.add(a.id));
-    if (replaceId) controller.editMessage(replaceId, text);
-    else void controller.send(text);
+    proceed();
   }
+
+  /** Met `replaceId` vervangt de tekst dat eigen bericht in plaats van erachter te komen. */
+  function guardedSend(text: string, replaceId?: string) {
+    runGuarded(
+      text,
+      () => (replaceId ? controller.editMessage(replaceId, text) : dispatch(text)),
+      text,
+    );
+  }
+
+  // --- Doorvragen bij het eerste bericht ---
+  // Mist er iets, dan maakt de chat er eerst een prompt van en vraagt hij bij een
+  // heel summier bericht eerst door. Uit te zetten bij Instellingen, Chat.
+  const { techniques } = useReferenceData();
+  const intakeEnabled = useChatIntakeEnabled();
+  const attachmentsRef = useRef(conversation?.attachments ?? []);
+  attachmentsRef.current = conversation?.attachments ?? [];
+  const intake = useChatIntake({
+    settings,
+    techniques,
+    getMaterial: () =>
+      attachmentsRef.current
+        .map((a) => `Bijlage "${a.name}":\n${a.text.slice(0, MAX_INTAKE_ATTACHMENT_EXCERPT)}`)
+        .join('\n\n'),
+    onPassThrough: (goal) => void controller.send(goal),
+    // Net als de context prompt: hij komt in het tekstvak en draait als uitvoering.
+    onUse: (draft) => {
+      controller.applyContext(null, true);
+      composerRef.current?.fillPrompt(draft.prompt, {
+        framework: draft.framework?.name,
+        reden: draft.reden,
+      });
+    },
+  });
+  const intakeState = intake.state;
+  const resetIntake = intake.reset;
+  useEffect(() => {
+    resetIntake();
+  }, [conversationId, resetIntake]);
+  useEffect(() => {
+    if (messages.length > 0 && intakeState) resetIntake();
+  }, [messages.length, intakeState, resetIntake]);
+  const chatActive = messages.length > 0 || intakeState !== null;
+
+  /** Waar een verstuurd bericht heen gaat: het doorvragen, of gewoon de chat. */
+  function dispatch(text: string) {
+    if (intakeState) {
+      if (intakeState.phase === 'vragen' && intakeState.question) {
+        intake.answer(text);
+        return;
+      }
+      if (intakeState.phase === 'voorstel') {
+        intake.improve(text);
+        return;
+      }
+      // De gemaakte prompt, of iets nieuws: dit is het echte eerste bericht.
+      resetIntake();
+      void controller.send(text);
+      return;
+    }
+    if (
+      intakeEnabled &&
+      messages.length === 0 &&
+      conversation &&
+      conversation.kind !== 'execution' &&
+      !conversation.projectId &&
+      // Een gesprek met de stem loopt door; een vraagkaart zou het stilleggen.
+      !isConversationActive() &&
+      shouldJudgeFirstMessage(text)
+    ) {
+      intake.start(text);
+      return;
+    }
+    void controller.send(text);
+  }
+
+  const intakePlaceholder =
+    intakeState?.phase === 'vragen'
+      ? 'Of typ je eigen antwoord'
+      : intakeState?.phase === 'voorstel'
+        ? 'Of zeg wat er anders moet'
+        : undefined;
+  /** De prompt zoals hij nu in het tekstvak staat, ook als de gebruiker hem al aanpaste. */
+  const intakePrompt = () =>
+    composerRef.current?.getText().trim() || intakeState?.draft?.prompt || '';
 
   // --- Projecten ---
   // `projectPage` is de projectPAGINA: klik je links op een project, dan kom je
@@ -315,22 +412,24 @@ function ChatPageInner() {
   const handleApplyContext = useCallback(
     (projectId: string | null) => {
       setContextWizard(null);
+      resetIntake();
       controller.applyContext(projectId, false);
       composerRef.current?.focus();
     },
-    [controller],
+    [controller, resetIntake],
   );
 
   const handleContextPrompt = useCallback(
     ({ draft, projectId }: ContextPrompt) => {
       setContextWizard(null);
+      resetIntake();
       controller.applyContext(projectId, true);
       composerRef.current?.fillPrompt(draft.prompt, {
         framework: draft.framework?.name,
         reden: draft.reden,
       });
     },
-    [controller],
+    [controller, resetIntake],
   );
 
   const handleSaveWizard = useCallback(
@@ -705,10 +804,24 @@ function ChatPageInner() {
               <div
                 className={clsx(
                   'flex min-h-0 flex-auto flex-col',
-                  messages.length === 0 && 'overflow-y-auto',
+                  !chatActive && 'overflow-y-auto',
                 )}
               >
-                {messages.length === 0 ? (
+                {intakeState && messages.length === 0 ? (
+                  <ChatIntake
+                    state={intakeState}
+                    onPick={(answer) => runGuarded('', () => intake.answer(answer))}
+                    onFinishQuestions={() => runGuarded('', intake.finishQuestions)}
+                    onSkip={() => runGuarded('', intake.skip)}
+                    onImprove={intake.improve}
+                    onUse={intake.use}
+                    onReopen={intake.reopen}
+                    onRetry={() => runGuarded('', intake.retry)}
+                    onAddFile={() => composerRef.current?.openFilePicker()}
+                    onSaveAsPrompt={() => handleSaveAsPrompt(intakePrompt())}
+                    onBuildInMaken={() => handleImprove(intakePrompt())}
+                  />
+                ) : messages.length === 0 ? (
                   // Een vergroot tekstvak vraagt de hele ruimte: dan geen begroeting.
                   !composerEnlarged && (
                     <div className="mt-auto">
@@ -760,7 +873,7 @@ function ChatPageInner() {
 
                 <div
                   className={
-                    messages.length > 0
+                    chatActive
                       ? 'opl-inklap opl-chat-invoer'
                       : composerEnlarged
                         ? 'my-auto'
@@ -780,12 +893,21 @@ function ChatPageInner() {
                       disabledPlaceholder={
                         projectNeedsLogin ? 'Log in om verder te chatten in dit project' : undefined
                       }
-                      streaming={controller.streaming}
+                      placeholder={intakePlaceholder}
+                      // Ook terwijl het doorvragen loopt: dan stopt Stop die stap.
+                      streaming={controller.streaming || intake.busy}
                       extracting={controller.extracting}
                       attachments={conversation?.attachments ?? []}
                       onSend={guardedSend}
                       onRoutekaart={(text) => void controller.addRoutekaart(text)}
-                      onStop={controller.stop}
+                      onStop={() => {
+                        if (!intake.busy) {
+                          controller.stop();
+                          return;
+                        }
+                        const back = intake.stop();
+                        if (back) composerRef.current?.fill(back);
+                      }}
                       onAddFile={(file) => void controller.addAttachment(file)}
                       onRemoveAttachment={controller.removeAttachment}
                       // Sterretje alleen tonen als de beheerder de functie aan heeft staan.
@@ -800,7 +922,7 @@ function ChatPageInner() {
                       onToggleWebSearch={settings?.webSearchEnabled ? setWebSearch : undefined}
                       // Leeg gesprek: het invoerveld is het enige aanknopingspunt op
                       // het scherm en wordt daarom groter en blauw omrand getoond.
-                      prominent={messages.length === 0}
+                      prominent={!chatActive}
                       notice={PII_NOTICE}
                       // Geen uitvoergesprek: daar staan zulke woorden in de prompt die getest wordt.
                       memoryHint={conversation?.kind !== 'execution'}
@@ -876,15 +998,11 @@ function ChatPageInner() {
           onConfirm={() => {
             pendingSend.attachmentIds.forEach((id) => checkedAttachments.current.add(id));
             setPendingSend(null);
-            if (pendingSend.replaceId) {
-              controller.editMessage(pendingSend.replaceId, pendingSend.text);
-            } else {
-              void controller.send(pendingSend.text);
-            }
+            pendingSend.proceed();
           }}
           onCancel={() => {
             // Het invoerveld is bij versturen al leeggemaakt; zet de tekst terug.
-            composerRef.current?.fill(pendingSend.text);
+            if (pendingSend.refill) composerRef.current?.fill(pendingSend.refill);
             setPendingSend(null);
           }}
         />

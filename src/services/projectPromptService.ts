@@ -28,6 +28,24 @@ export interface ProjectPromptDraft {
   framework?: { id: string; name: string };
   reden?: string;
   titel?: string;
+  /** Alleen bij de context prompt: de kopjes van de prompt, op volgorde. */
+  kopjes?: string[];
+}
+
+/** Het oordeel over het eerste bericht van een nieuwe chat. */
+export interface ChatIntakeVerdict {
+  /** genoeg: gewoon versturen. deels: meteen een voorstel. summier: eerst een vraag. */
+  oordeel: 'genoeg' | 'deels' | 'summier';
+  soort?: string;
+  begrip?: string;
+  vraag?: string;
+  opties?: string[];
+}
+
+/** De beoordeling van een gemaakte prompt, per kopje. */
+export interface PromptCheck {
+  kopjes: { kopje: string; oordeel: 'sterk' | 'zwak'; kern: string }[];
+  verbeterpunt: { kopje: string; vraag: string; opties: string[] } | null;
 }
 
 /**
@@ -174,6 +192,63 @@ export function writeContextPrompt(args: {
       projectSoort: args.soort,
       projectContext: args.material,
       techniques: projectFrameworks(args.techniques),
+    },
+    args.settings,
+    args.signal,
+    true,
+  );
+}
+
+/** Doorvragen: beoordeelt het eerste bericht van een nieuwe chat. */
+export function judgeFirstMessage(args: {
+  goal: string;
+  material?: string;
+  settings: ChatSettings | null;
+  signal?: AbortSignal;
+}): Promise<ChatIntakeVerdict> {
+  return post<ChatIntakeVerdict & { success?: boolean; error?: string }>(
+    { mode: 'chat-intake', goal: args.goal, projectContext: args.material },
+    args.settings,
+    args.signal,
+    true,
+  );
+}
+
+/** Doorvragen: beoordeelt de gemaakte prompt per kopje, voordat hij verstuurd wordt. */
+export function checkContextPrompt(args: {
+  prompt: string;
+  kopjes: string[];
+  goal: string;
+  turns: ProjectTurn[];
+  settings: ChatSettings | null;
+  signal?: AbortSignal;
+}): Promise<PromptCheck> {
+  return post<PromptCheck & { success?: boolean; error?: string }>(
+    {
+      mode: 'chat-intake-check',
+      projectPromptCurrent: args.prompt,
+      promptKopjes: args.kopjes,
+      goal: args.goal,
+      transcript: args.turns,
+    },
+    args.settings,
+    args.signal,
+    true,
+  );
+}
+
+/** Past een context prompt aan op één verzoek; de opbouw blijft staan. */
+export function adjustContextPrompt(args: {
+  prompt: string;
+  feedback: string;
+  settings: ChatSettings | null;
+  signal?: AbortSignal;
+}): Promise<ProjectPromptDraft> {
+  return post<ProjectPromptDraft & { success?: boolean; error?: string }>(
+    {
+      mode: 'context-prompt',
+      projectPromptCurrent: args.prompt,
+      projectPromptFeedback: args.feedback,
     },
     args.settings,
     args.signal,

@@ -393,7 +393,7 @@ en antwoord op één lijn beginnen.
 
 Eén edge function, `optimize-prompt`, ongeveer 8000 regels, met een
 `mode`-veld in de body als router. Nieuwe AI-functionaliteit wordt een nieuwe
-mode in dat bestand, niet een nieuwe function. De 41 modes, gegroepeerd:
+mode in dat bestand, niet een nieuwe function. De 43 modes, gegroepeerd:
 
 | Groep | Modes |
 | --- | --- |
@@ -402,7 +402,7 @@ mode in dat bestand, niet een nieuwe function. De 41 modes, gegroepeerd:
 | Veldhulp in de bouwer | `analyze`, `prefill`, `expand-field`, `title`, `metadata` |
 | PlanWizard | `plan`, `plan-step`, `plan-step-analyze`, `clarify`, `assumption-check` |
 | Techniekbouwers | `persona-fill`, `fewshot-example`, `fewshot-extract`, `meta-build`, `cove-scan`, `stepback-ladder`, `rubric-propose`, `skill-draft`, `skill-trigger` |
-| Chat en projecten | `chat-optimize`, `project-optimize`, `project-brief`, `project-interview`, `project-prompt`, `context-interview`, `context-prompt`, `memory-save`, `memory-search` |
+| Chat en projecten | `chat-optimize`, `project-optimize`, `project-brief`, `project-interview`, `project-prompt`, `context-interview`, `context-prompt`, `chat-intake`, `chat-intake-check`, `memory-save`, `memory-search` |
 | Testkamer-loop | `mock-answer`, `refine`, `refine-suggest` |
 | Sjablonen | `sjabloon` |
 | Projectbronnen | `project-index`, `project-search` |
@@ -633,6 +633,30 @@ In de rijen doen privéprompts niet mee. Populair toont alleen prompts met een
 like, anders is die rij gelijk aan Nieuw. Een lege rij verdwijnt. Populairste
 eerst sorteert de client, want likes staan niet op de prompt-rij. Technieken staan
 bewust niet bij de filters: dat zegt een gebruiker niets over wat een prompt doet.
+
+## Doorvragen bij het eerste bericht
+
+Het eerste bericht van een nieuwe gewone chat gaat eerst langs mode `chat-intake`
+(`useChatIntake`, `ChatIntake`). Het model legt alleen feiten vast (soort, doel, wat
+ontbreekt) en de server rekent het oordeel uit: een vraag of een compleet bericht is
+genoeg en gaat gewoon door; zonder doel, of met drie of meer gaten, is het summier en
+volgen hoogstens drie vragen; anders maakt de chat meteen een voorstel. Laat het oordeel
+niet terug naar het model gaan: Mistral Small paste die regels slecht toe.
+
+Vragen en schrijven lopen via `context-interview` en `context-prompt`, dezelfde modes als
+de context prompt; die geeft voor de chat ook de `kopjes` terug, zodat het voorstel per
+kopje te tonen is. `chat-intake-check` beoordeelt de prompt per kopje en stelt één vraag
+over het zwakste punt; een gekozen antwoord gaat via de aanpasstap van `context-prompt`.
+Pas "Gebruik deze prompt" zet hem in het tekstvak, als uitvoergesprek. Versturen blijft
+een eigen handeling. Niets van het doorvragen komt in de opgeslagen chat.
+
+Het slaat over bij uitvoergesprekken, projectchats, de gespreksmodus en wat
+`shouldJudgeFirstMessage` wegfiltert (korte vragen, eigen prompts met kopjes, wensen voor
+het geheugen). Faalt de beoordeling, dan gaat het bericht gewoon door: het is hulp, geen
+poort. Een bijlage die tijdens het doorvragen wordt toegevoegd, gaat pas als bronmateriaal
+naar de AI na de controle op persoonsgegevens (`runGuarded` in `ChatPage`).
+
+Aan of uit per browser, standaard aan, bij Instellingen, Chat (`opl.chat.doorvragen`).
 
 ## Plus, Projecten en Context prompt in de chat
 

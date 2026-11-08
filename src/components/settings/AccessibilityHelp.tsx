@@ -179,6 +179,22 @@ export default function AccessibilityHelp() {
         </p>
       </Section>
 
+      <Section id="hulp-doorvragen" title="Als de chat eerst vragen stelt">
+        <p>
+          Bij het eerste bericht van een nieuwe chat stelt de chat soms eerst een paar vragen. Daarna
+          maakt hij er een prompt van.
+        </p>
+        <ul className="list-disc space-y-1 pl-5">
+          <li>Kies een antwoord met een knop, of typ je antwoord in het tekstvak.</li>
+          <li>Met de knop Sla de vragen over gaat je bericht meteen door.</li>
+          <li>
+            Met de knop Gebruik deze prompt komt de prompt in het tekstvak. Je leest hem na en
+            verstuurt hem zelf.
+          </li>
+          <li>Je zet dit uit bij Instellingen, Chat.</li>
+        </ul>
+      </Section>
+
       <Section id="hulp-schermlezer" title="Met een schermlezer">
         <ul className="list-disc space-y-1 pl-5">
           <li>

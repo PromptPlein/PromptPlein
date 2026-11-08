@@ -75,6 +75,8 @@ export interface ChatComposerHandle {
   getText: () => string;
   /** Zet de cursor achter de tekst, tenzij hij al in het veld staat. */
   focus: () => void;
+  /** Opent de bestandskiezer, net als de paperclip. */
+  openFilePicker: () => void;
 }
 
 interface ChatComposerProps {
@@ -82,6 +84,8 @@ interface ChatComposerProps {
   disabled: boolean;
   /** Tekst in het lege vak zolang het uitgeschakeld is; standaard "laden". */
   disabledPlaceholder?: string;
+  /** Eigen tekst in het lege vak, bijvoorbeeld als het een antwoord op een vraag wordt. */
+  placeholder?: string;
   streaming: boolean;
   extracting: boolean;
   attachments: ChatAttachment[];
@@ -173,6 +177,7 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
   {
     disabled,
     disabledPlaceholder,
+    placeholder,
     streaming,
     extracting,
     attachments,
@@ -299,6 +304,9 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
         focusAfterFill.current = 'start';
       },
       getText: () => textareaRef.current?.value ?? '',
+      openFilePicker() {
+        if (allowAttachments) fileInputRef.current?.click();
+      },
       focus() {
         const el = textareaRef.current;
         if (!el || document.activeElement === el) return;
@@ -306,7 +314,7 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
         el.setSelectionRange(el.value.length, el.value.length);
       },
     }),
-    [setText],
+    [setText, allowAttachments],
   );
   useLayoutEffect(() => {
     const place = focusAfterFill.current;
@@ -559,7 +567,9 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
               placeholder={
                 disabled
                   ? (disabledPlaceholder ?? 'Chat wordt geladen…')
-                  : prominent
+                  : placeholder
+                    ? placeholder
+                    : prominent
                     ? touchKeyboard
                       ? 'Typ hier je bericht'
                       : 'Typ hier je bericht en druk op Enter'
