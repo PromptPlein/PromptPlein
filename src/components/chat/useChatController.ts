@@ -26,7 +26,7 @@ import { buildRoutekaartHtml, parseRoutekaart } from '@/lib/routekaart';
 import { downloadText } from '@/lib/download';
 import { sendChatMessage } from '@/services/chatService';
 import { hasMemoryTrigger } from '@/lib/memoryTriggers';
-import { rememberWish } from '@/components/chat/rememberWish';
+import { rememberWish, type MemoryNotice } from '@/components/chat/rememberWish';
 import { generateTitle } from '@/services/optimizeService';
 import { loadProjectContext } from '@/services/chatProjectService';
 import type { ChatSettings } from '@/services/settingsService';
@@ -93,6 +93,9 @@ export interface ChatController {
   phase: string | null;
   extracting: boolean;
   send: (text: string) => Promise<void>;
+  /** Wat het geheugen bij het laatste bericht deed; de chat toont het boven het tekstvak. */
+  memoryNotice: MemoryNotice | null;
+  dismissMemoryNotice: () => void;
   /** Start een vers gesprek en verstuur `text` daarin (generator-handoff). */
   sendInNewConversation: (text: string, kind?: ChatConversation['kind']) => void;
   stop: () => void;
@@ -164,6 +167,8 @@ export default function useChatController(
   const [conversation, setConversation] = useState<ChatConversation | null>(null);
   const [index, setIndex] = useState<ChatIndexEntry[]>([]);
   const [streaming, setStreaming] = useState(false);
+  const [memoryNotice, setMemoryNotice] = useState<MemoryNotice | null>(null);
+  const dismissMemoryNotice = useCallback(() => setMemoryNotice(null), []);
   const [phase, setPhase] = useState<string | null>(null);
   const [extracting, setExtracting] = useState(false);
 
@@ -457,6 +462,8 @@ export default function useChatController(
     async (rawText: string) => {
       const text = rawText.trim();
       if (!text || streamingRef.current || !settings) return;
+      // Een nieuw bericht: de melding over het vorige geldt niet meer.
+      setMemoryNotice(null);
 
       const base = conversationRef.current ?? createConversation(defaultKind);
       const now = new Date().toISOString();
@@ -495,7 +502,7 @@ export default function useChatController(
           previousAssistant: earlier.filter((m) => m.role === 'assistant').at(-1)?.content,
           preferredProvider: settings.provider,
           preferredModel: settings.model,
-        });
+        }, setMemoryNotice);
       }
 
       await streamAnswer(updated, assistantMsg.id, history, '');
@@ -823,6 +830,8 @@ export default function useChatController(
   );
 
   return {
+    memoryNotice,
+    dismissMemoryNotice,
     conversation,
     index,
     streaming,

@@ -29,6 +29,7 @@ import ProjectPromptWizard from '@/components/chat/ProjectPromptWizard';
 import ProjectSettingsModal from '@/components/chat/ProjectSettingsModal';
 import ProjectView from '@/components/chat/ProjectView';
 import useChatController from '@/components/chat/useChatController';
+import MemoryNoticeBar from '@/components/chat/MemoryNoticeBar';
 import useThinking from '@/lib/useThinking';
 import useWebSearch from '@/lib/useWebSearch';
 import useChatProjects from '@/components/chat/useChatProjects';
@@ -750,6 +751,12 @@ function ChatPageInner() {
                     messages.length > 0 ? undefined : composerEnlarged ? 'my-auto' : 'mb-auto'
                   }
                 >
+                  {/* Wat het geheugen deed, op de plek waar je typt. */}
+                  <MemoryNoticeBar
+                    notice={controller.memoryNotice}
+                    onDismiss={controller.dismissMemoryNotice}
+                    onLogin={() => requireLogin('Log in om dit in je geheugen op te slaan.')}
+                  />
                   <ChatComposer
                     ref={composerRef}
                     disabled={composerDisabled}
@@ -778,6 +785,8 @@ function ChatPageInner() {
                     // het scherm en wordt daarom groter en blauw omrand getoond.
                     prominent={messages.length === 0}
                     notice={PII_NOTICE}
+                    // Geen uitvoergesprek: daar staan zulke woorden in de prompt die getest wordt.
+                    memoryHint={conversation?.kind !== 'execution'}
                     onEnlargedChange={setComposerEnlarged}
                     badge={
                       settings ? (

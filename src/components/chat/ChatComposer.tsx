@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import {
+  BookmarkPlus,
   FolderOpen,
   Loader2,
   Map as MapIcon,
@@ -30,6 +31,7 @@ import WebSearchToggle from '@/components/common/WebSearchToggle';
 import { ACCEPTED_DOC_ACCEPT } from '@/lib/extractDocument';
 import { usePersistentDraft } from '@/lib/usePersistentDraft';
 import { parseRoutekaart } from '@/lib/routekaart';
+import { hasMemoryTrigger } from '@/lib/memoryTriggers';
 import ComposerPlusMenu from './ComposerPlusMenu';
 import ConversationToggle from './ConversationToggle';
 import { useChatVoice } from './useChatVoice';
@@ -99,6 +101,11 @@ interface ChatComposerProps {
   badge?: ReactNode;
   /** Korte waarschuwing die altijd bij het tekstvak hoort, links van de badge. */
   notice?: ReactNode;
+  /**
+   * Toon onder het veld dat het bericht in het geheugen komt zodra er een woord
+   * als "voortaan" of "onthoud" in staat. Uit in een uitvoergesprek.
+   */
+  memoryHint?: boolean;
   /** Het vak is vergroot: een lege chat maakt dan plaats voor de tekst. */
   onEnlargedChange?: (enlarged: boolean) => void;
   /** Bijlagen toestaan? De Testkamer zet dit uit: daar test je de prompt zelf. */
@@ -174,6 +181,7 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
     onOptimize,
     badge,
     notice,
+    memoryHint = false,
     onEnlargedChange,
     allowAttachments = true,
     onContext,
@@ -797,6 +805,15 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
                 <Undo2 size={13} /> Herstel mijn tekst
               </button>
             )}
+          </div>
+        )}
+
+        {/* Een woord als "voortaan" of "onthoud": al vóór het versturen zichtbaar dat
+            de wens in het geheugen komt. Geen live-regio: dit verandert bij elke toets. */}
+        {memoryHint && hasMemoryTrigger(text) && (
+          <div className="mt-1.5 flex items-center gap-2 text-[0.6875rem] text-slate-500 dark:text-slate-400">
+            <BookmarkPlus size={12} aria-hidden="true" className="shrink-0 text-rijksblauw-600 dark:text-rijksblauw-300" />
+            <span className="min-w-0">Bij versturen wordt je wens in geheugen opgeslagen.</span>
           </div>
         )}
 

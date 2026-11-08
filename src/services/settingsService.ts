@@ -868,6 +868,7 @@ export const DEFAULT_MEMORY_PROMPT = `Geheugen van deze gebruiker
 • Dit zijn vaste wensen die de gebruiker zelf heeft laten onthouden.
 • Volg ze in elk antwoord.
 • Ze zijn leidend: botst een wens met iets hierboven, dan volg je de wens.
+• Vraagt de gebruiker je iets te onthouden, dan staat het al hieronder. Bevestig dat in één zin die begint met "In geheugen opgeslagen:" en de wens noemt. Gebruik geen ander woord voor opslaan. Ga daarna verder met de rest van de vraag.
 
 {{geheugen}}`;
 
