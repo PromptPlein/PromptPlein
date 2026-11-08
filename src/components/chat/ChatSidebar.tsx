@@ -1,23 +1,22 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { FolderOpen, MessageSquare, Plus, Settings2, Trash2 } from '@/components/common/icons';
-import clsx from 'clsx';
+import { type ReactNode } from 'react';
 import InfoDot from '@/components/common/InfoDot';
+import MenuAction from '@/components/common/MenuAction';
 import { formatDate } from '@/lib/utils';
 import type { ChatIndexEntry, ChatProject } from '@/types';
+import '@nldd/design-system/button';
+import '@nldd/design-system/container';
+import '@nldd/design-system/icon-button';
+import '@nldd/design-system/icon-cell';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/list-item-segment';
+import '@nldd/design-system/menu';
+import '@nldd/design-system/spacer';
+import '@nldd/design-system/spacer-cell';
+import '@nldd/design-system/text';
+import '@nldd/design-system/text-cell';
+import '@nldd/design-system/title';
 
-/**
- * Zijbalk (desktop): projecten boven, losse gesprekken eronder.
- *
- * De volgorde is de boodschap. Een project is een plek waar je naartoe gaat en
- * waar je werk zich verzamelt; een los gesprek is een losse vraag. Gesprekken
- * die bij een project horen staan daarom NIET in de lijst hieronder maar in het
- * project zelf — anders zou dezelfde chat op twee plaatsen staan en zou de
- * lijst voor iemand met een druk project onbruikbaar worden.
- *
- * Puur presentationeel: verwijderacties vragen de pagina om bevestiging via
- * onRequestDelete/onRequestDeleteAll.
- */
 /**
  * Kopregel van een lijst met het plusje rechts op dezelfde hoogte.
  *
@@ -32,55 +31,49 @@ function SectionHeading({
   addLabel,
   onAdd,
   disabled,
-  className,
   info,
+  more,
 }: {
   label: string;
+  /** Extra control after the plus, such as the menu with less common actions. */
+  more?: ReactNode;
   /** Korte uitleg achter een infobolletje naast het kopje. */
   info?: string;
-  /** Wat de knop doet, in gewone taal — wordt het toegankelijkheidslabel. */
+  /** Wat de knop doet, in gewone taal: wordt het toegankelijkheidslabel. */
   addLabel: string;
   onAdd: () => void;
   disabled: boolean;
-  className?: string;
 }) {
   return (
-    <div className={clsx('flex items-center gap-0.5 px-2 pb-1 pt-1', className)}>
-      <h2 className="truncate text-sm font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
-        {label}
-      </h2>
+    <nldd-container layout="row" gap="4" vertical-alignment="center">
+      <nldd-title heading-level={2} size={6} text={label}></nldd-title>
       {info && <InfoDot label={`Uitleg over ${label.toLowerCase()}`} text={info} />}
-      <button
-        type="button"
-        className="-mr-1 ml-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-rijksblauw-700 transition-colors hover:bg-rijksblauw-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 disabled:pointer-events-none disabled:opacity-40 dark:text-rijksblauw-200 dark:hover:bg-rijksblauw-500/15"
+      <nldd-spacer size="flexible"></nldd-spacer>
+      <nldd-icon-button
+        size="sm"
+        appearance="neutral-transparent"
+        icon="plus"
+        text={addLabel}
+        disabled={disabled || undefined}
         onClick={onAdd}
-        disabled={disabled}
-        aria-label={addLabel}
-        title={addLabel}
-      >
-        <Plus size={16} />
-      </button>
-    </div>
+      ></nldd-icon-button>
+      {more}
+    </nldd-container>
   );
 }
 
-/** Rond tegeltje met het icoon van een project of chat, zoals op de startpagina. */
-function ItemIcon({ active, children }: { active: boolean; children: ReactNode }) {
-  return (
-    <span
-      aria-hidden="true"
-      className={clsx(
-        'flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors',
-        active
-          ? 'bg-rijksblauw-700 text-white dark:bg-rijksblauw-500'
-          : 'bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200',
-      )}
-    >
-      {children}
-    </span>
-  );
-}
-
+/**
+ * Zijbalk: projecten boven, losse gesprekken eronder.
+ *
+ * De volgorde is de boodschap. Een project is een plek waar je naartoe gaat en
+ * waar je werk zich verzamelt; een los gesprek is een losse vraag. Gesprekken
+ * die bij een project horen staan daarom NIET in de lijst hieronder maar in het
+ * project zelf, anders zou dezelfde chat op twee plaatsen staan en zou de
+ * lijst voor iemand met een druk project onbruikbaar worden.
+ *
+ * Puur presentationeel: verwijderacties vragen de pagina om bevestiging via
+ * onRequestDelete/onRequestDeleteAll.
+ */
 export default function ChatSidebar({
   entries,
   totalConversations,
@@ -94,7 +87,9 @@ export default function ChatSidebar({
   onOpenProject,
   onRequestDelete,
   onRequestDeleteAll,
-  inDrawer = false,
+  onExport,
+  onImport,
+  canExport,
   footer,
 }: {
   /** Alleen de LOSSE gesprekken; projectgesprekken staan in hun project. */
@@ -117,88 +112,38 @@ export default function ChatSidebar({
   onOpenProject: (id: string) => void;
   onRequestDelete: (id: string) => void;
   onRequestDeleteAll: () => void;
-  /** In het inschuifpaneel van de telefoon, in plaats van naast het gesprek. */
-  inDrawer?: boolean;
+  /** Bewaar alle chats als bestand op dit apparaat. */
+  onExport: () => void;
+  /** Zet een bewaard bestand terug. */
+  onImport: () => void;
+  canExport: boolean;
+  /** The quiet line about where chats live, at the bottom. */
   footer?: ReactNode;
 }) {
-  const navigate = useNavigate();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!menuOpen) return;
-    function onPointerDown(e: PointerEvent) {
-      if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
-    }
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') setMenuOpen(false);
-    }
-    document.addEventListener('pointerdown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('pointerdown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [menuOpen]);
-
   return (
-    /* Zit binnen dezelfde kaart als het gesprek: geen eigen rand of schaduw,
-       alleen een scheidingslijn en een iets rustiger vlak. Zo lezen de lijst en
-       het gesprek als één omgeving in plaats van twee losse blokken. */
-    <aside
-      className={clsx(
-        'flex-col p-3',
-        inDrawer
-          ? 'flex h-full'
-          : 'hidden w-64 shrink-0 border-r border-slate-200 bg-slate-50/70 lg:flex dark:border-slate-700 dark:bg-slate-900/40',
-      )}
-    >
+    <nldd-container gap="16">
       {/* Eén knop met een klein menu erachter: nieuw gesprek is de gewone daad,
           nieuw project de zeldzame. Twee even grote knoppen zouden suggereren
           dat je elke keer moet kiezen. */}
-      <div className="relative" ref={menuRef}>
-        <button
-          type="button"
-          className="opl-btn-primary w-full"
-          onClick={() => setMenuOpen((open) => !open)}
-          disabled={disabled}
-          aria-expanded={menuOpen}
-        >
-          <Plus size={16} /> Nieuw
-        </button>
-        {menuOpen && (
-          <div className="absolute left-0 right-0 top-full z-20 mt-1 rounded-xl border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-700 dark:bg-slate-800">
-            <button
-              type="button"
-              className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm text-slate-700 transition-colors hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700"
-              onClick={() => {
-                setMenuOpen(false);
-                onNew();
-              }}
-            >
-              <MessageSquare size={15} className="shrink-0 text-slate-400" />
-              Nieuwe chat
-            </button>
-            <button
-              type="button"
-              className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm text-slate-700 transition-colors hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700"
-              onClick={() => {
-                setMenuOpen(false);
-                onNewProject();
-              }}
-            >
-              <FolderOpen size={15} className="shrink-0 text-slate-400" />
-              Nieuw project
-            </button>
-          </div>
-        )}
-      </div>
+      <nldd-button
+        appearance="primary"
+        width="full"
+        start-icon="plus"
+        text="Nieuw"
+        expandable
+        disabled={disabled || undefined}
+      >
+        <nldd-menu slot="popup" accessible-label="Nieuw">
+          <MenuAction icon="message-rectangle-text" text="Nieuwe chat" onSelect={onNew} />
+          <MenuAction icon="folder-open" text="Nieuw project" onSelect={onNewProject} />
+        </nldd-menu>
+      </nldd-button>
 
-      <div className="mt-3 min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
-        {/* De kopregels zijn tegelijk de snelste weg naar "nog een erbij": het
-            plusje staat rechts op dezelfde regel als het kopje. Daarom staan ze
-            er ook als de lijst nog leeg is — anders is de knop pas te vinden
-            nadat je al een project hebt. */}
+      {/* De kopregels zijn tegelijk de snelste weg naar "nog een erbij": het
+          plusje staat rechts op dezelfde regel als het kopje. Daarom staan ze
+          er ook als de lijst nog leeg is, anders is de knop pas te vinden
+          nadat je al een project hebt. */}
+      <nldd-container gap="4">
         <SectionHeading
           label="Projecten"
           addLabel="Nieuw project"
@@ -206,113 +151,111 @@ export default function ChatSidebar({
           disabled={disabled}
           info="Een project bundelt een instructie, bronbestanden en chats over één onderwerp."
         />
-        {projects.length > 0 && (
-          <>
-            {projects.map((project) => (
-              <button
-                key={project.id}
-                type="button"
-                className={clsx(
-                  'flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-sm transition-colors',
-                  project.id === openProjectId
-                    ? 'bg-rijksblauw-50 font-semibold text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-100'
-                    : 'text-slate-800 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800',
-                )}
+        <nldd-list accessible-label="Projecten">
+          {projects.map((project) => (
+            <nldd-list-item key={project.id} size="sm">
+              <nldd-list-item-segment
+                width="full"
+                button
+                current={project.id === openProjectId || undefined}
+                disabled={disabled || undefined}
                 onClick={() => onOpenProject(project.id)}
-                disabled={disabled}
               >
-                <ItemIcon active={project.id === openProjectId}>
-                  <FolderOpen size={15} />
-                </ItemIcon>
-                <span className="min-w-0 flex-1 truncate">{project.name}</span>
-                {Boolean(project.fileCount) && (
-                  <span
-                    aria-label={`${project.fileCount} bronbestanden`}
-                    title={`${project.fileCount} bronbestanden`}
-                    className="min-w-[1.5rem] shrink-0 rounded-full bg-rijksblauw-700 px-1.5 text-center text-xs font-bold leading-6 text-white dark:bg-rijksblauw-500"
-                  >
-                    {project.fileCount}
-                  </span>
-                )}
-              </button>
-            ))}
-          </>
-        )}
+                <nldd-icon-cell icon="folder-open" size="20" color="content"></nldd-icon-cell>
+                <nldd-spacer-cell size="8"></nldd-spacer-cell>
+                <nldd-text-cell
+                  text={project.name}
+                  supporting-text={
+                    project.fileCount
+                      ? `${project.fileCount} ${project.fileCount === 1 ? 'bronbestand' : 'bronbestanden'}`
+                      : undefined
+                  }
+                ></nldd-text-cell>
+              </nldd-list-item-segment>
+            </nldd-list-item>
+          ))}
+          <nldd-text slot="empty" size="sm" color="secondary">
+            Nog geen projecten.
+          </nldd-text>
+        </nldd-list>
+      </nldd-container>
 
-        <SectionHeading label="Chats" addLabel="Nieuwe chat" onAdd={onNew} disabled={disabled} className="pt-3" />
-
-        {entries.length === 0 && (
-          <p className="px-2 py-3 text-sm text-slate-600 dark:text-slate-400">Nog geen chats.</p>
-        )}
-        {entries.map((entry) => (
-          <div
-            key={entry.id}
-            className={clsx(
-              'group flex items-center gap-1 rounded-lg pr-1 transition-colors',
-              entry.id === activeId
-                ? 'bg-rijksblauw-50 dark:bg-rijksblauw-500/15'
-                : 'hover:bg-slate-100 dark:hover:bg-slate-800',
-            )}
-          >
-            <button
-              type="button"
-              className="flex min-w-0 flex-1 items-center gap-2.5 px-2 py-1.5 text-left"
-              onClick={() => onSelect(entry.id)}
-              disabled={disabled}
-            >
-              <ItemIcon active={entry.id === activeId}>
-                <MessageSquare size={15} />
-              </ItemIcon>
-              <span className="flex min-w-0 flex-1 flex-col">
-                <span
-                  className={clsx(
-                    'truncate text-sm',
-                    entry.id === activeId
-                      ? 'font-semibold text-rijksblauw-700 dark:text-rijksblauw-100'
-                      : 'text-slate-800 dark:text-slate-200',
-                  )}
-                >
-                  {entry.title}
-                </span>
-                <span className="text-xs text-slate-600 dark:text-slate-400">
-                  {formatDate(entry.updatedAt)}
-                </span>
-              </span>
-            </button>
-            <button
-              type="button"
-              className="shrink-0 rounded-md p-1.5 text-slate-500 opacity-0 transition-opacity hover:bg-slate-200 hover:text-rijksrood focus:opacity-100 group-hover:opacity-100 opl-geen-muis:opacity-100 dark:text-slate-400 dark:hover:bg-slate-700"
-              onClick={() => onRequestDelete(entry.id)}
-              disabled={disabled}
-              aria-label={`Verwijder chat "${entry.title}"`}
-            >
-              <Trash2 size={14} />
-            </button>
-          </div>
-        ))}
-      </div>
-
-      {totalConversations > 0 && (
-        <button
-          type="button"
-          className="opl-btn-ghost mt-2 w-full text-rijksrood dark:text-red-400"
-          onClick={onRequestDeleteAll}
+      <nldd-container gap="4">
+        <SectionHeading
+          label="Chats"
+          addLabel="Nieuwe chat"
+          onAdd={onNew}
           disabled={disabled}
-        >
-          <Trash2 size={14} /> Alles verwijderen
-        </button>
-      )}
-      {/* Uit tijdens het streamen, net als wisselen van chat: wegklikken zou het
-          lopende antwoord afbreken. */}
-      {footer}
-      <button
-        type="button"
-        className="opl-btn-ghost mt-2 w-full"
-        onClick={() => navigate('/instellingen/chat')}
-        disabled={disabled}
-      >
-        <Settings2 size={14} /> Instellingen
-      </button>
-    </aside>
+          more={
+            <nldd-icon-button
+              size="sm"
+              appearance="neutral-transparent"
+              icon="more"
+              text="Meer"
+              accessible-label="Meer acties voor chats"
+              disabled={disabled || undefined}
+            >
+              <nldd-menu slot="popup" placement="bottom-end" accessible-label="Meer acties voor chats">
+                <MenuAction
+                  icon="download"
+                  text="Bewaren als bestand"
+                  disabled={!canExport || undefined}
+                  onSelect={onExport}
+                />
+                <MenuAction icon="upload" text="Terugzetten uit bestand" onSelect={onImport} />
+                {totalConversations > 0 && (
+                  <>
+                    <nldd-menu-divider></nldd-menu-divider>
+                    <MenuAction icon="trash" text="Verwijder alle chats" destructive onSelect={onRequestDeleteAll} />
+                  </>
+                )}
+              </nldd-menu>
+            </nldd-icon-button>
+          }
+        />
+        <nldd-list accessible-label="Chats">
+          {entries.map((entry) => (
+            <nldd-list-item key={entry.id} size="sm">
+              <nldd-list-item-segment
+                width="full"
+                button
+                current={entry.id === activeId || undefined}
+                disabled={disabled || undefined}
+                onClick={() => onSelect(entry.id)}
+              >
+                <nldd-icon-cell icon="message-rectangle-text" size="20" color="content"></nldd-icon-cell>
+                <nldd-spacer-cell size="8"></nldd-spacer-cell>
+                <nldd-text-cell text={entry.title} supporting-text={formatDate(entry.updatedAt)}></nldd-text-cell>
+              </nldd-list-item-segment>
+              <nldd-list-item-segment
+                button
+                accessible-label={`Verwijder chat "${entry.title}"`}
+                disabled={disabled || undefined}
+                onClick={() => onRequestDelete(entry.id)}
+              >
+                <nldd-icon-cell icon="trash" size="20" color="secondary"></nldd-icon-cell>
+              </nldd-list-item-segment>
+            </nldd-list-item>
+          ))}
+          <nldd-text slot="empty" size="sm" color="secondary">
+            Nog geen chats.
+          </nldd-text>
+        </nldd-list>
+      </nldd-container>
+
+      {/* Quiet things last: the settings as an ordinary row, and one line about
+          where the chats live. */}
+      <nldd-container gap="8">
+        <nldd-list accessible-label="Instellingen">
+          <nldd-list-item size="sm" href="/instellingen/chat" disabled={disabled || undefined}>
+            <nldd-icon-cell icon="gear" size="20" color="content"></nldd-icon-cell>
+            <nldd-spacer-cell size="8"></nldd-spacer-cell>
+            <nldd-text-cell text="Instellingen"></nldd-text-cell>
+            <nldd-icon-cell icon="chevron-right" size="20" color="secondary"></nldd-icon-cell>
+          </nldd-list-item>
+        </nldd-list>
+        {footer}
+      </nldd-container>
+    </nldd-container>
   );
 }

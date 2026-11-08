@@ -1,5 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ZoomIn, ZoomOut, RotateCcw } from '@/components/common/icons';
+import { useNlddEvent } from '@/lib/nldd';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/container';
+import '@nldd/design-system/icon-button';
+import '@nldd/design-system/segmented-control';
+import '@nldd/design-system/slider';
+import '@nldd/design-system/text';
+
+/** A design-system color token, read at runtime for drawing on the canvas. */
+function token(name: string): string {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
 
 /**
  * Vierkante logo-crop/zoom-editor.
@@ -40,6 +52,15 @@ export default function LogoCropper({ src, onConfirm, onCancel, background = 'tr
   const [bg, setBg] = useState<'transparent' | 'white'>(background);
   const [tf, setTf] = useState<Transform>({ scale: 1, x: 0, y: 0 });
   const [baseScale, setBaseScale] = useState(1);
+  const sliderRef = useRef<HTMLElement>(null);
+  const bgRef = useRef<HTMLElement>(null);
+  useNlddEvent<CustomEvent<{ value?: number }>>(sliderRef, 'input', (e) => {
+    const v = Number(e.detail?.value);
+    if (Number.isFinite(v)) setScaleFromSlider(v);
+  });
+  useNlddEvent<CustomEvent<{ value?: string }>>(bgRef, 'change', (e) => {
+    if (e.detail?.value === 'transparent' || e.detail?.value === 'white') setBg(e.detail.value);
+  });
   const drag = useRef<{ active: boolean; sx: number; sy: number; ox: number; oy: number }>({
     active: false,
     sx: 0,
@@ -75,8 +96,18 @@ export default function LogoCropper({ src, onConfirm, onCancel, background = 'tr
 
     ctx.clearRect(0, 0, FRAME, FRAME);
     if (bg === 'white') {
-      ctx.fillStyle = '#ffffff';
+      ctx.fillStyle = 'white';
       ctx.fillRect(0, 0, FRAME, FRAME);
+    } else {
+      // A checkerboard behind the transparent parts, on the preview only.
+      const light = token('--primitives-color-neutral-0') || 'white';
+      const dark = token('--primitives-color-neutral-150') || 'silver';
+      for (let y = 0; y < FRAME; y += 8) {
+        for (let x = 0; x < FRAME; x += 8) {
+          ctx.fillStyle = (x + y) % 16 === 0 ? light : dark;
+          ctx.fillRect(x, y, 8, 8);
+        }
+      }
     }
     const w = img.naturalWidth * tf.scale;
     const h = img.naturalHeight * tf.scale;
@@ -113,30 +144,32 @@ export default function LogoCropper({ src, onConfirm, onCancel, background = 'tr
   };
 
   // --- Zoomen (scroll rond het kadermidden) ---
-  const onWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    setTf((t) => {
-      const factor = Math.exp(-e.deltaY * 0.0015);
-      const scale = Math.min(MAX_SCALE * baseScale, Math.max(MIN_SCALE * baseScale, t.scale * factor));
-      const k = scale / t.scale;
-      // Zoom rond het kadermidden → schaal de offset mee.
-      return { scale, x: t.x * k, y: t.y * k };
-    });
-  };
+  // A native listener, because React's wheel listener is passive and cannot
+  // stop the page from scrolling along.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    // Dragging on a touch screen must move the logo, not the page. The design
+    // system (0.18.0) has no attribute for this on a canvas.
+    canvas.style.touchAction = 'none';
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      setTf((t) => {
+        const factor = Math.exp(-e.deltaY * 0.0015);
+        const scale = Math.min(MAX_SCALE * baseScale, Math.max(MIN_SCALE * baseScale, t.scale * factor));
+        const k = scale / t.scale;
+        // Zoom rond het kadermidden → schaal de offset mee.
+        return { scale, x: t.x * k, y: t.y * k };
+      });
+    };
+    canvas.addEventListener('wheel', onWheel, { passive: false });
+    return () => canvas.removeEventListener('wheel', onWheel);
+  }, [baseScale]);
 
   const setScaleFromSlider = (pct: number) => {
     // pct 0..100 → schaal tussen baseScale en MAX_SCALE*baseScale (log-achtig lineair).
     const scale = baseScale * (1 + (pct / 100) * (MAX_SCALE - 1));
     setTf((t) => {
-      const k = scale / t.scale;
-      return { scale, x: t.x * k, y: t.y * k };
-    });
-  };
-
-  // Stapsgewijs in-/uitzoomen via de knoppen, rond het kadermidden.
-  const zoomStep = (factor: number) => {
-    setTf((t) => {
-      const scale = Math.min(MAX_SCALE * baseScale, Math.max(MIN_SCALE * baseScale, t.scale * factor));
       const k = scale / t.scale;
       return { scale, x: t.x * k, y: t.y * k };
     });
@@ -155,7 +188,7 @@ export default function LogoCropper({ src, onConfirm, onCancel, background = 'tr
     if (!ctx) return;
 
     if (bg === 'white') {
-      ctx.fillStyle = '#ffffff';
+      ctx.fillStyle = 'white';
       ctx.fillRect(0, 0, OUTPUT, OUTPUT);
     }
     // Schaalfactor van kader-px → uitvoer-px.
@@ -181,114 +214,59 @@ export default function LogoCropper({ src, onConfirm, onCancel, background = 'tr
   const sliderPct = Math.round(((tf.scale / baseScale - 1) / (MAX_SCALE - 1)) * 100);
 
   return (
-    <div className="space-y-4">
-      <p className="text-sm text-slate-600 dark:text-slate-300">
+    <nldd-container gap="16">
+      <nldd-text size="sm" color="secondary">
         Sleep om te verschuiven, scroll of gebruik de schuif om te zoomen. Wat binnen het kader staat,
         wordt opgeslagen.
-      </p>
+      </nldd-text>
 
-      <div className="flex flex-col items-center gap-4">
-        {/* Kader met checkerboard-achtergrond voor transparantie. */}
-        <div
-          className="relative overflow-hidden rounded-xl border border-slate-300 dark:border-slate-600"
-          style={{
-            width: FRAME,
-            height: FRAME,
-            backgroundColor: bg === 'white' ? '#ffffff' : undefined,
-            backgroundImage:
-              bg === 'transparent'
-                ? 'linear-gradient(45deg,#e2e8f0 25%,transparent 25%),linear-gradient(-45deg,#e2e8f0 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#e2e8f0 75%),linear-gradient(-45deg,transparent 75%,#e2e8f0 75%)'
-                : undefined,
-            backgroundSize: '16px 16px',
-            backgroundPosition: '0 0,0 8px,8px -8px,-8px 0',
-            cursor: drag.current.active ? 'grabbing' : 'grab',
-          }}
+      <nldd-container gap="16" horizontal-alignment="center">
+        <canvas
+          ref={canvasRef}
+          width={FRAME}
+          height={FRAME}
+          aria-label="Uitsnede van het logo"
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerLeave={onPointerUp}
-          onWheel={onWheel}
-        >
-          <canvas
-            ref={canvasRef}
-            width={FRAME}
-            height={FRAME}
-            className="touch-none select-none"
-            style={{ width: FRAME, height: FRAME }}
-          />
-          {/* Subtiel cirkelmasker als hint voor een typisch logo-badge. */}
-          <div className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-inset ring-rijksblauw-500/40" />
-        </div>
+        />
 
-        {/* Zoomregeling */}
-        <div className="flex w-full max-w-xs items-center gap-3">
-          <button
-            type="button"
-            onClick={() => zoomStep(0.8)}
-            className="shrink-0 rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-700 dark:hover:text-slate-200"
-            aria-label="Uitzoomen"
-            title="Uitzoomen"
-          >
-            <ZoomOut size={16} />
-          </button>
-          <input
-            type="range"
+        <nldd-container layout="row" gap="8" vertical-alignment="center" max-width="20rem">
+          <nldd-slider
+            ref={sliderRef}
             min={0}
             max={100}
-            value={Math.max(0, Math.min(100, sliderPct))}
-            onChange={(e) => setScaleFromSlider(Number(e.target.value))}
-            className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-slate-200 accent-rijksblauw-500 dark:bg-slate-700"
-            aria-label="Zoomen"
-          />
-          <button
-            type="button"
-            onClick={() => zoomStep(1.25)}
-            className="shrink-0 rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-700 dark:hover:text-slate-200"
-            aria-label="Inzoomen"
-            title="Inzoomen"
-          >
-            <ZoomIn size={16} />
-          </button>
-          <button
-            type="button"
+            value={String(Math.max(0, Math.min(100, sliderPct)))}
+            start-icon="minus"
+            end-icon="plus"
+            tooltip-timing="never"
+            accessible-label="Zoomen"
+          ></nldd-slider>
+          <nldd-icon-button
+            icon="undo"
+            appearance="neutral-transparent"
+            size="sm"
+            accessible-label="Herstellen"
             onClick={reset}
-            className="shrink-0 rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-700 dark:hover:text-slate-200"
-            aria-label="Herstellen"
-            title="Herstellen"
-          >
-            <RotateCcw size={15} />
-          </button>
-        </div>
+          ></nldd-icon-button>
+        </nldd-container>
 
-        {/* Achtergrondkeuze (handig voor logo's met transparantie). */}
-        <div className="flex items-center gap-2 text-xs">
-          <span className="text-slate-500 dark:text-slate-400">Achtergrond:</span>
-          {(['transparent', 'white'] as const).map((opt) => (
-            <button
-              key={opt}
-              type="button"
-              onClick={() => setBg(opt)}
-              className={
-                'rounded-full border px-3 py-1 font-medium transition-colors ' +
-                (bg === opt
-                  ? 'border-rijksblauw-500 bg-rijksblauw-500 text-white'
-                  : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300')
-              }
-            >
-              {opt === 'transparent' ? 'Transparant' : 'Wit'}
-            </button>
-          ))}
-        </div>
-      </div>
+        <nldd-segmented-control ref={bgRef} size="sm" value={bg} accessible-label="Achtergrond">
+          <nldd-segmented-control-item value="transparent" text="Transparant"></nldd-segmented-control-item>
+          <nldd-segmented-control-item value="white" text="Wit"></nldd-segmented-control-item>
+        </nldd-segmented-control>
+      </nldd-container>
 
-      <div className="flex justify-end gap-3 pt-1">
-        <button type="button" className="opl-btn-secondary" onClick={onCancel}>
-          Annuleren
-        </button>
-        <button type="button" className="opl-btn-primary" onClick={confirm} disabled={!ready}>
-          Logo gebruiken
-        </button>
-      </div>
-    </div>
+      <nldd-button-group>
+        <nldd-button appearance="secondary" text="Annuleren" onClick={onCancel}></nldd-button>
+        <nldd-button
+          appearance="primary"
+          text="Gebruik dit logo"
+          disabled={!ready || undefined}
+          onClick={confirm}
+        ></nldd-button>
+      </nldd-button-group>
+    </nldd-container>
   );
 }

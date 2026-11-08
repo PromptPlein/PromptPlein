@@ -125,7 +125,7 @@ const KADERS: Kader[] = [
 ];
 
 /** De kaders die bij deze tekst horen, in vaste volgorde. */
-export function detectKaders(text: string): KaderId[] {
+function detectKaders(text: string): KaderId[] {
   const t = text.toLowerCase();
   if (t.trim().length < 12) return [];
   return KADERS.filter((k) => k.test(t)).map((k) => k.id);

@@ -1,10 +1,19 @@
-import { useEffect, useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff } from '@/components/common/icons';
-import toast from 'react-hot-toast';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { notify } from '@/lib/notify';
+import { useNlddValue } from '@/lib/nldd';
 import { updatePassword } from '@/services/authService';
 import { useAuth } from '@/context/AuthContext';
 import AuthLayout from './AuthLayout';
+import '@nldd/design-system/banner';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/form';
+import '@nldd/design-system/form-actions';
+import '@nldd/design-system/form-field';
+import '@nldd/design-system/link';
+import '@nldd/design-system/password-field';
+import '@nldd/design-system/spacer';
 
 const MIN_LENGTH = 8;
 
@@ -18,8 +27,11 @@ export default function UpdatePasswordPage() {
   const { configured, loading, isAuthenticated } = useAuth();
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
-  const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
+  const passwordRef = useRef<HTMLElement & { value?: string }>(null);
+  const confirmRef = useRef<HTMLElement & { value?: string }>(null);
+  useNlddValue(passwordRef, password, setPassword);
+  useNlddValue(confirmRef, confirm, setConfirm);
 
   // Geef supabase-js even de tijd om het recovery-token uit de URL te verwerken.
   const [grace, setGrace] = useState(true);
@@ -34,21 +46,25 @@ export default function UpdatePasswordPage() {
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (busy) return;
+    if (!ready) {
+      notify.error('De herstellink wordt nog gecontroleerd. Probeer het zo opnieuw.');
+      return;
+    }
     if (password.length < MIN_LENGTH) {
-      toast.error(`Gebruik minstens ${MIN_LENGTH} tekens.`);
+      notify.error(`Gebruik minstens ${MIN_LENGTH} tekens.`);
       return;
     }
     if (password !== confirm) {
-      toast.error('De wachtwoorden komen niet overeen.');
+      notify.error('De wachtwoorden komen niet overeen.');
       return;
     }
     setBusy(true);
     try {
       await updatePassword(password);
-      toast.success('Wachtwoord bijgewerkt. Je kunt nu inloggen.');
+      notify.success('Wachtwoord bijgewerkt. Je kunt nu inloggen.');
       navigate('/auth/login', { replace: true });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Bijwerken mislukt.');
+      notify.error(err instanceof Error ? err.message : 'Bijwerken mislukt.');
     } finally {
       setBusy(false);
     }
@@ -58,58 +74,51 @@ export default function UpdatePasswordPage() {
     <AuthLayout
       title="Nieuw wachtwoord instellen"
       subtitle="Kies een nieuw wachtwoord voor je account."
-      footer={
-        <Link to="/auth/login" className="font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300">
-          Terug naar inloggen
-        </Link>
-      }
+      footer={<nldd-link href="/auth/login" text="Terug naar inloggen"></nldd-link>}
     >
       {noToken ? (
-        <div className="space-y-3">
-          <p className="rounded-lg bg-amber-50 px-3 py-3 text-sm text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">
-            Geen geldige herstellink gevonden. Vraag een nieuwe herstelmail aan en open de link
-            opnieuw.
-          </p>
-          <Link to="/auth/wachtwoord-vergeten" className="opl-btn-primary w-full">
-            Nieuwe herstellink aanvragen
-          </Link>
-        </div>
+        <>
+          <nldd-banner
+            variant="warning"
+            size="sm"
+            text="Geen geldige herstellink gevonden. Vraag een nieuwe herstelmail aan en open de link opnieuw."
+          ></nldd-banner>
+          <nldd-spacer size="16"></nldd-spacer>
+          <nldd-button
+            appearance="primary"
+            href="/auth/wachtwoord-vergeten"
+            text="Nieuwe herstellink aanvragen"
+          ></nldd-button>
+        </>
       ) : (
-        <form onSubmit={submit} className="space-y-3">
-          <div className="relative">
-            <input
-              type={show ? 'text' : 'password'}
-              autoFocus
-              required
-              className="opl-input pr-10"
-              placeholder="Nieuw wachtwoord"
-              autoComplete="new-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-            <button
-              type="button"
-              onClick={() => setShow((s) => !s)}
-              className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-              aria-label={show ? 'Verberg wachtwoord' : 'Toon wachtwoord'}
-            >
-              {show ? <EyeOff size={16} /> : <Eye size={16} />}
-            </button>
-          </div>
-          <input
-            type={show ? 'text' : 'password'}
-            required
-            className="opl-input"
-            placeholder="Herhaal nieuw wachtwoord"
-            autoComplete="new-password"
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-          />
-          <p className="text-xs text-slate-400 dark:text-slate-500">Minstens {MIN_LENGTH} tekens.</p>
-          <button type="submit" className="opl-btn-primary w-full" disabled={busy || !ready}>
-            {busy ? 'Bezig…' : ready ? 'Wachtwoord opslaan' : 'Herstellink controleren…'}
-          </button>
-        </form>
+        <nldd-form>
+          <form onSubmit={submit}>
+            <nldd-form-field label="Nieuw wachtwoord">
+              <nldd-password-field
+                ref={passwordRef}
+                required
+                autocomplete="new-password"
+                name="password"
+                minlength={String(MIN_LENGTH)}
+              ></nldd-password-field>
+              <nldd-form-field-help-text>Minstens {MIN_LENGTH} tekens.</nldd-form-field-help-text>
+            </nldd-form-field>
+            <nldd-form-field label="Herhaal nieuw wachtwoord">
+              <nldd-password-field ref={confirmRef} required autocomplete="new-password" name="confirm"></nldd-password-field>
+            </nldd-form-field>
+            <nldd-form-actions>
+              <nldd-button-group>
+                <nldd-button
+                  appearance="primary"
+                  type="submit"
+                  text="Bewaar wachtwoord"
+                  loading={busy || !ready || undefined}
+                  loading-text={busy ? 'Bezig met opslaan' : 'Herstellink controleren'}
+                ></nldd-button>
+              </nldd-button-group>
+            </nldd-form-actions>
+          </form>
+        </nldd-form>
       )}
     </AuthLayout>
   );

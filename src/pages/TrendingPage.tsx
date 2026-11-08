@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { TrendingUp, Flame } from '@/components/common/icons';
 import PromptCard from '@/components/prompts/PromptCard';
 import { BarChartCard } from '@/components/analytics/Charts';
 import { SkeletonGrid } from '@/components/common/Skeleton';
@@ -8,11 +7,16 @@ import { listEvents, topTechniques } from '@/services/analyticsService';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { usePromptCommunity } from '@/hooks/usePromptCommunity';
 import type { AnalyticsEvent, Prompt } from '@/types';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/collection';
+import '@nldd/design-system/inline-dialog';
+import '@nldd/design-system/simple-section';
+import '@nldd/design-system/spacer';
+import '@nldd/design-system/tab-bar';
+import '@nldd/design-system/title';
 
-/**
- * `embedded` laat de eigen paginakop weg en de buitenmarges versmallen, zodat
- * de inhoud netjes als tabblad binnen een andere pagina (Community) past.
- */
+/** `embedded` leaves out the page header, for use inside another page. */
 export default function TrendingPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { techniqueById } = useReferenceData();
   const [prompts, setPrompts] = useState<Prompt[]>([]);
@@ -59,49 +63,76 @@ export default function TrendingPage({ embedded = false }: { embedded?: boolean 
 
   const { enriched, authors } = usePromptCommunity(trending);
 
-  return (
-    <div className={embedded ? '' : 'mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8'}>
-      {!embedded && (
-        <div className="mb-6 flex items-center gap-2">
-          <Flame className="text-rijksoranje" />
-          <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Trending</h1>
-        </div>
-      )}
+  const header = embedded ? null : (
+    <>
+      <nldd-title
+        slot="header"
+        heading-level={1}
+        size={2}
+        text="Trending"
+        supporting-text="De prompts en technieken waar collega’s nu het meest mee werken."
+      ></nldd-title>
+      <nldd-tab-bar slot="header" navigation accessible-label="Onderdelen van Community">
+        <nldd-tab-bar-item href="/community" text="Community"></nldd-tab-bar-item>
+        <nldd-tab-bar-item href="/trending" text="Trending" current></nldd-tab-bar-item>
+      </nldd-tab-bar>
+    </>
+  );
 
-      {loading ? (
+  if (loading) {
+    return (
+      <nldd-simple-section>
+        {header}
         <SkeletonGrid count={6} />
-      ) : (
-        <div className="space-y-8">
-          <section>
-            <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold text-slate-700 dark:text-slate-200">
-              <TrendingUp size={18} /> Populairste prompts
-            </h2>
-            {trending.length === 0 ? (
-              <p className="text-sm text-slate-500 dark:text-slate-400">Nog te weinig activiteit om trends te tonen.</p>
-            ) : (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {enriched.map((p) => (
-                  <PromptCard
-                    key={p.id}
-                    prompt={p}
-                    author={p.created_by_user ? authors[p.created_by_user] : null}
-                    onChanged={(u) => setPrompts((prev) => prev.map((x) => (x.id === u.id ? u : x)))}
-                  />
-                ))}
-              </div>
-            )}
-          </section>
+      </nldd-simple-section>
+    );
+  }
 
-          <section>
-            <h2 className="mb-3 text-lg font-semibold text-slate-700 dark:text-slate-200">Meest gebruikte technieken</h2>
-            <BarChartCard
-              title="Optimalisaties per techniek"
-              data={techniqueData}
-              emptyHint="Voer optimalisaties uit om trends te zien."
+  if (trending.length === 0) {
+    return (
+      <nldd-simple-section>
+        {header}
+        <nldd-inline-dialog
+          icon="line-chart"
+          horizontal-alignment="left"
+          text="Nog te weinig activiteit om trends te tonen"
+          supporting-text="Maak en gebruik prompts, dan verschijnen hier de populairste."
+        >
+          <nldd-button-group slot="actions">
+            <nldd-button appearance="primary" href="/genereren" text="Maak een prompt"></nldd-button>
+          </nldd-button-group>
+        </nldd-inline-dialog>
+      </nldd-simple-section>
+    );
+  }
+
+  return (
+    <>
+      <nldd-simple-section>
+        {header}
+        <nldd-title heading-level={2} size={4} text="Populairste prompts"></nldd-title>
+        <nldd-spacer size="12"></nldd-spacer>
+        <nldd-collection item-min-width="18rem">
+          {enriched.map((p) => (
+            <PromptCard
+              key={p.id}
+              prompt={p}
+              author={p.created_by_user ? authors[p.created_by_user] : null}
+              onChanged={(u) => setPrompts((prev) => prev.map((x) => (x.id === u.id ? u : x)))}
             />
-          </section>
-        </div>
-      )}
-    </div>
+          ))}
+        </nldd-collection>
+      </nldd-simple-section>
+
+      <nldd-simple-section background="tinted">
+        <nldd-title slot="header" heading-level={2} size={4} text="Meest gebruikte technieken"></nldd-title>
+        <BarChartCard
+          title="Optimalisaties per techniek"
+          headingLevel={3}
+          data={techniqueData}
+          emptyHint="Voer optimalisaties uit om trends te zien."
+        />
+      </nldd-simple-section>
+    </>
   );
 }

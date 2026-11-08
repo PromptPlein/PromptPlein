@@ -1,11 +1,21 @@
-import { useEffect, useState } from 'react';
-import { Brain, Check, Info, Loader2, RotateCw, Sparkles, X } from '@/components/common/icons';
-import toast from 'react-hot-toast';
+import { useEffect, useRef, useState } from 'react';
+import { useNlddValue } from '@/lib/nldd';
+import { notify } from '@/lib/notify';
 import { buildMetaPrompt } from '@/services/optimizeService';
 import type { AiSettings } from '@/services/settingsService';
 import RichText from './RichText';
 import BuilderIntro from './BuilderIntro';
 import InfoDot from '@/components/common/InfoDot';
+import '@nldd/design-system/box';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/code-viewer';
+import '@nldd/design-system/container';
+import '@nldd/design-system/icon';
+import '@nldd/design-system/multi-line-text-field';
+import '@nldd/design-system/tag';
+import '@nldd/design-system/text';
+import '@nldd/design-system/title';
 
 interface MetaBuilderProps {
   settings: AiSettings;
@@ -39,6 +49,8 @@ export default function MetaBuilder({ settings, goal, onSerialized }: MetaBuilde
   const [toelichting, setToelichting] = useState('');
   const [cot, setCot] = useState(false);
   const [feedback, setFeedback] = useState('');
+  const requestRef = useRef<HTMLElement & { value?: string }>(null);
+  useNlddValue(requestRef, request, setRequest);
 
   // Meld de geserialiseerde prompt terug zodra die wijzigt.
   useEffect(() => {
@@ -48,7 +60,7 @@ export default function MetaBuilder({ settings, goal, onSerialized }: MetaBuilde
 
   async function build(withFeedback?: string) {
     if (!request.trim()) {
-      toast.error('Beschrijf eerst wat je nodig hebt.');
+      notify.error('Beschrijf eerst wat je nodig hebt.');
       return;
     }
     setBusy(true);
@@ -60,11 +72,11 @@ export default function MetaBuilder({ settings, goal, onSerialized }: MetaBuilde
         preferredModel: settings.model,
       });
       if (res.unclear) {
-        toast.error(res.reason?.trim() || 'Je verzoek is nog niet duidelijk genoeg.');
+        notify.error(res.reason?.trim() || 'Je verzoek is nog niet duidelijk genoeg.');
         return;
       }
       if (!res.success || !res.prompt) {
-        toast.error(res.error ?? 'De prompt kon niet worden gebouwd.');
+        notify.error(res.error ?? 'De prompt kon niet worden gebouwd.');
         return;
       }
       setPrompt(res.prompt);
@@ -77,104 +89,113 @@ export default function MetaBuilder({ settings, goal, onSerialized }: MetaBuilde
   }
 
   return (
-    <div className="space-y-4">
-      {/* Uitleg over wat meta-prompting doet. */}
+    <nldd-container gap="24">
       <BuilderIntro
-        icon={<Brain size={18} />}
+        icon="brain"
         title="Bouw een prompt"
         text="De AI bouwt een prompt, geen antwoord. Die gebruik je daarna in je eigen chat."
       />
 
-      {/* Het ruwe verzoek. */}
-      <div>
-        <div className="mb-0.5 flex items-center gap-1">
-          <label className="opl-label mb-0" htmlFor="meta-request">Wat wil je dat de (andere) AI straks doet?</label>
+      {/* The raw request. */}
+      <nldd-container gap="8">
+        <nldd-container layout="row" gap="4" vertical-alignment="center">
+          <nldd-text weight="bold">Wat wil je dat de (andere) AI straks doet?</nldd-text>
           <InfoDot label="Uitleg bij dit veld" text="De AI beantwoordt dit niet zelf; hij bouwt de prompt waarmee dit optimaal gemaakt wordt." />
-        </div>
-        <textarea
-          id="meta-request"
-          className="opl-input min-h-[80px] resize-y text-sm"
-          value={request}
+        </nldd-container>
+        <nldd-multi-line-text-field
+          ref={requestRef}
+          rows={3}
+          resize="vertical"
+          accessible-label="Wat wil je dat de (andere) AI straks doet?"
           placeholder="Bijv. een memo schrijven over de invoering van een nieuwe regeling, gericht aan het management"
-          disabled={busy}
-          onChange={(e) => setRequest(e.target.value)}
-        />
-      </div>
+          disabled={busy || undefined}
+        ></nldd-multi-line-text-field>
+      </nldd-container>
 
       {!prompt ? (
-        <button type="button" className="opl-btn-primary" onClick={() => void build()} disabled={busy || !request.trim()}>
-          {busy ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-          {busy ? 'Prompt bouwen…' : 'Bouw de prompt'}
-        </button>
+        <nldd-button-group>
+          <nldd-button
+            appearance="secondary"
+            start-icon="sparkles"
+            text="Bouw de prompt"
+            loading={busy || undefined}
+            loading-text="Prompt bouwen…"
+            disabled={busy || !request.trim() || undefined}
+            onClick={() => void build()}
+          ></nldd-button>
+        </nldd-button-group>
       ) : (
-        <div className="space-y-3 rounded-xl border border-rijksblauw-200 bg-rijksblauw-50/40 p-4 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10">
-          {/* CoT-afweging als badge. */}
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-              Gebouwde prompt
-            </span>
-            <span
-              className={
-                cot
-                  ? 'inline-flex items-center gap-1 rounded-full bg-rijksblauw-100 px-2 py-0.5 text-[0.6875rem] font-medium text-rijksblauw-800 dark:bg-rijksblauw-500/20 dark:text-rijksblauw-200'
-                  : 'inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[0.6875rem] font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300'
-              }
-            >
-              {cot ? <Check size={11} /> : <X size={11} />}
-              {cot ? 'Chain-of-Thought opgenomen' : 'Geen Chain-of-Thought'}
-            </span>
-          </div>
+        <nldd-container gap="16">
+          {/* The built prompt, with the Chain-of-Thought decision beside its title. */}
+          <nldd-container gap="8">
+            <nldd-container layout="wrap" gap="8" vertical-alignment="center">
+              <nldd-title heading-level={3} size={6} text="Gebouwde prompt"></nldd-title>
+              <nldd-tag
+                size="sm"
+                color={cot ? 'accent' : 'neutral'}
+                icon={cot ? 'check-mark' : 'dismiss'}
+                text={cot ? 'Chain-of-Thought opgenomen' : 'Geen Chain-of-Thought'}
+              ></nldd-tag>
+            </nldd-container>
+            <nldd-code-viewer appearance="box-tinted" wrap max-height="18rem">
+              {prompt}
+            </nldd-code-viewer>
+          </nldd-container>
 
-          {/* De gebouwde prompt. */}
-          <pre tabIndex={0} className="max-h-72 overflow-auto whitespace-pre-wrap rounded-lg border border-slate-200 bg-white p-3 font-mono text-[0.8125rem] leading-relaxed text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
-            {prompt}
-          </pre>
-
-          {/* Toelichting (incl. CoT-motivatie). */}
+          {/* Explanation, including the Chain-of-Thought reasoning. */}
           {toelichting && (
-            <div className="rounded-lg border border-slate-200 bg-white/70 p-3 dark:border-slate-700 dark:bg-slate-800/60">
-              <p className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200">
-                <Info size={13} className="text-rijksblauw-500" /> Toelichting
-              </p>
-              <RichText text={toelichting} className="mt-1 text-xs text-slate-600 dark:text-slate-300" />
-            </div>
+            <nldd-box>
+              <nldd-container padding="16" gap="8">
+                <nldd-container layout="row" gap="6" vertical-alignment="center">
+                  <nldd-icon icon="info-circle" size="16" color="lintblauw"></nldd-icon>
+                  <nldd-text size="sm" weight="bold">
+                    Toelichting
+                  </nldd-text>
+                </nldd-container>
+                <RichText text={toelichting} />
+              </nldd-container>
+            </nldd-box>
           )}
 
-          {/* Verfijnen met feedback. */}
-          <div>
-            <label className="opl-label mb-0.5 block" htmlFor="meta-feedback">
-              Wil je iets aanpassen? Geef feedback en laat de prompt herbouwen.
-            </label>
-            <textarea
-              id="meta-feedback"
-              className="opl-input min-h-[56px] resize-y text-sm"
-              value={feedback}
-              placeholder="Bijv. korter, formeler, of voeg een stap toe om bronnen te checken."
-              disabled={busy}
-              onChange={(e) => setFeedback(e.target.value)}
-            />
-            <div className="mt-2 flex flex-wrap gap-2">
-              <button
-                type="button"
-                className="opl-btn-secondary"
+          {/* Refining with feedback. */}
+          <nldd-container gap="8">
+            <nldd-text weight="bold">Wil je iets aanpassen? Geef feedback en laat de prompt herbouwen.</nldd-text>
+            <FeedbackField value={feedback} onValue={setFeedback} disabled={busy} />
+            <nldd-button-group>
+              <nldd-button
+                appearance="secondary"
+                start-icon="arrow-clockwise"
+                text="Verwerk feedback"
+                loading={busy || undefined}
+                disabled={busy || !feedback.trim() || undefined}
                 onClick={() => void build(feedback.trim() || undefined)}
-                disabled={busy || !feedback.trim()}
-              >
-                {busy ? <Loader2 size={16} className="animate-spin" /> : <RotateCw size={16} />}
-                Verwerk feedback
-              </button>
-              <button
-                type="button"
-                className="text-xs font-medium text-slate-500 hover:text-rijksblauw-600 dark:text-slate-400"
+              ></nldd-button>
+              <nldd-button
+                appearance="neutral-transparent"
+                text="Opnieuw bouwen"
+                disabled={busy || undefined}
                 onClick={() => void build()}
-                disabled={busy}
-              >
-                Opnieuw bouwen
-              </button>
-            </div>
-          </div>
-        </div>
+              ></nldd-button>
+            </nldd-button-group>
+          </nldd-container>
+        </nldd-container>
       )}
-    </div>
+    </nldd-container>
+  );
+}
+
+/** The feedback field; it mounts with the built prompt, so its binding does too. */
+function FeedbackField({ value, onValue, disabled }: { value: string; onValue: (v: string) => void; disabled: boolean }) {
+  const ref = useRef<HTMLElement & { value?: string }>(null);
+  useNlddValue(ref, value, onValue);
+  return (
+    <nldd-multi-line-text-field
+      ref={ref}
+      rows={2}
+      resize="vertical"
+      accessible-label="Feedback op de gebouwde prompt"
+      placeholder="Bijv. korter, formeler, of voeg een stap toe om bronnen te checken."
+      disabled={disabled || undefined}
+    ></nldd-multi-line-text-field>
   );
 }

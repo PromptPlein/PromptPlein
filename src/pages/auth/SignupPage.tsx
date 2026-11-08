@@ -1,11 +1,22 @@
-import { useMemo, useState, type FormEvent } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import toast from 'react-hot-toast';
+import { useMemo, useRef, useState, type FormEvent } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { notify } from '@/lib/notify';
+import { useNlddValue } from '@/lib/nldd';
 import { useAuth } from '@/context/AuthContext';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { buildOrgOptions, orgOptionToSearchable } from '@/lib/orgTree';
 import SearchableSelect from '@/components/common/SearchableSelect';
 import AuthLayout from './AuthLayout';
+import '@nldd/design-system/banner';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/form';
+import '@nldd/design-system/form-actions';
+import '@nldd/design-system/form-field';
+import '@nldd/design-system/link';
+import '@nldd/design-system/password-field';
+import '@nldd/design-system/spacer';
+import '@nldd/design-system/text-field';
 
 export default function SignupPage() {
   const { signUp, configured } = useAuth();
@@ -22,6 +33,12 @@ export default function SignupPage() {
   // automatisch verbonden met alle lagen daarboven (ministerie, dienst …).
   const [organizationId, setOrganizationId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const nameRef = useRef<HTMLElement & { value?: string }>(null);
+  const emailRef = useRef<HTMLElement & { value?: string }>(null);
+  const passwordRef = useRef<HTMLElement & { value?: string }>(null);
+  useNlddValue(nameRef, fullName, setFullName);
+  useNlddValue(emailRef, email, setEmail);
+  useNlddValue(passwordRef, password, setPassword);
 
   const orgOptions = useMemo(
     () => buildOrgOptions(organizations).map(orgOptionToSearchable),
@@ -31,12 +48,16 @@ export default function SignupPage() {
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (busy) return;
+    if (!configured) {
+      notify.error('Registreren kan nu niet: er is geen backend ingesteld.');
+      return;
+    }
     if (password.length < 8) {
-      toast.error('Kies een wachtwoord van minimaal 8 tekens.');
+      notify.error('Kies een wachtwoord van minimaal 8 tekens.');
       return;
     }
     if (!organizationId) {
-      toast.error('Kies je ministerie.');
+      notify.error('Kies je ministerie.');
       return;
     }
     setBusy(true);
@@ -47,10 +68,10 @@ export default function SignupPage() {
         fullName: fullName.trim() || undefined,
         organizationId,
       });
-      toast.success('Account aangemaakt. Controleer je e-mail om te bevestigen.');
+      notify.success('Account aangemaakt. Controleer je e-mail om te bevestigen.');
       navigate('/auth/login', { replace: true, state: from ? { from } : undefined });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Registreren mislukt.');
+      notify.error(err instanceof Error ? err.message : 'Registreren mislukt.');
     } finally {
       setBusy(false);
     }
@@ -63,79 +84,67 @@ export default function SignupPage() {
       footer={
         <>
           Al een account?{' '}
-          <Link
-            to="/auth/login"
-            state={from ? { from } : undefined}
-            className="font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
-          >
-            Inloggen
-          </Link>
+          {/* Pass the original destination on, so the round trip through
+              signup still lands where the user was going. */}
+          <nldd-link
+            href="/auth/login"
+            text="Inloggen"
+            onClick={(e) => {
+              if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+              e.preventDefault();
+              navigate('/auth/login', { state: from ? { from } : undefined });
+            }}
+          ></nldd-link>
         </>
       }
     >
       {!configured && (
-        <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">
-          Geen Supabase-backend geconfigureerd. Registratie is uitgeschakeld.
-        </p>
+        <>
+          <nldd-banner variant="warning" size="sm" text="Geen Supabase-backend geconfigureerd. Registratie is uitgeschakeld."></nldd-banner>
+          <nldd-spacer size="16"></nldd-spacer>
+        </>
       )}
-      <form onSubmit={submit} className="space-y-3">
-        <input
-          type="text"
-          autoFocus
-          className="opl-input"
-          placeholder="Volledige naam"
-          autoComplete="name"
-          value={fullName}
-          onChange={(e) => setFullName(e.target.value)}
-        />
-        <input
-          type="email"
-          required
-          className="opl-input"
-          placeholder="E-mailadres"
-          autoComplete="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-        <input
-          type="password"
-          required
-          minLength={8}
-          className="opl-input"
-          placeholder="Wachtwoord (min. 8 tekens)"
-          autoComplete="new-password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-
-        {/* Ministerie — verplicht. Eén zoekveld waarmee de gebruiker het
-            ministerie kiest waar hij/zij voor werkt. */}
-        <div>
-          <label className="opl-label" htmlFor="signup-org">
-            Ministerie
-          </label>
-          <SearchableSelect
-            id="signup-org"
-            options={orgOptions}
-            value={organizationId}
-            onChange={setOrganizationId}
-            disabled={orgsLoading || !configured}
-            placeholder={orgsLoading ? 'Ministeries laden…' : 'Kies het ministerie waar je nu voor werkt'}
-            searchPlaceholder="Zoek jouw ministerie…"
-          />
-          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-            Kies het ministerie waar je nu voor werkt.
-          </p>
-        </div>
-
-        <button
-          type="submit"
-          className="opl-btn-primary w-full"
-          disabled={busy || !configured || !organizationId}
-        >
-          {busy ? 'Bezig…' : 'Account aanmaken'}
-        </button>
-      </form>
+      <nldd-form>
+        <form onSubmit={submit}>
+          <nldd-form-field label="Volledige naam" optional>
+            <nldd-text-field ref={nameRef} autocomplete="name" name="name"></nldd-text-field>
+          </nldd-form-field>
+          <nldd-form-field label="E-mailadres">
+            <nldd-text-field ref={emailRef} type="email" required autocomplete="email" name="email"></nldd-text-field>
+          </nldd-form-field>
+          <nldd-form-field label="Wachtwoord">
+            <nldd-password-field
+              ref={passwordRef}
+              required
+              minlength="8"
+              autocomplete="new-password"
+              name="password"
+            ></nldd-password-field>
+            <nldd-form-field-help-text>Minimaal 8 tekens.</nldd-form-field-help-text>
+          </nldd-form-field>
+          <nldd-form-field label="Ministerie">
+            <SearchableSelect
+              id="signup-org"
+              options={orgOptions}
+              value={organizationId}
+              onChange={setOrganizationId}
+              placeholder={orgsLoading ? 'Ministeries laden…' : 'Typ om te zoeken'}
+            />
+            <nldd-form-field-help-text>Kies het ministerie waar je nu voor werkt.</nldd-form-field-help-text>
+          </nldd-form-field>
+          <nldd-form-actions>
+            <nldd-button-group>
+              <nldd-button
+                appearance="primary"
+                type="submit"
+                text="Maak account aan"
+                loading={busy || undefined}
+                loading-text="Bezig met registreren"
+              ></nldd-button>
+            </nldd-button-group>
+          </nldd-form-actions>
+        </form>
+      </nldd-form>
     </AuthLayout>
   );
 }

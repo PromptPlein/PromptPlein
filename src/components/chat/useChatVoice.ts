@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import { useAccessibility, useSpeechVoice } from '@/context/AccessibilityContext';
 import { CUE_MS, playCue } from '@/lib/audioCue';
 import { setConversationActive, useConversationActive } from '@/lib/conversationMode';
@@ -141,11 +141,11 @@ export function useChatVoice({ textareaRef, disabled, streaming, onSubmit }: Cha
       return;
     }
     if (!latest.current.conversationMode) {
-      toast('Zet Gesprek zonder handen eerst aan bij Toegankelijkheid.');
+      notify('Zet Gesprek zonder handen eerst aan bij Toegankelijkheid.');
       return;
     }
     if (!dictationRef.current.available) {
-      toast.error('Log in om een gesprek te voeren.');
+      notify.error('Log in om een gesprek te voeren.');
       return;
     }
     stopSpeaking();
@@ -217,7 +217,7 @@ export function useChatVoice({ textareaRef, disabled, streaming, onSubmit }: Cha
 
       const { available, state, toggle } = dictationRef.current;
       if (!available) {
-        toast.error('Log in om te kunnen dicteren.');
+        notify.error('Log in om te kunnen dicteren.');
         return;
       }
       const { disabled: blocked, streaming: busy } = latest.current;

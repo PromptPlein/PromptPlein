@@ -1,5 +1,8 @@
 import { type ReactNode } from 'react';
 import InfoDot from '@/components/common/InfoDot';
+import '@nldd/design-system/container';
+import '@nldd/design-system/icon';
+import '@nldd/design-system/text';
 
 /**
  * Korte kop boven een techniekbouwer: wat je hier doet in een paar woorden, de
@@ -11,20 +14,17 @@ export default function BuilderIntro({
   title,
   text,
 }: {
+  /** An nldd icon name, or a ready element. */
   icon?: ReactNode;
   title: string;
   /** Hooguit twee korte zinnen. */
   text: string;
 }) {
   return (
-    <div className="flex items-center gap-1.5">
-      {icon && (
-        <span aria-hidden="true" className="shrink-0 text-rijksblauw-500 dark:text-rijksblauw-200">
-          {icon}
-        </span>
-      )}
-      <p className="text-base font-bold text-slate-900 dark:text-slate-100">{title}</p>
+    <nldd-container layout="row" gap="8" vertical-alignment="center">
+      {typeof icon === 'string' ? <nldd-icon icon={icon} size="20" color="accent"></nldd-icon> : icon}
+      <nldd-text weight="bold">{title}</nldd-text>
       <InfoDot label={`Uitleg bij: ${title}`} text={text} />
-    </div>
+    </nldd-container>
   );
 }

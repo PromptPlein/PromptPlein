@@ -1,31 +1,47 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useRef } from 'react';
 import { createPortal } from 'react-dom';
-import clsx from 'clsx';
-import { X } from '@/components/common/icons';
 import { useReferenceData } from '@/context/ReferenceDataContext';
-import { categoryIcon } from '@/lib/categoryIcons';
+import { useNlddEvent } from '@/lib/nldd';
 import { SHARING_LEVELS, toggled } from '@/lib/utils';
-import useDialogFocus from '@/lib/useDialogFocus';
 import type { AdvancedPromptFilters, SharingLevel } from '@/types';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/cell';
+import '@nldd/design-system/checkbox';
+import '@nldd/design-system/container';
+import '@nldd/design-system/date-field';
+import '@nldd/design-system/form-field';
+import '@nldd/design-system/inline-dialog';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/page';
+import '@nldd/design-system/sheet';
+import '@nldd/design-system/simple-section';
+import '@nldd/design-system/spacer-cell';
+import '@nldd/design-system/text-cell';
+import '@nldd/design-system/title';
+import '@nldd/design-system/top-title-bar';
 
 interface FilterPanelProps {
   open: boolean;
   onClose: () => void;
   filters: AdvancedPromptFilters;
   onChange: (patch: Partial<AdvancedPromptFilters>) => void;
-  /** Aantal resultaten met deze filters; null zolang er gezocht wordt. */
+  /** Number of results with these filters; null while searching. */
   resultCount: number | null;
 }
 
+type SheetElement = HTMLElement & { show?: () => void };
+type DateElement = HTMLElement & { value?: string };
+
 /**
- * Het filterpaneel van Ontdekken. Een keuze werkt meteen door in de resultaten,
- * dus er valt niets te verliezen: anders dan bij Modal sluit hij ook met Escape
- * en met een klik ernaast.
+ * The filter panel of Ontdekken, an nldd-sheet. A choice applies to the results
+ * at once, so there is nothing to lose: it closes with Klaar, Escape and a click
+ * beside it. The number of results stands under the title.
  *
- * Alleen ministeries en de Rijksoverheid staan erin, als korte code. De volledige
- * naam staat in `title` en `aria-label`. Filteren op een ministerie neemt alles
- * mee wat eronder valt (zie SearchPage). De rasters rekenen in rem: met grote
- * letters op een smal scherm krijgen ze vanzelf minder kolommen.
+ * Only ministries and the Rijksoverheid are in it, as a short code with the full
+ * name as the second line. Filtering on a ministry takes everything under it
+ * along (see SearchPage).
  */
 export default function FilterPanel({
   open,
@@ -35,234 +51,157 @@ export default function FilterPanel({
   resultCount,
 }: FilterPanelProps) {
   const { categories, organizations, roles } = useReferenceData();
-  const panelRef = useRef<HTMLElement>(null);
+  const sheetRef = useRef<SheetElement>(null);
+  const fromRef = useRef<DateElement>(null);
+  const toRef = useRef<DateElement>(null);
+  const openRef = useRef(open);
+  openRef.current = open;
 
-  useDialogFocus(open, panelRef, onClose);
+  useNlddEvent(sheetRef, 'close', () => {
+    if (openRef.current) onClose();
+  });
+  useNlddEvent(fromRef, 'change', () => onChange({ date_from: fromRef.current?.value || null }));
+  useNlddEvent(toRef, 'change', () => onChange({ date_to: toRef.current?.value || null }));
 
-  useEffect(() => {
-    if (!open) return;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, [open]);
-
-  if (!open) return null;
+  const resultsText =
+    resultCount === null
+      ? 'Resultaten worden geteld'
+      : `${resultCount} ${resultCount === 1 ? 'resultaat' : 'resultaten'}`;
 
   const ministries = organizations.filter(
     (o) => o.organization_type === 'ministry' || o.organization_type === 'government',
   );
 
   return createPortal(
-    <div className="fixed inset-0 z-50">
-      <div
-        aria-hidden="true"
-        onClick={onClose}
-        className="absolute inset-0 bg-slate-900/50 dark:bg-black/60"
-      />
-      <aside
-        ref={panelRef}
-        tabIndex={-1}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="filter-kop"
-        className="absolute inset-y-0 right-0 flex w-full max-w-md animate-fade-in flex-col pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] focus:outline-none border-l border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800"
-      >
-        <div className="flex shrink-0 items-center justify-between border-b border-slate-200 py-3 pl-5 pr-3 dark:border-slate-700">
-          <h2
+    <nldd-sheet ref={sheetRef} open={open || undefined} width="28rem">
+      <nldd-page>
+        <nldd-top-title-bar
+          slot="header"
+          text="Filters"
+          supporting-text={resultsText}
+          heading-level={2}
+          dismiss-text="Klaar"
+          collapse-anchor="filter-kop"
+        ></nldd-top-title-bar>
+
+        <nldd-simple-section>
+          <nldd-title
             id="filter-kop"
-            className="text-xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200"
-          >
-            Filters
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Sluit filters"
-            className="flex h-11 w-11 items-center justify-center rounded text-slate-500 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 dark:text-slate-300 dark:hover:bg-slate-700"
-          >
-            <X size={20} />
-          </button>
-        </div>
+            slot="header"
+            size={3}
+            heading-level={2}
+            text="Filters"
+            supporting-text={resultsText}
+          ></nldd-title>
+          <nldd-container gap="24">
+            <FilterList
+              title="Categorie"
+              items={categories.map((c) => ({ id: c.id, label: c.name }))}
+              selected={filters.category_ids ?? []}
+              onToggle={(id) => onChange({ category_ids: toggled(filters.category_ids, id) })}
+            />
 
-        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
-          <FilterGroup title="Categorie">
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-1.5">
-              {categories.map((c) => {
-                const Icon = categoryIcon(c.icon);
-                return (
-                  <ToggleButton
-                    key={c.id}
-                    active={filters.category_ids?.includes(c.id) ?? false}
-                    onClick={() =>
-                      onChange({ category_ids: toggled(filters.category_ids, c.id) })
-                    }
-                    className="justify-start gap-2 text-left text-sm"
-                  >
-                    <Icon size={18} className="shrink-0" />
-                    {c.name}
-                  </ToggleButton>
-                );
-              })}
-            </div>
-          </FilterGroup>
-
-          {ministries.length > 0 && (
-            <FilterGroup title="Organisatie">
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(4.5rem,1fr))] gap-1.5">
-                {ministries.map((o) => (
-                  <ToggleButton
-                    key={o.id}
-                    active={filters.organization_ids?.includes(o.id) ?? false}
-                    onClick={() =>
-                      onChange({ organization_ids: toggled(filters.organization_ids, o.id) })
-                    }
-                    label={o.name}
-                    className="justify-center text-sm font-semibold"
-                  >
-                    {o.code ?? o.name}
-                  </ToggleButton>
-                ))}
-              </div>
-            </FilterGroup>
-          )}
-
-          {roles.length > 0 && (
-            <FilterGroup title="Functie">
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-x-3">
-                {roles.map((r) => (
-                  <label
-                    key={r.id}
-                    className="flex min-h-[2.25rem] cursor-pointer items-center gap-2 text-sm text-slate-700 dark:text-slate-200"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={filters.role_ids?.includes(r.id) ?? false}
-                      onChange={() => onChange({ role_ids: toggled(filters.role_ids, r.id) })}
-                      className="h-[1.125rem] w-[1.125rem] shrink-0 accent-rijksblauw-500"
-                    />
-                    <span className="min-w-0">{r.name}</span>
-                  </label>
-                ))}
-              </div>
-            </FilterGroup>
-          )}
-
-          <FilterGroup title="Deelniveau">
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(5rem,1fr))] gap-1.5">
-              {SHARING_LEVELS.map((s) => (
-                <ToggleButton
-                  key={s.value}
-                  active={filters.sharing_levels?.includes(s.value) ?? false}
-                  onClick={() =>
-                    onChange({
-                      sharing_levels: toggled<SharingLevel>(filters.sharing_levels, s.value),
-                    })
-                  }
-                  className="justify-center text-sm"
-                >
-                  {s.label}
-                </ToggleButton>
-              ))}
-            </div>
-          </FilterGroup>
-
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-3">
-            <div>
-              <label htmlFor="filter-van" className="opl-label">
-                Vanaf
-              </label>
-              <input
-                id="filter-van"
-                type="date"
-                className="opl-input"
-                value={filters.date_from ?? ''}
-                onChange={(e) => onChange({ date_from: e.target.value || null })}
+            {ministries.length > 0 && (
+              <FilterList
+                title="Organisatie"
+                items={ministries.map((o) => ({
+                  id: o.id,
+                  label: o.code ?? o.name,
+                  hint: o.code ? o.name : undefined,
+                }))}
+                selected={filters.organization_ids ?? []}
+                onToggle={(id) => onChange({ organization_ids: toggled(filters.organization_ids, id) })}
               />
-            </div>
-            <div>
-              <label htmlFor="filter-tot" className="opl-label">
-                Tot
-              </label>
-              <input
-                id="filter-tot"
-                type="date"
-                className="opl-input"
-                value={filters.date_to ?? ''}
-                onChange={(e) => onChange({ date_to: e.target.value || null })}
-              />
-            </div>
-          </div>
-        </div>
+            )}
 
-        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-slate-200 px-5 py-3 dark:border-slate-700">
-          <button
-            type="button"
-            onClick={() =>
-              onChange({
-                category_ids: [],
-                organization_ids: [],
-                role_ids: [],
-                sharing_levels: [],
-                date_from: null,
-                date_to: null,
-              })
-            }
-            className="opl-btn-ghost"
-          >
-            Wissen
-          </button>
-          <button type="button" onClick={onClose} className="opl-btn-primary">
-            {resultCount === null
-              ? 'Toon resultaten'
-              : `Toon ${resultCount} ${resultCount === 1 ? 'resultaat' : 'resultaten'}`}
-          </button>
-        </div>
-      </aside>
-    </div>,
+            {roles.length > 0 && (
+              <FilterList
+                title="Functie"
+                items={roles.map((r) => ({ id: r.id, label: r.name }))}
+                selected={filters.role_ids ?? []}
+                onToggle={(id) => onChange({ role_ids: toggled(filters.role_ids, id) })}
+              />
+            )}
+
+            <FilterList
+              title="Deelniveau"
+              items={SHARING_LEVELS.map((s) => ({ id: s.value, label: s.label }))}
+              selected={filters.sharing_levels ?? []}
+              onToggle={(id) =>
+                onChange({ sharing_levels: toggled<SharingLevel>(filters.sharing_levels, id as SharingLevel) })
+              }
+            />
+
+            <nldd-container layout="grid" column-count={2} sm-column-count={1} gap="12">
+              <nldd-form-field label="Vanaf">
+                <nldd-date-field ref={fromRef} value={filters.date_from ?? ''}></nldd-date-field>
+              </nldd-form-field>
+              <nldd-form-field label="Tot">
+                <nldd-date-field ref={toRef} value={filters.date_to ?? ''}></nldd-date-field>
+              </nldd-form-field>
+            </nldd-container>
+
+            <nldd-button-group>
+              <nldd-button
+                appearance="neutral-tinted"
+                start-icon="dismiss"
+                text="Wis alle filters"
+                onClick={() =>
+                  onChange({
+                    category_ids: [],
+                    organization_ids: [],
+                    role_ids: [],
+                    sharing_levels: [],
+                    date_from: null,
+                    date_to: null,
+                  })
+                }
+              ></nldd-button>
+            </nldd-button-group>
+          </nldd-container>
+        </nldd-simple-section>
+
+      </nldd-page>
+    </nldd-sheet>,
     document.body,
   );
 }
 
-function FilterGroup({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section aria-label={title}>
-      <h3 className="mb-2 text-sm font-bold text-slate-900 dark:text-slate-100">{title}</h3>
-      {children}
-    </section>
-  );
-}
-
-function ToggleButton({
-  active,
-  onClick,
-  label,
-  className,
-  children,
+/** One group of filters: a row per option, and the row is the checkbox. */
+function FilterList({
+  title,
+  items,
+  selected,
+  onToggle,
 }: {
-  active: boolean;
-  onClick: () => void;
-  /** Volledige naam als de knop zelf alleen een code toont. */
-  label?: string;
-  className?: string;
-  children: ReactNode;
+  title: string;
+  items: { id: string; label: string; hint?: string }[];
+  selected: string[];
+  onToggle: (id: string) => void;
 }) {
+  const ref = useRef<HTMLElement>(null);
+  useNlddEvent(ref, 'change', (e) => {
+    const id = (e.target as HTMLElement | null)?.dataset.id;
+    if (id) onToggle(id);
+  });
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      aria-label={label}
-      title={label}
-      className={clsx(
-        'flex min-h-[2.75rem] items-center rounded border px-2 py-1 leading-tight transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-slate-800',
-        active
-          ? 'border-rijksblauw-700 bg-rijksblauw-700 text-white dark:border-rijksblauw-600 dark:bg-rijksblauw-600'
-          : 'border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700',
-        className,
-      )}
-    >
-      {children}
-    </button>
+    <nldd-container gap="8">
+      <nldd-title heading-level={3} size={6} text={title}></nldd-title>
+      <nldd-list ref={ref} appearance="box-tinted" accessible-label={title}>
+        {items.map((item) => {
+          const on = selected.includes(item.id);
+          return (
+            <nldd-list-item key={item.id} data-id={item.id} checkbox checked={on || undefined}>
+              <nldd-cell>
+                <nldd-checkbox decorative checked={on || undefined}></nldd-checkbox>
+              </nldd-cell>
+              <nldd-spacer-cell size="12"></nldd-spacer-cell>
+              <nldd-text-cell text={item.label} supporting-text={item.hint}></nldd-text-cell>
+            </nldd-list-item>
+          );
+        })}
+        <nldd-inline-dialog slot="empty" text={`Geen ${title.toLowerCase()} om op te filteren.`}></nldd-inline-dialog>
+      </nldd-list>
+    </nldd-container>
   );
 }

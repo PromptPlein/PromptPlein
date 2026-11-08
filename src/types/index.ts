@@ -43,7 +43,7 @@ export interface Category {
   id: string;
   name: string;
   description?: string;
-  icon?: string; // lucide-react icoonnaam
+  icon?: string; // old lucide name, mapped to an nldd icon by categoryIconName
   sort_order?: number;
   created_at?: string;
 }

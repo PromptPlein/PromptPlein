@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
-import { ArrowRight, Check, Dices, Loader2, MessageCircleQuestion } from '@/components/common/icons';
-import toast from 'react-hot-toast';
+import { useEffect, useRef, useState } from 'react';
+import { useNlddValue } from '@/lib/nldd';
+import { notify } from '@/lib/notify';
 import { runPlanStep } from '@/services/optimizeService';
 import { structureFormat } from '@/lib/techniques';
 import { stripMarkdown } from '@/lib/utils';
@@ -8,6 +8,24 @@ import { detectPii, detectBlockedTopics, type GuardrailFinding } from '@/service
 import type { AiSettings } from '@/services/settingsService';
 import InterviewSteps from './InterviewSteps';
 import type { PlanStep, Technique, TranscriptTurn } from '@/types';
+import '@nldd/design-system/activity-indicator';
+import '@nldd/design-system/banner';
+import '@nldd/design-system/box';
+import '@nldd/design-system/button';
+import '@nldd/design-system/card';
+import '@nldd/design-system/code-viewer';
+import '@nldd/design-system/container';
+import '@nldd/design-system/form-field';
+import '@nldd/design-system/icon';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/multi-line-text-field';
+import '@nldd/design-system/progress-bar';
+import '@nldd/design-system/spacer';
+import '@nldd/design-system/tag';
+import '@nldd/design-system/text';
+import '@nldd/design-system/text-cell';
+import '@nldd/design-system/tooltip';
 
 /**
  * De pure UI van het vraag-na-vraag-interview: het gesprek tot nu toe, de huidige
@@ -64,131 +82,156 @@ export function InterviewPanel({
   inventing?: boolean;
 }) {
   return (
-    <div className="space-y-3">
-      <div className="flex items-start gap-2">
-        <MessageCircleQuestion size={18} className="mt-0.5 shrink-0 text-rijksblauw-500" />
-        <p className="text-sm text-slate-600 dark:text-slate-300">
+    <nldd-container gap="12">
+      <nldd-container layout="row" gap="8">
+        <nldd-icon icon="question-mark-circle" size="20" color="lintblauw"></nldd-icon>
+        <nldd-text size="sm" color="secondary">
           {intro ??
             (socratic
               ? 'De AI stelt alleen vragen (max. 7) zodat jij je eigen denken aanscherpt, zonder antwoorden of adviezen. Weet je iets niet? Zeg dat gerust; de volgende vraag wordt dan concreter. Klaar? Rond af voor een neutrale samenvatting van je aannames, met per aanname hoe zeker die is.'
               : 'De AI stelt op basis van je antwoorden telkens de volgende vraag (max. 7), tot het beeld compleet is. Klaar met input geven? Rond dan af; de AI trekt dan meteen een conclusie.')}
-        </p>
-      </div>
+        </nldd-text>
+      </nldd-container>
 
-      {/* Waar we in het gesprek zijn. Alleen als de aanroeper stappen levert. */}
+      {/* Where the conversation stands. Only when the caller supplies steps. */}
       {step !== undefined && (
         <InterviewSteps current={step} answered={transcript.length} busy={busy && !question} />
       )}
 
-      {/* Het gesprek tot nu toe. */}
+      {/* The conversation so far. */}
       {transcript.length > 0 && (
-        <ul className="space-y-2">
+        <nldd-list appearance="box-base" accessible-label="Het gesprek tot nu toe">
           {transcript.map((t, i) => (
-            <li
-              key={i}
-              className="animate-fade-in rounded-lg border border-slate-200 bg-white p-2.5 text-xs transition-colors dark:border-slate-700 dark:bg-slate-800"
-            >
-              <p className="font-medium text-slate-600 dark:text-slate-300">
-                {i + 1}. {stripMarkdown(t.question)}
-              </p>
-              <p className="mt-0.5 text-slate-500 dark:text-slate-400">{t.answer}</p>
-            </li>
+            <nldd-list-item key={i} size="sm">
+              <nldd-text-cell size="sm" text={`${i + 1}. ${stripMarkdown(t.question)}`} supporting-text={t.answer}></nldd-text-cell>
+            </nldd-list-item>
           ))}
-        </ul>
+        </nldd-list>
       )}
 
-      {/* De huidige vraag + antwoordveld, of een laadstaat terwijl de AI nadenkt. */}
+      {/* The current question with its answer field, or a loading state while the AI thinks. */}
       {busy && !question ? (
-        <div className="animate-fade-in overflow-hidden rounded-xl border border-rijksblauw-200 bg-white dark:border-rijksblauw-500/30 dark:bg-slate-800">
-          <div className="flex items-center gap-2 p-3 text-sm text-rijksblauw-600 dark:text-rijksblauw-300">
-            <Loader2 size={16} className="animate-spin" />
-            {finishing
-              ? 'We zetten het totaalplaatje op een rij en kijken wat er nog mist…'
-              : transcript.length === 0
-                ? 'De eerste vraag wordt opgesteld…'
-                : 'De AI denkt na over de volgende vraag…'}
-          </div>
-          {/* Onbepaalde voortgang: laat zien dat er iets gebeurt zonder een
-              wachttijd te beloven die we niet kennen. */}
-          <div className="relative h-1 overflow-hidden bg-rijksblauw-100 dark:bg-rijksblauw-500/20">
-            <div className="animate-loading-bar absolute inset-y-0 w-1/3 rounded-full bg-rijksblauw-500" />
-          </div>
-        </div>
+        <nldd-card>
+          <nldd-container padding="12" gap="8">
+            <nldd-container layout="row" gap="8" vertical-alignment="center">
+              <nldd-activity-indicator size="16"></nldd-activity-indicator>
+              <nldd-text size="sm" color="accent">
+                {finishing
+                  ? 'We zetten het totaalplaatje op een rij en kijken wat er nog mist…'
+                  : transcript.length === 0
+                    ? 'De eerste vraag wordt opgesteld…'
+                    : 'De AI denkt na over de volgende vraag…'}
+              </nldd-text>
+            </nldd-container>
+            {/* Indeterminate progress: something happens, without promising a wait we do not know. */}
+            <nldd-progress-bar size="sm" indeterminate value-display="none" accessible-label="De AI denkt na"></nldd-progress-bar>
+          </nldd-container>
+        </nldd-card>
       ) : question ? (
-        <div className="animate-fade-in rounded-xl border border-rijksblauw-200 bg-white p-3 shadow-sm dark:border-rijksblauw-500/30 dark:bg-slate-800">
-          <p className="flex items-start gap-2 text-sm font-medium text-rijksblauw-700 dark:text-rijksblauw-200">
-            <MessageCircleQuestion size={16} className="mt-0.5 shrink-0" />
-            <span>
-              Vraag {transcript.length + 1}: {stripMarkdown(question)}
-            </span>
-          </p>
-          <textarea
-            className="opl-input mt-2 min-h-[72px] resize-y"
-            value={answer}
-            placeholder="Typ je antwoord…"
-            autoFocus
-            disabled={busy}
-            onChange={(e) => onAnswerChange(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                onSubmit();
-              }
-            }}
-          />
-          {/* Testknop, alleen voor beheerders: de aanroeper geeft deze handler
-              uitsluitend mee als de gebruiker admin is. Laat de AI een passend
-              antwoord verzinnen, zodat een beheerder de hele vragenronde kan
-              doorlopen zonder elke vraag zelf te beantwoorden. Het verzonnen
-              antwoord komt gewoon in het veld te staan en is dus zichtbaar en
-              aanpasbaar voordat het meetelt. */}
-          {onInventAnswer && (
-            <button
-              type="button"
-              className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-dashed border-rijksoranje/50 px-2 py-1 text-xs font-medium text-rijksoranje transition-colors hover:bg-rijksoranje/10 disabled:cursor-not-allowed disabled:opacity-50"
-              onClick={() => void onInventAnswer()}
-              disabled={busy || inventing}
-              title="Alleen voor beheerders: laat de AI een testantwoord op deze vraag verzinnen"
-            >
-              {inventing ? (
-                <Loader2 size={13} className="animate-spin" />
-              ) : (
-                <Dices size={13} />
-              )}
-              {inventing ? 'Antwoord verzinnen…' : 'Verzin een testantwoord'}
-              <span className="rounded bg-rijksoranje/15 px-1 py-px text-[0.625rem] uppercase tracking-wide">
-                admin
-              </span>
-            </button>
-          )}
+        <nldd-card>
+          <nldd-container padding="12" gap="8">
+            <nldd-form-field label={`Vraag ${transcript.length + 1}: ${stripMarkdown(question)}`}>
+              <AnswerField
+                question={question}
+                value={answer}
+                disabled={busy}
+                onValue={onAnswerChange}
+                onSubmit={onSubmit}
+              />
+            </nldd-form-field>
+            {/* Test button for administrators only: the caller passes this handler
+                only when the user is an admin. The AI makes up a fitting answer,
+                so an administrator can walk the whole round without answering
+                each question. The answer lands in the field, visible and editable
+                before it counts. */}
+            {onInventAnswer && (
+              <nldd-container layout="row" gap="8" vertical-alignment="center">
+                <nldd-tooltip text="Alleen voor beheerders: laat de AI een testantwoord op deze vraag verzinnen">
+                  <nldd-button
+                    appearance="neutral-tinted"
+                    size="xs"
+                    start-icon="magic"
+                    text="Verzin een testantwoord"
+                    loading={inventing || undefined}
+                    loading-text="Antwoord verzinnen…"
+                    disabled={busy || inventing || undefined}
+                    onClick={() => void onInventAnswer()}
+                  ></nldd-button>
+                </nldd-tooltip>
+                <nldd-tag size="sm" color="oranje" text="admin"></nldd-tag>
+              </nldd-container>
+            )}
 
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-            <button
-              type="button"
-              className="opl-btn-secondary"
-              onClick={onFinish}
-              disabled={busy}
-              title={
-                socratic
-                  ? 'Rond af; de AI zet je aannames neutraal op een rij, met per aanname hoe zeker die is (zonder oordeel)'
-                  : 'Rond het interview af; de AI trekt een conclusie op basis van je antwoorden'
-              }
-            >
-              <Check size={16} /> Ik heb genoeg gedeeld
-            </button>
-            <button
-              type="button"
-              className="opl-btn-primary"
-              onClick={onSubmit}
-              disabled={busy || !answer.trim()}
-            >
-              {busy ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
-              Volgende vraag
-            </button>
-          </div>
-        </div>
+            <nldd-container layout="wrap" gap="8" vertical-alignment="center">
+              <nldd-tooltip
+                text={
+                  socratic
+                    ? 'Rond af; de AI zet je aannames neutraal op een rij, met per aanname hoe zeker die is (zonder oordeel)'
+                    : 'Rond het interview af; de AI trekt een conclusie op basis van je antwoorden'
+                }
+              >
+                <nldd-button
+                  appearance="secondary"
+                  start-icon="check-mark"
+                  text="Ik heb genoeg gedeeld"
+                  disabled={busy || undefined}
+                  onClick={onFinish}
+                ></nldd-button>
+              </nldd-tooltip>
+              <nldd-spacer size="flexible" direction="horizontal"></nldd-spacer>
+              <nldd-button
+                appearance="primary"
+                end-icon="arrow-right"
+                text="Volgende vraag"
+                loading={busy || undefined}
+                disabled={busy || !answer.trim() || undefined}
+                onClick={onSubmit}
+              ></nldd-button>
+            </nldd-container>
+          </nldd-container>
+        </nldd-card>
       ) : null}
-    </div>
+    </nldd-container>
+  );
+}
+
+/**
+ * The answer field of the open question. It mounts with the question, so its
+ * binding does too; a new question puts the cursor in it. Enter sends,
+ * Shift+Enter starts a new line.
+ */
+function AnswerField({
+  question,
+  value,
+  disabled,
+  onValue,
+  onSubmit,
+}: {
+  question: string;
+  value: string;
+  disabled: boolean;
+  onValue: (value: string) => void;
+  onSubmit: () => void;
+}) {
+  const ref = useRef<HTMLElement & { value?: string }>(null);
+  useNlddValue(ref, value, onValue);
+  useEffect(() => {
+    ref.current?.focus();
+  }, [question]);
+  return (
+    <nldd-multi-line-text-field
+      ref={ref}
+      rows={3}
+      resize="vertical"
+      placeholder="Typ je antwoord…"
+      disabled={disabled || undefined}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          onSubmit();
+        }
+      }}
+    ></nldd-multi-line-text-field>
   );
 }
 
@@ -283,7 +326,7 @@ export default function InterviewFlow({
     if (!question) return;
     const a = answer.trim();
     if (!a) {
-      toast.error('Vul eerst een antwoord in, of rond af.');
+      notify.error('Vul eerst een antwoord in, of rond af.');
       return;
     }
     const findings: GuardrailFinding[] = [
@@ -292,9 +335,7 @@ export default function InterviewFlow({
     ];
     if (findings.length > 0) {
       // In deze losse flow tonen we de finding als toast i.p.v. een dialoog.
-      toast(`Let op: mogelijk gevoelige inhoud (${findings.map((f) => f.label).join(', ')}).`, {
-        icon: '⚠️',
-      });
+      notify.warning(`Let op: mogelijk gevoelige inhoud (${findings.map((f) => f.label).join(', ')}).`);
     }
     const turns = [...transcript, { question, answer: a }];
     setTranscript(turns);
@@ -307,35 +348,33 @@ export default function InterviewFlow({
     void turn(transcript, true);
   }
 
-  // Klaar: toon de conclusie/samenvatting; het genereren gebruikt deze inhoud.
+  // Done: show the conclusion; generating uses this content.
   if (done) {
     return (
-      <div className="space-y-2 rounded-xl border border-emerald-200 bg-emerald-50/40 p-4 dark:border-emerald-500/30 dark:bg-emerald-500/10">
-        <p className="flex items-center gap-2 text-sm font-semibold text-emerald-800 dark:text-emerald-300">
-          <Check size={15} /> {socratic ? 'Samenvatting van je inzichten' : 'Conclusie van het gesprek'}
-        </p>
-        <pre tabIndex={0} className="max-h-64 overflow-auto whitespace-pre-wrap rounded-lg border border-emerald-200 bg-white p-3 text-xs leading-relaxed text-slate-700 dark:border-emerald-500/20 dark:bg-slate-900 dark:text-slate-200">
-          {done}
-        </pre>
-        <p className="text-xs text-emerald-700/80 dark:text-emerald-300/70">
-          Klik hieronder op &quot;Bouw prompt&quot; om hier een herbruikbare prompt van te maken.
-        </p>
-      </div>
+      <nldd-box background="tinted">
+        <nldd-container padding="16" gap="8">
+          <nldd-container layout="row" gap="8" vertical-alignment="center">
+            <nldd-icon icon="check-mark" size="16" color="success"></nldd-icon>
+            <nldd-text size="sm" weight="bold" color="success">
+              {socratic ? 'Samenvatting van je inzichten' : 'Conclusie van het gesprek'}
+            </nldd-text>
+          </nldd-container>
+          <nldd-code-viewer appearance="box-base" wrap no-copy max-height="16rem">
+            {done}
+          </nldd-code-viewer>
+          <nldd-text size="xs" color="secondary">
+            Klik hieronder op &quot;Bouw prompt&quot; om hier een herbruikbare prompt van te maken.
+          </nldd-text>
+        </nldd-container>
+      </nldd-box>
     );
   }
 
   if (error) {
     return (
-      <div className="flex flex-col gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 sm:flex-row sm:items-center sm:justify-between dark:border-rose-500/30 dark:bg-rose-500/15 dark:text-rose-200">
-        <span>{stripMarkdown(error)}</span>
-        <button
-          type="button"
-          className="opl-btn-secondary shrink-0"
-          onClick={() => void turn(transcript, false)}
-        >
-          Opnieuw proberen
-        </button>
-      </div>
+      <nldd-banner variant="critical" text={stripMarkdown(error)}>
+        <nldd-button slot="actions" appearance="secondary" text="Opnieuw proberen" onClick={() => void turn(transcript, false)}></nldd-button>
+      </nldd-banner>
     );
   }
 

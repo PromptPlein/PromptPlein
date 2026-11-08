@@ -1,10 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, FileText, Sparkles, Share2, Star } from '@/components/common/icons';
 import { LineChartCard } from '@/components/analytics/Charts';
 import { listEvents, eventsPerDay } from '@/services/analyticsService';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { getCurrentUser, formatDate } from '@/lib/utils';
 import type { AnalyticsEvent } from '@/types';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/container';
+import '@nldd/design-system/inline-dialog';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/simple-section';
+import '@nldd/design-system/spacer';
+import '@nldd/design-system/spacer-cell';
+import '@nldd/design-system/text';
+import '@nldd/design-system/text-cell';
+import '@nldd/design-system/title';
 
 const EVENT_LABELS: Record<string, string> = {
   prompt_created: 'Prompt aangemaakt',
@@ -15,17 +26,12 @@ const EVENT_LABELS: Record<string, string> = {
   favorite_toggled: 'Favoriet gewijzigd',
 };
 
-function Stat({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) {
+function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="opl-card flex items-center gap-3 p-4">
-      <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-rijksblauw-50 text-rijksblauw-500 dark:bg-rijksblauw-500/15">
-        {icon}
-      </span>
-      <div>
-        <p className="text-xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">{value}</p>
-        <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
-      </div>
-    </div>
+    <nldd-container gap="4">
+      <nldd-text size="display-2">{value}</nldd-text>
+      <nldd-text size="sm" color="secondary">{label}</nldd-text>
+    </nldd-container>
   );
 }
 
@@ -69,67 +75,78 @@ export default function ActivityPage() {
 
   const trend = useMemo(() => eventsPerDay(mine, 14), [mine]);
 
+  const title = (
+    <nldd-title
+      slot="header"
+      heading-level={1}
+      size={2}
+      text="Mijn activiteit"
+      supporting-text={topTechnique ? `Je meest gebruikte techniek is ${topTechnique}.` : undefined}
+    ></nldd-title>
+  );
+
   if (!user) {
     return (
-      <div className="mx-auto max-w-lg px-4 py-20 text-center">
-        <Activity size={40} className="mx-auto mb-3 text-slate-300 dark:text-slate-600" />
-        <h1 className="text-xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Stel eerst je naam in</h1>
-        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-          Klik rechtsboven op het profiel-icoon om je naam in te stellen. Daarna verschijnt hier je
-          persoonlijke activiteit.
-        </p>
-      </div>
+      <nldd-simple-section>
+        {title}
+        <nldd-inline-dialog
+          icon="line-chart"
+          horizontal-alignment="left"
+          heading-level={2}
+          text="Stel eerst je naam in"
+          supporting-text="Kies Stel je naam in in het accountmenu. Daarna verschijnt hier je persoonlijke activiteit."
+        ></nldd-inline-dialog>
+      </nldd-simple-section>
+    );
+  }
+
+  if (loading) {
+    return (
+      <nldd-simple-section>
+        {title}
+        <nldd-inline-dialog variant="loading" text="Activiteit laden"></nldd-inline-dialog>
+      </nldd-simple-section>
     );
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mb-6 flex items-center gap-2">
-        <Activity className="text-rijksblauw-500" />
-        <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Mijn activiteit</h1>
-      </div>
+    <>
+      <nldd-simple-section>
+        {title}
+        <nldd-container layout="grid" gap="12" sm-gap="8" column-count={4} sm-column-count={2}>
+          <Stat label="Prompts aangemaakt" value={stats.created} />
+          <Stat label="Optimalisaties" value={stats.optimized} />
+          <Stat label="Gedeeld" value={stats.shared} />
+          <Stat label="Favoriet-wijzigingen" value={stats.favorites} />
+        </nldd-container>
+        <nldd-spacer size="24"></nldd-spacer>
+        <LineChartCard
+          title="Jouw activiteit (laatste 14 dagen)"
+          data={trend}
+          emptyHint="Nog geen activiteit geregistreerd."
+        />
+      </nldd-simple-section>
 
-      {loading ? (
-        <div className="skeleton h-64 w-full rounded-xl" />
-      ) : (
-        <div className="space-y-6">
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <Stat icon={<FileText size={18} />} label="Prompts aangemaakt" value={stats.created} />
-            <Stat icon={<Sparkles size={18} />} label="Optimalisaties" value={stats.optimized} />
-            <Stat icon={<Share2 size={18} />} label="Gedeeld" value={stats.shared} />
-            <Stat icon={<Star size={18} />} label="Favoriet-wijzigingen" value={stats.favorites} />
-          </div>
-
-          {topTechnique && (
-            <div className="opl-card p-4 text-sm text-slate-600 dark:text-slate-300">
-              Je meest gebruikte techniek is{' '}
-              <span className="font-semibold text-rijksblauw-700 dark:text-rijksblauw-200">{topTechnique}</span>.
-            </div>
-          )}
-
-          <LineChartCard
-            title="Jouw activiteit (laatste 14 dagen)"
-            data={trend}
-            emptyHint="Nog geen activiteit geregistreerd."
-          />
-
-          <div className="opl-card p-5">
-            <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">Recente activiteit</h3>
-            {mine.length === 0 ? (
-              <p className="text-sm text-slate-400 dark:text-slate-500">Nog geen activiteit.</p>
-            ) : (
-              <ul className="divide-y divide-slate-100">
-                {mine.slice(0, 20).map((e) => (
-                  <li key={e.id} className="flex items-center justify-between py-2 text-sm">
-                    <span className="text-slate-700 dark:text-slate-200">{EVENT_LABELS[e.event_type] ?? e.event_type}</span>
-                    <span className="text-xs text-slate-400 dark:text-slate-500">{formatDate(e.created_at)}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
+      <nldd-simple-section background="tinted">
+        <nldd-title slot="header" heading-level={2} size={4} text="Recente activiteit"></nldd-title>
+        {mine.length === 0 ? (
+          <nldd-inline-dialog icon="clock" horizontal-alignment="left" text="Nog geen activiteit">
+            <nldd-button-group slot="actions">
+              <nldd-button appearance="primary" href="/genereren" text="Maak een prompt"></nldd-button>
+            </nldd-button-group>
+          </nldd-inline-dialog>
+        ) : (
+          <nldd-list accessible-label="Recente activiteit">
+            {mine.slice(0, 20).map((e) => (
+              <nldd-list-item key={e.id} size="sm">
+                <nldd-text-cell text={EVENT_LABELS[e.event_type] ?? e.event_type}></nldd-text-cell>
+                <nldd-spacer-cell size="12"></nldd-spacer-cell>
+                <nldd-text-cell width="fit-content" size="sm" color="secondary" text={formatDate(e.created_at)}></nldd-text-cell>
+              </nldd-list-item>
+            ))}
+          </nldd-list>
+        )}
+      </nldd-simple-section>
+    </>
   );
 }

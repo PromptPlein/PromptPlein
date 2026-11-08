@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import { useAuth } from '@/context/AuthContext';
 
 /**
@@ -19,7 +19,7 @@ export function useAuthGuard() {
       // Mock-modus (geen Supabase) → niets blokkeren.
       if (!configured) return true;
       if (isAuthenticated) return true;
-      toast.error(message);
+      notify.error(message);
       navigate('/auth/login', { state: { from: location.pathname } });
       return false;
     },

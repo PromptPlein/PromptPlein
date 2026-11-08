@@ -16,17 +16,11 @@
 import { getAnonKey, getFunctionUrl, isSupabaseConfigured, supabase } from '@/lib/supabase';
 import type { UserMemory } from '@/types';
 
-/** Spiegel van de CHECK in 0052 en van MAX_MEMORY_CHARS in de edge function. */
-export const MAX_MEMORY_CHARS = 500;
-
 /**
  * Boven deze omvang gaat niet meer het hele geheugen mee, maar alleen wat bij de
  * vraag past. Gekozen door de eigenaar (8-11-2026).
  */
 export const MEMORY_VECTOR_THRESHOLD_TOKENS = 100_000;
-
-/** Spiegel van MEMORY_SEARCH_LIMIT in de edge function. */
-export const MEMORY_SEARCH_LIMIT = 40;
 
 /** Zelfde duur als bij de eigen instructie: een wijziging elders komt snel door. */
 const CACHE_MS = 60_000;
@@ -37,7 +31,7 @@ const LOCAL_KEY = 'opl.memories';
  * Ruwe schatting van het aantal tokens: Mistral rekent voor Nederlands op zo'n
  * vier tekens per token. Genoeg om te weten aan welke kant van de grens we zitten.
  */
-export function estimateTokens(text: string): number {
+function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
 }
 

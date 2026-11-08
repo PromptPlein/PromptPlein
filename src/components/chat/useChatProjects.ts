@@ -5,7 +5,7 @@
 // werkt de lijst in state bij met wat de database teruggaf.
 
 import { useCallback, useEffect, useState } from 'react';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import { useAuth } from '@/context/AuthContext';
 import {
   createProject,
@@ -53,7 +53,7 @@ export default function useChatProjects(): ChatProjectsController {
         if (active) setProjects(list);
       })
       .catch(() => {
-        if (active) toast.error('De projecten konden niet worden geladen.');
+        if (active) notify.error('De projecten konden niet worden geladen.');
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -71,7 +71,7 @@ export default function useChatProjects(): ChatProjectsController {
         setProjects((cur) => [project, ...cur]);
         return project;
       } catch {
-        toast.error('Het project kon niet worden aangemaakt.');
+        notify.error('Het project kon niet worden aangemaakt.');
         return null;
       }
     },
@@ -89,7 +89,7 @@ export default function useChatProjects(): ChatProjectsController {
         );
         return true;
       } catch {
-        toast.error('Het project kon niet worden opgeslagen.');
+        notify.error('Het project kon niet worden opgeslagen.');
         return false;
       }
     },
@@ -102,7 +102,7 @@ export default function useChatProjects(): ChatProjectsController {
       setProjects((cur) => cur.filter((p) => p.id !== id));
       return true;
     } catch {
-      toast.error('Het project kon niet worden verwijderd.');
+      notify.error('Het project kon niet worden verwijderd.');
       return false;
     }
   }, []);

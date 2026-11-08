@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { FileText, Users, Sparkles, Share2 } from '@/components/common/icons';
-import { BarChartCard, LineChartCard } from '@/components/analytics/Charts';
+import { BarChartCard, KeyFigure, LineChartCard } from '@/components/analytics/Charts';
 import SystemStatus from '@/components/admin/SystemStatus';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { listPrompts } from '@/services/repository';
@@ -14,6 +13,14 @@ import {
 } from '@/services/analyticsService';
 import type { AnalyticsEvent, Prompt } from '@/types';
 import { formatDate } from '@/lib/utils';
+import '@nldd/design-system/activity-indicator';
+import '@nldd/design-system/card';
+import '@nldd/design-system/container';
+import '@nldd/design-system/inline-dialog';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/text-cell';
+import '@nldd/design-system/title';
 
 const EVENT_LABELS: Record<string, string> = {
   prompt_created: 'Prompt aangemaakt',
@@ -24,27 +31,8 @@ const EVENT_LABELS: Record<string, string> = {
   favorite_toggled: 'Favoriet gewijzigd',
 };
 
-function StatCard({
-  icon,
-  label,
-  value,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: number | string;
-}) {
-  return (
-    <div className="opl-card flex flex-col items-start gap-2 p-4 sm:flex-row sm:items-center sm:gap-4 sm:p-5">
-      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-rijksblauw-50 text-rijksblauw-500 dark:bg-rijksblauw-500/15">
-        {icon}
-      </span>
-      <div className="min-w-0 max-w-full">
-        <p className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">{value}</p>
-        <p className="text-xs text-slate-500 [overflow-wrap:anywhere] dark:text-slate-400">{label}</p>
-      </div>
-    </div>
-  );
-}
+const PAGE_TITLE = 'Admin-dashboard';
+const PAGE_INTRO = 'Overzicht van gebruik en activiteit.';
 
 export default function AdminDashboardPage() {
   const { categoryById, techniqueById } = useReferenceData();
@@ -82,58 +70,66 @@ export default function AdminDashboardPage() {
   const recent = events.slice(0, 12);
 
   if (loading) {
-    return <div className="skeleton h-64 w-full rounded-xl" />;
+    return (
+      <nldd-container layout="stack" gap="24">
+        <nldd-title heading-level={1} size={2} text={PAGE_TITLE} supporting-text={PAGE_INTRO}></nldd-title>
+        <nldd-container min-height="16rem">
+          <nldd-activity-indicator></nldd-activity-indicator>
+        </nldd-container>
+      </nldd-container>
+    );
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Admin-dashboard</h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400">Overzicht van gebruik en activiteit.</p>
-      </div>
+    <nldd-container layout="stack" gap="24">
+      <nldd-title heading-level={1} size={2} text={PAGE_TITLE} supporting-text={PAGE_INTRO}></nldd-title>
 
-      <SystemStatus />
+      <nldd-container layout="grid" gap="16" column-count={2} md-column-count={4}>
+        <KeyFigure label="Prompts" value={prompts.length} />
+        <KeyFigure label="Unieke gebruikers" value={uniqueUsers(events)} />
+        <KeyFigure label="Optimalisaties" value={eventCounts.optimization_run} />
+        <KeyFigure label="Deel-links" value={eventCounts.share_created} />
+      </nldd-container>
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard icon={<FileText size={20} />} label="Totaal prompts" value={prompts.length} />
-        <StatCard icon={<Users size={20} />} label="Unieke gebruikers" value={uniqueUsers(events)} />
-        <StatCard
-          icon={<Sparkles size={20} />}
-          label="Optimalisaties"
-          value={eventCounts.optimization_run}
-        />
-        <StatCard icon={<Share2 size={20} />} label="Deel-links" value={eventCounts.share_created} />
-      </div>
+      <LineChartCard title="Activiteit (laatste 14 dagen)" data={trend} emptyHint="Activiteit verschijnt hier zodra de app gebruikt wordt." />
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <nldd-container layout="grid" gap="16" column-count={1} md-column-count={2}>
         <BarChartCard
           title="Meest gebruikte technieken"
           data={techniqueData}
           emptyHint="Voer optimalisaties uit om data te zien."
         />
         <BarChartCard title="Prompts per categorie" data={categoryData} />
-      </div>
+      </nldd-container>
 
-      <LineChartCard title="Activiteit (laatste 14 dagen)" data={trend} />
+      <nldd-card>
+        <nldd-container padding="24" sm-padding="16" gap="16">
+          <nldd-title heading-level={2} size={5} text="Recente activiteit"></nldd-title>
+          {recent.length === 0 ? (
+            <nldd-container padding-block="16">
+              <nldd-inline-dialog icon="clock" icon-color="secondary" text="Nog geen activiteit geregistreerd"></nldd-inline-dialog>
+            </nldd-container>
+          ) : (
+            <nldd-list accessible-label="Recente activiteit">
+              {recent.map((e) => (
+                <nldd-list-item key={e.id} size="sm">
+                  <nldd-text-cell
+                    text={`**${e.user_identifier || 'Anoniem'}** · ${EVENT_LABELS[e.event_type] ?? e.event_type}`}
+                  ></nldd-text-cell>
+                  <nldd-text-cell
+                    width="fit-content"
+                    horizontal-alignment="right"
+                    color="secondary"
+                    text={formatDate(e.created_at)}
+                  ></nldd-text-cell>
+                </nldd-list-item>
+              ))}
+            </nldd-list>
+          )}
+        </nldd-container>
+      </nldd-card>
 
-      <div className="opl-card p-5">
-        <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">Recente activiteit</h3>
-        {recent.length === 0 ? (
-          <p className="text-sm text-slate-400 dark:text-slate-500">Nog geen activiteit geregistreerd.</p>
-        ) : (
-          <ul className="divide-y divide-slate-100 dark:divide-slate-700">
-            {recent.map((e) => (
-              <li key={e.id} className="flex items-center justify-between py-2 text-sm">
-                <span className="text-slate-700 dark:text-slate-200">
-                  <span className="font-medium">{e.user_identifier || 'Anoniem'}</span>{' '}
-                  · {EVENT_LABELS[e.event_type] ?? e.event_type}
-                </span>
-                <span className="text-xs text-slate-400 dark:text-slate-500">{formatDate(e.created_at)}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </div>
+      <SystemStatus />
+    </nldd-container>
   );
 }

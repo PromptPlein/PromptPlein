@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { FileText, Loader2, RotateCcw, Scissors, Sparkles, Trash2, Upload } from '@/components/common/icons';
-import clsx from 'clsx';
-import toast from 'react-hot-toast';
-import Modal from '@/components/common/Modal';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { createPortal } from 'react-dom';
+import { notify } from '@/lib/notify';
+import { useNlddEvent, useNlddValue } from '@/lib/nldd';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { ACCEPTED_DOC_ACCEPT } from '@/lib/extractDocument';
 import { countPii, redactPii, type PiiCount } from '@/services/guardrails';
@@ -23,6 +22,30 @@ import {
   MAX_PROJECT_NAME_CHARS,
 } from '@/services/chatProjectService';
 import type { ChatProject, ChatProjectFile } from '@/types';
+import '@nldd/design-system/activity-indicator';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/container';
+import '@nldd/design-system/file-field';
+import '@nldd/design-system/form';
+import '@nldd/design-system/form-actions';
+import '@nldd/design-system/form-field';
+import '@nldd/design-system/icon-cell';
+import '@nldd/design-system/inline-dialog';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/list-item-segment';
+import '@nldd/design-system/multi-line-text-field';
+import '@nldd/design-system/page';
+import '@nldd/design-system/progress-bar';
+import '@nldd/design-system/sheet';
+import '@nldd/design-system/simple-section';
+import '@nldd/design-system/spacer-cell';
+import '@nldd/design-system/text';
+import '@nldd/design-system/text-cell';
+import '@nldd/design-system/text-field';
+import '@nldd/design-system/title';
+import '@nldd/design-system/top-title-bar';
 
 /**
  * Projectinstellingen: de naam, de projectinstructie en de bronbestanden.
@@ -75,9 +98,26 @@ export default function ProjectSettingsModal({
   const [uploading, setUploading] = useState<{ current: number; total: number } | null>(null);
   /** Stukken die nog doorzoekbaar moeten worden; 0 is klaar. */
   const [indexRemaining, setIndexRemaining] = useState(0);
-  const [dragging, setDragging] = useState(false);
   const [confirmDeleteFile, setConfirmDeleteFile] = useState<ChatProjectFile | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const sheetRef = useRef<HTMLElement>(null);
+  const nameRef = useRef<HTMLElement & { value?: string }>(null);
+  const instructionsRef = useRef<HTMLElement & { value?: string }>(null);
+  const fileFieldRef = useRef<HTMLElement & { formResetCallback?: () => void }>(null);
+  useNlddValue(nameRef, name, setName);
+  useNlddValue(instructionsRef, instructions, setInstructions);
+  // The sheet clears `open` itself on Escape, the backdrop or the dismiss
+  // button. A close that follows our own `open` going false is no news.
+  useNlddEvent(sheetRef, 'close', () => {
+    if (open) onClose();
+  });
+  // The field hands over the chosen or dropped files; it is emptied again
+  // right away, because each file becomes a row in the list below.
+  useNlddEvent<CustomEvent<{ files?: File[] }>>(fileFieldRef, 'change', (e) => {
+    const chosen = e.detail?.files ?? [];
+    if (chosen.length === 0) return;
+    fileFieldRef.current?.formResetCallback?.();
+    void upload(chosen);
+  });
   // De vraag over persoonsgegevens voor het bestand dat nu aan de beurt is.
   const [piiAsk, setPiiAsk] = useState<{ fileName: string; found: PiiCount[] } | null>(null);
   const piiAnswer = useRef<((choice: PiiFileChoice) => void) | null>(null);
@@ -113,7 +153,7 @@ export default function ProjectSettingsModal({
         if (active) setFiles(list);
       })
       .catch(() => {
-        if (active) toast.error('De bestanden konden niet worden geladen.');
+        if (active) notify.error('De bestanden konden niet worden geladen.');
       })
       .finally(() => {
         if (active) setLoadingFiles(false);
@@ -165,16 +205,16 @@ export default function ProjectSettingsModal({
         settings: chatSettings,
       });
       if (result.error) {
-        toast.error(result.error);
+        notify.error(result.error);
         return;
       }
       if (!result.changed || !result.text.trim()) {
-        toast('Je instructie was al compleet genoeg.', { icon: '✨' });
+        notify('Je instructie was al compleet genoeg.', { icon: '✨' });
         return;
       }
       setInstructions(result.text);
       setBeforeOptimize({ before, after: result.text });
-      toast.success('Instructie herschreven. Lees hem na en sla op als hij klopt.');
+      notify.success('Instructie herschreven. Lees hem na en sla op als hij klopt.');
     } finally {
       setOptimizing(false);
     }
@@ -190,14 +230,14 @@ export default function ProjectSettingsModal({
     if (!project || saving || optimizing) return;
     const trimmed = name.trim();
     if (!trimmed) {
-      toast.error('Geef het project een naam.');
+      notify.error('Geef het project een naam.');
       return;
     }
     setSaving(true);
     const ok = await onSave({ name: trimmed, instructions });
     setSaving(false);
     if (ok) {
-      toast.success('Project opgeslagen.');
+      notify.success('Project opgeslagen.');
       onClose();
     }
   }
@@ -207,11 +247,11 @@ export default function ProjectSettingsModal({
     if (!projectId || uploading || list.length === 0) return;
     const room = MAX_PROJECT_FILES - files.length;
     if (room <= 0) {
-      toast.error(`Maximaal ${MAX_PROJECT_FILES} bestanden per project.`);
+      notify.error(`Maximaal ${MAX_PROJECT_FILES} bestanden per project.`);
       return;
     }
     if (list.length > room) {
-      toast.error(`Er passen nog ${room} bestanden in dit project.`);
+      notify.error(`Er passen nog ${room} bestanden in dit project.`);
     }
     const batch = list.slice(0, room);
     let done = 0;
@@ -244,18 +284,18 @@ export default function ProjectSettingsModal({
         // en mag het bij annuleren niet worden opgeruimd.
         if (done === 1) onFilesChanged();
         if (truncated) {
-          toast(
+          notify(
             `"${doc.name}" was te groot en is afgekapt op ${num(MAX_PROJECT_FILE_CHARS)} tekens.`,
             { icon: '✂️' },
           );
         }
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : `"${file.name}" kon niet worden toegevoegd.`);
+        notify.error(err instanceof Error ? err.message : `"${file.name}" kon niet worden toegevoegd.`);
       }
     }
     setUploading(null);
     if (done > 1) onFilesChanged();
-    if (done > 0) toast.success(done === 1 ? 'Bestand toegevoegd.' : `${done} bestanden toegevoegd.`);
+    if (done > 0) notify.success(done === 1 ? 'Bestand toegevoegd.' : `${done} bestanden toegevoegd.`);
   }
 
   async function removeFile(file: ChatProjectFile) {
@@ -264,246 +304,185 @@ export default function ProjectSettingsModal({
       await deleteProjectFile(projectId, file.id);
       setFiles((cur) => cur.filter((f) => f.id !== file.id));
       onFilesChanged();
-      toast.success(`"${file.name}" verwijderd.`);
+      notify.success(`"${file.name}" verwijderd.`);
     } catch {
-      toast.error('Het bestand kon niet worden verwijderd.');
+      notify.error('Het bestand kon niet worden verwijderd.');
     }
   }
 
   const totalChars = filesChars;
+  const showOptimize = Boolean(chatSettings?.projectOptimizeEnabled) && (instructions.trim().length > 0 || optimizing);
+
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    void save();
+  }
 
   return (
     <>
-      <Modal open={open} onClose={onClose} title="Projectinstellingen" size="max-w-2xl">
-        <div className="space-y-6">
-          <div>
-            <label
-              className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300"
-              htmlFor="project-name"
-            >
-              Naam
-            </label>
-            <input
-              id="project-name"
-              className="opl-input w-full"
-              value={name}
-              maxLength={MAX_PROJECT_NAME_CHARS}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Bijvoorbeeld: Merkstem, Verkoopmails, Kwartaalrapport"
-            />
-          </div>
+      {createPortal(
+        <nldd-sheet ref={sheetRef} open={open || undefined} placement="right" width="640px">
+          <nldd-page>
+            <nldd-top-title-bar
+              slot="header"
+              text="Projectinstellingen"
+              dismiss-text="Sluit"
+              collapse-anchor="project-instellingen-titel"
+            ></nldd-top-title-bar>
+            <nldd-simple-section>
+              <nldd-title
+                id="project-instellingen-titel"
+                slot="header"
+                heading-level={2}
+                size={3}
+                text="Projectinstellingen"
+              ></nldd-title>
+              <nldd-form>
+                <form onSubmit={submit}>
+                  <nldd-form-field label="Naam">
+                    <nldd-text-field
+                      ref={nameRef}
+                      maxlength={String(MAX_PROJECT_NAME_CHARS)}
+                      placeholder="Bijvoorbeeld: Merkstem, Verkoopmails, Kwartaalrapport"
+                    ></nldd-text-field>
+                  </nldd-form-field>
 
-          <div>
-            <label
-              className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300"
-              htmlFor="project-instructions"
-            >
-              Projectinstructie
-            </label>
-            <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
-              Deze instructie geldt voor elke chat in dit project. Beschrijf wie de assistent is,
-              hoe hij moet antwoorden en welk eindproduct eruit moet komen.
-            </p>
-            <div className="relative">
-              <textarea
-                id="project-instructions"
-                // pb-12: houdt de onderste regel vrij van het sterretje. Zonder
-                // die ruimte schuift de laatste zin er precies achter zodra de
-                // gebruiker naar beneden typt — juist waar zijn cursor staat.
-                className="opl-input min-h-[10rem] w-full resize-y pb-12 font-normal"
-                value={instructions}
-                maxLength={MAX_PROJECT_INSTRUCTIONS_CHARS}
-                onChange={(e) => setInstructions(e.target.value)}
-                placeholder="Je bent de tekstschrijver van ons merk. Schrijf altijd in de wij-vorm, kort en concreet. Lever elke tekst als: titel, drie alinea's, afsluitende oproep."
-              />
-              {/* Sterretje rechtsonder: schrijft de instructie om tot een volwaardige
-                  systeemprompt. Verschijnt pas zodra er tekst staat, zodat een leeg
-                  veld rustig blijft — hetzelfde gebaar als in de chat, maar met een
-                  veel zwaardere slag erachter (zie PROJECTINSTRUCTIE_Framework.md). */}
-              {chatSettings?.projectOptimizeEnabled &&
-                (instructions.trim().length > 0 || optimizing) && (
-                  <button
-                    type="button"
-                    className={clsx(
-                      // Rechtsonder, maar niet in de hoek: daar zitten de rand, de
-                      // schuifbalk (± 16px) en het sleepgreepje van resize-y al.
-                      // 22px legt de knop er net naast met een paar pixels lucht,
-                      // zodat het greepje bruikbaar blijft en de knop niet tegen
-                      // de grijze baan van de schuifbalk aan plakt.
-                      'absolute bottom-2.5 right-[22px] flex h-8 w-8 items-center justify-center rounded-lg',
-                      'bg-rijksoranje text-white',
-                      // Een ringetje in de veldkleur licht de knop van de tekst
-                      // eronder: zonder die scheiding loopt hij vast aan de regel
-                      // waar hij toevallig overheen valt.
-                      'shadow-sm ring-2 ring-white dark:ring-slate-800',
-                      'transition-all duration-200 focus:outline-none focus:ring-rijksoranje/40',
-                      canOptimize && !optimizing
-                        ? 'hover:shadow-md motion-safe:hover:-translate-y-px'
-                        : 'cursor-default opacity-60',
-                    )}
-                    onClick={() => void optimize()}
-                    disabled={!canOptimize || optimizing}
-                    title={
-                      optimizing
-                        ? 'Bezig met omschrijven…'
-                        : 'Schrijf mijn instructie om tot een volledige systeemprompt; je oorspronkelijke tekst kun je daarna terughalen'
-                    }
-                    aria-label="Schrijf mijn projectinstructie om met AI"
+                  <nldd-form-field
+                    label="Projectinstructie"
+                    supporting-label="Deze instructie geldt voor elke chat in dit project. Beschrijf wie de assistent is, hoe hij moet antwoorden en welk eindproduct eruit moet komen."
                   >
-                    {optimizing ? (
-                      <Loader2 size={15} className="animate-spin" />
-                    ) : (
-                      <Sparkles size={15} strokeWidth={2.25} />
-                    )}
-                  </button>
-                )}
-            </div>
-            <div className="mt-1 flex items-center justify-between gap-3">
-              {canUndoOptimize ? (
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1 text-[0.6875rem] font-medium text-slate-500 hover:text-rijksblauw-600 hover:underline dark:text-slate-400 dark:hover:text-rijksblauw-300"
-                  onClick={undoOptimize}
-                >
-                  <RotateCcw size={12} /> Herstel mijn eigen tekst
-                </button>
-              ) : (
-                <span />
-              )}
-              <p className="text-[0.6875rem] text-slate-400 dark:text-slate-500">
-                {num(instructions.length)} van {num(MAX_PROJECT_INSTRUCTIONS_CHARS)} tekens
-              </p>
-            </div>
-          </div>
+                    <nldd-multi-line-text-field
+                      ref={instructionsRef}
+                      rows={7}
+                      resize="vertical"
+                      maxlength={String(MAX_PROJECT_INSTRUCTIONS_CHARS)}
+                      placeholder="Je bent de tekstschrijver van ons merk. Schrijf altijd in de wij-vorm, kort en concreet. Lever elke tekst als: titel, drie alinea's, afsluitende oproep."
+                    ></nldd-multi-line-text-field>
+                    <nldd-form-field-help-text>
+                      {num(instructions.length)} van {num(MAX_PROJECT_INSTRUCTIONS_CHARS)} tekens
+                    </nldd-form-field-help-text>
+                  </nldd-form-field>
 
-          <div>
-            <div className="mb-2">
-              <h3 className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                Bronbestanden
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Tot {MAX_PROJECT_FILES} bestanden van elk {MAX_PROJECT_FILE_BYTES / (1024 * 1024)} MB
-                (.txt, .md, .pdf, .docx). Gebruik je een project drie maanden niet, dan worden
-                de bestanden verwijderd. Je krijgt een week vooraf een mail. Het project blijft staan.
-              </p>
-            </div>
-            <button
-              type="button"
-              className={clsx(
-                'mb-2 flex min-h-[4.5rem] w-full items-center justify-center gap-3 rounded-xl border-2 border-dashed px-4 py-3 text-base font-bold text-rijksblauw-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 disabled:cursor-not-allowed disabled:opacity-60 dark:text-white',
-                dragging
-                  ? 'border-rijksblauw-700 bg-rijksblauw-50 dark:bg-rijksblauw-500/15'
-                  : 'border-rijksblauw-300 hover:border-rijksblauw-500 hover:bg-rijksblauw-50 dark:border-rijksblauw-500 dark:hover:bg-rijksblauw-500/15',
-              )}
-              onClick={() => fileInputRef.current?.click()}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDragging(true);
-              }}
-              onDragLeave={() => setDragging(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setDragging(false);
-                void upload(Array.from(e.dataTransfer.files));
-              }}
-              disabled={Boolean(uploading) || files.length >= MAX_PROJECT_FILES}
-            >
-              {uploading ? (
-                <>
-                  <Loader2 size={24} className="animate-spin" />
-                  Bestand {uploading.current} van {uploading.total}
-                </>
-              ) : (
-                <>
-                  <Upload size={24} /> Bestanden toevoegen of hierheen slepen
-                </>
-              )}
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept={ACCEPTED_DOC_ACCEPT}
-              className="hidden"
-              aria-label="Kies bestanden"
-              onChange={(e) => {
-                void upload(Array.from(e.target.files ?? []));
-                e.target.value = '';
-              }}
-            />
+                  {/* The sparkle rewrites the instruction into a full system prompt.
+                      It shows once there is text, the same gesture as in the chat
+                      with a much heavier rewrite behind it (see
+                      PROJECTINSTRUCTIE_Framework.md). */}
+                  {(showOptimize || canUndoOptimize) && (
+                    <nldd-container layout="wrap" gap="8">
+                      {showOptimize && (
+                        <nldd-button
+                          appearance="secondary"
+                          size="sm"
+                          start-icon="sparkles"
+                          text="Herschrijf met AI"
+                          accessible-label="Schrijf mijn projectinstructie om met AI"
+                          loading={optimizing || undefined}
+                          loading-text="Bezig met omschrijven"
+                          onClick={() => void optimize()}
+                        ></nldd-button>
+                      )}
+                      {canUndoOptimize && (
+                        <nldd-button
+                          appearance="neutral-transparent"
+                          size="sm"
+                          start-icon="undo"
+                          text="Herstel mijn eigen tekst"
+                          onClick={undoOptimize}
+                        ></nldd-button>
+                      )}
+                    </nldd-container>
+                  )}
 
-            {loadingFiles ? (
-              <p className="py-4 text-center text-xs text-slate-400">Bestanden laden…</p>
-            ) : files.length === 0 ? null : (
-              <ul className="space-y-1">
-                {files.map((file) => (
-                  <li
-                    key={file.id}
-                    className="group flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700"
+                  <nldd-form-field
+                    label="Bronbestanden"
+                    supporting-label={`Tot ${MAX_PROJECT_FILES} bestanden van elk ${MAX_PROJECT_FILE_BYTES / (1024 * 1024)} MB (.txt, .md, .pdf, .docx). Gebruik je een project drie maanden niet, dan worden de bestanden verwijderd. Je krijgt een week vooraf een mail. Het project blijft staan.`}
                   >
-                    <FileText size={15} className="shrink-0 text-slate-400" />
-                    <span className="min-w-0 flex-1 truncate text-sm text-slate-700 dark:text-slate-200">
-                      {file.name}
-                    </span>
-                    {file.truncated && (
-                      <span
-                        className="inline-flex shrink-0 items-center gap-0.5 text-[0.6875rem] text-amber-600 dark:text-amber-400"
-                        title="Dit bestand was te groot en is afgekapt."
-                      >
-                        <Scissors size={11} /> ingekort
-                      </span>
-                    )}
-                    <span className="shrink-0 text-[0.6875rem] text-slate-400 dark:text-slate-500">
-                      {num(file.chars)} tekens
-                    </span>
-                    <button
-                      type="button"
-                      className="shrink-0 rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-rijksrood dark:hover:bg-slate-700"
-                      onClick={() => setConfirmDeleteFile(file)}
-                      aria-label={`Verwijder bestand "${file.name}"`}
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
+                    <nldd-file-field
+                      ref={fileFieldRef}
+                      variant="area"
+                      multiple
+                      accept={ACCEPTED_DOC_ACCEPT}
+                      disabled={(Boolean(uploading) || files.length >= MAX_PROJECT_FILES) || undefined}
+                    ></nldd-file-field>
+                  </nldd-form-field>
 
-            {files.length > 0 && (
-              <p className="mt-2 text-[0.6875rem] text-slate-400 dark:text-slate-500">
-                Samen {num(totalChars)} tekens bronmateriaal.
-              </p>
-            )}
+                  {uploading && (
+                    <nldd-progress-bar
+                      max={uploading.total}
+                      value={String(uploading.current)}
+                      value-format="fraction"
+                      text={`Bestand ${uploading.current} van ${uploading.total}`}
+                    ></nldd-progress-bar>
+                  )}
 
-            {indexRemaining > 0 && (
-              <p
-                role="status"
-                className="mt-1 flex items-center gap-1.5 text-[0.6875rem] text-slate-400 dark:text-slate-500"
-              >
-                <Loader2 size={12} className="animate-spin" />
-                Bestanden doorzoekbaar maken
-              </p>
-            )}
-          </div>
+                  {loadingFiles ? (
+                    <nldd-inline-dialog variant="loading" text="Bestanden laden"></nldd-inline-dialog>
+                  ) : (
+                    <nldd-list appearance="box-base" accessible-label="Bronbestanden">
+                      {files.map((file) => (
+                        <nldd-list-item key={file.id}>
+                          <nldd-icon-cell icon="text-document" color="secondary" size="20"></nldd-icon-cell>
+                          <nldd-spacer-cell size="12"></nldd-spacer-cell>
+                          <nldd-text-cell
+                            text={file.name}
+                            supporting-text={
+                              file.truncated
+                                ? `${num(file.chars)} tekens, ingekort omdat het bestand te groot was`
+                                : `${num(file.chars)} tekens`
+                            }
+                          ></nldd-text-cell>
+                          <nldd-list-item-segment
+                            button
+                            accessible-label={`Verwijder bestand "${file.name}"`}
+                            onClick={() => setConfirmDeleteFile(file)}
+                          >
+                            <nldd-icon-cell icon="trash" color="secondary" size="20"></nldd-icon-cell>
+                          </nldd-list-item-segment>
+                        </nldd-list-item>
+                      ))}
+                      <nldd-inline-dialog
+                        slot="empty"
+                        icon="text-document"
+                        text="Nog geen bronbestanden"
+                      ></nldd-inline-dialog>
+                    </nldd-list>
+                  )}
 
-          <div className="flex justify-end gap-2 border-t border-slate-200 pt-4 dark:border-slate-700">
-            <button type="button" className="opl-btn-secondary" onClick={onClose}>
-              Annuleren
-            </button>
-            <button
-              type="button"
-              className="opl-btn-primary"
-              onClick={() => void save()}
-              // Ook tijdens het omschrijven dicht: anders bewaart een klik de
-              // oude instructie terwijl de nieuwe onderweg is.
-              disabled={saving || optimizing}
-            >
-              {saving && <Loader2 size={15} className="animate-spin" />}
-              Opslaan
-            </button>
-          </div>
-        </div>
-      </Modal>
+                  {files.length > 0 && (
+                    <nldd-text size="xs" color="secondary">
+                      Samen {num(totalChars)} tekens bronmateriaal.
+                    </nldd-text>
+                  )}
+
+                  {indexRemaining > 0 && (
+                    <nldd-activity-indicator
+                      size="16"
+                      show-text
+                      timing="instant"
+                      text="Bestanden doorzoekbaar maken"
+                    ></nldd-activity-indicator>
+                  )}
+
+                  <nldd-form-actions>
+                    <nldd-button-group>
+                      {/* save() also waits while the rewrite runs: otherwise a click
+                          would keep the old instruction while the new one is on its way. */}
+                      <nldd-button
+                        appearance="primary"
+                        type="submit"
+                        text="Bewaar"
+                        loading={saving || undefined}
+                        loading-text="Aan het bewaren"
+                      ></nldd-button>
+                    </nldd-button-group>
+                  </nldd-form-actions>
+                </form>
+              </nldd-form>
+            </nldd-simple-section>
+          </nldd-page>
+        </nldd-sheet>,
+        document.body,
+      )}
 
       {piiAsk && (
         <PiiFileDialog

@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Download, FileJson, Activity } from '@/components/common/icons';
-import { BarChartCard, LineChartCard, PieChartCard } from '@/components/analytics/Charts';
+import { BarChartCard, KeyFigure, LineChartCard, PieChartCard } from '@/components/analytics/Charts';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import {
   countByEventType,
@@ -21,7 +20,16 @@ import {
 import { downloadText } from '@/lib/download';
 import { formatDate } from '@/lib/utils';
 import type { AnalyticsEvent, BehaviorLog } from '@/types';
-import StackTable from '@/components/common/StackTable';
+import '@nldd/design-system/activity-indicator';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/card';
+import '@nldd/design-system/container';
+import '@nldd/design-system/inline-dialog';
+import '@nldd/design-system/table';
+import '@nldd/design-system/text';
+import '@nldd/design-system/text-cell';
+import '@nldd/design-system/title';
 
 const EVENT_LABELS: Record<string, string> = {
   prompt_created: 'Prompt aangemaakt',
@@ -106,133 +114,146 @@ export default function AdminAnalyticsPage() {
     downloadText('gedragslog.json', behaviorLogsToJson(logs), 'application/json');
   }
 
-  if (loading) return <div className="skeleton h-64 w-full rounded-xl" />;
+  const title = 'Analytics';
+  const intro = `${events.length} events · ${logs.length} gedragslog-regels · ${sessions} sessies`;
+
+  if (loading) {
+    return (
+      <nldd-container layout="stack" gap="24">
+        <nldd-title heading-level={1} size={2} text={title}></nldd-title>
+        <nldd-container min-height="16rem">
+          <nldd-activity-indicator></nldd-activity-indicator>
+        </nldd-container>
+      </nldd-container>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Analytics</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            {events.length} events · {logs.length} gedragslog-regels · {sessions} sessies
-          </p>
-        </div>
-        <button className="opl-btn-secondary" onClick={exportEventsCsv} disabled={events.length === 0}>
-          <Download size={16} /> Events (CSV)
-        </button>
-      </div>
+    <nldd-container layout="stack" gap="24">
+      <nldd-container gap="16">
+        <nldd-title heading-level={1} size={2} text={title} supporting-text={intro}></nldd-title>
+        <nldd-button-group>
+          <nldd-button
+            appearance="secondary"
+            start-icon="download"
+            text="Events (CSV)"
+            disabled={events.length === 0 || undefined}
+            onClick={exportEventsCsv}
+          ></nldd-button>
+        </nldd-button-group>
+      </nldd-container>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <LineChartCard
+        title="Activiteit (laatste 30 dagen)"
+        data={trend}
+        emptyHint="Activiteit verschijnt hier zodra de app gebruikt wordt."
+      />
+      <nldd-container layout="grid" gap="16" column-count={1} md-column-count={2}>
         <PieChartCard title="Events per type" data={byType} />
         <BarChartCard title="Meest gebruikte technieken" data={techniqueData} />
-      </div>
-      <LineChartCard title="Activiteit (laatste 30 dagen)" data={trend} />
+      </nldd-container>
 
-      {/* --- Uitgebreide gedragslog van de prompt-bouwer --- */}
-      <div className="space-y-4 rounded-2xl border border-slate-200 p-5 dark:border-slate-700">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="flex items-center gap-2 text-lg font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
-              <Activity size={18} /> Gedragslog prompt-bouwer
-            </h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              Fijnmazige log van het verloop per sessie; bedoeld om te exporteren en door een AI te
-              laten analyseren voor verbeteringen.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button className="opl-btn-secondary" onClick={exportBehaviorCsv} disabled={logs.length === 0}>
-              <Download size={16} /> Gedragslog (CSV)
-            </button>
-            <button className="opl-btn-secondary" onClick={exportBehaviorJson} disabled={logs.length === 0}>
-              <FileJson size={16} /> Gedragslog (JSON)
-            </button>
-          </div>
-        </div>
+      {/* Detailed behavior log of the prompt builder. */}
+      <nldd-container gap="16">
+        <nldd-title
+          heading-level={2}
+          size={4}
+          text="Gedragslog prompt-bouwer"
+          supporting-text="Fijnmazige log van het verloop per sessie, bedoeld om te exporteren en door een AI te laten analyseren voor verbeteringen."
+        ></nldd-title>
+        <nldd-button-group>
+          <nldd-button
+            appearance="secondary"
+            start-icon="download"
+            text="Gedragslog (CSV)"
+            disabled={logs.length === 0 || undefined}
+            onClick={exportBehaviorCsv}
+          ></nldd-button>
+          <nldd-button
+            appearance="secondary"
+            start-icon="file-text"
+            text="Gedragslog (JSON)"
+            disabled={logs.length === 0 || undefined}
+            onClick={exportBehaviorJson}
+          ></nldd-button>
+        </nldd-button-group>
 
         {logs.length === 0 ? (
-          <p className="text-sm text-slate-400 dark:text-slate-500">
-            Nog geen gedragslog. Deze vult zich zodra iemand de prompt-bouwer gebruikt.
-          </p>
+          <nldd-card>
+            <nldd-container padding="24" sm-padding="16">
+              <nldd-inline-dialog
+                icon="file-text"
+                icon-color="secondary"
+                text="Nog geen gedragslog"
+                supporting-text="Deze vult zich zodra iemand de prompt-bouwer gebruikt."
+              ></nldd-inline-dialog>
+            </nldd-container>
+          </nldd-card>
         ) : (
           <>
-            {/* Kerncijfers. */}
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <StatTile label="Sessies" value={String(sessions)} />
-              <StatTile label="Voltooid" value={String(completion.completed)} />
-              <StatTile
+            <nldd-container layout="grid" gap="16" column-count={2} md-column-count={4}>
+              <KeyFigure label="Sessies" value={sessions} />
+              <KeyFigure label="Voltooid" value={completion.completed} />
+              <KeyFigure
                 label="Voltooiingsgraad"
                 value={`${Math.round(completion.rate * 100)}%`}
                 hint={`${completion.completed} van ${completion.started}`}
               />
-              <StatTile label="Logregels" value={String(logs.length)} />
-            </div>
+              <KeyFigure label="Logregels" value={logs.length} />
+            </nldd-container>
 
-            <BarChartCard title="Acties in de bouwer" data={actions} />
+            <BarChartCard title="Acties in de bouwer" data={actions} headingLevel={3} />
 
-            {/* Recente logregels. */}
-            <div>
-              <h3 className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
-                Recente gedragsregels
-              </h3>
-              <div className="max-h-96 overflow-auto rounded-lg border border-slate-200 dark:border-slate-700">
-                <StackTable>
-                <table className="w-full text-left text-xs">
-                  <thead className="sticky top-0 bg-slate-50 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-                    <tr>
-                      <th className="px-3 py-2 font-medium">Tijd</th>
-                      <th className="px-3 py-2 font-medium">Gebruiker</th>
-                      <th className="px-3 py-2 font-medium">Actie</th>
-                      <th className="px-3 py-2 font-medium">Stap</th>
-                      <th className="px-3 py-2 font-medium">Details</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {logs.slice(0, 200).map((l) => (
-                      <tr key={l.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                        <td className="whitespace-nowrap px-3 py-1.5 text-slate-500 dark:text-slate-400">
-                          {formatDate(l.created_at)}
-                        </td>
-                        <td className="px-3 py-1.5 text-slate-600 dark:text-slate-300">
-                          {l.user_identifier || '—'}
-                        </td>
-                        <td className="px-3 py-1.5 font-medium text-slate-700 dark:text-slate-200">
-                          {actionLabel(l.action)}
-                        </td>
-                        <td className="px-3 py-1.5 text-slate-500 dark:text-slate-400">
-                          {l.step_index == null ? '—' : l.step_index + 1}
-                        </td>
-                        <td className="px-3 py-1.5 font-mono text-[0.6875rem] text-slate-400 dark:text-slate-500">
-                          {l.metadata && Object.keys(l.metadata).length > 0
-                            ? JSON.stringify(l.metadata)
-                            : '—'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                </StackTable>
-              </div>
+            <nldd-container gap="8">
+              <nldd-title heading-level={3} size={5} text="Recente gedragsregels"></nldd-title>
+              <nldd-table
+                accessible-label="Recente gedragsregels"
+                columns="minmax(7rem, auto) minmax(6rem, 1fr) minmax(8rem, 1fr) 3rem minmax(10rem, 2fr)"
+                sm-columns="minmax(6rem, auto) 1fr"
+              >
+                <nldd-table-row slot="header">
+                  <nldd-text-cell size="sm" text="Tijd"></nldd-text-cell>
+                  <nldd-text-cell size="sm" text="Gebruiker" hide-below="md"></nldd-text-cell>
+                  <nldd-text-cell size="sm" text="Actie"></nldd-text-cell>
+                  <nldd-text-cell size="sm" text="Stap" hide-below="md"></nldd-text-cell>
+                  <nldd-text-cell size="sm" text="Details" hide-below="md"></nldd-text-cell>
+                </nldd-table-row>
+                {logs.slice(0, 200).map((l) => (
+                  <nldd-table-row key={l.id}>
+                    <nldd-text-cell size="sm" color="secondary" text={formatDate(l.created_at)}></nldd-text-cell>
+                    <nldd-text-cell size="sm" hide-below="md" text={l.user_identifier || '—'}></nldd-text-cell>
+                    <nldd-text-cell
+                      size="sm"
+                      hide-above="sm"
+                      text={actionLabel(l.action)}
+                      supporting-text={l.user_identifier || '—'}
+                    ></nldd-text-cell>
+                    <nldd-text-cell size="sm" hide-below="md" text={actionLabel(l.action)}></nldd-text-cell>
+                    <nldd-text-cell
+                      size="sm"
+                      color="secondary"
+                      hide-below="md"
+                      text={l.step_index == null ? '—' : String(l.step_index + 1)}
+                    ></nldd-text-cell>
+                    <nldd-text-cell size="sm" color="secondary" hide-below="md">
+                      {l.metadata && Object.keys(l.metadata).length > 0 ? (
+                        <code>{JSON.stringify(l.metadata)}</code>
+                      ) : (
+                        '—'
+                      )}
+                    </nldd-text-cell>
+                  </nldd-table-row>
+                ))}
+              </nldd-table>
               {logs.length > 200 && (
-                <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+                <nldd-text size="xs" color="secondary">
                   Eerste 200 van {logs.length} regels getoond. Exporteer voor de volledige log.
-                </p>
+                </nldd-text>
               )}
-            </div>
+            </nldd-container>
           </>
         )}
-      </div>
-    </div>
-  );
-}
-
-/** Klein kerncijfer-blok. */
-function StatTile({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-800">
-      <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{label}</p>
-      <p className="mt-0.5 text-xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">{value}</p>
-      {hint && <p className="text-[0.6875rem] text-slate-400 dark:text-slate-500">{hint}</p>}
-    </div>
+      </nldd-container>
+    </nldd-container>
   );
 }

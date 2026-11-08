@@ -37,7 +37,7 @@ function subscribe(listener: () => void) {
   };
 }
 
-export function isChatIntakeEnabled(): boolean {
+function isChatIntakeEnabled(): boolean {
   return enabled;
 }
 

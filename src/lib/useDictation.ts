@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import { useAuth } from '@/context/AuthContext';
 import { watchForSilence } from '@/lib/silenceWatch';
 import { stopSpeaking } from '@/lib/speech';
@@ -94,7 +94,7 @@ export function useDictation(
       media = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (err) {
       const denied = err instanceof DOMException && err.name === 'NotAllowedError';
-      toast.error(
+      notify.error(
         denied
           ? 'Geef de browser toestemming om je microfoon te gebruiken.'
           : 'Er is geen microfoon gevonden.',
@@ -143,14 +143,14 @@ export function useDictation(
       setState('idle');
       if (cancelledRef.current) return;
       if (result.error) {
-        toast.error(result.error);
+        notify.error(result.error);
         if (autoStop) onEndRef.current?.('fout');
       } else if (result.text) {
         onTextRef.current(result.text);
       } else if (autoStop) {
         onEndRef.current?.('leeg');
       } else {
-        toast('Er was niets te verstaan. Probeer het nog eens.');
+        notify('Er was niets te verstaan. Probeer het nog eens.');
       }
     };
 

@@ -1,9 +1,12 @@
 import { useState } from 'react';
-import { FolderCheck } from '@/components/common/icons';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import Modal from '@/components/common/Modal';
 import SavePromptPanel from '@/components/prompts/SavePromptPanel';
 import type { Prompt } from '@/types';
+import '@nldd/design-system/banner';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/container';
 
 interface SavePromptModalProps {
   open: boolean;
@@ -19,6 +22,7 @@ interface SavePromptModalProps {
  */
 export default function SavePromptModal({ open, content, onClose }: SavePromptModalProps) {
   const [saved, setSaved] = useState<Prompt | null>(null);
+  const navigate = useNavigate();
 
   function close() {
     setSaved(null);
@@ -28,25 +32,24 @@ export default function SavePromptModal({ open, content, onClose }: SavePromptMo
   return (
     <Modal open={open} onClose={close} title="Bewaar als prompt" size="max-w-lg">
       {saved ? (
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-300">
-            <span className="inline-flex items-center gap-2">
-              <FolderCheck size={16} /> Opgeslagen als herbruikbare prompt.
-            </span>
-            <Link
-              to={`/prompt/${saved.id}`}
-              className="font-medium underline underline-offset-2 hover:no-underline"
-              onClick={close}
-            >
-              Bekijk in de bibliotheek
-            </Link>
-          </div>
-          <div className="flex justify-end">
-            <button type="button" className="opl-btn-secondary" onClick={close}>
-              Sluiten
-            </button>
-          </div>
-        </div>
+        <nldd-container gap="16">
+          <nldd-banner variant="success" text="Opgeslagen als herbruikbare prompt.">
+            <nldd-button
+              slot="actions"
+              appearance="secondary"
+              text="Bekijk in de bibliotheek"
+              href={`/prompt/${saved.id}`}
+              onClick={(e) => {
+                e.preventDefault();
+                close();
+                navigate(`/prompt/${saved.id}`);
+              }}
+            ></nldd-button>
+          </nldd-banner>
+          <nldd-button-group>
+            <nldd-button appearance="secondary" text="Sluiten" onClick={close}></nldd-button>
+          </nldd-button-group>
+        </nldd-container>
       ) : (
         <SavePromptPanel content={content} onSaved={setSaved} onCancel={close} frameless />
       )}

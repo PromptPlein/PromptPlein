@@ -1,8 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { Loader2, PenLine, Sparkles, Timer } from '@/components/common/icons';
-import clsx from 'clsx';
 import ModelStatus from './ModelStatus';
 import PhaseSteps from './PhaseSteps';
+import '@nldd/design-system/activity-indicator';
+import '@nldd/design-system/box';
+import '@nldd/design-system/code-viewer';
+import '@nldd/design-system/container';
+import '@nldd/design-system/icon';
+import '@nldd/design-system/progress-bar';
+import '@nldd/design-system/text';
 
 interface OptimizingLoaderProps {
   /** Naam van de gekozen techniek/raamwerk, voor een persoonlijke melding. */
@@ -59,7 +64,7 @@ export default function OptimizingLoader({
   phase,
 }: OptimizingLoaderProps) {
   const streaming = Boolean(streamText?.trim());
-  const streamRef = useRef<HTMLDivElement>(null);
+  const streamRef = useRef<HTMLElement & { view?: { scrollDOM?: HTMLElement } }>(null);
   const words = countWords(streamText ?? '');
 
   // Verstreken tijd sinds het laadscherm verscheen. Tijdens de denkfase komt er
@@ -73,29 +78,31 @@ export default function OptimizingLoader({
 
   // Meeschuiven met de tekst die binnenkomt, zodat de laatst geschreven regel in
   // beeld blijft zonder dat de pagina zelf verspringt.
+  // nldd-code-viewer 0.18.0 has no "follow the end" option; its scroller is the
+  // CodeMirror view it exposes as `view.scrollDOM`.
   useEffect(() => {
-    const el = streamRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    const scroller = streamRef.current?.view?.scrollDOM;
+    if (scroller) scroller.scrollTop = scroller.scrollHeight;
   }, [streamText]);
 
   return (
-    <div className="animate-fade-in overflow-hidden rounded-2xl border border-rijksblauw-200 bg-white shadow-sm dark:border-rijksblauw-500/30 dark:bg-slate-800">
-      {/* Geanimeerde accentbalk bovenaan */}
-      <div className="h-1 w-full overflow-hidden bg-rijksblauw-100 dark:bg-rijksblauw-500/20">
-        <div className="h-full w-1/3 animate-loading-bar bg-rijksblauw-500" />
-      </div>
-      <div className="p-5 sm:p-6">
-        <div className="flex items-center gap-3">
-          <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-rijksblauw-50 text-rijksblauw-600 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rijksblauw-400/30" />
-            <Sparkles size={18} className="relative" />
-          </span>
-          <div>
-            <p className="flex items-center gap-2 font-semibold text-slate-800 dark:text-slate-100">
-              We bouwen je prompt
-              <Loader2 size={15} className="animate-spin text-rijksblauw-500" />
-            </p>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
+    <nldd-box>
+      <nldd-container padding="20" sm-padding="16" gap="16">
+        {/* Onbepaalde voortgangsbalk bovenaan */}
+        <nldd-progress-bar
+          size="sm"
+          value-display="none"
+          indeterminate
+          accessible-label="Prompt bouwen"
+        ></nldd-progress-bar>
+        <nldd-container layout="row" gap="12" vertical-alignment="center">
+          <nldd-icon icon="sparkles" size="40" color="accent" box></nldd-icon>
+          <nldd-container gap="2">
+            <nldd-container layout="row" gap="8" vertical-alignment="center">
+              <nldd-text weight="bold">We bouwen je prompt</nldd-text>
+              <nldd-activity-indicator size="16" timing="instant"></nldd-activity-indicator>
+            </nldd-container>
+            <nldd-text size="sm" color="secondary">
               {phase === 'reviewing' ? (
                 <>Tweede ronde: het model controleert zijn eerste versie en verbetert die…</>
               ) : streaming ? (
@@ -111,81 +118,52 @@ export default function OptimizingLoader({
                   We verwerken je antwoorden tot een rijke, direct bruikbare prompt
                   {techniqueName ? (
                     <>
-                      {' '}volgens{' '}
-                      <span className="font-medium text-rijksblauw-700 dark:text-rijksblauw-200">
-                        {techniqueName}
-                      </span>
+                      {' '}volgens <strong>{techniqueName}</strong>
                     </>
                   ) : null}
                   …
                 </>
               )}
-            </p>
-          </div>
-        </div>
+            </nldd-text>
+          </nldd-container>
+        </nldd-container>
 
         {/* Stappenspoor: maakt de denkfase (nog geen tekst) zichtbaar als werk,
             in plaats van als stilstand. */}
-        <PhaseSteps steps={BUILD_STEPS} activeIndex={streaming ? 2 : 1} className="mt-4" />
+        <PhaseSteps steps={BUILD_STEPS} activeIndex={streaming ? 2 : 1} />
 
-        {models.length > 0 && (
-          <ModelStatus models={models} winner={winner} verb="schrijft je prompt" className="mt-4" />
-        )}
+        {models.length > 0 && <ModelStatus models={models} winner={winner} verb="schrijft je prompt" />}
 
-        {/* Voortgangsregel: tijdens het schrijven telt hij de woorden mee, tijdens
-            het nadenken de seconden — er is altijd iets dat beweegt. */}
-        <p
-          className={clsx(
-            'mt-4 flex items-center gap-1.5 text-xs font-medium',
-            streaming
-              ? 'text-slate-500 dark:text-slate-400'
-              : 'text-slate-400 dark:text-slate-500',
-          )}
-          aria-live="polite"
-        >
+        <nldd-container gap="8">
+          {/* Voortgangsregel: tijdens het schrijven telt hij de woorden mee, tijdens
+              het nadenken de seconden: er is altijd iets dat beweegt. */}
+          <nldd-container layout="row" gap="6" vertical-alignment="center" aria-live="polite">
+            <nldd-icon icon={streaming ? 'pencil' : 'timer'} size="16" color={streaming ? 'oranje' : 'accent'}></nldd-icon>
+            <nldd-text size="xs" weight="medium" color="secondary">
+              {streaming
+                ? `${words} ${words === 1 ? 'woord' : 'woorden'} geschreven · ${elapsed}s`
+                : `${elapsed}s bezig · ${
+                    phase === 'searching'
+                      ? 'bronnen op internet opzoeken'
+                      : phase === 'reviewing'
+                        ? 'het model leest zijn eerste versie na'
+                        : 'het model leest je antwoorden en bepaalt de opbouw'
+                  }`}
+            </nldd-text>
+          </nldd-container>
+
           {streaming ? (
-            <>
-              <PenLine size={12} className="text-rijksoranje" />
-              {words} {words === 1 ? 'woord' : 'woorden'} geschreven · {elapsed}s
-            </>
+            /* Meelezen: de tekst zoals de AI hem op dit moment schrijft. */
+            <nldd-code-viewer ref={streamRef} wrap no-copy max-height="18rem" aria-busy="true">
+              {streamText}
+            </nldd-code-viewer>
           ) : (
-            <>
-              <Timer size={12} className="text-rijksblauw-500" />
-              {elapsed}s bezig ·{' '}
-              {phase === 'searching'
-                ? 'bronnen op internet opzoeken'
-                : phase === 'reviewing'
-                  ? 'het model leest zijn eerste versie na'
-                  : 'het model leest je antwoorden en bepaalt de opbouw'}
-            </>
+            <nldd-container min-height="10rem">
+              <nldd-activity-indicator timing="instant" text="De prompt wordt opgebouwd" show-text></nldd-activity-indicator>
+            </nldd-container>
           )}
-        </p>
-
-        {streaming ? (
-          /* Meelezen: de tekst zoals de AI hem op dit moment schrijft. */
-          <div
-            ref={streamRef}
-            aria-live="polite"
-            aria-busy="true"
-            className="mt-2 max-h-72 overflow-y-auto whitespace-pre-wrap break-words rounded-xl bg-slate-50 p-4 text-sm leading-relaxed text-slate-700 dark:bg-slate-900/50 dark:text-slate-200"
-          >
-            {streamText}
-            {/* Knipperende cursor op de plek waar de tekst verder groeit. */}
-            <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse rounded-sm bg-rijksblauw-500 align-text-bottom" />
-          </div>
-        ) : (
-          /* Skelet dat een opgebouwde prompt-tekst suggereert. */
-          <div className="mt-2 space-y-2.5">
-            <div className="skeleton h-3.5 w-1/4 rounded" />
-            <div className="skeleton h-3 w-full rounded" />
-            <div className="skeleton h-3 w-11/12 rounded" />
-            <div className="skeleton h-3 w-4/5 rounded" />
-            <div className="mt-4 skeleton h-3.5 w-1/3 rounded" />
-            <div className="skeleton h-3 w-full rounded" />
-            <div className="skeleton h-3 w-3/4 rounded" />
-          </div>
-        )}
-      </div>
-    </div>
+        </nldd-container>
+      </nldd-container>
+    </nldd-box>
   );
 }

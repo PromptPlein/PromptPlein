@@ -1,6 +1,10 @@
-import { ShieldAlert } from '@/components/common/icons';
-import Modal from '@/components/common/Modal';
+import { useRef } from 'react';
+import { useNlddEvent } from '@/lib/nldd';
 import type { GuardrailFinding } from '@/services/guardrails';
+import '@nldd/design-system/button';
+import '@nldd/design-system/container';
+import '@nldd/design-system/modal-dialog';
+import '@nldd/design-system/text';
 
 interface GuardrailDialogProps {
   findings: GuardrailFinding[];
@@ -11,6 +15,10 @@ interface GuardrailDialogProps {
   action?: 'genereren' | 'versturen';
 }
 
+/**
+ * Asks before sending text with personal data or a forbidden topic. Closing the
+ * dialog (Escape) counts as going back; only the second button goes on.
+ */
 export default function GuardrailDialog({
   findings,
   piiWarning,
@@ -20,47 +28,59 @@ export default function GuardrailDialog({
 }: GuardrailDialogProps) {
   const pii = findings.filter((f) => f.kind === 'pii');
   const topics = findings.filter((f) => f.kind === 'topic');
+  const ref = useRef<HTMLElement>(null);
+  const decided = useRef(false);
+  useNlddEvent(ref, 'close', () => {
+    if (decided.current) return;
+    decided.current = true;
+    onCancel();
+  });
+
+  function decide(fn: () => void) {
+    if (decided.current) return;
+    decided.current = true;
+    fn();
+  }
 
   return (
-    <Modal open onClose={onCancel} title={`Controle vóór ${action}`} size="max-w-lg">
-      <div className="flex gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400">
-          <ShieldAlert size={20} />
-        </span>
-        <div className="space-y-3 text-sm text-slate-600 dark:text-slate-300">
-          {pii.length > 0 && (
-            <div>
-              <p>{piiWarning}</p>
-              <p className="mt-2">
-                Gevonden:{' '}
-                <span className="font-medium text-slate-800 dark:text-slate-100">
-                  {pii.map((f) => f.label).join(', ')}
-                </span>
-              </p>
-            </div>
-          )}
-          {topics.length > 0 && (
-            <p>
-              Je prompt bevat mogelijk een verboden onderwerp:{' '}
-              <span className="font-medium text-slate-800 dark:text-slate-100">
-                {topics.map((f) => f.label).join(', ')}
-              </span>
-              .
-            </p>
-          )}
-          <p className="text-slate-500 dark:text-slate-400">
-            Wil je toch doorgaan met {action}?
-          </p>
-        </div>
-      </div>
-      <div className="mt-6 flex justify-end gap-3">
-        <button className="opl-btn-secondary" onClick={onCancel}>
-          {action === 'versturen' ? 'Terug, ik pas het bericht aan' : 'Terug, ik pas de prompt aan'}
-        </button>
-        <button className="opl-btn bg-amber-600 text-white hover:bg-amber-700" onClick={onConfirm}>
-          Ik begrijp het, ga door
-        </button>
-      </div>
-    </Modal>
+    <nldd-modal-dialog
+      ref={ref}
+      open
+      variant="alert"
+      icon="shield"
+      text={`Controle vóór ${action}`}
+      horizontal-alignment="left"
+    >
+      <nldd-container gap="12">
+        {pii.length > 0 && (
+          <>
+            <nldd-text size="sm">{piiWarning}</nldd-text>
+            <nldd-text size="sm">
+              Gevonden: <strong>{pii.map((f) => f.label).join(', ')}</strong>
+            </nldd-text>
+          </>
+        )}
+        {topics.length > 0 && (
+          <nldd-text size="sm">
+            Je prompt bevat mogelijk een verboden onderwerp: <strong>{topics.map((f) => f.label).join(', ')}</strong>.
+          </nldd-text>
+        )}
+        <nldd-text size="sm" color="secondary">
+          Wil je toch doorgaan met {action}?
+        </nldd-text>
+      </nldd-container>
+      <nldd-button
+        slot="actions"
+        appearance="primary"
+        text={action === 'versturen' ? 'Terug, ik pas het bericht aan' : 'Terug, ik pas de prompt aan'}
+        onClick={() => decide(onCancel)}
+      ></nldd-button>
+      <nldd-button
+        slot="actions"
+        appearance="secondary"
+        text="Ik begrijp het, ga door"
+        onClick={() => decide(onConfirm)}
+      ></nldd-button>
+    </nldd-modal-dialog>
   );
 }

@@ -1,13 +1,27 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2, ArrowUp, ArrowDown, Upload } from '@/components/common/icons';
-import toast from 'react-hot-toast';
-import Modal from '@/components/common/Modal';
+import { notify } from '@/lib/notify';
+import AdminSheet from '@/components/admin/AdminSheet';
+import { BoundMultiLine, BoundTextField } from '@/components/admin/AdminFields';
+import MenuAction from '@/components/common/MenuAction';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { createRole, deleteRole, getRoles, updateRole } from '@/services/repository';
 import { logAdminAction } from '@/services/adminService';
 import type { Role } from '@/types';
-import StackTable from '@/components/common/StackTable';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/container';
+import '@nldd/design-system/form';
+import '@nldd/design-system/form-actions';
+import '@nldd/design-system/form-field';
+import '@nldd/design-system/icon-cell';
+import '@nldd/design-system/inline-dialog';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/list-item-segment';
+import '@nldd/design-system/menu';
+import '@nldd/design-system/text-cell';
+import '@nldd/design-system/title';
 
 interface Editor {
   id?: string;
@@ -35,18 +49,18 @@ export default function RoleManagerPage() {
 
   async function save() {
     if (!editor?.name.trim()) {
-      toast.error('Naam is verplicht');
+      notify.error('Naam is verplicht');
       return;
     }
     const payload = { name: editor.name.trim(), description: editor.description.trim() };
     if (editor.id) {
       await updateRole(editor.id, payload);
       await logAdminAction({ action: 'update_role', entity_type: 'role', entity_id: editor.id, changes: payload });
-      toast.success('Functie bijgewerkt');
+      notify.success('Functie bijgewerkt');
     } else {
       const created = await createRole(payload);
       await logAdminAction({ action: 'create_role', entity_type: 'role', entity_id: created.id, changes: payload });
-      toast.success('Functie toegevoegd');
+      notify.success('Functie toegevoegd');
     }
     setEditor(null);
     await load();
@@ -56,7 +70,7 @@ export default function RoleManagerPage() {
   async function remove(r: Role) {
     await deleteRole(r.id);
     await logAdminAction({ action: 'delete_role', entity_type: 'role', entity_id: r.id });
-    toast.success('Functie verwijderd');
+    notify.success('Functie verwijderd');
     await load();
     await refresh();
   }
@@ -86,7 +100,7 @@ export default function RoleManagerPage() {
       count++;
     }
     await logAdminAction({ action: 'bulk_import_roles', entity_type: 'role', changes: { count } });
-    toast.success(`${count} functies geïmporteerd`);
+    notify.success(`${count} functies geïmporteerd`);
     setCsv('');
     setCsvOpen(false);
     await load();
@@ -94,91 +108,102 @@ export default function RoleManagerPage() {
   }
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Functies beheren</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">{roles.length} functies</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button className="opl-btn-secondary" onClick={() => setCsvOpen(true)}>
-            <Upload size={16} /> CSV import
-          </button>
-          <button className="opl-btn-primary" onClick={() => setEditor({ name: '', description: '' })}>
-            <Plus size={18} /> Nieuwe functie
-          </button>
-        </div>
-      </div>
+    <nldd-container layout="stack" gap="24">
+      <nldd-title heading-level={1} size={2} text="Functies beheren" supporting-text={`${roles.length} functies`}></nldd-title>
+      <nldd-button-group>
+        <nldd-button appearance="primary" start-icon="plus" text="Nieuwe functie" onClick={() => setEditor({ name: '', description: '' })}></nldd-button>
+        <nldd-button appearance="secondary" start-icon="upload" text="CSV importeren" onClick={() => setCsvOpen(true)}></nldd-button>
+      </nldd-button-group>
 
-      <div className="opl-card overflow-hidden">
+      <nldd-list appearance="box-tinted" accessible-label="Functies">
+        {!loading &&
+          roles.map((r) => (
+            <nldd-list-item key={r.id}>
+              <nldd-list-item-segment button width="full" accessible-label={`Bewerk ${r.name}`} onClick={() => setEditor({ id: r.id, name: r.name, description: r.description ?? '' })}>
+                <nldd-text-cell text={r.name} supporting-text={r.description || 'Geen beschrijving'}></nldd-text-cell>
+              </nldd-list-item-segment>
+              <nldd-list-item-segment
+                button
+                popovertarget={`functie-acties-${r.id}`}
+                accessible-label={`Acties voor ${r.name}`}
+              >
+                <nldd-icon-cell icon="ellipsis" size="20" color="secondary"></nldd-icon-cell>
+              </nldd-list-item-segment>
+            </nldd-list-item>
+          ))}
         {loading ? (
-          <div className="skeleton h-48 w-full" />
+          <nldd-inline-dialog slot="empty" variant="loading" text="Functies laden"></nldd-inline-dialog>
         ) : (
-          <StackTable>
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-              <tr>
-                <th className="px-4 py-3 font-medium">Naam</th>
-                <th className="hidden px-4 py-3 font-medium sm:table-cell">Beschrijving</th>
-                <th className="px-4 py-3 text-right font-medium">Acties</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-              {roles.map((r, i) => (
-                <tr key={r.id} className="hover:bg-slate-50 dark:hover:bg-slate-800">
-                  <td className="px-4 py-3 font-medium text-slate-800 dark:text-slate-100">{r.name}</td>
-                  <td className="hidden px-4 py-3 text-slate-500 sm:table-cell dark:text-slate-400">{r.description}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => move(r, -1)} disabled={i === 0} className="rounded p-1.5 text-slate-400 hover:bg-slate-100 disabled:opacity-30 dark:text-slate-500 dark:hover:bg-slate-800" aria-label="Omhoog">
-                        <ArrowUp size={15} />
-                      </button>
-                      <button onClick={() => move(r, 1)} disabled={i === roles.length - 1} className="rounded p-1.5 text-slate-400 hover:bg-slate-100 disabled:opacity-30 dark:text-slate-500 dark:hover:bg-slate-800" aria-label="Omlaag">
-                        <ArrowDown size={15} />
-                      </button>
-                      <button onClick={() => setEditor({ id: r.id, name: r.name, description: r.description ?? '' })} className="rounded p-1.5 text-rijksblauw-500 hover:bg-rijksblauw-50 dark:hover:bg-rijksblauw-500/15" aria-label="Bewerken">
-                        <Pencil size={15} />
-                      </button>
-                      <button onClick={() => setToDelete(r)} className="rounded p-1.5 text-rijksrood hover:bg-red-50 dark:hover:bg-red-500/10" aria-label="Verwijderen">
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          </StackTable>
+          <nldd-inline-dialog slot="empty" icon="users" text="Nog geen functies"></nldd-inline-dialog>
         )}
-      </div>
+      </nldd-list>
+      {roles.map((r, i) => (
+        <nldd-menu key={r.id} id={`functie-acties-${r.id}`} placement="bottom-end">
+          <MenuAction icon="pencil" text="Bewerk" onSelect={() => setEditor({ id: r.id, name: r.name, description: r.description ?? '' })} />
+          <MenuAction icon="arrow-up" text="Omhoog" disabled={i === 0 || undefined} onSelect={() => move(r, -1)} />
+          <MenuAction icon="arrow-down" text="Omlaag" disabled={i === roles.length - 1 || undefined} onSelect={() => move(r, 1)} />
+          <nldd-menu-divider></nldd-menu-divider>
+          <MenuAction icon="trash" text="Verwijder" destructive onSelect={() => setToDelete(r)} />
+        </nldd-menu>
+      ))}
 
-      <Modal open={!!editor} onClose={() => setEditor(null)} title={editor?.id ? 'Functie bewerken' : 'Nieuwe functie'} size="max-w-md">
-        {editor && (
-          <div className="space-y-4">
-            <div>
-              <label className="opl-label">Naam</label>
-              <input className="opl-input" value={editor.name} onChange={(e) => setEditor({ ...editor, name: e.target.value })} autoFocus />
-            </div>
-            <div>
-              <label className="opl-label">Beschrijving</label>
-              <input className="opl-input" value={editor.description} onChange={(e) => setEditor({ ...editor, description: e.target.value })} />
-            </div>
-            <div className="flex justify-end gap-3">
-              <button className="opl-btn-secondary" onClick={() => setEditor(null)}>Annuleren</button>
-              <button className="opl-btn-primary" onClick={save}>Opslaan</button>
-            </div>
-          </div>
-        )}
-      </Modal>
+      <AdminSheet open={!!editor} onClose={() => setEditor(null)} title={editor?.id ? 'Functie bewerken' : 'Nieuwe functie'} width="480px">
+        <nldd-form>
+          <form
+            noValidate
+            onSubmit={(e) => {
+              e.preventDefault();
+              void save();
+            }}
+          >
+            <nldd-form-field label="Naam">
+              <BoundTextField value={editor?.name ?? ''} onValue={(name) => editor && setEditor({ ...editor, name })}></BoundTextField>
+            </nldd-form-field>
+            <nldd-form-field label="Beschrijving" optional>
+              <BoundTextField
+                value={editor?.description ?? ''}
+                onValue={(description) => editor && setEditor({ ...editor, description })}
+              ></BoundTextField>
+            </nldd-form-field>
+            <nldd-form-actions>
+              <nldd-button-group>
+                <nldd-button appearance="primary" type="submit" text="Bewaar"></nldd-button>
+              </nldd-button-group>
+            </nldd-form-actions>
+          </form>
+        </nldd-form>
+      </AdminSheet>
 
-      <Modal open={csvOpen} onClose={() => setCsvOpen(false)} title="CSV-import (functies)" size="max-w-lg">
-        <p className="mb-2 text-sm text-slate-500 dark:text-slate-400">Eén functie per regel, formaat: <code>naam,beschrijving</code></p>
-        <textarea className="opl-input min-h-[160px] resize-y font-mono text-xs" value={csv} onChange={(e) => setCsv(e.target.value)} placeholder={'Inkoopadviseur,Adviseert over aanbestedingen\nHR-adviseur,Personeelszaken'} />
-        <div className="mt-4 flex justify-end gap-3">
-          <button className="opl-btn-secondary" onClick={() => setCsvOpen(false)}>Annuleren</button>
-          <button className="opl-btn-primary" onClick={importCsv} disabled={!csv.trim()}>Importeren</button>
-        </div>
-      </Modal>
+      <AdminSheet open={csvOpen} onClose={() => setCsvOpen(false)} title="CSV-import (functies)" width="560px">
+        <nldd-form>
+          <form
+            noValidate
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!csv.trim()) {
+                notify.error('Plak eerst een of meer regels.');
+                return;
+              }
+              void importCsv();
+            }}
+          >
+            <nldd-form-field label="Functies" supporting-label="Eén functie per regel, formaat: naam,beschrijving">
+              <BoundMultiLine
+                value={csv}
+                onValue={setCsv}
+                rows={8}
+                no-spellcheck
+                placeholder={'Inkoopadviseur,Adviseert over aanbestedingen\nHR-adviseur,Personeelszaken'}
+              ></BoundMultiLine>
+            </nldd-form-field>
+            <nldd-form-actions>
+              <nldd-button-group>
+                <nldd-button appearance="primary" type="submit" start-icon="upload" text="Importeer"></nldd-button>
+              </nldd-button-group>
+            </nldd-form-actions>
+          </form>
+        </nldd-form>
+      </AdminSheet>
 
       <ConfirmDialog
         open={!!toDelete}
@@ -189,6 +214,6 @@ export default function RoleManagerPage() {
         onConfirm={() => toDelete && remove(toDelete)}
         onClose={() => setToDelete(null)}
       />
-    </div>
+    </nldd-container>
   );
 }

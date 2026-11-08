@@ -1,5 +1,6 @@
-import { lazy, Suspense } from 'react';
-import { Link, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom';
+import { lazy, Suspense, useEffect } from 'react';
+import { Routes, Route, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { installNlddRouterLinks } from '@/lib/nldd';
 import { ReferenceDataProvider } from '@/context/ReferenceDataContext';
 import ErrorBoundary from '@/components/common/ErrorBoundary';
 import Header from '@/components/common/Header';
@@ -7,13 +8,17 @@ import Footer from '@/components/common/Footer';
 import DictationLayer from '@/components/common/DictationLayer';
 import HelpShortcut from '@/components/common/HelpShortcut';
 import RouteFocus from '@/components/common/RouteFocus';
-import { HELP_PATH } from '@/lib/shortcuts';
 import HomePage from '@/pages/HomePage';
 import RequireAuth from '@/components/auth/RequireAuth';
 import LoginPage from '@/pages/auth/LoginPage';
 import SignupPage from '@/pages/auth/SignupPage';
 import PasswordResetPage from '@/pages/auth/PasswordResetPage';
 import UpdatePasswordPage from '@/pages/auth/UpdatePasswordPage';
+import '@nldd/design-system/inline-dialog';
+import '@nldd/design-system/page';
+import '@nldd/design-system/shell';
+import '@nldd/design-system/simple-section';
+import '@nldd/design-system/skip-link';
 // De bouwer is groot en je komt er vaak niet eens: wie op de telefoon alleen de
 // chat of de start opent, hoeft hem niet te laden.
 const OptimizerPage = lazy(() => import('@/pages/OptimizerPage'));
@@ -60,29 +65,25 @@ function RedirectToGenereren() {
 
 function PageFallback() {
   return (
-    <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-      <div className="skeleton h-64 w-full rounded-xl" />
-    </div>
+    <nldd-simple-section>
+      <nldd-inline-dialog variant="loading" text="Pagina laden"></nldd-inline-dialog>
+    </nldd-simple-section>
   );
 }
 
 export default function App() {
   const { pathname } = useLocation();
+  const navigate = useNavigate();
+  useEffect(() => installNlddRouterLinks(navigate), [navigate]);
 
   return (
     <ReferenceDataProvider>
-      {/* min-h-full en geen min-h-dvh: naast de zwevende balk van Safari is dvh
-          hoger dan wat je ziet, en dan kan een pagina die precies past toch schuiven. */}
-      <div id="app-shell" className="opl-app flex min-h-full flex-col">
-        <RouteFocus />
-        <a href="#inhoud" className="opl-skip-link">
-          Naar de inhoud
-        </a>
-        <Link to={HELP_PATH} className="opl-skip-link">
-          Hulp bij toegankelijkheid
-        </Link>
-        <Header />
-        <main id="inhoud" tabIndex={-1} className="flex-1 focus:outline-none">
+      <RouteFocus />
+      <nldd-shell>
+        <nldd-page>
+          <nldd-skip-link slot="header" text="Sla navigatie over">
+            <Header />
+          </nldd-skip-link>
           <ErrorBoundary>
             <Suspense fallback={<PageFallback />}>
             <Routes>
@@ -142,11 +143,7 @@ export default function App() {
               <Route element={<RequireAuth role="admin" allowModerator />}>
                 <Route
                   path="/goedkeuringen"
-                  element={
-                    <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 lg:px-8">
-                      <ApprovalQueuePage />
-                    </div>
-                  }
+                  element={<ApprovalQueuePage />}
                 />
               </Route>
 
@@ -176,14 +173,13 @@ export default function App() {
             </Routes>
             </Suspense>
           </ErrorBoundary>
-        </main>
-        {/* De chat gebruikt het hele venster om te lezen. De tekst uit de footer
-            staat daar onder de kaart. */}
-        {pathname !== '/chat' && <Footer />}
-        {/* Microfoontje rechtsonder in elk tekstvak: inspreken in plaats van typen. */}
-        <DictationLayer />
-        <HelpShortcut />
-      </div>
+          {/* The chat uses the whole window to read in. */}
+          {pathname !== '/chat' && <Footer />}
+        </nldd-page>
+      </nldd-shell>
+      {/* Microphone in every text field: dictate instead of type. */}
+      <DictationLayer />
+      <HelpShortcut />
     </ReferenceDataProvider>
   );
 }

@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react';
-import { Check, X, Globe2, Pencil, Save } from '@/components/common/icons';
-import toast from 'react-hot-toast';
-import clsx from 'clsx';
+import { useEffect, useRef, useState } from 'react';
+import { notify } from '@/lib/notify';
+import { useNlddValue } from '@/lib/nldd';
 import {
   listVisibility,
   decideVisibility,
@@ -11,19 +10,34 @@ import { VISIBILITY_STATUS_META } from '@/services/collaborationService';
 import { visibilityMeta } from '@/lib/utils';
 import { logAdminAction } from '@/services/adminService';
 import VisibilityPicker from '@/components/prompts/VisibilityPicker';
-import type { PromptVisibility, VisibilityLevel } from '@/types';
+import type { PromptVisibility, VisibilityLevel, VisibilityStatus } from '@/types';
+import '@nldd/design-system/badge';
+import '@nldd/design-system/box';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/card';
+import '@nldd/design-system/container';
+import '@nldd/design-system/form-field';
+import '@nldd/design-system/multi-line-text-field';
+import '@nldd/design-system/text';
+import '@nldd/design-system/title';
+
+const STATUS_COLOR: Record<VisibilityStatus, 'success' | 'warning' | 'critical'> = {
+  approved: 'success',
+  pending: 'warning',
+  rejected: 'critical',
+};
 
 /**
- * Toont de deelniveaus van een prompt met hun goedkeuringsstatus, en — voor wie
- * een niveau mag beoordelen — knoppen om dat niveau goed te keuren of af te
- * wijzen. Per niveau apart: de afdeling kan al goedgekeurd zijn terwijl het
- * ministerie nog wacht. RLS bepaalt of een beslissing slaagt; we tonen de
- * knoppen voor nog-openstaande niveaus en vangen een weigering netjes op.
+ * Shows the sharing levels of a prompt with their approval status and, for
+ * whoever may review a level, buttons to approve or reject it. Each level on
+ * its own: the department can be approved while the ministry still waits. RLS
+ * decides whether a decision succeeds; the buttons show for pending levels and
+ * a refusal is caught.
  *
- * Daarnaast kan de eigenaar (of een admin) de zichtbaarheid achteraf aanpassen:
- * een privé-prompt later alsnog met de afdeling of het ministerie delen, of een
- * gedeeld niveau weer intrekken. Nieuw gekozen niveaus volgen dezelfde
- * goedkeuringsroute als bij het aanmaken.
+ * The owner (or an admin) can also change the visibility afterwards: share a
+ * private prompt with the department or ministry later, or withdraw a shared
+ * level. Newly chosen levels follow the same approval route as on creation.
  */
 export default function VisibilityApprovalPanel({
   promptId,
@@ -44,7 +58,7 @@ export default function VisibilityApprovalPanel({
   const [rows, setRows] = useState<PromptVisibility[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [notes, setNotes] = useState<Record<string, string>>({});
-  // Aanpassen-modus: de eigenaar kiest de gewenste niveaus opnieuw.
+  // Edit mode: the owner picks the wanted levels again.
   const [editing, setEditing] = useState(false);
   const [draftLevels, setDraftLevels] = useState<VisibilityLevel[]>([]);
   const [saving, setSaving] = useState(false);
@@ -53,7 +67,7 @@ export default function VisibilityApprovalPanel({
     try {
       setRows(await listVisibility(promptId));
     } catch {
-      /* niet-blokkerend */
+      /* not blocking */
     }
   }
 
@@ -63,7 +77,7 @@ export default function VisibilityApprovalPanel({
   }, [promptId, refreshKey]);
 
   function startEditing() {
-    // Begin met de niveaus die nu (in welke status dan ook) gekozen zijn.
+    // Start from the levels chosen now, in whatever status.
     setDraftLevels(rows.map((r) => r.level));
     setEditing(true);
   }
@@ -72,12 +86,12 @@ export default function VisibilityApprovalPanel({
     setSaving(true);
     try {
       await updatePromptVisibility(promptId, draftLevels, organizationId);
-      toast.success('Zichtbaarheid bijgewerkt');
+      notify.success('Zichtbaarheid bijgewerkt');
       setEditing(false);
       await reload();
       onChanged?.();
     } catch (err) {
-      toast.error(
+      notify.error(
         err instanceof Error ? err.message : 'Aanpassen van de zichtbaarheid mislukt.',
       );
     } finally {
@@ -95,112 +109,137 @@ export default function VisibilityApprovalPanel({
         entity_id: row.id,
         changes: { prompt_id: promptId, level: row.level, note: notes[row.id] || null },
       });
-      toast.success(decision === 'approved' ? 'Niveau goedgekeurd' : 'Niveau afgewezen');
+      notify.success(decision === 'approved' ? 'Niveau goedgekeurd' : 'Niveau afgewezen');
       await reload();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Je hebt geen rechten om dit niveau te beoordelen.');
+      notify.error(err instanceof Error ? err.message : 'Je hebt geen rechten om dit niveau te beoordelen.');
     } finally {
       setBusyId(null);
     }
   }
 
   return (
-    <div className="opl-card p-5">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
-          <Globe2 size={18} className="text-rijksblauw-500" /> Deelniveaus
-          {rows.length > 0 && ` (${rows.length})`}
-        </h2>
-        {canEdit && !editing && (
-          <button
-            onClick={startEditing}
-            className="inline-flex items-center gap-1 text-sm text-rijksblauw-600 hover:text-rijksblauw-800 dark:text-rijksblauw-300 dark:hover:text-rijksblauw-200"
-          >
-            <Pencil size={14} /> Aanpassen
-          </button>
-        )}
-      </div>
-
-      {/* Aanpassen-modus: de eigenaar/admin kiest de gewenste niveaus opnieuw. */}
-      {editing ? (
-        <div className="space-y-3">
-          <VisibilityPicker idPrefix="edit-vis" value={draftLevels} onChange={setDraftLevels} />
-          <p className="text-xs text-slate-400 dark:text-slate-500">
-            Nieuw aangevinkte niveaus volgen de gebruikelijke route: de afdeling is direct
-            beschikbaar, het ministerie en Rijksoverheid wachten op goedkeuring. Een niveau dat
-            je uitvinkt, wordt weer ingetrokken.
-          </p>
-          <div className="flex justify-end gap-2">
-            <button
+    <nldd-card>
+      <nldd-container padding="20" gap="12">
+        <nldd-title heading-level={2} size={5} text={`Deelniveaus${rows.length > 0 ? ` (${rows.length})` : ''}`}>
+          {editing ? (
+            <nldd-button
+              slot="end"
+              size="sm"
+              appearance="neutral-transparent"
+              start-icon="close"
+              text="Annuleer"
+              disabled={saving || undefined}
               onClick={() => setEditing(false)}
-              disabled={saving}
-              className="opl-btn-secondary"
-            >
-              <X size={16} /> Annuleren
-            </button>
-            <button onClick={saveLevels} disabled={saving} className="opl-btn-primary">
-              <Save size={16} /> {saving ? 'Opslaan…' : 'Opslaan'}
-            </button>
-          </div>
-        </div>
-      ) : rows.length === 0 ? (
-        <p className="text-sm text-slate-400 dark:text-slate-500">
-          Deze prompt is privé; er zijn geen deelniveaus.
-          {canEdit && ' Klik op “Aanpassen” om hem met je afdeling of ministerie te delen.'}
-        </p>
-      ) : (
-        <ul className="space-y-3">
-          {rows.map((row) => {
-            const meta = visibilityMeta(row.level);
-            const statusMeta = VISIBILITY_STATUS_META[row.status];
-            const canDecide = row.status === 'pending';
-            return (
-              <li
-                key={row.id}
-                className="rounded-xl border border-slate-200 p-3 dark:border-slate-700"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="font-medium text-slate-800 dark:text-slate-100">
-                    {meta?.label ?? row.level}
-                  </span>
-                  <span className={clsx('opl-badge', statusMeta.classes)}>{statusMeta.label}</span>
-                </div>
-                {meta && (
-                  <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{meta.description}</p>
-                )}
+            ></nldd-button>
+          ) : (
+            canEdit && (
+              <nldd-button
+                slot="end"
+                size="sm"
+                appearance="neutral-transparent"
+                start-icon="pencil"
+                text="Pas aan"
+                onClick={startEditing}
+              ></nldd-button>
+            )
+          )}
+        </nldd-title>
 
-                {canDecide && (
-                  <div className="mt-2 space-y-2">
-                    <textarea
-                      className="opl-input"
-                      rows={2}
-                      placeholder="Optionele opmerking bij je beslissing…"
-                      value={notes[row.id] ?? ''}
-                      onChange={(e) => setNotes((n) => ({ ...n, [row.id]: e.target.value }))}
-                    />
-                    <div className="flex justify-end gap-2">
-                      <button
-                        onClick={() => decide(row, 'rejected')}
-                        disabled={busyId === row.id}
-                        className="opl-btn-secondary text-rijksrood"
-                      >
-                        <X size={16} /> Afwijzen
-                      </button>
-                      <button
-                        onClick={() => decide(row, 'approved')}
-                        disabled={busyId === row.id}
-                        className="opl-btn-primary bg-emerald-600 hover:bg-emerald-700"
-                      >
-                        <Check size={16} /> Goedkeuren
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </div>
+        {editing ? (
+          <nldd-container layout="stack" gap="12">
+            <VisibilityPicker idPrefix="edit-vis" value={draftLevels} onChange={setDraftLevels} />
+            <nldd-text size="xs" color="secondary">
+              Nieuw aangevinkte niveaus volgen de gebruikelijke route: de afdeling is direct
+              beschikbaar, het ministerie en Rijksoverheid wachten op goedkeuring. Een niveau dat
+              je uitvinkt, wordt weer ingetrokken.
+            </nldd-text>
+            <nldd-button-group>
+              <nldd-button
+                appearance="primary"
+                start-icon="save"
+                text="Bewaar"
+                loading={saving || undefined}
+                loading-text="Aan het bewaren"
+                onClick={saveLevels}
+              ></nldd-button>
+            </nldd-button-group>
+          </nldd-container>
+        ) : rows.length === 0 ? (
+          <nldd-text size="sm" color="secondary">
+            Deze prompt is privé; er zijn geen deelniveaus.
+            {canEdit && ' Kies “Pas aan” om hem met je afdeling of ministerie te delen.'}
+          </nldd-text>
+        ) : (
+          <nldd-container layout="stack" gap="12">
+            {rows.map((row) => {
+              const meta = visibilityMeta(row.level);
+              const statusMeta = VISIBILITY_STATUS_META[row.status];
+              return (
+                <nldd-box key={row.id}>
+                  <nldd-container padding="12" gap="8">
+                    <nldd-title
+                      heading-level={3}
+                      size={6}
+                      text={meta?.label ?? row.level}
+                      supporting-text={meta?.description}
+                    >
+                      <nldd-badge slot="end" color={STATUS_COLOR[row.status]} text={statusMeta.label}></nldd-badge>
+                    </nldd-title>
+                    {row.status === 'pending' && (
+                      <Decision
+                        note={notes[row.id] ?? ''}
+                        onNote={(value) => setNotes((n) => ({ ...n, [row.id]: value }))}
+                        busy={busyId === row.id}
+                        onDecide={(decision) => decide(row, decision)}
+                      />
+                    )}
+                  </nldd-container>
+                </nldd-box>
+              );
+            })}
+          </nldd-container>
+        )}
+      </nldd-container>
+    </nldd-card>
+  );
+}
+
+/** The note and the two buttons for a level that waits for a decision. */
+function Decision({
+  note,
+  onNote,
+  busy,
+  onDecide,
+}: {
+  note: string;
+  onNote: (value: string) => void;
+  busy: boolean;
+  onDecide: (decision: 'approved' | 'rejected') => void;
+}) {
+  const noteRef = useRef<HTMLElement & { value?: string }>(null);
+  useNlddValue(noteRef, note, onNote);
+  return (
+    <nldd-container layout="stack" gap="8">
+      <nldd-form-field label="Opmerking bij je beslissing" optional>
+        <nldd-multi-line-text-field ref={noteRef} rows={2}></nldd-multi-line-text-field>
+      </nldd-form-field>
+      <nldd-button-group>
+        <nldd-button
+          appearance="critical-tinted"
+          start-icon="close"
+          text="Wijs af"
+          disabled={busy || undefined}
+          onClick={() => onDecide('rejected')}
+        ></nldd-button>
+        <nldd-button
+          appearance="primary"
+          start-icon="check-mark"
+          text="Keur goed"
+          disabled={busy || undefined}
+          onClick={() => onDecide('approved')}
+        ></nldd-button>
+      </nldd-button-group>
+    </nldd-container>
   );
 }

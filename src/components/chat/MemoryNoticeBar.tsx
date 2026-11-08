@@ -1,13 +1,11 @@
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { BookmarkCheck, Loader2, LogIn, X } from '@/components/common/icons';
+import { useEffect, useRef, useState, type ComponentProps } from 'react';
+import { useNlddEvent } from '@/lib/nldd';
 import type { MemoryNotice } from './rememberWish';
+import '@nldd/design-system/banner';
+import '@nldd/design-system/button';
 
 /** Zo lang blijft een melding staan als niemand er iets mee doet. */
 const NOTICE_MS = 5000;
-
-const LINK_CLASS =
-  'opl-raak font-medium text-rijksblauw-700 underline hover:no-underline dark:text-rijksblauw-200';
 
 /**
  * Wat het geheugen deed, direct boven het tekstvak: daar kijkt wie typt. Verdwijnt
@@ -16,8 +14,8 @@ const LINK_CLASS =
  * opnieuw. Wie de melding mist, vindt het geheugen en Ongedaan maken ook bij
  * Instellingen, Chat.
  *
- * Een eigen role="status", los van de berichtenlijst: zo leest een schermlezer
- * deze ene regel voor zonder het streamende antwoord op te pikken.
+ * The banner is its own role="status", apart from the message list, so a screen
+ * reader reads this one line without picking up the streaming answer.
  */
 export default function MemoryNoticeBar({
   notice,
@@ -50,89 +48,69 @@ export default function MemoryNoticeBar({
     return () => window.clearTimeout(timer);
   }, [waiting, notice, undone, onDismiss]);
 
+  let text = '';
+  let supporting: string | undefined;
+  if (notice?.kind === 'saving') text = 'Wordt in geheugen opgeslagen…';
+  else if (notice?.kind === 'message') text = notice.text;
+  else if (notice?.kind === 'saved') {
+    if (undone === 'ok') text = 'Niet in geheugen opgeslagen.';
+    else {
+      text = `In geheugen opgeslagen: ${notice.saved.join(' ')}`;
+      const lines = [];
+      if (notice.replaced.length > 0) lines.push(`Vervangt: ${notice.replaced.join(' ')}`);
+      if (undone === 'failed') lines.push('Ongedaan maken lukte niet. Verwijder het bij Instellingen.');
+      supporting = lines.join(' ') || undefined;
+    }
+  }
+
+  if (!notice) return null;
   return (
-    <div role="status" className="mx-auto max-w-[60ch]">
-      {notice && (
-        <div
-          onMouseEnter={() => setHovered(true)}
-          onMouseLeave={() => setHovered(false)}
-          onFocus={() => setFocused(true)}
-          onBlur={(e) => {
-            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFocused(false);
-          }}
-          className="mb-2 flex items-start gap-2.5 rounded-xl border border-rijksblauw-200 bg-rijksblauw-50 px-3.5 py-2.5 text-sm text-slate-800 dark:border-rijksblauw-500/40 dark:bg-rijksblauw-500/10 dark:text-slate-100">
-          {notice.kind === 'saving' ? (
-            <Loader2 size={16} aria-hidden="true" className="mt-0.5 shrink-0 animate-spin text-rijksblauw-600 dark:text-rijksblauw-300" />
-          ) : (
-            <BookmarkCheck size={16} aria-hidden="true" className="mt-0.5 shrink-0 text-rijksblauw-600 dark:text-rijksblauw-300" />
-          )}
-
-          <div className="min-w-0 flex-1 space-y-1">
-            {notice.kind === 'saving' && <p>Wordt in geheugen opgeslagen…</p>}
-
-            {notice.kind === 'message' && (
-              <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <span>{notice.text}</span>
-                {notice.login && (
-                  <button type="button" className={`${LINK_CLASS} inline-flex items-center gap-1`} onClick={onLogin}>
-                    <LogIn size={14} aria-hidden="true" /> Inloggen
-                  </button>
-                )}
-              </p>
-            )}
-
-            {notice.kind === 'saved' &&
-              (undone === 'ok' ? (
-                <p>Niet in geheugen opgeslagen.</p>
-              ) : (
-                <>
-                  <p>
-                    <span className="font-semibold">In geheugen opgeslagen:</span> {notice.saved.join(' ')}
-                  </p>
-                  {notice.replaced.length > 0 && (
-                    <p className="text-slate-600 dark:text-slate-300">
-                      Vervangt: {notice.replaced.join(' ')}
-                    </p>
-                  )}
-                  {undone === 'failed' && (
-                    <p>Ongedaan maken lukte niet. Verwijder het bij Instellingen.</p>
-                  )}
-                  <p className="flex flex-wrap gap-x-4">
-                    <button
-                      type="button"
-                      className={LINK_CLASS}
-                      disabled={undoing}
-                      onClick={() => {
-                        setUndoing(true);
-                        notice
-                          .undo()
-                          .then(() => setUndone('ok'))
-                          .catch(() => setUndone('failed'))
-                          .finally(() => setUndoing(false));
-                      }}
-                    >
-                      {undoing ? 'Bezig…' : 'Ongedaan maken'}
-                    </button>
-                    <Link to="/instellingen/chat" className={LINK_CLASS}>
-                      Bekijk geheugen
-                    </Link>
-                  </p>
-                </>
-              ))}
-          </div>
-
-          {notice.kind !== 'saving' && (
-            <button
-              type="button"
-              className="-m-1 shrink-0 rounded-md p-1 text-slate-500 hover:bg-rijksblauw-100 hover:text-slate-800 dark:hover:bg-rijksblauw-500/20 dark:hover:text-slate-100"
-              onClick={onDismiss}
-              aria-label="Melding over het geheugen sluiten"
-            >
-              <X size={14} aria-hidden="true" />
-            </button>
-          )}
-        </div>
+    <DismissibleBanner
+      onDismiss={onDismiss}
+      size="sm"
+      variant="accent"
+      icon="bookmark"
+      text={text}
+      supporting-text={supporting}
+      dismissible={notice.kind !== 'saving' || undefined}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onFocus={() => setFocused(true)}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFocused(false);
+      }}
+    >
+      {notice.kind === 'message' && notice.login && (
+        <nldd-button slot="actions" appearance="secondary" start-icon="login" text="Inloggen" onClick={onLogin}></nldd-button>
       )}
-    </div>
+      {notice.kind === 'saved' && undone !== 'ok' && (
+        <>
+          <nldd-button
+            slot="actions"
+            appearance="secondary"
+            text="Ongedaan maken"
+            loading={undoing || undefined}
+            loading-text="Bezig"
+            onClick={() => {
+              if (undoing) return;
+              setUndoing(true);
+              notice
+                .undo()
+                .then(() => setUndone('ok'))
+                .catch(() => setUndone('failed'))
+                .finally(() => setUndoing(false));
+            }}
+          ></nldd-button>
+          <nldd-button slot="actions" appearance="neutral-transparent" text="Bekijk geheugen" href="/instellingen/chat"></nldd-button>
+        </>
+      )}
+    </DismissibleBanner>
   );
+}
+
+/** Mounts with the banner, so the dismiss listener binds to the element that exists. */
+function DismissibleBanner({ onDismiss, ...rest }: ComponentProps<'nldd-banner'> & { onDismiss: () => void }) {
+  const ref = useRef<HTMLElement>(null);
+  useNlddEvent(ref, 'dismiss', () => onDismiss());
+  return <nldd-banner ref={ref} {...rest}></nldd-banner>;
 }

@@ -35,6 +35,40 @@ voor *in my skin* moet "in mijn vel" zijn. Verbied zulke constructies in een
 systeemprompt met een concreet voorbeeld erbij, niet met de algemene aanwijzing
 "schrijf natuurlijk".
 
+## Interface: alleen het NLDD Designsysteem
+
+De hele interface komt uit `@nldd/design-system`: componenten, iconen, lettertype en
+kleuren. Er is geen Tailwind, geen eigen CSS, geen `className`, geen `style`, geen
+losse HTML voor opmaak en geen eigen iconenset. Kan iets niet met een component of
+een attribuut, meld het dan bij het designsysteem (skill `nldd-design-contribute`)
+in plaats van er zelf omheen te bouwen.
+
+Controles, alle drie voor elke commit:
+
+- `node scripts/check-pure.mjs` telt alles wat niet uit het systeem komt (klassen,
+  inline stijlen, losse elementen, hexkleuren, eigen iconen). Moet nul zijn, op de
+  twee generatoren van losse exportbestanden na (`exportService`, `reportService`):
+  wat de app verlaat kent geen webcomponenten.
+- `npx @nldd/design-system lint --max-warnings 0` controleert tags, attributen,
+  slots en icoonnamen. Een onbekende icoonnaam is anders stil leeg.
+- Kijk in een echte browser (`scripts/sweep.py` meet elke route op drie breedtes):
+  dit systeem faalt stil. Alles compileert, en toch kan een tekst één woord per regel
+  staan of een knop niets doen.
+
+Wat er stil misgaat, en hoe het hier is opgelost:
+
+- React-`onChange` bereikt geen veld in een component. Gebruik `useNlddValue` en
+  `useNlddEvent` uit `src/lib/nldd.ts`. `onClick` werkt wel.
+- Een booleaans attribuut met `false` staat aan: React 18 schrijft de tekst "false".
+  Schrijf `open={x || undefined}`. De JSX-typen in
+  `src/types/nldd-jsx.generated.d.ts` (uit `scripts/gen-nldd-jsx.mjs`, opnieuw draaien
+  na een upgrade) staan alleen `true | undefined` toe.
+- Een `href` op een component (link, knop, kaart, menu-item) gaat via de router dankzij
+  `installNlddRouterLinks` in `App.tsx`. Gebruik geen `Link` of `NavLink`.
+- Meldingen gaan via `notify` (`src/lib/notify.ts`, `nldd-notification`).
+- `close` van een sheet, venster of popover borrelt niet op: bind hem op het element.
+  Laat een overlay in de DOM staan en stuur hem met `open`.
+
 ## Uitrollen: elke afgeronde wijziging gaat meteen naar productie
 
 `main` is de productietak: Vercel bouwt elke push naar `origin/main` en zet hem
@@ -113,33 +147,25 @@ database. Wordt er code van daar geport, hernummer dan de migratie.
 | Laag | Wat |
 | --- | --- |
 | Frontend | React 18 + TypeScript + Vite 6, `@/`-alias naar `src/` |
-| Styling | Tailwind (Rijkshuisstijl), licht/donker via `ThemeContext` |
+| Interface | `@nldd/design-system` (webcomponenten), licht/donker via `ThemeContext` (`color-scheme`) |
 | Routing | react-router-dom v6, alle paden Nederlands |
 | 3D | react-three-fiber + three.js (achtergrond, organisatienetwerk) |
 | Grafieken | recharts, lazy geladen zodat het uit de hoofdbundle blijft |
 | Backend | Supabase: Postgres met RLS, Auth, Storage, Edge Functions (Deno) |
 | Hosting | Vercel, SPA-rewrite in `vercel.json`, `X-Robots-Tag: noindex` |
 
-Huisstijl: PromptPlein valt onder de Rijksoverheid en voert daarom de
-Rijkshuisstijl. Kleuren staan in `src/config/brandColors.js` (lintblauw `#154273`
-voor koppen en balken, donkerblauw `#01689B` voor interactie), de vormtaal in
-`borderRadius` van de Tailwind-config. Het lettertype Rijks Sans staat in
-`src/assets/fonts/` en is niet vrij: het staat met toestemming in deze openbare repo
-omdat PromptPlein van de Rijksoverheid is, en valt net als `public/logo-rijksoverheid.*`
-niet onder de EUPL-1.2. Nooit naar een ander product of andere repo kopiëren.
-Bron: het thema van RijksICTGilde (`hugo-theme-rijksoverheid`) en de
-tokens van `nl-design-system/rijkshuisstijl-community`. De contextmap van de skill
-`pas-rijkshuisstijl-toe` staat niet op deze machine.
+Huisstijl: PromptPlein valt onder de Rijksoverheid en voert de Rijkshuisstijl via het
+NLDD Designsysteem. Kleuren, lettertype (Rijks Sans, uit het pakket) en iconen komen
+daaruit. De kop draagt het woordmerk van Rijksorganisatie ODI (Ministerie van BZK)
+naast het lint. Wat zelf tekent (three.js, recharts, het organogram op canvas) leest
+zijn kleuren tijdens het draaien uit de tokens via `src/config/brandColors.js`
+(`readToken`); daar staat geen enkele hexwaarde meer in. Iconen zijn namen uit de
+vaste set van het pakket (`icon="..."`); een naam die niet bestaat, rendert niets.
 
-Iconen komen altijd uit `@/components/common/icons`, niet uit `lucide-react`.
-Dat bestand geeft de officiële functionele iconen van de Rijkshuisstijl de
-lucide-naam en laat de rest doorlopen uit lucide. Neem een officieel icoon alleen
-op als de betekenis gelijk blijft: Star blijft lucide omdat de favorietstatus uit
-leeg of gevuld leest.
-
-Env-variabelen (alle vier `VITE_`-prefixed, dus client-side):
-`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_ADMIN_TOKEN`,
-`VITE_OPTIMIZE_FUNCTION_URL` (optionele override van de function-URL).
+Env-variabelen (alle drie `VITE_`-prefixed, dus client-side en voor iedereen leesbaar):
+`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`,
+`VITE_OPTIMIZE_FUNCTION_URL` (optionele override van de function-URL). Zet hier nooit
+iets geheims in: Vite plakt elke `VITE_`-waarde in de bundel.
 
 Edge functions draaien in `eu-west-1` (Ierland), naast de database: `getFunctionUrl`
 zet `forceFunctionRegion` op elke URL, ook op de override. Zonder die parameter kiest
@@ -288,49 +314,24 @@ De hele app werkt op de telefoon, ook het beheer. Testen doe je op 320 pixels br
 met tekstgrootte Extra groot: wat daar past, past overal. Staat er iets nieuws, kijk
 dan ook liggend en met het toetsenbord open.
 
-- **Menu**: op de telefoon staat het hoofdmenu onderaan (`--onderbalk`, 60 pixels plus
-  de thuisbalk), vanaf `sm` plakt het bovenaan. Wat vast onderaan staat, houdt daar
-  rekening mee met `bottom: var(--onderbalk)`. De kop heeft naast het lint plek voor
-  drie knoppen: Toegankelijkheid, meldingen en het accountmenu. De rest zit op de
-  telefoon in dat menu.
-- **Raakvlakken**: de regels in `index.css` maken alles 44 bij 44 pixels op een
-  aanraakscherm of smal venster. In pixels, want een vinger groeit niet mee met de
-  tekstgrootte. Een losse tekstlink buiten een zin krijgt `opl-raak`. Kop en onderbalk
-  staan om dezelfde reden in pixels, en niet in rem.
-- **Icoonknoppen** krijgen altijd een `aria-label`: daar hangt ook het centreren aan.
-- **Invoer**: alles op minstens 16 pixels, anders zoomt iOS bij elk veld in.
-- **Toetsenbord**: `viewportWatch` meet de zichtbare hoogte (`--zichtbaar`) en zet
-  `data-toetsenbord` op `<html>`. Gebruik daar `100dvh` niet voor: die ziet het
-  toetsenbord niet, en is naast de zwevende balk van Safari hoger dan wat je ziet.
-  De chat volgt dit via `useFitHeight`. Op een aanraakscherm geeft de returntoets een
-  nieuwe regel en sluit Verstuur het toetsenbord, zodat je het antwoord kunt lezen.
+- **Menu**: `nldd-top-navigation-bar`. Op smal zet de component het hoofdmenu achter de
+  knop Menu; rechts staan Toegankelijkheid, meldingen en het accountmenu.
+- **Raakvlakken, focus, invoergrootte en vensters** regelen de componenten zelf. Bouw
+  ze niet na.
+- **Toetsenbord**: `viewportWatch` meet de zichtbare hoogte en zet `data-toetsenbord`
+  op `<html>`. Op een aanraakscherm geeft de returntoets een nieuwe regel en sluit
+  Verstuur het toetsenbord, zodat je het antwoord kunt lezen.
 - **Tekstgrootte van het toestel** telt mee: Android via de meta `text-scale`, iOS via
-  `systemTextFactor` (`-apple-system-body`). Alles in rem groeit dus mee, tot 200%, en
-  dat is een stand die mensen echt gebruiken. Test hem ook. Is het scherm smaller dan
-  15 rem, dan zet `viewportWatch` `data-krap` op `<html>`: alles gaat in één kolom, met
-  krappe marges. De chat reageert met container queries in rem. Media queries rekenen
-  met de standaardgrootte van de browser en zien de tekstgrootte dus niet.
-- **Aanraken is geen muis**: wat bij aanwijzen verschijnt, krijgt `opl-geen-muis:` zodat
-  het er op een aanraakscherm gewoon staat. Hover-kleuren werken alleen waar hover
-  bestaat (`hoverOnlyWhenSupported`). Geen automatische focus op een veld op een
-  aanraakscherm als dat het toetsenbord over de inhoud legt.
-- **Vensters** lopen via `Modal` of `Drawer`, of gebruiken zelf `useDialogFocus`: de
-  focus gaat naar binnen en weer terug, en de pagina eronder wordt `inert`, zodat
-  VoiceOver er met vegen niet achter komt. Nieuwe vaste panelen dus ook via een portal
-  op `document.body`.
-- **Tabellen** in `StackTable` worden op de telefoon kaarten en houden hun rollen.
+  `systemTextFactor`. Test 200%.
 - **Tekenen** (organogram, 3D) vangt elke veeg op. Daarom vult dat nooit het hele
   scherm en heeft het netwerk een gewone lijst, op de telefoon de standaard.
 - **Paginawissel**: `RouteFocus` zet de titel uit `pageTitles.ts`, gaat naar boven en
-  zet de focus op de zichtbare `h1`. Zichtbaar, want tijdens het laden van een lazy
-  pagina staat de kop van de vorige pagina verborgen in de DOM. Elke pagina heeft dus
-  precies één `h1`, ook in de laad- en foutstand, en een nieuwe route hoort in die lijst.
-- **Grijze tekst**: `text-slate-400` en `-500` zijn tokens die in beide modi 4,5:1
-  halen. Randen en vlakken houden de echte tint.
+  zet de focus op de zichtbare kop van niveau 1. Elke pagina heeft dus precies één
+  `nldd-title heading-level={1}`, ook in de laad- en foutstand, en een nieuwe route hoort
+  in die lijst.
 - **Bundel**: `manualChunks` in `vite.config.ts` houdt three en recharts uit de eerste
-  lading. Rollup trekt alles wat die pakketten importeren mee hun chunk in, dus een
-  gedeeld hulpje dat daar belandt laadt ze weer op elke pagina. Controleer na een
-  nieuwe dependency in `dist/index.html` dat ze niet in de preload staan.
+  lading. Controleer na een nieuwe dependency in `dist/index.html` dat ze niet in de
+  preload staan.
 
 ## Toegankelijkheid en leesgemak in de chat
 
@@ -338,9 +339,17 @@ De keuzes staan op `/instellingen/toegankelijkheid` (`/toegankelijkheid` verwijs
 daarheen). Die pagina is bewust openbaar, omdat de chat ook zonder account werkt.
 De keuzes staan per browser in localStorage (`AccessibilityContext`, sleutel
 `opl-toegankelijkheid`) en gelden via `<html>`: tekstgrootte als `font-size`
-(alles staat in rem, dus reken ook marges in rem), de rest als `data-contrast`,
-`data-motion` en `data-actions` met de regels in `index.css`. Code die zelf
-animeert vraagt `prefersReducedMotion()`, dat ook de systeeminstelling meeneemt.
+en "minder beweging" als `data-motion`, met de enige eigen regel in `index.css` omdat het
+systeem daar geen attribuut voor heeft. Code die zelf animeert vraagt
+`prefersReducedMotion()`, dat ook de systeeminstelling meeneemt.
+
+Een eigen keuze voor hoog contrast is er bewust niet: het designsysteem kent geen
+`prefers-contrast` en een eigen contrastlaag zou de tokens overschrijven. Wie meer
+contrast nodig heeft, gebruikt de contrastinstelling van de computer; met de
+contrastthema's van Windows (`forced-colors`) volgt elk onderdeel. Komt
+`prefers-contrast` in het systeem, dan werkt de instelling van het besturingssysteem
+vanzelf. Een keuze "acties altijd zichtbaar" is er ook niet meer: acties staan altijd in
+beeld.
 
 Alles bij Toegankelijkheid staat uit tot iemand het zelf aanzet, ook de sneltoetsen
 die erbij horen. Een nieuwe instelling krijgt dus de standaardwaarde uit en zijn knop
@@ -384,11 +393,10 @@ bij elke regel van het antwoord op, en wie met vergroting werkt raakt het kwijt.
 
 De chat scrolt bewust niet mee: een nieuwe vraag gaat bovenaan staan en het
 antwoord groeit eronder, zodat je vanaf het begin in je eigen tempo leest.
-"Naar beneden" zet volgen aan, omhoog scrollen zet het weer uit. Op de telefoon
-schuiven de kop van de app en de titelbalk weg als je naar beneden leest en komen
-ze terug als je omhoog scrolt (`useReadingMode`). Het tekstvak blijft altijd staan:
-toen dat ook wegschoof, voelde het alsof de chat verdween. De leeskolom is
-`60ch`, wat in Rijks Sans zo'n 72 tekens per regel is (gemeten). Maak hem niet
+"Naar beneden" zet volgen aan, omhoog scrollen zet het weer uit. De kop van de app
+scrolt weg; de titelbalk van de chat en het tekstvak blijven staan: toen het tekstvak
+ook wegschoof, voelde het alsof de chat verdween. De leeskolom is `60ch`, wat in
+Rijks Sans zo'n 72 tekens per regel is (gemeten). Maak hem niet
 breder zonder opnieuw te meten. Het tekstvak heeft dezelfde breedte, zodat vraag
 en antwoord op één lijn beginnen.
 
@@ -403,7 +411,7 @@ mode in dat bestand, niet een nieuwe function. De 43 modes, gegroepeerd:
 | Streamende vrije tekst | `generate`, `execute`, `chat` |
 | Techniek- en frameworkkeuze | `recommend`, `recommend-framework`, `framework-fit`, `technique-advisor` |
 | Veldhulp in de bouwer | `analyze`, `prefill`, `expand-field`, `title`, `metadata` |
-| PlanWizard | `plan`, `plan-step`, `plan-step-analyze`, `clarify`, `assumption-check` |
+| Doel-flow | `plan-step`, `clarify` (de oude PlanWizard-modes `plan`, `plan-step-analyze` en `assumption-check` roept de client niet meer aan) |
 | Techniekbouwers | `persona-fill`, `fewshot-example`, `fewshot-extract`, `meta-build`, `cove-scan`, `stepback-ladder`, `rubric-propose`, `skill-draft`, `skill-trigger` |
 | Chat en projecten | `chat-optimize`, `project-optimize`, `project-brief`, `project-interview`, `project-prompt`, `context-interview`, `context-prompt`, `chat-intake`, `chat-intake-check`, `memory-save`, `memory-search` |
 | Testkamer-loop | `mock-answer`, `refine`, `refine-suggest` |
@@ -571,9 +579,8 @@ Merk het voorbeeld daarom onmiskenbaar als voorbeeld, of laat het weg.
   (`AanpakKaart`) en "Andere aanpak" toont de alternatieven die de AI al gaf, zonder
   extra aanroep. Bij te weinig tekst vraagt de AI bij het tekstvak om meer, nooit
   via een lijst. Geldt voor beide tabbladen: na het gesprek bij "Ik heb een idee"
-  kiest de AI op dezelfde manier. Hier zit ook de PlanWizard (plan met stappen,
-  interview in de tool, socratische aannamecontrole) en de Testkamer, de gesloten
-  lus bouwen, testen, verbeteren met versies.
+  kiest de AI op dezelfde manier. Hier zit ook de Testkamer, de gesloten lus bouwen,
+  testen, verbeteren met versies.
 - **`/technieken`** is de trainingspagina waar de gebruiker zélf een techniek
   kiest en de velden invult. Bouw geen handmatige techniekkiezer in
   `/genereren`: dat is precies de scheiding tussen die twee pagina's.
@@ -698,8 +705,5 @@ invulplek maar een woord dat de AI zelf gebruikt (`SLOT` in `ChatComposer`).
   `project-optimize`, met de onderbouwing en de bronnen. Let op, de
   modeltabellen daarin lopen achter op `src/config/aiModels.ts`; de code is
   leidend.
-- `docs/framework-packaging-plan.md`: nog **niet** uitgevoerd. Beschrijft een
-  fase 'framework' in de PlanWizard om de prompt na afloop in een framework te
-  pakken. `PlanWizard.tsx` kent die fase nog niet.
 - `docs/archief/`: afgeronde portplannen en de oorspronkelijke bouwspecificaties.
   Historie, geen instructie. Ga er niet vanuit dat wat daar staat nog klopt.

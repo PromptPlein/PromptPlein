@@ -22,10 +22,7 @@ export const DEVICE_VOICE = 'apparaat';
 
 export interface AccessibilitySettings {
   textScale: TextScale;
-  highContrast: boolean;
   reduceMotion: boolean;
-  /** Knoppen bij berichten altijd tonen in plaats van pas bij de muis of focus. */
-  alwaysShowActions: boolean;
   /** Knop "Voorlezen" onder elk antwoord. */
   speechButton: boolean;
   answerDone: AnswerDone;
@@ -47,9 +44,7 @@ export interface AccessibilitySettings {
  */
 export const DEFAULT_ACCESSIBILITY: AccessibilitySettings = {
   textScale: 'normaal',
-  highContrast: false,
   reduceMotion: false,
-  alwaysShowActions: false,
   speechButton: false,
   answerDone: 'niets',
   speechVoice: null,
@@ -111,9 +106,7 @@ function sanitize(raw: unknown): AccessibilitySettings {
   return {
     textScale:
       value.textScale && value.textScale in TEXT_SCALE_PERCENT ? value.textScale : d.textScale,
-    highContrast: value.highContrast === true,
     reduceMotion: value.reduceMotion === true,
-    alwaysShowActions: value.alwaysShowActions === true,
     speechButton: value.speechButton === true,
     answerDone:
       value.answerDone === 'schermlezer' || value.answerDone === 'voorlezen'
@@ -137,19 +130,17 @@ function readStored(): AccessibilitySettings {
   }
 }
 
-/** Zet de keuzes op <html>; de regels zelf staan in index.css. */
+/** Applies the choices to <html>. Only reduced motion needs a rule of its own, in index.css. */
 function applyToDocument(settings: AccessibilitySettings) {
   const root = document.documentElement;
-  // Tailwind rekent in rem, dus zo groeit de hele interface mee.
+  // The design system sets its type sizes in rem, so text grows with this.
   // Bovenop de keuze hier telt de tekstgrootte van de iPhone zelf.
   root.style.fontSize = `calc(${TEXT_SCALE_PERCENT[settings.textScale]} * ${systemTextFactor()})`;
   const toggle = (name: string, on: boolean, value: string) => {
     if (on) root.dataset[name] = value;
     else delete root.dataset[name];
   };
-  toggle('contrast', settings.highContrast, 'high');
   toggle('motion', settings.reduceMotion, 'reduce');
-  toggle('actions', settings.alwaysShowActions, 'always');
   // De tekstgrootte bepaalt of de opmaak moet versmallen (viewportWatch).
   window.dispatchEvent(new Event('resize'));
 }

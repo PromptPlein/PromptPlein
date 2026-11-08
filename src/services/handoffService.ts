@@ -126,18 +126,6 @@ export interface ResultSnapshot {
   techniqueId: string | null;
 }
 
-/** Bewaar het generatorresultaat vlak voor een navigatie naar de loginpagina. */
-export function writeResultSnapshot(result: OptimizeResult, techniqueId: string | null): void {
-  try {
-    sessionStorage.setItem(
-      RESULT_SNAPSHOT_KEY,
-      JSON.stringify({ result, techniqueId, createdAt: Date.now() }),
-    );
-  } catch {
-    /* sessieopslag niet beschikbaar — de gebruiker begint dan opnieuw */
-  }
-}
-
 /** Lees en verwijder het snapshot; verlopen of ongeldig -> null. */
 export function consumeResultSnapshot(): ResultSnapshot | null {
   try {

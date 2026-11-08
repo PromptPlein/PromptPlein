@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
-import { Volume2, VolumeX } from '@/components/common/icons';
-import toast from 'react-hot-toast';
+import { useEffect, useRef, useState } from 'react';
+import { useNlddEvent } from '@/lib/nldd';
+import { notify } from '@/lib/notify';
 import {
   DEVICE_VOICE,
   NATURAL_VOICE,
@@ -20,6 +20,25 @@ import {
   useSpeakingId,
   type SpeechVoiceOption,
 } from '@/lib/speech';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/cell';
+import '@nldd/design-system/container';
+import '@nldd/design-system/dropdown';
+import '@nldd/design-system/form';
+import '@nldd/design-system/form-actions';
+import '@nldd/design-system/form-field';
+import '@nldd/design-system/form-section';
+import '@nldd/design-system/inline-dialog';
+import '@nldd/design-system/keyboard-shortcut';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/radio-button';
+import '@nldd/design-system/segmented-control';
+import '@nldd/design-system/spacer-cell';
+import '@nldd/design-system/switch-field';
+import '@nldd/design-system/text';
+import '@nldd/design-system/text-cell';
 
 const TEXT_SCALES: { value: TextScale; label: string }[] = [
   { value: 'normaal', label: 'Normaal' },
@@ -50,30 +69,32 @@ const RATE_LABELS: Record<number, string> = {
 
 const SAMPLE = 'Dit is de stem die je antwoorden voorleest in PromptPlein.';
 
-function CheckField({
+/**
+ * One setting that turns on or off: an nldd-switch-field, with its explanation
+ * right under it.
+ */
+export function SwitchRow({
   label,
   hint,
   checked,
   onChange,
 }: {
   label: string;
-  hint: string;
+  hint?: string;
   checked: boolean;
   onChange: (value: boolean) => void;
 }) {
+  const ref = useRef<HTMLElement>(null);
+  useNlddEvent<CustomEvent<{ checked: boolean }>>(ref, 'change', (e) => onChange(Boolean(e.detail?.checked)));
   return (
-    <label className="flex cursor-pointer items-start gap-3 py-2">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        className="mt-1 h-5 w-5 shrink-0 accent-rijksblauw-700"
-      />
-      <span>
-        <span className="block font-medium text-slate-900 dark:text-slate-100">{label}</span>
-        <span className="block text-sm text-slate-600 dark:text-slate-300">{hint}</span>
-      </span>
-    </label>
+    <nldd-container gap="4">
+      <nldd-switch-field ref={ref} label={label} checked={checked || undefined}></nldd-switch-field>
+      {hint && (
+        <nldd-text size="sm" color="secondary">
+          {hint}
+        </nldd-text>
+      )}
+    </nldd-container>
   );
 }
 
@@ -109,209 +130,184 @@ export default function AccessibilitySettings() {
       voice: speechVoice,
       rate: settings.speechRate,
     });
-    if (result === 'geen-stem') toast.error('Kies eerst een stem.');
+    if (result === 'geen-stem') notify.error('Kies eerst een stem.');
   }
 
-  const sectionClass = 'opl-card p-5 sm:p-6';
-  const titleClass = 'text-lg font-semibold text-rijksblauw-700 dark:text-rijksblauw-200';
-  const legendClass = 'mb-1 font-medium text-slate-900 dark:text-slate-100';
+  const scaleRef = useRef<HTMLElement>(null);
+  const answerRef = useRef<HTMLElement>(null);
+  const voiceRef = useRef<HTMLElement>(null);
+  const rateRef = useRef<HTMLElement>(null);
+  useNlddEvent<CustomEvent<{ value: string }>>(scaleRef, 'change', (e) => {
+    const value = e.detail?.value as TextScale | undefined;
+    if (value && TEXT_SCALES.some((scale) => scale.value === value)) update({ textScale: value });
+  });
+  useNlddEvent<CustomEvent<{ checked: boolean }>>(answerRef, 'change', (e) => {
+    const value = (e.target as HTMLElement | null)?.dataset.value as AnswerDone | undefined;
+    if (value && e.detail?.checked) update({ answerDone: value });
+  });
+  useNlddEvent<CustomEvent<{ value: string }>>(voiceRef, 'change', (e) => {
+    const value = e.detail?.value ?? (e.target as HTMLSelectElement | null)?.value;
+    if (value) update({ speechVoice: value });
+  });
+  useNlddEvent<CustomEvent<{ value: string }>>(rateRef, 'change', (e) => {
+    const value = Number(e.detail?.value ?? (e.target as HTMLSelectElement | null)?.value);
+    if (Number.isFinite(value)) update({ speechRate: value });
+  });
 
   return (
-    <div className="space-y-5">
-      <p className="text-slate-600 dark:text-slate-300">
-        Wijzigingen gelden meteen en blijven bewaard in deze browser.
-      </p>
-
-      <section className={sectionClass} aria-labelledby="ta-lezen">
-        <h2 id="ta-lezen" className={titleClass}>
-          Lezen
-        </h2>
-
-        <fieldset className="mt-3">
-          <legend className={legendClass}>Tekstgrootte</legend>
-          <div className="flex flex-wrap gap-x-6 gap-y-1">
-            {TEXT_SCALES.map((scale) => (
-              <label key={scale.value} className="flex cursor-pointer items-center gap-2 py-1">
-                <input
-                  type="radio"
-                  name="tekstgrootte"
-                  checked={settings.textScale === scale.value}
-                  onChange={() => update({ textScale: scale.value })}
-                  className="h-5 w-5 accent-rijksblauw-700"
-                />
-                <span className="text-slate-800 dark:text-slate-100">{scale.label}</span>
-              </label>
-            ))}
-          </div>
-        </fieldset>
-
-        <div className="mt-2 divide-y divide-slate-100 dark:divide-slate-700">
-          <CheckField
-            label="Hoog contrast"
-            hint="Donkerdere tekst, duidelijke randen en een dikke focusrand."
-            checked={settings.highContrast}
-            onChange={(highContrast) => update({ highContrast })}
-          />
-          <CheckField
+    <nldd-form>
+      <form noValidate onSubmit={(e) => e.preventDefault()}>
+        <nldd-form-section text="Lezen" supporting-text="Wijzigingen gelden meteen en blijven bewaard in deze browser.">
+          <nldd-form-field label="Tekstgrootte">
+            <nldd-segmented-control ref={scaleRef} value={settings.textScale}>
+              {TEXT_SCALES.map((scale) => (
+                <nldd-segmented-control-item
+                  key={scale.value}
+                  value={scale.value}
+                  text={scale.label}
+                ></nldd-segmented-control-item>
+              ))}
+            </nldd-segmented-control>
+          </nldd-form-field>
+          <SwitchRow
             label="Minder beweging"
             hint="Zet animaties uit. Dat gebeurt ook als je dit in je systeem hebt ingesteld."
             checked={settings.reduceMotion}
             onChange={(reduceMotion) => update({ reduceMotion })}
           />
-          <CheckField
-            label="Knoppen bij berichten altijd tonen"
-            hint="Zonder dit verschijnen ze pas als je met de muis of het toetsenbord bij het bericht bent."
-            checked={settings.alwaysShowActions}
-            onChange={(alwaysShowActions) => update({ alwaysShowActions })}
-          />
-        </div>
-      </section>
+          <nldd-text size="sm" color="secondary">
+            Wil je meer contrast? Gebruik de contrastinstelling van je computer. Met de
+            contrastthema&apos;s van Windows volgt elk onderdeel van PromptPlein mee.
+          </nldd-text>
+        </nldd-form-section>
 
-      <section className={sectionClass} aria-labelledby="ta-antwoord">
-        <h2 id="ta-antwoord" className={titleClass}>
-          Als een antwoord in de chat klaar is
-        </h2>
-        <fieldset className="mt-3">
-          <legend className="sr-only">Wat er gebeurt als een antwoord klaar is</legend>
-          {ANSWER_DONE.map((option) => (
-            <label key={option.value} className="flex cursor-pointer items-start gap-3 py-2">
-              <input
-                type="radio"
-                name="antwoord-klaar"
-                checked={settings.answerDone === option.value}
-                onChange={() => update({ answerDone: option.value })}
-                className="mt-1 h-5 w-5 shrink-0 accent-rijksblauw-700"
+        <nldd-form-section text="Als een antwoord in de chat klaar is">
+          <nldd-list
+            ref={answerRef}
+            type="radiogroup"
+            accessible-label="Wat er gebeurt als een antwoord klaar is"
+          >
+            {ANSWER_DONE.map((option) => (
+              <nldd-list-item
+                key={option.value}
+                data-value={option.value}
+                radio
+                checked={settings.answerDone === option.value || undefined}
+              >
+                <nldd-cell>
+                  <nldd-radio-button decorative checked={settings.answerDone === option.value || undefined}></nldd-radio-button>
+                </nldd-cell>
+                <nldd-spacer-cell size="12"></nldd-spacer-cell>
+                <nldd-text-cell text={option.label} supporting-text={option.hint}></nldd-text-cell>
+              </nldd-list-item>
+            ))}
+          </nldd-list>
+        </nldd-form-section>
+
+        <nldd-form-section text="Voorlezen">
+          {!canSpeak ? (
+            <nldd-inline-dialog
+              icon="speaker-slash"
+              text="Deze browser kan niet voorlezen."
+              supporting-text="Probeer Edge, Chrome of Safari."
+            ></nldd-inline-dialog>
+          ) : (
+            <>
+              <SwitchRow
+                label="Knop Voorlezen onder elk antwoord"
+                hint="Je kiest dan zelf welk antwoord je wilt horen."
+                checked={settings.speechButton}
+                onChange={(speechButton) => update({ speechButton })}
               />
-              <span>
-                <span className="block font-medium text-slate-900 dark:text-slate-100">
-                  {option.label}
-                </span>
-                <span className="block text-sm text-slate-600 dark:text-slate-300">
-                  {option.hint}
-                </span>
-              </span>
-            </label>
-          ))}
-        </fieldset>
-      </section>
 
-      <section className={sectionClass} aria-labelledby="ta-voorlezen">
-        <h2 id="ta-voorlezen" className={titleClass}>
-          Voorlezen
-        </h2>
-
-        {!canSpeak ? (
-          <p className="mt-2 text-slate-700 dark:text-slate-200">
-            Deze browser kan niet voorlezen. Probeer Edge, Chrome of Safari.
-          </p>
-        ) : (
-          <>
-            <CheckField
-              label="Knop Voorlezen onder elk antwoord"
-              hint="Je kiest dan zelf welk antwoord je wilt horen."
-              checked={settings.speechButton}
-              onChange={(speechButton) => update({ speechButton })}
-            />
-
-            {speechOn && (
-              <div className="mt-3 space-y-4">
-                <div>
-                  <label htmlFor="ta-stem" className="opl-label">
-                    Stem
-                  </label>
-                  <select
-                    id="ta-stem"
-                    className="opl-input"
-                    value={speechVoice ?? DEVICE_VOICE}
-                    onChange={(e) => update({ speechVoice: e.target.value })}
-                  >
-                    {isAuthenticated && (
-                      <option value={NATURAL_VOICE}>Lotte, natuurlijke stem (via Mistral)</option>
+              {speechOn && (
+                <>
+                  <nldd-form-field label="Stem">
+                    <nldd-dropdown ref={voiceRef}>
+                      <select aria-label="Stem" value={speechVoice ?? DEVICE_VOICE} onChange={() => undefined}>
+                        {isAuthenticated && (
+                          <option value={NATURAL_VOICE}>Lotte, natuurlijke stem (via Mistral)</option>
+                        )}
+                        <option value={DEVICE_VOICE}>Eerste Nederlandse stem op dit apparaat</option>
+                        {voices.map((voice) => (
+                          <option key={voice.uri} value={voice.uri}>
+                            {voice.name} ({voice.lang}){voice.local ? '' : ', online'}
+                          </option>
+                        ))}
+                      </select>
+                    </nldd-dropdown>
+                    {chosenVoice && !chosenVoice.local && (
+                      <nldd-form-field-help-text>
+                        Let op: bij een online stem gaat de tekst van het antwoord naar de leverancier
+                        van die stem.
+                      </nldd-form-field-help-text>
                     )}
-                    <option value={DEVICE_VOICE}>Eerste Nederlandse stem op dit apparaat</option>
-                    {voices.map((voice) => (
-                      <option key={voice.uri} value={voice.uri}>
-                        {voice.name} ({voice.lang}){voice.local ? '' : ', online'}
-                      </option>
-                    ))}
-                  </select>
-                  {chosenVoice && !chosenVoice.local && (
-                    <p className="mt-1 text-sm text-slate-700 dark:text-slate-200">
-                      Let op: bij een online stem gaat de tekst van het antwoord naar de leverancier
-                      van die stem.
-                    </p>
-                  )}
-                  {!hasLocalVoice && speechVoice !== NATURAL_VOICE && (
-                    <p className="mt-1 text-sm text-slate-700 dark:text-slate-200">
-                      Er staat geen Nederlandse stem op dit apparaat. Voeg er een toe in de
-                      taalinstellingen van je systeem, of kies een online stem.
-                    </p>
-                  )}
-                </div>
+                    {!hasLocalVoice && speechVoice !== NATURAL_VOICE && (
+                      <nldd-form-field-help-text>
+                        Er staat geen Nederlandse stem op dit apparaat. Voeg er een toe in de
+                        taalinstellingen van je systeem, of kies een online stem.
+                      </nldd-form-field-help-text>
+                    )}
+                  </nldd-form-field>
 
-                <div>
-                  <label htmlFor="ta-snelheid" className="opl-label">
-                    Snelheid
-                  </label>
-                  <select
-                    id="ta-snelheid"
-                    className="opl-input"
-                    value={settings.speechRate}
-                    onChange={(e) => update({ speechRate: Number(e.target.value) })}
-                  >
-                    {SPEECH_RATES.map((rate) => (
-                      <option key={rate} value={rate}>
-                        {RATE_LABELS[rate]}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                  <nldd-form-field label="Snelheid">
+                    <nldd-segmented-control ref={rateRef} value={String(settings.speechRate)}>
+                      {SPEECH_RATES.map((rate) => (
+                        <nldd-segmented-control-item
+                          key={rate}
+                          value={String(rate)}
+                          text={RATE_LABELS[rate]}
+                        ></nldd-segmented-control-item>
+                      ))}
+                    </nldd-segmented-control>
+                  </nldd-form-field>
 
-                <button
-                  type="button"
-                  className="opl-btn-secondary"
-                  onClick={trying ? stopSpeaking : tryVoice}
-                >
-                  {trying ? (
-                    <>
-                      <VolumeX size={16} aria-hidden="true" /> Stop
-                    </>
-                  ) : (
-                    <>
-                      <Volume2 size={16} aria-hidden="true" /> Probeer de stem
-                    </>
-                  )}
-                </button>
-              </div>
-            )}
-          </>
-        )}
-      </section>
+                  <nldd-form-actions>
+                    <nldd-button-group>
+                      <nldd-button
+                        appearance="secondary"
+                        start-icon={trying ? 'speaker-slash' : 'speaker-volume-high'}
+                        text={trying ? 'Stop' : 'Probeer de stem'}
+                        onClick={trying ? stopSpeaking : tryVoice}
+                      ></nldd-button>
+                    </nldd-button-group>
+                  </nldd-form-actions>
+                </>
+              )}
+            </>
+          )}
+        </nldd-form-section>
 
-      <section className={sectionClass} aria-labelledby="ta-dicteren">
-        <h2 id="ta-dicteren" className={titleClass}>
-          Inspreken
-        </h2>
-        <p className="mt-2 text-slate-700 dark:text-slate-200">
-          Elk tekstvak heeft een microfoon. Dit werkt als je bent ingelogd.
-        </p>
-        <CheckField
-          label="Versturen met je stem"
-          hint="Eindig je dictaat in de chat met het woord verstuur. Je tekst gaat dan meteen weg, zonder nalezen."
-          checked={settings.sendByVoice}
-          onChange={(sendByVoice) => update({ sendByVoice })}
-        />
-        <CheckField
-          label="Gesprek zonder handen"
-          hint="Zet de knop Gesprek in de chat aan: je praat, hoort het antwoord en praat weer verder."
-          checked={settings.conversationMode}
-          onChange={(conversationMode) => update({ conversationMode })}
-        />
-      </section>
+        <nldd-form-section text="Inspreken" supporting-text="Dit werkt als je bent ingelogd.">
+          <SwitchRow
+            label="Versturen met je stem"
+            hint="Eindig je dictaat in de chat met het woord verstuur. Je tekst gaat dan meteen weg, zonder nalezen."
+            checked={settings.sendByVoice}
+            onChange={(sendByVoice) => update({ sendByVoice })}
+          />
+          <SwitchRow
+            label="Gesprek zonder handen"
+            hint="Zet de knop Gesprek in de chat aan: je praat, hoort het antwoord en praat weer verder."
+            checked={settings.conversationMode}
+            onChange={(conversationMode) => update({ conversationMode })}
+          />
+          <nldd-text size="sm" color="secondary">
+            In de chat staat een microfoon. In elk ander tekstvak spreek je in met{' '}
+            <nldd-keyboard-shortcut keys="Alt+Shift+D" mac-keys="Option+Shift+D" size="inherit" always-visible></nldd-keyboard-shortcut>.
+          </nldd-text>
+        </nldd-form-section>
 
-      <button type="button" className="opl-btn-ghost" onClick={reset}>
-        Terug naar de standaardinstellingen
-      </button>
-    </div>
+        <nldd-form-actions>
+          <nldd-button-group>
+            <nldd-button
+              appearance="secondary"
+              start-icon="undo"
+              text="Zet alles terug naar de standaard"
+              onClick={reset}
+            ></nldd-button>
+          </nldd-button-group>
+        </nldd-form-actions>
+      </form>
+    </nldd-form>
   );
 }

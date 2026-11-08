@@ -1,20 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
-import clsx from 'clsx';
-import {
-  ArrowLeft,
-  ArrowRight,
-  Search,
-  SearchX,
-  SlidersHorizontal,
-  X,
-} from '@/components/common/icons';
+import { useSearchParams } from 'react-router-dom';
 import FilterPanel from '@/components/prompts/FilterPanel';
 import PromptCard from '@/components/prompts/PromptCard';
 import { SkeletonGrid } from '@/components/common/Skeleton';
 import { searchPrompts } from '@/services/repository';
 import { trackEvent } from '@/services/analyticsService';
-import { categoryIcon } from '@/lib/categoryIcons';
+import { categoryIconName } from '@/lib/categoryIcons';
+import MenuAction from '@/components/common/MenuAction';
+import { useNlddEvent, useNlddValue } from '@/lib/nldd';
 import { ministryOf, orgSubtreeIds } from '@/lib/orgTree';
 import {
   activityIdentifier,
@@ -34,6 +27,22 @@ import type {
   SharingLevel,
   SortOption,
 } from '@/types';
+import '@nldd/design-system/button';
+import '@nldd/design-system/collection';
+import '@nldd/design-system/container';
+import '@nldd/design-system/dropdown';
+import '@nldd/design-system/inline-dialog';
+import '@nldd/design-system/link';
+import '@nldd/design-system/search-field';
+import '@nldd/design-system/simple-section';
+import '@nldd/design-system/spacer';
+import '@nldd/design-system/text';
+import '@nldd/design-system/title';
+import '@nldd/design-system/toggle-button';
+import '@nldd/design-system/toggle-button-group';
+import '@nldd/design-system/token';
+import '@nldd/design-system/toolbar';
+import '@nldd/design-system/tooltip';
 
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: 'newest', label: 'Nieuwste eerst' },
@@ -110,6 +119,8 @@ export default function SearchPage() {
   const [loading, setLoading] = useState(true);
   const [panelOpen, setPanelOpen] = useState(false);
   const lastTrackedQuery = useRef('');
+  const searchRef = useRef<HTMLElement & { value?: string }>(null);
+  useNlddValue(searchRef, query, setQuery);
 
   /** Vanuit de rijen is dit een nieuwe stap in de geschiedenis, daarna niet meer. */
   function update(patch: Partial<AdvancedPromptFilters>) {
@@ -162,204 +173,161 @@ export default function SearchPage() {
   const { enriched, authors, likesReady } = usePromptCommunity(prompts);
   const waiting = loading || ((browsing || filters.sort === 'popular') && !likesReady);
 
+  const tokens: { key: string; label: string; onRemove: () => void }[] = [
+    ...(filters.category_ids ?? []).map((id) => ({
+      key: `c-${id}`,
+      label: categoryById(id)?.name ?? 'Categorie',
+      onRemove: () => update({ category_ids: toggled(filters.category_ids, id) }),
+    })),
+    ...(filters.organization_ids ?? []).map((id) => {
+      const org = organizationById(id);
+      return {
+        key: `o-${id}`,
+        label: org?.code ?? org?.name ?? 'Organisatie',
+        onRemove: () => update({ organization_ids: toggled(filters.organization_ids, id) }),
+      };
+    }),
+    ...(filters.role_ids ?? []).map((id) => ({
+      key: `r-${id}`,
+      label: roleById(id)?.name ?? 'Functie',
+      onRemove: () => update({ role_ids: toggled(filters.role_ids, id) }),
+    })),
+    ...(filters.sharing_levels ?? []).map((level) => ({
+      key: `s-${level}`,
+      label: sharingLabel(level),
+      onRemove: () => update({ sharing_levels: toggled(filters.sharing_levels, level) }),
+    })),
+    ...(filters.date_from
+      ? [{ key: 'van', label: `Vanaf ${formatDate(filters.date_from)}`, onRemove: () => update({ date_from: null }) }]
+      : []),
+    ...(filters.date_to
+      ? [{ key: 'tot', label: `Tot ${formatDate(filters.date_to)}`, onRemove: () => update({ date_to: null }) }]
+      : []),
+  ];
+
   return (
-    <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-      <section
-        aria-labelledby="ontdekken-kop"
-        className="mx-auto mb-8 flex max-w-3xl flex-col items-center gap-5"
-      >
-        <h1
-          id="ontdekken-kop"
-          className="text-3xl font-bold text-rijksblauw-700 dark:text-rijksblauw-100"
-        >
-          Wat zoek je?
-        </h1>
+    <>
+      <nldd-simple-section>
+        <nldd-title slot="header" heading-level={1} size={2} text="Wat zoek je?"></nldd-title>
 
-        <div role="search" className="relative w-full">
-          <Search
-            size={22}
-            className="pointer-events-none absolute left-[1.125rem] top-1/2 -translate-y-1/2 text-slate-500 max-sm:left-3 dark:text-slate-400"
-          />
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Zoek op titel of inhoud"
-            aria-label="Zoek prompts"
-            className="opl-input h-16 rounded-xl pl-[3.375rem] pr-36 text-lg max-sm:pl-[44px] max-sm:pr-[64px]"
-          />
-          <button
-            type="button"
-            onClick={() => setPanelOpen(true)}
-            aria-haspopup="dialog"
-            className="absolute bottom-2 right-2 top-2 inline-flex items-center gap-2 rounded bg-rijksblauw-50 px-3.5 max-sm:px-[14px] text-sm font-semibold text-rijksblauw-700 transition-colors hover:bg-rijksblauw-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200 dark:hover:bg-rijksblauw-500/25"
-          >
-            <SlidersHorizontal size={18} />
-            {/* Op de telefoon alleen het icoon: het zoekvak heeft de breedte nodig. */}
-            <span className="max-sm:sr-only">Filters</span>
-            {activeCount > 0 && (
-              <span className="min-w-[1.375rem] rounded-full bg-rijksblauw-700 px-1.5 text-center text-xs font-bold leading-[1.375rem] text-white dark:bg-rijksblauw-600">
-                {activeCount}
-                <span className="sr-only"> actief</span>
-              </span>
-            )}
-          </button>
-        </div>
+        <nldd-toolbar role="search" accessible-label="Zoeken en filteren">
+          <nldd-toolbar-item slot="start" min-width="240px" width="100%" fluid>
+            <nldd-search-field
+              ref={searchRef}
+              placeholder="Zoek op titel of inhoud"
+              accessible-label="Zoek op titel of inhoud in prompts"
+            ></nldd-search-field>
+            <MenuAction slot="overflow" icon="search" text="Zoeken" onSelect={() => searchRef.current?.focus()} />
+          </nldd-toolbar-item>
+          <nldd-toolbar-item slot="start">
+            <nldd-button
+              appearance="secondary"
+              start-icon="filter"
+              text={activeCount > 0 ? `Filters (${activeCount})` : 'Filters'}
+              accessible-label={activeCount > 0 ? `Filters, ${activeCount} actief` : 'Filters'}
+              popup-type="dialog"
+              onClick={() => setPanelOpen(true)}
+            ></nldd-button>
+            <MenuAction slot="overflow" icon="filter" text="Filters" onSelect={() => setPanelOpen(true)} />
+          </nldd-toolbar-item>
+        </nldd-toolbar>
+        <nldd-spacer size="16"></nldd-spacer>
 
-        <div className="grid w-full grid-cols-3 gap-1 min-[352px]:grid-cols-4 lg:grid-cols-8">
+        <nldd-toggle-button-group accessible-label="Categorieën" size="sm" appearance="neutral-transparent">
           {categories.map((c) => {
-            const Icon = categoryIcon(c.icon);
             const active = filters.category_ids?.includes(c.id) ?? false;
-            return (
-              <button
+            const button = (
+              <nldd-toggle-button
                 key={c.id}
-                type="button"
-                aria-pressed={active}
-                title={c.description || undefined}
+                icon={categoryIconName(c.icon)}
+                text={c.name}
+                selected={active || undefined}
                 onClick={() => update({ category_ids: toggled(filters.category_ids, c.id) })}
-                className="group flex flex-col items-center gap-1.5 rounded px-0.5 py-1 text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500"
-              >
-                <span
-                  className={clsx(
-                    'flex h-11 w-11 items-center justify-center rounded-full transition-colors',
-                    active
-                      ? 'bg-rijksblauw-700 text-white dark:bg-rijksblauw-600'
-                      : 'bg-rijksblauw-50 text-rijksblauw-700 group-hover:bg-rijksblauw-700 group-hover:text-white dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200',
-                  )}
-                >
-                  <Icon size={22} />
-                </span>
-                <span
-                  className={clsx(
-                    'max-w-full text-[0.8125rem] leading-tight text-slate-900 [hyphens:auto] [overflow-wrap:anywhere] dark:text-slate-100',
-                    active ? 'font-bold' : 'font-medium',
-                  )}
-                >
-                  {c.name}
-                </span>
-              </button>
+              ></nldd-toggle-button>
+            );
+            return c.description ? (
+              <nldd-tooltip key={c.id} text={c.description}>
+                {button}
+              </nldd-tooltip>
+            ) : (
+              button
             );
           })}
-        </div>
-      </section>
+        </nldd-toggle-button-group>
 
-      {browsing ? (
-        waiting ? (
-          <SkeletonGrid count={6} />
-        ) : (
-          <BrowseRows
-            prompts={enriched}
-            authors={authors}
-            ministryId={
-              profile?.organization_id
-                ? (ministryOf(profile.organization_id, organizations)?.id ?? null)
-                : null
-            }
-            onChanged={handleChanged}
-          />
-        )
-      ) : (
-        <section aria-labelledby="resultaten-kop">
-          <h2 id="resultaten-kop" className="sr-only">
-            Resultaten
-          </h2>
-          <div className="mb-4 flex flex-wrap items-center gap-2">
-            <p role="status" className="mr-1 text-lg font-bold text-slate-900 dark:text-slate-100">
-              {waiting
-                ? 'Zoeken…'
-                : `${prompts.length} ${prompts.length === 1 ? 'resultaat' : 'resultaten'}`}
-            </p>
-
-            {filters.category_ids?.map((id) => (
-              <ActiveChip
-                key={id}
-                label={categoryById(id)?.name ?? 'Categorie'}
-                onRemove={() => update({ category_ids: toggled(filters.category_ids, id) })}
-              />
-            ))}
-            {filters.organization_ids?.map((id) => {
-              const org = organizationById(id);
-              return (
-                <ActiveChip
-                  key={id}
-                  label={org?.code ?? org?.name ?? 'Organisatie'}
-                  onRemove={() =>
-                    update({ organization_ids: toggled(filters.organization_ids, id) })
-                  }
-                />
-              );
-            })}
-            {filters.role_ids?.map((id) => (
-              <ActiveChip
-                key={id}
-                label={roleById(id)?.name ?? 'Functie'}
-                onRemove={() => update({ role_ids: toggled(filters.role_ids, id) })}
-              />
-            ))}
-            {filters.sharing_levels?.map((level) => (
-              <ActiveChip
-                key={level}
-                label={sharingLabel(level)}
-                onRemove={() => update({ sharing_levels: toggled(filters.sharing_levels, level) })}
-              />
-            ))}
-            {filters.date_from && (
-              <ActiveChip
-                label={`Vanaf ${formatDate(filters.date_from)}`}
-                onRemove={() => update({ date_from: null })}
-              />
-            )}
-            {filters.date_to && (
-              <ActiveChip
-                label={`Tot ${formatDate(filters.date_to)}`}
-                onRemove={() => update({ date_to: null })}
-              />
-            )}
-
-            <button
-              type="button"
-              onClick={() => setSearchParams({})}
-              className="inline-flex min-h-[2.25rem] items-center gap-1 rounded px-1.5 text-sm font-semibold text-rijksblauw-500 hover:text-rijksblauw-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 dark:text-rijksblauw-200 dark:hover:text-white"
-            >
-              {urlQuery || activeCount > 0 ? (
-                'Wissen'
-              ) : (
-                <>
-                  <ArrowLeft size={16} /> Terug
-                </>
-              )}
-            </button>
-
-            <select
-              className="opl-input ml-auto w-auto"
-              value={filters.sort}
-              onChange={(e) => update({ sort: e.target.value as SortOption })}
-              aria-label="Sorteren"
-            >
-              {SORT_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
+        {tokens.length > 0 && (
+          <>
+            <nldd-spacer size="16"></nldd-spacer>
+            <nldd-container layout="wrap" gap="8" vertical-alignment="center">
+              {tokens.map((t) => (
+                <ActiveChip key={t.key} label={t.label} onRemove={t.onRemove} />
               ))}
-            </select>
-          </div>
+            </nldd-container>
+          </>
+        )}
 
-          {waiting ? (
+      </nldd-simple-section>
+
+      <nldd-simple-section>
+        {browsing ? (
+          waiting ? (
             <SkeletonGrid count={6} />
-          ) : prompts.length === 0 ? (
-            <div className="opl-card flex flex-col items-center gap-3 p-12 text-center">
-              <SearchX size={40} className="text-slate-300 dark:text-slate-500" />
-              <p className="text-slate-600 dark:text-slate-300">Geen prompts gevonden.</p>
-            </div>
           ) : (
-            <PromptGrid
-              prompts={filters.sort === 'popular' ? [...enriched].sort(byLikes) : enriched}
+            <BrowseRows
+              prompts={enriched}
               authors={authors}
+              ministryId={
+                profile?.organization_id
+                  ? (ministryOf(profile.organization_id, organizations)?.id ?? null)
+                  : null
+              }
               onChanged={handleChanged}
             />
-          )}
-        </section>
-      )}
+          )
+        ) : (
+          <>
+            <nldd-title slot="header" heading-level={2} size={4} text="Resultaten"></nldd-title>
+            <nldd-container layout="wrap" gap="12" vertical-alignment="center">
+              <nldd-text size="sm" color="secondary" aria-live="polite">
+                {waiting
+                  ? 'Zoeken…'
+                  : `${prompts.length} ${prompts.length === 1 ? 'prompt' : 'prompts'}`}
+              </nldd-text>
+              {!urlQuery && activeCount === 0 && (
+                <nldd-link
+                  href="/zoeken"
+                  size="sm"
+                  start-icon="arrow-left"
+                  text="Terug naar ontdekken"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setSearchParams({});
+                  }}
+                ></nldd-link>
+              )}
+              <nldd-spacer size="flexible"></nldd-spacer>
+              <SortDropdown value={filters.sort ?? 'newest'} onChange={(sort) => update({ sort })} />
+            </nldd-container>
+            <nldd-spacer size="16"></nldd-spacer>
+
+            {waiting ? (
+              <SkeletonGrid count={6} />
+            ) : prompts.length === 0 ? (
+              <nldd-inline-dialog
+                icon="search"
+                text="Geen prompts gevonden"
+                supporting-text="Pas je zoekopdracht of filters aan."
+              ></nldd-inline-dialog>
+            ) : (
+              <PromptGrid
+                prompts={filters.sort === 'popular' ? [...enriched].sort(byLikes) : enriched}
+                authors={authors}
+                onChanged={handleChanged}
+              />
+            )}
+          </>
+        )}
+      </nldd-simple-section>
 
       <FilterPanel
         open={panelOpen}
@@ -368,7 +336,27 @@ export default function SearchPage() {
         onChange={update}
         resultCount={loading ? null : prompts.length}
       />
-    </div>
+    </>
+  );
+}
+
+/** The sort choice. Its own component, so the change listener binds when it mounts. */
+function SortDropdown({ value, onChange }: { value: SortOption; onChange: (sort: SortOption) => void }) {
+  const ref = useRef<HTMLElement>(null);
+  useNlddEvent<CustomEvent<{ value?: string }>>(ref, 'change', (e) => {
+    const next = e.detail?.value ?? (e.target as HTMLSelectElement | null)?.value;
+    if (next) onChange(next as SortOption);
+  });
+  return (
+    <nldd-dropdown ref={ref} size="sm" width="14rem" accessible-label="Sorteren">
+      <select value={value} onChange={() => undefined} aria-label="Sorteren">
+        {SORT_OPTIONS.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </nldd-dropdown>
   );
 }
 
@@ -413,32 +401,30 @@ function BrowseRows({
 
   if (rows.length === 0) {
     return (
-      <div className="opl-card p-12 text-center text-slate-600 dark:text-slate-300">
-        Er zijn nog geen gedeelde prompts.
-      </div>
+      <nldd-inline-dialog icon="file-text" text="Er zijn nog geen gedeelde prompts."></nldd-inline-dialog>
     );
   }
 
   return (
-    <div className="space-y-8">
+    <nldd-container gap="32">
       {rows.map((row) => (
-        <section key={row.title} aria-label={row.title}>
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <h2 className="text-xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
-              {row.title}
-            </h2>
-            <Link
-              to={row.to}
-              aria-label={`Alles: ${row.title}`}
-              className="inline-flex min-h-[2.75rem] items-center gap-1 text-sm font-semibold text-rijksblauw-500 hover:text-rijksblauw-700 dark:text-rijksblauw-300 dark:hover:text-rijksblauw-200"
-            >
-              Alles <ArrowRight size={16} />
-            </Link>
-          </div>
+        <nldd-container key={row.title}>
+          <nldd-container layout="row" gap="12" vertical-alignment="center">
+            <nldd-title heading-level={2} size={4} text={row.title}></nldd-title>
+            <nldd-spacer size="flexible"></nldd-spacer>
+            <nldd-link
+              href={row.to}
+              size="sm"
+              end-icon="arrow-right"
+              text="Alles"
+              accessible-label={`Alles: ${row.title}`}
+            ></nldd-link>
+          </nldd-container>
+          <nldd-spacer size="12"></nldd-spacer>
           <PromptGrid prompts={row.prompts} authors={authors} onChanged={onChanged} />
-        </section>
+        </nldd-container>
       ))}
-    </div>
+    </nldd-container>
   );
 }
 
@@ -452,7 +438,7 @@ function PromptGrid({
   onChanged: (updated: Prompt) => void;
 }) {
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <nldd-collection item-min-width="20rem">
       {prompts.map((p) => (
         <PromptCard
           key={p.id}
@@ -461,20 +447,12 @@ function PromptGrid({
           onChanged={onChanged}
         />
       ))}
-    </div>
+    </nldd-collection>
   );
 }
 
 function ActiveChip({ label, onRemove }: { label: string; onRemove: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onRemove}
-      aria-label={`Filter ${label} weghalen`}
-      className="inline-flex min-h-[2.25rem] items-center gap-1.5 rounded-full bg-rijksblauw-50 pl-3 pr-2 text-sm font-medium text-rijksblauw-700 hover:bg-rijksblauw-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200 dark:hover:bg-rijksblauw-500/25"
-    >
-      {label}
-      <X size={14} />
-    </button>
-  );
+  const ref = useRef<HTMLElement>(null);
+  useNlddEvent(ref, 'dismiss', () => onRemove());
+  return <nldd-token ref={ref} text={label} control="dismiss" dismiss-text={`Filter ${label} weghalen`}></nldd-token>;
 }

@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2, ArrowUp, ArrowDown, Upload } from '@/components/common/icons';
-import toast from 'react-hot-toast';
-import Modal from '@/components/common/Modal';
+import { useEffect, useRef, useState } from 'react';
+import { notify } from '@/lib/notify';
+import AdminSheet from '@/components/admin/AdminSheet';
+import { BoundMultiLine, BoundTextField } from '@/components/admin/AdminFields';
+import MenuAction from '@/components/common/MenuAction';
+import { useNlddEvent } from '@/lib/nldd';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import {
@@ -12,7 +14,21 @@ import {
 } from '@/services/repository';
 import { logAdminAction } from '@/services/adminService';
 import type { Category } from '@/types';
-import StackTable from '@/components/common/StackTable';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/container';
+import '@nldd/design-system/dropdown';
+import '@nldd/design-system/form';
+import '@nldd/design-system/form-actions';
+import '@nldd/design-system/form-field';
+import '@nldd/design-system/icon-cell';
+import '@nldd/design-system/inline-dialog';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/list-item-segment';
+import '@nldd/design-system/menu';
+import '@nldd/design-system/text-cell';
+import '@nldd/design-system/title';
 
 interface Editor {
   id?: string;
@@ -40,6 +56,11 @@ export default function CategoryManagerPage() {
   const [toDelete, setToDelete] = useState<Category | null>(null);
   const [csvOpen, setCsvOpen] = useState(false);
   const [csv, setCsv] = useState('');
+  const iconRef = useRef<HTMLElement>(null);
+  useNlddEvent<CustomEvent<{ value: string }>>(iconRef, 'change', (e) => {
+    const icon = e.detail?.value ?? (e.target as HTMLSelectElement | null)?.value;
+    if (icon) setEditor((ed) => (ed ? { ...ed, icon } : ed));
+  });
 
   async function load() {
     setLoading(true);
@@ -52,7 +73,7 @@ export default function CategoryManagerPage() {
 
   async function save() {
     if (!editor?.name.trim()) {
-      toast.error('Naam is verplicht');
+      notify.error('Naam is verplicht');
       return;
     }
     const payload = {
@@ -63,11 +84,11 @@ export default function CategoryManagerPage() {
     if (editor.id) {
       await updateCategory(editor.id, payload);
       await logAdminAction({ action: 'update_category', entity_type: 'category', entity_id: editor.id, changes: payload });
-      toast.success('Categorie bijgewerkt');
+      notify.success('Categorie bijgewerkt');
     } else {
       const created = await createCategory(payload);
       await logAdminAction({ action: 'create_category', entity_type: 'category', entity_id: created.id, changes: payload });
-      toast.success('Categorie toegevoegd');
+      notify.success('Categorie toegevoegd');
     }
     setEditor(null);
     await load();
@@ -77,7 +98,7 @@ export default function CategoryManagerPage() {
   async function remove(c: Category) {
     await deleteCategory(c.id);
     await logAdminAction({ action: 'delete_category', entity_type: 'category', entity_id: c.id });
-    toast.success('Categorie verwijderd');
+    notify.success('Categorie verwijderd');
     await load();
     await refresh();
   }
@@ -104,7 +125,7 @@ export default function CategoryManagerPage() {
       count++;
     }
     await logAdminAction({ action: 'bulk_import_categories', entity_type: 'category', changes: { count } });
-    toast.success(`${count} categorieën geïmporteerd`);
+    notify.success(`${count} categorieën geïmporteerd`);
     setCsv('');
     setCsvOpen(false);
     await load();
@@ -112,108 +133,129 @@ export default function CategoryManagerPage() {
   }
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Categorieën beheren</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">{categories.length} categorieën</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button className="opl-btn-secondary" onClick={() => setCsvOpen(true)}>
-            <Upload size={16} /> CSV import
-          </button>
-          <button
-            className="opl-btn-primary"
-            onClick={() => setEditor({ name: '', description: '', icon: 'Folder' })}
-          >
-            <Plus size={18} /> Nieuwe categorie
-          </button>
-        </div>
-      </div>
+    <nldd-container layout="stack" gap="24">
+      <nldd-title
+        heading-level={1}
+        size={2}
+        text="Categorieën beheren"
+        supporting-text={`${categories.length} categorieën`}
+      ></nldd-title>
+      <nldd-button-group>
+        <nldd-button
+          appearance="primary"
+          start-icon="plus"
+          text="Nieuwe categorie"
+          onClick={() => setEditor({ name: '', description: '', icon: 'Folder' })}
+        ></nldd-button>
+        <nldd-button appearance="secondary" start-icon="upload" text="CSV importeren" onClick={() => setCsvOpen(true)}></nldd-button>
+      </nldd-button-group>
 
-      <div className="opl-card overflow-hidden">
+      <nldd-list appearance="box-tinted" accessible-label="Categorieën">
+        {!loading &&
+          categories.map((c) => (
+            <nldd-list-item key={c.id}>
+              <nldd-list-item-segment button width="full" accessible-label={`Bewerk ${c.name}`} onClick={() => setEditor({ id: c.id, name: c.name, description: c.description ?? '', icon: c.icon ?? 'Folder' })}>
+                <nldd-text-cell text={c.name} supporting-text={c.description || 'Geen beschrijving'}></nldd-text-cell>
+                <nldd-text-cell hide-below="md" width="fit-content" size="sm" color="secondary" text={c.icon || 'Geen icoon'}></nldd-text-cell>
+              </nldd-list-item-segment>
+              <nldd-list-item-segment
+                button
+                popovertarget={`categorie-acties-${c.id}`}
+                accessible-label={`Acties voor ${c.name}`}
+              >
+                <nldd-icon-cell icon="ellipsis" size="20" color="secondary"></nldd-icon-cell>
+              </nldd-list-item-segment>
+            </nldd-list-item>
+          ))}
         {loading ? (
-          <div className="skeleton h-48 w-full" />
+          <nldd-inline-dialog slot="empty" variant="loading" text="Categorieën laden"></nldd-inline-dialog>
         ) : (
-          <StackTable>
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-              <tr>
-                <th className="px-4 py-3 font-medium">Naam</th>
-                <th className="hidden px-4 py-3 font-medium sm:table-cell">Beschrijving</th>
-                <th className="hidden px-4 py-3 font-medium sm:table-cell">Icoon</th>
-                <th className="px-4 py-3 text-right font-medium">Acties</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-              {categories.map((c, i) => (
-                <tr key={c.id} className="hover:bg-slate-50 dark:hover:bg-slate-800">
-                  <td className="px-4 py-3 font-medium text-slate-800 dark:text-slate-100">{c.name}</td>
-                  <td className="hidden px-4 py-3 text-slate-500 sm:table-cell dark:text-slate-400">{c.description}</td>
-                  <td className="hidden px-4 py-3 text-slate-400 sm:table-cell dark:text-slate-500">
-                    <code className="text-xs">{c.icon}</code>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => move(c, -1)} disabled={i === 0} className="rounded p-1.5 text-slate-400 hover:bg-slate-100 disabled:opacity-30 dark:text-slate-500 dark:hover:bg-slate-800" aria-label="Omhoog">
-                        <ArrowUp size={15} />
-                      </button>
-                      <button onClick={() => move(c, 1)} disabled={i === categories.length - 1} className="rounded p-1.5 text-slate-400 hover:bg-slate-100 disabled:opacity-30 dark:text-slate-500 dark:hover:bg-slate-800" aria-label="Omlaag">
-                        <ArrowDown size={15} />
-                      </button>
-                      <button onClick={() => setEditor({ id: c.id, name: c.name, description: c.description ?? '', icon: c.icon ?? 'Folder' })} className="rounded p-1.5 text-rijksblauw-500 hover:bg-rijksblauw-50 dark:hover:bg-rijksblauw-500/15" aria-label="Bewerken">
-                        <Pencil size={15} />
-                      </button>
-                      <button onClick={() => setToDelete(c)} className="rounded p-1.5 text-rijksrood hover:bg-red-50 dark:hover:bg-red-500/10" aria-label="Verwijderen">
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          </StackTable>
+          <nldd-inline-dialog slot="empty" icon="categories" text="Nog geen categorieën"></nldd-inline-dialog>
         )}
-      </div>
+      </nldd-list>
+      {categories.map((c, i) => (
+        <nldd-menu key={c.id} id={`categorie-acties-${c.id}`} placement="bottom-end">
+          <MenuAction icon="pencil" text="Bewerk" onSelect={() => setEditor({ id: c.id, name: c.name, description: c.description ?? '', icon: c.icon ?? 'Folder' })} />
+          <MenuAction icon="arrow-up" text="Omhoog" disabled={i === 0 || undefined} onSelect={() => move(c, -1)} />
+          <MenuAction icon="arrow-down" text="Omlaag" disabled={i === categories.length - 1 || undefined} onSelect={() => move(c, 1)} />
+          <nldd-menu-divider></nldd-menu-divider>
+          <MenuAction icon="trash" text="Verwijder" destructive onSelect={() => setToDelete(c)} />
+        </nldd-menu>
+      ))}
 
-      <Modal open={!!editor} onClose={() => setEditor(null)} title={editor?.id ? 'Categorie bewerken' : 'Nieuwe categorie'} size="max-w-md">
-        {editor && (
-          <div className="space-y-4">
-            <div>
-              <label className="opl-label">Naam</label>
-              <input className="opl-input" value={editor.name} onChange={(e) => setEditor({ ...editor, name: e.target.value })} autoFocus />
-            </div>
-            <div>
-              <label className="opl-label">Beschrijving</label>
-              <input className="opl-input" value={editor.description} onChange={(e) => setEditor({ ...editor, description: e.target.value })} />
-            </div>
-            <div>
-              <label className="opl-label">Icoon</label>
-              <select className="opl-input" value={editor.icon} onChange={(e) => setEditor({ ...editor, icon: e.target.value })}>
-                {ICON_OPTIONS.map((ic) => (
-                  <option key={ic} value={ic}>
-                    {ic}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex justify-end gap-3">
-              <button className="opl-btn-secondary" onClick={() => setEditor(null)}>Annuleren</button>
-              <button className="opl-btn-primary" onClick={save}>Opslaan</button>
-            </div>
-          </div>
-        )}
-      </Modal>
+      <AdminSheet
+        open={!!editor}
+        onClose={() => setEditor(null)}
+        title={editor?.id ? 'Categorie bewerken' : 'Nieuwe categorie'}
+        width="480px"
+      >
+        <nldd-form>
+          <form
+            noValidate
+            onSubmit={(e) => {
+              e.preventDefault();
+              void save();
+            }}
+          >
+            <nldd-form-field label="Naam">
+              <BoundTextField value={editor?.name ?? ''} onValue={(name) => editor && setEditor({ ...editor, name })}></BoundTextField>
+            </nldd-form-field>
+            <nldd-form-field label="Beschrijving" optional>
+              <BoundTextField
+                value={editor?.description ?? ''}
+                onValue={(description) => editor && setEditor({ ...editor, description })}
+              ></BoundTextField>
+            </nldd-form-field>
+            <nldd-form-field label="Icoon">
+              <nldd-dropdown ref={iconRef}>
+                <select value={editor?.icon ?? 'Folder'} onChange={() => undefined}>
+                  {ICON_OPTIONS.map((ic) => (
+                    <option key={ic} value={ic}>
+                      {ic}
+                    </option>
+                  ))}
+                </select>
+              </nldd-dropdown>
+            </nldd-form-field>
+            <nldd-form-actions>
+              <nldd-button-group>
+                <nldd-button appearance="primary" type="submit" text="Bewaar"></nldd-button>
+              </nldd-button-group>
+            </nldd-form-actions>
+          </form>
+        </nldd-form>
+      </AdminSheet>
 
-      <Modal open={csvOpen} onClose={() => setCsvOpen(false)} title="CSV-import (categorieën)" size="max-w-lg">
-        <p className="mb-2 text-sm text-slate-500 dark:text-slate-400">Eén categorie per regel, formaat: <code>naam,beschrijving,icoon</code></p>
-        <textarea className="opl-input min-h-[160px] resize-y font-mono text-xs" value={csv} onChange={(e) => setCsv(e.target.value)} placeholder={'Subsidies,Aanvragen en regelingen,FileText\nKlachten,Klachtafhandeling,Mail'} />
-        <div className="mt-4 flex justify-end gap-3">
-          <button className="opl-btn-secondary" onClick={() => setCsvOpen(false)}>Annuleren</button>
-          <button className="opl-btn-primary" onClick={importCsv} disabled={!csv.trim()}>Importeren</button>
-        </div>
-      </Modal>
+      <AdminSheet open={csvOpen} onClose={() => setCsvOpen(false)} title="CSV-import (categorieën)" width="560px">
+        <nldd-form>
+          <form
+            noValidate
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!csv.trim()) {
+                notify.error('Plak eerst een of meer regels.');
+                return;
+              }
+              void importCsv();
+            }}
+          >
+            <nldd-form-field label="Categorieën" supporting-label="Eén categorie per regel, formaat: naam,beschrijving,icoon">
+              <BoundMultiLine
+                value={csv}
+                onValue={setCsv}
+                rows={8}
+                no-spellcheck
+                placeholder={'Subsidies,Aanvragen en regelingen,FileText\nKlachten,Klachtafhandeling,Mail'}
+              ></BoundMultiLine>
+            </nldd-form-field>
+            <nldd-form-actions>
+              <nldd-button-group>
+                <nldd-button appearance="primary" type="submit" start-icon="upload" text="Importeer"></nldd-button>
+              </nldd-button-group>
+            </nldd-form-actions>
+          </form>
+        </nldd-form>
+      </AdminSheet>
 
       <ConfirmDialog
         open={!!toDelete}
@@ -224,6 +266,6 @@ export default function CategoryManagerPage() {
         onConfirm={() => toDelete && remove(toDelete)}
         onClose={() => setToDelete(null)}
       />
-    </div>
+    </nldd-container>
   );
 }

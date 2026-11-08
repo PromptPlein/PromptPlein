@@ -1,8 +1,19 @@
-import { useState, type FormEvent } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import toast from 'react-hot-toast';
+import { useRef, useState, type FormEvent } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { notify } from '@/lib/notify';
 import { useAuth } from '@/context/AuthContext';
+import { useNlddValue } from '@/lib/nldd';
 import AuthLayout from './AuthLayout';
+import '@nldd/design-system/banner';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/form';
+import '@nldd/design-system/form-actions';
+import '@nldd/design-system/form-field';
+import '@nldd/design-system/link';
+import '@nldd/design-system/password-field';
+import '@nldd/design-system/spacer';
+import '@nldd/design-system/text-field';
 
 export default function LoginPage() {
   const { signIn, configured } = useAuth();
@@ -11,6 +22,10 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
+  const emailRef = useRef<HTMLElement & { value?: string }>(null);
+  const passwordRef = useRef<HTMLElement & { value?: string }>(null);
+  useNlddValue(emailRef, email, setEmail);
+  useNlddValue(passwordRef, password, setPassword);
 
   const from = (location.state as { from?: string } | null)?.from;
   const redirectTo = from ?? '/';
@@ -18,13 +33,17 @@ export default function LoginPage() {
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (busy) return;
+    if (!configured) {
+      notify.error('Inloggen kan nu niet: er is geen backend ingesteld.');
+      return;
+    }
     setBusy(true);
     try {
       await signIn(email.trim(), password);
-      toast.success('Welkom terug!');
+      notify.success('Welkom terug!');
       navigate(redirectTo, { replace: true });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Inloggen mislukt.');
+      notify.error(err instanceof Error ? err.message : 'Inloggen mislukt.');
     } finally {
       setBusy(false);
     }
@@ -37,55 +56,50 @@ export default function LoginPage() {
       footer={
         <>
           Nog geen account?{' '}
-          {/* Geef het oorspronkelijke doel (from) door: wie eerst registreert
-              en dan terugkomt om in te loggen, landt alsnog waar hij heen wilde. */}
-          <Link
-            to="/auth/registreren"
-            state={from ? { from } : undefined}
-            className="font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
-          >
-            Registreren
-          </Link>
+          {/* Pass the original destination on: whoever signs up first and
+              then comes back to log in still lands where they were going. */}
+          <nldd-link
+            href="/auth/registreren"
+            text="Registreren"
+            onClick={(e) => {
+              if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+              e.preventDefault();
+              navigate('/auth/registreren', { state: from ? { from } : undefined });
+            }}
+          ></nldd-link>
         </>
       }
     >
       {!configured && (
-        <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">
-          Geen Supabase-backend geconfigureerd. Authenticatie is uitgeschakeld.
-        </p>
+        <>
+          <nldd-banner variant="warning" size="sm" text="Geen Supabase-backend geconfigureerd. Authenticatie is uitgeschakeld."></nldd-banner>
+          <nldd-spacer size="16"></nldd-spacer>
+        </>
       )}
-      <form onSubmit={submit} className="space-y-3">
-        <input
-          type="email"
-          autoFocus
-          required
-          className="opl-input"
-          placeholder="E-mailadres"
-          autoComplete="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-        <input
-          type="password"
-          required
-          className="opl-input"
-          placeholder="Wachtwoord"
-          autoComplete="current-password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-        <button type="submit" className="opl-btn-primary w-full" disabled={busy || !configured}>
-          {busy ? 'Bezig…' : 'Inloggen'}
-        </button>
-      </form>
-      <div className="mt-3 text-right">
-        <Link
-          to="/auth/wachtwoord-vergeten"
-          className="text-sm text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100"
-        >
-          Wachtwoord vergeten?
-        </Link>
-      </div>
+      <nldd-form>
+        <form onSubmit={submit}>
+          <nldd-form-field label="E-mailadres">
+            <nldd-text-field ref={emailRef} type="email" required autocomplete="email" name="email"></nldd-text-field>
+          </nldd-form-field>
+          <nldd-form-field label="Wachtwoord">
+            <nldd-password-field ref={passwordRef} required autocomplete="current-password" name="password"></nldd-password-field>
+            <nldd-form-field-help-text>
+              <nldd-link href="/auth/wachtwoord-vergeten" size="sm" text="Wachtwoord vergeten?"></nldd-link>
+            </nldd-form-field-help-text>
+          </nldd-form-field>
+          <nldd-form-actions>
+            <nldd-button-group>
+              <nldd-button
+                appearance="primary"
+                type="submit"
+                text="Log in"
+                loading={busy || undefined}
+                loading-text="Bezig met inloggen"
+              ></nldd-button>
+            </nldd-button-group>
+          </nldd-form-actions>
+        </form>
+      </nldd-form>
     </AuthLayout>
   );
 }

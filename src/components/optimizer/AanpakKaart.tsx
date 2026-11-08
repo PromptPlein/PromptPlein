@@ -1,8 +1,17 @@
 import { useState } from 'react';
-import { Sparkles } from '@/components/common/icons';
 import InfoDot from '@/components/common/InfoDot';
 import type { Technique } from '@/types';
 import { techniekKaart } from '@/lib/techniekDoelen';
+import '@nldd/design-system/button';
+import '@nldd/design-system/card';
+import '@nldd/design-system/container';
+import '@nldd/design-system/divider';
+import '@nldd/design-system/icon';
+import '@nldd/design-system/icon-cell';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/text';
+import '@nldd/design-system/text-cell';
 
 export interface AanpakOptie {
   id: string;
@@ -11,10 +20,10 @@ export interface AanpakOptie {
 }
 
 /**
- * Welke aanpak de AI heeft gekozen en waarom. Op Prompt maken kiest niemand meer
- * zelf een framework, maar de naam blijft zichtbaar: zo zie je waar de velden
- * vandaan komen. "Andere aanpak" toont de alternatieven die de AI al had, voor als
- * de keuze er naast zit. Wisselen vult de velden opnieuw in.
+ * Which approach the AI chose and why. On Prompt maken nobody picks a framework,
+ * but the name stays visible, so you see where the fields come from. "Andere
+ * aanpak" shows the alternatives the AI already gave, for when the choice is off.
+ * Switching fills in the fields again.
  */
 export default function AanpakKaart({
   technique,
@@ -36,69 +45,58 @@ export default function AanpakKaart({
   const kaart = techniekKaart(technique);
 
   return (
-    <section
-      aria-label="Gekozen aanpak"
-      className="animate-fade-in rounded-xl border border-slate-200 bg-white px-4 pb-3 pt-4 shadow-[inset_0_4px_0_0_theme(colors.rijksoranje.vast)] dark:border-slate-700 dark:bg-slate-800"
-    >
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <span
-          aria-hidden="true"
-          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/20 dark:text-rijksblauw-200"
-        >
-          <Sparkles size={24} />
-        </span>
-        <div className="min-w-0 flex-1 basis-72">
-          <p className="text-lg font-bold leading-tight text-rijksblauw-700 dark:text-rijksblauw-200">
-            {titel}
-          </p>
-          <p className="flex flex-wrap items-center gap-x-1 text-[0.9375rem] text-slate-600 dark:text-slate-300">
-            <span>
-              Aanpak: <span className="font-semibold">{technique.name}</span>
-              {reden ? `. ${reden}` : ''}
-            </span>
-            {kaart.info && <InfoDot label={`Uitleg over ${technique.name}`} text={kaart.info} />}
-          </p>
-        </div>
-        {opties.length > 0 && onKies && (
-          <button
-            type="button"
-            aria-expanded={open}
-            onClick={() => setOpen((v) => !v)}
-            className="min-h-11 shrink-0 font-semibold text-rijksblauw-500 transition-colors hover:underline dark:text-rijksblauw-200"
-          >
-            Andere aanpak
-          </button>
-        )}
-      </div>
+    <nldd-card accessible-label="Gekozen aanpak">
+      <nldd-container padding="16" gap="12">
+        <nldd-container layout="wrap" gap="12" vertical-alignment="center">
+          <nldd-icon icon="sparkles" size="24" color="lintblauw" box></nldd-icon>
+          <nldd-container width="18rem" gap="2">
+            <nldd-text size="lg" weight="bold" color="accent">
+              {titel}
+            </nldd-text>
+            <nldd-container layout="row" gap="4" vertical-alignment="center">
+              <nldd-text>
+                Aanpak: <strong>{technique.name}</strong>
+                {reden ? `. ${reden}` : ''}
+              </nldd-text>
+              {kaart.info && <InfoDot label={`Uitleg over ${technique.name}`} text={kaart.info} />}
+            </nldd-container>
+          </nldd-container>
+          {opties.length > 0 && onKies && (
+            <nldd-button
+              appearance="neutral-transparent"
+              text="Andere aanpak"
+              end-icon={open ? 'chevron-up' : 'chevron-down'}
+              onClick={() => setOpen((v) => !v)}
+            ></nldd-button>
+          )}
+        </nldd-container>
 
-      {open && onKies && (
-        <div className="animate-fade-in mt-3 border-t border-slate-200 pt-3 dark:border-slate-700">
-          <p className="mb-2 text-sm text-slate-500 dark:text-slate-400">
-            Kies je een andere aanpak, dan vult de AI de velden opnieuw in.
-          </p>
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,18rem),1fr))] gap-2">
-            {opties.map((o) => (
-              <button
-                key={o.id}
-                type="button"
-                disabled={disabled}
-                onClick={() => {
-                  setOpen(false);
-                  onKies(o.id);
-                }}
-                className="flex min-h-16 flex-col rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-left transition-colors hover:border-rijksblauw-700 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500/50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900/40 dark:hover:border-rijksblauw-200 dark:hover:bg-slate-900"
-              >
-                <span className="font-bold text-rijksblauw-700 dark:text-rijksblauw-200">{o.naam}</span>
-                {o.waarom && (
-                  <span className="text-[0.9375rem] leading-snug text-slate-600 dark:text-slate-300">
-                    {o.waarom}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-    </section>
+        {open && onKies && (
+          <nldd-container gap="8">
+            <nldd-divider></nldd-divider>
+            <nldd-text size="sm" color="secondary">
+              Kies je een andere aanpak, dan vult de AI de velden opnieuw in.
+            </nldd-text>
+            <nldd-list appearance="box-tinted" accessible-label="Andere aanpak">
+              {opties.map((o) => (
+                <nldd-list-item
+                  key={o.id}
+                  button
+                  disabled={disabled || undefined}
+                  onClick={() => {
+                    if (disabled) return;
+                    setOpen(false);
+                    onKies(o.id);
+                  }}
+                >
+                  <nldd-text-cell text={o.naam} supporting-text={o.waarom || undefined}></nldd-text-cell>
+                  <nldd-icon-cell icon="chevron-right" size="20"></nldd-icon-cell>
+                </nldd-list-item>
+              ))}
+            </nldd-list>
+          </nldd-container>
+        )}
+      </nldd-container>
+    </nldd-card>
   );
 }

@@ -7,10 +7,7 @@
  */
 
 /** Maximale bestandsgrootte (10 MB) — grotere bestanden weigeren we vriendelijk. */
-export const MAX_DOC_BYTES = 10 * 1024 * 1024;
-
-/** Ondersteunde extensies (voor het accept-attribuut en de validatie). */
-export const ACCEPTED_DOC_EXTENSIONS = ['.txt', '.md', '.pdf', '.docx'] as const;
+const MAX_DOC_BYTES = 10 * 1024 * 1024;
 export const ACCEPTED_DOC_ACCEPT =
   '.txt,.md,.markdown,.pdf,.docx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 

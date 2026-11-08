@@ -7,23 +7,9 @@ import {
   useRef,
   useState,
   type ReactNode,
+  type RefObject,
 } from 'react';
-import {
-  BookmarkPlus,
-  FolderOpen,
-  Loader2,
-  Map as MapIcon,
-  Maximize2,
-  Minimize2,
-  Paperclip,
-  Scissors,
-  Send,
-  Sparkles,
-  Square,
-  Undo2,
-  X,
-} from '@/components/common/icons';
-import clsx from 'clsx';
+import { useNlddEvent, useNlddValue } from '@/lib/nldd';
 import InfoDot from '@/components/common/InfoDot';
 import DictationButton from '@/components/common/DictationButton';
 import ThinkingToggle from '@/components/common/ThinkingToggle';
@@ -37,22 +23,41 @@ import ConversationToggle from './ConversationToggle';
 import { useChatVoice } from './useChatVoice';
 import { MAX_CHAT_ATTACHMENTS, MAX_CHAT_ATTACHMENT_BYTES } from './useChatController';
 import type { ChatAttachment } from '@/types';
+import '@nldd/design-system/banner';
+import '@nldd/design-system/button';
+import '@nldd/design-system/container';
+import '@nldd/design-system/icon';
+import '@nldd/design-system/icon-button';
+import '@nldd/design-system/multi-line-text-field';
+import '@nldd/design-system/spacer';
+import '@nldd/design-system/text';
+import '@nldd/design-system/toggle-button';
+import '@nldd/design-system/token';
+import '@nldd/design-system/tooltip';
 
 const MAX_MB = MAX_CHAT_ATTACHMENT_BYTES / (1024 * 1024);
 
 /**
- * Bovengrens van het tekstvak. Daarboven groeit het niet verder mee en scrollt
- * de inhoud van binnen: anders zou een lange tekst het gesprek erboven volledig
- * wegdrukken.
+ * Upper bound of the field in rows. Above it the field stops growing and scrolls
+ * inside, or a long text would push the conversation above it out of view.
  */
-const MAX_HEIGHT = 240;
+const MAX_ROWS = 8;
+/** The enlarged field, in rows. */
+const ENLARGED_ROWS = 16;
+/** Rough characters per row, to count wrapped lines as rows. */
+const CHARS_PER_ROW = 60;
 /**
  * Een invulplek tussen haken. `[ontbreekt]` hoort daar niet bij: dat is een woord
  * dat de AI zelf gebruikt als iets niet in de bronnen staat.
  */
 const SLOT = /\[(?!ontbreekt\])[^\]\n]+\]/;
-/** Het vergrote tekstvak: dit deel van de vensterhoogte. */
-const ENLARGED_SHARE = 0.55;
+
+/** Rows a text needs: its lines, with long lines counted as the rows they wrap to. */
+function rowsFor(text: string): number {
+  return text
+    .split('\n')
+    .reduce((sum, line) => sum + Math.max(1, Math.ceil(line.length / CHARS_PER_ROW)), 0);
+}
 
 /** Uitkomst van een verbeterslag op de getypte tekst. */
 export interface OptimizeResult {
@@ -208,7 +213,6 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
   // Lange prompts zijn hier de hoofdzaak, dus het vak mag groter als de tekst
   // niet meer past.
   const [enlarged, setEnlarged] = useState(false);
-  const [overflowing, setOverflowing] = useState(false);
   useEffect(() => onEnlargedChange?.(enlarged), [enlarged, onEnlargedChange]);
   // Een leeg vak hoeft niet groot te zijn: de begroeting van een lege chat komt
   // dan ook weer terug.
@@ -237,8 +241,25 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
     framework?: string;
     reden?: string;
   } | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fieldRef = useRef<HTMLElement & { value?: string }>(null);
+  // The voice hook, dictation and caret placement need the native textarea, which
+  // nldd-multi-line-text-field keeps in its shadow root. Resolved on every read,
+  // because the field renders it asynchronously.
+  const textareaRef = useMemo<RefObject<HTMLTextAreaElement>>(
+    () => ({
+      get current() {
+        return fieldRef.current?.shadowRoot?.querySelector('textarea') ?? null;
+      },
+    }),
+    [],
+  );
+  /** The native textarea, brought in step with the value React just set. */
+  function inner(): HTMLTextAreaElement | null {
+    const el = textareaRef.current;
+    const value = fieldRef.current?.value;
+    if (el && value !== undefined && el.value !== value) el.value = value;
+    return el;
+  }
 
   // Inspreken: de uitgeschreven tekst komt op de plek van de cursor, en
   // versturen blijft een eigen handeling, zodat je eerst kunt nalezen.
@@ -265,23 +286,47 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [dictationState, cancelDictation]);
 
-  // Meegroeien met de inhoud: eerst terug naar 'auto' (anders houdt het vak zijn
-  // vorige, grotere hoogte vast en meet scrollHeight de oude stand), dan precies
-  // zo hoog als de tekst nodig heeft. Boven MAX_HEIGHT stopt het en neemt de
-  // eigen schuifbalk het over.
-  useLayoutEffect(() => {
-    const el = textareaRef.current;
-    if (!el) return;
-    el.style.height = 'auto';
-    // Het vak rekent met border-box, dus een eventuele rand telt mee in de
-    // hoogte. Alleen scrollHeight aanhouden laat de tekst er net overheen lopen,
-    // en dat is precies genoeg voor een schuifbalk bij tekst die eigenlijk past.
-    const borders = el.offsetHeight - el.clientHeight;
-    const needed = el.scrollHeight + borders;
-    const limit = enlarged ? Math.round(window.innerHeight * ENLARGED_SHARE) : MAX_HEIGHT;
-    el.style.height = `${Math.min(limit, needed)}px`;
-    setOverflowing(needed > MAX_HEIGHT);
-  }, [text, enlarged]);
+  const neededRows = rowsFor(text);
+  const overflowing = neededRows > MAX_ROWS;
+  const rows = enlarged
+    ? ENLARGED_ROWS
+    : Math.max(prominent ? 2 : 1, Math.min(MAX_ROWS, neededRows));
+
+  // React's onChange never reaches an nldd field: the value comes in through the
+  // element's own input event.
+  useNlddValue(fieldRef, text, (value) => {
+    setText(value);
+    // Een @ als allereerste teken is een commando, geen tekst: dat opent
+    // de context. Verderop in een zin (een e-mailadres, een naam) doen
+    // we niets, anders zou hij bij elk adres opengaan.
+    if (value === '@' && onContext) {
+      clearText();
+      onContext('context');
+    }
+  });
+  useNlddEvent<KeyboardEvent>(fieldRef, 'keydown', (e) => {
+    // Enter verzendt; Shift+Enter maakt een nieuwe regel.
+    // Tijdens samenstellen van een teken bevestigt Enter dat teken.
+    // Op het schermtoetsenbord blijft de returntoets een nieuwe regel, zoals
+    // in elke berichtenapp: versturen doe je met de knop Verstuur.
+    if (e.key === 'Enter' && !touchKeyboard && !e.shiftKey && !e.isComposing) {
+      e.preventDefault();
+      submit();
+    }
+  });
+
+  /** Opens the file dialog. A native picker only opens from a real input, made here instead of in the markup. */
+  function pickFile() {
+    if (!allowAttachments) return;
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = ACCEPTED_DOC_ACCEPT;
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (file) void onAddFile(file);
+    };
+    input.click();
+  }
 
   // Van buitenaf tekst klaarzetten (startsjablonen). Focussen doen we pas nadat
   // React de nieuwe waarde in het veld heeft gezet — anders zou de cursor nog op
@@ -297,30 +342,31 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
         focusAfterFill.current = 'end';
       },
       fillPrompt(value: string, made: { framework?: string; reden?: string }) {
-        setMadePrompt({ text: value, before: textareaRef.current?.value ?? '', ...made });
+        setMadePrompt({ text: value, before: fieldRef.current?.value ?? '', ...made });
         setBeforeOptimize(null);
         setText(value);
         setEnlarged(true);
         focusAfterFill.current = 'start';
       },
-      getText: () => textareaRef.current?.value ?? '',
+      getText: () => fieldRef.current?.value ?? '',
       openFilePicker() {
-        if (allowAttachments) fileInputRef.current?.click();
+        pickFile();
       },
       focus() {
-        const el = textareaRef.current;
-        if (!el || document.activeElement === el) return;
+        const el = inner();
+        if (!el || fieldRef.current?.shadowRoot?.activeElement === el) return;
         el.focus();
         el.setSelectionRange(el.value.length, el.value.length);
       },
     }),
-    [setText, allowAttachments],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [setText, allowAttachments, onAddFile],
   );
   useLayoutEffect(() => {
     const place = focusAfterFill.current;
     if (!place) return;
     focusAfterFill.current = null;
-    const el = textareaRef.current;
+    const el = inner();
     if (!el) return;
     el.focus();
     // Staat er een invulplek tussen [haken], selecteer dan de eerste: je typt er
@@ -442,431 +488,301 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
     : 'Enter verstuurt. Shift+Enter geeft een nieuwe regel.';
 
   return (
-    <div
-      className={clsx(
-        'px-4 pb-3 pt-3 sm:px-6 laag:!pb-1 laag:!pt-1',
-        // In een leeg gesprek staat het veld los in het midden, zonder scheidslijn.
-        !prominent && 'border-t border-slate-200 dark:border-slate-700',
-      )}
-    >
-      {/* Even breed als de leeskolom in ChatMessageList, zodat je tekst en het
-          antwoord op dezelfde lijn beginnen. */}
-      <div className="mx-auto max-w-[60ch]">
-        {/* Een routekaart programmeert de AI niet zelf: PromptPlein heeft een
-            vaste, geteste versie, en Verstuur maakt hem daarmee. */}
-        {isRoutekaart && !streaming && (
-          <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-rijksblauw-200 bg-rijksblauw-50/70 px-3 py-2 text-xs text-slate-700 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10 dark:text-slate-200">
-            <MapIcon size={15} className="shrink-0 text-rijksblauw-600 dark:text-rijksblauw-300" />
-            <span className="min-w-0 flex-1 basis-48">
-              Dit is een routekaart. PromptPlein maakt hem direct in de vaste rijksstijl, zonder AI:
-              altijd dezelfde opmaak en meteen klaar. Ook Verstuur maakt hem zo.
-            </span>
-            <button
-              type="button"
-              className="opl-btn-primary !px-2.5 !py-1.5 text-xs"
-              onClick={makeRoutekaart}
-              disabled={disabled}
-            >
-              <MapIcon size={14} /> Maak de routekaart
-            </button>
-          </div>
-        )}
-        {/* Eén omhulsel dat er als hét invoerveld uitziet: bijlagen, tekstvak en
-            knoppen zitten er samen in en de rand licht op zodra je in het tekstvak
-            staat (focus-within). Zo hoort alles zichtbaar bij elkaar, terwijl de
-            knoppen buiten het tekstvak blijven staan — daar kan de tekst dus nooit
-            onderdoor lopen. */}
-        <div
-          className={clsx(
-            'relative rounded-xl border bg-white transition-colors dark:bg-slate-800',
-            'focus-within:border-rijksblauw-500 focus-within:ring-2 focus-within:ring-rijksblauw-500/20',
-            // In een leeg gesprek springt het veld eruit: blauwe rand, zachte gloed
-            // en een schaduw, zodat meteen duidelijk is waar je typt.
-            prominent
-              ? 'border-rijksblauw-300 shadow-md ring-4 ring-rijksblauw-500/10 dark:border-rijksblauw-500/50 dark:ring-rijksblauw-500/10'
-              : 'border-slate-300 dark:border-slate-600',
-            disabled && 'opacity-60',
-          )}
-          // Klikken op de rand of de lege ruimte eromheen zet de cursor in de
-          // tekst, zoals je van één veld verwacht.
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) {
-              e.preventDefault();
-              textareaRef.current?.focus();
-            }
-          }}
-          onDragEnter={onDragEnter}
-          onDragOver={onDragOver}
-          onDragLeave={onDragLeave}
-          onDrop={(e) => void onDrop(e)}
+    <nldd-container gap="8">
+      {/* Een routekaart programmeert de AI niet zelf: PromptPlein heeft een
+          vaste, geteste versie, en Verstuur maakt hem daarmee. */}
+      {isRoutekaart && !streaming && (
+        <nldd-banner
+          size="sm"
+          variant="accent"
+          icon="map"
+          text="Dit is een routekaart."
+          supporting-text="PromptPlein maakt hem direct in de vaste rijksstijl, zonder AI: altijd dezelfde opmaak en meteen klaar. Ook Verstuur maakt hem zo."
         >
-          {allowAttachments && attachments.length > 0 && (
-            <div className="flex flex-wrap gap-2 px-3 pt-3">
-              {attachments.map((a, i) => (
-                <span
-                  key={a.id}
-                  className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700 dark:bg-slate-700 dark:text-slate-200"
-                  title={`Bijlage ${i + 1}: ${a.name}, ${a.chars.toLocaleString('nl-NL')} tekens`}
-                >
-                  <Paperclip size={12} className="shrink-0" />
-                  <span className="truncate">{a.name}</span>
-                  <span className="shrink-0 text-slate-400">
-                    {a.chars.toLocaleString('nl-NL')} tekens
-                  </span>
-                  {a.truncated && (
-                    <span
-                      className="inline-flex shrink-0 items-center gap-0.5 text-amber-600 dark:text-amber-400"
-                      title="De tekst is ingekort tot de bijlagelimiet"
-                    >
-                      <Scissors size={11} /> ingekort
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    className="shrink-0 rounded-full p-0.5 text-slate-400 hover:bg-slate-200 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300"
-                    onClick={() => onRemoveAttachment(a.id)}
-                    aria-label={`Verwijder bijlage ${a.name}`}
-                  >
-                    <X size={12} />
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
+          <nldd-button
+            slot="actions"
+            appearance="primary"
+            start-icon="map"
+            text="Maak de routekaart"
+            disabled={disabled || undefined}
+            onClick={makeRoutekaart}
+          ></nldd-button>
+        </nldd-banner>
+      )}
 
-          {/* Het tekstvak zelf: zonder eigen rand of focusring, want die zitten op
-              het omhulsel. Alleen het sterretje ligt eroverheen (rechtsboven); de
-              tekst houdt daar afstand van via de rechtermarge. */}
-          <div className="relative">
-            <textarea
-              ref={textareaRef}
-              // De chat heeft zijn eigen microfoon in de werkbalk hieronder, en
-              // groeit zelf mee tot MAX_HEIGHT.
-              data-dictation="off"
-              data-autogrow="off"
-              className={clsx(
-                // opl-scroll-slim: een slanke schuifbalk met vaste goot, zodat een
-                // langere tekst geen brede systeembalk oplevert die tegen het
-                // sterretje aan botst — en de tekst niet verspringt op het moment
-                // dat de balk verschijnt.
-                'opl-scroll-slim block w-full resize-none border-0 bg-transparent px-3.5 py-2.5',
-                'text-base leading-7 text-slate-800 placeholder:text-slate-500 focus:outline-none focus:ring-0',
-                'dark:text-slate-100 dark:placeholder:text-slate-400',
-                // Leeg gesprek: een ruimer vak, zodat het als een uitnodiging leest
-                // en niet als een smal regeltje onderaan het scherm.
-                prominent && 'min-h-[3.5rem] py-3.5',
-                // Ruimte rechtsboven voor het sterretje, zodat de tekst er niet
-                // onder doorloopt. Vast (niet afhankelijk van of de knop er staat),
-                // anders zou de tekst verspringen zodra je begint te typen.
-                onOptimize && 'pr-12',
-              )}
-              // Eén regel als startpunt; de layout-effect hierboven laat het vak
-              // daarna meegroeien met de tekst.
-              rows={1}
-              aria-label="Je bericht"
-              placeholder={
-                disabled
-                  ? (disabledPlaceholder ?? 'Chat wordt geladen…')
-                  : placeholder
-                    ? placeholder
-                    : prominent
-                    ? touchKeyboard
-                      ? 'Typ hier je bericht'
-                      : 'Typ hier je bericht en druk op Enter'
-                    : 'Stel je vraag…'
-              }
-              value={text}
-              disabled={disabled || optimizing}
-              onChange={(e) => {
-                const value = e.target.value;
-                setText(value);
-                // Een @ als allereerste teken is een commando, geen tekst: dat opent
-                // de context. Verderop in een zin (een e-mailadres, een naam) doen
-                // we niets, anders zou hij bij elk adres opengaan.
-                if (value === '@' && onContext) {
-                  clearText();
-                  onContext('context');
-                }
-              }}
-              onKeyDown={(e) => {
-                // Enter verzendt; Shift+Enter maakt een nieuwe regel.
-                // Tijdens samenstellen van een teken bevestigt Enter dat teken.
-                // Op het schermtoetsenbord blijft de returntoets een nieuwe regel, zoals
-                // in elke berichtenapp: versturen doe je met de knop Verstuur.
-                if (e.key === 'Enter' && !touchKeyboard && !e.shiftKey && !e.nativeEvent.isComposing) {
-                  e.preventDefault();
-                  submit();
-                }
-              }}
-            />
-            {/* Sterretje rechtsboven: verbetert in één klik wat er staat. Verschijnt
-                pas zodra er tekst is, zodat een leeg veld rustig blijft. Zelfde
-                oranje verloop als het gereedschap "Genereren" in de menubalk. */}
-            {onOptimize && (text.trim().length > 0 || optimizing) && (
-              <button
-                type="button"
-                className={clsx(
-                  // right-3 laat de schuifbalk vrij; zonder balk oogt het als een
-                  // bewuste marge in plaats van een knop tegen de rand.
-                  'absolute right-3 top-2 flex h-7 w-7 items-center justify-center rounded-lg',
-                  'bg-rijksoranje text-white shadow-sm',
-                  'transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-rijksoranje/40',
-                  canOptimize && !optimizing
-                    ? 'hover:shadow-md motion-safe:hover:-translate-y-px'
-                    : 'cursor-default opacity-60',
-                )}
-                onClick={() => void optimize()}
-                disabled={!canOptimize || optimizing}
-                title={
-                  optimizing
-                    ? 'Bezig met verbeteren…'
-                    : 'Verbeter mijn tekst met AI; je oorspronkelijke tekst kun je daarna terughalen'
-                }
-                aria-label="Verbeter mijn tekst met AI"
-              >
-                {optimizing ? (
-                  <Loader2 size={14} className="animate-spin" />
-                ) : (
-                  <Sparkles size={14} strokeWidth={2.25} />
-                )}
-              </button>
-            )}
-          </div>
+      {/* Bijlagen, tekstvak en knoppen horen bij elkaar. Bestanden mogen overal
+          op dit blok worden losgelaten. */}
+      <nldd-container
+        gap="4"
+        onDragEnter={onDragEnter}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={(e) => void onDrop(e)}
+      >
+        {allowAttachments && attachments.length > 0 && (
+          <nldd-container layout="wrap" gap="6">
+            {attachments.map((a, i) => (
+              <AttachmentToken key={a.id} attachment={a} index={i} onRemove={onRemoveAttachment} />
+            ))}
+          </nldd-container>
+        )}
 
-          {/* Werkbalk onderin hetzelfde veld: bijlage links, versturen rechts.
-              Staat onder het tekstvak in plaats van eroverheen, dus de tekst kan er
-              nooit achter verdwijnen. Een lichte scheidingslijn erboven zet de
-              knoppen los van wat je typt. */}
-          <div className="opl-chat-balk mt-1 flex items-center gap-1 border-t border-slate-100 px-2 pb-2 pt-1.5 dark:border-slate-700/60">
-            {/* De plusknop houdt alles bij elkaar wat je kunt toevoegen of aanzetten.
-                De balk laat daarnaast alleen zien wat er nu aanstaat. */}
-            <ComposerPlusMenu
-              disabled={disabled || streaming}
-              busy={extracting}
-              canAddFile={
-                allowAttachments && !extracting && attachments.length < MAX_CHAT_ATTACHMENTS
-              }
-              addFileHint={
-                attachments.length >= MAX_CHAT_ATTACHMENTS
-                  ? `Maximaal ${MAX_CHAT_ATTACHMENTS} per chat`
-                  : `PDF, Word of tekst, tot ${MAX_MB} MB`
-              }
-              onAddFile={() => fileInputRef.current?.click()}
-              onContext={() => onContext?.('context')}
-              onMakePrompt={() => onContext?.('taak')}
-              thinking={thinking}
-              onToggleThinking={onToggleThinking}
-              thinkingUnavailable={thinkingUnavailable}
-              webSearch={webSearch}
-              onToggleWebSearch={onToggleWebSearch}
-              onDictate={dictation.available ? dictation.toggle : undefined}
-            />
-            {dictation.available && (
-              <ConversationToggle
-                active={dictation.conversation.active}
-                phase={dictation.conversation.phase}
-                announcement={dictation.conversation.announcement}
-                onToggle={dictation.conversation.toggle}
-              />
-            )}
-
-            {/* Projecten: project met bronbestanden, en van daaruit een context prompt.
-                Staat los van de plus, want dit is de snelste weg naar een goed
-                antwoord. Hoort de chat bij een project, dan staat dat erop. */}
-            {onContext && (
-              <button
-                type="button"
-                className={clsx(
-                  'flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 transition-colors focus:outline-none focus:ring-2 focus:ring-rijksblauw-500/40 disabled:cursor-not-allowed disabled:opacity-40',
-                  activeProjectName
-                    ? 'bg-rijksblauw-50 text-rijksblauw-700 hover:bg-rijksblauw-100 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-slate-100',
-                )}
-                onClick={() => onContext('context')}
-                disabled={disabled || streaming}
-                title="Kies een project met bronbestanden of maak een context prompt"
-                aria-label={activeProjectName ? `Project: ${activeProjectName}` : 'Projecten'}
-              >
-                <FolderOpen size={16} className="shrink-0" />
-                <span className="opl-balk-optioneel max-w-[9rem] truncate text-xs font-medium">
-                  {activeProjectName ?? 'Projecten'}
-                </span>
-              </button>
-            )}
-
-            {/* Alleen wat aanstaat: één klik zet het weer uit. */}
-            {onToggleThinking && thinking && !thinkingUnavailable && (
-              <ThinkingToggle
-                value={thinking}
-                onChange={onToggleThinking}
-                disabled={disabled || streaming}
-                unavailableReason={thinkingUnavailable}
-              />
-            )}
-            {onToggleWebSearch && webSearch && (
-              <WebSearchToggle
-                value={webSearch}
-                onChange={onToggleWebSearch}
-                disabled={disabled || streaming}
-              />
-            )}
-
-            {(overflowing || enlarged) && (
-              <button
-                type="button"
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-rijksblauw-500/40 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200"
-                onClick={() => setEnlarged((value) => !value)}
-                aria-pressed={enlarged}
-                aria-label="Groter tekstvak"
-                title={enlarged ? 'Kleiner tekstvak' : 'Groter tekstvak'}
-              >
-                {enlarged ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
-              </button>
-            )}
-
-            {allowAttachments && (
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept={ACCEPTED_DOC_ACCEPT}
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) void onAddFile(file);
-                  e.target.value = '';
-                }}
-              />
-            )}
-
-            {/* De microfoon rechts naast Verstuur: inspreken is een manier om te
-                schrijven en moet zonder menu bereikbaar blijven. Tijdens het
-                opnemen wordt het een balk met een geluidsmeter en de tijd. */}
-            {dictation.available && (
-              <DictationButton
-                state={dictationState}
-                seconds={dictation.seconds}
-                stream={dictation.stream}
-                onToggle={dictation.toggle}
-                disabled={disabled || streaming}
-                size="md"
-                className="ml-auto"
-              />
-            )}
-
-            {streaming ? (
-              <button
-                type="button"
-                className={clsx(
-                  'opl-btn-secondary shrink-0 !rounded-lg !px-3 !py-1.5',
-                  !dictation.available && 'ml-auto',
-                )}
-                onClick={onStop}
-                aria-label="Stop het antwoord"
-              >
-                <Square size={15} /> <span className="opl-balk-kort">Stop</span>
-              </button>
-            ) : (
-              <button
-                type="button"
-                className={clsx(
-                  'opl-btn-primary shrink-0 !rounded-lg !px-3 !py-1.5',
-                  !dictation.available && 'ml-auto',
-                  !canSend && 'opacity-50',
-                )}
-                onClick={submit}
-                disabled={!canSend}
-                aria-label="Verstuur"
-              >
-                <Send size={15} /> <span className="opl-balk-kort">Verstuur</span>
-              </button>
-            )}
-          </div>
-
-          {/* Sleep je bestanden over het veld, dan legt dit vlak eroverheen uit wat
-              er gebeurt als je loslaat. pointer-events-none, zodat het de drop
-              zelf niet in de weg zit. */}
-          {dragging && (
-            <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-rijksblauw-400 bg-rijksblauw-50/95 text-sm font-medium text-rijksblauw-700 dark:border-rijksblauw-500/60 dark:bg-slate-800/95 dark:text-rijksblauw-200">
-              <Paperclip size={16} />
+        {dragging && (
+          <nldd-container layout="row" gap="8" vertical-alignment="center">
+            <nldd-icon icon="paperclip" size="16" color="accent"></nldd-icon>
+            <nldd-text size="sm" weight="medium" color="accent">
               Laat los om als bijlage toe te voegen
-            </div>
-          )}
-        </div>
-
-        {/* Een gemaakte prompt is net binnengekomen: zeg wat het is en wat er nog
-            moet gebeuren. Weg zodra de gebruiker hem wijzigt of verstuurt. */}
-        {madePrompt && text === madePrompt.text && (
-          <div className="mt-1.5 flex animate-fade-in flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-slate-700 dark:text-slate-200">
-            <Sparkles size={14} className="shrink-0 text-rijksoranje" />
-            <span className="font-semibold">
-              {madePrompt.framework ? `Gebouwd met ${madePrompt.framework}.` : 'Je prompt staat klaar.'}
-            </span>
-            {madePrompt.reden && <InfoDot label="Waarom deze aanpak" text={madePrompt.reden} />}
-            {SLOT.test(text) && <span>Vul de plekken tussen haken in.</span>}
-            {madePrompt.before.trim() && (
-              <button
-                type="button"
-                className="inline-flex shrink-0 items-center gap-1 font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
-                onClick={() => {
-                  setText(madePrompt.before);
-                  setMadePrompt(null);
-                  setEnlarged(false);
-                  textareaRef.current?.focus();
-                }}
-              >
-                <Undo2 size={13} /> Herstel mijn tekst
-              </button>
-            )}
-          </div>
+            </nldd-text>
+          </nldd-container>
         )}
 
-        {/* Een woord als "voortaan" of "onthoud": al vóór het versturen zichtbaar dat
-            de wens in het geheugen komt. Geen live-regio: dit verandert bij elke toets. */}
-        {memoryHint && hasMemoryTrigger(text) && (
-          <div className="mt-1.5 flex items-center gap-2 text-[0.6875rem] text-slate-500 dark:text-slate-400">
-            <BookmarkPlus size={12} aria-hidden="true" className="shrink-0 text-rijksblauw-600 dark:text-rijksblauw-300" />
-            <span className="min-w-0">Bij versturen wordt je wens in geheugen opgeslagen.</span>
-          </div>
-        )}
+        <nldd-multi-line-text-field
+          ref={fieldRef}
+          // De chat heeft zijn eigen microfoon in de werkbalk hieronder.
+          data-dictation="off"
+          data-autogrow="off"
+          accessible-label="Je bericht"
+          rows={rows}
+          resize="none"
+          placeholder={
+            disabled
+              ? (disabledPlaceholder ?? 'Chat wordt geladen…')
+              : placeholder
+                ? placeholder
+                : prominent
+                  ? touchKeyboard
+                    ? 'Typ hier je bericht'
+                    : 'Typ hier je bericht en druk op Enter'
+                  : 'Stel je vraag…'
+          }
+          disabled={disabled || optimizing || undefined}
+        ></nldd-multi-line-text-field>
 
-        {/* Na een verbetering: één klik terug naar de eigen tekst. Verdwijnt zodra
-            de gebruiker zelf verder typt of het bericht verstuurt. */}
-        {canUndo && (
-          <div className="mt-1.5 flex items-center gap-2 text-[0.6875rem] text-slate-500 dark:text-slate-400">
-            <Sparkles size={12} className="shrink-0 text-rijksoranje" />
-            <span className="min-w-0">Je tekst is verbeterd. Lees hem na en pas gerust aan.</span>
-            <button
-              type="button"
-              className="shrink-0 inline-flex items-center gap-1 font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
-              onClick={undoOptimize}
-            >
-              <Undo2 size={12} /> Herstel mijn tekst
-            </button>
-          </div>
-        )}
-
-        {/* Sneltoetsen en de bijlagelimiet stonden hier als een regel kleine
-            grijze tekst. Die staat nu achter het infobolletje: wie het wil weten
-            vindt het, en het veld blijft rustig. */}
-        <div className="opl-chat-notitie mt-1 flex items-center justify-between gap-2">
-          <InfoDot
-            label="Uitleg bij het invoerveld"
-            className="-ml-1"
-            text={
-              allowAttachments
-                ? `${enterHint}\nBijlagen: maximaal ${MAX_CHAT_ATTACHMENTS}, elk tot ${MAX_MB} MB. Sleep ze hierheen of kies Bestand achter de plus. Ze blijven de hele chat beschikbaar.`
-                : enterHint
+        {/* Werkbalk onder het tekstvak: de plus links, versturen rechts. */}
+        <nldd-container layout="row" gap="4" vertical-alignment="center">
+          {/* De plusknop houdt alles bij elkaar wat je kunt toevoegen of aanzetten.
+              De balk laat daarnaast alleen zien wat er nu aanstaat. */}
+          <ComposerPlusMenu
+            disabled={disabled || streaming}
+            busy={extracting}
+            canAddFile={allowAttachments && !extracting && attachments.length < MAX_CHAT_ATTACHMENTS}
+            addFileHint={
+              attachments.length >= MAX_CHAT_ATTACHMENTS
+                ? `Maximaal ${MAX_CHAT_ATTACHMENTS} per chat`
+                : `Tot ${MAX_MB} MB`
             }
+            onAddFile={pickFile}
+            onContext={() => onContext?.('context')}
+            onMakePrompt={() => onContext?.('taak')}
+            thinking={thinking}
+            onToggleThinking={onToggleThinking}
+            thinkingUnavailable={thinkingUnavailable}
+            webSearch={webSearch}
+            onToggleWebSearch={onToggleWebSearch}
+            onDictate={dictation.available ? dictation.toggle : undefined}
           />
-          {notice && (
-            <p className="min-w-0 flex-1 text-sm text-slate-700 dark:text-slate-200">{notice}</p>
+          {dictation.available && (
+            <ConversationToggle
+              active={dictation.conversation.active}
+              phase={dictation.conversation.phase}
+              announcement={dictation.conversation.announcement}
+              onToggle={dictation.conversation.toggle}
+            />
           )}
-          {/* Op de telefoon telt elke regel; de melding over persoonsgegevens gaat voor. */}
-          <span className="hidden shrink-0 sm:inline">{badge}</span>
-        </div>
-      </div>
-    </div>
+
+          {/* Projecten: project met bronbestanden, en van daaruit een context prompt.
+              Staat los van de plus, want dit is de snelste weg naar een goed
+              antwoord. Hoort de chat bij een project, dan staat dat erop. */}
+          {onContext && (
+            <nldd-button
+              appearance={activeProjectName ? 'neutral-tinted' : 'neutral-transparent'}
+              size="sm"
+              start-icon="folder-open"
+              text={activeProjectName ?? 'Projecten'}
+              max-width="12rem"
+              single-line
+              accessible-label={activeProjectName ? `Project: ${activeProjectName}` : 'Projecten'}
+              disabled={disabled || streaming || undefined}
+              onClick={() => onContext('context')}
+            ></nldd-button>
+          )}
+
+          {/* Alleen wat aanstaat: één klik zet het weer uit. */}
+          {onToggleThinking && thinking && !thinkingUnavailable && (
+            <ThinkingToggle
+              value={thinking}
+              onChange={onToggleThinking}
+              disabled={disabled || streaming}
+              unavailableReason={thinkingUnavailable}
+            />
+          )}
+          {onToggleWebSearch && webSearch && (
+            <WebSearchToggle value={webSearch} onChange={onToggleWebSearch} disabled={disabled || streaming} />
+          )}
+
+          {(overflowing || enlarged) && (
+            <nldd-toggle-button
+              appearance="neutral-transparent"
+              size="sm"
+              variant="icon"
+              icon="expand"
+              selected-icon="collapse"
+              accessible-label="Groter tekstvak"
+              selected={enlarged || undefined}
+              onClick={() => setEnlarged((value) => !value)}
+            ></nldd-toggle-button>
+          )}
+
+          {/* Verbetert in één klik wat er staat. Verschijnt pas zodra er tekst is,
+              zodat een leeg veld rustig blijft. */}
+          {onOptimize && (text.trim().length > 0 || optimizing) && (
+            <nldd-icon-button
+              appearance="neutral-transparent"
+              size="sm"
+              icon="sparkles"
+              text="Verbeter mijn tekst met AI"
+              loading={optimizing || undefined}
+              loading-text="Bezig met verbeteren"
+              disabled={!canOptimize || undefined}
+              onClick={() => void optimize()}
+            ></nldd-icon-button>
+          )}
+
+          <nldd-spacer size="flexible"></nldd-spacer>
+
+          {/* De microfoon naast Verstuur: inspreken is een manier om te
+              schrijven en moet zonder menu bereikbaar blijven. */}
+          {dictation.available && (
+            <DictationButton
+              state={dictationState}
+              seconds={dictation.seconds}
+              stream={dictation.stream}
+              onToggle={dictation.toggle}
+              disabled={disabled || streaming}
+              size="md"
+            />
+          )}
+
+          {streaming ? (
+            <nldd-button
+              appearance="secondary"
+              size="sm"
+              start-icon="stop"
+              text="Stop"
+              accessible-label="Stop het antwoord"
+              onClick={onStop}
+            ></nldd-button>
+          ) : (
+            <nldd-button
+              appearance="primary"
+              size="sm"
+              start-icon="send"
+              text="Verstuur"
+              disabled={!canSend || undefined}
+              onClick={submit}
+            ></nldd-button>
+          )}
+        </nldd-container>
+      </nldd-container>
+
+      {/* Een gemaakte prompt is net binnengekomen: zeg wat het is en wat er nog
+          moet gebeuren. Weg zodra de gebruiker hem wijzigt of verstuurt. */}
+      {madePrompt && text === madePrompt.text && (
+        <nldd-container layout="wrap" gap="6" vertical-alignment="center">
+          <nldd-icon icon="sparkles" size="16" color="oranje"></nldd-icon>
+          <nldd-text size="sm" weight="bold">
+            {madePrompt.framework ? `Gebouwd met ${madePrompt.framework}.` : 'Je prompt staat klaar.'}
+          </nldd-text>
+          {madePrompt.reden && <InfoDot label="Waarom deze aanpak" text={madePrompt.reden} />}
+          {SLOT.test(text) && <nldd-text size="sm">Vul de plekken tussen haken in.</nldd-text>}
+          {madePrompt.before.trim() && (
+            <nldd-button
+              appearance="neutral-transparent"
+              size="xs"
+              start-icon="undo"
+              text="Herstel mijn tekst"
+              onClick={() => {
+                setText(madePrompt.before);
+                setMadePrompt(null);
+                setEnlarged(false);
+                textareaRef.current?.focus();
+              }}
+            ></nldd-button>
+          )}
+        </nldd-container>
+      )}
+
+      {/* Een woord als "voortaan" of "onthoud": al vóór het versturen zichtbaar dat
+          de wens in het geheugen komt. Geen live-regio: dit verandert bij elke toets. */}
+      {memoryHint && hasMemoryTrigger(text) && (
+        <nldd-container layout="row" gap="6" vertical-alignment="center">
+          <nldd-icon icon="bookmark" size="16" color="accent"></nldd-icon>
+          <nldd-text size="xs" color="secondary">
+            Bij versturen wordt je wens in geheugen opgeslagen.
+          </nldd-text>
+        </nldd-container>
+      )}
+
+      {/* Na een verbetering: één klik terug naar de eigen tekst. Verdwijnt zodra
+          de gebruiker zelf verder typt of het bericht verstuurt. */}
+      {canUndo && (
+        <nldd-container layout="wrap" gap="6" vertical-alignment="center">
+          <nldd-icon icon="sparkles" size="16" color="oranje"></nldd-icon>
+          <nldd-text size="xs" color="secondary">
+            Je tekst is verbeterd. Lees hem na en pas gerust aan.
+          </nldd-text>
+          <nldd-button
+            appearance="neutral-transparent"
+            size="xs"
+            start-icon="undo"
+            text="Herstel mijn tekst"
+            onClick={undoOptimize}
+          ></nldd-button>
+        </nldd-container>
+      )}
+
+      {/* Sneltoetsen en de bijlagelimiet staan achter het infobolletje: wie het
+          wil weten vindt het, en het veld blijft rustig. */}
+      <nldd-container layout="wrap" gap="8" vertical-alignment="center">
+        <InfoDot
+          label="Uitleg bij het invoerveld"
+          text={
+            allowAttachments
+              ? `${enterHint}\nBijlagen: maximaal ${MAX_CHAT_ATTACHMENTS}, elk tot ${MAX_MB} MB. Sleep ze hierheen of kies Bestand achter de plus. Ze blijven de hele chat beschikbaar.`
+              : enterHint
+          }
+        />
+        {notice && <nldd-text size="sm">{notice}</nldd-text>}
+        <nldd-spacer size="flexible"></nldd-spacer>
+        {badge}
+      </nldd-container>
+    </nldd-container>
   );
 });
+
+/** One attachment as a removable token; its dismiss event is bound on the token itself. */
+function AttachmentToken({
+  attachment: a,
+  index,
+  onRemove,
+}: {
+  attachment: ChatAttachment;
+  index: number;
+  onRemove: (id: string) => void;
+}) {
+  const ref = useRef<HTMLElement>(null);
+  useNlddEvent(ref, 'dismiss', () => onRemove(a.id));
+  const chars = `${a.chars.toLocaleString('nl-NL')} tekens`;
+  return (
+    <nldd-tooltip text={`Bijlage ${index + 1}: ${a.name}, ${chars}${a.truncated ? ', ingekort tot de bijlagelimiet' : ''}`}>
+      <nldd-token
+        ref={ref}
+        control="dismiss"
+        dismiss-text={`Verwijder bijlage ${a.name}`}
+        text={`${a.name} · ${chars}${a.truncated ? ' · ingekort' : ''}`}
+      ></nldd-token>
+    </nldd-tooltip>
+  );
+}
 
 export default ChatComposer;

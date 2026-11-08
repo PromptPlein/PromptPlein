@@ -14,7 +14,7 @@ export interface ContactMessage {
 }
 
 /** Vast beheeradres waar contactmails naartoe gaan (server kan dit overschrijven). */
-export const CONTACT_EMAIL = 'royvsichem@gmail.com';
+const CONTACT_EMAIL = 'royvsichem@gmail.com';
 
 const KIND_LABELS: Record<ContactKind, string> = {
   bug: 'Bug-melding',
@@ -26,7 +26,7 @@ const KIND_LABELS: Record<ContactKind, string> = {
  * Bouw een mailto-fallback zodat het bericht ook verzonden kan worden als de
  * Edge Function (nog) niet beschikbaar is, of in lokale mock-modus.
  */
-export function buildContactMailto(msg: ContactMessage): string {
+function buildContactMailto(msg: ContactMessage): string {
   const label = KIND_LABELS[msg.kind];
   const subject = msg.subject ? `[PromptPlein] ${label}: ${msg.subject}` : `[PromptPlein] ${label}`;
   const body = [

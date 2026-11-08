@@ -1,6 +1,6 @@
-import { Globe, Sparkles, Wand2 } from '@/components/common/icons';
-import clsx from 'clsx';
 import type { PrefillSource } from '@/types';
+import '@nldd/design-system/tag';
+import '@nldd/design-system/tooltip';
 
 interface PrefillBadgeProps {
   source: PrefillSource;
@@ -9,40 +9,28 @@ interface PrefillBadgeProps {
 }
 
 /**
- * Klein herkomst-label bij een voor-ingevuld veld. Maakt in één oogopslag
- * duidelijk of de inhoud uit de eigen input van de gebruiker is afgeleid
- * (groen, hoog vertrouwen) of een AI-suggestie is die om controle vraagt
- * (donkeroranje met witte letters, zodat het opvalt).
+ * Small origin label next to a prefilled field. It shows at a glance whether the
+ * content comes from the user's own input (success, high confidence), from an
+ * internet source (accent, with a globe), or is an AI suggestion that asks for
+ * a check (warning).
  */
 export default function PrefillBadge({ source, note }: PrefillBadgeProps) {
-  const fromPrompt = source === 'prompt';
-  // Aangevuld met een feit van internet: blauw met wereldbol, zodat zichtbaar
-  // is dat zoeken echt iets heeft opgeleverd. De URL staat in het veld zelf.
   if (source === 'bron') {
     return (
-      <span
-        className="inline-flex items-center gap-1 rounded-full bg-rijksblauw-50 px-2 py-0.5 text-[0.6875rem] font-medium text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200"
-        title={note || 'Aangevuld met een feit uit een internetbron; de URL staat in het veld'}
-      >
-        <Globe size={11} />
-        Aangevuld van internet
-      </span>
+      <nldd-tooltip text={note || 'Aangevuld met een feit uit een internetbron; de URL staat in het veld'}>
+        <nldd-tag size="sm" color="accent" icon="globe" text="Aangevuld van internet"></nldd-tag>
+      </nldd-tooltip>
     );
   }
+  const fromPrompt = source === 'prompt';
   return (
-    <span
-      className={clsx(
-        'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.6875rem] font-medium',
-        fromPrompt
-          ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
-          // Donkeroranje met witte letters; semibold houdt die kleine witte
-          // tekst leesbaar op de volle kleur.
-          : 'bg-rijksoranje-dark font-semibold text-white',
-      )}
-      title={note || (fromPrompt ? 'Afgeleid uit je eigen input' : 'AI-suggestie; controleer of dit klopt')}
-    >
-      {fromPrompt ? <Sparkles size={11} /> : <Wand2 size={11} />}
-      {fromPrompt ? 'Uit jouw tekst' : 'Controleren'}
-    </span>
+    <nldd-tooltip text={note || (fromPrompt ? 'Afgeleid uit je eigen input' : 'AI-suggestie; controleer of dit klopt')}>
+      <nldd-tag
+        size="sm"
+        color={fromPrompt ? 'success' : 'warning'}
+        icon={fromPrompt ? 'sparkles' : 'magic'}
+        text={fromPrompt ? 'Uit jouw tekst' : 'Controleren'}
+      ></nldd-tag>
+    </nldd-tooltip>
   );
 }

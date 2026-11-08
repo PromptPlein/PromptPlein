@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react';
-import toast from 'react-hot-toast';
-import { Trash2 } from '@/components/common/icons';
+import { notify } from '@/lib/notify';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
-import InfoDot from '@/components/common/InfoDot';
 import { useAuth } from '@/context/AuthContext';
 import {
   deleteAllMemories,
@@ -12,9 +10,18 @@ import {
   MEMORY_VECTOR_THRESHOLD_TOKENS,
 } from '@/services/memoryService';
 import type { UserMemory } from '@/types';
-
-const SECTION_CLASS = 'opl-card p-5 sm:p-6';
-const TITLE_CLASS = 'text-lg font-semibold text-rijksblauw-700 dark:text-rijksblauw-200';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/form';
+import '@nldd/design-system/form-actions';
+import '@nldd/design-system/form-section';
+import '@nldd/design-system/icon-cell';
+import '@nldd/design-system/inline-dialog';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/list-item-segment';
+import '@nldd/design-system/text';
+import '@nldd/design-system/text-cell';
 
 /**
  * Het geheugen van de chat: wat de gebruiker liet onthouden met "voortaan",
@@ -29,7 +36,6 @@ export default function ChatMemorySettings() {
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
-  const [status, setStatus] = useState('');
   const [confirmAll, setConfirmAll] = useState(false);
 
   useEffect(() => {
@@ -54,13 +60,12 @@ export default function ChatMemorySettings() {
 
   async function remove(memory: UserMemory) {
     setBusy(memory.id);
-    setStatus('');
     try {
       await deleteMemory(memory.id);
       setMemories((list) => list.filter((m) => m.id !== memory.id));
-      setStatus('Verwijderd.');
+      notify.success('Verwijderd.');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Verwijderen mislukt');
+      notify.error(err instanceof Error ? err.message : 'Verwijderen mislukt');
     } finally {
       setBusy(null);
     }
@@ -68,13 +73,12 @@ export default function ChatMemorySettings() {
 
   async function removeAll() {
     setBusy('all');
-    setStatus('');
     try {
       await deleteAllMemories();
       setMemories([]);
-      setStatus('Geheugen gewist.');
+      notify.success('Geheugen gewist.');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Wissen mislukt');
+      notify.error(err instanceof Error ? err.message : 'Wissen mislukt');
     } finally {
       setBusy(null);
     }
@@ -82,91 +86,81 @@ export default function ChatMemorySettings() {
 
   if (authLoading) return null;
 
-  return (
-    <>
-      {canUse && (
-        <section className={SECTION_CLASS} aria-labelledby="chat-geheugen">
-          <div className="flex items-center gap-1">
-            <h2 id="chat-geheugen" className={TITLE_CLASS}>
-              Geheugen
-            </h2>
-            <InfoDot
-              label="Uitleg over het geheugen"
-              text="Zeg in de chat voortaan, onthoud dit of vanaf nu, dan komt je wens hier. Je wensen gaan voor op de regels van PromptPlein, in elke chat en elk project. Niet bij het uitvoeren van een prompt."
-            />
-          </div>
+  if (!canUse) return null;
 
+  return (
+    <nldd-form>
+      <form noValidate onSubmit={(e) => e.preventDefault()}>
+        <nldd-form-section
+          text="Geheugen"
+          supporting-text="Zeg in de chat voortaan, onthoud dit of vanaf nu, dan komt je wens hier. Hij geldt in elke chat en elk project."
+        >
           {loadFailed ? (
-            <p role="alert" className="mt-4 text-slate-800 dark:text-slate-100">
-              Je geheugen kon niet worden opgehaald. Probeer het later opnieuw.
-            </p>
+            <nldd-inline-dialog
+              variant="alert"
+              text="Je geheugen kon niet worden opgehaald. Probeer het later opnieuw."
+            ></nldd-inline-dialog>
           ) : loading ? (
-            <p className="mt-4 text-slate-600 dark:text-slate-300" aria-busy="true">
+            <nldd-text size="sm" color="secondary">
               Laden…
-            </p>
+            </nldd-text>
           ) : memories.length === 0 ? (
-            <p className="mt-4 text-slate-700 dark:text-slate-200">Nog niets onthouden.</p>
+            <nldd-text size="sm" color="secondary">
+              Nog niets onthouden.
+            </nldd-text>
           ) : (
-            <>
-              <ul className="mt-4 space-y-2">
-                {memories.map((memory) => (
-                  <li
-                    key={memory.id}
-                    className="flex items-start gap-2 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700"
+            <nldd-list accessible-label="Onthouden wensen">
+              {memories.map((memory) => (
+                <nldd-list-item key={memory.id}>
+                  <nldd-text-cell text={memory.text}></nldd-text-cell>
+                  <nldd-list-item-segment
+                    button
+                    accessible-label={`Verwijder: ${memory.text}`}
+                    disabled={busy !== null || undefined}
+                    onClick={() => void remove(memory)}
                   >
-                    <span className="min-w-0 flex-1 break-words text-slate-800 dark:text-slate-100">
-                      {memory.text}
-                    </span>
-                    <button
-                      type="button"
-                      className="shrink-0 rounded-md p-1.5 text-slate-500 transition-colors hover:bg-slate-100 hover:text-rijksrood dark:hover:bg-slate-700"
-                      onClick={() => void remove(memory)}
-                      disabled={busy !== null}
-                      aria-label={`Verwijder: ${memory.text}`}
-                    >
-                      <Trash2 size={16} aria-hidden="true" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-              {memoryTokens(memories) > MEMORY_VECTOR_THRESHOLD_TOKENS && (
-                <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-                  Je geheugen is groot. Per vraag gaan de wensen mee die erbij passen.
-                </p>
-              )}
-            </>
+                    <nldd-icon-cell icon="trash" size="20" color="secondary"></nldd-icon-cell>
+                  </nldd-list-item-segment>
+                </nldd-list-item>
+              ))}
+            </nldd-list>
           )}
 
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            {memories.length > 1 && (
-              <button
-                type="button"
-                className="opl-btn-ghost text-rijksrood dark:text-red-400"
-                onClick={() => setConfirmAll(true)}
-                disabled={busy !== null}
-              >
-                Alles verwijderen
-              </button>
-            )}
-            <p role="status" className="text-sm text-slate-700 dark:text-slate-200">
-              {status}
-            </p>
-          </div>
+          {!loading && memoryTokens(memories) > MEMORY_VECTOR_THRESHOLD_TOKENS && (
+            <nldd-text size="sm" color="secondary">
+              Je geheugen is groot. Per vraag gaan de wensen mee die erbij passen.
+            </nldd-text>
+          )}
 
-          <ConfirmDialog
-            open={confirmAll}
-            title="Hele geheugen verwijderen?"
-            message="Dit kan niet ongedaan worden gemaakt."
-            confirmLabel="Verwijderen"
-            destructive
-            onClose={() => setConfirmAll(false)}
-            onConfirm={() => {
-              setConfirmAll(false);
-              void removeAll();
-            }}
-          />
-        </section>
-      )}
-    </>
+          {memories.length > 1 && (
+            <nldd-form-actions>
+              <nldd-button-group>
+                <nldd-button
+                  appearance="critical-transparent"
+                  start-icon="trash"
+                  text="Verwijder alles"
+                  disabled={busy !== null || undefined}
+                  onClick={() => setConfirmAll(true)}
+                ></nldd-button>
+              </nldd-button-group>
+            </nldd-form-actions>
+          )}
+        </nldd-form-section>
+
+        <ConfirmDialog
+          open={confirmAll}
+          title="Hele geheugen verwijderen?"
+          message="Dit kan niet ongedaan worden gemaakt."
+          confirmLabel="Verwijder alles"
+          cancelLabel="Behoud geheugen"
+          destructive
+          onClose={() => setConfirmAll(false)}
+          onConfirm={() => {
+            setConfirmAll(false);
+            void removeAll();
+          }}
+        />
+      </form>
+    </nldd-form>
   );
 }

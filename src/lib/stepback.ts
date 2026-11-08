@@ -89,11 +89,6 @@ export function emptyStepBack(): StepBackData {
   };
 }
 
-/** Is er genoeg ingevuld om een zinvolle prompt te bouwen? */
-export function stepBackHasContent(d: StepBackData): boolean {
-  return Boolean(d.concreteVraag.trim() || d.gekozenVraag.trim());
-}
-
 /**
  * Serialiseert de step-back-opzet tot gelabelde tekst voor de compose. De
  * splitsing vast/aanname staat er expliciet in: dat is de instructie die

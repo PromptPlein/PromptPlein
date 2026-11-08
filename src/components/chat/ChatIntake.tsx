@@ -1,78 +1,82 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import clsx from 'clsx';
-import {
-  Bookmark,
-  Check,
-  ChevronRight,
-  Loader2,
-  Paperclip,
-  Pencil,
-  Sparkles,
-  Wand2,
-} from '@/components/common/icons';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import InfoDot from '@/components/common/InfoDot';
 import { prefersReducedMotion } from '@/context/AccessibilityContext';
 import { MAX_INTAKE_QUESTIONS, splitPromptSections } from '@/lib/chatIntake';
+import { useNlddEvent } from '@/lib/nldd';
 import { WizardError } from './PromptInterviewParts';
 import type { IntakeState } from './useChatIntake';
+import '@nldd/design-system/activity-indicator';
+import '@nldd/design-system/box';
+import '@nldd/design-system/button';
+import '@nldd/design-system/card';
+import '@nldd/design-system/cell';
+import '@nldd/design-system/checkbox';
+import '@nldd/design-system/code-viewer';
+import '@nldd/design-system/container';
+import '@nldd/design-system/icon';
+import '@nldd/design-system/icon-cell';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/progress-bar';
+import '@nldd/design-system/spacer';
+import '@nldd/design-system/spacer-cell';
+import '@nldd/design-system/text';
+import '@nldd/design-system/text-cell';
+import '@nldd/design-system/title';
+import '@nldd/design-system/visually-hidden';
 
 const OVER_DOORVRAGEN =
   'Bij het eerste bericht van een nieuwe chat kijkt de AI of hij genoeg weet. Je zet dit uit bij Instellingen, Chat.';
 
-const CARD =
-  'overflow-hidden rounded-xl border border-t-4 border-slate-200 border-t-rijksoranje bg-white dark:border-slate-700 dark:border-t-rijksoranje dark:bg-slate-800';
-
-/** Een antwoord om aan te vinken: je mag er meer kiezen. */
-const OPTION =
-  'flex min-h-[2.75rem] w-full cursor-pointer items-center gap-3 rounded-lg border border-rijksblauw-500 bg-white px-3.5 py-2 text-left font-semibold text-rijksblauw-500 transition-colors hover:bg-rijksblauw-50 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-rijksblauw-500 has-[:focus-visible]:ring-offset-2 has-[:checked]:bg-rijksblauw-50 has-[:disabled]:opacity-50 dark:border-rijksblauw-300 dark:bg-transparent dark:text-rijksblauw-100 dark:hover:bg-rijksblauw-500/20 dark:has-[:checked]:bg-rijksblauw-500/20 dark:has-[:focus-visible]:ring-offset-slate-800';
-
-/** Zelf typen: geen antwoord, maar de weg naar het tekstvak. */
-const TYPE_OWN =
-  'flex min-h-[2.75rem] w-full items-center justify-between gap-2 rounded-lg border border-dashed border-rijksblauw-500 px-3.5 py-2 text-left font-semibold text-rijksblauw-500 transition-colors hover:bg-rijksblauw-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 focus-visible:ring-offset-2 dark:border-rijksblauw-300 dark:text-rijksblauw-100 dark:hover:bg-rijksblauw-500/20 dark:focus-visible:ring-offset-slate-800';
-
-const CHIP =
-  'min-h-[2.75rem] rounded-lg border border-rijksblauw-500 bg-white px-3 py-1.5 text-left text-sm font-semibold text-rijksblauw-500 transition-colors hover:bg-rijksblauw-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 disabled:opacity-50 dark:border-rijksblauw-300 dark:bg-transparent dark:text-rijksblauw-100 dark:hover:bg-rijksblauw-500/20';
-
-const LINK =
-  'opl-raak inline-flex items-center gap-1.5 rounded text-sm font-semibold text-rijksblauw-500 underline underline-offset-2 hover:text-rijksblauw-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 disabled:opacity-50 dark:text-rijksblauw-200 dark:hover:text-white';
+/** Text with its line breaks kept, for nldd-text, which does not keep them itself. */
+function withBreaks(text: string) {
+  return text.split('\n').map((line, i) => (
+    <Fragment key={i}>
+      {i > 0 && <br />}
+      {line}
+    </Fragment>
+  ));
+}
 
 function UserBubble({ children }: { children: string }) {
   return (
-    <div className="flex justify-end">
-      <h2 className="sr-only">Jouw bericht</h2>
-      <p className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-rijksblauw-50 px-4 py-2.5 text-base leading-7 text-slate-900 dark:bg-rijksblauw-500/15 dark:text-slate-100">
-        {children}
-      </p>
-    </div>
+    <nldd-container horizontal-alignment="right">
+      <nldd-visually-hidden>
+        <nldd-title heading-level={2} text="Jouw bericht"></nldd-title>
+      </nldd-visually-hidden>
+      <nldd-container max-width="85%" width="fit-content">
+        <nldd-box background="accent-tinted">
+          <nldd-container padding-inline="16" padding-block="10">
+            <nldd-text>{withBreaks(children)}</nldd-text>
+          </nldd-container>
+        </nldd-box>
+      </nldd-container>
+    </nldd-container>
   );
 }
 
 function Waiting({ label }: { label: string }) {
   return (
-    <p className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
-      <Loader2 size={18} className="shrink-0 animate-spin" /> {label}
-    </p>
+    <nldd-container layout="row" gap="8" vertical-alignment="center">
+      <nldd-activity-indicator size="20" timing="instant" text={label}></nldd-activity-indicator>
+      <nldd-text color="secondary">{label}</nldd-text>
+    </nldd-container>
   );
 }
 
 /** Een balkje per stap of per kopje: gevuld is gedaan of sterk. */
-function Bars({ filled, total, tone }: { filled: number; total: number; tone: 'blauw' | 'groen' }) {
+function Bars({ filled, total, tone, label }: { filled: number; total: number; tone: 'blauw' | 'groen'; label: string }) {
   return (
-    <span aria-hidden="true" className="flex gap-1">
-      {Array.from({ length: total }, (_, i) => (
-        <span
-          key={i}
-          className={clsx(
-            'h-1.5 w-5 rounded-sm',
-            i < filled
-              ? tone === 'groen'
-                ? 'bg-rijksgroen'
-                : 'bg-rijksblauw-700 dark:bg-rijksblauw-300'
-              : 'bg-slate-200 dark:bg-slate-600',
-          )}
-        />
-      ))}
-    </span>
+    <nldd-container width="120px">
+      <nldd-progress-bar
+        size="sm"
+        max={total}
+        value={String(filled)}
+        color={tone === 'groen' ? 'success' : 'accent'}
+        value-display="none"
+        accessible-label={label}
+      ></nldd-progress-bar>
+    </nldd-container>
   );
 }
 
@@ -87,6 +91,31 @@ function joinAnswers(parts: string[]): string {
   return `${all.slice(0, -1).join(', ')} en ${all[all.length - 1]}`;
 }
 
+/** One answer to tick: a checkbox row, the whole row is the control. */
+function OptionRow({
+  optie,
+  on,
+  busy,
+  onToggle,
+}: {
+  optie: string;
+  on: boolean;
+  busy: boolean;
+  onToggle: () => void;
+}) {
+  const ref = useRef<HTMLElement>(null);
+  useNlddEvent(ref, 'change', () => onToggle());
+  return (
+    <nldd-list-item ref={ref} checkbox checked={on || undefined} disabled={busy || undefined}>
+      <nldd-cell>
+        <nldd-checkbox decorative checked={on || undefined}></nldd-checkbox>
+      </nldd-cell>
+      <nldd-spacer-cell size="12"></nldd-spacer-cell>
+      <nldd-text-cell text={optie}></nldd-text-cell>
+    </nldd-list-item>
+  );
+}
+
 /**
  * De antwoorden bij één vraag. Je vinkt er een of meer aan en kiest Verder. Wie
  * iets anders wil zeggen, kiest Antwoord zelf typen: dan gaat de cursor naar het
@@ -94,13 +123,13 @@ function joinAnswers(parts: string[]): string {
  */
 function QuestionOptions({
   opties,
-  labelledBy,
+  label,
   busy,
   onPick,
   onTypeOwn,
 }: {
   opties: string[];
-  labelledBy: string;
+  label: string;
   busy: boolean;
   onPick: (answer: string) => void;
   onTypeOwn: (start: string) => void;
@@ -113,43 +142,40 @@ function QuestionOptions({
 
   return (
     <>
-      <fieldset className="mt-3 grid gap-2" aria-labelledby={labelledBy}>
+      <nldd-spacer size="12"></nldd-spacer>
+      <nldd-list appearance="box-base" accessible-label={label}>
         {opties.map((optie) => (
-          <label key={optie} className={OPTION}>
-            <input
-              type="checkbox"
-              className="h-5 w-5 shrink-0 cursor-pointer rounded accent-rijksblauw-500 focus:outline-none"
-              checked={chosen.includes(optie)}
-              disabled={busy}
-              onChange={() => toggle(optie)}
-            />
-            <span className="min-w-0">{optie}</span>
-          </label>
+          <OptionRow
+            key={optie}
+            optie={optie}
+            on={chosen.includes(optie)}
+            busy={busy}
+            onToggle={() => toggle(optie)}
+          />
         ))}
-        <button type="button" className={TYPE_OWN} onClick={() => onTypeOwn(joinAnswers(picked))}>
-          <span className="flex items-center gap-3">
-            <Pencil size={18} className="shrink-0" /> Antwoord zelf typen
-          </span>
-          <ChevronRight size={18} className="shrink-0" />
-        </button>
-      </fieldset>
-      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
-        <button
-          type="button"
-          className="opl-btn-primary"
-          disabled={busy || picked.length === 0}
+        <nldd-list-item button onClick={() => onTypeOwn(joinAnswers(picked))}>
+          <nldd-icon-cell icon="edit" color="accent"></nldd-icon-cell>
+          <nldd-spacer-cell size="12"></nldd-spacer-cell>
+          <nldd-text-cell text="Antwoord zelf typen" color="accent"></nldd-text-cell>
+          <nldd-icon-cell icon="chevron-right" size="20" color="secondary"></nldd-icon-cell>
+        </nldd-list-item>
+      </nldd-list>
+      <nldd-spacer size="12"></nldd-spacer>
+      <nldd-container layout="wrap" gap="12" vertical-alignment="center">
+        <nldd-button
+          appearance="primary"
+          text="Verder"
+          disabled={(busy || picked.length === 0) || undefined}
           onClick={() => onPick(joinAnswers(picked))}
-        >
-          Verder
-        </button>
-        <span className="text-sm text-slate-500 dark:text-slate-400">
+        ></nldd-button>
+        <nldd-text size="sm" color="secondary">
           {picked.length === 0
             ? 'Kies een of meer antwoorden.'
             : picked.length === 1
               ? '1 antwoord gekozen'
               : `${picked.length} antwoorden gekozen`}
-        </span>
-      </div>
+        </nldd-text>
+      </nldd-container>
     </>
   );
 }
@@ -192,9 +218,8 @@ export default function ChatIntake({
   onBuildInMaken: () => void;
 }) {
   const { goal, phase, begrip, turns, question, draft, check, checking, loading, error } = state;
-  const questionId = useId();
-  const proposalId = useId();
-  const scrollRef = useRef<HTMLDivElement>(null);
+  // null: follow the default, open only when the prompt has no kopjes.
+  const [showAll, setShowAll] = useState<boolean | null>(null);
 
   const sections = useMemo(
     () => (draft ? splitPromptSections(draft.prompt, draft.kopjes) : []),
@@ -203,14 +228,12 @@ export default function ChatIntake({
   const sterk = check ? check.kopjes.filter((k) => k.oordeel === 'sterk').length : 0;
   const total = check?.kopjes.length ?? 0;
   const busy = Boolean(loading);
+  const promptOpen = showAll ?? sections.length === 0;
 
-  // Wat er nieuw bij komt, staat onderaan: daar heen. Alleen de lijst scrolt,
-  // niet de pagina eromheen (dat zou scrollIntoView wel doen).
+  // What is new stands at the bottom, so go there. The document scrolls.
   useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    el.scrollTo({
-      top: el.scrollHeight,
+    window.scrollTo({
+      top: document.documentElement.scrollHeight,
       behavior: prefersReducedMotion() ? 'auto' : 'smooth',
     });
   }, [turns.length, question, phase, loading, checking]);
@@ -233,248 +256,235 @@ export default function ChatIntake({
       : `${begrip} Ik maak er een prompt van.`);
 
   return (
-    <div
-      ref={scrollRef}
-      data-chat-lijst
-      tabIndex={0}
-      role="region"
-      aria-label="Gesprek"
-      aria-busy={busy}
-      // Relative: anders telt de onzichtbare statusregel mee met de hoogte van de pagina.
-      className="opl-scroll-slim relative min-h-0 flex-auto overflow-y-auto px-4 py-4 [scrollbar-gutter:stable_both-edges] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-rijksblauw-500 sm:px-6"
-    >
-      <div className="mx-auto max-w-[60ch] space-y-5">
-        <UserBubble>{goal}</UserBubble>
+    <nldd-container gap="20" aria-busy={busy || undefined}>
+      <UserBubble>{goal}</UserBubble>
 
-        {intro && (
-          <div>
-            <h2 className="sr-only">Antwoord</h2>
-            <p className="text-base leading-7 text-slate-800 dark:text-slate-100">{intro}</p>
-          </div>
-        )}
+      {intro && (
+        <nldd-container>
+          <nldd-visually-hidden>
+            <nldd-title heading-level={2} text="Antwoord"></nldd-title>
+          </nldd-visually-hidden>
+          <nldd-text>{intro}</nldd-text>
+        </nldd-container>
+      )}
 
-        {turns.map((turn, i) => (
-          <div key={i} className="space-y-2">
-            <p className="text-sm text-slate-500 dark:text-slate-400">{turn.question}</p>
-            <UserBubble>{turn.answer}</UserBubble>
-          </div>
-        ))}
+      {turns.map((turn, i) => (
+        <nldd-container key={i} gap="8">
+          <nldd-text size="sm" color="secondary">{turn.question}</nldd-text>
+          <UserBubble>{turn.answer}</UserBubble>
+        </nldd-container>
+      ))}
 
-        {question && (
-          <section aria-labelledby={questionId} className={clsx(CARD, 'p-4')}>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">
+      {question && (
+        <nldd-card accessible-label={question.vraag}>
+          <nldd-container padding="16">
+            <nldd-container layout="row" gap="8" vertical-alignment="center">
+              <nldd-text size="sm" weight="bold" color="secondary">
                 Vraag {turns.length + 1} van {MAX_INTAKE_QUESTIONS}
-              </span>
-              <Bars filled={turns.length + 1} total={MAX_INTAKE_QUESTIONS} tone="blauw" />
-              <span className="ml-auto">
-                <InfoDot label="Over doorvragen" text={OVER_DOORVRAGEN} />
-              </span>
-            </div>
-            <h3
-              id={questionId}
-              className="mt-2 text-lg font-bold leading-snug text-rijksblauw-700 dark:text-rijksblauw-200"
-            >
-              {question.vraag}
-            </h3>
+              </nldd-text>
+              <Bars
+                filled={turns.length + 1}
+                total={MAX_INTAKE_QUESTIONS}
+                tone="blauw"
+                label={`Vraag ${turns.length + 1} van ${MAX_INTAKE_QUESTIONS}`}
+              />
+              <nldd-spacer size="flexible"></nldd-spacer>
+              <InfoDot label="Over doorvragen" text={OVER_DOORVRAGEN} />
+            </nldd-container>
+            <nldd-spacer size="8"></nldd-spacer>
+            <nldd-title heading-level={3} size={4} text={question.vraag}></nldd-title>
             {question.opties.length > 0 ? (
               <QuestionOptions
                 key={question.vraag}
                 opties={question.opties}
-                labelledBy={questionId}
+                label={question.vraag}
                 busy={busy}
                 onPick={onPick}
                 onTypeOwn={onTypeOwn}
               />
             ) : (
-              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-                Typ je antwoord in het tekstvak.
-              </p>
+              <>
+                <nldd-spacer size="8"></nldd-spacer>
+                <nldd-text size="sm" color="secondary">Typ je antwoord in het tekstvak.</nldd-text>
+              </>
             )}
-            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
-              <button type="button" className="opl-btn-secondary !px-3 !py-1.5" onClick={onAddFile}>
-                <Paperclip size={16} /> Bestand toevoegen
-              </button>
+            <nldd-spacer size="12"></nldd-spacer>
+            <nldd-container layout="wrap" gap="8" vertical-alignment="center">
+              <nldd-button appearance="secondary" size="sm" start-icon="paperclip" text="Bestand toevoegen" onClick={onAddFile}></nldd-button>
               {turns.length > 0 && (
-                <button
-                  type="button"
-                  className="opl-btn-ghost !px-3 !py-1.5"
-                  disabled={busy}
+                <nldd-button
+                  appearance="neutral-transparent"
+                  size="sm"
+                  start-icon="magic"
+                  text="Maak de prompt"
+                  disabled={busy || undefined}
                   onClick={onFinishQuestions}
-                >
-                  <Wand2 size={16} /> Maak de prompt
-                </button>
+                ></nldd-button>
               )}
-              <button type="button" className={clsx(LINK, 'sm:ml-auto')} onClick={onSkip}>
-                Sla de vragen over
-              </button>
-            </div>
-          </section>
-        )}
+              <nldd-spacer size="flexible"></nldd-spacer>
+              <nldd-button appearance="accent-transparent" size="sm" text="Sla de vragen over" onClick={onSkip}></nldd-button>
+            </nldd-container>
+          </nldd-container>
+        </nldd-card>
+      )}
 
-        {draft && phase === 'voorstel' && (
-          <section aria-labelledby={proposalId} className={CARD}>
-            <div className="flex flex-wrap items-center gap-x-1.5 px-4 pt-3">
-              <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">
-                Aanpak
-              </span>
-              <h3
-                id={proposalId}
-                className="text-lg font-bold text-rijksblauw-700 dark:text-rijksblauw-200"
-              >
-                {draft.framework?.name ?? 'Je prompt'}
-              </h3>
-              {draft.reden && <InfoDot label="Waarom deze aanpak" text={draft.reden} />}
-            </div>
+      {draft && phase === 'voorstel' && (
+        <nldd-card accessible-label={draft.framework?.name ?? 'Je prompt'}>
+          <nldd-container padding="16" gap="12">
+            <nldd-title
+              heading-level={3}
+              size={4}
+              overline="Aanpak"
+              text={draft.framework?.name ?? 'Je prompt'}
+            >
+              {draft.reden && (
+                <nldd-container slot="end">
+                  <InfoDot label="Waarom deze aanpak" text={draft.reden} />
+                </nldd-container>
+              )}
+            </nldd-title>
 
             {sections.length > 0 && (
-              <ul className="space-y-2 px-4 py-3">
+              <nldd-list accessible-label="Kopjes van je prompt">
                 {sections.map((section) => {
                   const beoordeeld = check?.kopjes.find((k) => k.kopje === section.kopje);
                   const zwak = beoordeeld?.oordeel === 'zwak';
                   return (
-                    <li key={section.kopje} className="flex items-start gap-2.5 text-[0.9375rem] leading-6">
-                      <span
-                        aria-hidden="true"
-                        className={clsx(
-                          'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded',
-                          !beoordeeld && 'bg-slate-100 dark:bg-slate-700',
-                          beoordeeld && !zwak && 'bg-rijksgroen text-white',
-                          zwak && 'border-2 border-dashed border-rijksoranje',
-                        )}
+                    <nldd-list-item key={section.kopje}>
+                      {beoordeeld ? (
+                        <nldd-icon-cell
+                          vertical-alignment="top"
+                          icon={zwak ? 'circle-dashed' : 'check-mark-circle-filled'}
+                          color={zwak ? 'warning' : 'success'}
+                        ></nldd-icon-cell>
+                      ) : (
+                        <nldd-icon-cell vertical-alignment="top" icon="circle-dashed" color="secondary"></nldd-icon-cell>
+                      )}
+                      <nldd-spacer-cell size="12"></nldd-spacer-cell>
+                      <nldd-text-cell
+                        vertical-alignment="top"
+                        supporting-text={beoordeeld?.kern || section.tekst.split('\n')[0]}
                       >
-                        {beoordeeld && !zwak && <Check size={14} strokeWidth={3} />}
-                      </span>
-                      <span className="min-w-0">
-                        <span className="font-semibold text-slate-900 dark:text-slate-100">
-                          {section.kopje}
-                        </span>
+                        {section.kopje}
                         {beoordeeld && (
-                          <span className="sr-only">{zwak ? ', kan beter' : ', sterk'}</span>
-                        )}{' '}
-                        <span className="line-clamp-2 text-slate-700 dark:text-slate-200 [overflow-wrap:anywhere]">
-                          {beoordeeld?.kern || section.tekst.split('\n')[0]}
-                        </span>
-                      </span>
-                    </li>
+                          <nldd-visually-hidden>{zwak ? ', kan beter' : ', sterk'}</nldd-visually-hidden>
+                        )}
+                      </nldd-text-cell>
+                    </nldd-list-item>
                   );
                 })}
-              </ul>
+              </nldd-list>
             )}
 
-            <details className="group px-4 pb-3" open={sections.length === 0}>
-              <summary className={clsx(LINK, 'cursor-pointer list-none')}>
-                <span className="group-open:hidden">Hele prompt lezen</span>
-                <span className="hidden group-open:inline">Hele prompt verbergen</span>
-              </summary>
-              <div className="mt-2 max-h-80 overflow-y-auto whitespace-pre-wrap break-words rounded-lg bg-slate-50 p-3 text-sm leading-6 text-slate-800 dark:bg-slate-900/60 dark:text-slate-100">
+            <nldd-container layout="row">
+              <nldd-button
+                appearance="accent-transparent"
+                size="sm"
+                end-icon={promptOpen ? 'chevron-up' : 'chevron-down'}
+                text={promptOpen ? 'Hele prompt verbergen' : 'Hele prompt lezen'}
+                expanded={promptOpen || undefined}
+                onClick={() => setShowAll(!promptOpen)}
+              ></nldd-button>
+            </nldd-container>
+            {promptOpen && (
+              <nldd-code-viewer wrap language="markdown" max-height="320px">
                 {draft.prompt}
-              </div>
-            </details>
+              </nldd-code-viewer>
+            )}
 
             {(checking || check) && (
-              <div className="border-t border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/40">
-                {checking ? (
-                  <Waiting label="Ik beoordeel je prompt" />
-                ) : check ? (
-                  <>
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                      <span className="font-semibold text-rijksblauw-700 dark:text-rijksblauw-200">
-                        Beoordeling
-                      </span>
-                      <Bars filled={sterk} total={total} tone="groen" />
-                      <span className="ml-auto text-sm text-slate-700 dark:text-slate-200">
-                        {sterk} van {total} sterk
-                      </span>
-                    </div>
-                    {check.verbeterpunt ? (
-                      <>
-                        <p className="mt-2 text-[0.9375rem] text-slate-800 dark:text-slate-100">
-                          {check.verbeterpunt.vraag}
-                        </p>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {check.verbeterpunt.opties.map((optie) => (
-                            <button
-                              key={optie}
-                              type="button"
-                              className={CHIP}
-                              disabled={busy}
-                              onClick={() =>
-                                onImprove(
-                                  `Verwerk dit antwoord${
-                                    check.verbeterpunt?.kopje
-                                      ? ` onder het kopje ${check.verbeterpunt.kopje}`
-                                      : ''
-                                  }. Vraag: ${check.verbeterpunt?.vraag} Antwoord: ${optie}`,
-                                )
-                              }
-                            >
-                              {optie}
-                            </button>
-                          ))}
-                        </div>
-                      </>
-                    ) : (
-                      <p className="mt-2 flex items-center gap-1.5 text-[0.9375rem] text-slate-800 dark:text-slate-100">
-                        <Check size={16} className="shrink-0 text-rijksgroen" /> Klaar om te
-                        versturen.
-                      </p>
-                    )}
-                  </>
-                ) : null}
-              </div>
+              <nldd-box>
+                <nldd-container padding="12">
+                  {checking ? (
+                    <Waiting label="Ik beoordeel je prompt" />
+                  ) : check ? (
+                    <>
+                      <nldd-container layout="wrap" gap="12" vertical-alignment="center">
+                        <nldd-text weight="bold" color="accent">Beoordeling</nldd-text>
+                        <Bars filled={sterk} total={total} tone="groen" label={`${sterk} van ${total} sterk`} />
+                        <nldd-spacer size="flexible"></nldd-spacer>
+                        <nldd-text size="sm">
+                          {sterk} van {total} sterk
+                        </nldd-text>
+                      </nldd-container>
+                      <nldd-spacer size="8"></nldd-spacer>
+                      {check.verbeterpunt ? (
+                        <>
+                          <nldd-text>{check.verbeterpunt.vraag}</nldd-text>
+                          <nldd-spacer size="8"></nldd-spacer>
+                          <nldd-container layout="wrap" gap="8">
+                            {check.verbeterpunt.opties.map((optie) => (
+                              <nldd-button
+                                key={optie}
+                                appearance="secondary"
+                                size="sm"
+                                text={optie}
+                                disabled={busy || undefined}
+                                onClick={() =>
+                                  onImprove(
+                                    `Verwerk dit antwoord${
+                                      check.verbeterpunt?.kopje
+                                        ? ` onder het kopje ${check.verbeterpunt.kopje}`
+                                        : ''
+                                    }. Vraag: ${check.verbeterpunt?.vraag} Antwoord: ${optie}`,
+                                  )
+                                }
+                              ></nldd-button>
+                            ))}
+                          </nldd-container>
+                        </>
+                      ) : (
+                        <nldd-container layout="row" gap="6" vertical-alignment="center">
+                          <nldd-icon icon="check-mark" size="16" color="success"></nldd-icon>
+                          <nldd-text>Klaar om te versturen.</nldd-text>
+                        </nldd-container>
+                      )}
+                    </>
+                  ) : null}
+                </nldd-container>
+              </nldd-box>
             )}
 
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-slate-200 px-4 py-3 dark:border-slate-700">
-              <button type="button" className="opl-btn-primary" disabled={busy} onClick={onUse}>
-                Gebruik deze prompt
-              </button>
-              <button type="button" className={LINK} onClick={onSkip}>
-                Stuur mijn eigen vraag
-              </button>
-            </div>
-          </section>
-        )}
+            <nldd-container layout="wrap" gap="12" vertical-alignment="center">
+              <nldd-button appearance="primary" text="Gebruik deze prompt" disabled={busy || undefined} onClick={onUse}></nldd-button>
+              <nldd-button appearance="accent-transparent" text="Stuur mijn eigen vraag" onClick={onSkip}></nldd-button>
+            </nldd-container>
+          </nldd-container>
+        </nldd-card>
+      )}
 
-        {draft && phase === 'klaar' && (
-          <div className="space-y-1">
-            <div className="flex items-center gap-3 rounded-xl border border-slate-200 py-1.5 pl-3 pr-1.5 dark:border-slate-700">
-              <Check size={20} className="shrink-0 text-rijksgroen" />
-              <span className="min-w-0 flex-1 leading-tight">
-                <span className="block font-semibold text-rijksblauw-700 dark:text-rijksblauw-200">
-                  {draft.framework?.name ?? 'Je prompt'}
-                  {check ? `, ${sterk} van ${total} sterk` : ''}
-                </span>
-                <span className="block text-sm text-slate-500 dark:text-slate-400">
-                  Staat in het tekstvak
-                </span>
-              </span>
-              <button type="button" className="opl-btn-ghost !px-3 !py-1.5" onClick={onReopen}>
-                Bekijk
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-x-4">
-              <button type="button" className={LINK} onClick={onBuildInMaken}>
-                <Sparkles size={16} /> Verder bouwen in Maken
-              </button>
-              <button type="button" className={LINK} onClick={onSaveAsPrompt}>
-                <Bookmark size={16} /> Bewaar als prompt
-              </button>
-            </div>
-          </div>
-        )}
+      {draft && phase === 'klaar' && (
+        <nldd-container gap="4">
+          <nldd-box background="base">
+            <nldd-container padding-block="6" padding-left="12" padding-right="6" layout="row" gap="12" vertical-alignment="center">
+              <nldd-icon icon="check-mark" size="20" color="success"></nldd-icon>
+              <nldd-container width="fit-content">
+                <nldd-text weight="bold" color="accent">
+                  {`${draft.framework?.name ?? 'Je prompt'}${check ? `, ${sterk} van ${total} sterk` : ''}`}
+                </nldd-text>
+                <nldd-text size="sm" color="secondary">Staat in het tekstvak</nldd-text>
+              </nldd-container>
+              <nldd-spacer size="flexible"></nldd-spacer>
+              <nldd-button appearance="neutral-transparent" size="sm" text="Bekijk" onClick={onReopen}></nldd-button>
+            </nldd-container>
+          </nldd-box>
+          <nldd-container layout="wrap" gap="8">
+            <nldd-button appearance="accent-transparent" size="sm" start-icon="sparkles" text="Verder bouwen in Maken" onClick={onBuildInMaken}></nldd-button>
+            <nldd-button appearance="accent-transparent" size="sm" start-icon="bookmark" text="Bewaar als prompt" onClick={onSaveAsPrompt}></nldd-button>
+          </nldd-container>
+        </nldd-container>
+      )}
 
-        {loading && <Waiting label={loading} />}
-        {error && !loading && <WizardError message={error} onRetry={onRetry} />}
-        {error && !loading && phase !== 'klaar' && (
-          <button type="button" className={LINK} onClick={onSkip}>
-            Stuur mijn eigen vraag
-          </button>
-        )}
-      </div>
-      <p className="sr-only" role="status">
+      {loading && <Waiting label={loading} />}
+      {error && !loading && <WizardError message={error} onRetry={onRetry} />}
+      {error && !loading && phase !== 'klaar' && (
+        <nldd-container layout="row">
+          <nldd-button appearance="accent-transparent" text="Stuur mijn eigen vraag" onClick={onSkip}></nldd-button>
+        </nldd-container>
+      )}
+      <nldd-visually-hidden role="status" aria-atomic="true">
         {announcement}
-      </p>
-    </div>
+      </nldd-visually-hidden>
+    </nldd-container>
   );
 }

@@ -7,7 +7,7 @@ import type { Profile } from '@/types';
  * zich als no-op zodat de app blijft draaien op de lokale mock.
  */
 
-export class AuthNotConfiguredError extends Error {
+class AuthNotConfiguredError extends Error {
   constructor() {
     super('Authenticatie vereist een geconfigureerde Supabase-backend.');
     this.name = 'AuthNotConfiguredError';

@@ -4,27 +4,6 @@ import type { AuditLogEntry } from '@/types';
 
 const local = !isSupabaseConfigured || !supabase;
 
-// Token-gebaseerde admin-toegang (Phase 2, lichtgewicht).
-// In demo-modus is de standaardtoken 'admin'; in productie via VITE_ADMIN_TOKEN.
-const ADMIN_TOKEN = (import.meta.env.VITE_ADMIN_TOKEN as string | undefined) || 'admin';
-const SESSION_KEY = 'opl.adminToken';
-
-export function adminLogin(token: string): boolean {
-  if (token.trim() === ADMIN_TOKEN) {
-    localStorage.setItem(SESSION_KEY, token.trim());
-    return true;
-  }
-  return false;
-}
-
-export function adminLogout(): void {
-  localStorage.removeItem(SESSION_KEY);
-}
-
-export function isAdminAuthenticated(): boolean {
-  return localStorage.getItem(SESSION_KEY) === ADMIN_TOKEN;
-}
-
 /** Log een admin-actie in het audit-log (best-effort). */
 export async function logAdminAction(input: {
   action: string;

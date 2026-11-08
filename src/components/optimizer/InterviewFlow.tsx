@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Check } from '@/components/common/icons';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
 import { runPlanStep } from '@/services/optimizeService';
 import { structureFormat } from '@/lib/techniques';
 import { stripMarkdown } from '@/lib/utils';
@@ -8,6 +7,13 @@ import { detectPii, detectBlockedTopics, type GuardrailFinding } from '@/service
 import type { AiSettings } from '@/services/settingsService';
 import { InterviewPanel } from './InterviewPanel';
 import type { PlanStep, Technique, TranscriptTurn } from '@/types';
+import '@nldd/design-system/banner';
+import '@nldd/design-system/box';
+import '@nldd/design-system/button';
+import '@nldd/design-system/code-viewer';
+import '@nldd/design-system/container';
+import '@nldd/design-system/icon';
+import '@nldd/design-system/text';
 
 /**
  * Zelfstandig vraag-na-vraag-interview voor de losse techniek-keuze (Chain-of-
@@ -105,7 +111,7 @@ export default function InterviewFlow({
     if (!question) return;
     const a = answer.trim();
     if (!a) {
-      toast.error('Vul eerst een antwoord in, of rond af.');
+      notify.error('Vul eerst een antwoord in, of rond af.');
       return;
     }
     const findings: GuardrailFinding[] = [
@@ -114,9 +120,7 @@ export default function InterviewFlow({
     ];
     if (findings.length > 0) {
       // In deze losse flow tonen we de finding als toast i.p.v. een dialoog.
-      toast(`Let op: mogelijk gevoelige inhoud (${findings.map((f) => f.label).join(', ')}).`, {
-        icon: '⚠️',
-      });
+      notify.warning(`Let op: mogelijk gevoelige inhoud (${findings.map((f) => f.label).join(', ')}).`);
     }
     const turns = [...transcript, { question, answer: a }];
     setTranscript(turns);
@@ -129,36 +133,33 @@ export default function InterviewFlow({
     void turn(transcript, true);
   }
 
-  // Klaar: toon de conclusie/samenvatting; het genereren gebruikt deze inhoud.
+  // Done: show the conclusion; generating uses this content.
   if (done) {
     return (
-      <div className="space-y-2 rounded-xl border border-emerald-200 bg-emerald-50/40 p-4 dark:border-emerald-500/30 dark:bg-emerald-500/10">
-        <p className="flex items-center gap-2 text-sm font-semibold text-emerald-800 dark:text-emerald-300">
-          <Check size={15} />{' '}
-          {socratic ? 'Samenvatting van je inzichten' : 'Conclusie van het gesprek'}
-        </p>
-        <pre tabIndex={0} className="max-h-64 overflow-auto whitespace-pre-wrap rounded-lg border border-emerald-200 bg-white p-3 text-xs leading-relaxed text-slate-700 dark:border-emerald-500/20 dark:bg-slate-900 dark:text-slate-200">
-          {done}
-        </pre>
-        <p className="text-xs text-emerald-700/80 dark:text-emerald-300/70">
-          Klik hieronder op &quot;Bouw prompt&quot; om hier een herbruikbare prompt van te maken.
-        </p>
-      </div>
+      <nldd-box background="tinted">
+        <nldd-container padding="16" gap="8">
+          <nldd-container layout="row" gap="8" vertical-alignment="center">
+            <nldd-icon icon="check-mark" size="16" color="success"></nldd-icon>
+            <nldd-text size="sm" weight="bold" color="success">
+              {socratic ? 'Samenvatting van je inzichten' : 'Conclusie van het gesprek'}
+            </nldd-text>
+          </nldd-container>
+          <nldd-code-viewer appearance="box-base" wrap no-copy max-height="16rem">
+            {done}
+          </nldd-code-viewer>
+          <nldd-text size="xs" color="secondary">
+            Klik hieronder op &quot;Bouw prompt&quot; om hier een herbruikbare prompt van te maken.
+          </nldd-text>
+        </nldd-container>
+      </nldd-box>
     );
   }
 
   if (error) {
     return (
-      <div className="flex flex-col gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 sm:flex-row sm:items-center sm:justify-between dark:border-rose-500/30 dark:bg-rose-500/15 dark:text-rose-200">
-        <span>{stripMarkdown(error)}</span>
-        <button
-          type="button"
-          className="opl-btn-secondary shrink-0"
-          onClick={() => void turn(transcript, false)}
-        >
-          Opnieuw proberen
-        </button>
-      </div>
+      <nldd-banner variant="critical" text={stripMarkdown(error)}>
+        <nldd-button slot="actions" appearance="secondary" text="Opnieuw proberen" onClick={() => void turn(transcript, false)}></nldd-button>
+      </nldd-banner>
     );
   }
 

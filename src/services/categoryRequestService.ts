@@ -35,17 +35,6 @@ export async function requestCategory(params: {
   return data as CategoryRequest;
 }
 
-/** Aantal openstaande (pending) aanvragen — voor een badge in het admin-menu. */
-export async function countPendingCategoryRequests(): Promise<number> {
-  if (!isSupabaseConfigured || !supabase) return 0;
-  const { count, error } = await supabase
-    .from('category_requests')
-    .select('id', { count: 'exact', head: true })
-    .eq('status', 'pending');
-  if (error) throw error;
-  return count ?? 0;
-}
-
 /** Haal de openstaande aanvragen op, verrijkt met de naam van de aanvrager. */
 export async function listPendingCategoryRequests(): Promise<CategoryRequest[]> {
   const client = requireClient();

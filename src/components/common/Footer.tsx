@@ -1,15 +1,14 @@
-import { Link } from 'react-router-dom';
 import { HELP_PATH } from '@/lib/shortcuts';
+import '@nldd/design-system/page-footer';
 
 export default function Footer() {
   return (
-    <footer className="bg-rijksblauw-700 text-white">
-      <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-2 px-4 py-6 text-xs sm:flex-row sm:px-6 lg:px-8">
-        <p>Overheid Prompt Library. Verwerk geen persoonsgegevens.</p>
-        <Link to={HELP_PATH} className="opl-raak underline">
-          Hulp bij toegankelijkheid
-        </Link>
-      </div>
-    </footer>
+    <nldd-page-footer slot="footer">
+      <nldd-page-footer-legal-bar slot="legal-bar">
+        <nldd-page-footer-legal-bar-item slot="start" text="Verwerk geen persoonsgegevens"></nldd-page-footer-legal-bar-item>
+        <nldd-page-footer-legal-bar-item slot="end" text="Contact" href="/contact"></nldd-page-footer-legal-bar-item>
+        <nldd-page-footer-legal-bar-item slot="end" text="Hulp bij toegankelijkheid" href={HELP_PATH}></nldd-page-footer-legal-bar-item>
+      </nldd-page-footer-legal-bar>
+    </nldd-page-footer>
   );
 }

@@ -1,14 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Compass, Wand2 } from '@/components/common/icons';
 import GoalDialog from '@/components/optimizer/GoalDialog';
-import DailyBackground from '@/components/common/DailyBackground';
 import InfoDot from '@/components/common/InfoDot';
 import ThinkingToggle from '@/components/common/ThinkingToggle';
 import WebSearchToggle from '@/components/common/WebSearchToggle';
 import useThinking from '@/lib/useThinking';
 import useWebSearch from '@/lib/useWebSearch';
-import EntryTab from '@/components/optimizer/EntryTab';
+import { useNlddEvent } from '@/lib/nldd';
 import OwnPromptOptimizer from '@/components/optimizer/OwnPromptOptimizer';
 import OptimizedOutput from '@/components/optimizer/OptimizedOutput';
 import ProjectContextPicker, {
@@ -39,12 +37,18 @@ import { thinkingUnavailableReason } from '@/config/aiModels';
 import { activityIdentifier } from '@/lib/utils';
 import { usePersistentDraft } from '@/lib/usePersistentDraft';
 import type { OptimizeResult, Technique } from '@/types';
+import '@nldd/design-system/activity-indicator';
+import '@nldd/design-system/container';
+import '@nldd/design-system/simple-section';
+import '@nldd/design-system/spacer';
+import '@nldd/design-system/tab-bar';
+import '@nldd/design-system/title';
 
 /**
  * Welke instap actief is. Beide zijn automatisch: de gebruiker levert inhoud
  * (een eigen prompt of een doel), de AI kiest het passende framework en vult de
  * velden voor. Een framework "vanaf nul" handmatig invullen kan bewust niet
- * meer — er is geen instap zonder analyse.
+ * meer: er is geen instap zonder analyse.
  */
 type EntryMode = 'own-prompt' | 'goal';
 
@@ -307,129 +311,149 @@ export default function OptimizerPage() {
   const ownActive = entryMode === 'own-prompt';
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
-      {/* De bewegende achtergrond van de dag. Alle inhoud staat op een dekkend
-          paneel: deze pagina heeft veel tussenstappen en meldingen die los op
-          de pagina staan, en die moeten op elke achtergrond leesbaar blijven. */}
-      <DailyBackground />
-      <div className="rounded-2xl bg-slate-100 p-4 shadow-lg sm:p-6 dark:bg-slate-900">
-      <div className="mb-5 flex items-center gap-1">
-        <h1 className="text-3xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
-          Prompt maken
-        </h1>
-        <InfoDot
-          label="Uitleg over prompt maken"
-          text={
-            'Je maakt een herbruikbare prompt. De AI kiest de aanpak en vult alvast in; jij vult aan.\nHeb je nog geen tekst? Bij Ik heb een idee denken we eerst met je mee.'
-          }
-        />
-      </div>
-
-      {phase === 'output' && result ? (
-        <div className="opl-card p-6">
-          <OptimizedOutput
-            result={result}
-            technique={resultTechnique}
-            goal={goal}
-            onReset={handleReset}
-            versions={versions}
-            activeVersion={activeVersion}
-            onSelectVersion={setActiveVersion}
+    <nldd-simple-section>
+      {/* The moving background of the day. All content sits on an opaque card:
+          this page has many intermediate steps and messages, and they have to
+          stay readable on any background. */}
+      <nldd-container slot="header">
+        <nldd-container layout="row" gap="4" vertical-alignment="center">
+          <nldd-title heading-level={1} size={2} text="Prompt maken"></nldd-title>
+          <InfoDot
+            label="Uitleg over prompt maken"
+            text={
+              'Je maakt een herbruikbare prompt. De AI kiest de aanpak en vult alvast in; jij vult aan.\nHeb je nog geen tekst? Bij Ik heb een idee denken we eerst met je mee.'
+            }
           />
-        </div>
-      ) : (
-        <div
-          className={`space-y-6 transition-opacity duration-700 ${
-            phase === 'transition' ? 'pointer-events-none opacity-0' : 'opacity-100'
-          }`}
-        >
-          {/* Twee tabbladen boven het invulvlak. Denken en Internet staan bij de
-              knop waarmee je start: ze gelden voor het invullen én het bouwen. */}
-          {(() => {
-            const tabs = (
-              <div role="tablist" aria-label="Hoe begin je?" className="grid grid-cols-1 gap-x-3 sm:grid-cols-2">
-                <EntryTab
-                  active={ownActive}
-                  onClick={() => setEntryMode('own-prompt')}
-                  icon={<Wand2 size={22} />}
-                  title="Ik heb al een prompt"
-                />
-                <EntryTab
-                  active={!ownActive}
-                  onClick={() => setEntryMode('goal')}
-                  icon={<Compass size={22} />}
-                  title="Ik heb een idee"
-                />
-              </div>
-            );
-            const toggles = (
-              <>
-                <ThinkingToggle
-                  value={thinking}
-                  onChange={setThinking}
-                  unavailableReason={thinkingUnavailable}
-                />
-                {searchAvailable && <WebSearchToggle value={webSearch} onChange={setWebSearch} />}
-                <InfoDot
-                  label="Uitleg over denken en internet"
-                  text={
-                    searchAvailable
-                      ? 'Denken: grondiger, wel trager. Alleen bij een lastige opdracht.\nInternet: de AI zoekt eerst op internet en noemt de bronnen.'
-                      : 'Denken: grondiger, wel trager. Alleen bij een lastige opdracht.'
-                  }
-                />
-              </>
-            );
+        </nldd-container>
+        {phase !== 'output' && (
+          <>
+            <nldd-spacer size="16"></nldd-spacer>
+            <EntryTabs ownActive={ownActive} onChange={setEntryMode} />
+          </>
+        )}
+      </nldd-container>
 
-            // De projectcontext staat bij het tekstvak en niet in de kop: beide
-            // instappen hebben een eigen veld, dus geven ze hun tekst hier door.
-            const renderProjectContext = ({ text, stripMention, className }: ProjectContextSlot) => (
-              <ProjectContextPicker
-                projects={chatProjects.projects}
-                context={projectContext}
-                activeProjectId={projectContextId}
-                loading={projectContextLoading}
-                text={text}
-                onStripMention={stripMention}
-                onPick={pickProject}
-                onClear={clearProjectContext}
-                onSelectFiles={selectProjectFiles}
-                className={className}
-              />
-            );
+          {phase === 'output' && result ? (
+                <OptimizedOutput
+                  result={result}
+                  technique={resultTechnique}
+                  goal={goal}
+                  onReset={handleReset}
+                  versions={versions}
+                  activeVersion={activeVersion}
+                  onSelectVersion={setActiveVersion}
+                />
+          ) : (
+            // While the result is on its way the input stays in place, inert,
+            // under the indicator.
+            <nldd-activity-indicator
+              timing="instant"
+              text="Prompt wordt klaargezet"
+              complete={phase !== 'transition' || undefined}
+            >
+              <nldd-container gap="24">
+                {/* Two choices above the input area. Thinking and Internet sit next
+                    to the start button: they apply to filling in and building. */}
+                {(() => {
+                  const toggles = (
+                    <>
+                      <ThinkingToggle
+                        value={thinking}
+                        onChange={setThinking}
+                        unavailableReason={thinkingUnavailable}
+                      />
+                      {searchAvailable && <WebSearchToggle value={webSearch} onChange={setWebSearch} />}
+                      <InfoDot
+                        label="Uitleg over denken en internet"
+                        text={
+                          searchAvailable
+                            ? 'Denken: grondiger, wel trager. Alleen bij een lastige opdracht.\nInternet: de AI zoekt eerst op internet en noemt de bronnen.'
+                            : 'Denken: grondiger, wel trager. Alleen bij een lastige opdracht.'
+                        }
+                      />
+                    </>
+                  );
 
-            // Beide instappen renderen de tabs zelf, boven hun eigen vlak. De
-            // eigen-prompt-flow leest een geplakte prompt; de doel-flow voert eerst
-            // een gesprek. In beide gevallen kiest de AI het framework en vult zij
-            // de velden voor. Niemand kiest hier zelf; dat kan op /technieken.
-            return ownActive ? (
-              <OwnPromptOptimizer
-                settings={settingsRef.current}
-                onResult={handleResult}
-                header={tabs}
-                toggles={toggles}
-                initialPrompt={initialPrompt}
-                projectContext={projectContext?.text}
-                renderProjectContext={renderProjectContext}
-                thinking={thinkingOn}
-                webSearch={webSearchOn}
-              />
-            ) : (
-              <GoalDialog
-                settings={settingsRef.current}
-                onResult={handleResult}
-                header={tabs}
-                toggles={toggles}
-                projectContext={projectContext?.text}
-                renderProjectContext={renderProjectContext}
-                thinking={thinkingOn}
-                webSearch={webSearchOn}
-              />
-            );
-          })()}
-        </div>
-      )}
-      </div>
-    </div>
+                  // The project context sits by the text field, not in the header:
+                  // each entry has its own field, so each passes its text here.
+                  const renderProjectContext = ({ text, stripMention }: ProjectContextSlot) => (
+                    <ProjectContextPicker
+                      projects={chatProjects.projects}
+                      context={projectContext}
+                      activeProjectId={projectContextId}
+                      loading={projectContextLoading}
+                      text={text}
+                      onStripMention={stripMention}
+                      onPick={pickProject}
+                      onClear={clearProjectContext}
+                      onSelectFiles={selectProjectFiles}
+                    />
+                  );
+
+                  // Both entries render the choices themselves, above their own
+                  // area. In both the AI picks the framework and fills in the
+                  // fields. Nobody picks one here; that is what /technieken is for.
+                  return ownActive ? (
+                    <OwnPromptOptimizer
+                      settings={settingsRef.current}
+                      onResult={handleResult}
+                                            toggles={toggles}
+                      initialPrompt={initialPrompt}
+                      projectContext={projectContext?.text}
+                      renderProjectContext={renderProjectContext}
+                      thinking={thinkingOn}
+                      webSearch={webSearchOn}
+                    />
+                  ) : (
+                    <GoalDialog
+                      settings={settingsRef.current}
+                      onResult={handleResult}
+                                            toggles={toggles}
+                      projectContext={projectContext?.text}
+                      renderProjectContext={renderProjectContext}
+                      thinking={thinkingOn}
+                      webSearch={webSearchOn}
+                    />
+                  );
+                })()}
+              </nldd-container>
+            </nldd-activity-indicator>
+          )}
+    </nldd-simple-section>
+  );
+}
+
+/**
+ * The two ways in: with a prompt of your own or with an idea. A tab bar,
+ * because the choice switches the content below it. Its own component, so
+ * the tabchange listener binds whenever the bar mounts.
+ */
+function EntryTabs({
+  ownActive,
+  onChange,
+}: {
+  ownActive: boolean;
+  onChange: (mode: 'own-prompt' | 'goal') => void;
+}) {
+  const ref = useRef<HTMLElement>(null);
+  useNlddEvent<CustomEvent<{ item?: HTMLElement }>>(ref, 'tabchange', (e) => {
+    const next = e.detail?.item?.dataset.tab;
+    if (next === 'own-prompt' || next === 'goal') onChange(next);
+  });
+  return (
+    <nldd-tab-bar ref={ref} accessible-label="Hoe begin je?">
+      <nldd-tab-bar-item
+        data-tab="own-prompt"
+        icon="magic"
+        text="Ik heb een prompt"
+        current={ownActive || undefined}
+      ></nldd-tab-bar-item>
+      <nldd-tab-bar-item
+        data-tab="goal"
+        icon="signpost"
+        text="Ik heb een idee"
+        current={!ownActive || undefined}
+      ></nldd-tab-bar-item>
+    </nldd-tab-bar>
   );
 }

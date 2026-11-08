@@ -1,23 +1,9 @@
-import { useState } from 'react';
-import {
-  AlignLeft,
-  ArrowLeft,
-  ArrowRight,
-  Check,
-  ClipboardList,
-  FileText,
-  Loader2,
-  Mail,
-  Settings2,
-  Sparkles,
-  Wand2,
-} from '@/components/common/icons';
-import clsx from 'clsx';
+import { useEffect, useRef, useState, type ComponentProps } from 'react';
+import { createPortal } from 'react-dom';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import InfoDot from '@/components/common/InfoDot';
-import Modal from '@/components/common/Modal';
-import { TILE, TILE_PRIMARY, TILE_SOFT } from '@/components/chat/projectTiles';
 import { useReferenceData } from '@/context/ReferenceDataContext';
+import { useNlddEvent, useNlddValue } from '@/lib/nldd';
 import {
   MAX_PROJECT_INSTRUCTIONS_CHARS,
   MAX_PROJECT_NAME_CHARS,
@@ -31,11 +17,27 @@ import {
 import type { ChatSettings } from '@/services/settingsService';
 import {
   InterviewQuestion,
+  useSubmitOnEnter,
   WizardError,
   WizardSteps,
   WizardWaiting,
 } from './PromptInterviewParts';
-import { submitOnEnter, usePromptInterview } from './usePromptInterview';
+import { usePromptInterview } from './usePromptInterview';
+import '@nldd/design-system/button';
+import '@nldd/design-system/card';
+import '@nldd/design-system/container';
+import '@nldd/design-system/form-field';
+import '@nldd/design-system/icon';
+import '@nldd/design-system/multi-line-text-field';
+import '@nldd/design-system/page';
+import '@nldd/design-system/sheet';
+import '@nldd/design-system/simple-section';
+import '@nldd/design-system/spacer';
+import '@nldd/design-system/text';
+import '@nldd/design-system/text-field';
+import '@nldd/design-system/title';
+import '@nldd/design-system/toggle-button';
+import '@nldd/design-system/top-title-bar';
 
 type Step = 'keuze' | 'taak' | 'vragen' | 'voorstel';
 
@@ -47,24 +49,36 @@ const RICHTINGEN = [
   {
     label: 'Memo in vaste vorm',
     tekst: 'Een memo schrijven dat er elke keer hetzelfde uitziet',
-    icon: FileText,
+    icon: 'text-document',
   },
   {
     label: 'Mail op dyslexie',
     tekst: 'Mijn mail nakijken op dyslexie zonder dat mijn toon en stem verloren gaan',
-    icon: Mail,
+    icon: 'email',
   },
   {
     label: 'Stuk samenvatten',
     tekst: 'Lange stukken samenvatten voor mijn leidinggevende',
-    icon: AlignLeft,
+    icon: 'file-text',
   },
   {
     label: 'Verslag maken',
     tekst: 'Aantekeningen van een overleg omzetten naar een vast verslag',
-    icon: ClipboardList,
+    icon: 'clipboard-bullet-list',
   },
 ];
+
+/**
+ * A toggle button whose selected state follows React. The button flips its own
+ * state on a click, so the property is set back from the prop after every render.
+ */
+function ChoiceToggle({ selected, ...rest }: Omit<ComponentProps<'nldd-toggle-button'>, 'selected'> & { selected: boolean }) {
+  const ref = useRef<HTMLElement & { selected?: boolean }>(null);
+  useEffect(() => {
+    if (ref.current) ref.current.selected = selected;
+  });
+  return <nldd-toggle-button ref={ref} selected={selected || undefined} {...rest}></nldd-toggle-button>;
+}
 
 /**
  * "Prompt maken" in een project: taak, vragen, voorstel. De AI analyseert de taak
@@ -96,6 +110,7 @@ export default function ProjectPromptWizard({
   const [name, setName] = useState(projectName);
   const [feedback, setFeedback] = useState('');
   const [confirmClose, setConfirmClose] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(true);
 
   const interview = usePromptInterview({
     ask: (turns, signal) => nextProjectQuestion({ goal: goal.trim(), turns, settings, signal }),
@@ -144,209 +159,195 @@ export default function ProjectPromptWizard({
     else onClose();
   };
 
+  // The sheet closes itself (Escape, backdrop, Sluit); with work in it, the
+  // confirmation decides, and cancelling it opens the sheet again.
+  const sheetRef = useRef<HTMLElement>(null);
+  useNlddEvent(sheetRef, 'close', () => {
+    setSheetOpen(false);
+    requestClose();
+  });
+
+  const taskRef = useRef<HTMLElement & { value?: string }>(null);
+  useNlddValue(taskRef, goal, setGoal);
+  useSubmitOnEnter(taskRef, () => {
+    if (goal.trim()) interview.start();
+  });
+  const nameRef = useRef<HTMLElement & { value?: string }>(null);
+  useNlddValue(nameRef, name, setName);
+  const promptRef = useRef<HTMLElement & { value?: string }>(null);
+  useNlddValue(promptRef, prompt, setPrompt);
+  const feedbackRef = useRef<HTMLElement & { value?: string }>(null);
+  useNlddValue(feedbackRef, feedback, setFeedback);
+  useSubmitOnEnter(feedbackRef, applyFeedback);
+
+  // The task field takes focus once the sheet has opened.
+  useEffect(() => {
+    if (step !== 'taak') return;
+    const timer = window.setTimeout(() => taskRef.current?.focus(), 50);
+    return () => window.clearTimeout(timer);
+  }, [step]);
+
   const stepIndex = STAPPEN.indexOf(step);
   const backButton = (
-    <button type="button" className="opl-btn-ghost" onClick={goBack}>
-      <ArrowLeft size={16} /> Terug
-    </button>
+    <nldd-button appearance="neutral-transparent" start-icon="arrow-left" text="Terug" onClick={goBack}></nldd-button>
   );
-  const errorBox = error && <WizardError message={error} onRetry={interview.retry} />;
+  const errorBox = error && (
+    <>
+      <WizardError message={error} onRetry={interview.retry} />
+      <nldd-spacer size="16"></nldd-spacer>
+    </>
+  );
+  const title = isNewProject ? 'Nieuw project' : 'Prompt maken';
 
-  return (
-    <Modal open onClose={requestClose} title={isNewProject ? 'Nieuw project' : 'Prompt maken'}>
-      {stepIndex >= 0 && <WizardSteps labels={STAP_LABELS} current={stepIndex} />}
+  return createPortal(
+    <>
+      <nldd-sheet ref={sheetRef} open={sheetOpen || undefined} width="640px">
+        <nldd-page>
+          <nldd-top-title-bar slot="header" text={title} dismiss-text="Sluit"></nldd-top-title-bar>
+          <nldd-simple-section>
+            {stepIndex >= 0 && <WizardSteps labels={STAP_LABELS} current={stepIndex} />}
 
-      {step === 'keuze' && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <button
-            type="button"
-            className={`${TILE} ${TILE_PRIMARY}`}
-            onClick={() => setStep('taak')}
-          >
-            <Wand2 size={28} strokeWidth={1.5} />
-            <span>
-              <span className="block text-base font-bold leading-tight">Prompt maken</span>
-              <span className="mt-1 block text-sm">De AI stelt een paar vragen</span>
-            </span>
-          </button>
-          <button type="button" className={`${TILE} ${TILE_SOFT}`} onClick={onManual}>
-            <Settings2 size={28} />
-            <span>
-              <span className="block text-base font-bold leading-tight">Zelf instellen</span>
-              <span className="mt-1 block text-sm">Eigen instructie en bestanden</span>
-            </span>
-          </button>
-        </div>
-      )}
-
-      {step === 'taak' && (
-        <div className="space-y-4">
-          <div>
-            <label
-              htmlFor="project-task"
-              className="mb-2 block text-lg font-bold text-rijksblauw-700 dark:text-rijksblauw-200"
-            >
-              Wat wil je vaker uitgevoerd hebben?
-            </label>
-            <textarea
-              id="project-task"
-              autoFocus
-              rows={3}
-              maxLength={2000}
-              className="opl-input resize-y"
-              value={goal}
-              onChange={(e) => setGoal(e.target.value)}
-              onKeyDown={submitOnEnter(() => goal.trim() && interview.start())}
-            />
-          </div>
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] gap-2">
-            {RICHTINGEN.map(({ label, tekst, icon: Icon }) => (
-              <button
-                key={label}
-                type="button"
-                aria-pressed={goal === tekst}
-                onClick={() => setGoal(tekst)}
-                className={clsx(
-                  'flex min-h-[3rem] items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500',
-                  goal === tekst
-                    ? 'bg-rijksblauw-700 text-white dark:bg-rijksblauw-600'
-                    : 'bg-rijksblauw-50 text-rijksblauw-700 hover:bg-rijksblauw-100 dark:bg-rijksblauw-500/20 dark:text-white dark:hover:bg-rijksblauw-500/30',
-                )}
-              >
-                <Icon size={18} className="shrink-0" /> {label}
-              </button>
-            ))}
-          </div>
-          <div className="flex justify-end">
-            <button
-              type="button"
-              className="opl-btn-primary"
-              disabled={!goal.trim()}
-              onClick={interview.start}
-            >
-              Verder <ArrowRight size={16} />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {step === 'vragen' && (
-        <div className="space-y-4">
-          {errorBox}
-          {busy && <WizardWaiting label="Ik denk na over je taak" />}
-          {!busy && question?.vraag && (
-            <InterviewQuestion
-              question={question}
-              number={answered.length + 1}
-              picked={picked}
-              answer={answer}
-              onTogglePick={interview.togglePick}
-              onAnswer={interview.setAnswer}
-              onSubmit={interview.submitAnswer}
-            />
-          )}
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            {backButton}
-            {!busy && question?.vraag && (
-              <div className="flex flex-wrap items-center gap-2">
-                {answered.length > 0 && (
-                  <button type="button" className="opl-btn-secondary" onClick={interview.finishEarly}>
-                    <Sparkles size={16} /> Maak de prompt
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className="opl-btn-primary"
-                  disabled={picked.length === 0 && !answer.trim()}
-                  onClick={interview.submitAnswer}
-                >
-                  Verder <ArrowRight size={16} />
-                </button>
-              </div>
+            {step === 'keuze' && (
+              <nldd-container layout="grid" column-count={2} sm-column-count={1} gap="12">
+                <nldd-card button background="accent-tinted" accessible-label="Prompt maken" onClick={() => setStep('taak')}>
+                  <nldd-container padding="16" gap="8">
+                    <nldd-icon icon="magic" size="28"></nldd-icon>
+                    <nldd-title heading-level={2} size={5} text="Prompt maken" supporting-text="De AI stelt een paar vragen"></nldd-title>
+                  </nldd-container>
+                </nldd-card>
+                <nldd-card button accessible-label="Zelf instellen" onClick={onManual}>
+                  <nldd-container padding="16" gap="8">
+                    <nldd-icon icon="settings" size="28"></nldd-icon>
+                    <nldd-title heading-level={2} size={5} text="Zelf instellen" supporting-text="Eigen instructie en bestanden"></nldd-title>
+                  </nldd-container>
+                </nldd-card>
+              </nldd-container>
             )}
-          </div>
-        </div>
-      )}
 
-      {step === 'voorstel' && (
-        <div className="space-y-4">
-          {errorBox}
-          {busy && !draft && <WizardWaiting label="Ik kies een aanpak en schrijf je prompt" />}
-          {draft && (
-            <>
-              {draft.framework && (
-                <p className="flex items-center gap-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
-                  Gebouwd met {draft.framework.name}
-                  {draft.reden && (
-                    <InfoDot label="Waarom deze aanpak" text={draft.reden} />
-                  )}
-                </p>
-              )}
-              {isNewProject && (
-                <div>
-                  <label htmlFor="project-prompt-name" className="opl-label">
-                    Projectnaam
-                  </label>
-                  <input
-                    id="project-prompt-name"
-                    className="opl-input"
-                    value={name}
-                    maxLength={MAX_PROJECT_NAME_CHARS}
-                    onChange={(e) => setName(e.target.value)}
+            {step === 'taak' && (
+              <nldd-container gap="16">
+                <nldd-form-field label="Wat wil je vaker uitgevoerd hebben?">
+                  <nldd-multi-line-text-field ref={taskRef} rows={3} maxlength="2000"></nldd-multi-line-text-field>
+                </nldd-form-field>
+                <nldd-container layout="wrap" gap="8">
+                  {RICHTINGEN.map(({ label, tekst, icon }) => (
+                    <ChoiceToggle
+                      key={label}
+                      icon={icon}
+                      text={label}
+                      selected={goal === tekst}
+                      onClick={() => setGoal(tekst)}
+                    />
+                  ))}
+                </nldd-container>
+                <nldd-container horizontal-alignment="right">
+                  <nldd-button
+                    appearance="primary"
+                    end-icon="arrow-right"
+                    text="Verder"
+                    disabled={!goal.trim() || undefined}
+                    onClick={interview.start}
+                  ></nldd-button>
+                </nldd-container>
+              </nldd-container>
+            )}
+
+            {step === 'vragen' && (
+              <nldd-container gap="16">
+                {errorBox}
+                {busy && <WizardWaiting label="Ik denk na over je taak" />}
+                {!busy && question?.vraag && (
+                  <InterviewQuestion
+                    question={question}
+                    number={answered.length + 1}
+                    picked={picked}
+                    answer={answer}
+                    onTogglePick={interview.togglePick}
+                    onAnswer={interview.setAnswer}
+                    onSubmit={interview.submitAnswer}
                   />
-                </div>
-              )}
-              <div>
-                <label htmlFor="project-prompt-text" className="opl-label">
-                  Je prompt
-                </label>
-                <textarea
-                  id="project-prompt-text"
-                  className="opl-input min-h-[18rem] resize-y"
-                  value={prompt}
-                  maxLength={MAX_PROJECT_INSTRUCTIONS_CHARS}
-                  disabled={busy}
-                  onChange={(e) => setPrompt(e.target.value)}
-                />
-              </div>
-              <div className="flex items-end gap-2">
-                <textarea
-                  rows={1}
-                  aria-label="Wat moet er anders?"
-                  placeholder="Wat moet er anders?"
-                  maxLength={2000}
-                  className="opl-input resize-y"
-                  value={feedback}
-                  disabled={busy}
-                  onChange={(e) => setFeedback(e.target.value)}
-                  onKeyDown={submitOnEnter(applyFeedback)}
-                />
-                <button
-                  type="button"
-                  className="opl-btn-secondary shrink-0"
-                  disabled={busy || !feedback.trim() || !prompt.trim()}
-                  onClick={applyFeedback}
-                >
-                  {busy ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-                  Aanpassen
-                </button>
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                {backButton}
-                <button
-                  type="button"
-                  className="opl-btn-primary"
-                  disabled={busy || !prompt.trim()}
-                  onClick={save}
-                >
-                  <Check size={16} /> Dit wil ik
-                </button>
-              </div>
-            </>
-          )}
-          {!draft && <div>{backButton}</div>}
-        </div>
-      )}
+                )}
+                <nldd-container layout="wrap" gap="8" vertical-alignment="center">
+                  {backButton}
+                  <nldd-spacer size="flexible"></nldd-spacer>
+                  {!busy && question?.vraag && answered.length > 0 && (
+                    <nldd-button appearance="secondary" start-icon="sparkles" text="Maak de prompt" onClick={interview.finishEarly}></nldd-button>
+                  )}
+                  {!busy && question?.vraag && (
+                    <nldd-button
+                      appearance="primary"
+                      end-icon="arrow-right"
+                      text="Verder"
+                      disabled={(picked.length === 0 && !answer.trim()) || undefined}
+                      onClick={interview.submitAnswer}
+                    ></nldd-button>
+                  )}
+                </nldd-container>
+              </nldd-container>
+            )}
+
+            {step === 'voorstel' && (
+              <nldd-container gap="16">
+                {errorBox}
+                {busy && !draft && <WizardWaiting label="Ik kies een aanpak en schrijf je prompt" />}
+                {draft && (
+                  <>
+                    {draft.framework && (
+                      <nldd-container layout="row" gap="4" vertical-alignment="center">
+                        <nldd-text size="sm" weight="bold">Gebouwd met {draft.framework.name}</nldd-text>
+                        {draft.reden && <InfoDot label="Waarom deze aanpak" text={draft.reden} />}
+                      </nldd-container>
+                    )}
+                    {isNewProject && (
+                      <nldd-form-field label="Projectnaam">
+                        <nldd-text-field ref={nameRef} maxlength={String(MAX_PROJECT_NAME_CHARS)}></nldd-text-field>
+                      </nldd-form-field>
+                    )}
+                    <nldd-form-field label="Je prompt">
+                      <nldd-multi-line-text-field
+                        ref={promptRef}
+                        rows={12}
+                        maxlength={String(MAX_PROJECT_INSTRUCTIONS_CHARS)}
+                        disabled={busy || undefined}
+                      ></nldd-multi-line-text-field>
+                    </nldd-form-field>
+                    <nldd-container layout="row" gap="8" vertical-alignment="bottom">
+                      <nldd-multi-line-text-field
+                        ref={feedbackRef}
+                        rows={1}
+                        accessible-label="Wat moet er anders?"
+                        placeholder="Wat moet er anders?"
+                        maxlength="2000"
+                        disabled={busy || undefined}
+                      ></nldd-multi-line-text-field>
+                      <nldd-button
+                        appearance="secondary"
+                        start-icon="sparkles"
+                        text="Aanpassen"
+                        loading={busy || undefined}
+                        disabled={(!busy && (!feedback.trim() || !prompt.trim())) || undefined}
+                        onClick={applyFeedback}
+                      ></nldd-button>
+                    </nldd-container>
+                    <nldd-container layout="row" gap="8" vertical-alignment="center">
+                      {backButton}
+                      <nldd-spacer size="flexible"></nldd-spacer>
+                      <nldd-button
+                        appearance="primary"
+                        start-icon="check-mark"
+                        text="Dit wil ik"
+                        disabled={(busy || !prompt.trim()) || undefined}
+                        onClick={save}
+                      ></nldd-button>
+                    </nldd-container>
+                  </>
+                )}
+                {!draft && backButton}
+              </nldd-container>
+            )}
+          </nldd-simple-section>
+        </nldd-page>
+      </nldd-sheet>
 
       <ConfirmDialog
         open={confirmClose}
@@ -355,8 +356,12 @@ export default function ProjectPromptWizard({
         confirmLabel="Stoppen"
         destructive
         onConfirm={onClose}
-        onClose={() => setConfirmClose(false)}
+        onClose={() => {
+          setConfirmClose(false);
+          setSheetOpen(true);
+        }}
       />
-    </Modal>
+    </>,
+    document.body,
   );
 }

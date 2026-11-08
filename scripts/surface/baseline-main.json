@@ -1,0 +1,1009 @@
+{
+ "1280/": {
+  "links": [
+   "/",
+   "/admin",
+   "/bibliotheek",
+   "/chat",
+   "/community/demo-mehmet",
+   "/community/demo-sanne",
+   "/community/local-user",
+   "/genereren",
+   "/instellingen/toegankelijkheid",
+   "/instellingen/toegankelijkheid/hulp",
+   "/prompt/prompt-aadtqiez-mw7u6tf0",
+   "/prompt/prompt-geh2lgp0-mw7u6tf0",
+   "/prompt/prompt-jmziqwv3-mw7u6tf0",
+   "/technieken",
+   "/zoeken",
+   "/zoeken?category=cat-beleid",
+   "/zoeken?category=cat-burgerbrieven",
+   "/zoeken?category=cat-communicatie",
+   "/zoeken?category=cat-data",
+   "/zoeken?category=cat-juridisch",
+   "/zoeken?category=cat-onderzoek",
+   "/zoeken?category=cat-vergaderingen"
+  ],
+  "controls": [
+   "button: Deel prompt",
+   "button: Kopieer prompt",
+   "button: Meer over deze prompt",
+   "button: Prompt liken, 0",
+   "button: Stel je naam in",
+   "button: Thema wisselen",
+   "button: Uitleg over categorieën",
+   "button: Verwijder uit favorieten",
+   "button: Voeg toe aan favorieten"
+  ],
+  "headings": [
+   "Begrijpelijke afwijzingsbrief opstellen",
+   "Categorieën",
+   "Nieuwe prompts",
+   "Persbericht concept genereren",
+   "Samenvatting van een beleidsnota",
+   "Wat wil je doen?"
+  ]
+ },
+ "1280/zoeken": {
+  "links": [
+   "/",
+   "/admin",
+   "/bibliotheek",
+   "/chat",
+   "/community/demo-mehmet",
+   "/community/demo-sanne",
+   "/community/local-user",
+   "/genereren",
+   "/instellingen/toegankelijkheid",
+   "/instellingen/toegankelijkheid/hulp",
+   "/prompt/prompt-aadtqiez-mw7u6tf0",
+   "/prompt/prompt-geh2lgp0-mw7u6tf0",
+   "/prompt/prompt-jmziqwv3-mw7u6tf0",
+   "/zoeken",
+   "/zoeken?alles=1"
+  ],
+  "controls": [
+   "button: Beleid & Advies",
+   "button: Burgerbrieven",
+   "button: Communicatie",
+   "button: Data & Analyse",
+   "button: Deel prompt",
+   "button: Filters",
+   "button: Juridisch",
+   "button: Kopieer prompt",
+   "button: Meer over deze prompt",
+   "button: Onderzoek",
+   "button: Prompt liken, 0",
+   "button: Stel je naam in",
+   "button: Thema wisselen",
+   "button: Vergaderingen",
+   "button: Verwijder uit favorieten",
+   "button: Voeg toe aan favorieten",
+   "input: Zoek prompts"
+  ],
+  "headings": [
+   "Begrijpelijke afwijzingsbrief opstellen",
+   "Nieuw",
+   "Persbericht concept genereren",
+   "Samenvatting van een beleidsnota",
+   "Wat zoek je?"
+  ]
+ },
+ "1280/genereren": {
+  "links": [
+   "/",
+   "/admin",
+   "/bibliotheek",
+   "/chat",
+   "/genereren",
+   "/instellingen/toegankelijkheid",
+   "/instellingen/toegankelijkheid/hulp",
+   "/zoeken"
+  ],
+  "controls": [
+   "button: Pagina herladen",
+   "button: Stel je naam in",
+   "button: Thema wisselen"
+  ],
+  "headings": [
+   "Er ging iets mis"
+  ]
+ },
+ "1280/technieken": {
+  "links": [
+   "/",
+   "/admin",
+   "/bibliotheek",
+   "/chat",
+   "/genereren",
+   "/instellingen/toegankelijkheid",
+   "/instellingen/toegankelijkheid/hulp",
+   "/technieken",
+   "/zoeken"
+  ],
+  "controls": [
+   "button: CAREDe basis voor elke promptFrameworkKies",
+   "button: CO-STARCommunicatie en contentFrameworkKies",
+   "button: CRAFTZakelijke stukkenFrameworkKies",
+   "button: CREATECreatieve opdrachtenFrameworkKies",
+   "button: CRISPGestructureerd prompten met Context, Rules, Instruction",
+   "button: ControlerenEen antwoord of stuk toetsen",
+   "button: Help mij kiezen",
+   "button: Multi-Persona PromptingVoor meerdere ontvangersTechniekKies",
+   "button: Persona PromptingSchrijven voor je ontvangerTechniekKies",
+   "button: RAISESnelle, concrete takenFrameworkKies",
+   "button: REACTFramework voor agent-achtige workflows waarbij de AI re",
+   "button: SchrijvenEen tekst of bericht maken",
+   "button: Stel je naam in",
+   "button: Thema wisselen",
+   "button: UitdenkenEen lastige vraag uitpluizen",
+   "button: Uitleg over CARE",
+   "button: Uitleg over CO-STAR",
+   "button: Uitleg over CRAFT",
+   "button: Uitleg over CREATE",
+   "button: Uitleg over CRISP",
+   "button: Uitleg over Multi-Persona Prompting",
+   "button: Uitleg over Persona Prompting",
+   "button: Uitleg over RAISE",
+   "button: Uitleg over REACT",
+   "button: Vaste vormElke keer hetzelfde resultaat"
+  ],
+  "headings": [
+   "Schrijven: 9 keuzes",
+   "Wat wil je bereiken?"
+  ]
+ },
+ "1280/chat": {
+  "links": [
+   "/",
+   "/admin",
+   "/bibliotheek",
+   "/chat",
+   "/genereren",
+   "/instellingen/toegankelijkheid",
+   "/instellingen/toegankelijkheid/hulp",
+   "/zoeken"
+  ],
+  "controls": [
+   "button: Stel je naam in",
+   "button: Thema wisselen"
+  ],
+  "headings": [
+   "De chat is niet beschikbaar"
+  ]
+ },
+ "1280/contact": {
+  "links": [
+   "/",
+   "/admin",
+   "/bibliotheek",
+   "/chat",
+   "/contact",
+   "/genereren",
+   "/instellingen/toegankelijkheid",
+   "/instellingen/toegankelijkheid/hulp",
+   "/zoeken"
+  ],
+  "controls": [
+   "button: Bug melden",
+   "button: Feature voorstellen",
+   "button: Iets anders",
+   "button: Stel je naam in",
+   "button: Thema wisselen",
+   "button: Versturen",
+   "input: Jouw e-mailadres",
+   "input: Onderwerp",
+   "textarea: Bericht"
+  ],
+  "headings": [
+   "Contact"
+  ]
+ },
+ "1280/community": {
+  "links": [
+   "/",
+   "/admin",
+   "/bibliotheek",
+   "/chat",
+   "/community",
+   "/community/demo-mehmet",
+   "/community/demo-sanne",
+   "/community/local-user",
+   "/genereren",
+   "/instellingen/toegankelijkheid",
+   "/instellingen/toegankelijkheid/hulp",
+   "/zoeken",
+   "/zoeken?org=org-bzk",
+   "/zoeken?org=org-jenv",
+   "/zoeken?org=org-rijk"
+  ],
+  "controls": [
+   "button: Community",
+   "button: Stel je naam in",
+   "button: Thema wisselen",
+   "button: Trending"
+  ],
+  "headings": [
+   "Community",
+   "Organisatie",
+   "Ranglijst"
+  ]
+ },
+ "1280/trending": {
+  "links": [
+   "/",
+   "/admin",
+   "/bibliotheek",
+   "/chat",
+   "/community/demo-mehmet",
+   "/community/demo-sanne",
+   "/community/local-user",
+   "/genereren",
+   "/instellingen/toegankelijkheid",
+   "/instellingen/toegankelijkheid/hulp",
+   "/prompt/prompt-aadtqiez-mw7u6tf0",
+   "/prompt/prompt-geh2lgp0-mw7u6tf0",
+   "/prompt/prompt-jmziqwv3-mw7u6tf0",
+   "/trending",
+   "/zoeken"
+  ],
+  "controls": [
+   "button: Deel prompt",
+   "button: Kopieer prompt",
+   "button: Meer over deze prompt",
+   "button: Prompt liken, 0",
+   "button: Stel je naam in",
+   "button: Thema wisselen",
+   "button: Verwijder uit favorieten",
+   "button: Voeg toe aan favorieten"
+  ],
+  "headings": [
+   "Begrijpelijke afwijzingsbrief opstellen",
+   "Meest gebruikte technieken",
+   "Optimalisaties per techniek",
+   "Persbericht concept genereren",
+   "Populairste prompts",
+   "Samenvatting van een beleidsnota",
+   "Trending"
+  ]
+ },
+ "1280/activiteit": {
+  "links": [
+   "/",
+   "/activiteit",
+   "/admin",
+   "/bibliotheek",
+   "/chat",
+   "/genereren",
+   "/instellingen/toegankelijkheid",
+   "/instellingen/toegankelijkheid/hulp",
+   "/zoeken"
+  ],
+  "controls": [
+   "button: Stel je naam in",
+   "button: Thema wisselen"
+  ],
+  "headings": [
+   "Stel eerst je naam in"
+  ]
+ },
+ "1280/instellingen": {
+  "links": [
+   "/",
+   "/admin",
+   "/bibliotheek",
+   "/chat",
+   "/genereren",
+   "/instellingen/chat",
+   "/instellingen/toegankelijkheid",
+   "/instellingen/toegankelijkheid/hulp",
+   "/zoeken"
+  ],
+  "controls": [
+   "button: Opslaan",
+   "button: Stel je naam in",
+   "button: Thema wisselen",
+   "button: Uitleg over de eigen instructie",
+   "button: Uitleg over doorvragen",
+   "button: Uitleg over het geheugen",
+   "input: Eerst doorvragen bij een nieuwe chatGeldt in deze browser.",
+   "textarea: Jouw instructie"
+  ],
+  "headings": [
+   "Doorvragen",
+   "Eigen instructie",
+   "Geheugen",
+   "Instellingen"
+  ]
+ },
+ "1280/instellingen/chat": {
+  "links": [
+   "/",
+   "/admin",
+   "/bibliotheek",
+   "/chat",
+   "/genereren",
+   "/instellingen/chat",
+   "/instellingen/toegankelijkheid",
+   "/instellingen/toegankelijkheid/hulp",
+   "/zoeken"
+  ],
+  "controls": [
+   "button: Opslaan",
+   "button: Stel je naam in",
+   "button: Thema wisselen",
+   "button: Uitleg over de eigen instructie",
+   "button: Uitleg over doorvragen",
+   "button: Uitleg over het geheugen",
+   "input: Eerst doorvragen bij een nieuwe chatGeldt in deze browser.",
+   "textarea: Jouw instructie"
+  ],
+  "headings": [
+   "Doorvragen",
+   "Eigen instructie",
+   "Geheugen",
+   "Instellingen"
+  ]
+ },
+ "1280/instellingen/toegankelijkheid": {
+  "links": [
+   "/",
+   "/admin",
+   "/bibliotheek",
+   "/chat",
+   "/genereren",
+   "/instellingen/chat",
+   "/instellingen/toegankelijkheid",
+   "/instellingen/toegankelijkheid/hulp",
+   "/zoeken"
+  ],
+  "controls": [
+   "button: Stel je naam in",
+   "button: Terug naar de standaardinstellingen",
+   "button: Thema wisselen",
+   "input: Extra groot",
+   "input: Gesprek zonder handenZet de knop Gesprek in de chat aan: je ",
+   "input: Groot",
+   "input: Hoog contrastDonkerdere tekst, duidelijke randen en een dikk",
+   "input: Knop Voorlezen onder elk antwoordJe kiest dan zelf welk antw",
+   "input: Knoppen bij berichten altijd tonenZonder dit verschijnen ze ",
+   "input: Mijn schermlezer leest het voorVoor wie NVDA, JAWS of VoiceO",
+   "input: Minder bewegingZet animaties uit. Dat gebeurt ook als je dit",
+   "input: Niets doenJe leest het antwoord zelf.",
+   "input: Normaal",
+   "input: PromptPlein leest het hardop voorMet de stem hieronder. Esca",
+   "input: Versturen met je stemEindig je dictaat in de chat met het wo"
+  ],
+  "headings": [
+   "Als een antwoord in de chat klaar is",
+   "Inspreken",
+   "Instellingen",
+   "Lezen",
+   "Voorlezen"
+  ]
+ },
+ "1280/instellingen/toegankelijkheid/hulp": {
+  "links": [
+   "/",
+   "/admin",
+   "/bibliotheek",
+   "/chat",
+   "/contact",
+   "/genereren",
+   "/instellingen/chat",
+   "/instellingen/toegankelijkheid",
+   "/instellingen/toegankelijkheid/hulp",
+   "/zoeken"
+  ],
+  "controls": [
+   "button: Stel je naam in",
+   "button: Thema wisselen"
+  ],
+  "headings": [
+   "Als de chat eerst vragen stelt",
+   "Antwoorden laten voorlezen",
+   "Een gesprek voeren zonder handen",
+   "Grotere letters en meer contrast",
+   "Inspreken in plaats van typen",
+   "Instellingen",
+   "Lukt het niet?",
+   "Met een schermlezer",
+   "Op de telefoon",
+   "Sneltoetsen"
+  ]
+ },
+ "1280/auth/login": {
+  "links": [
+   "/",
+   "/admin",
+   "/auth/login",
+   "/auth/registreren",
+   "/auth/wachtwoord-vergeten",
+   "/bibliotheek",
+   "/chat",
+   "/genereren",
+   "/instellingen/toegankelijkheid",
+   "/instellingen/toegankelijkheid/hulp",
+   "/zoeken"
+  ],
+  "controls": [
+   "button: Inloggen",
+   "button: Stel je naam in",
+   "button: Thema wisselen",
+   "input: E-mailadres",
+   "input: Wachtwoord"
+  ],
+  "headings": [
+   "Inloggen"
+  ]
+ },
+ "1280/auth/registreren": {
+  "links": [
+   "/",
+   "/admin",
+   "/auth/login",
+   "/auth/registreren",
+   "/bibliotheek",
+   "/chat",
+   "/genereren",
+   "/instellingen/toegankelijkheid",
+   "/instellingen/toegankelijkheid/hulp",
+   "/zoeken"
+  ],
+  "controls": [
+   "button: Account aanmaken",
+   "button: Ministerie",
+   "button: Stel je naam in",
+   "button: Thema wisselen",
+   "input: E-mailadres",
+   "input: Volledige naam",
+   "input: Wachtwoord (min. 8 tekens)"
+  ],
+  "headings": [
+   "Registreren"
+  ]
+ },
+ "1280/auth/wachtwoord-vergeten": {
+  "links": [
+   "/",
+   "/admin",
+   "/auth/login",
+   "/auth/wachtwoord-vergeten",
+   "/bibliotheek",
+   "/chat",
+   "/genereren",
+   "/instellingen/toegankelijkheid",
+   "/instellingen/toegankelijkheid/hulp",
+   "/zoeken"
+  ],
+  "controls": [
+   "button: Herstellink versturen",
+   "button: Stel je naam in",
+   "button: Thema wisselen",
+   "input: E-mailadres"
+  ],
+  "headings": [
+   "Wachtwoord vergeten"
+  ]
+ },
+ "1280/auth/nieuw-wachtwoord": {
+  "links": [
+   "/",
+   "/admin",
+   "/auth/login",
+   "/auth/nieuw-wachtwoord",
+   "/bibliotheek",
+   "/chat",
+   "/genereren",
+   "/instellingen/toegankelijkheid",
+   "/instellingen/toegankelijkheid/hulp",
+   "/zoeken"
+  ],
+  "controls": [
+   "button: Herstellink controleren…",
+   "button: Stel je naam in",
+   "button: Thema wisselen",
+   "button: Toon wachtwoord",
+   "input: Herhaal nieuw wachtwoord",
+   "input: Nieuw wachtwoord"
+  ],
+  "headings": [
+   "Nieuw wachtwoord instellen"
+  ]
+ },
+ "390/": {
+  "links": [
+   "/",
+   "/bibliotheek",
+   "/chat",
+   "/community/demo-mehmet",
+   "/community/demo-sanne",
+   "/community/local-user",
+   "/genereren",
+   "/instellingen/toegankelijkheid",
+   "/instellingen/toegankelijkheid/hulp",
+   "/prompt/prompt-fa8vrgrp-mw7u79b4",
+   "/prompt/prompt-lb8276td-mw7u79b4",
+   "/prompt/prompt-r87xrtti-mw7u79b4",
+   "/technieken",
+   "/zoeken",
+   "/zoeken?category=cat-beleid",
+   "/zoeken?category=cat-burgerbrieven",
+   "/zoeken?category=cat-communicatie",
+   "/zoeken?category=cat-data",
+   "/zoeken?category=cat-juridisch",
+   "/zoeken?category=cat-onderzoek",
+   "/zoeken?category=cat-vergaderingen"
+  ],
+  "controls": [
+   "button: Deel prompt",
+   "button: Kopieer prompt",
+   "button: Meer over deze prompt",
+   "button: Prompt liken, 0",
+   "button: Stel je naam in",
+   "button: Thema wisselen",
+   "button: Uitleg over categorieën",
+   "button: Verwijder uit favorieten",
+   "button: Voeg toe aan favorieten"
+  ],
+  "headings": [
+   "Begrijpelijke afwijzingsbrief opstellen",
+   "Categorieën",
+   "Nieuwe prompts",
+   "Persbericht concept genereren",
+   "Samenvatting van een beleidsnota",
+   "Wat wil je doen?"
+  ]
+ },
+ "390/zoeken": {
+  "links": [
+   "/",
+   "/bibliotheek",
+   "/chat",
+   "/community/demo-mehmet",
+   "/community/demo-sanne",
+   "/community/local-user",
+   "/genereren",
+   "/instellingen/toegankelijkheid",
+   "/instellingen/toegankelijkheid/hulp",
+   "/prompt/prompt-fa8vrgrp-mw7u79b4",
+   "/prompt/prompt-lb8276td-mw7u79b4",
+   "/prompt/prompt-r87xrtti-mw7u79b4",
+   "/zoeken",
+   "/zoeken?alles=1"
+  ],
+  "controls": [
+   "button: Beleid & Advies",
+   "button: Burgerbrieven",
+   "button: Communicatie",
+   "button: Data & Analyse",
+   "button: Deel prompt",
+   "button: Filters",
+   "button: Juridisch",
+   "button: Kopieer prompt",
+   "button: Meer over deze prompt",
+   "button: Onderzoek",
+   "button: Prompt liken, 0",
+   "button: Stel je naam in",
+   "button: Thema wisselen",
+   "button: Vergaderingen",
+   "button: Verwijder uit favorieten",
+   "button: Voeg toe aan favorieten",
+   "input: Zoek prompts"
+  ],
+  "headings": [
+   "Begrijpelijke afwijzingsbrief opstellen",
+   "Nieuw",
+   "Persbericht concept genereren",
+   "Samenvatting van een beleidsnota",
+   "Wat zoek je?"
+  ]
+ },
+ "390/genereren": {
+  "links": [
+   "/",
+   "/bibliotheek",
+   "/chat",
+   "/genereren",
+   "/instellingen/toegankelijkheid",
+   "/instellingen/toegankelijkheid/hulp",
+   "/zoeken"
+  ],
+  "controls": [
+   "button: Pagina herladen",
+   "button: Stel je naam in",
+   "button: Thema wisselen"
+  ],
+  "headings": [
+   "Er ging iets mis"
+  ]
+ },
+ "390/technieken": {
+  "links": [
+   "/",
+   "/bibliotheek",
+   "/chat",
+   "/genereren",
+   "/instellingen/toegankelijkheid",
+   "/instellingen/toegankelijkheid/hulp",
+   "/technieken",
+   "/zoeken"
+  ],
+  "controls": [
+   "button: CAREDe basis voor elke promptFrameworkKies",
+   "button: CO-STARCommunicatie en contentFrameworkKies",
+   "button: CRAFTZakelijke stukkenFrameworkKies",
+   "button: CREATECreatieve opdrachtenFrameworkKies",
+   "button: CRISPGestructureerd prompten met Context, Rules, Instruction",
+   "button: ControlerenEen antwoord of stuk toetsen",
+   "button: Help mij kiezen",
+   "button: Multi-Persona PromptingVoor meerdere ontvangersTechniekKies",
+   "button: Persona PromptingSchrijven voor je ontvangerTechniekKies",
+   "button: RAISESnelle, concrete takenFrameworkKies",
+   "button: REACTFramework voor agent-achtige workflows waarbij de AI re",
+   "button: SchrijvenEen tekst of bericht maken",
+   "button: Stel je naam in",
+   "button: Thema wisselen",
+   "button: UitdenkenEen lastige vraag uitpluizen",
+   "button: Uitleg over CARE",
+   "button: Uitleg over CO-STAR",
+   "button: Uitleg over CRAFT",
+   "button: Uitleg over CREATE",
+   "button: Uitleg over CRISP",
+   "button: Uitleg over Multi-Persona Prompting",
+   "button: Uitleg over Persona Prompting",
+   "button: Uitleg over RAISE",
+   "button: Uitleg over REACT",
+   "button: Vaste vormElke keer hetzelfde resultaat"
+  ],
+  "headings": [
+   "Schrijven: 9 keuzes",
+   "Wat wil je bereiken?"
+  ]
+ },
+ "390/chat": {
+  "links": [
+   "/",
+   "/bibliotheek",
+   "/chat",
+   "/genereren",
+   "/instellingen/toegankelijkheid",
+   "/instellingen/toegankelijkheid/hulp",
+   "/zoeken"
+  ],
+  "controls": [
+   "button: Stel je naam in",
+   "button: Thema wisselen"
+  ],
+  "headings": [
+   "De chat is niet beschikbaar"
+  ]
+ },
+ "390/contact": {
+  "links": [
+   "/",
+   "/bibliotheek",
+   "/chat",
+   "/contact",
+   "/genereren",
+   "/instellingen/toegankelijkheid",
+   "/instellingen/toegankelijkheid/hulp",
+   "/zoeken"
+  ],
+  "controls": [
+   "button: Bug melden",
+   "button: Feature voorstellen",
+   "button: Iets anders",
+   "button: Stel je naam in",
+   "button: Thema wisselen",
+   "button: Versturen",
+   "input: Jouw e-mailadres",
+   "input: Onderwerp",
+   "textarea: Bericht"
+  ],
+  "headings": [
+   "Contact"
+  ]
+ },
+ "390/community": {
+  "links": [
+   "/",
+   "/bibliotheek",
+   "/chat",
+   "/community",
+   "/community/demo-mehmet",
+   "/community/demo-sanne",
+   "/community/local-user",
+   "/genereren",
+   "/instellingen/toegankelijkheid",
+   "/instellingen/toegankelijkheid/hulp",
+   "/zoeken",
+   "/zoeken?org=org-bzk",
+   "/zoeken?org=org-jenv",
+   "/zoeken?org=org-rijk"
+  ],
+  "controls": [
+   "button: Community",
+   "button: Stel je naam in",
+   "button: Thema wisselen",
+   "button: Trending"
+  ],
+  "headings": [
+   "Community",
+   "Organisatie",
+   "Ranglijst"
+  ]
+ },
+ "390/trending": {
+  "links": [
+   "/",
+   "/bibliotheek",
+   "/chat",
+   "/community/demo-mehmet",
+   "/community/demo-sanne",
+   "/community/local-user",
+   "/genereren",
+   "/instellingen/toegankelijkheid",
+   "/instellingen/toegankelijkheid/hulp",
+   "/prompt/prompt-fa8vrgrp-mw7u79b4",
+   "/prompt/prompt-lb8276td-mw7u79b4",
+   "/prompt/prompt-r87xrtti-mw7u79b4",
+   "/trending",
+   "/zoeken"
+  ],
+  "controls": [
+   "button: Deel prompt",
+   "button: Kopieer prompt",
+   "button: Meer over deze prompt",
+   "button: Prompt liken, 0",
+   "button: Stel je naam in",
+   "button: Thema wisselen",
+   "button: Verwijder uit favorieten",
+   "button: Voeg toe aan favorieten"
+  ],
+  "headings": [
+   "Begrijpelijke afwijzingsbrief opstellen",
+   "Meest gebruikte technieken",
+   "Optimalisaties per techniek",
+   "Persbericht concept genereren",
+   "Populairste prompts",
+   "Samenvatting van een beleidsnota",
+   "Trending"
+  ]
+ },
+ "390/activiteit": {
+  "links": [
+   "/",
+   "/activiteit",
+   "/bibliotheek",
+   "/chat",
+   "/genereren",
+   "/instellingen/toegankelijkheid",
+   "/instellingen/toegankelijkheid/hulp",
+   "/zoeken"
+  ],
+  "controls": [
+   "button: Stel je naam in",
+   "button: Thema wisselen"
+  ],
+  "headings": [
+   "Stel eerst je naam in"
+  ]
+ },
+ "390/instellingen": {
+  "links": [
+   "/",
+   "/bibliotheek",
+   "/chat",
+   "/genereren",
+   "/instellingen/chat",
+   "/instellingen/toegankelijkheid",
+   "/instellingen/toegankelijkheid/hulp",
+   "/zoeken"
+  ],
+  "controls": [
+   "button: Opslaan",
+   "button: Stel je naam in",
+   "button: Thema wisselen",
+   "button: Uitleg over de eigen instructie",
+   "button: Uitleg over doorvragen",
+   "button: Uitleg over het geheugen",
+   "input: Eerst doorvragen bij een nieuwe chatGeldt in deze browser.",
+   "textarea: Jouw instructie"
+  ],
+  "headings": [
+   "Doorvragen",
+   "Eigen instructie",
+   "Geheugen",
+   "Instellingen"
+  ]
+ },
+ "390/instellingen/chat": {
+  "links": [
+   "/",
+   "/bibliotheek",
+   "/chat",
+   "/genereren",
+   "/instellingen/chat",
+   "/instellingen/toegankelijkheid",
+   "/instellingen/toegankelijkheid/hulp",
+   "/zoeken"
+  ],
+  "controls": [
+   "button: Opslaan",
+   "button: Stel je naam in",
+   "button: Thema wisselen",
+   "button: Uitleg over de eigen instructie",
+   "button: Uitleg over doorvragen",
+   "button: Uitleg over het geheugen",
+   "input: Eerst doorvragen bij een nieuwe chatGeldt in deze browser.",
+   "textarea: Jouw instructie"
+  ],
+  "headings": [
+   "Doorvragen",
+   "Eigen instructie",
+   "Geheugen",
+   "Instellingen"
+  ]
+ },
+ "390/instellingen/toegankelijkheid": {
+  "links": [
+   "/",
+   "/bibliotheek",
+   "/chat",
+   "/genereren",
+   "/instellingen/chat",
+   "/instellingen/toegankelijkheid",
+   "/instellingen/toegankelijkheid/hulp",
+   "/zoeken"
+  ],
+  "controls": [
+   "button: Stel je naam in",
+   "button: Terug naar de standaardinstellingen",
+   "button: Thema wisselen",
+   "input: Extra groot",
+   "input: Gesprek zonder handenZet de knop Gesprek in de chat aan: je ",
+   "input: Groot",
+   "input: Hoog contrastDonkerdere tekst, duidelijke randen en een dikk",
+   "input: Knop Voorlezen onder elk antwoordJe kiest dan zelf welk antw",
+   "input: Knoppen bij berichten altijd tonenZonder dit verschijnen ze ",
+   "input: Mijn schermlezer leest het voorVoor wie NVDA, JAWS of VoiceO",
+   "input: Minder bewegingZet animaties uit. Dat gebeurt ook als je dit",
+   "input: Niets doenJe leest het antwoord zelf.",
+   "input: Normaal",
+   "input: PromptPlein leest het hardop voorMet de stem hieronder. Esca",
+   "input: Versturen met je stemEindig je dictaat in de chat met het wo"
+  ],
+  "headings": [
+   "Als een antwoord in de chat klaar is",
+   "Inspreken",
+   "Instellingen",
+   "Lezen",
+   "Voorlezen"
+  ]
+ },
+ "390/instellingen/toegankelijkheid/hulp": {
+  "links": [
+   "/",
+   "/bibliotheek",
+   "/chat",
+   "/contact",
+   "/genereren",
+   "/instellingen/chat",
+   "/instellingen/toegankelijkheid",
+   "/instellingen/toegankelijkheid/hulp",
+   "/zoeken"
+  ],
+  "controls": [
+   "button: Stel je naam in",
+   "button: Thema wisselen"
+  ],
+  "headings": [
+   "Als de chat eerst vragen stelt",
+   "Antwoorden laten voorlezen",
+   "Een gesprek voeren zonder handen",
+   "Grotere letters en meer contrast",
+   "Inspreken in plaats van typen",
+   "Instellingen",
+   "Lukt het niet?",
+   "Met een schermlezer",
+   "Op de telefoon",
+   "Sneltoetsen"
+  ]
+ },
+ "390/auth/login": {
+  "links": [
+   "/",
+   "/auth/login",
+   "/auth/registreren",
+   "/auth/wachtwoord-vergeten",
+   "/bibliotheek",
+   "/chat",
+   "/genereren",
+   "/instellingen/toegankelijkheid",
+   "/instellingen/toegankelijkheid/hulp",
+   "/zoeken"
+  ],
+  "controls": [
+   "button: Inloggen",
+   "button: Stel je naam in",
+   "button: Thema wisselen",
+   "input: E-mailadres",
+   "input: Wachtwoord"
+  ],
+  "headings": [
+   "Inloggen"
+  ]
+ },
+ "390/auth/registreren": {
+  "links": [
+   "/",
+   "/auth/login",
+   "/auth/registreren",
+   "/bibliotheek",
+   "/chat",
+   "/genereren",
+   "/instellingen/toegankelijkheid",
+   "/instellingen/toegankelijkheid/hulp",
+   "/zoeken"
+  ],
+  "controls": [
+   "button: Account aanmaken",
+   "button: Ministerie",
+   "button: Stel je naam in",
+   "button: Thema wisselen",
+   "input: E-mailadres",
+   "input: Volledige naam",
+   "input: Wachtwoord (min. 8 tekens)"
+  ],
+  "headings": [
+   "Registreren"
+  ]
+ },
+ "390/auth/wachtwoord-vergeten": {
+  "links": [
+   "/",
+   "/auth/login",
+   "/auth/wachtwoord-vergeten",
+   "/bibliotheek",
+   "/chat",
+   "/genereren",
+   "/instellingen/toegankelijkheid",
+   "/instellingen/toegankelijkheid/hulp",
+   "/zoeken"
+  ],
+  "controls": [
+   "button: Herstellink versturen",
+   "button: Stel je naam in",
+   "button: Thema wisselen",
+   "input: E-mailadres"
+  ],
+  "headings": [
+   "Wachtwoord vergeten"
+  ]
+ },
+ "390/auth/nieuw-wachtwoord": {
+  "links": [
+   "/",
+   "/auth/login",
+   "/auth/nieuw-wachtwoord",
+   "/bibliotheek",
+   "/chat",
+   "/genereren",
+   "/instellingen/toegankelijkheid",
+   "/instellingen/toegankelijkheid/hulp",
+   "/zoeken"
+  ],
+  "controls": [
+   "button: Herstellink controleren…",
+   "button: Stel je naam in",
+   "button: Thema wisselen",
+   "button: Toon wachtwoord",
+   "input: Herhaal nieuw wachtwoord",
+   "input: Nieuw wachtwoord"
+  ],
+  "headings": [
+   "Nieuw wachtwoord instellen"
+  ]
+ }
+}

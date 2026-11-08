@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
-import { AlertTriangle, ChevronDown, ChevronRight, Loader2, Plus, Ruler, Sparkles, Trash2 } from '@/components/common/icons';
-import toast from 'react-hot-toast';
+import { useEffect, useRef, useState } from 'react';
+import { useNlddEvent, useNlddValue } from '@/lib/nldd';
+import { notify } from '@/lib/notify';
 import { proposeRubric } from '@/services/optimizeService';
 import type { AiSettings } from '@/services/settingsService';
 import {
@@ -13,11 +13,33 @@ import {
   scaleLevels,
   serializeRubric,
   type CriterionWeight,
+  type RubricCriterion,
   type RubricData,
   type RubricScale,
 } from '@/lib/rubric';
 import BuilderIntro from './BuilderIntro';
 import InfoDot from '@/components/common/InfoDot';
+import '@nldd/design-system/badge';
+import '@nldd/design-system/box';
+import '@nldd/design-system/button';
+import '@nldd/design-system/cell';
+import '@nldd/design-system/checkbox';
+import '@nldd/design-system/container';
+import '@nldd/design-system/form-field';
+import '@nldd/design-system/icon';
+import '@nldd/design-system/icon-button';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/radio-button';
+import '@nldd/design-system/radio-button-field';
+import '@nldd/design-system/radio-button-group';
+import '@nldd/design-system/spacer';
+import '@nldd/design-system/spacer-cell';
+import '@nldd/design-system/text';
+import '@nldd/design-system/text-cell';
+import '@nldd/design-system/text-field';
+import '@nldd/design-system/title';
+import '@nldd/design-system/tooltip';
 
 interface RubricBuilderProps {
   settings: AiSettings;
@@ -57,7 +79,7 @@ export default function RubricBuilder({ settings, context, onSerialized }: Rubri
   /** Laat de AI criteria voorstellen bij dit soort stuk. */
   async function suggestCriteria() {
     if (!data.teBeoordelen.trim()) {
-      toast.error('Beschrijf eerst wat je beoordeelt.');
+      notify.error('Beschrijf eerst wat je beoordeelt.');
       return;
     }
     setBusy('criteria');
@@ -71,11 +93,11 @@ export default function RubricBuilder({ settings, context, onSerialized }: Rubri
         preferredModel: settings.model,
       });
       if (res.unclear) {
-        toast.error(res.reason?.trim() || 'De omschrijving is nog niet duidelijk genoeg.');
+        notify.error(res.reason?.trim() || 'De omschrijving is nog niet duidelijk genoeg.');
         return;
       }
       if (!res.success || !res.criteria?.length) {
-        toast.error(res.error ?? 'Er konden geen criteria worden voorgesteld.');
+        notify.error(res.error ?? 'Er konden geen criteria worden voorgesteld.');
         return;
       }
       setData((d) => ({
@@ -100,7 +122,7 @@ export default function RubricBuilder({ settings, context, onSerialized }: Rubri
   /** Schrijf per criterium een beschrijving per schaalpunt; de kern van de rubric. */
   async function fillLevels() {
     if (gevuldeCriteria.length === 0) {
-      toast.error('Voeg eerst minstens één criterium toe.');
+      notify.error('Voeg eerst minstens één criterium toe.');
       return;
     }
     setBusy('niveaus');
@@ -115,7 +137,7 @@ export default function RubricBuilder({ settings, context, onSerialized }: Rubri
         preferredModel: settings.model,
       });
       if (!res.success || !res.criteria?.length) {
-        toast.error(res.error ?? 'De niveaubeschrijvingen konden niet worden gemaakt.');
+        notify.error(res.error ?? 'De niveaubeschrijvingen konden niet worden gemaakt.');
         return;
       }
       // Match op naam: de AI krijgt de criteria in dezelfde volgorde terug,
@@ -139,294 +161,320 @@ export default function RubricBuilder({ settings, context, onSerialized }: Rubri
     }
   }
 
+  function updateCriterion(id: string, patch: Partial<RubricCriterion>) {
+    setData((d) => ({
+      ...d,
+      criteria: d.criteria.map((x) => (x.id === id ? { ...x, ...patch } : x)),
+    }));
+  }
+
   return (
-    <div className="space-y-5">
+    <nldd-container gap="24">
       <BuilderIntro
-        icon={<Ruler size={18} />}
+        icon="slider-horizontal-3"
         title="Bouw je toetsingskader"
         text="Leg vooraf vast wanneer iets voldoet. Dan is het oordeel navolgbaar."
       />
 
-      {/* Stap 1: wat en waarvoor. */}
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div>
-          <label className="opl-label mb-0.5 block" htmlFor="rb-wat">
-            1. Wat beoordeel je?
-          </label>
-          <input
-            id="rb-wat"
-            className="opl-input text-sm"
+      {/* Steps 1 and 2: what, and what for. */}
+      <nldd-container layout="grid" gap="16" sm-column-count={1} md-column-count={2} lg-column-count={2}>
+        <nldd-container gap="8">
+          <StepLabel text="1. Wat beoordeel je?" />
+          <TextInput
             value={data.teBeoordelen}
+            onValue={(v) => setData((d) => ({ ...d, teBeoordelen: v }))}
+            label="Wat beoordeel je?"
             placeholder="Bijv. vier subsidieaanvragen voor het innovatiefonds"
-            onChange={(e) => setData((d) => ({ ...d, teBeoordelen: e.target.value }))}
           />
-        </div>
-        <div>
-          <label className="opl-label mb-0.5 block" htmlFor="rb-doel">
-            2. Waar dient het oordeel voor?
-          </label>
-          <input
-            id="rb-doel"
-            className="opl-input text-sm"
+        </nldd-container>
+        <nldd-container gap="8">
+          <StepLabel text="2. Waar dient het oordeel voor?" />
+          <TextInput
             value={data.doel}
+            onValue={(v) => setData((d) => ({ ...d, doel: v }))}
+            label="Waar dient het oordeel voor?"
             placeholder="Bijv. een toekenningsbesluit dat bezwaar moet doorstaan"
-            onChange={(e) => setData((d) => ({ ...d, doel: e.target.value }))}
           />
-        </div>
-      </div>
+        </nldd-container>
+      </nldd-container>
 
-      {/* Stap 3: de schaal. Verandert de schaal, dan vervallen de beschrijvingen. */}
-      <div>
-        <p className="opl-label mb-0.5">3. Op welke schaal scoor je?</p>
-        <div className="space-y-1.5">
-          {RUBRIC_SCALES.map((s) => (
-            <label
-              key={s.value}
-              className={`flex cursor-pointer items-start gap-2.5 rounded-lg border p-2.5 transition-colors ${
-                data.schaal === s.value
-                  ? 'border-rijksblauw-300 bg-rijksblauw-50/60 dark:border-rijksblauw-500/40 dark:bg-rijksblauw-500/10'
-                  : 'border-slate-200 hover:border-slate-300 dark:border-slate-700 dark:hover:border-slate-600'
-              }`}
-            >
-              <input
-                type="radio"
-                name="rb-schaal"
-                className="mt-1 h-4 w-4 shrink-0 accent-rijksoranje"
-                checked={data.schaal === s.value}
-                onChange={() =>
-                  setData((d) => ({
-                    ...d,
-                    schaal: s.value as RubricScale,
-                    // De beschrijvingen horen bij de oude schaalpunten en zouden
-                    // na een wissel niet meer kloppen.
-                    criteria: d.criteria.map((c) => ({ ...c, niveaus: {} })),
-                  }))
-                }
-              />
-              <span>
-                <span className="block text-sm font-medium text-slate-700 dark:text-slate-200">
-                  {s.label}
-                </span>
-                <span className="block text-xs text-slate-500 dark:text-slate-400">{s.hint}</span>
-              </span>
-            </label>
+      {/* Step 3: the scale. A new scale drops the descriptions. */}
+      <nldd-container gap="8">
+        <StepLabel text="3. Op welke schaal scoor je?" />
+        <nldd-list type="radiogroup" appearance="box-base" accessible-label="Op welke schaal scoor je?">
+          {RUBRIC_SCALES.map((sc) => (
+            <ChoiceRow
+              key={sc.value}
+              kind="radio"
+              checked={data.schaal === sc.value}
+              text={sc.label}
+              supporting={sc.hint}
+              onChecked={(checked) => {
+                if (!checked) return;
+                setData((d) => ({
+                  ...d,
+                  schaal: sc.value as RubricScale,
+                  // The descriptions belong to the old scale points and no longer
+                  // fit after a switch.
+                  criteria: d.criteria.map((c) => ({ ...c, niveaus: {} })),
+                }));
+              }}
+            />
           ))}
-        </div>
-      </div>
+        </nldd-list>
+      </nldd-container>
 
-      {/* Stap 4: de criteria met hun niveaubeschrijvingen. */}
-      <div>
-        <div className="mb-0.5 flex items-center gap-1">
-          <p className="opl-label mb-0">4. Welke criteria staan in het kader?</p>
-          <InfoDot label="Uitleg bij dit veld" text="Vul per criterium in wat het meet, en klap het open om per schaalpunt vast te leggen wanneer het die score krijgt." />
-        </div>
+      {/* Step 4: the criteria with their level descriptions. */}
+      <nldd-container gap="8">
+        <StepLabel
+          text="4. Welke criteria staan in het kader?"
+          info="Vul per criterium in wat het meet, en klap het open om per schaalpunt vast te leggen wanneer het die score krijgt."
+        />
 
-        <div className="space-y-2">
-          {data.criteria.map((c, i) => {
-            const heeftNiveaus = Object.values(c.niveaus).some((v) => v?.trim());
-            const isOpen = open[c.id] ?? false;
-            return (
-              <div
-                key={c.id}
-                className="rounded-lg border border-slate-200 p-3 dark:border-slate-700"
-              >
-                <div className="flex items-start gap-2">
-                  <span className="mt-2 text-xs font-semibold text-slate-400">{i + 1}.</span>
-                  <div className="min-w-0 flex-1 space-y-2">
-                    <input
-                      className="opl-input text-sm font-medium"
-                      value={c.naam}
-                      placeholder="Bijv. uitvoerbaarheid"
-                      onChange={(e) =>
-                        setData((d) => ({
-                          ...d,
-                          criteria: d.criteria.map((x) =>
-                            x.id === c.id ? { ...x, naam: e.target.value } : x,
-                          ),
-                        }))
-                      }
-                    />
-                    <input
-                      className="opl-input text-sm"
-                      value={c.betekenis}
-                      placeholder="Wat meet dit criterium precies? Bijv. kan de uitvoerder dit met de huidige capaciteit aan?"
-                      onChange={(e) =>
-                        setData((d) => ({
-                          ...d,
-                          criteria: d.criteria.map((x) =>
-                            x.id === c.id ? { ...x, betekenis: e.target.value } : x,
-                          ),
-                        }))
-                      }
-                    />
-                    <div className="flex flex-wrap items-center gap-2">
-                      {CRITERION_WEIGHTS.map((w) => (
-                        <button
-                          key={w.value}
-                          type="button"
-                          title={w.hint}
-                          onClick={() =>
-                            setData((d) => ({
-                              ...d,
-                              criteria: d.criteria.map((x) =>
-                                x.id === c.id ? { ...x, weging: w.value } : x,
-                              ),
-                            }))
-                          }
-                          className={`rounded-md border px-2 py-1 text-xs transition-colors ${
-                            c.weging === w.value
-                              ? 'border-rijksblauw-400 bg-rijksblauw-50 font-medium text-rijksblauw-800 dark:border-rijksblauw-500/50 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-100'
-                              : 'border-slate-200 text-slate-500 hover:border-slate-300 dark:border-slate-700 dark:text-slate-400'
-                          }`}
-                        >
-                          {w.label}
-                        </button>
-                      ))}
-                    </div>
+        {data.criteria.map((c, i) => (
+          <CriterionCard
+            key={c.id}
+            index={i}
+            criterion={c}
+            levels={levels}
+            open={open[c.id] ?? false}
+            onToggle={() => setOpen((o) => ({ ...o, [c.id]: !(o[c.id] ?? false) }))}
+            onChange={(patch) => updateCriterion(c.id, patch)}
+            onRemove={() =>
+              setData((d) => ({
+                ...d,
+                criteria: d.criteria.length > 1 ? d.criteria.filter((x) => x.id !== c.id) : [emptyCriterion()],
+              }))
+            }
+          />
+        ))}
 
-                    {/* De niveaubeschrijvingen. */}
-                    <button
-                      type="button"
-                      onClick={() => setOpen((o) => ({ ...o, [c.id]: !isOpen }))}
-                      className="inline-flex items-center gap-1 text-xs font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
-                    >
-                      {isOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-                      Niveaubeschrijvingen
-                      <span
-                        className={
-                          heeftNiveaus
-                            ? 'rounded-full bg-rijksgroen/15 px-1.5 py-0.5 text-[0.625rem] font-semibold text-rijksgroen'
-                            : 'rounded-full bg-amber-100 px-1.5 py-0.5 text-[0.625rem] font-semibold text-amber-700 dark:bg-amber-500/20 dark:text-amber-300'
-                        }
-                      >
-                        {heeftNiveaus ? 'ingevuld' : 'nog leeg'}
-                      </span>
-                    </button>
-                    {isOpen && (
-                      <div className="space-y-1.5 rounded-lg bg-slate-50 p-2.5 dark:bg-slate-900/40">
-                        {levels.map((level) => (
-                          <div key={level} className="flex items-center gap-2">
-                            <span className="w-24 shrink-0 text-xs font-semibold text-slate-600 dark:text-slate-300">
-                              {level}
-                            </span>
-                            <input
-                              className="opl-input flex-1 text-sm"
-                              value={c.niveaus[level] ?? ''}
-                              placeholder={`Wanneer krijgt het "${level}"?`}
-                              onChange={(e) =>
-                                setData((d) => ({
-                                  ...d,
-                                  criteria: d.criteria.map((x) =>
-                                    x.id === c.id
-                                      ? { ...x, niveaus: { ...x.niveaus, [level]: e.target.value } }
-                                      : x,
-                                  ),
-                                }))
-                              }
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    title="Criterium verwijderen"
-                    onClick={() =>
-                      setData((d) => ({
-                        ...d,
-                        criteria:
-                          d.criteria.length > 1
-                            ? d.criteria.filter((x) => x.id !== c.id)
-                            : [emptyCriterion()],
-                      }))
-                    }
-                    className="mt-2 shrink-0 text-slate-400 transition-colors hover:text-red-500"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="mt-2 flex flex-wrap gap-2">
-          <button
-            type="button"
-            className="inline-flex items-center gap-1 text-sm font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
+        <nldd-container layout="wrap" gap="8" vertical-alignment="center">
+          <nldd-button
+            appearance="accent-transparent"
+            start-icon="plus"
+            text="Criterium toevoegen"
             onClick={() => setData((d) => ({ ...d, criteria: [...d.criteria, emptyCriterion()] }))}
-          >
-            <Plus size={14} /> Criterium toevoegen
-          </button>
-          <button
-            type="button"
-            className="opl-btn-secondary"
+          ></nldd-button>
+          <nldd-button
+            appearance="secondary"
+            start-icon="sparkles"
+            text="Stel criteria voor"
+            loading={busy === 'criteria' || undefined}
+            disabled={busy !== null || !data.teBeoordelen.trim() || undefined}
             onClick={() => void suggestCriteria()}
-            disabled={busy !== null || !data.teBeoordelen.trim()}
-          >
-            {busy === 'criteria' ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-            Stel criteria voor
-          </button>
-          <button
-            type="button"
-            className="opl-btn-primary"
-            title="Laat de AI per criterium beschrijven wanneer welke score geldt"
-            onClick={() => void fillLevels()}
-            disabled={busy !== null || gevuldeCriteria.length === 0}
-          >
-            {busy === 'niveaus' ? <Loader2 size={16} className="animate-spin" /> : <Ruler size={16} />}
-            Schrijf de niveaubeschrijvingen
-          </button>
-        </div>
+          ></nldd-button>
+          <nldd-tooltip text="Laat de AI per criterium beschrijven wanneer welke score geldt">
+            <nldd-button
+              appearance="secondary"
+              start-icon="slider-horizontal-3"
+              text="Schrijf de niveaubeschrijvingen"
+              loading={busy === 'niveaus' || undefined}
+              disabled={busy !== null || gevuldeCriteria.length === 0 || undefined}
+              onClick={() => void fillLevels()}
+            ></nldd-button>
+          </nldd-tooltip>
+        </nldd-container>
 
         {gevuldeCriteria.length > 0 && zonderNiveaus.length > 0 && (
-          <p className="mt-2 flex items-start gap-1.5 text-xs text-amber-600 dark:text-amber-400">
-            <AlertTriangle size={13} className="mt-0.5 shrink-0" />
-            <span>
+          <nldd-container layout="row" gap="6">
+            <nldd-icon icon="exclamation-triangle" size="16" color="warning"></nldd-icon>
+            <nldd-text size="sm" color="warning">
               {zonderNiveaus.length === 1
                 ? `"${zonderNiveaus[0].naam.trim()}" heeft nog geen niveaubeschrijving.`
                 : `${zonderNiveaus.length} criteria hebben nog geen niveaubeschrijving.`}{' '}
               Zonder die beschrijving is de score een gevoel, en komen twee beoordelaars niet op
               hetzelfde uit.
-            </span>
-          </p>
+            </nldd-text>
+          </nldd-container>
         )}
-      </div>
+      </nldd-container>
 
-      {/* Stap 5: drempel en bewijsregel. */}
-      <div className="space-y-3">
-        <div>
-          <div className="mb-0.5 flex items-center gap-1">
-            <label className="opl-label mb-0" htmlFor="rb-drempel">5. Wanneer is het geheel voldoende?</label>
-            <InfoDot label="Uitleg bij dit veld" text="Leg dit vóór het beoordelen vast, anders wordt het eindoordeel achteraf naar het gevoel toe gerekend." />
-          </div>
-          <input
-            id="rb-drempel"
-            className="opl-input text-sm"
+      {/* Step 5: threshold and evidence rule. */}
+      <nldd-container gap="12">
+        <nldd-container gap="8">
+          <StepLabel
+            text="5. Wanneer is het geheel voldoende?"
+            info="Leg dit vóór het beoordelen vast, anders wordt het eindoordeel achteraf naar het gevoel toe gerekend."
+          />
+          <TextInput
             value={data.drempel}
+            onValue={(v) => setData((d) => ({ ...d, drempel: v }))}
+            label="Wanneer is het geheel voldoende?"
             placeholder="Bijv. geen enkel criterium op 'voldoet niet' en minstens drie op 'voldoet'"
-            onChange={(e) => setData((d) => ({ ...d, drempel: e.target.value }))}
           />
-        </div>
-        <label className="flex cursor-pointer items-start gap-2.5">
-          <input
-            type="checkbox"
-            className="mt-0.5 h-4 w-4 shrink-0 accent-rijksoranje"
+        </nldd-container>
+        <nldd-list appearance="box-base" accessible-label="Bewijsregel">
+          <ChoiceRow
+            kind="checkbox"
             checked={data.bewijsverplicht}
-            onChange={(e) => setData((d) => ({ ...d, bewijsverplicht: e.target.checked }))}
+            text="Elke score onderbouwen met een letterlijke passage"
+            supporting={'Dwingt de AI om te wijzen in plaats van te vinden. Staat er niets over in het stuk, dan volgt "niet te beoordelen" in plaats van een gok.'}
+            onChecked={(checked) => setData((d) => ({ ...d, bewijsverplicht: checked }))}
           />
-          <span>
-            <span className="block text-sm font-medium text-slate-700 dark:text-slate-200">
-              Elke score onderbouwen met een letterlijke passage
-            </span>
-            <span className="block text-xs text-slate-500 dark:text-slate-400">
-              Dwingt de AI om te wijzen in plaats van te vinden. Staat er niets over in het stuk, dan
-              volgt &quot;niet te beoordelen&quot; in plaats van een gok.
-            </span>
-          </span>
-        </label>
-      </div>
-    </div>
+        </nldd-list>
+      </nldd-container>
+    </nldd-container>
+  );
+}
+
+/** The question above a step, with its explanation behind the info dot. */
+function StepLabel({ text, info }: { text: string; info?: string }) {
+  return (
+    <nldd-container layout="row" gap="4" vertical-alignment="center">
+      <nldd-text weight="bold">{text}</nldd-text>
+      {info && <InfoDot label="Uitleg bij dit veld" text={info} />}
+    </nldd-container>
+  );
+}
+
+/** A text field bound to state; `label` names it when there is no form field around it. */
+function TextInput({
+  value,
+  onValue,
+  placeholder,
+  label,
+}: {
+  value: string;
+  onValue: (value: string) => void;
+  placeholder?: string;
+  label?: string;
+}) {
+  const ref = useRef<HTMLElement & { value?: string }>(null);
+  useNlddValue(ref, value, onValue);
+  return <nldd-text-field ref={ref} accessible-label={label} placeholder={placeholder}></nldd-text-field>;
+}
+
+/** One criterion: name, meaning, weight, and the level descriptions behind a disclosure. */
+function CriterionCard({
+  index,
+  criterion: c,
+  levels,
+  open,
+  onToggle,
+  onChange,
+  onRemove,
+}: {
+  index: number;
+  criterion: RubricCriterion;
+  levels: string[];
+  open: boolean;
+  onToggle: () => void;
+  onChange: (patch: Partial<RubricCriterion>) => void;
+  onRemove: () => void;
+}) {
+  const weightRef = useRef<HTMLElement>(null);
+  useNlddEvent<CustomEvent<{ checked: boolean; value: string }>>(weightRef, 'change', (e) => {
+    if (e.detail?.checked && e.detail.value) onChange({ weging: e.detail.value as CriterionWeight });
+  });
+  const heeftNiveaus = Object.values(c.niveaus).some((v) => v?.trim());
+  const weight = CRITERION_WEIGHTS.find((w) => w.value === c.weging);
+
+  return (
+    <nldd-box>
+      <nldd-container padding="16" gap="12">
+        <nldd-container layout="row" gap="8" vertical-alignment="center">
+          <nldd-title heading-level={3} size={6} text={c.naam.trim() || `Criterium ${index + 1}`}></nldd-title>
+          <nldd-spacer size="flexible" direction="horizontal"></nldd-spacer>
+          <nldd-icon-button
+            appearance="neutral-transparent"
+            size="sm"
+            icon="trash"
+            accessible-label={`Criterium ${index + 1} verwijderen`}
+            onClick={onRemove}
+          ></nldd-icon-button>
+        </nldd-container>
+        <nldd-form-field label="Naam">
+          <TextInput value={c.naam} onValue={(v) => onChange({ naam: v })} placeholder="Bijv. uitvoerbaarheid" />
+        </nldd-form-field>
+        <nldd-form-field label="Wat meet het precies?">
+          <TextInput
+            value={c.betekenis}
+            onValue={(v) => onChange({ betekenis: v })}
+            placeholder="Bijv. kan de uitvoerder dit met de huidige capaciteit aan?"
+          />
+        </nldd-form-field>
+        <nldd-form-field label="Weging">
+          <nldd-radio-button-group ref={weightRef} name={`weging-${c.id}`}>
+            {CRITERION_WEIGHTS.map((w) => (
+              <nldd-radio-button-field
+                key={w.value}
+                value={w.value}
+                label={w.label}
+                checked={c.weging === w.value || undefined}
+              ></nldd-radio-button-field>
+            ))}
+          </nldd-radio-button-group>
+          {weight?.hint && <nldd-form-field-help-text>{weight.hint}</nldd-form-field-help-text>}
+        </nldd-form-field>
+
+        {/* The level descriptions. */}
+        <nldd-container layout="row" gap="8" vertical-alignment="center">
+          <nldd-button
+            appearance="accent-transparent"
+            size="sm"
+            start-icon={open ? 'chevron-down' : 'chevron-right'}
+            text="Niveaubeschrijvingen"
+            onClick={onToggle}
+          ></nldd-button>
+          <nldd-badge size="sm" color={heeftNiveaus ? 'success' : 'warning'} text={heeftNiveaus ? 'ingevuld' : 'nog leeg'}></nldd-badge>
+        </nldd-container>
+        {open && (
+          <nldd-box background="base">
+            <nldd-container padding="16" gap="12">
+              {levels.map((level) => (
+                <nldd-container key={level} gap="4">
+                  <nldd-text size="sm" weight="bold">
+                    {level}
+                  </nldd-text>
+                  <TextInput
+                    value={c.niveaus[level] ?? ''}
+                    onValue={(v) => onChange({ niveaus: { ...c.niveaus, [level]: v } })}
+                    label={`${c.naam.trim() || `Criterium ${index + 1}`}: ${level}`}
+                    placeholder={`Wanneer krijgt het "${level}"?`}
+                  />
+                </nldd-container>
+              ))}
+            </nldd-container>
+          </nldd-box>
+        )}
+      </nldd-container>
+    </nldd-box>
+  );
+}
+
+/** A list row that is one checkbox or one radio, with its label and hint. */
+function ChoiceRow({
+  kind,
+  checked,
+  text,
+  supporting,
+  onChecked,
+}: {
+  kind: 'checkbox' | 'radio';
+  checked: boolean;
+  text: string;
+  supporting?: string;
+  onChecked: (checked: boolean) => void;
+}) {
+  const ref = useRef<HTMLElement>(null);
+  useNlddEvent<CustomEvent<{ checked: boolean }>>(ref, 'change', (e) => onChecked(Boolean(e.detail?.checked)));
+  return (
+    <nldd-list-item
+      ref={ref}
+      checkbox={kind === 'checkbox' || undefined}
+      radio={kind === 'radio' || undefined}
+      checked={checked || undefined}
+    >
+      <nldd-cell>
+        {kind === 'checkbox' ? (
+          <nldd-checkbox decorative checked={checked || undefined}></nldd-checkbox>
+        ) : (
+          <nldd-radio-button decorative checked={checked || undefined}></nldd-radio-button>
+        )}
+      </nldd-cell>
+      <nldd-spacer-cell size="8"></nldd-spacer-cell>
+      <nldd-text-cell text={text} supporting-text={supporting}></nldd-text-cell>
+    </nldd-list-item>
   );
 }

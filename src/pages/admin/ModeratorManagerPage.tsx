@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Pencil, ShieldCheck, Search } from '@/components/common/icons';
-import toast from 'react-hot-toast';
-import clsx from 'clsx';
-import Modal from '@/components/common/Modal';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { notify } from '@/lib/notify';
+import { useNlddEvent, useNlddValue } from '@/lib/nldd';
+import AdminSheet from '@/components/admin/AdminSheet';
 import {
   listProfiles,
   listOrganizations,
@@ -12,7 +11,21 @@ import {
 } from '@/services/orgService';
 import { logAdminAction } from '@/services/adminService';
 import type { Organization, OrganizationModerator, Profile } from '@/types';
-import StackTable from '@/components/common/StackTable';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/cell';
+import '@nldd/design-system/checkbox';
+import '@nldd/design-system/container';
+import '@nldd/design-system/icon-cell';
+import '@nldd/design-system/inline-dialog';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/search-field';
+import '@nldd/design-system/spacer-cell';
+import '@nldd/design-system/tag';
+import '@nldd/design-system/text';
+import '@nldd/design-system/text-cell';
+import '@nldd/design-system/title';
 
 /**
  * Adminscherm: wijs gebruikers aan als moderator van een ministerie. Een
@@ -36,10 +49,18 @@ export default function ModeratorManagerPage() {
   const [query, setQuery] = useState('');
   const [editor, setEditor] = useState<Editor | null>(null);
   const [saving, setSaving] = useState(false);
+  const searchRef = useRef<HTMLElement & { value?: string }>(null);
+  useNlddValue(searchRef, query, setQuery);
 
   const ministryName = useMemo(() => {
     const map = new Map(ministries.map((m) => [m.id, m.name]));
-    return (id: string) => map.get(id) ?? '—';
+    return (id: string) => map.get(id) ?? 'Onbekend';
+  }, [ministries]);
+
+  /** The short name of a ministry for a row: its code, else its name. */
+  const ministryShort = useMemo(() => {
+    const map = new Map(ministries.map((m) => [m.id, m.code || m.name]));
+    return (id: string) => map.get(id) ?? 'Onbekend';
   }, [ministries]);
 
   /** Moderator-koppelingen per gebruiker (user_id → koppelingen). */
@@ -66,7 +87,7 @@ export default function ModeratorManagerPage() {
       setMinistries(orgs.filter((o) => o.organization_type === 'ministry'));
       setModerators(mods);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Laden mislukt');
+      notify.error(err instanceof Error ? err.message : 'Laden mislukt');
     } finally {
       setLoading(false);
     }
@@ -130,163 +151,129 @@ export default function ModeratorManagerPage() {
         });
       }
 
-      toast.success('Moderator-toewijzing bijgewerkt');
+      notify.success('Moderator-toewijzing bijgewerkt');
       setEditor(null);
       await load();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Opslaan mislukt');
+      notify.error(err instanceof Error ? err.message : 'Opslaan mislukt');
     } finally {
       setSaving(false);
     }
   }
 
+  const editorName = editor ? editor.user.full_name || editor.user.email : '';
+
   return (
-    <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
-          Moderatoren beheren
-        </h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          Wijs gebruikers aan als moderator van een ministerie. Zij beoordelen de prompts die op
-          ministerieniveau worden gedeeld binnen die hele tak.
-        </p>
-      </div>
+    <nldd-container layout="stack" gap="24">
+      <nldd-title
+        heading-level={1}
+        size={2}
+        text="Moderatoren beheren"
+        supporting-text="Wijs gebruikers aan als moderator van een ministerie. Zij beoordelen de prompts die op ministerieniveau worden gedeeld binnen die hele tak."
+      ></nldd-title>
 
-      <div className="relative max-w-sm">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-        <input
-          className="opl-input pl-9"
-          placeholder="Zoek op naam of e-mail…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-      </div>
+      <nldd-search-field
+        ref={searchRef}
+        width="24rem"
+        placeholder="Zoek op naam of e-mail"
+      ></nldd-search-field>
 
-      <div className="opl-card overflow-hidden">
+      <nldd-list appearance="box-tinted" accessible-label="Gebruikers en hun ministeries">
+        {!loading &&
+          filtered.map((p) => {
+            const mods = modsByUser.get(p.id) ?? [];
+            return (
+              <nldd-list-item key={p.id} button onClick={() => openEditor(p)}>
+                <nldd-text-cell
+                  supporting-text={
+                    mods.length === 0
+                      ? `${p.email} · geen moderator`
+                      : `${p.email} · moderator van ${mods.map((m) => ministryShort(m.organization_id)).join(', ')}`
+                  }
+                >
+                  {p.full_name || 'Geen naam'}
+                  {mods.length > 0 && (
+                    <>
+                      {' '}
+                      <nldd-tag size="sm" color="lintblauw" icon="shield-check-mark" text="Moderator"></nldd-tag>
+                    </>
+                  )}
+                </nldd-text-cell>
+                <nldd-spacer-cell size="12"></nldd-spacer-cell>
+                <nldd-icon-cell size="20" color="secondary" icon="chevron-right"></nldd-icon-cell>
+              </nldd-list-item>
+            );
+          })}
         {loading ? (
-          <div className="skeleton h-48 w-full" />
+          <nldd-inline-dialog slot="empty" variant="loading" text="Gebruikers laden"></nldd-inline-dialog>
         ) : (
-          <StackTable>
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-              <tr>
-                <th className="px-4 py-3 font-medium">Naam / e-mail</th>
-                <th className="px-4 py-3 font-medium">Modereert ministerie(s)</th>
-                <th className="px-4 py-3 text-right font-medium">Acties</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-              {filtered.map((p) => {
-                const mods = modsByUser.get(p.id) ?? [];
-                return (
-                  <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800">
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-slate-800 dark:text-slate-100">
-                        {p.full_name || '—'}
-                      </div>
-                      <div className="text-xs text-slate-400 dark:text-slate-500">{p.email}</div>
-                    </td>
-                    <td className="px-4 py-3">
-                      {mods.length === 0 ? (
-                        <span className="text-xs text-slate-400 dark:text-slate-500">
-                          Geen moderator
-                        </span>
-                      ) : (
-                        <div className="flex flex-wrap gap-1.5">
-                          {mods.map((m) => (
-                            <span
-                              key={m.id}
-                              className="inline-flex items-center gap-1 rounded-full bg-rijksblauw-50 px-2 py-0.5 text-xs font-medium text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200"
-                            >
-                              <ShieldCheck size={12} /> {ministryName(m.organization_id)}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex justify-end">
-                        <button
-                          onClick={() => openEditor(p)}
-                          className="rounded p-1.5 text-rijksblauw-500 hover:bg-rijksblauw-50 dark:hover:bg-rijksblauw-500/15"
-                          aria-label="Moderator-toewijzing bewerken"
-                        >
-                          <Pencil size={15} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={3} className="px-4 py-8 text-center text-sm text-slate-400 dark:text-slate-500">
-                    Geen gebruikers gevonden.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-          </StackTable>
+          <nldd-inline-dialog
+            slot="empty"
+            icon="users"
+            text={profiles.length === 0 ? 'Nog geen gebruikers' : 'Geen gebruikers gevonden'}
+            supporting-text={profiles.length === 0 ? undefined : 'Zoek op een andere naam of een ander e-mailadres.'}
+          ></nldd-inline-dialog>
         )}
-      </div>
+      </nldd-list>
 
-      <Modal
+      <AdminSheet
         open={!!editor}
         onClose={() => setEditor(null)}
-        title={editor ? `Moderator van ${editor.user.full_name || editor.user.email}` : ''}
-        size="max-w-md"
+        title={editor ? `Moderator van ${editorName}` : 'Moderator'}
+        width="480px"
       >
-        {editor && (
-          <div className="space-y-4">
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              Vink de ministeries aan waarvan deze gebruiker moderator is. Een moderator beoordeelt
-              de ministerie-prompts van de hele tak (inclusief diensten en afdelingen).
-            </p>
-            <div className="max-h-72 space-y-1 overflow-auto">
-              {ministries.map((m) => {
-                const checked = editor.selected.has(m.id);
-                return (
-                  <label
-                    key={m.id}
-                    className={clsx(
-                      'flex cursor-pointer items-center gap-3 rounded-lg border p-2.5 transition-colors',
-                      checked
-                        ? 'border-rijksblauw-400 bg-rijksblauw-50/60 dark:border-rijksblauw-500/50 dark:bg-rijksblauw-500/10'
-                        : 'border-slate-200 hover:border-slate-300 dark:border-slate-700',
-                    )}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => toggle(m.id)}
-                    />
-                    <span className="text-sm text-slate-700 dark:text-slate-200">
-                      {m.name}
-                      {m.code && (
-                        <span className="ml-1 text-xs text-slate-400 dark:text-slate-500">({m.code})</span>
-                      )}
-                    </span>
-                  </label>
-                );
-              })}
-              {ministries.length === 0 && (
-                <p className="text-sm text-slate-400 dark:text-slate-500">
-                  Er zijn nog geen ministeries om aan te koppelen.
-                </p>
-              )}
-            </div>
-            <div className="flex justify-end gap-3">
-              <button className="opl-btn-secondary" onClick={() => setEditor(null)} disabled={saving}>
-                Annuleren
-              </button>
-              <button className="opl-btn-primary" onClick={save} disabled={saving}>
-                {saving ? 'Opslaan…' : 'Opslaan'}
-              </button>
-            </div>
-          </div>
-        )}
-      </Modal>
-    </div>
+        <nldd-container layout="stack" gap="16">
+          <nldd-text color="secondary">
+            Vink de ministeries aan waarvan deze gebruiker moderator is. Een moderator beoordeelt de
+            ministerie-prompts van de hele tak, inclusief diensten en afdelingen.
+          </nldd-text>
+          <nldd-list appearance="box-tinted" accessible-label="Ministeries">
+            {ministries.map((m) => (
+              <MinistryRow
+                key={m.id}
+                name={m.name}
+                code={m.code}
+                checked={!!editor?.selected.has(m.id)}
+                onToggle={() => toggle(m.id)}
+              />
+            ))}
+            <nldd-inline-dialog slot="empty" text="Er zijn nog geen ministeries om aan te koppelen."></nldd-inline-dialog>
+          </nldd-list>
+          <nldd-button-group>
+            <nldd-button
+              appearance="primary"
+              text="Bewaar"
+              loading={saving || undefined}
+              loading-text="Aan het bewaren"
+              onClick={() => void save()}
+            ></nldd-button>
+          </nldd-button-group>
+        </nldd-container>
+      </AdminSheet>
+    </nldd-container>
+  );
+}
+
+/** A ministry as a checkbox row; the row fires its own `change`. */
+function MinistryRow({
+  name,
+  code,
+  checked,
+  onToggle,
+}: {
+  name: string;
+  code?: string | null;
+  checked: boolean;
+  onToggle: () => void;
+}) {
+  const ref = useRef<HTMLElement>(null);
+  useNlddEvent(ref, 'change', () => onToggle());
+  return (
+    <nldd-list-item ref={ref} checkbox checked={checked || undefined}>
+      <nldd-cell>
+        <nldd-checkbox decorative checked={checked || undefined}></nldd-checkbox>
+      </nldd-cell>
+      <nldd-text-cell text={name} supporting-text={code ?? undefined}></nldd-text-cell>
+    </nldd-list-item>
   );
 }

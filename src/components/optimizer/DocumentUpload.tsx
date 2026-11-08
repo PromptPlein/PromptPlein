@@ -1,16 +1,30 @@
 import { useRef, useState } from 'react';
-import { Check, FileUp, Loader2, Sparkles } from '@/components/common/icons';
-import toast from 'react-hot-toast';
+import { notify } from '@/lib/notify';
+import { useNlddEvent, useNlddValue } from '@/lib/nldd';
+import '@nldd/design-system/activity-indicator';
+import '@nldd/design-system/box';
+import '@nldd/design-system/button';
+import '@nldd/design-system/button-group';
+import '@nldd/design-system/container';
+import '@nldd/design-system/divider';
+import '@nldd/design-system/file-field';
+import '@nldd/design-system/form-field';
+import '@nldd/design-system/icon';
+import '@nldd/design-system/multi-line-text-field';
+import '@nldd/design-system/text';
+
+const ACCEPT =
+  '.txt,.md,.markdown,.pdf,.docx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
 /**
- * Upload-zone voor een voorbeelddocument (Template-based Output). Extraheert de
- * tekst client-side (txt/md/pdf/docx), waarna de aanroeper (via `onPrefill`) de
- * AI het document laat doorlezen en de velden laat voor-invullen. Gedeeld door de
- * plan-bouwer en de losse techniek-keuze.
+ * Upload zone for an example document (Template-based Output). It extracts the
+ * text in the browser (txt/md/pdf/docx), after which the caller (through
+ * `onPrefill`) lets the AI read the document and prefill the fields. Shared by
+ * the plan builder and the single technique choice.
  *
- * Heeft de gebruiker geen voorbeeld, dan omschrijft hij via `onDescribe` wat voor
- * document en format hij nodig heeft en stelt de AI zelf een passende structuur
- * voor. De velden worden dus nooit ongevraagd ingevuld: de gebruiker kiest eerst.
+ * Without an example, the user describes through `onDescribe` what kind of
+ * document and format he needs, and the AI proposes a fitting structure. The
+ * fields are never filled unasked: the user chooses first.
  */
 export default function DocumentUpload({
   onPrefill,
@@ -29,23 +43,25 @@ export default function DocumentUpload({
   const [briefOpen, setBriefOpen] = useState(false);
   const [briefBusy, setBriefBusy] = useState(false);
   const [briefDone, setBriefDone] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const fileRef = useRef<HTMLElement & { value?: string }>(null);
+  useNlddEvent<CustomEvent<{ files?: File[] }>>(fileRef, 'change', (e) => {
+    const file = e.detail?.files?.[0];
+    if (file) void handleFile(file);
+  });
 
-  async function handleFile(file: File | undefined) {
-    if (!file) return;
+  async function handleFile(file: File) {
     setBusy(true);
     setDoneName(null);
     try {
       const { extractDocument } = await import('@/lib/extractDocument');
       const doc = await extractDocument(file);
-      toast.success(`"${doc.name}" ingelezen (${doc.chars.toLocaleString('nl-NL')} tekens).`);
+      notify.success(`"${doc.name}" ingelezen (${doc.chars.toLocaleString('nl-NL')} tekens).`);
       const ok = await onPrefill(doc.text);
       if (ok) setDoneName(doc.name);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Document inlezen mislukt.');
+      notify.error(err instanceof Error ? err.message : 'Document inlezen mislukt.');
     } finally {
       setBusy(false);
-      if (inputRef.current) inputRef.current.value = '';
     }
   }
 
@@ -58,115 +74,89 @@ export default function DocumentUpload({
       const ok = await onDescribe(text);
       if (ok) setBriefDone(true);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Voorstellen van een structuur mislukt.');
+      notify.error(err instanceof Error ? err.message : 'Voorstellen van een structuur mislukt.');
     } finally {
       setBriefBusy(false);
     }
   }
 
   return (
-    <div className="rounded-xl border border-dashed border-rijksblauw-300 bg-rijksblauw-50/40 p-4 dark:border-rijksblauw-500/40 dark:bg-rijksblauw-500/10">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-start gap-2">
-          <FileUp size={18} className="mt-0.5 shrink-0 text-rijksblauw-500" />
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-              Voorbeelddocument uploaden (optioneel)
-            </p>
-            <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-300">
-              De AI leest het document volledig door, analyseert de opbouw (format, rubrieken, regels)
-              en vult de velden hieronder automatisch voor. Ondersteunt .txt, .md, .pdf en .docx.
-            </p>
-          </div>
-        </div>
-        <button
-          type="button"
-          className="opl-btn-secondary shrink-0"
-          onClick={() => inputRef.current?.click()}
-          disabled={busy || disabled}
-        >
-          {busy ? (
-            <>
-              <Loader2 size={16} className="animate-spin" /> Inlezen…
-            </>
-          ) : (
-            <>
-              <FileUp size={16} /> Kies bestand
-            </>
-          )}
-        </button>
-      </div>
-      {doneName && (
-        <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400">
-          <Check size={13} /> Velden voor-ingevuld op basis van &quot;{doneName}&quot;. Controleer en
-          pas aan waar nodig.
-        </p>
-      )}
-      <input
-        ref={inputRef}
-        type="file"
-        accept=".txt,.md,.markdown,.pdf,.docx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        className="hidden"
-        onChange={(e) => void handleFile(e.target.files?.[0])}
-      />
-
-      {/* Geen voorbeeld? Omschrijf het gewenste document; de AI stelt dan zelf
-          een passende structuur voor. */}
-      <div className="mt-3 border-t border-rijksblauw-200/70 pt-3 dark:border-rijksblauw-500/30">
-        {!briefOpen ? (
-          <button
-            type="button"
-            className="text-sm font-medium text-rijksblauw-700 underline-offset-2 hover:underline disabled:opacity-60 dark:text-rijksblauw-200"
-            onClick={() => setBriefOpen(true)}
-            disabled={busy || disabled}
-          >
-            Ik heb geen voorbeelddocument, help me aan een structuur
-          </button>
-        ) : (
-          <div>
-            <label
-              className="opl-label mb-1 block"
-              htmlFor="doc-brief"
-            >
-              Wat voor document moet het worden, en in welk format?
-            </label>
-            <textarea
-              id="doc-brief"
-              className="opl-input min-h-[64px] resize-y text-sm"
-              value={brief}
-              placeholder="Bijv. een projectplan van maximaal 2 A4 met genummerde hoofdstukken, voor een directieteam"
-              onChange={(e) => setBrief(e.target.value)}
-              disabled={briefBusy || disabled}
-            />
-            <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
-              De AI stelt een structuur voor op basis van gangbare conventies binnen de overheid. Dat
-              is een voorstel uit eigen kennis, geen bestaand sjabloon; loop het dus even na.
-            </p>
-            <button
-              type="button"
-              className="opl-btn-secondary mt-2"
-              onClick={() => void handleDescribe()}
-              disabled={briefBusy || disabled || !brief.trim()}
-            >
-              {briefBusy ? (
-                <>
-                  <Loader2 size={16} className="animate-spin" /> Structuur voorstellen…
-                </>
-              ) : (
-                <>
-                  <Sparkles size={16} /> Stel een structuur voor
-                </>
-              )}
-            </button>
-            {briefDone && (
-              <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400">
-                <Check size={13} /> Structuur voorgesteld en in de velden gezet. Controleer en pas aan
-                waar nodig.
-              </p>
-            )}
-          </div>
+    <nldd-box background="accent-tinted">
+      <nldd-container padding="16" gap="12">
+        <nldd-form-field label="Voorbeelddocument uploaden" optional>
+          <nldd-form-field-help-text>
+            De AI leest het document volledig door, analyseert de opbouw (format, rubrieken, regels)
+            en vult de velden hieronder automatisch voor. Ondersteunt .txt, .md, .pdf en .docx.
+          </nldd-form-field-help-text>
+          <nldd-file-field ref={fileRef} accept={ACCEPT} disabled={busy || disabled || undefined}></nldd-file-field>
+        </nldd-form-field>
+        {busy && <nldd-activity-indicator size="20" show-text text="Inlezen…"></nldd-activity-indicator>}
+        {doneName && (
+          <nldd-container layout="row" gap="6" vertical-alignment="center">
+            <nldd-icon icon="check-mark" size="16" color="success"></nldd-icon>
+            <nldd-text size="xs" weight="medium" color="success">
+              Velden voor-ingevuld op basis van &quot;{doneName}&quot;. Controleer en pas aan waar nodig.
+            </nldd-text>
+          </nldd-container>
         )}
-      </div>
-    </div>
+
+        <nldd-divider></nldd-divider>
+
+        {/* No example? Describe the document; the AI proposes a structure. */}
+        {!briefOpen ? (
+          <nldd-button
+            appearance="accent-transparent"
+            size="sm"
+            text="Ik heb geen voorbeelddocument, help me aan een structuur"
+            disabled={busy || disabled || undefined}
+            onClick={() => setBriefOpen(true)}
+          ></nldd-button>
+        ) : (
+          <nldd-container gap="8">
+            <nldd-form-field label="Wat voor document moet het worden, en in welk format?">
+              <BriefField value={brief} onValue={setBrief} disabled={briefBusy || Boolean(disabled)} />
+              <nldd-form-field-help-text>
+                De AI stelt een structuur voor op basis van gangbare conventies binnen de overheid. Dat
+                is een voorstel uit eigen kennis, geen bestaand sjabloon; loop het dus even na.
+              </nldd-form-field-help-text>
+            </nldd-form-field>
+            <nldd-button-group>
+              <nldd-button
+                appearance="secondary"
+                start-icon="sparkles"
+                text="Stel een structuur voor"
+                loading={briefBusy || undefined}
+                loading-text="Structuur voorstellen…"
+                disabled={briefBusy || disabled || !brief.trim() || undefined}
+                onClick={() => void handleDescribe()}
+              ></nldd-button>
+            </nldd-button-group>
+            {briefDone && (
+              <nldd-container layout="row" gap="6" vertical-alignment="center">
+                <nldd-icon icon="check-mark" size="16" color="success"></nldd-icon>
+                <nldd-text size="xs" weight="medium" color="success">
+                  Structuur voorgesteld en in de velden gezet. Controleer en pas aan waar nodig.
+                </nldd-text>
+              </nldd-container>
+            )}
+          </nldd-container>
+        )}
+      </nldd-container>
+    </nldd-box>
+  );
+}
+
+/** The description field; it mounts when opened, so its binding does too. */
+function BriefField({ value, onValue, disabled }: { value: string; onValue: (v: string) => void; disabled: boolean }) {
+  const ref = useRef<HTMLElement & { value?: string }>(null);
+  useNlddValue(ref, value, onValue);
+  return (
+    <nldd-multi-line-text-field
+      ref={ref}
+      rows={3}
+      resize="vertical"
+      placeholder="Bijv. een projectplan van maximaal 2 A4 met genummerde hoofdstukken, voor een directieteam"
+      disabled={disabled || undefined}
+    ></nldd-multi-line-text-field>
   );
 }

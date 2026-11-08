@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Check, ChevronDown, FileCode2, Loader2, RotateCcw, Search } from '@/components/common/icons';
-import clsx from 'clsx';
-import toast from 'react-hot-toast';
-import { Link } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { notify } from '@/lib/notify';
+import { useNlddValue } from '@/lib/nldd';
+import AdminSheet from '@/components/admin/AdminSheet';
 import {
   getPromptCatalog,
   getPromptOverrides,
@@ -10,6 +9,41 @@ import {
   type ServerPrompt,
 } from '@/services/promptAdminService';
 import { logAdminAction } from '@/services/adminService';
+import '@nldd/design-system/activity-indicator';
+import '@nldd/design-system/badge';
+import '@nldd/design-system/banner';
+import '@nldd/design-system/button';
+import '@nldd/design-system/cell';
+import '@nldd/design-system/container';
+import '@nldd/design-system/form-field';
+import '@nldd/design-system/icon-cell';
+import '@nldd/design-system/inline-dialog';
+import '@nldd/design-system/link';
+import '@nldd/design-system/list';
+import '@nldd/design-system/list-item';
+import '@nldd/design-system/multi-line-text-field';
+import '@nldd/design-system/search-field';
+import '@nldd/design-system/spacer-cell';
+import '@nldd/design-system/text';
+import '@nldd/design-system/text-cell';
+import '@nldd/design-system/title';
+
+/** The text of one prompt, bound to the drafts of the page. */
+function PromptEditor({ value, label, onValue }: { value: string; label: string; onValue: (v: string) => void }) {
+  const ref = useRef<HTMLElement & { value?: string }>(null);
+  useNlddValue(ref, value, onValue);
+  return (
+    <nldd-form-field label={label}>
+      <nldd-multi-line-text-field ref={ref} rows={16} resize="vertical" no-spellcheck></nldd-multi-line-text-field>
+      <nldd-form-field-help-text>
+        Tekst tussen dubbele accolades, zoals <code>{'{{sleutels}}'}</code> of{' '}
+        <code>{'{{bronnenpunt}}'}</code>, vult de server in. Laat die staan. Prompts worden geschreven
+        voor een klein model: houd ze concreet, met een exact uitvoersjabloon, en zet er geen twee
+        regels in die elkaar tegenspreken.
+      </nldd-form-field-help-text>
+    </nldd-form-field>
+  );
+}
 
 /**
  * Beheer, Prompts: alle systeemprompts van de AI-laag op één plek, gegroepeerd
@@ -26,6 +60,8 @@ export default function PromptsPage() {
   const [open, setOpen] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [saving, setSaving] = useState(false);
+  const searchRef = useRef<HTMLElement & { value?: string }>(null);
+  useNlddValue(searchRef, query, setQuery);
 
   useEffect(() => {
     let active = true;
@@ -87,148 +123,150 @@ export default function PromptsPage() {
         /* audit is best-effort */
       });
       setSaved(nextOverrides);
-      toast.success('Prompts opgeslagen. Binnen een halve minuut gebruikt de AI de nieuwe tekst.');
+      notify.success('Prompts opgeslagen. Binnen een halve minuut gebruikt de AI de nieuwe tekst.');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Opslaan mislukt');
+      notify.error(err instanceof Error ? err.message : 'Opslaan mislukt');
     } finally {
       setSaving(false);
     }
   }
 
+  const aantalAangepast = Object.keys(nextOverrides).length;
+  // The sheet stays mounted; while it closes it keeps showing the last prompt.
+  const lastOpen = useRef<ServerPrompt | null>(null);
+  const openPrompt = catalog?.find((p) => p.id === open) ?? null;
+  if (openPrompt) lastOpen.current = openPrompt;
+  const shown = openPrompt ?? lastOpen.current;
+
+  const intro = (
+    <nldd-title
+      heading-level={1}
+      size={2}
+      text="Prompts"
+      supporting-text="Alle systeemprompts van de AI-laag, gegroepeerd naar waar ze gebruikt worden."
+    >
+      {catalog && !loadError && (
+        <nldd-button
+          slot="end"
+          appearance="primary"
+          start-icon="save"
+          text="Opslaan"
+          loading={saving || undefined}
+          loading-text="Aan het opslaan"
+          disabled={!dirty || undefined}
+          onClick={() => void handleSave()}
+        ></nldd-button>
+      )}
+    </nldd-title>
+  );
+
   if (loadError) {
     return (
-      <div className="space-y-4">
-        <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">Prompts</h1>
-        <div className="opl-card p-6 text-sm text-red-700 dark:text-red-300">
-          De prompts konden niet worden geladen: {loadError}
-        </div>
-      </div>
+      <nldd-container layout="stack" gap="24">
+        {intro}
+        <nldd-banner variant="critical" text="De prompts konden niet worden geladen" supporting-text={loadError}></nldd-banner>
+      </nldd-container>
     );
   }
   if (!catalog) {
     return (
-      <div className="space-y-4">
-        <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">Prompts</h1>
-        <div className="flex items-center gap-2 text-sm text-slate-500">
-          <Loader2 size={16} className="animate-spin" /> Prompts laden…
-        </div>
-      </div>
+      <nldd-container layout="stack" gap="24">
+        {intro}
+        <nldd-container min-height="8rem">
+          <nldd-activity-indicator text="Prompts laden" show-text></nldd-activity-indicator>
+        </nldd-container>
+      </nldd-container>
     );
   }
 
-  const aantalAangepast = Object.keys(nextOverrides).length;
-
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="flex items-center gap-2 text-xl font-bold text-slate-800 dark:text-slate-100">
-            <FileCode2 size={20} className="text-rijksblauw-500" /> Prompts
-          </h1>
-          <p className="mt-1 max-w-3xl text-sm text-slate-500 dark:text-slate-400">
-            Alle systeemprompts van de AI-laag, gegroepeerd naar waar ze gebruikt worden. Pas een
-            tekst aan en sla op; binnen een halve minuut gebruikt de AI de nieuwe versie, voor
-            iedereen. De hoofdprompt, de toon, de chat, de projectinstructie en de overheidskaders
-            staan bij{' '}
-            <Link to="/admin/instellingen" className="text-rijksblauw-600 hover:underline dark:text-rijksblauw-300">
-              AI-instellingen
-            </Link>
-            .
-          </p>
-          <p className="mt-1 max-w-3xl text-xs text-slate-400 dark:text-slate-500">
-            Tekst tussen dubbele accolades, zoals {'{{sleutels}}'} of {'{{bronnenpunt}}'}, vult de
-            server in. Laat die staan. Prompts worden geschreven voor een klein model: houd ze
-            concreet, met een exact uitvoersjabloon, en zet er geen twee regels in die elkaar
-            tegenspreken.
-          </p>
-        </div>
-        <button
-          type="button"
-          className="opl-btn-primary"
-          onClick={() => void handleSave()}
-          disabled={!dirty || saving}
-        >
-          {saving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-          Opslaan
-        </button>
-      </div>
+    <nldd-container layout="stack" gap="24">
+      {intro}
+      <nldd-text>
+        Pas een tekst aan en sla op; binnen een halve minuut gebruikt de AI de nieuwe versie, voor
+        iedereen. De hoofdprompt, de toon, de chat, de projectinstructie en de overheidskaders staan
+        bij <nldd-link href="/admin/instellingen" text="AI-instellingen"></nldd-link>.
+      </nldd-text>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative min-w-0 flex-1 basis-64">
-          <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            className="opl-input pl-9 text-sm"
-            placeholder="Zoek op naam of tekst"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </div>
-        <span className="text-xs text-slate-500 dark:text-slate-400">
+      <nldd-container layout="stack" gap="8">
+        <nldd-search-field
+          ref={searchRef}
+          width="24rem"
+          placeholder="Zoek op naam of tekst"
+          accessible-label="Zoek op naam of tekst"
+        ></nldd-search-field>
+        <nldd-text size="sm" color="secondary" aria-live="polite">
           {catalog.length} prompts, {aantalAangepast} aangepast
-        </span>
-      </div>
+        </nldd-text>
+      </nldd-container>
+
+      {groups.length === 0 && (
+        <nldd-inline-dialog icon="magnifier" text="Geen prompts gevonden" supporting-text="Probeer een ander zoekwoord."></nldd-inline-dialog>
+      )}
 
       {groups.map(([groep, prompts]) => (
-        <section key={groep} className="opl-card overflow-hidden">
-          <h2 className="border-b border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:text-slate-200">
-            {groep}
-          </h2>
-          <ul className="divide-y divide-slate-100 dark:divide-slate-700/60">
+        <nldd-container key={groep} layout="stack" gap="12">
+          <nldd-title heading-level={2} size={5} text={groep}></nldd-title>
+          <nldd-list appearance="box-tinted" accessible-label={groep}>
             {prompts.map((p) => {
-              const isOpen = open === p.id;
               const aangepast = drafts[p.id] !== p.standaard;
               return (
-                <li key={p.id}>
-                  <button
-                    type="button"
-                    className="flex w-full items-start gap-3 px-5 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800/60"
-                    onClick={() => setOpen(isOpen ? null : p.id)}
-                    aria-expanded={isOpen}
-                  >
-                    <ChevronDown
-                      size={16}
-                      className={clsx('mt-0.5 shrink-0 text-slate-400 transition-transform', isOpen && 'rotate-180')}
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-800 dark:text-slate-100">
-                        {p.titel}
-                        {aangepast && (
-                          <span className="rounded-full bg-rijksoranje/15 px-1.5 py-0.5 text-[0.625rem] font-semibold text-rijksoranje-dark dark:text-rijksoranje">
-                            aangepast
-                          </span>
-                        )}
-                      </span>
-                      <span className="block text-xs text-slate-500 dark:text-slate-400">{p.uitleg}</span>
-                    </span>
-                  </button>
-                  {isOpen && (
-                    <div className="space-y-2 px-5 pb-4">
-                      <textarea
-                        className="opl-input min-h-[320px] resize-y font-mono text-[0.78125rem] leading-relaxed"
-                        value={drafts[p.id] ?? ''}
-                        onChange={(e) => setDrafts((d) => ({ ...d, [p.id]: e.target.value }))}
-                        aria-label={p.titel}
-                      />
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400 dark:text-slate-500">
-                        <span className="font-mono">{p.id}</span>
-                        {aangepast && (
-                          <button
-                            type="button"
-                            className="inline-flex items-center gap-1 font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
-                            onClick={() => setDrafts((d) => ({ ...d, [p.id]: p.standaard }))}
-                          >
-                            <RotateCcw size={12} /> Herstel standaard
-                          </button>
-                        )}
-                      </div>
-                    </div>
+                <nldd-list-item key={p.id} button onClick={() => setOpen(p.id)}>
+                  <nldd-text-cell hide-below={aangepast ? 'md' : undefined} text={p.titel} supporting-text={p.uitleg}></nldd-text-cell>
+                  {/* Narrow, the status column is gone: a changed prompt says so after its name. */}
+                  {aangepast && (
+                    <nldd-text-cell hide-above="sm" supporting-text={p.uitleg}>
+                      {p.titel} <nldd-badge size="sm" color="warning" text="Aangepast"></nldd-badge>
+                    </nldd-text-cell>
                   )}
-                </li>
+                  {aangepast && (
+                    <>
+                      <nldd-spacer-cell size="16" hide-below="md"></nldd-spacer-cell>
+                      <nldd-cell hide-below="md">
+                        <nldd-badge color="warning" decorative></nldd-badge>
+                      </nldd-cell>
+                      <nldd-spacer-cell size="8" hide-below="md"></nldd-spacer-cell>
+                      <nldd-text-cell hide-below="md" width="fit-content" size="sm" text="Aangepast"></nldd-text-cell>
+                    </>
+                  )}
+                  <nldd-spacer-cell size="12"></nldd-spacer-cell>
+                  <nldd-icon-cell size="20" color="secondary" icon="chevron-right"></nldd-icon-cell>
+                </nldd-list-item>
               );
             })}
-          </ul>
-        </section>
+          </nldd-list>
+        </nldd-container>
       ))}
-    </div>
+
+      <AdminSheet open={!!openPrompt} onClose={() => setOpen(null)} title={shown?.titel ?? 'Prompt'} width="720px">
+        {shown && (
+          <nldd-container layout="stack" gap="16">
+            <nldd-text color="secondary">{shown.uitleg}</nldd-text>
+            <PromptEditor
+              label="Tekst van de prompt"
+              value={drafts[shown.id] ?? ''}
+              onValue={(v) => setDrafts((d) => ({ ...d, [shown.id]: v }))}
+            />
+            <nldd-container layout="wrap" gap="12" vertical-alignment="center">
+              <nldd-text size="sm" color="secondary">
+                <code>{shown.id}</code>
+              </nldd-text>
+              {drafts[shown.id] !== shown.standaard && (
+                <nldd-button
+                  appearance="secondary"
+                  size="sm"
+                  start-icon="arrow-2-counter-clockwise"
+                  text="Herstel standaard"
+                  onClick={() => setDrafts((d) => ({ ...d, [shown.id]: shown.standaard }))}
+                ></nldd-button>
+              )}
+            </nldd-container>
+            <nldd-text size="sm" color="secondary">
+              De wijziging geldt pas na Opslaan op de pagina.
+            </nldd-text>
+          </nldd-container>
+        )}
+      </AdminSheet>
+    </nldd-container>
   );
 }

@@ -1,6 +1,11 @@
-import { ShieldAlert } from '@/components/common/icons';
-import Modal from '@/components/common/Modal';
+import { useRef } from 'react';
+import { createPortal } from 'react-dom';
+import { useNlddEvent } from '@/lib/nldd';
 import type { PiiCount } from '@/services/guardrails';
+import '@nldd/design-system/button';
+import '@nldd/design-system/container';
+import '@nldd/design-system/modal-dialog';
+import '@nldd/design-system/text';
 
 export type PiiFileChoice = 'redact' | 'keep' | 'skip';
 
@@ -8,6 +13,9 @@ export type PiiFileChoice = 'redact' | 'keep' | 'skip';
  * Vraagt vóór het toevoegen van een bronbestand wat er met gevonden
  * persoonsgegevens moet gebeuren. Vervangen gebeurt in de browser, dus de
  * oorspronkelijke gegevens komen niet in de database en niet bij Mistral.
+ *
+ * The parent mounts this only while a choice is pending, so the dialog is open
+ * from its first render. Escape or the backdrop counts as "Niet toevoegen".
  */
 export default function PiiFileDialog({
   fileName,
@@ -18,57 +26,44 @@ export default function PiiFileDialog({
   found: PiiCount[];
   onChoose: (choice: PiiFileChoice) => void;
 }) {
-  return (
-    <Modal open onClose={() => onChoose('skip')} title="Persoonsgegevens gevonden" size="max-w-lg">
-      <div className="flex gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400">
-          <ShieldAlert size={20} />
-        </span>
-        <div className="min-w-0 space-y-3 text-sm text-slate-600 dark:text-slate-300">
-          <p>
-            In <span className="break-words font-medium text-slate-800 dark:text-slate-100">{fileName}</span>{' '}
-            staat mogelijk:
-          </p>
-          <ul className="space-y-0.5">
-            {found.map((f) => (
-              <li key={f.label} className="font-medium text-slate-800 dark:text-slate-100">
-                {f.label} ({f.count.toLocaleString('nl-NL')})
-              </li>
-            ))}
-          </ul>
-          <p>
-            Vervang je ze, dan staat er bijvoorbeeld [BSN] of [naam] in de tekst. Dat gebeurt op dit
-            apparaat, voordat er iets wordt verstuurd.
-          </p>
-          <p className="text-slate-500 dark:text-slate-400">
-            Een naam zonder aanhef of veldnaam vindt deze controle niet.
-          </p>
-        </div>
-      </div>
-      {/* Onder elkaar: drie knoppen naast elkaar breken in dit venster af. */}
-      <div className="mt-6 flex flex-col gap-2">
-        <button
-          type="button"
-          className="opl-btn-primary w-full justify-center"
-          onClick={() => onChoose('redact')}
-        >
-          Vervangen en toevoegen
-        </button>
-        <button
-          type="button"
-          className="opl-btn-secondary w-full justify-center"
-          onClick={() => onChoose('keep')}
-        >
-          Toevoegen zoals het is
-        </button>
-        <button
-          type="button"
-          className="opl-btn-secondary w-full justify-center"
-          onClick={() => onChoose('skip')}
-        >
-          Niet toevoegen
-        </button>
-      </div>
-    </Modal>
+  const ref = useRef<HTMLElement>(null);
+  const chosen = useRef(false);
+  const choose = (choice: PiiFileChoice) => {
+    if (chosen.current) return;
+    chosen.current = true;
+    onChoose(choice);
+  };
+  useNlddEvent(ref, 'close', () => choose('skip'));
+
+  return createPortal(
+    <nldd-modal-dialog
+      ref={ref}
+      open
+      icon="shield"
+      text="Persoonsgegevens gevonden"
+      horizontal-alignment="left"
+    >
+      <nldd-container gap="12">
+        <nldd-text>
+          In <strong>{fileName}</strong> staat mogelijk:
+        </nldd-text>
+        <nldd-container gap="2">
+          {found.map((f) => (
+            <nldd-text key={f.label} weight="medium">
+              {f.label} ({f.count.toLocaleString('nl-NL')})
+            </nldd-text>
+          ))}
+        </nldd-container>
+        <nldd-text>
+          Vervang je ze, dan staat er bijvoorbeeld [BSN] of [naam] in de tekst. Dat gebeurt op dit
+          apparaat, voordat er iets wordt verstuurd.
+        </nldd-text>
+        <nldd-text color="secondary">Een naam zonder aanhef of veldnaam vindt deze controle niet.</nldd-text>
+      </nldd-container>
+      <nldd-button slot="actions" appearance="primary" text="Vervangen en toevoegen" onClick={() => choose('redact')}></nldd-button>
+      <nldd-button slot="actions" appearance="secondary" text="Toevoegen zoals het is" onClick={() => choose('keep')}></nldd-button>
+      <nldd-button slot="actions" appearance="secondary" text="Niet toevoegen" onClick={() => choose('skip')}></nldd-button>
+    </nldd-modal-dialog>,
+    document.body,
   );
 }
