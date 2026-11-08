@@ -123,8 +123,8 @@ database. Wordt er code van daar geport, hernummer dan de migratie.
 Huisstijl: PromptPlein valt onder de Rijksoverheid en voert daarom de
 Rijkshuisstijl. Kleuren staan in `src/config/brandColors.js` (lintblauw `#154273`
 voor koppen en balken, donkerblauw `#01689B` voor interactie, en het token
-`nadruk` `#D2563E` als accent; dat heeft eigen tinten voor witte tekst, voor tekst
-in het rood en voor op lintblauw, zodat het contrast klopt), de vormtaal in
+`nadruk` `#D52B1E` (rijksrood) als accent; dat heeft eigen tinten voor tekst in
+het rood en voor op lintblauw, zodat het contrast klopt), de vormtaal in
 `borderRadius` van de Tailwind-config. Het lettertype Rijks Sans staat in
 `src/assets/fonts/` en is niet vrij: het staat met toestemming in deze openbare repo
 omdat PromptPlein van de Rijksoverheid is, en valt net als `public/logo-rijksoverheid.*`

@@ -27,7 +27,7 @@ const ROW_PX = 40;
 const FONT_PX = 13;
 const FONT_FAMILY = 'ui-monospace, "SF Mono", Menlo, Consolas, monospace';
 const TEXT_COLOR = 'rgba(153, 199, 221, 0.24)';
-const VARIABLE_COLOR = 'rgba(210, 86, 62, 0.7)';
+const VARIABLE_COLOR = 'rgba(213, 43, 30, 0.75)';
 const VIGNETTE_RGB = '1, 29, 46';
 
 type Segment = { text: string; isVariable: boolean; width: number };

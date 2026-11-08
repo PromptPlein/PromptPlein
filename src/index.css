@@ -112,7 +112,6 @@ html.dark body {
   /*
    * Rode accentknop voor de afsluitende actie van een blok (bouwen,
    * optimaliseren). Springt eruit naast de blauwe navigatieknoppen ernaast.
-   * Op nadruk-knop, want op het accent zelf haalt witte tekst geen 4,5:1.
    */
   .opl-btn-accent {
     @apply opl-btn bg-nadruk-knop text-white hover:bg-nadruk-dark focus:ring-nadruk;

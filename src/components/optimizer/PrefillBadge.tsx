@@ -12,7 +12,7 @@ interface PrefillBadgeProps {
  * Klein herkomst-label bij een voor-ingevuld veld. Maakt in één oogopslag
  * duidelijk of de inhoud uit de eigen input van de gebruiker is afgeleid
  * (groen, hoog vertrouwen) of een AI-suggestie is die om controle vraagt
- * (donkerrood met witte letters, zodat het opvalt).
+ * (rood met witte letters, zodat het opvalt).
  */
 export default function PrefillBadge({ source, note }: PrefillBadgeProps) {
   const fromPrompt = source === 'prompt';
@@ -35,7 +35,7 @@ export default function PrefillBadge({ source, note }: PrefillBadgeProps) {
         'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.6875rem] font-medium',
         fromPrompt
           ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
-          // Donkerrood met witte letters, zodat het opvalt; semibold houdt de
+          // Rood met witte letters, zodat het opvalt; semibold houdt de
           // kleine witte tekst leesbaar op de volle kleur.
           : 'bg-nadruk-knop font-semibold text-white',
       )}

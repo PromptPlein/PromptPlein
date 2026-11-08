@@ -16,9 +16,9 @@
  *
  * Lintblauw  #154273 = hoofdkleur: koppen, kop- en voetbalk, primaire knop
  * Donkerblauw #01689B = interactief: links, focus, accenten
- * Nadruk     #D2563E = accent, een warm rood. Vlakken, strepen, randen en
- *   knoppen met alleen een wit icoon (4,1:1) houden deze kleur. Witte tekst
- *   staat op nadrukKnop, tekst in de accentkleur gebruikt nadrukTekst.
+ * Nadruk     #D52B1E = accent, het rood van de Rijkshuisstijl (gelijk aan
+ *   rijksrood). Wit erop haalt 5:1, dus knoppen met witte tekst gebruiken het
+ *   rood zelf. Tekst in het rood gebruikt nadrukTekst.
  */
 
 /**
@@ -39,30 +39,27 @@ export const rijksblauw = {
   900: '#162945',
 };
 
-/** Accentkleur: vlakken, strepen, randen, knoppen met een wit icoon. @type {string} */
-export const nadruk = '#d2563e';
+/** Accentkleur: vlakken, strepen, randen en knoppen met witte tekst (5:1). @type {string} */
+export const nadruk = '#d52b1e';
+
+/** Vlak met witte tekst erop (accentknop, labels): het accent zelf. @type {string} */
+export const nadrukKnop = nadruk;
+
+/** Hover van een accentvlak; wit erop haalt 7,3:1. @type {string} */
+export const nadrukHover = '#a82118';
 
 /**
- * Vlak met witte tekst erop (accentknop, labels). Het accent zelf haalt met
- * wit 4,1:1, te weinig voor kleine tekst; deze tint haalt 5,5:1.
+ * Tekst en iconen in de accentkleur. Licht: 6,4:1 op wit en 5:1 op een licht
+ * rood vlak, waar het accent zelf maar 4:1 haalt. Donker: een lichtere tint,
+ * 5,6:1 op slate-800, waar het accent 2,9:1 haalt.
  * @type {string}
  */
-export const nadrukKnop = '#b5432e';
-
-/** Hover van een accentvlak; wit erop haalt 7:1. @type {string} */
-export const nadrukHover = '#9c3827';
-
-/**
- * Tekst en iconen in de accentkleur. Licht: 6,2:1 op wit en 5,2:1 op een licht
- * rood vlak. Donker: een lichtere tint, 5,8:1 op slate-800.
- * @type {string}
- */
-export const nadrukTekst = '#a83d2a';
+export const nadrukTekst = '#b8241a';
 /** @type {string} */
-export const nadrukTekstDonker = '#e88a76';
+export const nadrukTekstDonker = '#f07f74';
 
-/** Op lintblauw (menubalk), in beide modi gelijk: 3,5:1 voor iconen en strepen. @type {string} */
-export const nadrukOpBlauw = '#e57a63';
+/** Op lintblauw (menubalk), in beide modi gelijk: 3,9:1 voor iconen en strepen. @type {string} */
+export const nadrukOpBlauw = '#f07f74';
 
 /** Overige rijkshuisstijl-accenten. */
 export const rijksrood = '#d52b1e';
