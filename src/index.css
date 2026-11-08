@@ -340,6 +340,54 @@ html[data-toetsenbord='open'] .opl-app:has(.opl-chat-kop) {
 }
 
 /*
+ * Leesstand van de chat op de telefoon (useReadingMode): wie naar beneden leest,
+ * krijgt de kop van de app en de titelbalk uit beeld. Het tekstvak blijft
+ * staan. De titel zit in een raster van één rij dat van 1fr naar 0fr klapt. Zo
+ * krijgt het gesprek de vrijgekomen ruimte echt, in plaats van dat er alleen iets
+ * overheen schuift. :where houdt de specificiteit op nul, zodat laag:hidden en
+ * de regels voor het toetsenbord gewoon voorgaan.
+ */
+@media (max-width: 39.99rem), (max-height: 31.25rem) {
+  :where(.opl-inklap) {
+    display: grid;
+    grid-template-rows: 1fr;
+    /* Alleen het raster mag de hoogte bepalen, niet de flexkolom eromheen. */
+    flex-shrink: 0;
+    overflow: hidden;
+    transition:
+      grid-template-rows 0.25s ease,
+      opacity 0.25s ease;
+  }
+
+  :where(.opl-inklap) > * {
+    min-height: 0;
+  }
+
+  html[data-leesstand='aan'] :where(.opl-inklap) {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+
+  /* De kop heeft een vaste hoogte, en daar krimpt een raster niet onder. Hij
+     klapt daarom zelf in. Zijn menu's staan hier vast in het venster, dus
+     afknippen kan altijd. */
+  .opl-chat-kop {
+    overflow: hidden;
+  }
+
+  .opl-chat-kop > div {
+    transition:
+      height 0.25s ease,
+      opacity 0.25s ease;
+  }
+
+  html[data-leesstand='aan'] .opl-chat-kop > div {
+    height: 0;
+    opacity: 0;
+  }
+}
+
+/*
  * Tabel als rijtje kaarten (zie StackTable). De kop blijft bestaan voor de
  * schermlezer, maar is onzichtbaar: de kolomnaam staat bij elke waarde.
  */

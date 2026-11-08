@@ -258,6 +258,7 @@ export default function ChatMessageList({
           scrollen. Zie de status hieronder voor wat een schermlezer hoort. */}
       <div
         ref={scrollRef}
+        data-chat-lijst
         tabIndex={0}
         role="region"
         aria-label="Gesprek"

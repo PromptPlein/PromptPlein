@@ -384,9 +384,10 @@ bij elke regel van het antwoord op, en wie met vergroting werkt raakt het kwijt.
 
 De chat scrolt bewust niet mee: een nieuwe vraag gaat bovenaan staan en het
 antwoord groeit eronder, zodat je vanaf het begin in je eigen tempo leest.
-"Naar beneden" zet volgen aan, omhoog scrollen zet het weer uit. Kop, titelbalk en
-tekstvak blijven staan terwijl je scrolt, ook op de telefoon. Een leesstand die ze
-bij het scrollen liet wegschuiven is weer verwijderd: wie las, raakte de chat kwijt. De leeskolom is
+"Naar beneden" zet volgen aan, omhoog scrollen zet het weer uit. Op de telefoon
+schuiven de kop van de app en de titelbalk weg als je naar beneden leest en komen
+ze terug als je omhoog scrolt (`useReadingMode`). Het tekstvak blijft altijd staan:
+toen dat ook wegschoof, voelde het alsof de chat verdween. De leeskolom is
 `60ch`, wat in Rijks Sans zo'n 72 tekens per regel is (gemeten). Maak hem niet
 breder zonder opnieuw te meten. Het tekstvak heeft dezelfde breedte, zodat vraag
 en antwoord op één lijn beginnen.

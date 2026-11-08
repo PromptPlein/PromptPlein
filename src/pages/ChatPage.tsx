@@ -36,6 +36,7 @@ import useThinking from '@/lib/useThinking';
 import useWebSearch from '@/lib/useWebSearch';
 import useChatProjects from '@/components/chat/useChatProjects';
 import useFitHeight from '@/components/chat/useFitHeight';
+import useReadingMode from '@/components/chat/useReadingMode';
 import SavePromptModal from '@/components/prompts/SavePromptModal';
 import { looksLikeMessyPrompt } from '@/lib/promptHeuristics';
 import { shouldJudgeFirstMessage, useChatIntakeEnabled } from '@/lib/chatIntake';
@@ -293,6 +294,8 @@ function ChatPageInner() {
 
   const projectList = projects.projects;
   const openProject = projectList.find((p) => p.id === projectPage) ?? null;
+  // Op de telefoon: wie naar beneden leest, krijgt de bovenkant uit beeld.
+  useReadingMode(cardRef, messages.length > 0 && !openProject, conversationId);
   const settingsProject = projectList.find((p) => p.id === settingsProjectId) ?? null;
   const wizardProject = projectList.find((p) => p.id === wizard?.projectId) ?? null;
 
@@ -692,77 +695,82 @@ function ChatPageInner() {
         />
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-            <div className="opl-chat-titel flex items-center gap-2 border-b border-slate-200 px-2 py-1 dark:border-slate-700 sm:px-6 sm:py-3 lg:px-6 laag:!py-0">
-              {/* Zonder zijbalk: de lijst met chats en projecten schuift in. */}
-              <button
-                type="button"
-                className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-rijksblauw-700 hover:bg-slate-100 disabled:opacity-40 dark:text-rijksblauw-200 dark:hover:bg-slate-700 lg:hidden"
-                onClick={() => setListOpen(true)}
-                disabled={controller.streaming}
-                aria-label="Chats en projecten"
-              >
-                <Menu size={20} />
-              </button>
-              {openProject ? (
-                <FolderOpen size={18} className="hidden text-rijksblauw-500 lg:block" />
-              ) : (
-                <MessageSquare size={18} className="hidden text-rijksblauw-500 lg:block" />
-              )}
-              <h1 className="min-w-0 truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
-                {openProject
-                  ? openProject.name
-                  : conversation && messages.length > 0
-                    ? conversation.title
-                    : 'Chat'}
-              </h1>
-              {/* Uitvoergesprek: hier draait een gegenereerde prompt (neutrale
-                  systeemprompt, geen B1-huisregels) — maak dat zichtbaar. */}
-              {!openProject && conversation?.kind === 'execution' && (
-                <span
-                  className="opl-badge inline-flex shrink-0 items-center gap-1 bg-rijksoranje/10 text-rijksoranje"
-                  title="In deze chat wordt een gegenereerde prompt uitgevoerd; de prompt bepaalt zelf taal, toon en opmaak."
-                >
-                  <Play size={11} /> Uitvoering
-                </span>
-              )}
-              {/* Projectgesprek: de instructie van dit project stuurt het
-                  antwoord. Klikbaar, want vanuit een gesprek wil je regelmatig
-                  even terug naar de instructie of de bronnen. */}
-              {!openProject && activeProject && (
-                <button
-                  type="button"
-                  className="opl-badge inline-flex shrink-0 items-center gap-1 bg-rijksblauw-50 text-rijksblauw-700 hover:bg-rijksblauw-100 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200"
-                  onClick={() => handleOpenProject(activeProject.id)}
-                  title={`Deze chat draait onder de instructie van project "${activeProject.name}". Klik om het project te openen.`}
-                >
-                  <FolderOpen size={11} /> {activeProject.name}
-                </button>
-              )}
-              {!openProject && conversation && messages.length > 0 && (
-                <button
-                  type="button"
-                  className="ml-auto shrink-0 rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:opacity-40 dark:text-slate-500 dark:hover:bg-slate-700 dark:hover:text-slate-200"
-                  onClick={() => controller.exportConversation(conversation.id)}
-                  disabled={controller.streaming}
-                  aria-label="Bewaar deze chat als bestand"
-                  title="Bewaar deze chat als bestand op dit apparaat"
-                >
-                  <Download size={16} />
-                </button>
-              )}
-              <button
-                type="button"
-                className={clsx(
-                  'flex h-9 shrink-0 items-center justify-center rounded-lg px-2 text-rijksblauw-700 hover:bg-slate-100 disabled:opacity-40 dark:text-rijksblauw-200 dark:hover:bg-slate-700 lg:hidden',
-                  !(!openProject && conversation && messages.length > 0) && 'ml-auto',
-                )}
-                onClick={handleNewConversation}
-                disabled={controller.streaming}
-                aria-label="Nieuwe chat"
-                title="Nieuwe chat"
-              >
-                <Plus size={20} />
-              </button>
+            {/* In de leesstand op de telefoon schuift de titelbalk weg (useReadingMode). */}
+            <div className="opl-inklap">
+              <div>
+                <div className="opl-chat-titel flex items-center gap-2 border-b border-slate-200 px-2 py-1 dark:border-slate-700 sm:px-6 sm:py-3 lg:px-6 laag:!py-0">
+                  {/* Zonder zijbalk: de lijst met chats en projecten schuift in. */}
+                  <button
+                    type="button"
+                    className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-rijksblauw-700 hover:bg-slate-100 disabled:opacity-40 dark:text-rijksblauw-200 dark:hover:bg-slate-700 lg:hidden"
+                    onClick={() => setListOpen(true)}
+                    disabled={controller.streaming}
+                    aria-label="Chats en projecten"
+                  >
+                    <Menu size={20} />
+                  </button>
+                  {openProject ? (
+                    <FolderOpen size={18} className="hidden text-rijksblauw-500 lg:block" />
+                  ) : (
+                    <MessageSquare size={18} className="hidden text-rijksblauw-500 lg:block" />
+                  )}
+                  <h1 className="min-w-0 truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                    {openProject
+                      ? openProject.name
+                      : conversation && messages.length > 0
+                        ? conversation.title
+                        : 'Chat'}
+                  </h1>
+                  {/* Uitvoergesprek: hier draait een gegenereerde prompt (neutrale
+                      systeemprompt, geen B1-huisregels) — maak dat zichtbaar. */}
+                  {!openProject && conversation?.kind === 'execution' && (
+                    <span
+                      className="opl-badge inline-flex shrink-0 items-center gap-1 bg-rijksoranje/10 text-rijksoranje"
+                      title="In deze chat wordt een gegenereerde prompt uitgevoerd; de prompt bepaalt zelf taal, toon en opmaak."
+                    >
+                      <Play size={11} /> Uitvoering
+                    </span>
+                  )}
+                  {/* Projectgesprek: de instructie van dit project stuurt het
+                      antwoord. Klikbaar, want vanuit een gesprek wil je regelmatig
+                      even terug naar de instructie of de bronnen. */}
+                  {!openProject && activeProject && (
+                    <button
+                      type="button"
+                      className="opl-badge inline-flex shrink-0 items-center gap-1 bg-rijksblauw-50 text-rijksblauw-700 hover:bg-rijksblauw-100 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200"
+                      onClick={() => handleOpenProject(activeProject.id)}
+                      title={`Deze chat draait onder de instructie van project "${activeProject.name}". Klik om het project te openen.`}
+                    >
+                      <FolderOpen size={11} /> {activeProject.name}
+                    </button>
+                  )}
+                  {!openProject && conversation && messages.length > 0 && (
+                    <button
+                      type="button"
+                      className="ml-auto shrink-0 rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:opacity-40 dark:text-slate-500 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+                      onClick={() => controller.exportConversation(conversation.id)}
+                      disabled={controller.streaming}
+                      aria-label="Bewaar deze chat als bestand"
+                      title="Bewaar deze chat als bestand op dit apparaat"
+                    >
+                      <Download size={16} />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className={clsx(
+                      'flex h-9 shrink-0 items-center justify-center rounded-lg px-2 text-rijksblauw-700 hover:bg-slate-100 disabled:opacity-40 dark:text-rijksblauw-200 dark:hover:bg-slate-700 lg:hidden',
+                      !(!openProject && conversation && messages.length > 0) && 'ml-auto',
+                    )}
+                    onClick={handleNewConversation}
+                    disabled={controller.streaming}
+                    aria-label="Nieuwe chat"
+                    title="Nieuwe chat"
+                  >
+                    <Plus size={20} />
+                  </button>
+                </div>
+              </div>
             </div>
 
             {openProject ? (
