@@ -1224,7 +1224,6 @@ function KindPicker({ kind, onKind }: { kind: PromptKind | null; onKind: (kind: 
     <nldd-toggle-button-group
       ref={ref}
       type="radio"
-      appearance="neutral-transparent"
       accessible-label="Wat wordt het?"
     >
       {[null, ...PROMPT_KINDS].map((k) => {

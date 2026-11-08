@@ -39,6 +39,7 @@ import { usePersistentDraft } from '@/lib/usePersistentDraft';
 import type { OptimizeResult, Technique } from '@/types';
 import '@nldd/design-system/activity-indicator';
 import '@nldd/design-system/container';
+import '@nldd/design-system/card';
 import '@nldd/design-system/simple-section';
 import '@nldd/design-system/spacer';
 import '@nldd/design-system/tab-bar';
@@ -311,11 +312,13 @@ export default function OptimizerPage() {
   const ownActive = entryMode === 'own-prompt';
 
   return (
-    <nldd-simple-section>
-      {/* The moving background of the day. All content sits on an opaque card:
-          this page has many intermediate steps and messages, and they have to
-          stay readable on any background. */}
-      <nldd-container slot="header">
+    <nldd-simple-section background="tinted" horizontal-alignment="center">
+      {/* Alles staat op één witte kaart in het midden van een grijze ondergrond:
+          de pagina heeft veel tussenstappen en meldingen, en die horen bij elkaar. */}
+      <nldd-container max-width="960px">
+      <nldd-card accessible-label="Prompt maken">
+      <nldd-container padding="24" sm-padding="16">
+      <nldd-container>
         <nldd-container layout="row" gap="4" vertical-alignment="center">
           <nldd-title heading-level={1} size={2} text="Prompt maken"></nldd-title>
           <InfoDot
@@ -332,6 +335,7 @@ export default function OptimizerPage() {
           </>
         )}
       </nldd-container>
+      <nldd-spacer size="24"></nldd-spacer>
 
           {phase === 'output' && result ? (
                 <OptimizedOutput
@@ -419,6 +423,9 @@ export default function OptimizerPage() {
               </nldd-container>
             </nldd-activity-indicator>
           )}
+      </nldd-container>
+      </nldd-card>
+      </nldd-container>
     </nldd-simple-section>
   );
 }

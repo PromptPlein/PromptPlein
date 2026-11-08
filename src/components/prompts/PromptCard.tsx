@@ -5,6 +5,7 @@ import { notify } from '@/lib/notify';
 import InfoDot from '@/components/common/InfoDot';
 import MenuAction from '@/components/common/MenuAction';
 import { useReferenceData } from '@/context/ReferenceDataContext';
+import { categoryIconName } from '@/lib/categoryIcons';
 import { useAuth } from '@/context/AuthContext';
 import {
   sharingLabel,
@@ -20,6 +21,7 @@ import type { Prompt, PublicProfile } from '@/types';
 import '@nldd/design-system/avatar';
 import '@nldd/design-system/card';
 import '@nldd/design-system/container';
+import '@nldd/design-system/icon';
 import '@nldd/design-system/icon-button';
 import '@nldd/design-system/link';
 import '@nldd/design-system/menu';
@@ -148,7 +150,13 @@ export default function PromptCard({ prompt, author, onChanged }: PromptCardProp
         {/* The title is the link to the prompt. A card that is a link itself
             cannot hold the buttons below (its overlay covers them), so the
             link carries the heading role that the title would. */}
-        <nldd-title size={5} overline={category?.name ?? 'Overig'}>
+        <nldd-container layout="row" gap="8" vertical-alignment="center">
+          <nldd-icon icon={categoryIconName(category?.icon)} size="28" color="lichtblauw" box></nldd-icon>
+          <nldd-text size="sm" color="secondary">
+            {category?.name ?? 'Overig'}
+          </nldd-text>
+        </nldd-container>
+        <nldd-title size={5}>
           <nldd-link role="heading" aria-level={3} size="inherit" href={`/prompt/${prompt.id}`} text={prompt.title}></nldd-link>
         </nldd-title>
         <nldd-container layout="wrap" gap="4" vertical-alignment="center">

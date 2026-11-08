@@ -15,21 +15,15 @@ import '@nldd/design-system/card';
 import '@nldd/design-system/collection';
 import '@nldd/design-system/container';
 import '@nldd/design-system/icon';
-import '@nldd/design-system/icon-cell';
 import '@nldd/design-system/inline-dialog';
 import '@nldd/design-system/link';
-import '@nldd/design-system/list';
-import '@nldd/design-system/list-item';
-import '@nldd/design-system/one-third-two-thirds-section';
 import '@nldd/design-system/simple-section';
 import '@nldd/design-system/spacer';
-import '@nldd/design-system/spacer-cell';
-import '@nldd/design-system/text-cell';
 import '@nldd/design-system/title';
 
 /**
- * De startpagina in tegels: eerst de vier dingen die je hier kunt doen, dan de
- * categorieën als iconen met een aantal, dan de nieuwste prompts. Uitleg staat
+ * De startpagina in tegels op een grijze ondergrond: eerst de vier dingen die je
+ * hier kunt doen, dan de categorieën als kaartjes met een aantal, dan de nieuwste prompts. Uitleg staat
  * niet als lopende tekst op de pagina, maar achter een infobolletje.
  */
 export default function HomePage() {
@@ -71,27 +65,32 @@ export default function HomePage() {
 
   return (
     <>
-      {/* Wat wil je doen? Vier tegels, elk één taak. */}
-      <nldd-simple-section>
+      {/* Wat wil je doen? Vier tegels, elk één taak, elk met een eigen kleur. */}
+      <nldd-simple-section background="tinted">
         <nldd-title slot="header" heading-level={1} size={1} text="Wat wil je doen?"></nldd-title>
         <nldd-container layout="grid" column-count={4} md-column-count={2} sm-column-count={1} gap="16">
           <TaskTile
             href="/genereren"
             icon="sparkles"
+            color="accent"
             label="Prompt maken"
             supporting="De AI helpt je op weg"
             background="accent-tinted"
           />
-          {chatEnabled && <TaskTile href="/chat" icon="comment" label="Chatten" supporting="Stel direct een vraag" />}
+          {chatEnabled && (
+            <TaskTile href="/chat" icon="comment" color="hemelblauw" label="Chatten" supporting="Stel direct een vraag" />
+          )}
           <TaskTile
             href="/zoeken"
             icon="search"
+            color="mintgroen"
             label="Prompts zoeken"
             supporting={total != null ? countText(total, 'prompt', 'prompts') : 'Van collega’s'}
           />
           <TaskTile
             href="/technieken"
             icon="stack"
+            color="donkergeel"
             label="Technieken leren"
             supporting={
               techniques.length ? countText(techniques.length, 'techniek', 'technieken') : 'Leer de aanpakken'
@@ -100,50 +99,34 @@ export default function HomePage() {
         </nldd-container>
       </nldd-simple-section>
 
-      {/* Categorieën met het aantal prompts. */}
-      <nldd-one-third-two-thirds-section background="tinted">
-        <nldd-title slot="left" heading-level={2} size={4} text="Categorieën"></nldd-title>
-        <nldd-list slot="right" type="navigation" appearance="box-base" accessible-label="Categorieën">
+      {/* Categorieën als raster van kaartjes, met het aantal prompts. */}
+      <nldd-simple-section background="tinted" padding-top="0">
+        <nldd-title slot="header" heading-level={2} size={4} text="Categorieën"></nldd-title>
+        <nldd-container layout="grid" column-count={4} md-column-count={2} sm-column-count={1} gap="12">
           {[...categories]
             .sort((a, b) => (perCategory[b.id] ?? 0) - (perCategory[a.id] ?? 0))
             .map((c) => {
               const count = perCategory[c.id] ?? 0;
               const amount = count === 0 ? 'Nog geen prompts' : countText(count, 'prompt', 'prompts');
               return (
-                <nldd-list-item key={c.id} href={`/zoeken?category=${c.id}`}>
-                  <nldd-icon-cell icon={categoryIconName(c.icon)} color="accent"></nldd-icon-cell>
-                  <nldd-spacer-cell size="12"></nldd-spacer-cell>
-                  <nldd-text-cell
-                    hide-below="md"
-                    text={c.name}
-                    supporting-text={!loading && count === 0 ? amount : c.description || undefined}
-                  ></nldd-text-cell>
-                  <nldd-text-cell
-                    hide-above="sm"
-                    text={c.name}
-                    supporting-text={loading ? undefined : amount}
-                  ></nldd-text-cell>
-                  {!loading && count > 0 && (
-                    <>
-                      <nldd-spacer-cell size="12" hide-below="md"></nldd-spacer-cell>
-                      <nldd-text-cell
-                        hide-below="md"
-                        width="fit-content"
-                        color="secondary"
-                        text={amount}
-                      ></nldd-text-cell>
-                    </>
-                  )}
-                  <nldd-spacer-cell size="12"></nldd-spacer-cell>
-                  <nldd-icon-cell size="20" color="secondary" icon="chevron-right"></nldd-icon-cell>
-                </nldd-list-item>
+                <nldd-card key={c.id} href={`/zoeken?category=${c.id}`} accessible-label={`${c.name}, ${amount}`}>
+                  <nldd-container padding="16" layout="row" gap="12" vertical-alignment="center">
+                    <nldd-icon icon={categoryIconName(c.icon)} size="40" color="lichtblauw" box></nldd-icon>
+                    <nldd-title
+                      heading-level={3}
+                      size={6}
+                      text={c.name}
+                      supporting-text={loading ? undefined : amount}
+                    ></nldd-title>
+                  </nldd-container>
+                </nldd-card>
               );
             })}
-        </nldd-list>
-      </nldd-one-third-two-thirds-section>
+        </nldd-container>
+      </nldd-simple-section>
 
       {/* Nieuwste prompts */}
-      <nldd-simple-section>
+      <nldd-simple-section background="tinted" padding-top="0">
         <nldd-container slot="header" layout="row" gap="12" vertical-alignment="center">
           <nldd-title heading-level={2} size={4} text="Nieuwe prompts"></nldd-title>
           <nldd-spacer size="flexible"></nldd-spacer>
@@ -191,16 +174,18 @@ function countText(n: number, one: string, many: string) {
   return `${n} ${n === 1 ? one : many}`;
 }
 
-/** Eén taaktegel: icoon, label met een korte regel eronder, en een pijl. */
+/** Eén taaktegel: icoon in een gekleurd vlak, label met een korte regel eronder, en een pijl. */
 function TaskTile({
   href,
   icon,
+  color,
   label,
   supporting,
   background,
 }: {
   href: string;
   icon: string;
+  color: ComponentProps<'nldd-icon'>['color'];
   label: string;
   supporting: string;
   background?: ComponentProps<'nldd-card'>['background'];
@@ -208,7 +193,7 @@ function TaskTile({
   return (
     <nldd-card href={href} accessible-label={`${label}, ${supporting}`} background={background}>
       <nldd-container padding="20" gap="24">
-        <nldd-icon icon={icon} size="40" color="accent"></nldd-icon>
+        <nldd-icon icon={icon} size="48" color={color} box></nldd-icon>
         <nldd-container layout="row" gap="8" vertical-alignment="center">
           <nldd-title heading-level={2} size={4} text={label} supporting-text={supporting}></nldd-title>
           <nldd-spacer size="flexible"></nldd-spacer>

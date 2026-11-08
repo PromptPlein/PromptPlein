@@ -683,10 +683,12 @@ function ChatPageInner() {
     <>
       {/* Gesprekkenlijst en gesprek horen bij elkaar: op een breed scherm staat de
           lijst ernaast, smaller schuift hij in als sheet. Het document scrolt; de
-          titelbalk blijft staan (sticky-header). */}
+          titelbalk blijft staan (sticky-header). De grijze ondergrond laat de lijst
+          en het witte gesprek als twee vlakken zien. */}
       <nldd-sidebar-section
         ref={sectionRef}
         sidebar-label="Chats en projecten"
+        background="tinted"
         width="full"
         sm-padding-top="8"
       >

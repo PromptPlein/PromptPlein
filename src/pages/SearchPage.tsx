@@ -207,8 +207,11 @@ export default function SearchPage() {
 
   return (
     <>
-      <nldd-simple-section>
-        <nldd-title slot="header" heading-level={1} size={2} text="Wat zoek je?"></nldd-title>
+      {/* Zoekvak en categorieën in een smalle kolom in het midden. */}
+      <nldd-simple-section background="tinted" horizontal-alignment="center">
+        <nldd-container max-width="768px">
+        <nldd-title heading-level={1} size={2} text="Wat zoek je?"></nldd-title>
+        <nldd-spacer size="24"></nldd-spacer>
 
         <nldd-toolbar role="search" accessible-label="Zoeken en filteren">
           <nldd-toolbar-item slot="start" min-width="240px" width="100%" fluid>
@@ -265,10 +268,10 @@ export default function SearchPage() {
             </nldd-container>
           </>
         )}
-
+        </nldd-container>
       </nldd-simple-section>
 
-      <nldd-simple-section>
+      <nldd-simple-section background="tinted" padding-top="0">
         {browsing ? (
           waiting ? (
             <SkeletonGrid count={6} />
