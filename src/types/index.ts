@@ -1089,3 +1089,13 @@ export interface AppNotification {
   read: boolean;
   created_at: string;
 }
+
+/**
+ * Eén vaste wens uit het geheugen van de chat (migratie 0052): wat een gebruiker
+ * liet onthouden met "voortaan", "onthoud dit" of "vanaf nu".
+ */
+export interface UserMemory {
+  id: string;
+  text: string;
+  createdAt: string;
+}

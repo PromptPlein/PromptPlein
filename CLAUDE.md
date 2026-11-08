@@ -223,7 +223,8 @@ ministeries (`orgTree.ts`, migraties 0020/0021/0024).
 - **Postgres**: prompts, gebruikers, organisaties, technieken, categorieën,
   rollen, analytics, audit log, meldingen, chat*projecten* (0030) met hun bronstukken
   en vectoren (0046, 0049), de persoonlijke
-  chatinstructie (`user_chat_preferences`, 0047).
+  chatinstructie (`user_chat_preferences`, 0047), het geheugen van de chat
+  (`user_memories`, 0052).
 - **localStorage, nooit de database**: de chat*gesprekken* zelf
   (`src/lib/chatStorage.ts`, één bak per browser, met eviction). Ze horen bij
   het apparaat en niet bij het account: ingelogd of niet zie je dezelfde chats,
@@ -254,6 +255,29 @@ De instructie vervangt de systeemprompt van de beheerder niet, maar komt eronder
 wens met de huisregels, dan gelden de huisregels. Hij geldt alleen in een gewone
 chat: een uitvoergesprek test de prompt zelf en in een project is de
 projectinstructie al de instructie van de gebruiker.
+
+## Geheugen van de chat
+
+Zegt een ingelogde gebruiker in de chat "voortaan", "onthoud dit", "vanaf nu" of
+een van de andere woorden in `src/lib/memoryTriggers.ts`, dan schrijft de mode
+`memory-save` de wens op als korte regel in `user_memories` (0052, RLS strikt
+eigenaar-alleen). Zonder zo'n woord gaat er niets naar die mode. Het model wijst ook
+aan welke oude regel de nieuwe vervangt; vervangen zonder nieuwe regel doet hij
+niet. Eerst opslaan, dan antwoorden, hoogstens 10 seconden wachten. De chat meldt
+wat er is onthouden, met Ongedaan maken. Een bericht met een persoonsgegeven wordt
+niet onthouden.
+
+De regels staan los op `/instellingen/chat` en zijn daar te verwijderen; daaronder
+staat de volledige systeemprompt van een gewoon chatgesprek, alleen op chatniveau.
+In de systeemprompt komt het geheugen als laatste blok (`composeMemoryBlock`, tekst
+in Beheer, AI-instellingen) en dat blok is leidend, ook boven de systeemprompt van de
+beheerder. Dat is bewust anders dan de eigen instructie. Het geldt in gewone chats en
+projecten, niet in een uitvoergesprek.
+
+Elke regel krijgt bij het opslaan een vector van `mistral-embed`. Tot
+`MEMORY_VECTOR_THRESHOLD_TOKENS` (100.000, keuze van de eigenaar) gaat het hele
+geheugen elke beurt mee; daarboven zoekt `memory-search` de 40 regels die bij de
+vraag passen (`match_user_memories`).
 
 ## Telefoon en aanraakscherm
 
@@ -366,7 +390,7 @@ en antwoord op één lijn beginnen.
 
 Eén edge function, `optimize-prompt`, ongeveer 8000 regels, met een
 `mode`-veld in de body als router. Nieuwe AI-functionaliteit wordt een nieuwe
-mode in dat bestand, niet een nieuwe function. De 39 modes, gegroepeerd:
+mode in dat bestand, niet een nieuwe function. De 41 modes, gegroepeerd:
 
 | Groep | Modes |
 | --- | --- |
@@ -375,7 +399,7 @@ mode in dat bestand, niet een nieuwe function. De 39 modes, gegroepeerd:
 | Veldhulp in de bouwer | `analyze`, `prefill`, `expand-field`, `title`, `metadata` |
 | PlanWizard | `plan`, `plan-step`, `plan-step-analyze`, `clarify`, `assumption-check` |
 | Techniekbouwers | `persona-fill`, `fewshot-example`, `fewshot-extract`, `meta-build`, `cove-scan`, `stepback-ladder`, `rubric-propose`, `skill-draft`, `skill-trigger` |
-| Chat en projecten | `chat-optimize`, `project-optimize`, `project-brief`, `project-interview`, `project-prompt`, `context-interview`, `context-prompt` |
+| Chat en projecten | `chat-optimize`, `project-optimize`, `project-brief`, `project-interview`, `project-prompt`, `context-interview`, `context-prompt`, `memory-save`, `memory-search` |
 | Testkamer-loop | `mock-answer`, `refine`, `refine-suggest` |
 | Sjablonen | `sjabloon` |
 | Projectbronnen | `project-index`, `project-search` |

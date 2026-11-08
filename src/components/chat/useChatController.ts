@@ -25,6 +25,8 @@ import { splitAnswer } from '@/lib/chatFiles';
 import { buildRoutekaartHtml, parseRoutekaart } from '@/lib/routekaart';
 import { downloadText } from '@/lib/download';
 import { sendChatMessage } from '@/services/chatService';
+import { hasMemoryTrigger } from '@/lib/memoryTriggers';
+import { rememberWish } from '@/components/chat/rememberWish';
 import { generateTitle } from '@/services/optimizeService';
 import { loadProjectContext } from '@/services/chatProjectService';
 import type { ChatSettings } from '@/services/settingsService';
@@ -478,6 +480,23 @@ export default function useChatController(
       const history = updated.messages
         .filter((m) => m.id !== assistantMsg.id && !m.error && !m.madeBy && m.content.trim())
         .map((m) => ({ role: m.role, content: m.content }));
+
+      // "Voortaan", "onthoud dit", "vanaf nu": eerst vastleggen, dan antwoorden,
+      // zodat een wens die een oude vervangt al in dit antwoord geldt. Niet in een
+      // uitvoergesprek: daar staan zulke woorden in de prompt die getest wordt.
+      if (updated.kind !== 'execution' && hasMemoryTrigger(text)) {
+        const earlier = base.messages.filter((m) => !m.error && !m.madeBy && m.content.trim());
+        // Al bezig: zo kan er tijdens het vastleggen geen tweede bericht door.
+        streamingRef.current = true;
+        setStreaming(true);
+        await rememberWish({
+          message: text,
+          previousUser: earlier.filter((m) => m.role === 'user').at(-1)?.content,
+          previousAssistant: earlier.filter((m) => m.role === 'assistant').at(-1)?.content,
+          preferredProvider: settings.provider,
+          preferredModel: settings.model,
+        });
+      }
 
       await streamAnswer(updated, assistantMsg.id, history, '');
 

@@ -41,6 +41,7 @@ import {
   DEFAULT_CHAT_OPTIMIZE_PROMPT,
   DEFAULT_CHAT_SYSTEM_PROMPT,
   DEFAULT_PERSONAL_INSTRUCTION_PROMPT,
+  DEFAULT_MEMORY_PROMPT,
   DEFAULT_EXECUTION_SYSTEM_PROMPT,
   DEFAULT_GENERATOR_WEB_SEARCH_INSTRUCTION,
   DEFAULT_KADER_INSTRUCTION,
@@ -582,8 +583,8 @@ export default function SettingsPage() {
                 Gaat mee bij <strong>elk</strong> bericht van <strong>iedere</strong> gebruiker en
                 bepaalt taal, toon en opmaak van de antwoorden. Laat leeg om de ingebouwde standaard
                 te gebruiken. Er komt alleen nog iets onder als de gebruiker zelf een eigen
-                instructie heeft ingesteld (zie hieronder). Het antwoord wordt daarna niet meer
-                bijgeschaafd.
+                instructie heeft ingesteld of iets heeft laten onthouden (zie hieronder). Het
+                antwoord wordt daarna niet meer bijgeschaafd.
               </span>
               {chat.systemPrompt.trim() !== DEFAULT_CHAT_SYSTEM_PROMPT && (
                 <button
@@ -621,6 +622,37 @@ export default function SettingsPage() {
                   onClick={() =>
                     patchChat({ personalInstructionPrompt: DEFAULT_PERSONAL_INSTRUCTION_PROMPT })
                   }
+                >
+                  Herstel standaard
+                </button>
+              )}
+            </p>
+          </div>
+
+          <div>
+            <label className="opl-label" htmlFor="chatMemoryPrompt">
+              Tekst rond het geheugen van een gebruiker
+            </label>
+            <textarea
+              id="chatMemoryPrompt"
+              className="opl-input min-h-[120px] resize-y font-mono text-[0.8125rem]"
+              value={chat.memoryPrompt}
+              onChange={(e) => patchChat({ memoryPrompt: e.target.value })}
+            />
+            <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400 dark:text-slate-500">
+              <span>
+                Komt als laatste in de systeemprompt als een ingelogde gebruiker in de chat iets
+                heeft laten onthouden met woorden als voortaan, onthoud dit of vanaf nu. Op de plek
+                van <code>{'{{geheugen}}'}</code> komen die wensen, één per regel. Dit blok is
+                leidend, ook boven de systeemprompt hierboven. Geldt in gewone chats en projecten,
+                niet bij het uitvoeren van een prompt. Wat een gebruiker liet onthouden, kun je hier
+                niet lezen.
+              </span>
+              {chat.memoryPrompt.trim() !== DEFAULT_MEMORY_PROMPT && (
+                <button
+                  type="button"
+                  className="shrink-0 font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
+                  onClick={() => patchChat({ memoryPrompt: DEFAULT_MEMORY_PROMPT })}
                 >
                   Herstel standaard
                 </button>

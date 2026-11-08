@@ -3749,6 +3749,262 @@ async function searchProjectChunks(
   return (await found.json()) as Array<{ file_id: string; seq: number; text: string }>;
 }
 
+// --- Geheugen van de chat ---
+// Vaste wensen die een gebruiker uitspreekt met "voortaan", "onthoud dit" of
+// "vanaf nu altijd" (migratie 0052). De client herkent die woorden en vraagt dan
+// pas 'memory-save' aan; het model schrijft de wens als korte regel op. Alles naar
+// de database loopt met het token van de gebruiker, dus RLS bepaalt wat deze
+// functie ziet en schrijft.
+
+/** Spiegel van de CHECK in 0052 en van MAX_MEMORY_CHARS in memoryService. */
+const MAX_MEMORY_CHARS = 500;
+
+/** Zoveel bestaande regels krijgt het model te zien om dubbelingen en tegenspraak te vinden. */
+const MEMORY_COMPARE_LIMIT = 60;
+
+/** Regels die 'memory-search' teruggeeft. Spiegel van MEMORY_SEARCH_LIMIT in memoryService. */
+const MEMORY_SEARCH_LIMIT = 40;
+
+/** Regels zonder vector die 'memory-search' per aanroep alsnog een vector geeft. */
+const MEMORY_BACKFILL_BATCH = 32;
+
+let MEMORY_EXTRACT_SYSTEM_PROMPT = `Je bent de geheugenhulp van de chat van PromptPlein en je schrijft vaste wensen van een medewerker op als korte regels voor de chat.
+
+<taak>
+Je krijgt het laatste bericht van de medewerker, soms met het bericht en het antwoord daarvoor, en de lijst met regels die al onthouden zijn. Schrijf elke wens op die de medewerker voor altijd onthouden wil hebben. Een wens geldt voor altijd als de medewerker woorden gebruikt als "voortaan", "onthoud dit", "onthoud dit voor altijd", "vanaf nu", "van nu af aan", "in het vervolg" of "ik wil dit altijd zo".
+</taak>
+
+<regels>
+1. Schrijf elke wens als één opdracht aan de chat of als één feit over de medewerker. Hoogstens twee zinnen per regel.
+2. Neem alleen op wat de medewerker voor altijd wil. Laat de opdracht van nu weg, zoals de mail of de tekst die nu geschreven moet worden.
+3. Verwijst "dit" of "dat" naar het vorige bericht of het vorige antwoord, schrijf dan op waar het naar verwijst.
+4. Neem geen namen van personen, e-mailadressen, telefoonnummers, burgerservicenummers of zaaknummers op.
+5. Vervangt een nieuwe wens een regel uit de lijst, of spreekt hij die tegen, zet dan het nummer van die regel bij "vervangt".
+6. Staat de wens al met dezelfde betekenis in de lijst, laat hem dan weg.
+7. Vraagt de medewerker niets voor altijd, geef dan twee lege lijsten.
+8. Schrijf natuurlijk Nederlands zoals een mens het schrijft, zonder letterlijk vertaalde Engelse uitdrukkingen: schrijf "dat klopt" en niet "dat maakt zin".
+9. Zet nooit een gedachtestreepje tussen zinsdelen. Schrijf daar een komma, een dubbele punt of een punt.
+</regels>
+
+<uitvoer>
+Geef alleen dit JSON-object:
+{"onthouden": ["regel"], "vervangt": [nummer]}
+</uitvoer>
+
+<voorbeeld>
+Dit is alleen een voorbeeld van de vorm, geen regel voor deze medewerker.
+Bericht: "Voortaan wil ik antwoorden zonder opsommingstekens. Schrijf nu een korte mail aan het team over de verhuizing."
+Lijst: 1. Zet stappen in een genummerde lijst.
+Antwoord: {"onthouden": ["Gebruik geen opsommingstekens, schrijf in lopende zinnen."], "vervangt": [1]}
+</voorbeeld>`;
+
+interface MemoryRow {
+  id: string;
+  text: string;
+}
+
+/** Wat het model teruggaf, of null als er geen bruikbaar JSON-object in stond. */
+function parseMemoryExtract(raw: string): { onthouden: string[]; vervangt: number[] } | null {
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  try {
+    const parsed = JSON.parse(escapeRawControlChars(match[0])) as {
+      onthouden?: unknown;
+      vervangt?: unknown;
+    };
+    // Een klein model nest een tekstveld soms als object; pak dan de eerste tekst.
+    const asText = (value: unknown): string => {
+      if (typeof value === 'string') return value;
+      if (value && typeof value === 'object') {
+        const first = Object.values(value as Record<string, unknown>).find((v) => typeof v === 'string');
+        return typeof first === 'string' ? first : '';
+      }
+      return '';
+    };
+    const onthouden = (Array.isArray(parsed.onthouden) ? parsed.onthouden : [])
+      .map(asText)
+      .map((t) => stripSectionTags(t, ['regel', 'bericht', 'lijst']).replace(/^["'\s]+|["'\s]+$/g, '').trim())
+      .filter(Boolean);
+    const vervangt = (Array.isArray(parsed.vervangt) ? parsed.vervangt : [])
+      .map((n) => (typeof n === 'number' ? n : Number.parseInt(String(n), 10)))
+      .filter((n) => Number.isInteger(n) && n > 0);
+    return { onthouden, vervangt };
+  } catch {
+    return null;
+  }
+}
+
+/** Vergelijkt twee regels zonder op hoofdletters, spaties en de slotpunt te letten. */
+function sameMemory(a: string, b: string): boolean {
+  const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').replace(/[.!\s]+$/, '').trim();
+  return norm(a) === norm(b);
+}
+
+/** Kapt een regel af op MAX_MEMORY_CHARS, bij voorkeur na een hele zin. */
+function clampMemory(text: string): string {
+  if (text.length <= MAX_MEMORY_CHARS) return text;
+  const cut = text.slice(0, MAX_MEMORY_CHARS);
+  const end = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('! '), cut.lastIndexOf('? '));
+  return end > MAX_MEMORY_CHARS / 2 ? cut.slice(0, end + 1) : cut.trimEnd();
+}
+
+async function readJson<T>(response: Response, what: string): Promise<T> {
+  if (!response.ok) {
+    throw new Error(`${what} gaf status ${response.status}: ${(await response.text()).slice(0, 300)}`);
+  }
+  return (await response.json()) as T;
+}
+
+/**
+ * De bestaande regels om de nieuwe wens mee te vergelijken. Zijn het er meer dan
+ * het model kan overzien, dan de regels die qua betekenis het dichtst bij het
+ * bericht liggen: daar zitten de dubbelingen en de tegenspraak.
+ */
+async function memoriesToCompare(req: Request, message: string): Promise<MemoryRow[]> {
+  const all = await readJson<MemoryRow[]>(
+    await databaseRequest(
+      req,
+      `user_memories?select=id,text&order=created_at.asc&limit=${MEMORY_COMPARE_LIMIT + 1}`,
+    ),
+    'Geheugen ophalen',
+  );
+  if (all.length <= MEMORY_COMPARE_LIMIT) return all;
+  try {
+    const [vector] = await embedTexts([message.slice(-MAX_EMBED_QUERY_CHARS)]);
+    return await readJson<MemoryRow[]>(
+      await databaseRequest(req, 'rpc/match_user_memories', {
+        method: 'POST',
+        body: JSON.stringify({ p_embedding: JSON.stringify(vector), p_limit: 30 }),
+      }),
+      'Geheugen doorzoeken',
+    );
+  } catch (err) {
+    console.warn('Vergelijken zonder vector:', err instanceof Error ? err.message : err);
+    return all.slice(-MEMORY_COMPARE_LIMIT);
+  }
+}
+
+/**
+ * Schrijft de wensen uit het bericht weg en verwijdert de regels die ze vervangen.
+ * Geeft terug wat er is opgeslagen en wat er is vervangen, zodat de client het
+ * kan melden en ongedaan kan maken.
+ */
+async function saveMemories(
+  req: Request,
+  input: { message: string; previousUser?: string; previousAssistant?: string },
+  preferredProvider: PreferredProvider | undefined,
+  preferredModel: string | undefined,
+): Promise<{ saved: MemoryRow[]; replaced: MemoryRow[] } | null> {
+  const existing = await memoriesToCompare(req, input.message);
+  const earlier =
+    input.previousUser || input.previousAssistant
+      ? `<eerder>\nVorig bericht van de medewerker: ${input.previousUser?.trim() || '(geen)'}\nAntwoord van de chat: ${input.previousAssistant?.trim() || '(geen)'}\n</eerder>\n\n`
+      : '';
+  const list = existing.length
+    ? existing.map((m, i) => `${i + 1}. ${m.text}`).join('\n')
+    : '(nog geen regels)';
+  const userMessage = `${earlier}<lijst>\n${list}\n</lijst>\n\n<bericht>\n${input.message}\n</bericht>\n\nGeef het JSON-object.`;
+
+  let extract: { onthouden: string[]; vervangt: number[] } | null = null;
+  for (const candidate of buildOrder(preferredProvider)) {
+    try {
+      const raw = await JSON_PROVIDERS[candidate](
+        userMessage,
+        MEMORY_EXTRACT_SYSTEM_PROMPT,
+        0.1,
+        resolveModel(candidate, preferredProvider, preferredModel),
+        512,
+        undefined,
+        20_000,
+      );
+      extract = parseMemoryExtract(raw);
+      if (extract) break;
+    } catch (providerErr) {
+      console.error(`${candidate} (memory-save) mislukt, probeer volgende:`, providerErr);
+    }
+  }
+  if (!extract) return null;
+
+  const fresh: string[] = [];
+  for (const text of extract.onthouden.map(clampMemory)) {
+    if (existing.some((m) => sameMemory(m.text, text)) || fresh.some((t) => sameMemory(t, text))) continue;
+    fresh.push(text);
+  }
+  const replacedRows = [...new Set(extract.vervangt)]
+    .map((n) => existing[n - 1])
+    .filter((m): m is MemoryRow => Boolean(m));
+  // Vervangen zonder iets nieuws ervoor in de plaats is wissen; dat doet alleen de gebruiker zelf.
+  if (fresh.length === 0) return { saved: [], replaced: [] };
+
+  let vectors: (number[] | null)[] = fresh.map(() => null);
+  try {
+    vectors = await embedTexts(fresh);
+  } catch (err) {
+    // Geen ramp: 'memory-search' maakt de vector later alsnog.
+    console.warn('Geheugen zonder vector opgeslagen:', err instanceof Error ? err.message : err);
+  }
+  const saved = await readJson<MemoryRow[]>(
+    await databaseRequest(req, 'user_memories?select=id,text', {
+      method: 'POST',
+      headers: { Prefer: 'return=representation' },
+      body: JSON.stringify(
+        fresh.map((text, i) => ({
+          text,
+          ...(vectors[i] ? { embedding: JSON.stringify(vectors[i]) } : {}),
+        })),
+      ),
+    }),
+    'Geheugen opslaan',
+  );
+
+  if (replacedRows.length > 0) {
+    const ids = replacedRows.map((m) => m.id).join(',');
+    const removed = await databaseRequest(req, `user_memories?id=in.(${ids})`, { method: 'DELETE' });
+    if (!removed.ok) {
+      console.warn('Vervangen regels niet verwijderd: status', removed.status);
+      return { saved, replaced: [] };
+    }
+  }
+  return { saved, replaced: replacedRows };
+}
+
+/**
+ * De regels die het best bij de vraag passen, voor een geheugen dat te groot is
+ * om helemaal mee te sturen. Geeft regels zonder vector eerst alsnog een vector.
+ */
+async function searchMemories(req: Request, query: string): Promise<MemoryRow[]> {
+  try {
+    const missing = await readJson<MemoryRow[]>(
+      await databaseRequest(
+        req,
+        `user_memories?embedding=is.null&select=id,text&order=created_at.asc&limit=${MEMORY_BACKFILL_BATCH}`,
+      ),
+      'Geheugen zonder vector ophalen',
+    );
+    if (missing.length > 0) {
+      const vectors = await embedTexts(missing.map((m) => m.text));
+      await Promise.all(
+        missing.map((m, i) =>
+          databaseRequest(req, `user_memories?id=eq.${encodeURIComponent(m.id)}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ embedding: JSON.stringify(vectors[i]) }),
+          }),
+        ),
+      );
+    }
+  } catch (err) {
+    console.warn('Vectoren aanvullen mislukt:', err instanceof Error ? err.message : err);
+  }
+  const [vector] = await embedTexts([query.slice(-MAX_EMBED_QUERY_CHARS)]);
+  return await readJson<MemoryRow[]>(
+    await databaseRequest(req, 'rpc/match_user_memories', {
+      method: 'POST',
+      body: JSON.stringify({ p_embedding: JSON.stringify(vector), p_limit: MEMORY_SEARCH_LIMIT }),
+    }),
+    'Geheugen doorzoeken',
+  );
+}
+
 /**
  * Is de aanroeper een beheerder? Voor modi die alleen beheerders mogen
  * gebruiken. Die keuze mag niet van de browser afhangen: een knop verbergen
@@ -9105,6 +9361,7 @@ const PROMPT_CATALOG: PromptCatalogEntry[] = [
   { id: 'CONTEXT_FRAMEWORK_SYSTEM_PROMPT', groep: "Uitvoeren, Testkamer en projecten", titel: "Context prompt: framework kiezen", uitleg: "Kiest zelf de opbouw die past bij de taak van nu.", get: () => CONTEXT_FRAMEWORK_SYSTEM_PROMPT, set: (v) => { CONTEXT_FRAMEWORK_SYSTEM_PROMPT = v; } },
   { id: 'CONTEXT_PROMPT_SYSTEM_PROMPT', groep: "Uitvoeren, Testkamer en projecten", titel: "Context prompt: prompt schrijven", uitleg: "Schrijft op de gekozen opbouw de prompt die in het tekstvak van de chat komt.", get: () => CONTEXT_PROMPT_SYSTEM_PROMPT, set: (v) => { CONTEXT_PROMPT_SYSTEM_PROMPT = v; } },
   { id: 'PROJECT_PROMPT_ADJUST_SYSTEM_PROMPT', groep: "Uitvoeren, Testkamer en projecten", titel: "Project: prompt aanpassen", uitleg: "Past het voorstel aan op het verzoek van de medewerker.", get: () => PROJECT_PROMPT_ADJUST_SYSTEM_PROMPT, set: (v) => { PROJECT_PROMPT_ADJUST_SYSTEM_PROMPT = v; } },
+  { id: 'MEMORY_EXTRACT_SYSTEM_PROMPT', groep: "Uitvoeren, Testkamer en projecten", titel: "Chat: wens onthouden", uitleg: "Draait als een bericht in de chat woorden bevat als voortaan, onthoud dit of vanaf nu. Schrijft de wens als korte regel voor het geheugen van de gebruiker en wijst aan welke oude regel hij vervangt. Antwoordt met JSON: onthouden en vervangt.", get: () => MEMORY_EXTRACT_SYSTEM_PROMPT, set: (v) => { MEMORY_EXTRACT_SYSTEM_PROMPT = v; } },
   { id: 'PROJECT_BRIEF_SYSTEM_PROMPT', groep: "Uitvoeren, Testkamer en projecten", titel: "Projectanalyse", uitleg: "De vaste analyse van de bronbestanden van een chatproject.", get: () => PROJECT_BRIEF_SYSTEM_PROMPT, set: (v) => { PROJECT_BRIEF_SYSTEM_PROMPT = v; } },
 ];
 
@@ -9289,6 +9546,55 @@ Deno.serve(async (req: Request) => {
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
+    }
+
+    // Geheugen van de chat: wensen opslaan en, bij een groot geheugen, de passende
+    // regels zoeken. Alleen voor ingelogde gebruikers; RLS houdt het bij de eigen rijen.
+    if (
+      (body as { mode?: string }).mode === 'memory-save' ||
+      (body as { mode?: string }).mode === 'memory-search'
+    ) {
+      const json = (status: number, payload: Record<string, unknown>) =>
+        new Response(JSON.stringify(payload), {
+          status,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      if (!isAuthenticatedRequest(req)) {
+        return json(401, { success: false, error: 'Log in om de chat iets te laten onthouden' });
+      }
+      const { mode, message, previousUser, previousAssistant, query } = body as {
+        mode: string;
+        message?: unknown;
+        previousUser?: unknown;
+        previousAssistant?: unknown;
+        query?: unknown;
+      };
+      const text = (value: unknown, max: number) =>
+        typeof value === 'string' ? value.trim().slice(0, max) : '';
+      try {
+        if (mode === 'memory-search') {
+          const q = text(query, MAX_EMBED_QUERY_CHARS);
+          if (!q) return json(400, { success: false, error: 'Geen zoekvraag ontvangen' });
+          return json(200, { success: true, memories: await searchMemories(req, q) });
+        }
+        const msg = text(message, 8000);
+        if (!msg) return json(400, { success: false, error: 'Geen bericht ontvangen' });
+        const result = await saveMemories(
+          req,
+          {
+            message: msg,
+            previousUser: text(previousUser, 2000),
+            previousAssistant: text(previousAssistant, 2000),
+          },
+          body.preferredProvider,
+          body.preferredModel,
+        );
+        if (!result) return json(200, { success: false, error: 'De wens kon niet worden opgeschreven' });
+        return json(200, { success: true, ...result });
+      } catch (err) {
+        console.error(`${mode} mislukt:`, err instanceof Error ? err.message : err);
+        return json(502, { success: false, error: 'Het geheugen is nu niet bereikbaar' });
+      }
     }
 
     const mode: Mode =

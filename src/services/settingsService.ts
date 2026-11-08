@@ -398,6 +398,13 @@ export interface ChatSettings {
    */
   personalInstructionPrompt: string;
   /**
+   * Tekst waarmee het geheugen van de gebruiker (wensen die hij liet onthouden
+   * met "voortaan" of "onthoud dit") als laatste blok in de systeemprompt komt,
+   * met {{geheugen}} als invulplek. Dit blok is leidend, ook boven de
+   * systeemprompt van de beheerder. Leeg = ingebouwde default.
+   */
+  memoryPrompt: string;
+  /**
    * Systeemprompt voor UITVOERgesprekken: een gegenereerde prompt draait in de
    * chat (Testkamer of "Kopiëren in chat"). Bewust los van `systemPrompt`,
    * want hier gelden de B1-huisregels juist NIET — de prompt-template bepaalt
@@ -851,6 +858,19 @@ export const DEFAULT_PERSONAL_INSTRUCTION_PROMPT = `Persoonlijke wensen van deze
 
 {{instructie}}`;
 
+/**
+ * Hiermee komt het geheugen van de gebruiker als laatste blok in de systeemprompt.
+ * Zelfde vorm als het blok van de eigen instructie. Anders dan daar is dit blok
+ * leidend: de gebruiker heeft deze wensen zelf met nadruk laten vastleggen, en
+ * PromptPlein volgt dan de gebruiker.
+ */
+export const DEFAULT_MEMORY_PROMPT = `Geheugen van deze gebruiker
+• Dit zijn vaste wensen die de gebruiker zelf heeft laten onthouden.
+• Volg ze in elk antwoord.
+• Ze zijn leidend: botst een wens met iets hierboven, dan volg je de wens.
+
+{{geheugen}}`;
+
 export const DEFAULT_CHAT_SETTINGS: ChatSettings = {
   enabled: true,
   // Mistral is de afgesproken basis voor de chat (Europees, snel en goedkoop).
@@ -858,6 +878,7 @@ export const DEFAULT_CHAT_SETTINGS: ChatSettings = {
   model: 'mistral-small-latest',
   systemPrompt: DEFAULT_CHAT_SYSTEM_PROMPT,
   personalInstructionPrompt: DEFAULT_PERSONAL_INSTRUCTION_PROMPT,
+  memoryPrompt: DEFAULT_MEMORY_PROMPT,
   executionSystemPrompt: DEFAULT_EXECUTION_SYSTEM_PROMPT,
   temperature: 0.5,
   optimizeEnabled: true,
@@ -873,23 +894,53 @@ export const DEFAULT_CHAT_SETTINGS: ChatSettings = {
 };
 
 /**
+ * Het blok met het geheugen van de gebruiker, of '' als er niets onthouden is.
+ * Komt altijd als laatste in de systeemprompt, zodat het leidend is.
+ */
+export function composeMemoryBlock(settings: ChatSettings, memories: readonly string[]): string {
+  const lines = memories.map((m) => m.trim()).filter(Boolean);
+  if (lines.length === 0) return '';
+  const list = lines.map((m) => `• ${m}`).join('\n');
+  const template = settings.memoryPrompt.trim() || DEFAULT_MEMORY_PROMPT;
+  // Een functie als vervanger: de tekst van de gebruiker mag $-tekens bevatten.
+  return template.includes('{{geheugen}}')
+    ? template.replace('{{geheugen}}', () => list)
+    : `${template}\n\n${list}`;
+}
+
+/** Zet het geheugen onder een systeemprompt; zonder geheugen blijft de prompt gelijk. */
+export function withMemoryBlock(
+  prompt: string,
+  settings: ChatSettings,
+  memories: readonly string[],
+): string {
+  const block = composeMemoryBlock(settings, memories);
+  return block ? `${prompt}\n\n${block}` : prompt;
+}
+
+/**
  * De systeeminstructie van de chat: de prompt uit het portaal en verder niets,
- * tenzij de gebruiker zelf een persoonlijke instructie heeft ingesteld. Die komt
- * eronder, met de tekst die de beheerder in het portaal ziet staan.
+ * tenzij de gebruiker zelf een persoonlijke instructie heeft ingesteld of iets
+ * heeft laten onthouden. De instructie komt eronder, met de tekst die de
+ * beheerder in het portaal ziet staan; het geheugen komt als laatste.
  */
 export function composeChatSystemPrompt(
   settings: ChatSettings,
   personalInstruction = '',
+  memories: readonly string[] = [],
 ): string {
   const base = settings.systemPrompt.trim() || DEFAULT_CHAT_SYSTEM_PROMPT;
   const personal = personalInstruction.trim();
-  if (!personal) return base;
-  const template = settings.personalInstructionPrompt.trim() || DEFAULT_PERSONAL_INSTRUCTION_PROMPT;
-  // Een functie als vervanger: de tekst van de gebruiker mag $-tekens bevatten.
-  const block = template.includes('{{instructie}}')
-    ? template.replace('{{instructie}}', () => personal)
-    : `${template}\n\n${personal}`;
-  return `${base}\n\n${block}`;
+  let prompt = base;
+  if (personal) {
+    const template = settings.personalInstructionPrompt.trim() || DEFAULT_PERSONAL_INSTRUCTION_PROMPT;
+    // Een functie als vervanger: de tekst van de gebruiker mag $-tekens bevatten.
+    const block = template.includes('{{instructie}}')
+      ? template.replace('{{instructie}}', () => personal)
+      : `${template}\n\n${personal}`;
+    prompt = `${base}\n\n${block}`;
+  }
+  return withMemoryBlock(prompt, settings, memories);
 }
 
 /**
@@ -967,6 +1018,7 @@ function normalizeChat(raw: Partial<ChatSettings> | null | undefined): ChatSetti
       typeof raw.personalInstructionPrompt === 'string'
         ? raw.personalInstructionPrompt
         : d.personalInstructionPrompt,
+    memoryPrompt: typeof raw.memoryPrompt === 'string' ? raw.memoryPrompt : d.memoryPrompt,
     executionSystemPrompt:
       typeof raw.executionSystemPrompt === 'string'
         ? raw.executionSystemPrompt

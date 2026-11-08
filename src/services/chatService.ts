@@ -19,9 +19,11 @@ import {
   composeWebSearchInstruction,
   MAX_CHAT_OPTIMIZE_CHARS,
   MAX_PROJECT_OPTIMIZE_CHARS,
+  withMemoryBlock,
   type ChatSettings,
 } from '@/services/settingsService';
 import { getPersonalInstructionForChat } from '@/services/personalInstructionService';
+import { getMemoriesForChat } from '@/services/memoryService';
 import type { ChatProjectContext, ChatSource } from '@/types';
 
 /**
@@ -120,8 +122,18 @@ export async function sendChatMessage(args: {
   const isProject = !isExecution && Boolean(project);
   // Alleen in een gewoon gesprek. Een uitvoergesprek test de prompt zelf en in een
   // project is de projectinstructie al de instructie van de gebruiker.
-  const personalInstruction =
-    isExecution || isProject ? '' : await getPersonalInstructionForChat();
+  // Het geheugen geldt in elk gesprek van de gebruiker, ook in een project, en is
+  // daar leidend. Niet bij uitvoeren: daar wordt de prompt zelf getest. De vraag
+  // van nu en die daarvoor bepalen welke wensen meegaan als het geheugen groot is.
+  const memoryQuery = messages
+    .filter((m) => m.role === 'user')
+    .slice(-2)
+    .map((m) => m.content)
+    .join('\n\n');
+  const [personalInstruction, memories] = await Promise.all([
+    isExecution || isProject ? Promise.resolve('') : getPersonalInstructionForChat(),
+    isExecution ? Promise.resolve([] as string[]) : getMemoriesForChat(memoryQuery),
+  ]);
 
   const functionUrl = getFunctionUrl('optimize-prompt');
   if (!isSupabaseConfigured || !supabase || !functionUrl) {
@@ -178,12 +190,13 @@ export async function sendChatMessage(args: {
         // De systeemprompt van de beheerder, in een gewoon gesprek met daaronder
         // de persoonlijke instructie van de gebruiker; bij een uitvoergesprek de
         // neutrale uitvoerinstructie en in een project de projectinstructie van
-        // de gebruiker zelf. De server voegt er niets aan toe.
+        // de gebruiker zelf. Het geheugen komt in beide laatste gevallen als
+        // laatste blok. De server voegt er niets aan toe.
         systemPrompt: isExecution
           ? composeExecutionSystemPrompt(settings)
           : isProject && project
-            ? composeProjectSystemPrompt(project.instructions)
-            : composeChatSystemPrompt(settings, personalInstruction),
+            ? withMemoryBlock(composeProjectSystemPrompt(project.instructions), settings, memories)
+            : composeChatSystemPrompt(settings, personalInstruction, memories),
       },
       onChunk,
       signal,
