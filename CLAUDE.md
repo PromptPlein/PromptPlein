@@ -623,6 +623,12 @@ Elk HTML-bestand in de chat wordt na het schrijven onzichtbaar en afgeschermd
 gedraaid (`src/lib/fileCheck.ts`); scriptfouten komen met regelnummer op de
 bestandskaart.
 
+Bij het bouwen gaan de velden voor de eigen tekst waaruit ze zijn voor-ingevuld. Die
+tekst gaat mee als achtergrond, met `FIELDS_PRECEDENCE_INSTRUCTION` erachter. Zonder die
+regel koos Mistral bij een tegenspraak de oorspronkelijke tekst en verdwenen de
+aanpassingen van de gebruiker uit de prompt. Wat een veld is, leest de server uit de
+sleutels van `followUpAnswers`; elk ander antwoord is achtergrond.
+
 Vanuit de bouwer kun je een prompt met "Uitvoeren in chat" doorzetten naar
 `/chat`, en vanuit de chat weer terug (`handoffService`).
 

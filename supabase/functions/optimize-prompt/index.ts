@@ -761,6 +761,16 @@ function extractHeadings(template: string): string[] {
 }
 
 /**
+ * Voorrangsregel bij het schrijven van de prompt: de velden van het raamwerk
+ * gaan voor de oorspronkelijke tekst waaruit ze zijn voor-ingevuld. Te bewerken
+ * in Beheer, Prompts.
+ */
+let FIELDS_PRECEDENCE_INSTRUCTION = `VOORRANG:
+De velden zijn leidend. De gebruiker heeft ze nagekeken en aangepast nadat ze uit de achtergrond zijn gemaakt.
+Zegt de achtergrond iets anders dan een veld, over de doelgroep, het onderwerp, de rol, de taak, de toon, de lengte of een feit, dan volg je het veld en laat je wat in de achtergrond staat weg.
+Uit de achtergrond neem je alleen details over die in geen enkel veld staan en die niet botsen met de velden.`;
+
+/**
  * Bouwt de gebruikersprompt voor generatie: techniekcontext + de losse,
  * gelabelde antwoorden van de gebruiker + de gevulde template als structuur.
  * Zo kan het model de antwoorden analyseren en uitschrijven i.p.v. invullen.
@@ -771,6 +781,8 @@ const GENERATE_USER_PROMPT = (args: {
   techniqueDescription?: string;
   techniqueStrength?: string;
   answeredFields?: AnsweredField[];
+  /** Ids van de velden van het raamwerk; andere antwoorden zijn achtergrond. */
+  fieldIds?: string[];
   promptContent?: string;
   structureFormat?:
     | 'care'
@@ -801,15 +813,45 @@ const GENERATE_USER_PROMPT = (args: {
   }
 
   const answered = (args.answeredFields ?? []).filter((f) => f.answer?.trim());
-  if (answered.length > 0) {
-    parts.push(
-      `ANTWOORDEN VAN DE GEBRUIKER (analyseer en verwerk deze, neem ze niet letterlijk over):\n` +
-        answered.map((f) => `- ${f.label}: ${f.answer.trim()}`).join('\n'),
-    );
-  }
+  const startText =
+    args.promptContent?.trim() && args.promptContent.trim() !== '[BESCHRIJF HIER WAT JE WILT BEREIKEN]'
+      ? args.promptContent.trim()
+      : '';
+  // De velden van het raamwerk zijn vaak eerst door de AI uit de eigen tekst
+  // voor-ingevuld en daarna door de gebruiker aangepast. Die eigen tekst gaat
+  // ook mee, ongewijzigd. Zonder voorrangsregel koos het model bij een
+  // tegenspraak de eigen tekst, zodat de aanpassingen in de velden verdwenen.
+  // Daarom: velden apart, de rest als achtergrond, en de velden winnen.
+  const fieldIds = new Set(args.fieldIds ?? []);
+  const velden = answered.filter((f) => fieldIds.has(f.id));
+  const extra = answered.filter((f) => !fieldIds.has(f.id));
+  const withPrecedence = velden.length > 0 && (startText !== '' || extra.length > 0);
 
-  if (args.promptContent?.trim() && args.promptContent.trim() !== '[BESCHRIJF HIER WAT JE WILT BEREIKEN]') {
-    parts.push(`STARTPUNT / EIGEN TEKST VAN DE GEBRUIKER:\n${args.promptContent.trim()}`);
+  if (withPrecedence) {
+    parts.push(
+      `ACHTERGROND (de oorspronkelijke tekst waaruit de velden zijn gemaakt):\n` +
+        [
+          startText,
+          ...extra.map((f) => `${f.label}:\n${f.answer.trim()}`),
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
+    );
+    parts.push(
+      `VELDEN VAN HET RAAMWERK, NAGEKEKEN DOOR DE GEBRUIKER (werk ze uit; de inhoud neem je volledig over):\n` +
+        velden.map((f) => `- ${f.label}: ${f.answer.trim()}`).join('\n'),
+    );
+    parts.push(FIELDS_PRECEDENCE_INSTRUCTION);
+  } else {
+    if (answered.length > 0) {
+      parts.push(
+        `ANTWOORDEN VAN DE GEBRUIKER (analyseer en verwerk deze, neem ze niet letterlijk over):\n` +
+          answered.map((f) => `- ${f.label}: ${f.answer.trim()}`).join('\n'),
+      );
+    }
+    if (startText) {
+      parts.push(`STARTPUNT / EIGEN TEKST VAN DE GEBRUIKER:\n${startText}`);
+    }
   }
 
   parts.push(
@@ -817,8 +859,9 @@ const GENERATE_USER_PROMPT = (args: {
   );
 
   parts.push(
-    `Schrijf nu één samenhangende, direct bruikbare prompt-template die alle ` +
-      `bovenstaande antwoorden combineert. Laat het doel${args.answeredFields?.some((f) => /persona/i.test(f.label)) ? ' en de persona' : ''} duidelijk naar voren komen.`,
+    `Schrijf nu één samenhangende, direct bruikbare prompt-template die ` +
+      (withPrecedence ? `de velden van het raamwerk uitwerkt` : `alle bovenstaande antwoorden combineert`) +
+      `. Laat het doel${args.answeredFields?.some((f) => /persona/i.test(f.label)) ? ' en de persona' : ''} duidelijk naar voren komen.`,
   );
 
   const resolvedInterview =
@@ -9548,6 +9591,7 @@ const PROMPT_CATALOG: PromptCatalogEntry[] = [
   { id: 'REVIEW_BRONNEN_PUNT', groep: "Zoeken en controle", titel: "Tweede ronde: controlepunt over bronnen", uitleg: "Komt op de plek van {{bronnenpunt}} in de tweede ronde, alleen als er bronnen zijn gevonden. Begin met het nummer van het punt.", get: () => REVIEW_BRONNEN_PUNT, set: (v) => { REVIEW_BRONNEN_PUNT = v; } },
   { id: 'CLARITY_GATE_INSTRUCTION', groep: "Prompt schrijven", titel: "Onduidelijke invoer herkennen", uitleg: "Komt als laatste achter de systeemprompt voor het schrijven van de prompt. Laat het model weigeren als de invoer onzin is.", get: () => CLARITY_GATE_INSTRUCTION, set: (v) => { CLARITY_GATE_INSTRUCTION = v; } },
   { id: 'NO_MARKDOWN_INSTRUCTION', groep: "Prompt schrijven", titel: "Opmaakregel: geen markdown", uitleg: "Komt achter de systeemprompt voor het schrijven van de prompt, het invullen van velden en het verduidelijken.", get: () => NO_MARKDOWN_INSTRUCTION, set: (v) => { NO_MARKDOWN_INSTRUCTION = v; } },
+  { id: 'FIELDS_PRECEDENCE_INSTRUCTION', groep: "Prompt schrijven", titel: "Velden gaan voor de eigen tekst", uitleg: "Komt in het bericht bij het schrijven van de prompt, na de velden, als die velden uit een eigen tekst zijn voor-ingevuld. Zorgt dat wat de gebruiker in de velden aanpaste het wint van die oorspronkelijke tekst.", get: () => FIELDS_PRECEDENCE_INSTRUCTION, set: (v) => { FIELDS_PRECEDENCE_INSTRUCTION = v; } },
   { id: 'TEMPLATE_LENGTH_INSTRUCTION', groep: "Prompt schrijven", titel: "Lengteregel voor de prompt", uitleg: "Komt achter de systeemprompt voor het schrijven van de prompt.", get: () => TEMPLATE_LENGTH_INSTRUCTION, set: (v) => { TEMPLATE_LENGTH_INSTRUCTION = v; } },
   { id: 'INTERVIEW_RESOLVED_INSTRUCTION', groep: "Prompt schrijven", titel: "Na een gevoerd gesprek", uitleg: "Vervangt de structuurinstructie als het gesprek (chain-of-thought of socratisch) al in de tool is gevoerd.", get: () => INTERVIEW_RESOLVED_INSTRUCTION, set: (v) => { INTERVIEW_RESOLVED_INSTRUCTION = v; } },
   { id: 'FEW_SHOT_STRUCTURE_INSTRUCTION', groep: "Structuur per techniek", titel: "Few-Shot", uitleg: "Opbouw die de prompt krijgt bij de techniek Few-Shot.", get: () => FEW_SHOT_STRUCTURE_INSTRUCTION, set: (v) => { FEW_SHOT_STRUCTURE_INSTRUCTION = v; } },
@@ -12388,12 +12432,22 @@ Deno.serve(async (req: Request) => {
       body.projectContext,
       body.kaderInstruction,
     );
+    // Staan er antwoorden in de velden, dan hoort de oorspronkelijke tekst niet
+    // als slotopdracht in de structuur-referentie: daar las het model hem als
+    // de echte opdracht en gingen aanpassingen in de velden verloren.
+    const fieldIds = Object.keys(body.followUpAnswers ?? {});
+    const fieldsAnswered = (body.answeredFields ?? []).some(
+      (f) => fieldIds.includes(f.id) && f.answer?.trim(),
+    );
     const userMessage = GENERATE_USER_PROMPT({
-      filled,
+      filled: fieldsAnswered
+        ? fillTemplate(body.template, '[de opdracht uit de velden]', body.followUpAnswers ?? {})
+        : filled,
       techniqueName: body.techniqueName,
       techniqueDescription: body.techniqueDescription,
       techniqueStrength: body.techniqueStrength,
       answeredFields: body.answeredFields,
+      fieldIds,
       promptContent: body.promptContent,
       structureFormat: format,
       interviewResolved,
