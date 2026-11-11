@@ -108,11 +108,31 @@ function serializeTranscript(turns: TranscriptTurn[]): string {
   return turns.map((t, i) => `Vraag ${i + 1}: ${t.question}\nAntwoord: ${t.answer}`).join('\n\n');
 }
 
+/**
+ * De stand van de doel-flow op het moment dat de prompt werd gebouwd: het
+ * gesprek, het gekozen framework en de velden zoals de gebruiker ze naliet. Met
+ * "Velden aanpassen" onder het resultaat komt de flow precies zo terug.
+ */
+export interface GoalDialogRestore {
+  transcript: TranscriptTurn[];
+  brief: string | null;
+  frameworkFits: TechniqueRecommendation[];
+  frameworkId: string;
+  prefill: PrefillResult | null;
+  answers: Record<string, string>;
+  fieldMeta: FieldMeta;
+}
+
 interface GoalDialogProps {
   /** Admin-bepaalde AI-instellingen (provider, systeemprompt, toon, temperatuur). */
   settings: AiSettings;
-  /** Het uiteindelijke resultaat + het framework waarin het is opgebouwd. */
-  onResult: (result: OptimizeResult, technique: Technique) => void;
+  /**
+   * Het uiteindelijke resultaat, het framework waarin het is opgebouwd en de
+   * stand van de flow, zodat de pagina die later kan terugzetten.
+   */
+  onResult: (result: OptimizeResult, technique: Technique, restore: GoalDialogRestore) => void;
+  /** Terugkomen uit het resultaat: begin bij de velden in plaats van leeg. */
+  restore?: GoalDialogRestore | null;
   /** De instap-tabs; vallen bovenin het omrande generator-blok. */
   header?: ReactNode;
   /** De knoppen Denken en Internet, naast de actieknop. */
@@ -177,6 +197,7 @@ export default function GoalDialog({
   renderProjectContext,
   thinking,
   webSearch,
+  restore,
 }: GoalDialogProps) {
   const { techniques, techniqueById } = useReferenceData();
   const { profile, user, isAdmin } = useAuth();
@@ -204,7 +225,7 @@ export default function GoalDialog({
   const goalRef = useRef(goal);
   goalRef.current = goal;
 
-  const [phase, setPhase] = useState<Phase>('goal');
+  const [phase, setPhase] = useState<Phase>(restore ? 'fields' : 'goal');
   // De prompt zoals de AI hem op dit moment schrijft (live meelezen).
   const [streamText, setStreamText] = useState('');
   const [showExamples, setShowExamples] = useState(false);
@@ -225,22 +246,24 @@ export default function GoalDialog({
   // Als ref erbij: `turn()` draait door in dezelfde tick waarin de analyse wordt
   // gezet, en leest de state-waarde dan nog niet.
   const analysisRef = useRef<{ technique?: string; text?: string } | null>(null);
-  const [transcript, setTranscript] = useState<TranscriptTurn[]>([]);
+  const [transcript, setTranscript] = useState<TranscriptTurn[]>(restore?.transcript ?? []);
   const [answer, setAnswer] = useState('');
   const [busy, setBusy] = useState(false);
   // Het gesprek is klaar; de opdrachtbeschrijving wordt nog opgesteld.
   const [finishing, setFinishing] = useState(false);
   // De uitgeschreven opdrachtbeschrijving (het resultaat van het gesprek).
-  const [brief, setBrief] = useState<string | null>(null);
+  const [brief, setBrief] = useState<string | null>(restore?.brief ?? null);
 
   // Frameworkkeuze: de aanbevelingen, of we ze nog ophalen, en het bouwen zelf.
-  const [frameworkFits, setFrameworkFits] = useState<TechniqueRecommendation[]>([]);
+  const [frameworkFits, setFrameworkFits] = useState<TechniqueRecommendation[]>(
+    restore?.frameworkFits ?? [],
+  );
 
   // Het gekozen framework en zijn voor-ingevulde velden. Dezelfde stap als in
   // "optimaliseer je eigen prompt": de AI verdeelt de opbrengst van het gesprek
   // over de velden van het raamwerk, waarna de gebruiker ze nog kan bijstellen.
-  const [frameworkId, setFrameworkId] = useState<string | null>(null);
-  const [prefill, setPrefill] = useState<PrefillResult | null>(null);
+  const [frameworkId, setFrameworkId] = useState<string | null>(restore?.frameworkId ?? null);
+  const [prefill, setPrefill] = useState<PrefillResult | null>(restore?.prefill ?? null);
   const [prefilling, setPrefilling] = useState(false);
   // Live voortgang van het voor-invullen (welk model, fase, binnengekomen
   // velden), zodat het laadscherm laat zien wát er gebeurt.
@@ -255,8 +278,8 @@ export default function GoalDialog({
   }>({ models: [], winner: null, phase: 'reading', fields: [] });
   // Dezelfde voortgang, maar dan voor het bouwen van de prompt zelf.
   const [composeProgress, setComposeProgress] = useState<StreamStatus>({});
-  const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [fieldMeta, setFieldMeta] = useState<FieldMeta>({});
+  const [answers, setAnswers] = useState<Record<string, string>>(restore?.answers ?? {});
+  const [fieldMeta, setFieldMeta] = useState<FieldMeta>(restore?.fieldMeta ?? {});
 
   // Een bij het laden gevonden, niet-afgemaakt gesprek, aangeboden om te hervatten.
   const [resumable, setResumable] = useState<PersistedRun | null>(null);
@@ -271,6 +294,8 @@ export default function GoalDialog({
 
   // Bij binnenkomst: staat er nog een niet-afgemaakt gesprek klaar?
   useEffect(() => {
+    // Terug uit het resultaat: het gesprek is al gevoerd, dus niets te hervatten.
+    if (restore) return;
     const run = loadRun();
     if (run) setResumable(run);
     // Alleen bij mount uitvoeren.
@@ -712,7 +737,15 @@ export default function GoalDialog({
       // De prompt verschijnt in de resultaatsectie onder dit blok; hier blijft
       // alleen een korte bevestiging staan (anders zou het laadscherm blijven hangen).
       setPhase('done');
-      onResult({ ...res, dialogue }, framework);
+      onResult({ ...res, dialogue }, framework, {
+        transcript,
+        brief,
+        frameworkFits,
+        frameworkId: framework.id,
+        prefill,
+        answers,
+        fieldMeta,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'De prompt kon niet worden gebouwd.');
       log('step_error', { metadata: { where: 'compose' } });

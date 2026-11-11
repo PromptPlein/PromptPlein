@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import GoalDialog from '@/components/optimizer/GoalDialog';
+import GoalDialog, { type GoalDialogRestore } from '@/components/optimizer/GoalDialog';
 import InfoDot from '@/components/common/InfoDot';
 import ThinkingToggle from '@/components/common/ThinkingToggle';
 import WebSearchToggle from '@/components/common/WebSearchToggle';
 import useThinking from '@/lib/useThinking';
 import useWebSearch from '@/lib/useWebSearch';
 import { useNlddEvent } from '@/lib/nldd';
-import OwnPromptOptimizer from '@/components/optimizer/OwnPromptOptimizer';
+import OwnPromptOptimizer, { type OwnPromptRestore } from '@/components/optimizer/OwnPromptOptimizer';
 import OptimizedOutput from '@/components/optimizer/OptimizedOutput';
 import ProjectContextPicker, {
   type ProjectContextSlot,
@@ -68,6 +68,12 @@ export default function OptimizerPage() {
   const [goal] = usePersistentDraft('goal');
   // Standaard staat de eigen-prompt-flow open: dat is het meest gebruikte startpunt.
   const [entryMode, setEntryMode] = useState<EntryMode>('own-prompt');
+  // De stand van de bouwer bij het laatste resultaat (framework en velden), en of
+  // de gebruiker daar nu naar terug is gegaan met "Velden aanpassen".
+  const [builderState, setBuilderState] = useState<
+    { mode: 'own'; data: OwnPromptRestore } | { mode: 'goal'; data: GoalDialogRestore } | null
+  >(null);
+  const [restoring, setRestoring] = useState(false);
   // Denkstand voor het schrijven van de prompt. Eén knop voor beide instappen.
   // Staat bij elke nieuwe prompt uit: zie useThinking.
   const [thinking, setThinking] = useThinking();
@@ -297,7 +303,19 @@ export default function OptimizerPage() {
     }, 400);
   }
 
+  /** Terug naar de velden van het laatste resultaat, om ze aan te passen en opnieuw te bouwen. */
+  function handleEditFields() {
+    if (!builderState) return;
+    setEntryMode(builderState.mode === 'own' ? 'own-prompt' : 'goal');
+    setRestoring(true);
+    setVersions([]);
+    setActiveVersion(0);
+    setPhase('input');
+  }
+
   function handleReset() {
+    setBuilderState(null);
+    setRestoring(false);
     setVersions([]);
     setActiveVersion(0);
     setResultTechnique(null);
@@ -351,6 +369,7 @@ export default function OptimizerPage() {
                   technique={resultTechnique}
                   goal={goal}
                   onReset={handleReset}
+                  onEditFields={builderState ? handleEditFields : undefined}
                   versions={versions}
                   activeVersion={activeVersion}
                   onSelectVersion={setActiveVersion}
@@ -408,8 +427,13 @@ export default function OptimizerPage() {
                   return ownActive ? (
                     <OwnPromptOptimizer
                       settings={settingsRef.current}
-                      onResult={handleResult}
-                                            toggles={toggles}
+                      onResult={(res, t, data) => {
+                        setBuilderState({ mode: 'own', data });
+                        setRestoring(false);
+                        handleResult(res, t);
+                      }}
+                      restore={restoring && builderState?.mode === 'own' ? builderState.data : null}
+                      toggles={toggles}
                       initialPrompt={initialPrompt}
                       projectContext={projectContext?.text}
                       renderProjectContext={renderProjectContext}
@@ -419,8 +443,13 @@ export default function OptimizerPage() {
                   ) : (
                     <GoalDialog
                       settings={settingsRef.current}
-                      onResult={handleResult}
-                                            toggles={toggles}
+                      onResult={(res, t, data) => {
+                        setBuilderState({ mode: 'goal', data });
+                        setRestoring(false);
+                        handleResult(res, t);
+                      }}
+                      restore={restoring && builderState?.mode === 'goal' ? builderState.data : null}
+                      toggles={toggles}
                       projectContext={projectContext?.text}
                       renderProjectContext={renderProjectContext}
                       thinking={thinkingOn}

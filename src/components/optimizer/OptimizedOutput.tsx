@@ -39,6 +39,11 @@ interface OptimizedOutputProps {
   goal?: string;
   onReset: () => void;
   /**
+   * Terug naar de velden waaruit deze prompt is gebouwd, om ze aan te passen en
+   * opnieuw te bouwen. Zonder deze functie (geen velden bekend) geen knop.
+   */
+  onEditFields?: () => void;
+  /**
    * Versiegeschiedenis uit de verbeter-lus (v1 = origineel). Bij meer dan één
    * versie verschijnen wisselknoppen boven de prompt; alle acties (kopiëren,
    * opslaan, testen, uitvoeren) werken op de getoonde versie.
@@ -59,6 +64,7 @@ export default function OptimizedOutput({
   technique,
   goal,
   onReset,
+  onEditFields,
   versions,
   activeVersion = 0,
   onSelectVersion,
@@ -337,6 +343,14 @@ export default function OptimizedOutput({
             text="Download als plugin"
             supporting-text="zip voor Claude Code, Codex of Cursor"
             onClick={() => void handleDownloadPlugin()}
+          ></nldd-button>
+        )}
+        {onEditFields && (
+          <nldd-button
+            appearance="secondary"
+            start-icon="pencil"
+            text="Velden aanpassen"
+            onClick={onEditFields}
           ></nldd-button>
         )}
         <nldd-button appearance="neutral-transparent" start-icon="arrow-2-counter-clockwise" text="Opnieuw" onClick={onReset}></nldd-button>

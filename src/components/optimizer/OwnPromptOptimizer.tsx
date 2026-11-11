@@ -81,11 +81,34 @@ import '@nldd/design-system/toggle-button-group';
 import '@nldd/design-system/tooltip';
 import '@nldd/design-system/top-title-bar';
 
+/**
+ * De stand van de bouwer op het moment dat de prompt werd gebouwd: het gekozen
+ * framework met de velden zoals de gebruiker ze naliet. Met "Velden aanpassen"
+ * onder het resultaat komt de bouwer precies zo terug.
+ */
+export interface OwnPromptRestore {
+  kind: PromptKind | null;
+  variantOn: boolean;
+  sjabloonId: string | null;
+  pickedByKind: boolean;
+  recommendations: TechniqueRecommendation[] | null;
+  techniqueId: string;
+  prefill: PrefillResult | null;
+  answers: Record<string, string>;
+  fieldMeta: FieldMeta;
+  vraagHerkomst: Record<string, VraagHerkomst>;
+}
+
 interface OwnPromptOptimizerProps {
   /** Admin-bepaalde AI-instellingen (provider, systeemprompt, toon, temperatuur). */
   settings: AiSettings;
-  /** Aangeroepen met het geoptimaliseerde resultaat + de gekozen techniek. */
-  onResult: (result: OptimizeResult, technique: Technique) => void;
+  /**
+   * Aangeroepen met het geoptimaliseerde resultaat, de gekozen techniek en de
+   * stand van de bouwer, zodat de pagina die later kan terugzetten.
+   */
+  onResult: (result: OptimizeResult, technique: Technique, restore: OwnPromptRestore) => void;
+  /** Terugkomen uit het resultaat: begin met deze velden in plaats van leeg. */
+  restore?: OwnPromptRestore | null;
   /**
    * De tabbladen (Ik heb al een prompt, Ik heb een idee) boven het invulvlak.
    */
@@ -197,6 +220,7 @@ export default function OwnPromptOptimizer({
   thinking,
   webSearch,
   toggles,
+  restore,
 }: OwnPromptOptimizerProps) {
   const { techniques, techniqueById } = useReferenceData();
   const navigate = useNavigate();
@@ -205,13 +229,13 @@ export default function OwnPromptOptimizer({
   // "Wat wil je maken?": de gekozen soort (null = de AI kiest uit alles) en de
   // stand van de schakelaar eronder. Die staat bij een nieuwe soort weer aan,
   // want aan is de aanbevolen stand (iets nieuws, eerst een prototype).
-  const [kind, setKind] = useState<PromptKind | null>(null);
-  const [variantOn, setVariantOn] = useState(true);
+  const [kind, setKind] = useState<PromptKind | null>(restore?.kind ?? null);
+  const [variantOn, setVariantOn] = useState(restore?.variantOn ?? true);
   const variant = kind ? KIND_VARIANTS[kind] : undefined;
   const candidates = frameworksForKind(frameworks, kind, variantOn);
   const kindOption = kind ? KIND_OPTIONS[kind] : null;
   // Bij Sjabloon kiest de gebruiker zelf welk sjabloon; er valt niets te wegen.
-  const [sjabloonId, setSjabloonId] = useState<string | null>(null);
+  const [sjabloonId, setSjabloonId] = useState<string | null>(restore?.sjabloonId ?? null);
   const sjabloon =
     kind === 'template' ? (candidates.find((t) => t.id === sjabloonId) ?? candidates[0] ?? null) : null;
   // De soort wees precies één framework aan: dan zoeken we niet, maar gaan we
@@ -223,7 +247,7 @@ export default function OwnPromptOptimizer({
         ? candidates[0]
         : null;
   // De aanbeveling kwam uit de soortkeuze, niet uit een AI-afweging.
-  const [pickedByKind, setPickedByKind] = useState(false);
+  const [pickedByKind, setPickedByKind] = useState(restore?.pickedByKind ?? false);
 
   // De geplakte prompt wordt in localStorage bewaard, zodat hij niet verloren
   // gaat bij een fout of herlaadactie. "Opschonen" maakt hem (en de rest) leeg.
@@ -240,13 +264,15 @@ export default function OwnPromptOptimizer({
     : ownPrompt.trim();
   const [showExamples, setShowExamples] = useState(false);
   const [recommending, setRecommending] = useState(false);
-  const [recommendations, setRecommendations] = useState<TechniqueRecommendation[] | null>(null);
+  const [recommendations, setRecommendations] = useState<TechniqueRecommendation[] | null>(
+    restore?.recommendations ?? null,
+  );
   // Waar de zoekactie mee bezig is; voedt de voortgangstekst op de knop.
   const [searchPhase, setSearchPhase] = useState<FrameworkSearchPhase>('analyzing');
   // Staat het invulvlak open? Na "Maak mijn prompt" klapt het in tot één regel, zodat
   // de ingevulde velden meteen in beeld staan. "Aanpassen" opent het weer; de velden
   // blijven eronder staan tot de tekst echt verandert.
-  const [composerOpen, setComposerOpen] = useState(true);
+  const [composerOpen, setComposerOpen] = useState(!restore);
   // Staat de toelichting voor een nieuwe invulronde open?
   const [clarifyOpen, setClarifyOpen] = useState(false);
   // Toelichting die de gebruiker typt om, ná het kiezen van een framework, de
@@ -256,16 +282,16 @@ export default function OwnPromptOptimizer({
   // gaat bij een fout of herlaadactie. resetDownstream() (leeg → verwijderd) en
   // "Opschonen" maken hem weer leeg.
   const [clarification, setClarification] = usePersistentDraft('ownPromptClarification');
-  const [techniqueId, setTechniqueId] = useState<string | null>(null);
+  const [techniqueId, setTechniqueId] = useState<string | null>(restore?.techniqueId ?? null);
   // Voor-invulling van de velden op basis van de eigen prompt (null = nog niet gedaan).
-  const [prefill, setPrefill] = useState<PrefillResult | null>(null);
+  const [prefill, setPrefill] = useState<PrefillResult | null>(restore?.prefill ?? null);
   // Bewust NIET in localStorage bewaard: deze velden worden door de AI voor-
   // ingevuld zodra een framework wordt gekozen, en die keuze + prefill herstellen
   // we niet over een herlaadactie heen. De geplakte prompt en de toelichting (het
   // eigenlijke handwerk) worden wél bewaard; die volstaan om verder te gaan.
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [answers, setAnswers] = useState<Record<string, string>>(restore?.answers ?? {});
   // Herkomst per voor-ingevuld veld (origin-badges); vervalt zodra de gebruiker zelf typt.
-  const [fieldMeta, setFieldMeta] = useState<FieldMeta>({});
+  const [fieldMeta, setFieldMeta] = useState<FieldMeta>(restore?.fieldMeta ?? {});
   const [prefilling, setPrefilling] = useState(false);
   // Live voortgang van het voor-invullen: welk model werkt, welke fase loopt en
   // welke velden al binnen zijn. Voedt het laadscherm, zodat de
@@ -310,7 +336,9 @@ export default function OwnPromptOptimizer({
   // in het invoerveld en laten we alles wat van een vorige prompt afhing
   // vervallen. Eén keer per aangeleverde tekst (ref-bewaakt), zodat wat de
   // gebruiker daarna zelf typt blijft staan.
-  const appliedInitialRef = useRef<string | null>(null);
+  // Komt de gebruiker terug uit het resultaat, dan is die tekst al verwerkt: de
+  // velden die hij terugkrijgt mogen er niet door worden gewist.
+  const appliedInitialRef = useRef<string | null>(restore ? (initialPrompt?.trim() ?? null) : null);
   useEffect(() => {
     const text = initialPrompt?.trim();
     if (!text || appliedInitialRef.current === text) return;
@@ -354,7 +382,9 @@ export default function OwnPromptOptimizer({
   // Loopt het invullen van de vragen uit de voorbereide tekst?
   const [vragenVullen, setVragenVullen] = useState(false);
   // Waar elk antwoord vandaan komt na "Vul de vragen in uit je tekst".
-  const [vraagHerkomst, setVraagHerkomst] = useState<Record<string, VraagHerkomst>>({});
+  const [vraagHerkomst, setVraagHerkomst] = useState<Record<string, VraagHerkomst>>(
+    restore?.vraagHerkomst ?? {},
+  );
   // Na "Velden invullen" bij de routekaart: per veld een voorgestelde aanvulling
   // van de AI, die de gebruiker toevoegt of verwerpt. null = wordt nog gezocht.
   const [aanvullingen, setAanvullingen] = useState<Record<string, string> | null>({});
@@ -705,7 +735,18 @@ export default function OwnPromptOptimizer({
         );
         return;
       }
-      onResult(res, technique);
+      onResult(res, technique, {
+        kind,
+        variantOn,
+        sjabloonId,
+        pickedByKind,
+        recommendations,
+        techniqueId: technique.id,
+        prefill,
+        answers,
+        fieldMeta,
+        vraagHerkomst,
+      });
     } catch (err) {
       notify.error(err instanceof Error ? err.message : 'Optimaliseren mislukt');
     } finally {
