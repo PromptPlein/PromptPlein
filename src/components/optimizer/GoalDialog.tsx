@@ -299,7 +299,7 @@ export default function GoalDialog({
     const run = loadRun();
     if (run) setResumable(run);
     // Alleen bij mount uitvoeren.
-     
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Scroll het laadscherm in beeld zodra het bouwen begint. De rAF wacht tot het
