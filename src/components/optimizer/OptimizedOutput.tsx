@@ -4,6 +4,7 @@ import {
   Check,
   ChevronDown,
   RotateCcw,
+  Pencil,
   Save,
   Share2,
   FolderCheck,
@@ -36,6 +37,11 @@ interface OptimizedOutputProps {
   goal?: string;
   onReset: () => void;
   /**
+   * Terug naar de velden waaruit deze prompt is gebouwd, om ze aan te passen en
+   * opnieuw te bouwen. Zonder deze functie (geen velden bekend) geen knop.
+   */
+  onEditFields?: () => void;
+  /**
    * Versiegeschiedenis uit de verbeter-lus (v1 = origineel). Bij meer dan één
    * versie verschijnen wisselknoppen boven de prompt; alle acties (kopiëren,
    * opslaan, testen, uitvoeren) werken op de getoonde versie.
@@ -56,6 +62,7 @@ export default function OptimizedOutput({
   technique,
   goal,
   onReset,
+  onEditFields,
   versions,
   activeVersion = 0,
   onSelectVersion,
@@ -329,6 +336,11 @@ export default function OptimizedOutput({
         <button className="opl-btn-secondary" onClick={onReset}>
           <RotateCcw size={16} /> Opnieuw
         </button>
+        {onEditFields && (
+          <button className="opl-btn-secondary" onClick={onEditFields}>
+            <Pencil size={16} /> Velden aanpassen
+          </button>
+        )}
         {saved ? (
           <button className="opl-btn-secondary" onClick={() => setShareOpen(true)}>
             <Share2 size={16} /> Delen met collega&apos;s
