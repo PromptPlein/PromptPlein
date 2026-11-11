@@ -768,7 +768,13 @@ function extractHeadings(template: string): string[] {
 let FIELDS_PRECEDENCE_INSTRUCTION = `VOORRANG:
 De velden zijn leidend. De gebruiker heeft ze nagekeken en aangepast nadat ze uit de achtergrond zijn gemaakt.
 Zegt de achtergrond iets anders dan een veld, over de doelgroep, het onderwerp, de rol, de taak, de toon, de lengte of een feit, dan volg je het veld en laat je wat in de achtergrond staat weg.
-Uit de achtergrond neem je alleen details over die in geen enkel veld staan en die niet botsen met de velden.`;
+Uit de achtergrond neem je alleen details over die in geen enkel veld staan en die niet botsen met de velden.
+
+INVULPLEKKEN IN DE VELDEN:
+Een tekst tussen vierkante haken in een veld, zoals [naam] of [datum], is geen keuze van de gebruiker maar een plek die nog leeg is.
+Staat de waarde voor die plek in de achtergrond of in een ander veld, dan schrijf je die waarde op die plek en laat je de vierkante haken weg.
+Een naam, getal, bestand, programma of datum die de gebruiker ergens heeft gegeven, komt letterlijk in de prompt en wordt nooit een invulplek.
+Alleen als de waarde nergens staat, laat je de invulplek staan.`;
 
 /**
  * Bouwt de gebruikersprompt voor generatie: techniekcontext + de losse,
