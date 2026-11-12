@@ -133,7 +133,7 @@ const KAARTEN: Record<string, TechniekKaart> = {
   'dashboard (prototype)': {
     doel: 'bouwen',
     kort: 'Klikbaar, met nepdata',
-    info: 'Bouwt een /goal-opdracht voor een klikbaar prototype, zonder backend of login.',
+    info: 'Bouwt een /goal-opdracht voor een klikbaar prototype als één HTML-bestand, zonder backend of login.',
     icon: 'square-grid-2x2',
   },
   'dashboard (volledig)': {

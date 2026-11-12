@@ -6196,7 +6196,7 @@ Je schrijft een /goal-opdracht voor een AI-agent die een dashboard of tool bouwt
 
 <onderdelen>
 taak: wat er gebouwd wordt, voor wie en waarvoor, als één zin in de gebiedende wijs.
-succes: een commando, test of zichtbaar resultaat dat je kunt controleren, zoals "npm run build slaagt en elke tab toont zijn cijfers". Een gevoel of bijvoeglijk naamwoord ("het ziet er mooi uit") is geen succesvoorwaarde.
+succes: een commando, test of zichtbaar resultaat dat je kunt controleren, zoals "elke tab toont zijn cijfers zonder fouten in de console". Een gevoel of bijvoeglijk naamwoord ("het ziet er mooi uit") is geen succesvoorwaarde.
 scope: wat niet mag veranderen of niet gebouwd wordt.
 grens: een maximum aantal beurten, of de opdracht om te stoppen en te vragen bij een blokkade.
 inhoud: per scherm wat erop staat: cijfers, grafieken, tabellen en de data erachter.
@@ -6205,13 +6205,18 @@ layout: per scherm de indeling, de stijl en eigen vormregels.
 
 <regels>
 Haal elk onderdeel uit de antwoorden en de eigen tekst van de gebruiker.
-Staat er in de /goal-regel van de STRUCTUUR-REFERENTIE vaste tekst naast de invulplekken, neem die tekst dan letterlijk over.
+Lees elk antwoord helemaal en zet elk punt dat erin staat in de opdracht: elk scherm, elke tab, elk cijfer, elke grafiek, elke tabel, elk filter, elke kleur, elke naam en elk aantal.
+Een punt dat in een ander antwoord staat maar over inhoud of layout gaat, zet je bij INHOUD of LAYOUT.
+Laat geen punt weg en voeg geen punten samen tot één algemene regel.
+Schrijf elke naam, elk getal en elk woord van de gebruiker precies zoals hij het schreef, ook een kort woord. Voorbeeld, niet overnemen: staat er kap, dan schrijf je kap en niet kapvergunning of iets anders.
+Zet bij INHOUD en LAYOUT alleen wat uit de antwoorden komt, nooit een regel uit de VASTE REGELS.
+Staat er in de /goal-regel van de STRUCTUUR-REFERENTIE vaste tekst naast de invulplekken, neem die tekst dan letterlijk over, ook de tekst achter een puntkomma bij Success en Scope.
 Is de succesvoorwaarde vaag of ontbreekt hij, schrijf dan [controleerbare succesvoorwaarde, bijvoorbeeld een test of commando] en verzin er geen.
 Ontbreekt de scope, schrijf dan [wat niet mag veranderen].
 Ontbreekt de grens, schrijf dan: Stop en vraag het als je vastloopt.
 Is LAYOUT leeg, schrijf daar dan alleen: Volg de vaste regels.
 Schrijf INHOUD en LAYOUT als korte regels, één punt per regel, in de gebiedende wijs.
-Neem het blok VASTE REGELS uit de STRUCTUUR-REFERENTIE letterlijk over.
+Neem het blok VASTE REGELS uit de STRUCTUUR-REFERENTIE letterlijk en helemaal over: elke regel, in dezelfde volgorde, elke regel op een eigen regel.
 De eerste vijf tekens van je antwoord zijn altijd /goal.
 Geen uitleg ervoor of erna, geen codeblok.
 </regels>
@@ -6220,13 +6225,16 @@ Geen uitleg ervoor of erna, geen codeblok.
 /goal <taak>. Success: <succes>. Scope: <scope>. <grens>.
 
 INHOUD:
-<per scherm wat erop staat>
+<eerste punt over wat er op een scherm staat>
+<volgende punt, elk punt op een eigen regel>
 
 LAYOUT:
-<per scherm de indeling en de stijl>
+<eerste punt over de indeling of de stijl>
+<volgende punt, elk punt op een eigen regel>
 
 VASTE REGELS:
-<het blok VASTE REGELS, letterlijk>
+<eerste vaste regel, letterlijk>
+<volgende vaste regel, letterlijk, tot en met de laatste>
 </uitvoersjabloon>`;
 
 /**
