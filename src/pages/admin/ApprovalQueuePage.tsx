@@ -1,21 +1,48 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Check, X, Inbox, ExternalLink } from '@/components/common/icons';
+import { Check, X, Inbox, ExternalLink, ChevronRight } from '@/components/common/icons';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
 import { formatDate, visibilityMeta } from '@/lib/utils';
 import { listPendingForModeration, decideVisibility } from '@/services/visibilityService';
 import { VISIBILITY_STATUS_META } from '@/services/collaborationService';
 import { logAdminAction } from '@/services/adminService';
+import { useAuth } from '@/context/AuthContext';
+import { countPendingOrganizationRequests } from '@/services/organizationRequestService';
+import { countPendingFunctionRequests } from '@/services/functionRequestService';
+import { countPendingCategoryRequests } from '@/services/categoryRequestService';
 import type { Prompt, PromptVisibility } from '@/types';
 
 type PendingRow = PromptVisibility & { prompt: Prompt | null };
+
+/** De andere wachtrijen van een beheerder; ze hebben elk een eigen pagina in Beheer. */
+const OTHER_QUEUES = [
+  { key: 'afdelingen', label: 'Afdelingen', to: '/admin/onderdeel-aanvragen', count: countPendingOrganizationRequests },
+  { key: 'functies', label: 'Functies', to: '/admin/functie-aanvragen', count: countPendingFunctionRequests },
+  { key: 'categorieen', label: 'Categorieën', to: '/admin/categorie-aanvragen', count: countPendingCategoryRequests },
+] as const;
 
 export default function ApprovalQueuePage() {
   const [rows, setRows] = useState<PendingRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
+  const { isAdmin } = useAuth();
+  const [other, setOther] = useState<Record<string, number>>({});
+
+  // Een beheerder ziet hier ook wat er in de andere wachtrijen staat: dit is de
+  // pagina achter het icoon in de kop, dus hier zoekt hij.
+  useEffect(() => {
+    if (!isAdmin) return;
+    let active = true;
+    Promise.all(OTHER_QUEUES.map((q) => q.count().catch(() => 0))).then((counts) => {
+      if (active) setOther(Object.fromEntries(OTHER_QUEUES.map((q, i) => [q.key, counts[i]])));
+    });
+    return () => {
+      active = false;
+    };
+  }, [isAdmin]);
+  const waiting = OTHER_QUEUES.filter((q) => (other[q.key] ?? 0) > 0);
 
   async function load() {
     setLoading(true);
@@ -62,6 +89,33 @@ export default function ApprovalQueuePage() {
         </p>
       </div>
 
+      {waiting.length > 0 && (
+        <section aria-labelledby="andere-aanvragen" className="opl-card p-5">
+          <h2
+            id="andere-aanvragen"
+            className="font-semibold text-slate-800 dark:text-slate-100"
+          >
+            Andere aanvragen
+          </h2>
+          <ul className="mt-2 divide-y divide-slate-100 dark:divide-slate-700">
+            {waiting.map((q) => (
+              <li key={q.key}>
+                <Link
+                  to={q.to}
+                  className="flex min-h-[2.75rem] items-center justify-between gap-3 py-2 text-sm text-rijksblauw-700 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 dark:text-rijksblauw-200"
+                >
+                  <span>
+                    {q.label}: {other[q.key]}{' '}
+                    {other[q.key] === 1 ? 'aanvraag wacht' : 'aanvragen wachten'}
+                  </span>
+                  <ChevronRight size={16} aria-hidden />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {loading ? (
         <div className="opl-card">
           <div className="skeleton h-40 w-full" />
@@ -69,7 +123,9 @@ export default function ApprovalQueuePage() {
       ) : rows.length === 0 ? (
         <div className="opl-card flex flex-col items-center gap-2 py-12 text-center">
           <Inbox size={32} className="text-slate-300 dark:text-slate-600" />
-          <p className="text-sm text-slate-500 dark:text-slate-400">Geen openstaande aanvragen. Mooi werk!</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            {waiting.length > 0 ? 'Geen prompts om te beoordelen.' : 'Geen openstaande aanvragen. Mooi werk!'}
+          </p>
         </div>
       ) : (
         <div className="space-y-4">
