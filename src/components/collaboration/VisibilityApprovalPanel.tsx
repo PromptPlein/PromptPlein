@@ -124,10 +124,15 @@ export default function VisibilityApprovalPanel({
       {/* Aanpassen-modus: de eigenaar/admin kiest de gewenste niveaus opnieuw. */}
       {editing ? (
         <div className="space-y-3">
-          <VisibilityPicker idPrefix="edit-vis" value={draftLevels} onChange={setDraftLevels} />
+          <VisibilityPicker
+            idPrefix="edit-vis"
+            value={draftLevels}
+            onChange={setDraftLevels}
+            organizationId={organizationId ?? undefined}
+          />
           <p className="text-xs text-slate-400 dark:text-slate-500">
             Nieuw aangevinkte niveaus volgen de gebruikelijke route: de afdeling is direct
-            beschikbaar, het ministerie en Rijksoverheid wachten op goedkeuring. Een niveau dat
+            beschikbaar, de directie of dienst, het ministerie en Rijksoverheid wachten op goedkeuring. Een niveau dat
             je uitvinkt, wordt weer ingetrokken.
           </p>
           <div className="flex justify-end gap-2">

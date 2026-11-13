@@ -220,8 +220,15 @@ vereist: alles onder `/admin`. De rest is openbaar, inclusief `/genereren`,
 `/zoeken`, `/community`, `/technieken` en `/toegankelijkheid`.
 
 Prompts hebben een zichtbaarheidsniveau met een goedkeuringsstroom
-(`visibilityService`, `ApprovalQueuePage`). Organisaties vormen een boom van
-ministeries (`orgTree.ts`, migraties 0020/0021/0024).
+(`visibilityService`, `ApprovalQueuePage`): Privé, Afdeling (direct), Directie of
+dienst, Ministerie (beide door een moderator van het ministerie, anders een
+beheerder) en Rijksoverheid (beheerder). De directie of dienst is de laag boven
+de afdeling (`private.directorate_of`, 0059); de database vult die zelf in uit de
+organisatie van de prompt. `VisibilityPicker` toont bij elk niveau de naam van je
+eigen afdeling, directie en ministerie. Een niveau boven Afdeling komt bij het
+aanmaken altijd op 'pending', ook als de browser iets anders stuurt
+(`guard_visibility_insert`). Organisaties vormen een boom van ministeries
+(`orgTree.ts`, migraties 0020/0021/0024).
 
 Onder een ministerie hangt een directie of dienst (type `directorate`) en daaronder
 de afdeling (type `department`). Zo heten die lagen in de app; "onderdeel" is te

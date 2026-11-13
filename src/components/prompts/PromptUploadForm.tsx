@@ -211,7 +211,12 @@ export default function PromptUploadForm({ onCreated, onCancel }: PromptUploadFo
         </div>
       )}
 
-      <VisibilityPicker idPrefix="up" value={sharingLevels} onChange={setSharingLevels} />
+      <VisibilityPicker
+        idPrefix="up"
+        value={sharingLevels}
+        onChange={setSharingLevels}
+        organizationId={organizationId || null}
+      />
 
       <div>
         <label className="opl-label" htmlFor="up-author">

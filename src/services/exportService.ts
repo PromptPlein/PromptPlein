@@ -22,6 +22,7 @@ export interface ExportMeta {
 const CLASSIFICATION: Record<SharingLevel, string> = {
   private: 'Vertrouwelijk: persoonlijk',
   department: 'Intern: afdeling',
+  directorate: 'Intern: directie of dienst',
   ministry: 'Intern: ministerie',
   public: 'Openbaar',
 };

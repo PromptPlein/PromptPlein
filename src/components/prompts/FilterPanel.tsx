@@ -3,9 +3,10 @@ import { createPortal } from 'react-dom';
 import clsx from 'clsx';
 import { X } from '@/components/common/icons';
 import { useReferenceData } from '@/context/ReferenceDataContext';
+import { useAuth } from '@/context/AuthContext';
 import { categoryIcon } from '@/lib/categoryIcons';
 import { SHARING_LEVELS, toggled } from '@/lib/utils';
-import { descendantsInOrder, ministryOf, orgDisplayName, orgSubtreeIds } from '@/lib/orgTree';
+import { descendantsInOrder, ministryOf, orgChain, orgDisplayName, orgSubtreeIds } from '@/lib/orgTree';
 import useDialogFocus from '@/lib/useDialogFocus';
 import type { AdvancedPromptFilters, SharingLevel } from '@/types';
 
@@ -23,9 +24,11 @@ interface FilterPanelProps {
  * dus er valt niets te verliezen: anders dan bij Modal sluit hij ook met Escape
  * en met een klik ernaast.
  *
- * Eerst de ministeries en de Rijksoverheid, als korte code. De volledige naam
- * staat in `title` en `aria-label`. Filteren op een ministerie neemt alles mee
- * wat eronder valt; wie daarna een afdeling kiest, zoekt alleen daarin (zie
+ * Bij Organisatie staat eerst de knop Rijksoverheid: alles wat is goedgekeurd
+ * voor de hele Rijksoverheid. Daaronder alleen je eigen ministerie, met de
+ * directies en afdelingen eronder als boom; andere ministeries staan er bewust
+ * niet bij. Je eigen directie en afdeling zijn gemarkeerd. Filteren op een laag
+ * neemt alles mee wat eronder valt; een diepere keuze vernauwt dat (zie
  * `searchOrgIds`). De rasters rekenen in rem: met grote letters op een smal
  * scherm krijgen ze vanzelf minder kolommen.
  */
@@ -37,6 +40,7 @@ export default function FilterPanel({
   resultCount,
 }: FilterPanelProps) {
   const { categories, organizations, roles } = useReferenceData();
+  const { profile } = useAuth();
   const panelRef = useRef<HTMLElement>(null);
 
   useDialogFocus(open, panelRef, onClose);
@@ -51,20 +55,24 @@ export default function FilterPanel({
 
   if (!open) return null;
 
-  const ministries = organizations.filter(
-    (o) => o.organization_type === 'ministry' || o.organization_type === 'government',
-  );
-
-  // Afdelingen per gekozen ministerie, ook als alleen een afdeling in de URL staat.
+  // Alleen je eigen ministerie, met alles eronder; je eigen lagen zijn gemarkeerd.
   const selectedOrgs = filters.organization_ids ?? [];
-  const openMinistries = ministries.filter(
-    (m) =>
-      m.organization_type === 'ministry' &&
-      selectedOrgs.some((id) => id === m.id || ministryOf(id, organizations)?.id === m.id),
-  );
-  const departmentGroups = openMinistries
-    .map((m) => ({ ministry: m, departments: descendantsInOrder(m.id, organizations) }))
-    .filter((g) => g.departments.length > 0);
+  const ownMinistry = profile?.organization_id
+    ? ministryOf(profile.organization_id, organizations)
+    : null;
+  const ownPath = new Set(orgChain(profile?.organization_id, organizations).map((o) => o.id));
+  const ownTree = ownMinistry
+    ? [{ org: ownMinistry, depth: 0 }, ...descendantsInOrder(ownMinistry.id, organizations)]
+    : [];
+
+  function toggleOrg(id: string) {
+    onChange({
+      // Een laag uitzetten zet ook wat eronder gekozen is uit.
+      organization_ids: selectedOrgs.includes(id)
+        ? selectedOrgs.filter((other) => !orgSubtreeIds(id, organizations).includes(other))
+        : [...selectedOrgs, id],
+    });
+  }
 
   return createPortal(
     <div className="fixed inset-0 z-50">
@@ -120,61 +128,54 @@ export default function FilterPanel({
             </div>
           </FilterGroup>
 
-          {ministries.length > 0 && (
-            <FilterGroup title="Organisatie">
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(4.5rem,1fr))] gap-1.5">
-                {ministries.map((o) => (
-                  <ToggleButton
-                    key={o.id}
-                    active={filters.organization_ids?.includes(o.id) ?? false}
-                    onClick={() =>
-                      onChange({
-                        // Een ministerie uitzetten zet ook zijn afdelingen uit.
-                        organization_ids: selectedOrgs.includes(o.id)
-                          ? selectedOrgs.filter(
-                              (id) => id !== o.id && ministryOf(id, organizations)?.id !== o.id,
-                            )
-                          : [...selectedOrgs, o.id],
-                      })
-                    }
-                    label={o.name}
-                    className="justify-center text-sm font-semibold"
-                  >
-                    {o.code ?? o.name}
-                  </ToggleButton>
-                ))}
-              </div>
-            </FilterGroup>
-          )}
+          <FilterGroup title="Organisatie">
+            <div className="space-y-3">
+              <ToggleButton
+                active={filters.rijksbreed ?? false}
+                onClick={() => onChange({ rijksbreed: !filters.rijksbreed })}
+                className="w-full text-left"
+              >
+                <span className="block py-0.5">
+                  <span className="block text-sm font-semibold">Rijksoverheid</span>
+                  <span className="block text-xs opacity-80">Goedgekeurd voor de hele Rijksoverheid</span>
+                </span>
+              </ToggleButton>
 
-          {departmentGroups.map(({ ministry, departments }) => (
-            <FilterGroup key={ministry.id} title={`Afdeling bij ${ministry.code ?? ministry.name}`}>
-              {/* Een boom: elke afdeling springt in onder zijn directie of dienst, zodat
-                  de lagen erboven zichtbaar blijven. Een directie kiezen neemt alles eronder mee. */}
-              <ul className="space-y-1.5">
-                {departments.map(({ org: d, depth }) => (
-                  <li key={d.id} style={{ paddingLeft: `${(depth - 1) * 1.25}rem` }}>
-                    <ToggleButton
-                      active={selectedOrgs.includes(d.id)}
-                      onClick={() =>
-                        onChange({
-                          // Een directie uitzetten zet ook de afdelingen eronder uit.
-                          organization_ids: selectedOrgs.includes(d.id)
-                            ? selectedOrgs.filter(
-                                (id) => !orgSubtreeIds(d.id, organizations).includes(id),
-                              )
-                            : [...selectedOrgs, d.id],
-                        })
-                      }
-                      className="w-full justify-start text-left text-sm"
-                    >
-                      {orgDisplayName(d)}
-                    </ToggleButton>
-                  </li>
-                ))}
-              </ul>
-            </FilterGroup>
-          ))}
+              {ownTree.length > 0 ? (
+                <ul className="space-y-1.5">
+                  {/* Een boom: elke laag springt in onder de laag erboven, zodat je ziet
+                      waar een afdeling onder valt. */}
+                  {ownTree.map(({ org, depth }) => {
+                    const own = ownPath.has(org.id);
+                    return (
+                      <li key={org.id} style={{ paddingLeft: `${depth * 1.25}rem` }}>
+                        <ToggleButton
+                          active={selectedOrgs.includes(org.id)}
+                          onClick={() => toggleOrg(org.id)}
+                          className="w-full justify-between gap-2 text-left text-sm"
+                        >
+                          <span className={clsx('min-w-0', depth === 0 && 'font-semibold')}>
+                            {orgDisplayName(org)}
+                          </span>
+                          {own && (
+                            <span className="shrink-0 text-xs font-medium opacity-80">
+                              {depth === 0 ? 'Jouw ministerie' : org.organization_type === 'department' ? 'Jouw afdeling' : 'Jouw directie'}
+                            </span>
+                          )}
+                        </ToggleButton>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  {profile
+                    ? 'Kies je ministerie en afdeling op je profiel om binnen je eigen organisatie te filteren.'
+                    : 'Log in om binnen je eigen organisatie te filteren.'}
+                </p>
+              )}
+            </div>
+          </FilterGroup>
 
           {roles.length > 0 && (
             <FilterGroup title="Functie">
@@ -253,6 +254,7 @@ export default function FilterPanel({
                 organization_ids: [],
                 role_ids: [],
                 sharing_levels: [],
+                rijksbreed: false,
                 date_from: null,
                 date_to: null,
               })

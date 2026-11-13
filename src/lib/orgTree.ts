@@ -164,6 +164,22 @@ export function looksLikeAbbreviation(text: string): boolean {
   return t.length > 0 && t.length <= 6 && !/\s/.test(t) && t === t.toUpperCase() && /[A-Z]/.test(t);
 }
 
+/**
+ * De directie of dienst waar een organisatie onder valt: de dichtstbijzijnde laag
+ * boven de afdeling die geen ministerie is. Gelijk aan `private.directorate_of` (0059).
+ */
+export function directorateOf(
+  orgId: string | null | undefined,
+  organizations: Organization[],
+): Organization | null {
+  const chain = orgChain(orgId, organizations);
+  for (let i = chain.length - 1; i >= 0; i--) {
+    const t = chain[i].organization_type;
+    if (t === 'directorate' || t === 'directorate_general' || t === 'agency') return chain[i];
+  }
+  return null;
+}
+
 /** De directe kinderen van een organisatie, op naam gesorteerd. */
 export function childrenOf(parentId: string, organizations: Organization[]): Organization[] {
   return organizations

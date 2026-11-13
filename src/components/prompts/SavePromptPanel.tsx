@@ -192,7 +192,7 @@ export default function SavePromptPanel({
     }
     // Afdeling/ministerie delen vereist een organisatie om op te richten — anders
     // weet niemand met welke afdeling de template gedeeld is.
-    const needsOrg = sharingLevels.includes('department') || sharingLevels.includes('ministry');
+    const needsOrg = sharingLevels.some((l) => l === 'department' || l === 'directorate' || l === 'ministry');
     if (needsOrg && !organizationId) {
       toast.error('Kies een organisatie om de prompt met je afdeling of ministerie te delen.');
       return;
@@ -489,6 +489,7 @@ export default function SavePromptPanel({
       )}
       <VisibilityPicker
         idPrefix="tpl"
+        organizationId={organizationId || null}
         value={sharingLevels}
         onChange={(next) => {
           sharingTouched.current = true;

@@ -1,6 +1,9 @@
 import { Check, Lock, Info } from '@/components/common/icons';
 import clsx from 'clsx';
 import { VISIBILITY_LEVELS } from '@/lib/utils';
+import { useAuth } from '@/context/AuthContext';
+import { useReferenceData } from '@/context/ReferenceDataContext';
+import { directorateOf, orgChain, orgDisplayName } from '@/lib/orgTree';
 import type { VisibilityLevel } from '@/types';
 
 /**
@@ -15,16 +18,40 @@ import type { VisibilityLevel } from '@/types';
  * duidelijk wat er na opslaan gebeurt (de afdeling is direct beschikbaar, hogere
  * niveaus wachten op goedkeuring). "Geen enkel deelniveau aangevinkt" betekent
  * dus: alleen privé.
+ *
+ * Bij elk niveau staat de naam van je eigen afdeling, directie of ministerie, zodat
+ * je ziet waar de prompt terechtkomt. Die komen uit `organizationId`, of anders uit
+ * je profiel. Valt je afdeling niet onder een directie of dienst, dan is dat niveau
+ * niet te kiezen.
  */
 export default function VisibilityPicker({
   value,
   onChange,
   idPrefix = 'vis',
+  organizationId,
 }: {
   value: VisibilityLevel[];
   onChange: (next: VisibilityLevel[]) => void;
   idPrefix?: string;
+  /** De organisatie van de prompt; zonder deze prop die van je profiel. */
+  organizationId?: string | null;
 }) {
+  const { profile } = useAuth();
+  const { organizations } = useReferenceData();
+  const orgId = organizationId === undefined ? (profile?.organization_id ?? null) : organizationId;
+  const chain = orgChain(orgId, organizations);
+  const deepest = chain.length ? chain[chain.length - 1] : null;
+  const directie = directorateOf(orgId, organizations);
+  const ministerie = chain.find((o) => o.organization_type === 'ministry') ?? null;
+
+  /** Waar de prompt op dit niveau terechtkomt, of null als dat niet te zeggen is. */
+  const scope: Record<VisibilityLevel, string | null> = {
+    department: deepest?.organization_type === 'department' ? orgDisplayName(deepest) : null,
+    directorate: directie ? orgDisplayName(directie) : null,
+    ministry: ministerie ? orgDisplayName(ministerie) : null,
+    public: null,
+  };
+
   function toggle(level: VisibilityLevel) {
     onChange(
       value.includes(level) ? value.filter((l) => l !== level) : [...value, level],
@@ -86,12 +113,17 @@ export default function VisibilityPicker({
 
         {VISIBILITY_LEVELS.map((lvl) => {
           const active = value.includes(lvl.value);
+          // Zonder directie op je profiel valt er op dit niveau niets te delen;
+          // een al gekozen niveau blijft wel uit te zetten.
+          const unavailable = lvl.value === 'directorate' && !scope.directorate && !active;
+          const noteId = `${idPrefix}-${lvl.value}-waar`;
           return (
             <label
               key={lvl.value}
               htmlFor={`${idPrefix}-${lvl.value}`}
               className={clsx(
-                'flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition-colors',
+                'flex items-start gap-3 rounded-xl border p-3 transition-colors',
+                unavailable ? 'cursor-not-allowed opacity-70' : 'cursor-pointer',
                 active
                   ? 'border-rijksblauw-400 bg-rijksblauw-50/60 dark:border-rijksblauw-500/50 dark:bg-rijksblauw-500/10'
                   : 'border-slate-200 hover:border-slate-300 dark:border-slate-700 dark:hover:border-slate-600',
@@ -113,6 +145,8 @@ export default function VisibilityPicker({
                 type="checkbox"
                 className="sr-only"
                 checked={active}
+                disabled={unavailable}
+                aria-describedby={noteId}
                 onChange={() => toggle(lvl.value)}
               />
               <span className="min-w-0">
@@ -128,6 +162,14 @@ export default function VisibilityPicker({
                   >
                     {lvl.approvalShort}
                   </span>
+                </span>
+                <span id={noteId} className="mt-0.5 block text-sm text-slate-700 dark:text-slate-200">
+                  {scope[lvl.value] ??
+                    (lvl.value === 'directorate'
+                      ? 'Je afdeling valt nog niet onder een directie of dienst. Kies je afdeling op je profiel.'
+                      : lvl.value === 'department' && orgId
+                        ? 'Je hebt nog geen afdeling gekozen op je profiel.'
+                        : null)}
                 </span>
                 <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
                   {lvl.description}

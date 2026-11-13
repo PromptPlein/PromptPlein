@@ -3,18 +3,20 @@ import type { SharingLevel, VisibilityLevel } from '@/types';
 export const SHARING_LEVELS: { value: SharingLevel; label: string; description: string }[] = [
   { value: 'private', label: 'Privé', description: 'Alleen voor jezelf zichtbaar.' },
   { value: 'department', label: 'Afdeling', description: 'Zichtbaar binnen je afdeling.' },
+  { value: 'directorate', label: 'Directie of dienst', description: 'Zichtbaar binnen je directie of dienst.' },
   { value: 'ministry', label: 'Ministerie', description: 'Zichtbaar binnen het ministerie.' },
   { value: 'public', label: 'Rijksoverheid', description: 'Voor alle overheidsmedewerkers.' },
 ];
 
 /**
- * De drie aanvinkbare deelniveaus, mét uitleg over wie het ziet én wat er na
+ * De vier aanvinkbare deelniveaus, mét uitleg over wie het ziet én wat er na
  * opslaan gebeurt (de goedkeuringsroute). Dit is de ENIGE bron voor deze teksten
  * — elke plek waar je een prompt deelt (dashboard, zoeken, generator) gebruikt
  * deze lijst, zodat de uitleg overal identiek is.
  *
  * Goedkeuringsroute:
  *   - Afdeling     → automatisch goedgekeurd, direct beschikbaar.
+ *   - Directie of dienst → een moderator van het ministerie beoordeelt het (0059).
  *   - Ministerie   → een moderator van het ministerie beoordeelt het.
  *   - Rijksoverheid → een beheerder beoordeelt het.
  */
@@ -36,6 +38,14 @@ export const VISIBILITY_LEVELS: {
     approval: 'Wordt direct gedeeld; afdelingsniveau is automatisch goedgekeurd.',
     approvalShort: 'Direct beschikbaar',
     autoApproved: true,
+  },
+  {
+    value: 'directorate',
+    label: 'Directie of dienst',
+    description: 'Zichtbaar voor iedereen in je directie of dienst, ook in de andere afdelingen eronder.',
+    approval: 'Een moderator van het ministerie beoordeelt het voordat het zichtbaar wordt.',
+    approvalShort: 'Wacht op moderator',
+    autoApproved: false,
   },
   {
     value: 'ministry',
@@ -68,6 +78,7 @@ export function visibilityMeta(level: VisibilityLevel) {
 export function representativeSharingLevel(levels: VisibilityLevel[]): SharingLevel {
   if (levels.includes('public')) return 'public';
   if (levels.includes('ministry')) return 'ministry';
+  if (levels.includes('directorate')) return 'directorate';
   if (levels.includes('department')) return 'department';
   return 'private';
 }
@@ -82,6 +93,8 @@ export function sharingBadgeClasses(level: SharingLevel): string {
       return 'bg-slate-100 text-slate-700';
     case 'department':
       return 'bg-sky-100 text-sky-800';
+    case 'directorate':
+      return 'bg-cyan-100 text-cyan-800';
     case 'ministry':
       return 'bg-indigo-100 text-indigo-800';
     case 'public':

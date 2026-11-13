@@ -1,13 +1,13 @@
 // Domeinmodellen voor de Overheid Prompt Library (Phase 1).
 
-export type SharingLevel = 'private' | 'department' | 'ministry' | 'public';
+export type SharingLevel = 'private' | 'department' | 'directorate' | 'ministry' | 'public';
 
 /**
  * De deelniveaus die je expliciet kunt aanvinken bij het delen (privé is de
  * afwezigheid van elk niveau). Elk niveau krijgt een eigen rij in
  * prompt_visibility met een eigen goedkeuringsstatus.
  */
-export type VisibilityLevel = 'department' | 'ministry' | 'public';
+export type VisibilityLevel = 'department' | 'directorate' | 'ministry' | 'public';
 
 /** Goedkeuringsstatus van één deelniveau van een prompt. */
 export type VisibilityStatus = 'approved' | 'pending' | 'rejected';
@@ -176,6 +176,8 @@ export interface AdvancedPromptFilters {
   role_ids?: string[];
   organization_ids?: string[];
   sharing_levels?: SharingLevel[];
+  /** Alleen prompts die zijn goedgekeurd voor de hele Rijksoverheid. */
+  rijksbreed?: boolean;
   date_from?: string | null;
   date_to?: string | null;
   favorites_only?: boolean;

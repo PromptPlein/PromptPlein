@@ -147,9 +147,25 @@ export async function listPrompts(filters: PromptFilters = {}): Promise<Prompt[]
 }
 
 export async function searchPrompts(filters: AdvancedPromptFilters = {}): Promise<Prompt[]> {
-  if (local) return localStore.searchPrompts(filters);
+  if (local) {
+    const found = localStore.searchPrompts(filters);
+    return filters.rijksbreed ? found.filter((p) => p.sharing_level === 'public') : found;
+  }
 
   let query = supabase!.from('prompts').select('*');
+  if (filters.rijksbreed) {
+    // Goedgekeurd voor de Rijksoverheid: een goedgekeurde rij op dat niveau, niet
+    // alleen een aanvraag. Het sharing_level op de prompt zegt dat niet.
+    const { data: rows, error: visErr } = await supabase!
+      .from('prompt_visibility')
+      .select('prompt_id')
+      .eq('level', 'public')
+      .eq('status', 'approved');
+    if (visErr) throw visErr;
+    const ids = [...new Set((rows ?? []).map((r: { prompt_id: string }) => r.prompt_id))];
+    if (ids.length === 0) return [];
+    query = query.in('id', ids);
+  }
   if (filters.favorites_only) query = query.eq('is_favorite', true);
   if (filters.category_ids?.length) query = query.in('category_id', filters.category_ids);
   if (filters.role_ids?.length) query = query.in('role_id', filters.role_ids);

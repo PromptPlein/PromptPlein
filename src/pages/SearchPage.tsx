@@ -57,6 +57,7 @@ function readFilters(params: URLSearchParams): AdvancedPromptFilters {
     sharing_levels: params
       .getAll('niveau')
       .filter((n): n is SharingLevel => levels.includes(n as SharingLevel)),
+    rijksbreed: params.get('rijk') === '1',
     date_from: params.get('van'),
     date_to: params.get('tot'),
     sort: SORT_OPTIONS.find((o) => o.value === sort)?.value ?? 'newest',
@@ -70,6 +71,7 @@ function writeFilters(filters: AdvancedPromptFilters, showAll: boolean): URLSear
   filters.organization_ids?.forEach((id) => params.append('org', id));
   filters.role_ids?.forEach((id) => params.append('functie', id));
   filters.sharing_levels?.forEach((level) => params.append('niveau', level));
+  if (filters.rijksbreed) params.set('rijk', '1');
   if (filters.date_from) params.set('van', filters.date_from);
   if (filters.date_to) params.set('tot', filters.date_to);
   if (filters.sort && filters.sort !== 'newest') params.set('sort', filters.sort);
@@ -91,7 +93,25 @@ export default function SearchPage() {
     useReferenceData();
 
   const paramKey = searchParams.toString();
-  const filters = useMemo(() => readFilters(searchParams), [searchParams]);
+  const rawFilters = useMemo(() => readFilters(searchParams), [searchParams]);
+
+  // Op organisatie filter je alleen binnen je eigen ministerie: het ministerie, de
+  // directies en de afdelingen eronder. Een oude link naar een ander ministerie
+  // telt daarom niet mee.
+  const ownMinistry = profile?.organization_id
+    ? ministryOf(profile.organization_id, organizations)
+    : null;
+  const ownTree = useMemo(
+    () => new Set(ownMinistry ? orgSubtreeIds(ownMinistry.id, organizations) : []),
+    [ownMinistry, organizations],
+  );
+  const filters = useMemo(
+    () => ({
+      ...rawFilters,
+      organization_ids: (rawFilters.organization_ids ?? []).filter((id) => ownTree.has(id)),
+    }),
+    [rawFilters, ownTree],
+  );
   const showAll = searchParams.has('alles');
 
   const activeCount =
@@ -99,6 +119,7 @@ export default function SearchPage() {
     (filters.organization_ids?.length ?? 0) +
     (filters.role_ids?.length ?? 0) +
     (filters.sharing_levels?.length ?? 0) +
+    (filters.rijksbreed ? 1 : 0) +
     (filters.date_from ? 1 : 0) +
     (filters.date_to ? 1 : 0);
   const urlQuery = filters.query ?? '';
@@ -279,6 +300,12 @@ export default function SearchPage() {
                 onRemove={() => update({ category_ids: toggled(filters.category_ids, id) })}
               />
             ))}
+            {filters.rijksbreed && (
+              <ActiveChip
+                label="Rijksoverheid"
+                onRemove={() => update({ rijksbreed: false })}
+              />
+            )}
             {filters.organization_ids?.map((id) => {
               const org = organizationById(id);
               return (
