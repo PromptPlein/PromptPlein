@@ -703,6 +703,14 @@ genoeg en gaat gewoon door; zonder doel, of met drie of meer gaten, is het summi
 volgen hoogstens drie vragen; anders maakt de chat meteen een voorstel. Laat het oordeel
 niet terug naar het model gaan: Mistral Small paste die regels slecht toe.
 
+Het eerste bericht gaat lang niet altijd over werk: een boek, een feest of een recept komt net
+zo goed voor. De systeemprompts van `chat-intake` en `context-interview` houden de vraag en de
+opties daarom in de wereld van het bericht, kennen naast de tekstsoorten ook Bedenken (ideeën,
+tips, plan, advies, vergelijking) en stellen bij een vaag bericht een keuzevraag met de twee of
+drie lezingen van dít bericht. Een vaste vraag voor elk vaag bericht ("een nieuwe tekst, een
+verbeterde tekst of een samenvatting") was het oude gedrag en paste nergens. Een tekst die de
+gebruiker nog moet geven is geen ontbrekend punt: die komt via Bestand toevoegen.
+
 Vragen en schrijven lopen via `context-interview` en `context-prompt`, dezelfde modes als
 de context prompt; die geeft voor de chat ook de `kopjes` terug, zodat het voorstel per
 kopje te tonen is. `chat-intake-check` beoordeelt de prompt per kopje en stelt één vraag
