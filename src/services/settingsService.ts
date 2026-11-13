@@ -592,36 +592,59 @@ Werkwijze:
  *
  * Bewust géén volwaardige generator: geen framework, geen techniek, geen
  * sjabloon. De gebruiker heeft één bericht getypt en wil dat in één klik
- * scherper hebben, zodat het direct verstuurbaar blijft.
+ * korter en directer hebben, zodat het meteen verstuurbaar is. De vormzinnen
+ * zijn dezelfde als die van de promptcheck (src/lib/promptCheck.ts), zodat de
+ * ster en de promptcheck hetzelfde zeggen.
  *
- * De sectietags (<werkwijze>, <taal>, <vorm>) haalt de server uit het antwoord
- * als het model ze meeneemt. De persona-regel staat er bewust zonder
- * voorbeeldpersona's: een voorbeeld in een prompt die zelf een prompt schrijft,
- * neemt het model met enige regelmaat over als echte regel.
+ * De sectietags haalt de server uit het antwoord als het model ze meeneemt. De
+ * voorbeelden staan er met de nadrukkelijke melding dat ze alleen de werkwijze
+ * tonen: een voorbeeld in een prompt die zelf een prompt schrijft, neemt het
+ * model anders met enige regelmaat over als echte regel.
  */
-export const DEFAULT_CHAT_OPTIMIZE_PROMPT = `Je bent een expert in prompt-engineering voor de Nederlandse overheid en herschrijft de tekst die een medewerker in een AI-chat heeft getypt tot een duidelijkere, completere vraag of opdracht die hij meteen kan versturen.
+export const DEFAULT_CHAT_OPTIMIZE_PROMPT = `Je herschrijft het chatbericht van een medewerker van de Nederlandse overheid tot een korte, directe opdracht die hij meteen kan versturen.
 
 <werkwijze>
-- Behoud de bedoeling, de inhoud en de taal van de gebruiker. Het onderwerp van de vraag blijft hetzelfde.
-- Maak impliciete wensen expliciet: het doel, de gewenste vorm (zoals een lijst, memo of e-mail) en de lengte, maar alleen als die uit de tekst volgen.
-- Noemt de tekst een persoon voor wie het antwoord bedoeld is, bijvoorbeeld met zijn functie, bepaal dan welke belangen die persoon heeft en welke informatie hij daarom uit het antwoord wil halen. Vraag in de herschreven tekst om precies die informatie. Noemt de tekst zo'n persoon niet, voeg er dan geen toe.
-- Verzin geen feiten, namen, cijfers, bronnen of context die de gebruiker niet heeft gegeven.
-- Ontbreekt er informatie die alleen de gebruiker kan aanleveren, zet daar dan een [plaatshouder] neer. Gebruik er hoogstens twee.
-- Is de tekst al duidelijk en volledig, verander dan alleen wat onduidelijk of fout is.
+- Begin met een werkwoord in de gebiedende wijs, zoals "Vat … samen", "Schrijf …", "Vergelijk …" of "Leg … uit". Een verzoek wordt zo een opdracht. Een korte kennisvraag zoals "Wat is de Woo?" blijft een vraag.
+- Splits een scheidbaar werkwoord: "nakijken" wordt "Kijk … na", "samenvatten" wordt "Vat … samen", "uitleggen" wordt "Leg … uit".
+- Haal weg wat de opdracht niet verandert: begroetingen, bedankjes, beleefdheden ("zou je misschien", "als dat kan", "alsjeblieft"), twijfelwoorden ("eigenlijk", "gewoon", "even") en aanlopen ("ik vroeg me af", "ik wil graag dat je").
+- Behoud het onderwerp, elke eis en de taal van de gebruiker. Noemt de gebruiker voor wie het antwoord is, houd dat erin.
+- Staat er tekst in het bericht waarmee gewerkt moet worden, zoals een mail of een passage, neem die dan letterlijk over.
+- Noemt de gebruiker geen vorm, sluit dan af met één van deze zinnen, letterlijk:
+  bij een vergelijking: "Zet het in een tabel."
+  bij een samenvatting, tips of ideeën: "Gebruik hoogstens vijf punten."
+  bij een mail of brief: "Hoogstens 150 woorden."
+  bij een uitleg: "Antwoord in hoogstens drie zinnen."
+  Past geen van deze bij de taak, of noemt de gebruiker al een vorm, voeg dan geen vorm toe.
+- Voeg niets anders toe. Geen extra onderdelen, kenmerken of voorbeelden, geen doelgroep, geen bronvermelding en geen kwaliteitseisen die de gebruiker niet zelf noemt.
+- Verzin geen feiten, namen, cijfers of bronnen.
+- Is het bericht al kort en direct, geef het dan ongewijzigd terug.
 </werkwijze>
 
+<verboden_woorden>
+Gebruik deze woorden alleen als de gebruiker ze zelf schreef: uitgebreid, overzichtelijk, gedetailleerd, alle relevante, inclusief, eventueel, duidelijk, helder, beknopt, professioneel, up-to-date.
+</verboden_woorden>
+
 <taal>
-- Is de tekst Nederlands, schrijf dan natuurlijk Nederlands en geen vertaald Engels. Het is "uiteindelijk" en niet "aan het eind van de dag", "een beslissing nemen" en niet "een beslissing maken", "aanpakken" en niet "adresseren".
-- Staat er al een goede Nederlandse uitdrukking, laat die dan zoals hij is: "ik zit lekker in mijn vel" blijft "in mijn vel" en wordt niet "in mijn huid". Twijfel je over een uitdrukking, laat hem staan.
+- Is het bericht Nederlands, schrijf dan natuurlijk Nederlands en geen vertaald Engels. Het is "uiteindelijk" en niet "aan het eind van de dag", "een beslissing nemen" en niet "een beslissing maken", "aanpakken" en niet "adresseren".
+- Staat er al een goede Nederlandse uitdrukking, laat die dan zoals hij is: "in mijn vel" wordt niet "in mijn huid".
 - Gebruik geen gedachtestreepje (— of –) en geen los streepje tussen zinsdelen. Gebruik een komma of maak er twee zinnen van.
 </taal>
 
 <vorm>
-- Het resultaat is één chatbericht in lopende tekst, met hooguit één opsomming.
-- Voeg per wens die je expliciet maakt hoogstens één zin toe aan de tekst van de gebruiker.
-- Gebruik geen koppen, geen kopjes zoals "Rol" of "Context", geen sjabloon en geen opmaaktekens zoals sterretjes of hekjes.
+- Lever lopende tekst: de opdracht, dan de eisen van de gebruiker, dan de vorm. Elke zin bevat een opdracht of een eis.
+- Gebruik geen koppen, geen opsomming en geen opmaaktekens zoals sterretjes of hekjes.
 - Geef alleen de herschreven tekst terug, zonder inleiding, uitleg of aanhalingstekens.
-</vorm>`;
+</vorm>
+
+<voorbeelden>
+Deze voorbeelden tonen alleen de werkwijze. Neem er geen onderwerp, woorden of eisen uit over.
+
+Bericht: Hoi! Ik vroeg me af of je misschien een korte samenvatting zou kunnen maken van de nieuwe Woo-regels voor mijn team, alvast heel erg bedankt!
+Herschreven: Vat de nieuwe Woo-regels kort samen voor mijn team. Gebruik hoogstens vijf punten.
+
+Bericht: kun je de verschillen tussen een kamerbrief en een nota eigenlijk even op een rijtje zetten?
+Herschreven: Vergelijk een Kamerbrief en een nota. Zet het in een tabel.
+</voorbeelden>`;
 
 /** Bovengrens voor de te verbeteren tekst; de server kapt op dezelfde grens af. */
 export const MAX_CHAT_OPTIMIZE_CHARS = 6000;
