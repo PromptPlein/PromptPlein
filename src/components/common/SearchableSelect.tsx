@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown, Search, X } from '@/components/common/icons';
+import { Check, ChevronDown, Plus, Search, X } from '@/components/common/icons';
 
 export interface SearchableOption {
   id: string;
@@ -26,6 +26,10 @@ interface SearchableSelectProps {
    */
   onRequestNew?: (term: string) => void;
   requestNewLabel?: (term: string) => string;
+  /** Tweede regel onder de toevoegactie, bijv. waar het nieuwe item komt. */
+  requestNewHint?: string;
+  /** Tekst als er nog helemaal niets te kiezen is. */
+  emptyLabel?: string;
 }
 
 /**
@@ -44,6 +48,8 @@ export default function SearchableSelect({
   id,
   onRequestNew,
   requestNewLabel = (term) => `“${term}” aanvragen`,
+  requestNewHint,
+  emptyLabel = 'Nog leeg. Typ een naam om hem toe te voegen.',
 }: SearchableSelectProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -89,6 +95,13 @@ export default function SearchableSelect({
     }
   }, [open]);
 
+  function requestNew() {
+    const term = query.trim();
+    if (!onRequestNew || !term) return;
+    onRequestNew(term);
+    setOpen(false);
+  }
+
   function choose(optId: string | null) {
     onChange(optId);
     setOpen(false);
@@ -122,6 +135,13 @@ export default function SearchableSelect({
               placeholder={searchPlaceholder}
               aria-label={searchPlaceholder}
               onKeyDown={(e) => {
+                // Enter kiest de enige treffer, of voegt toe als er niets is.
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  if (filtered.length === 1) choose(filtered[0].id);
+                  else if (filtered.length === 0 && !exactMatch) requestNew();
+                  return;
+                }
                 if (e.key !== 'Escape') return;
                 setOpen(false);
                 rootRef.current?.querySelector('button')?.focus();
@@ -141,7 +161,7 @@ export default function SearchableSelect({
 
           {/* Een gewone lijst met knoppen: dat leest en bedient elke schermlezer goed. */}
           <ul className="max-h-60 overflow-auto overscroll-contain py-1">
-            {clearLabel && (
+            {clearLabel && !query.trim() && (
               <li>
                 <button
                   type="button"
@@ -174,29 +194,41 @@ export default function SearchableSelect({
               </li>
             ))}
 
-            {filtered.length === 0 && !onRequestNew && (
-              <li className="px-3 py-3 text-center text-sm text-slate-400 dark:text-slate-500">
-                Geen resultaten
+            {filtered.length === 0 && query.trim() && (
+              <li className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400">
+                Niets gevonden voor “{query.trim()}”.
               </li>
             )}
 
-            {filtered.length === 0 && onRequestNew && !query.trim() && (
+            {filtered.length === 0 && !query.trim() && (
               <li className="px-3 py-3 text-center text-sm text-slate-500 dark:text-slate-400">
-                Nog leeg. Typ een naam om hem toe te voegen.
+                {onRequestNew ? emptyLabel : 'Geen resultaten'}
               </li>
             )}
 
             {onRequestNew && query.trim() && !exactMatch && (
-              <li className="border-t border-slate-100 dark:border-slate-700">
+              <li className="px-2 pb-1 pt-1">
                 <button
                   type="button"
-                  onClick={() => {
-                    onRequestNew(query.trim());
-                    setOpen(false);
-                  }}
-                  className="w-full px-3 py-2 text-left text-sm font-medium text-rijksblauw-600 hover:bg-rijksblauw-50 dark:text-rijksblauw-300 dark:hover:bg-rijksblauw-500/10"
+                  onClick={requestNew}
+                  className="flex w-full items-center gap-3 rounded border border-dashed border-rijksblauw-300 bg-rijksblauw-50/60 px-3 py-2.5 text-left hover:bg-rijksblauw-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 dark:border-rijksblauw-500/50 dark:bg-rijksblauw-500/10 dark:hover:bg-rijksblauw-500/20"
                 >
-                  + {requestNewLabel(query.trim())}
+                  <span
+                    aria-hidden
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-rijksblauw-600 text-white dark:bg-rijksblauw-400 dark:text-slate-900"
+                  >
+                    <Plus size={16} />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-rijksblauw-700 dark:text-rijksblauw-200">
+                      {requestNewLabel(query.trim())}
+                    </span>
+                    {requestNewHint && (
+                      <span className="block text-xs text-slate-500 dark:text-slate-400">
+                        {requestNewHint}
+                      </span>
+                    )}
+                  </span>
                 </button>
               </li>
             )}
