@@ -667,6 +667,19 @@ like, anders is die rij gelijk aan Nieuw. Een lege rij verdwijnt. Populairste
 eerst sorteert de client, want likes staan niet op de prompt-rij. Technieken staan
 bewust niet bij de filters: dat zegt een gebruiker niets over wat een prompt doet.
 
+## Promptcheck in het tekstvak
+
+Bij het eerste bericht van een gewone chat kijkt de browser na een korte pauze in het
+typen of het korter en scherper kan (`checkPrompt` in `src/lib/promptCheck.ts`, zonder
+AI). Zo ja, dan staat "Kan korter" in de balk en daarachter een kaartje met de strakkere
+versie: beleefdheden en twijfelwoorden eruit, "zou je X kunnen maken" wordt "Maak X", en
+waar het past een vorm erachter. "Gebruik deze" zet hem in het vak, met Herstel mijn
+tekst. Nooit een seintje bij een eigen prompt met kopjes, een lange opdracht of een
+wens voor het geheugen. Het idee komt van de Promptcheck van GreenPT voor BZK
+(promptchecker.nl); de regels zijn eigen werk, neem hun code niet over. Toon geen
+energiebesparing: dat is daar alleen het verschil in woorden. Aan of uit per browser,
+standaard aan, bij Instellingen, Chat (`opl.chat.promptcheck`).
+
 ## Doorvragen bij het eerste bericht
 
 Het eerste bericht van een nieuwe gewone chat gaat eerst langs mode `chat-intake`

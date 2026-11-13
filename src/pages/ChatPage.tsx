@@ -40,6 +40,7 @@ import useReadingMode from '@/components/chat/useReadingMode';
 import SavePromptModal from '@/components/prompts/SavePromptModal';
 import { looksLikeMessyPrompt } from '@/lib/promptHeuristics';
 import { shouldJudgeFirstMessage, useChatIntakeEnabled } from '@/lib/chatIntake';
+import { usePromptCheckEnabled } from '@/lib/promptCheck';
 import { isConversationActive } from '@/lib/conversationMode';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { consumeHandoff, optimizeChatInput } from '@/services/chatService';
@@ -212,6 +213,7 @@ function ChatPageInner() {
   // heel summier bericht eerst door. Uit te zetten bij Instellingen, Chat.
   const { techniques } = useReferenceData();
   const intakeEnabled = useChatIntakeEnabled();
+  const promptCheckEnabled = usePromptCheckEnabled();
   const attachmentsRef = useRef(conversation?.attachments ?? []);
   attachmentsRef.current = conversation?.attachments ?? [];
   const intake = useChatIntake({
@@ -901,6 +903,14 @@ function ChatPageInner() {
                     attachments={conversation?.attachments ?? []}
                     onSend={guardedSend}
                     onRoutekaart={(text) => void controller.addRoutekaart(text)}
+                    // Net als Doorvragen: alleen het eerste bericht van een gewone chat.
+                    promptCheck={
+                      promptCheckEnabled &&
+                      messages.length === 0 &&
+                      !intakeState &&
+                      conversation?.kind !== 'execution' &&
+                      !conversation?.projectId
+                    }
                     onStop={() => {
                       if (!intake.busy) {
                         controller.stop();

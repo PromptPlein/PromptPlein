@@ -1,6 +1,7 @@
 import {
   forwardRef,
   useEffect,
+  useId,
   useImperativeHandle,
   useLayoutEffect,
   useMemo,
@@ -11,6 +12,7 @@ import {
 import {
   BookmarkPlus,
   FolderOpen,
+  Gauge,
   Loader2,
   Map as MapIcon,
   Maximize2,
@@ -32,6 +34,7 @@ import { ACCEPTED_DOC_ACCEPT } from '@/lib/extractDocument';
 import { usePersistentDraft } from '@/lib/usePersistentDraft';
 import { parseRoutekaart } from '@/lib/routekaart';
 import { hasMemoryTrigger } from '@/lib/memoryTriggers';
+import { checkPrompt } from '@/lib/promptCheck';
 import ComposerPlusMenu from './ComposerPlusMenu';
 import ConversationToggle from './ConversationToggle';
 import { useChatVoice } from './useChatVoice';
@@ -53,6 +56,8 @@ const MAX_HEIGHT = 240;
 const SLOT = /\[(?!ontbreekt\])[^\]\n]+\]/;
 /** Het vergrote tekstvak: dit deel van de vensterhoogte. */
 const ENLARGED_SHARE = 0.55;
+/** Zo lang stil na de laatste toets voordat de promptcheck kijkt. */
+const CHECK_PAUSE_MS = 700;
 
 /** Uitkomst van een verbeterslag op de getypte tekst. */
 export interface OptimizeResult {
@@ -154,6 +159,12 @@ interface ChatComposerProps {
    * routekaart, zonder AI. Afwezig = geen aanbod.
    */
   onRoutekaart?: (text: string) => void;
+  /**
+   * Kijk tijdens het typen of het bericht korter en scherper kan (`checkPrompt`,
+   * zonder AI). Kan het, dan staat in de balk de knop "Kan korter" met een
+   * strakkere versie erachter. Alleen bij het eerste bericht van een gewone chat.
+   */
+  promptCheck?: boolean;
 }
 
 /**
@@ -200,6 +211,7 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
     onToggleWebSearch,
     prominent = false,
     onRoutekaart,
+    promptCheck = false,
   },
   ref,
 ) {
@@ -339,6 +351,52 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
   // bevat; typt de gebruiker verder, dan slaat "herstellen" nergens meer op.
   const canUndo = beforeOptimize !== null && text === beforeOptimize.after && !optimizing;
 
+  // --- Promptcheck ---
+  // Pas na een korte pauze in het typen, anders springt de knop bij elke letter op
+  // en neer. "Laat staan" geldt voor precies deze tekst; wie verder typt, krijgt
+  // een nieuwe kans.
+  const [settledText, setSettledText] = useState(text);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSettledText(text), CHECK_PAUSE_MS);
+    return () => window.clearTimeout(timer);
+  }, [text]);
+  const [checkDismissed, setCheckDismissed] = useState<string | null>(null);
+  const [checkOpen, setCheckOpen] = useState(false);
+  const check = useMemo(() => {
+    if (!promptCheck || disabled || streaming || optimizing) return null;
+    if (settledText !== text || text === checkDismissed || canUndo) return null;
+    // Een gemaakte prompt is al uitgewerkt; daar hoort geen seintje bij.
+    if (madePrompt && text === madePrompt.text) return null;
+    return checkPrompt(text);
+  }, [promptCheck, disabled, streaming, optimizing, settledText, text, checkDismissed, canUndo, madePrompt]);
+  useEffect(() => {
+    if (!check) setCheckOpen(false);
+  }, [check]);
+  const checkPanelId = useId();
+  const checkTitleId = useId();
+  const checkButtonRef = useRef<HTMLButtonElement>(null);
+  const checkTitleRef = useRef<HTMLHeadingElement>(null);
+  // Openen zet de focus op het kaartje, zodat een schermlezer leest wat er staat.
+  useEffect(() => {
+    if (checkOpen) checkTitleRef.current?.focus();
+  }, [checkOpen]);
+  const checkShorter = check !== null && check.wordsAfter < check.wordsBefore;
+  const checkLabel = checkShorter ? 'Kan korter' : 'Kan scherper';
+
+  function applyCheck() {
+    if (!check) return;
+    setBeforeOptimize({ before: text, after: check.suggestion });
+    setText(check.suggestion);
+    setCheckOpen(false);
+    textareaRef.current?.focus();
+  }
+
+  function dismissCheck() {
+    setCheckDismissed(text);
+    setCheckOpen(false);
+    textareaRef.current?.focus();
+  }
+
   function submit() {
     if (!canSend) return;
     // Een routekaart gaat niet naar de AI: die programmeerde de pagina zelf en
@@ -471,6 +529,66 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
             </button>
           </div>
         )}
+        {/* Promptcheck: de strakkere versie, boven het veld zodat je beide ziet. */}
+        {check && checkOpen && (
+          <section
+            id={checkPanelId}
+            aria-labelledby={checkTitleId}
+            className="mb-2 animate-fade-in rounded-lg border border-t-4 border-slate-300 border-t-nadruk bg-white p-3.5 shadow-lg dark:border-slate-600 dark:border-t-nadruk dark:bg-slate-800"
+            onKeyDown={(e) => {
+              if (e.key !== 'Escape') return;
+              e.stopPropagation();
+              setCheckOpen(false);
+              checkButtonRef.current?.focus();
+            }}
+          >
+            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+              <h2
+                id={checkTitleId}
+                ref={checkTitleRef}
+                tabIndex={-1}
+                className="text-base font-bold text-rijksblauw-700 focus:outline-none dark:text-rijksblauw-200"
+              >
+                {checkShorter ? 'Korter' : 'Scherper'}
+              </h2>
+              <InfoDot
+                label="Uitleg over de promptcheck"
+                text="Zonder beleefdheden en twijfelwoorden, en met de vorm die je wilt, krijg je een scherper en korter antwoord. De controle gebeurt in je browser."
+              />
+              <span className="ml-auto text-sm text-slate-500 dark:text-slate-400">
+                {checkShorter
+                  ? `${check.wordsBefore} woorden wordt ${check.wordsAfter}`
+                  : check.format
+                    ? 'Met een vorm erbij'
+                    : `${check.fillers} ${check.fillers === 1 ? 'vulwoord' : 'vulwoorden'} weg`}
+              </span>
+            </div>
+            <p className="mt-2 text-base leading-7 text-slate-800 dark:text-slate-100">
+              {check.core}
+              {check.format && (
+                <>
+                  {' '}
+                  <mark className="rounded bg-rijksblauw-50 px-1 text-inherit dark:bg-rijksblauw-500/20">
+                    {check.format}
+                  </mark>
+                </>
+              )}
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
+              <button type="button" className="opl-btn-primary" onClick={applyCheck}>
+                Gebruik deze
+              </button>
+              <button
+                type="button"
+                className="font-medium text-rijksblauw-600 underline-offset-2 hover:underline dark:text-rijksblauw-300"
+                onClick={dismissCheck}
+              >
+                Laat staan
+              </button>
+            </div>
+          </section>
+        )}
+
         {/* Eén omhulsel dat er als hét invoerveld uitziet: bijlagen, tekstvak en
             knoppen zitten er samen in en de rand licht op zodra je in het tekstvak
             staat (focus-within). Zo hoort alles zichtbaar bij elkaar, terwijl de
@@ -691,6 +809,23 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
                 <span className="opl-balk-optioneel max-w-[9rem] truncate text-xs font-medium">
                   {activeProjectName ?? 'Projecten'}
                 </span>
+              </button>
+            )}
+
+            {/* Promptcheck: alleen als er iets te winnen is. */}
+            {check && (
+              <button
+                ref={checkButtonRef}
+                type="button"
+                className="flex h-8 shrink-0 animate-fade-in items-center gap-1.5 rounded-full border border-nadruk bg-nadruk/5 px-2.5 text-nadruk transition-colors hover:bg-nadruk/10 focus:outline-none focus:ring-2 focus:ring-nadruk/40"
+                onClick={() => setCheckOpen((open) => !open)}
+                aria-expanded={checkOpen}
+                aria-controls={checkOpen ? checkPanelId : undefined}
+                aria-label={checkLabel}
+                title="Bekijk een strakkere versie"
+              >
+                <Gauge size={16} className="shrink-0" />
+                <span className="opl-balk-optioneel text-xs font-semibold">{checkLabel}</span>
               </button>
             )}
 

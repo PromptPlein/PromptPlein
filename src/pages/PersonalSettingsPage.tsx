@@ -5,6 +5,7 @@ import AccessibilityHelp from '@/components/settings/AccessibilityHelp';
 import AccessibilitySettings from '@/components/settings/AccessibilitySettings';
 import ChatInstructionSettings from '@/components/settings/ChatInstructionSettings';
 import ChatIntakeSettings from '@/components/settings/ChatIntakeSettings';
+import PromptCheckSettings from '@/components/settings/PromptCheckSettings';
 import ChatMemorySettings from '@/components/settings/ChatMemorySettings';
 import { HELP_PATH } from '@/lib/shortcuts';
 
@@ -95,6 +96,7 @@ export default function PersonalSettingsPage() {
       {onderdeel === 'chat' && (
         <>
           <ChatIntakeSettings />
+          <PromptCheckSettings />
           <ChatInstructionSettings />
           <ChatMemorySettings />
         </>
