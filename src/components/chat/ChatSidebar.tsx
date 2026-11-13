@@ -307,7 +307,7 @@ export default function ChatSidebar({
       {footer}
       <button
         type="button"
-        className="opl-btn-ghost mt-2 w-full"
+        className="opl-btn-secondary mt-2 w-full"
         onClick={() => navigate('/instellingen/chat')}
         disabled={disabled}
       >

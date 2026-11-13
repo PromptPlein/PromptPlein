@@ -635,9 +635,10 @@ function ChatPageInner() {
      onder het gesprek: op een laag scherm kostte die balk een flink stuk leesruimte. */
   const storageFooter = (
     <div className="mt-2 border-t border-slate-200 pt-2 text-sm dark:border-slate-700">
-      <p className="flex items-center gap-1.5 px-2 font-medium text-slate-700 dark:text-slate-200">
+      {/* Eén regel, ook in de smalle zijbalk: daarom zonder vet en met krappe marges. */}
+      <p className="flex items-center gap-1 px-1 text-slate-700 dark:text-slate-200">
         <ShieldCheck size={15} className="shrink-0 text-rijksblauw-700 dark:text-rijksblauw-200" />
-        <span className="min-w-0">Chats blijven in deze browser</span>
+        <span className="min-w-0 whitespace-nowrap">Chats blijven in deze browser</span>
         <InfoDot
           label="Uitleg over waar chats en projecten staan"
           text={
