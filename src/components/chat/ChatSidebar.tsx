@@ -220,11 +220,12 @@ export default function ChatSidebar({
                 )}
                 onClick={() => onOpenProject(project.id)}
                 disabled={disabled}
+                title={project.name}
               >
                 <ItemIcon active={project.id === openProjectId}>
                   <FolderOpen size={15} />
                 </ItemIcon>
-                <span className="min-w-0 flex-1 truncate">{project.name}</span>
+                <span className="line-clamp-2 min-w-0 flex-1 leading-snug [overflow-wrap:anywhere]">{project.name}</span>
                 {Boolean(project.fileCount) && (
                   <span
                     aria-label={`${project.fileCount} bronbestanden`}
@@ -259,6 +260,7 @@ export default function ChatSidebar({
               className="flex min-w-0 flex-1 items-center gap-2.5 px-2 py-1.5 text-left"
               onClick={() => onSelect(entry.id)}
               disabled={disabled}
+              title={entry.title}
             >
               <ItemIcon active={entry.id === activeId}>
                 <MessageSquare size={15} />
@@ -266,7 +268,7 @@ export default function ChatSidebar({
               <span className="flex min-w-0 flex-1 flex-col">
                 <span
                   className={clsx(
-                    'truncate text-sm',
+                    'line-clamp-2 text-sm leading-snug [overflow-wrap:anywhere]',
                     entry.id === activeId
                       ? 'font-semibold text-rijksblauw-700 dark:text-rijksblauw-100'
                       : 'text-slate-800 dark:text-slate-200',
