@@ -82,8 +82,29 @@ export async function updatePromptVisibility(
   promptId: string,
   nextLevels: VisibilityLevel[],
   organizationId: string | null | undefined,
+  /**
+   * De oude organisatie van de prompt, als de maker inmiddels ergens anders staat.
+   * De prompt verhuist dan naar `organizationId`, en het niveau Afdeling mee.
+   */
+  options: { moveFrom?: string | null } = {},
 ): Promise<void> {
   const client = requireClient();
+
+  // Eerst verhuizen: de database leidt de directie af uit de organisatie van de
+  // prompt, dus die moet kloppen voordat er een niveau bij komt.
+  if (options.moveFrom !== undefined && organizationId) {
+    const { error: moveErr } = await client
+      .from('prompts')
+      .update({ organization_id: organizationId })
+      .eq('id', promptId);
+    if (moveErr) throw moveErr;
+    const { error: deptErr } = await client
+      .from('prompt_visibility')
+      .update({ org_id: organizationId })
+      .eq('prompt_id', promptId)
+      .eq('level', 'department');
+    if (deptErr) throw deptErr;
+  }
 
   const current = await listVisibility(promptId);
   const currentLevels = new Set(current.map((r) => r.level));

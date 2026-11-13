@@ -93,11 +93,7 @@ export default function OrgPicker({
 
   const ministryOptions = useMemo(
     () =>
-      listMinistries(organizations).map((o) => ({
-        id: o.id,
-        label: o.name,
-        hint: o.code?.trim() || undefined,
-      })),
+      listMinistries(organizations).map((o) => ({ id: o.id, label: orgDisplayName(o) })),
     [organizations],
   );
 
@@ -112,19 +108,18 @@ export default function OrgPicker({
   const between = (o: Organization) =>
     orgChain(o.id, organizations).slice(1, -1).map(orgDisplayName).join(ORG_PATH_SEPARATOR);
 
-  // Bij elke keuze de afkorting en de lagen erboven: daar zoek je ook op.
+  // Bij elke keuze de naam met afkorting en de lagen erboven: daar zoek je ook op.
   const afdelingOptions = useMemo(() => {
     // Een profiel dat op een directie staat, blijft zichtbaar gekozen.
     return under
       .filter((o) => isDepartment(o) || o.id === value)
       .map((o) => {
         const above = between(o);
+        // De afkorting staat in de naam, dus je vindt hem ook daarop.
         return {
           id: o.id,
-          label: o.name,
-          hint: [o.code?.trim(), above ? `onder ${above}` : `direct onder ${ministryShort}`]
-            .filter(Boolean)
-            .join(' · '),
+          label: orgDisplayName(o),
+          hint: above ? `onder ${above}` : `direct onder ${ministryShort}`,
         };
       })
       .sort((a, b) => a.label.localeCompare(b.label, 'nl', { sensitivity: 'base' }));
@@ -137,8 +132,8 @@ export default function OrgPicker({
         const above = between(o);
         return {
           id: o.id,
-          label: o.name,
-          hint: [o.code?.trim(), above ? `onder ${above}` : null].filter(Boolean).join(' · ') || undefined,
+          label: orgDisplayName(o),
+          hint: above ? `onder ${above}` : undefined,
         };
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps

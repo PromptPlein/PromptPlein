@@ -11,6 +11,7 @@ import { VISIBILITY_STATUS_META } from '@/services/collaborationService';
 import { visibilityMeta } from '@/lib/utils';
 import { logAdminAction } from '@/services/adminService';
 import VisibilityPicker from '@/components/prompts/VisibilityPicker';
+import { useAuth } from '@/context/AuthContext';
 import type { PromptVisibility, VisibilityLevel } from '@/types';
 
 /**
@@ -30,8 +31,10 @@ export default function VisibilityApprovalPanel({
   refreshKey,
   /** Mag de huidige gebruiker de deelniveaus aanpassen (eigenaar/admin)? */
   canEdit = false,
-  /** De organisatie van de prompt — nodig om afdeling/ministerie te koppelen. */
+  /** De organisatie van de prompt, nodig om afdeling en ministerie te koppelen. */
   organizationId = null,
+  /** De maker van de prompt. */
+  ownerId = null,
   /** Aangeroepen na een wijziging, zodat de pagina de badge kan verversen. */
   onChanged,
 }: {
@@ -39,8 +42,16 @@ export default function VisibilityApprovalPanel({
   refreshKey?: number;
   canEdit?: boolean;
   organizationId?: string | null;
+  ownerId?: string | null;
   onChanged?: () => void;
 }) {
+  const { user, profile } = useAuth();
+  // Deelt de maker zelf, dan telt waar hij nu werkt en niet waar hij werkte toen
+  // hij de prompt opsloeg. Bij opslaan verhuist de prompt mee (zie
+  // updatePromptVisibility).
+  const isOwner = !!ownerId && user?.id === ownerId;
+  const effectiveOrgId =
+    isOwner && profile?.organization_id ? profile.organization_id : organizationId;
   const [rows, setRows] = useState<PromptVisibility[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [notes, setNotes] = useState<Record<string, string>>({});
@@ -71,7 +82,9 @@ export default function VisibilityApprovalPanel({
   async function saveLevels() {
     setSaving(true);
     try {
-      await updatePromptVisibility(promptId, draftLevels, organizationId);
+      await updatePromptVisibility(promptId, draftLevels, effectiveOrgId, {
+        moveFrom: effectiveOrgId !== organizationId ? organizationId : undefined,
+      });
       toast.success('Zichtbaarheid bijgewerkt');
       setEditing(false);
       await reload();
@@ -128,7 +141,7 @@ export default function VisibilityApprovalPanel({
             idPrefix="edit-vis"
             value={draftLevels}
             onChange={setDraftLevels}
-            organizationId={organizationId ?? undefined}
+            organizationId={effectiveOrgId ?? undefined}
           />
           <p className="text-xs text-slate-400 dark:text-slate-500">
             Nieuw aangevinkte niveaus volgen de gebruikelijke route: de afdeling is direct

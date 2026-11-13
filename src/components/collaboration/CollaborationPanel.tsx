@@ -91,6 +91,7 @@ export default function CollaborationPanel({
         refreshKey={refreshKey}
         canEdit={canEditVisibility}
         organizationId={prompt.organization_id ?? null}
+        ownerId={prompt.created_by_user ?? null}
         onChanged={onVisibilityChanged}
       />
 
