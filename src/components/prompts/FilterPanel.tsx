@@ -6,7 +6,17 @@ import { useReferenceData } from '@/context/ReferenceDataContext';
 import { useAuth } from '@/context/AuthContext';
 import { categoryIcon } from '@/lib/categoryIcons';
 import { SHARING_LEVELS, toggled } from '@/lib/utils';
-import { descendantsInOrder, ministryOf, orgChain, orgDisplayName, orgSubtreeIds } from '@/lib/orgTree';
+import {
+  descendantsInOrder,
+  directorateOf,
+  ministryOf,
+  orgChain,
+  orgDisplayName,
+  orgSubtreeIds,
+  ORG_PATH_SEPARATOR,
+} from '@/lib/orgTree';
+import SearchableSelect from '@/components/common/SearchableSelect';
+import type { Organization } from '@/types';
 import useDialogFocus from '@/lib/useDialogFocus';
 import type { AdvancedPromptFilters, SharingLevel } from '@/types';
 
@@ -24,12 +34,11 @@ interface FilterPanelProps {
  * dus er valt niets te verliezen: anders dan bij Modal sluit hij ook met Escape
  * en met een klik ernaast.
  *
- * Bij Organisatie staat eerst de knop Rijksoverheid: alles wat is goedgekeurd
- * voor de hele Rijksoverheid. Daaronder alleen je eigen ministerie, met de
- * directies en afdelingen eronder als boom; andere ministeries staan er bewust
- * niet bij. Je eigen directie en afdeling zijn gemarkeerd. Filteren op een laag
- * neemt alles mee wat eronder valt; een diepere keuze vernauwt dat (zie
- * `searchOrgIds`). De rasters rekenen in rem: met grote letters op een smal
+ * "Zoek binnen" is één keuze, net als de deelniveaus: alles wat je mag zien, je
+ * afdeling, je directie, je ministerie, of wat voor de hele Rijksoverheid is
+ * goedgekeurd. Een balkje laat zien hoe breed dat is. Een andere directie of
+ * afdeling kies je eronder, maar alleen binnen je eigen ministerie. Een laag neemt
+ * alles mee wat eronder valt (zie `searchOrgIds`). De rasters rekenen in rem: met grote letters op een smal
  * scherm krijgen ze vanzelf minder kolommen.
  */
 export default function FilterPanel({
@@ -55,24 +64,59 @@ export default function FilterPanel({
 
   if (!open) return null;
 
-  // Alleen je eigen ministerie, met alles eronder; je eigen lagen zijn gemarkeerd.
+  // Je eigen lagen, van klein naar groot.
   const selectedOrgs = filters.organization_ids ?? [];
-  const ownMinistry = profile?.organization_id
-    ? ministryOf(profile.organization_id, organizations)
-    : null;
-  const ownPath = new Set(orgChain(profile?.organization_id, organizations).map((o) => o.id));
-  const ownTree = ownMinistry
-    ? [{ org: ownMinistry, depth: 0 }, ...descendantsInOrder(ownMinistry.id, organizations)]
-    : [];
+  const ownOrgId = profile?.organization_id ?? null;
+  const ownMinistry = ownOrgId ? ministryOf(ownOrgId, organizations) : null;
+  const ownChain = orgChain(ownOrgId, organizations);
+  const ownDeepest = ownChain.length ? ownChain[ownChain.length - 1] : null;
+  const ownAfdeling = ownDeepest?.organization_type === 'department' ? ownDeepest : null;
+  const ownDirectie = directorateOf(ownOrgId, organizations);
 
-  function toggleOrg(id: string) {
+  type Scope = 'alles' | 'afdeling' | 'directie' | 'ministerie' | 'rijk';
+  const scopes: { key: Scope; label: string; org: Organization | null; width: number }[] = [
+    { key: 'alles', label: 'Alles wat je mag zien', org: null, width: 0 },
+    { key: 'afdeling', label: 'Jouw afdeling', org: ownAfdeling, width: 1 },
+    { key: 'directie', label: 'Jouw directie of dienst', org: ownDirectie, width: 2 },
+    { key: 'ministerie', label: 'Jouw ministerie', org: ownMinistry, width: 3 },
+    { key: 'rijk', label: 'Rijksoverheid', org: null, width: 4 },
+  ];
+  const shown = scopes.filter((sc) => sc.key === 'alles' || sc.key === 'rijk' || sc.org);
+
+  // Welke keuze staat aan? De diepste gekozen organisatie telt.
+  const deepestSelected = selectedOrgs.filter(
+    (id) => !selectedOrgs.some((o) => o !== id && orgSubtreeIds(id, organizations).includes(o)),
+  );
+  const pickedId = deepestSelected.length === 1 ? deepestSelected[0] : null;
+  const current: Scope | 'anders' = filters.rijksbreed
+    ? 'rijk'
+    : selectedOrgs.length === 0
+      ? 'alles'
+      : (shown.find((sc) => sc.org && sc.org.id === pickedId)?.key ?? 'anders');
+
+  function chooseScope(scope: (typeof scopes)[number]) {
     onChange({
-      // Een laag uitzetten zet ook wat eronder gekozen is uit.
-      organization_ids: selectedOrgs.includes(id)
-        ? selectedOrgs.filter((other) => !orgSubtreeIds(id, organizations).includes(other))
-        : [...selectedOrgs, id],
+      rijksbreed: scope.key === 'rijk',
+      organization_ids: scope.org ? [scope.org.id] : [],
     });
   }
+
+  // De andere directies en afdelingen van je ministerie, met waar ze onder vallen.
+  const otherOptions = ownMinistry
+    ? descendantsInOrder(ownMinistry.id, organizations).map(({ org }) => {
+        const above = orgChain(org.id, organizations).slice(1, -1).map(orgDisplayName);
+        return {
+          id: org.id,
+          label: orgDisplayName(org),
+          hint:
+            org.organization_type === 'department'
+              ? above.length
+                ? `Afdeling onder ${above.join(ORG_PATH_SEPARATOR)}`
+                : 'Afdeling'
+              : 'Directie of dienst',
+        };
+      })
+    : [];
 
   return createPortal(
     <div className="fixed inset-0 z-50">
@@ -128,54 +172,92 @@ export default function FilterPanel({
             </div>
           </FilterGroup>
 
-          <FilterGroup title="Organisatie">
-            <div className="space-y-3">
-              <ToggleButton
-                active={filters.rijksbreed ?? false}
-                onClick={() => onChange({ rijksbreed: !filters.rijksbreed })}
-                className="w-full text-left"
-              >
-                <span className="block py-0.5">
-                  <span className="block text-sm font-semibold">Rijksoverheid</span>
-                  <span className="block text-xs opacity-80">Goedgekeurd voor de hele Rijksoverheid</span>
-                </span>
-              </ToggleButton>
-
-              {ownTree.length > 0 ? (
-                <ul className="space-y-1.5">
-                  {/* Een boom: elke laag springt in onder de laag erboven, zodat je ziet
-                      waar een afdeling onder valt. */}
-                  {ownTree.map(({ org, depth }) => {
-                    const own = ownPath.has(org.id);
-                    return (
-                      <li key={org.id} style={{ paddingLeft: `${depth * 1.25}rem` }}>
-                        <ToggleButton
-                          active={selectedOrgs.includes(org.id)}
-                          onClick={() => toggleOrg(org.id)}
-                          className="w-full justify-between gap-2 text-left text-sm"
-                        >
-                          <span className={clsx('min-w-0', depth === 0 && 'font-semibold')}>
-                            {orgDisplayName(org)}
-                          </span>
-                          {own && (
-                            <span className="shrink-0 text-xs font-medium opacity-80">
-                              {depth === 0 ? 'Jouw ministerie' : org.organization_type === 'department' ? 'Jouw afdeling' : 'Jouw directie'}
-                            </span>
-                          )}
-                        </ToggleButton>
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : (
-                <p className="text-sm text-slate-500 dark:text-slate-400">
-                  {profile
-                    ? 'Kies je ministerie en afdeling op je profiel om binnen je eigen organisatie te filteren.'
-                    : 'Log in om binnen je eigen organisatie te filteren.'}
-                </p>
-              )}
+          <fieldset>
+            <legend className="mb-2 text-sm font-bold text-slate-900 dark:text-slate-100">
+              Zoek binnen
+            </legend>
+            <div className="space-y-2">
+              {shown.map((sc) => {
+                const active = current === sc.key;
+                return (
+                  <label
+                    key={sc.key}
+                    className={clsx(
+                      'flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2.5 transition-colors',
+                      active
+                        ? 'border-rijksblauw-700 bg-rijksblauw-50/70 shadow-[inset_4px_0_0_theme(colors.nadruk.DEFAULT)] dark:border-rijksblauw-400 dark:bg-rijksblauw-500/15'
+                        : 'border-slate-300 hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-700/50',
+                    )}
+                  >
+                    <input
+                      type="radio"
+                      name="zoek-binnen"
+                      checked={active}
+                      onChange={() => chooseScope(sc)}
+                      className="mt-0.5 h-5 w-5 shrink-0 accent-rijksblauw-700"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-semibold text-slate-900 dark:text-slate-100">
+                        {sc.label}
+                      </span>
+                      <span className="block text-xs text-slate-500 dark:text-slate-400">
+                        {sc.org
+                          ? orgDisplayName(sc.org)
+                          : sc.key === 'rijk'
+                            ? 'Goedgekeurd voor de hele Rijksoverheid'
+                            : 'Geen beperking op organisatie'}
+                      </span>
+                      {sc.width > 0 && (
+                        // Hoe breed je zoekt; alleen voor het oog, de tekst zegt het al.
+                        <span aria-hidden className="mt-1.5 flex gap-1">
+                          {[1, 2, 3, 4].map((n) => (
+                            <span
+                              key={n}
+                              className={clsx(
+                                'h-1.5 flex-1 rounded-full',
+                                n <= sc.width
+                                  ? 'bg-rijksblauw-600 dark:bg-rijksblauw-300'
+                                  : 'bg-slate-200 dark:bg-slate-600',
+                              )}
+                            />
+                          ))}
+                        </span>
+                      )}
+                    </span>
+                  </label>
+                );
+              })}
             </div>
-          </FilterGroup>
+
+            {ownMinistry ? (
+              <div className="mt-3">
+                <label
+                  htmlFor="filter-andere-plek"
+                  className="mb-1 block text-sm text-slate-700 dark:text-slate-200"
+                >
+                  Of een andere directie of afdeling binnen {ownMinistry.code || ownMinistry.name}
+                </label>
+                <SearchableSelect
+                  id="filter-andere-plek"
+                  options={otherOptions}
+                  value={current === 'anders' ? pickedId : null}
+                  onChange={(id) =>
+                    onChange({ rijksbreed: false, organization_ids: id ? [id] : [] })
+                  }
+                  placeholder="Kies een directie of afdeling"
+                  clearLabel="Geen"
+                  searchPlaceholder="Zoek op naam of afkorting"
+                  emptyLabel="Nog geen directies of afdelingen."
+                />
+              </div>
+            ) : (
+              <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
+                {profile
+                  ? 'Kies je ministerie en afdeling op je profiel om binnen je eigen organisatie te zoeken.'
+                  : 'Log in om binnen je eigen organisatie te zoeken.'}
+              </p>
+            )}
+          </fieldset>
 
           {roles.length > 0 && (
             <FilterGroup title="Functie">

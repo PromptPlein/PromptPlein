@@ -673,8 +673,13 @@ dezelfde plek, zodat er niets verspringt zodra iemand begint te typen.
 De filters staan in de URL en nergens anders: de links zijn deelbaar en de
 terugknop van de browser werkt. Bestaande links (`?category=`, `?org=`) blijven
 daardoor gewoon werken. De keuzes zitten in `FilterPanel` en gelden meteen, dus
-dat paneel sluit ook met Escape of een klik ernaast, anders dan `Modal`. Filteren
-op een ministerie neemt alles mee wat eronder hangt (`orgSubtreeIds`).
+dat paneel sluit ook met Escape of een klik ernaast, anders dan `Modal`. Op
+organisatie kies je "Zoek binnen": alles wat je mag zien, je afdeling, je directie,
+je ministerie of Rijksoverheid (alleen wat daarvoor is goedgekeurd, `rijk=1`), met
+een balkje voor hoe breed dat is. Een andere directie of afdeling kies je eronder,
+maar alleen binnen je eigen ministerie; andere ministeries zijn bewust niet te
+kiezen, ook niet via een oude link. Een laag neemt alles mee wat eronder hangt
+(`orgSubtreeIds`).
 
 In de rijen doen privéprompts niet mee. Populair toont alleen prompts met een
 like, anders is die rij gelijk aan Nieuw. Een lege rij verdwijnt. Populairste
