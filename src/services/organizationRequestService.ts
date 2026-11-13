@@ -2,14 +2,14 @@ import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import type { Organization, OrganizationRequest, Profile } from '@/types';
 
 /**
- * Aanvragen voor een nieuw onderdeel of team onder een ministerie (migratie 0056).
- * Een gebruiker vraagt een of meer lagen aan, een beheerder keurt ze goed en dan
+ * Aanvragen voor een nieuwe afdeling, zo nodig met de directie of dienst erboven
+ * (migraties 0056 tot 0058). Een gebruiker vraagt een of meer lagen aan, een beheerder keurt ze goed en dan
  * ontstaat de hele keten. RLS en de database-functies dwingen af wie wat mag.
  */
 
 function requireClient() {
   if (!isSupabaseConfigured || !supabase) {
-    throw new Error('Onderdelen aanvragen vereist een geconfigureerde Supabase-backend.');
+    throw new Error('Afdelingen aanvragen vereist een geconfigureerde Supabase-backend.');
   }
   return supabase;
 }
@@ -18,9 +18,15 @@ function requireClient() {
 function readableError(error: { code?: string; message: string }): Error {
   // De database geeft zelf een leesbare melding; een ontbrekende functie niet.
   if (error.code === 'PGRST202') {
-    return new Error('Een onderdeel aanvragen kan nog niet. Probeer het later opnieuw.');
+    return new Error('Een afdeling aanvragen kan nog niet. Probeer het later opnieuw.');
   }
   return new Error(error.message);
+}
+
+/** Een nieuwe laag: de naam voluit, met de afkorting als die er is. */
+export interface NewOrgLayer {
+  name: string;
+  code?: string | null;
 }
 
 /**
@@ -30,17 +36,26 @@ function readableError(error: { code?: string; message: string }): Error {
  */
 export async function requestOrganization(
   parentId: string,
-  names: string[],
+  layers: NewOrgLayer[],
   motivation?: string,
 ): Promise<OrganizationRequest> {
   const client = requireClient();
   const { data, error } = await client.rpc('request_organization', {
     p_parent: parentId,
-    p_names: names,
+    p_names: layers.map((l) => l.name.trim()),
+    p_codes: layers.map((l) => l.code?.trim() ?? ''),
     p_motivation: motivation?.trim() || null,
   });
   if (error) throw readableError(error);
   return data as OrganizationRequest;
+}
+
+/** De nieuwe lagen van een aanvraag als tekst, bijvoorbeeld "Organisatie Digitale Infrastructuur (ODI)". */
+export function requestLayerLabels(request: OrganizationRequest): string[] {
+  return request.names.map((name, i) => {
+    const code = request.codes?.[i]?.trim();
+    return code ? `${name} (${code})` : name;
+  });
 }
 
 /** De eigen aanvragen die nog op een beheerder wachten, voor het profiel. */

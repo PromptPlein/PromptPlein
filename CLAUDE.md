@@ -223,19 +223,27 @@ Prompts hebben een zichtbaarheidsniveau met een goedkeuringsstroom
 (`visibilityService`, `ApprovalQueuePage`). Organisaties vormen een boom van
 ministeries (`orgTree.ts`, migraties 0020/0021/0024).
 
-Onder een ministerie hangen onderdelen en daaronder teams, zo diep als nodig
-(bijvoorbeeld BZK › ODI › RADIO, hoogstens zes lagen). `OrgPicker` toont een
-keuzelijst per laag; het profiel hangt aan de diepste gekozen plek. Een ontbrekend
-onderdeel vraagt de gebruiker aan op zijn profiel, ook meerdere lagen in één
-aanvraag (`request_organization`, 0056), en een beheerder keurt het goed in
-Beheer, Onderdeel-aanvragen (`approve_organization_request` maakt de hele keten).
-Bij goedkeuring verhuist het profiel van de aanvrager naar het nieuwe onderdeel.
-Het direct aanmaken uit 0055 is daarmee vervallen: keuze van de eigenaar. Wie op
-dezelfde plek zit, deelt de prompts op het deelniveau Afdeling (exacte match).
-Een functie is op dezelfde manier een aanvraag; de aanvrager krijgt mail bij
-indienen en besluit. Overal waar een organisatie staat, toont de app het hele pad
-(`orgPathLabel`). In Ontdekken zoekt een gekozen onderdeel in alles eronder, en
-een dieper gekozen onderdeel vernauwt dat (`searchOrgIds`).
+Onder een ministerie hangt een directie of dienst (type `directorate`) en daaronder
+de afdeling (type `department`). Zo heten die lagen in de app; "onderdeel" is te
+vaag, keuze van de eigenaar. Mensen zoeken hun afdeling, niet de directie:
+`OrgPicker` toont na het ministerie één zoeklijst met alle afdelingen, met bij
+elke afdeling de afkorting en de directie erboven, zodat je op alle drie zoekt.
+Het profiel hangt aan de afdeling. Een ontbrekende afdeling vraagt de gebruiker
+aan op zijn profiel: eerst kiest hij de directie of dienst, en staat die er ook
+niet bij, dan vraagt hij die mee aan (`request_organization`, 0056). Een beheerder
+keurt goed in Beheer, Afdeling-aanvragen; `approve_organization_request` maakt de
+keten en zet de onderste laag als afdeling (0058). Bij goedkeuring verhuist het
+profiel van de aanvrager naar de nieuwe afdeling. Het direct aanmaken uit 0055 is
+vervallen.
+
+Elke laag heeft de vorm van een ministerie: de naam voluit in `name`, de afkorting
+in `code` (0057). De aanvraag vraagt om beide en houdt een losse afkorting als naam
+tegen (`looksLikeAbbreviation`). Wie in dezelfde afdeling zit, deelt de prompts op
+het deelniveau Afdeling (exacte match). Een functie is op dezelfde manier een
+aanvraag; de aanvrager krijgt mail bij indienen en besluit. Waar een organisatie
+staat, toont de app het pad (`orgPathLabel`): kort met afkortingen op kaarten,
+voluit op de promptpagina. In Ontdekken zoekt een gekozen directie in alle
+afdelingen eronder, en een gekozen afdeling vernauwt dat (`searchOrgIds`).
 
 ## Opslagscheiding: dit is een bewuste keuze
 

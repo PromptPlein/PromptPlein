@@ -1066,8 +1066,10 @@ export interface OrganizationRequest {
   id: string;
   /** De bestaande plek waaronder het nieuwe onderdeel komt. */
   parent_id: string;
-  /** De nieuwe lagen van boven naar beneden, bijvoorbeeld ODI en RADIO. */
+  /** De nieuwe lagen van boven naar beneden, de namen voluit. */
   names: string[];
+  /** De afkorting per laag, op dezelfde plek; leeg als er geen is (0057). */
+  codes?: string[] | null;
   motivation?: string | null;
   status: FunctionRequestStatus;
   requested_by?: string | null;

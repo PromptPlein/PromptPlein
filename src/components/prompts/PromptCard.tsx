@@ -122,7 +122,7 @@ export default function PromptCard({ prompt, author, onChanged }: PromptCardProp
   // staat achter het infobolletje: één blik op de kaart, de rest op verzoek.
   const info = [
     prompt.description,
-    // Het hele pad, zodat bij een team ook het onderdeel en het ministerie erboven staan.
+    // Het hele pad, zodat bij een afdeling ook de directie en het ministerie erboven staan.
     [org ? orgPathLabel(org.id, organizations, { short: true }) || org.name : null, role?.name, formatDate(prompt.created_at)]
       .filter(Boolean)
       .join(' · '),

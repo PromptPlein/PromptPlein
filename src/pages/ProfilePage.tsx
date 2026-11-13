@@ -11,6 +11,7 @@ import {
 } from '@/services/functionRequestService';
 import {
   listOwnPendingOrganizationRequests,
+  requestLayerLabels,
 } from '@/services/organizationRequestService';
 import { orgPathLabel, ORG_PATH_SEPARATOR } from '@/lib/orgTree';
 import FunctionPicker from '@/components/common/FunctionPicker';
@@ -129,7 +130,7 @@ export default function ProfilePage() {
             {pendingOrgs.map((r) => (
               <li key={r.id}>
                 <span className="font-medium">
-                  {[orgPathLabel(r.parent_id, organizations, { short: true }), ...r.names]
+                  {[orgPathLabel(r.parent_id, organizations, { short: true }), ...requestLayerLabels(r)]
                     .filter(Boolean)
                     .join(ORG_PATH_SEPARATOR)}
                 </span>

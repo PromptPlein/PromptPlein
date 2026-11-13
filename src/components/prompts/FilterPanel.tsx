@@ -5,7 +5,7 @@ import { X } from '@/components/common/icons';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { categoryIcon } from '@/lib/categoryIcons';
 import { SHARING_LEVELS, toggled } from '@/lib/utils';
-import { descendantsInOrder, ministryOf, orgSubtreeIds } from '@/lib/orgTree';
+import { descendantsInOrder, ministryOf, orgDisplayName, orgSubtreeIds } from '@/lib/orgTree';
 import useDialogFocus from '@/lib/useDialogFocus';
 import type { AdvancedPromptFilters, SharingLevel } from '@/types';
 
@@ -148,9 +148,9 @@ export default function FilterPanel({
           )}
 
           {departmentGroups.map(({ ministry, departments }) => (
-            <FilterGroup key={ministry.id} title={`Onderdeel bij ${ministry.code ?? ministry.name}`}>
-              {/* Een boom: elk onderdeel springt in onder zijn ouder, zodat de lagen
-                  erboven zichtbaar blijven. Een onderdeel kiezen neemt alles eronder mee. */}
+            <FilterGroup key={ministry.id} title={`Afdeling bij ${ministry.code ?? ministry.name}`}>
+              {/* Een boom: elke afdeling springt in onder zijn directie of dienst, zodat
+                  de lagen erboven zichtbaar blijven. Een directie kiezen neemt alles eronder mee. */}
               <ul className="space-y-1.5">
                 {departments.map(({ org: d, depth }) => (
                   <li key={d.id} style={{ paddingLeft: `${(depth - 1) * 1.25}rem` }}>
@@ -158,7 +158,7 @@ export default function FilterPanel({
                       active={selectedOrgs.includes(d.id)}
                       onClick={() =>
                         onChange({
-                          // Een onderdeel uitzetten zet ook wat eronder gekozen is uit.
+                          // Een directie uitzetten zet ook de afdelingen eronder uit.
                           organization_ids: selectedOrgs.includes(d.id)
                             ? selectedOrgs.filter(
                                 (id) => !orgSubtreeIds(d.id, organizations).includes(id),
@@ -168,7 +168,7 @@ export default function FilterPanel({
                       }
                       className="w-full justify-start text-left text-sm"
                     >
-                      {d.name}
+                      {orgDisplayName(d)}
                     </ToggleButton>
                   </li>
                 ))}

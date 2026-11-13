@@ -134,15 +134,34 @@ export function orgChain(orgId: string | null | undefined, organizations: Organi
   return chain;
 }
 
-/** Het pad als tekst, bijvoorbeeld "BZK › ODI › RADIO". Leeg als de id onbekend is. */
+/**
+ * Het pad als tekst. Voluit ("Binnenlandse Zaken en Koninkrijksrelaties › ...") of
+ * met `short` de afkortingen waar die er zijn ("BZK › ODI › RADIO"). Leeg als de
+ * id onbekend is.
+ */
 export function orgPathLabel(
   orgId: string | null | undefined,
   organizations: Organization[],
   options: { short?: boolean } = {},
 ): string {
   return orgChain(orgId, organizations)
-    .map((o) => (options.short && o.organization_type === 'ministry' ? o.code || o.name : o.name))
+    .map((o) => (options.short ? o.code || o.name : o.name))
     .join(ORG_PATH_SEPARATOR);
+}
+
+/** De naam voluit met de afkorting erachter, bijvoorbeeld "Organisatie Digitale Infrastructuur (ODI)". */
+export function orgDisplayName(org: Pick<Organization, 'name' | 'code'>): string {
+  const code = org.code?.trim();
+  return code && code.toLowerCase() !== org.name.toLowerCase() ? `${org.name} (${code})` : org.name;
+}
+
+/**
+ * Lijkt deze tekst een afkorting in plaats van een naam voluit? Eén woord van
+ * hoogstens zes tekens zonder kleine letters, zoals "ODI" of "DGOO".
+ */
+export function looksLikeAbbreviation(text: string): boolean {
+  const t = text.trim();
+  return t.length > 0 && t.length <= 6 && !/\s/.test(t) && t === t.toUpperCase() && /[A-Z]/.test(t);
 }
 
 /** De directe kinderen van een organisatie, op naam gesorteerd. */

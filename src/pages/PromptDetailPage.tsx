@@ -368,7 +368,8 @@ export default function PromptDetailPage() {
             const org = organizationById(author?.organization_id ?? prompt.organization_id);
             return org ? (
               <span className="inline-flex items-center gap-1 text-slate-400 dark:text-slate-500">
-                <Building2 size={12} /> {orgPathLabel(org.id, organizations, { short: true }) || org.name}
+                {/* Op de promptpagina voluit, zodat een afkorting niemand iets hoeft te zeggen. */}
+                <Building2 size={12} /> {orgPathLabel(org.id, organizations) || org.name}
               </span>
             ) : null;
           })()}

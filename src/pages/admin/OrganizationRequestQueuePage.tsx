@@ -9,6 +9,7 @@ import {
   approveOrganizationRequest,
   listPendingOrganizationRequests,
   rejectOrganizationRequest,
+  requestLayerLabels,
 } from '@/services/organizationRequestService';
 import { logAdminAction } from '@/services/adminService';
 import type { OrganizationRequest } from '@/types';
@@ -36,7 +37,7 @@ export default function OrganizationRequestQueuePage() {
   }, []);
 
   function pathOf(req: OrganizationRequest) {
-    return [orgPathLabel(req.parent_id, organizations), ...req.names]
+    return [orgPathLabel(req.parent_id, organizations), ...requestLayerLabels(req)]
       .filter(Boolean)
       .join(ORG_PATH_SEPARATOR);
   }
@@ -54,7 +55,7 @@ export default function OrganizationRequestQueuePage() {
       });
       toast.success(`“${org.name}” toegevoegd`);
       setRequests((prev) => prev.filter((x) => x.id !== req.id));
-      await refresh(); // het nieuwe onderdeel staat meteen in de keuzelijsten
+      await refresh(); // de nieuwe afdeling staat meteen in de keuzelijsten
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Goedkeuren mislukt');
     } finally {
@@ -86,7 +87,7 @@ export default function OrganizationRequestQueuePage() {
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
-          Onderdeel-aanvragen
+          Afdeling-aanvragen
         </h1>
         <p className="text-sm text-slate-500 dark:text-slate-400">
           {requests.length} {requests.length === 1 ? 'aanvraag wacht' : 'aanvragen wachten'} op beoordeling
@@ -116,9 +117,10 @@ export default function OrganizationRequestQueuePage() {
                   </h2>
                   <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-300">
                     {req.names.length === 1
-                      ? 'Eén nieuwe laag'
-                      : `${req.names.length} nieuwe lagen, die samen worden aangemaakt`}
-                    . De aanvrager komt er bij goedkeuring op zijn profiel te staan.
+                      ? 'Een nieuwe afdeling'
+                      : 'Een nieuwe directie of dienst met een afdeling eronder, die samen worden aangemaakt'}
+                    . De aanvrager komt er bij goedkeuring op zijn profiel te staan. Klopt een
+                    naam of afkorting niet, keur dan goed en pas hem aan bij Organisaties.
                   </p>
                   {req.motivation && (
                     <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-300">{req.motivation}</p>

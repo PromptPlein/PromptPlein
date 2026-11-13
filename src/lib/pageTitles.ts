@@ -32,7 +32,7 @@ const TITLES: [prefix: string, title: string][] = [
   ['/admin/technieken', 'Beheer: technieken'],
   ['/admin/rollen', 'Beheer: functies'],
   ['/admin/functie-aanvragen', 'Beheer: functie-aanvragen'],
-  ['/admin/onderdeel-aanvragen', 'Beheer: onderdeel-aanvragen'],
+  ['/admin/onderdeel-aanvragen', 'Beheer: afdeling-aanvragen'],
   ['/admin/categorieen', 'Beheer: categorieën'],
   ['/admin/categorie-aanvragen', 'Beheer: categorie-aanvragen'],
   ['/admin/analytics', 'Beheer: analytics'],
