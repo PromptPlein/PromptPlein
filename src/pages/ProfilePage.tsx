@@ -9,7 +9,7 @@ import {
   listOwnPendingFunctionRequests,
   requestFunction,
 } from '@/services/functionRequestService';
-import SearchableSelect from '@/components/common/SearchableSelect';
+import FunctionPicker from '@/components/common/FunctionPicker';
 import OrgPicker from '@/components/common/OrgPicker';
 import type { FunctionRequest } from '@/types';
 
@@ -116,41 +116,25 @@ export default function ProfilePage() {
           onCreated={saveOrganization}
         />
 
-        <div>
-          <label className="opl-label" htmlFor="profile-function">Mijn functie</label>
-          <SearchableSelect
-            id="profile-function"
-            options={roles.map((r) => ({ id: r.id, label: r.name, hint: r.description }))}
-            value={functionId}
-            onChange={setFunctionId}
-            placeholder="Kies je functie…"
-            clearLabel="— Geen functie —"
-            searchPlaceholder="Zoek je functie…"
-            onRequestNew={async (term) => {
-              if (!user) return;
-              try {
-                const created = await requestFunction({ name: term, requestedBy: user.id });
-                setPending((prev) => [...prev, created]);
-                toast.success(`“${term}” aangevraagd. Je krijgt een mail als een beheerder hem heeft beoordeeld.`);
-              } catch (err) {
-                toast.error(err instanceof Error ? err.message : 'Aanvraag mislukt');
-              }
-            }}
-            requestNewLabel={(term) => `“${term}” als nieuwe functie aanvragen`}
-          />
-          {pending.length > 0 && (
-            <ul className="mt-2 space-y-1 text-sm text-slate-600 dark:text-slate-300">
-              {pending.map((r) => (
-                <li key={r.id}>
-                  <span className="font-medium">{r.name}</span>: wacht op goedkeuring
-                </li>
-              ))}
-            </ul>
-          )}
-          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-            Staat je functie er niet bij? Typ hem en vraag hem aan.
-          </p>
-        </div>
+        <FunctionPicker
+          idPrefix="profile"
+          roles={roles}
+          value={functionId}
+          onChange={setFunctionId}
+          pending={pending}
+          onRequest={async (name, motivation) => {
+            if (!user) return false;
+            try {
+              const created = await requestFunction({ name, motivation, requestedBy: user.id });
+              setPending((prev) => [...prev, created]);
+              toast.success(`“${name}” aangevraagd. Je krijgt een mail als een beheerder hem heeft beoordeeld.`);
+              return true;
+            } catch (err) {
+              toast.error(err instanceof Error ? err.message : 'Aanvraag mislukt');
+              return false;
+            }
+          }}
+        />
 
         <div className="flex justify-end">
           <button className="opl-btn-primary" onClick={save} disabled={saving}>
