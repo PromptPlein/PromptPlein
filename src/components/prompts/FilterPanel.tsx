@@ -5,6 +5,7 @@ import { X } from '@/components/common/icons';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { categoryIcon } from '@/lib/categoryIcons';
 import { SHARING_LEVELS, toggled } from '@/lib/utils';
+import { departmentsUnder, ministryOf } from '@/lib/orgTree';
 import useDialogFocus from '@/lib/useDialogFocus';
 import type { AdvancedPromptFilters, SharingLevel } from '@/types';
 
@@ -22,10 +23,11 @@ interface FilterPanelProps {
  * dus er valt niets te verliezen: anders dan bij Modal sluit hij ook met Escape
  * en met een klik ernaast.
  *
- * Alleen ministeries en de Rijksoverheid staan erin, als korte code. De volledige
- * naam staat in `title` en `aria-label`. Filteren op een ministerie neemt alles
- * mee wat eronder valt (zie SearchPage). De rasters rekenen in rem: met grote
- * letters op een smal scherm krijgen ze vanzelf minder kolommen.
+ * Eerst de ministeries en de Rijksoverheid, als korte code. De volledige naam
+ * staat in `title` en `aria-label`. Filteren op een ministerie neemt alles mee
+ * wat eronder valt; wie daarna een afdeling kiest, zoekt alleen daarin (zie
+ * `searchOrgIds`). De rasters rekenen in rem: met grote letters op een smal
+ * scherm krijgen ze vanzelf minder kolommen.
  */
 export default function FilterPanel({
   open,
@@ -52,6 +54,17 @@ export default function FilterPanel({
   const ministries = organizations.filter(
     (o) => o.organization_type === 'ministry' || o.organization_type === 'government',
   );
+
+  // Afdelingen per gekozen ministerie, ook als alleen een afdeling in de URL staat.
+  const selectedOrgs = filters.organization_ids ?? [];
+  const openMinistries = ministries.filter(
+    (m) =>
+      m.organization_type === 'ministry' &&
+      selectedOrgs.some((id) => id === m.id || ministryOf(id, organizations)?.id === m.id),
+  );
+  const departmentGroups = openMinistries
+    .map((m) => ({ ministry: m, departments: departmentsUnder(m.id, organizations) }))
+    .filter((g) => g.departments.length > 0);
 
   return createPortal(
     <div className="fixed inset-0 z-50">
@@ -115,7 +128,14 @@ export default function FilterPanel({
                     key={o.id}
                     active={filters.organization_ids?.includes(o.id) ?? false}
                     onClick={() =>
-                      onChange({ organization_ids: toggled(filters.organization_ids, o.id) })
+                      onChange({
+                        // Een ministerie uitzetten zet ook zijn afdelingen uit.
+                        organization_ids: selectedOrgs.includes(o.id)
+                          ? selectedOrgs.filter(
+                              (id) => id !== o.id && ministryOf(id, organizations)?.id !== o.id,
+                            )
+                          : [...selectedOrgs, o.id],
+                      })
                     }
                     label={o.name}
                     className="justify-center text-sm font-semibold"
@@ -126,6 +146,23 @@ export default function FilterPanel({
               </div>
             </FilterGroup>
           )}
+
+          {departmentGroups.map(({ ministry, departments }) => (
+            <FilterGroup key={ministry.id} title={`Afdeling bij ${ministry.code ?? ministry.name}`}>
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-1.5">
+                {departments.map((d) => (
+                  <ToggleButton
+                    key={d.id}
+                    active={selectedOrgs.includes(d.id)}
+                    onClick={() => onChange({ organization_ids: toggled(selectedOrgs, d.id) })}
+                    className="justify-start text-left text-sm"
+                  >
+                    {d.name}
+                  </ToggleButton>
+                ))}
+              </div>
+            </FilterGroup>
+          ))}
 
           {roles.length > 0 && (
             <FilterGroup title="Functie">

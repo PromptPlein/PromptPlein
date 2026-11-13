@@ -1,15 +1,14 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/context/AuthContext';
 import { useReferenceData } from '@/context/ReferenceDataContext';
-import { buildOrgOptions, orgOptionToSearchable } from '@/lib/orgTree';
-import SearchableSelect from '@/components/common/SearchableSelect';
+import OrgPicker from '@/components/common/OrgPicker';
 import AuthLayout from './AuthLayout';
 
 export default function SignupPage() {
   const { signUp, configured } = useAuth();
-  const { organizations, loading: orgsLoading } = useReferenceData();
+  const { loading: orgsLoading } = useReferenceData();
   const navigate = useNavigate();
   // Kwam de gebruiker via RequireAuth (bijv. met een chat-handoff klaar in
   // sessionStorage)? Geef het oorspronkelijke doel dan door aan de loginpagina,
@@ -22,11 +21,6 @@ export default function SignupPage() {
   // automatisch verbonden met alle lagen daarboven (ministerie, dienst …).
   const [organizationId, setOrganizationId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-
-  const orgOptions = useMemo(
-    () => buildOrgOptions(organizations).map(orgOptionToSearchable),
-    [organizations],
-  );
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -108,25 +102,14 @@ export default function SignupPage() {
           onChange={(e) => setPassword(e.target.value)}
         />
 
-        {/* Ministerie — verplicht. Eén zoekveld waarmee de gebruiker het
-            ministerie kiest waar hij/zij voor werkt. */}
-        <div>
-          <label className="opl-label" htmlFor="signup-org">
-            Ministerie
-          </label>
-          <SearchableSelect
-            id="signup-org"
-            options={orgOptions}
-            value={organizationId}
-            onChange={setOrganizationId}
-            disabled={orgsLoading || !configured}
-            placeholder={orgsLoading ? 'Ministeries laden…' : 'Kies het ministerie waar je nu voor werkt'}
-            searchPlaceholder="Zoek jouw ministerie…"
-          />
-          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-            Kies het ministerie waar je nu voor werkt.
-          </p>
-        </div>
+        {/* Ministerie verplicht, afdeling als die er al is. Een nieuwe afdeling
+            toevoegen kan pas na het inloggen, bij het profiel. */}
+        <OrgPicker
+          idPrefix="signup"
+          value={organizationId}
+          onChange={setOrganizationId}
+          disabled={orgsLoading || !configured}
+        />
 
         <button
           type="submit"

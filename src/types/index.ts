@@ -948,6 +948,8 @@ export interface Organization {
   organization_type: OrganizationType;
   contact_email?: string | null;
   is_active: boolean;
+  /** Wie de afdeling aanmaakte; leeg bij wat een beheerder aanmaakte (0055). */
+  created_by?: string | null;
   created_at?: string;
   updated_at?: string;
 }

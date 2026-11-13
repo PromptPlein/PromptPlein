@@ -223,6 +223,14 @@ Prompts hebben een zichtbaarheidsniveau met een goedkeuringsstroom
 (`visibilityService`, `ApprovalQueuePage`). Organisaties vormen een boom van
 ministeries (`orgTree.ts`, migraties 0020/0021/0024).
 
+Afdelingen maakt de gebruiker zelf aan onder een ministerie, zonder goedkeuring
+(`create_department`, 0055, met `OrgPicker` op het profiel). Dat is een keuze van
+de eigenaar: wie dezelfde afdeling kiest, deelt de prompts op het deelniveau
+Afdeling. Een functie blijft een aanvraag die een beheerder goedkeurt; de
+aanvrager krijgt mail bij indienen en besluit, en de goedgekeurde functie komt
+op zijn profiel als daar nog geen stond. In Ontdekken zoekt een ministerie met
+een gekozen afdeling alleen in die afdeling (`searchOrgIds`).
+
 ## Opslagscheiding: dit is een bewuste keuze
 
 - **Postgres**: prompts, gebruikers, organisaties, technieken, categorieën,

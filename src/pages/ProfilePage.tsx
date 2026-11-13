@@ -1,34 +1,53 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { UserCircle2 } from '@/components/common/icons';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/context/AuthContext';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { updateOwnProfile } from '@/services/authService';
 import { APP_ROLE_LABELS } from '@/services/orgService';
-import { requestFunction } from '@/services/functionRequestService';
-import { buildOrgOptions, orgOptionToSearchable } from '@/lib/orgTree';
+import {
+  listOwnPendingFunctionRequests,
+  requestFunction,
+} from '@/services/functionRequestService';
 import SearchableSelect from '@/components/common/SearchableSelect';
+import OrgPicker from '@/components/common/OrgPicker';
+import type { FunctionRequest } from '@/types';
 
 export default function ProfilePage() {
   const { user, profile, refreshProfile } = useAuth();
-  const { roles, organizations } = useReferenceData();
+  const { roles } = useReferenceData();
   const [fullName, setFullName] = useState(profile?.full_name ?? '');
   const [orgId, setOrgId] = useState<string | null>(profile?.organization_id ?? null);
   const [functionId, setFunctionId] = useState<string | null>(profile?.function_id ?? null);
   const [saving, setSaving] = useState(false);
+  const [pending, setPending] = useState<FunctionRequest[]>([]);
 
-  // Zelfde pad-gebaseerde keuzelijst als bij registratie: kies je afdeling/dienst
-  // en je bent automatisch gekoppeld aan het ministerie erboven.
-  const orgOptions = useMemo(
-    () => buildOrgOptions(organizations).map(orgOptionToSearchable),
-    [organizations],
-  );
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    listOwnPendingFunctionRequests(user.id)
+      .then((rows) => active && setPending(rows))
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [user]);
 
+  // Een nieuwe afdeling gaat meteen op het profiel: wie hem toevoegt, werkt er.
+  async function saveOrganization(id: string) {
+    if (!user) return;
+    await updateOwnProfile(user.id, { organization_id: id });
+    await refreshProfile();
+  }
+
+  // Alleen bij een ander profiel overnemen: het opslaan van een nieuwe afdeling
+  // ververst het profiel en mag de rest van wat je aan het invullen bent niet wissen.
   useEffect(() => {
     setFullName(profile?.full_name ?? '');
     setOrgId(profile?.organization_id ?? null);
     setFunctionId(profile?.function_id ?? null);
-  }, [profile]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.id]);
 
   async function save() {
     if (!user) return;
@@ -89,22 +108,13 @@ export default function ProfilePage() {
           />
         </div>
 
-        <div>
-          <label className="opl-label" htmlFor="profile-org">Organisatie of afdeling</label>
-          <SearchableSelect
-            id="profile-org"
-            options={orgOptions}
-            value={orgId}
-            onChange={setOrgId}
-            placeholder="Zoek je afdeling, dienst of ministerie"
-            clearLabel="— Geen organisatie —"
-            searchPlaceholder="Zoek bijv. op je afdeling of dienst (zoals “DUO”)…"
-          />
-          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-            Kies de eenheid waar je werkt; je wordt automatisch gekoppeld aan het ministerie en de
-            tussenliggende lagen.
-          </p>
-        </div>
+        <OrgPicker
+          idPrefix="profile"
+          value={orgId}
+          onChange={setOrgId}
+          allowCreate
+          onCreated={saveOrganization}
+        />
 
         <div>
           <label className="opl-label" htmlFor="profile-function">Mijn functie</label>
@@ -119,16 +129,26 @@ export default function ProfilePage() {
             onRequestNew={async (term) => {
               if (!user) return;
               try {
-                await requestFunction({ name: term, requestedBy: user.id });
-                toast.success(`Aanvraag voor “${term}” verstuurd; een beheerder beoordeelt hem.`);
+                const created = await requestFunction({ name: term, requestedBy: user.id });
+                setPending((prev) => [...prev, created]);
+                toast.success(`“${term}” aangevraagd. Je krijgt een mail als een beheerder hem heeft beoordeeld.`);
               } catch (err) {
                 toast.error(err instanceof Error ? err.message : 'Aanvraag mislukt');
               }
             }}
             requestNewLabel={(term) => `“${term}” als nieuwe functie aanvragen`}
           />
+          {pending.length > 0 && (
+            <ul className="mt-2 space-y-1 text-sm text-slate-600 dark:text-slate-300">
+              {pending.map((r) => (
+                <li key={r.id}>
+                  <span className="font-medium">{r.name}</span>: wacht op goedkeuring
+                </li>
+              ))}
+            </ul>
+          )}
           <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-            Zo vinden collega&apos;s met dezelfde functie elkaars prompts makkelijker terug.
+            Staat je functie er niet bij? Typ hem en vraag hem aan.
           </p>
         </div>
 

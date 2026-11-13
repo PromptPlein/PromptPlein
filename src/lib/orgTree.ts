@@ -113,3 +113,32 @@ export function orgSubtreeIds(rootId: string, organizations: Organization[]): st
   }
   return [...ids];
 }
+
+/** De ministeries, op naam gesorteerd. */
+export function listMinistries(organizations: Organization[]): Organization[] {
+  return organizations
+    .filter((o) => o.organization_type === 'ministry')
+    .sort((a, b) => a.name.localeCompare(b.name, 'nl', { sensitivity: 'base' }));
+}
+
+/** Alles wat onder een ministerie hangt, zonder het ministerie zelf, op naam. */
+export function departmentsUnder(ministryId: string, organizations: Organization[]): Organization[] {
+  const ids = new Set(orgSubtreeIds(ministryId, organizations));
+  ids.delete(ministryId);
+  return organizations
+    .filter((o) => ids.has(o.id))
+    .sort((a, b) => a.name.localeCompare(b.name, 'nl', { sensitivity: 'base' }));
+}
+
+/**
+ * De organisaties waarop gezocht wordt. Een ministerie neemt alles mee wat eronder
+ * hangt, behalve als er ook een afdeling van dat ministerie gekozen is: dan zoekt
+ * het alleen in die afdeling. Zo werkt "eerst het ministerie, dan de afdeling".
+ */
+export function searchOrgIds(selected: string[], organizations: Organization[]): string[] {
+  const trees = new Map(selected.map((id) => [id, orgSubtreeIds(id, organizations)]));
+  const narrowed = selected.filter(
+    (id) => !selected.some((other) => other !== id && trees.get(id)!.includes(other)),
+  );
+  return [...new Set(narrowed.flatMap((id) => trees.get(id)!))];
+}

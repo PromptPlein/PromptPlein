@@ -15,7 +15,7 @@ import { SkeletonGrid } from '@/components/common/Skeleton';
 import { searchPrompts } from '@/services/repository';
 import { trackEvent } from '@/services/analyticsService';
 import { categoryIcon } from '@/lib/categoryIcons';
-import { ministryOf, orgSubtreeIds } from '@/lib/orgTree';
+import { ministryOf, orgSubtreeIds, searchOrgIds } from '@/lib/orgTree';
 import {
   activityIdentifier,
   formatDate,
@@ -126,9 +126,10 @@ export default function SearchPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedQuery]);
 
-  // Een ministerie neemt alles mee wat eronder hangt.
+  // Een ministerie neemt alles mee wat eronder hangt, tenzij er ook een afdeling
+  // van dat ministerie gekozen is.
   const orgIds = useMemo(
-    () => (filters.organization_ids ?? []).flatMap((id) => orgSubtreeIds(id, organizations)),
+    () => searchOrgIds(filters.organization_ids ?? [], organizations),
     [filters.organization_ids, organizations],
   );
   const orgIdsKey = orgIds.join(',');
@@ -255,6 +256,7 @@ export default function SearchPage() {
                 ? (ministryOf(profile.organization_id, organizations)?.id ?? null)
                 : null
             }
+            departmentId={profile?.organization_id ?? null}
             onChanged={handleChanged}
           />
         )
@@ -381,18 +383,30 @@ function BrowseRows({
   prompts,
   authors,
   ministryId,
+  departmentId,
   onChanged,
 }: {
   prompts: Prompt[];
   authors: Record<string, PublicProfile>;
   ministryId: string | null;
+  /** De organisatie op het profiel; telt alleen als afdeling als hij onder het ministerie hangt. */
+  departmentId: string | null;
   onChanged: (updated: Prompt) => void;
 }) {
   const { organizations } = useReferenceData();
   const shared = prompts.filter((p) => p.sharing_level !== 'private');
   const own = new Set(ministryId ? orgSubtreeIds(ministryId, organizations) : []);
+  const afdeling = departmentId && departmentId !== ministryId ? departmentId : null;
+  const ownDepartment = new Set(afdeling ? orgSubtreeIds(afdeling, organizations) : []);
 
   const rows = [
+    {
+      title: 'Uit jouw afdeling',
+      to: `/zoeken?org=${ministryId}&org=${afdeling}`,
+      prompts: shared
+        .filter((p) => p.organization_id && ownDepartment.has(p.organization_id))
+        .slice(0, ROW_SIZE),
+    },
     {
       title: "Populair bij collega's",
       to: '/zoeken?alles=1&sort=popular',

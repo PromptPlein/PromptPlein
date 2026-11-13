@@ -180,6 +180,12 @@ export default function SearchableSelect({
               </li>
             )}
 
+            {filtered.length === 0 && onRequestNew && !query.trim() && (
+              <li className="px-3 py-3 text-center text-sm text-slate-500 dark:text-slate-400">
+                Nog leeg. Typ een naam om hem toe te voegen.
+              </li>
+            )}
+
             {onRequestNew && query.trim() && !exactMatch && (
               <li className="border-t border-slate-100 dark:border-slate-700">
                 <button

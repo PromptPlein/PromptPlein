@@ -34,6 +34,19 @@ export async function requestFunction(params: {
   return data as FunctionRequest;
 }
 
+/** De eigen aanvragen die nog op een beheerder wachten, voor het profiel. */
+export async function listOwnPendingFunctionRequests(userId: string): Promise<FunctionRequest[]> {
+  if (!isSupabaseConfigured || !supabase) return [];
+  const { data, error } = await supabase
+    .from('function_requests')
+    .select('*')
+    .eq('requested_by', userId)
+    .eq('status', 'pending')
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as FunctionRequest[];
+}
+
 /** Aantal openstaande (pending) aanvragen — voor een badge in het admin-menu. */
 export async function countPendingFunctionRequests(): Promise<number> {
   if (!isSupabaseConfigured || !supabase) return 0;
