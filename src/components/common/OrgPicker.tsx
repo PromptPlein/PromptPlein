@@ -184,7 +184,7 @@ export default function OrgPicker({
     // Staat je profiel al op een afdeling, dan ligt de directie daarvan voor de hand.
     const guess = current ? (isDepartment(current) ? current.parent_id ?? null : current.id) : null;
     setDirectieId(directies.some((d) => d.id === guess) ? guess : null);
-    setNewDirectie(directies.length === 0);
+    setNewDirectie(false);
     setDirectie(EMPTY_LAYER);
     setAfdeling(layerFromTerm(afdelingTerm));
     setAdding(true);
@@ -314,58 +314,63 @@ export default function OrgPicker({
 
           <fieldset>
             <legend className="opl-label">Onder welke directie of dienst valt je afdeling?</legend>
+            {/* De keuzelijst staat er altijd, ook zolang hij leeg is: zo zoek je eerst
+                en vraag je alleen aan wat er echt niet bij staat. */}
+            <SearchableSelect
+              id={`${idPrefix}-directie`}
+              options={directieOptions}
+              value={newDirectie ? null : directieId}
+              onChange={(id) => {
+                setDirectieId(id);
+                if (id) {
+                  setNewDirectie(false);
+                  setDirectie(EMPTY_LAYER);
+                }
+              }}
+              disabled={sending}
+              placeholder={newDirectie ? 'Nieuwe directie of dienst, hieronder' : 'Kies de directie of dienst'}
+              searchPlaceholder="Zoek op naam of afkorting"
+              emptyLabel="Nog geen directies of diensten bij dit ministerie. Typ de naam om hem aan te vragen."
+              onRequestNew={(term) => {
+                setDirectie(layerFromTerm(term));
+                setNewDirectie(true);
+              }}
+              requestNewLabel={(term) => `“${term}” aanvragen als directie of dienst`}
+              requestNewHint="Staat er nog niet bij"
+            />
             {!newDirectie ? (
-              <>
-                <SearchableSelect
-                  id={`${idPrefix}-directie`}
-                  options={directieOptions}
-                  value={directieId}
-                  onChange={setDirectieId}
-                  disabled={sending}
-                  placeholder="Kies de directie of dienst"
-                  searchPlaceholder="Zoek op naam of afkorting"
-                  emptyLabel="Nog geen directies of diensten bij dit ministerie."
-                  onRequestNew={(term) => {
-                    setDirectie(layerFromTerm(term));
-                    setNewDirectie(true);
-                  }}
-                  requestNewLabel={(term) => `“${term}” ook aanvragen`}
-                  requestNewHint="Nieuwe directie of dienst"
-                />
-                <button
-                  type="button"
-                  onClick={() => setNewDirectie(true)}
-                  disabled={sending}
-                  className={`${LINK} mt-2`}
-                >
-                  <Plus size={14} aria-hidden />
-                  Directie of dienst staat er ook niet bij
-                </button>
-              </>
+              <button
+                type="button"
+                onClick={() => setNewDirectie(true)}
+                disabled={sending}
+                className={`${LINK} mt-2`}
+              >
+                <Plus size={14} aria-hidden />
+                Directie of dienst staat er niet bij
+              </button>
             ) : (
-              <>
+              <div className="mt-3">
                 <LayerFields
                   idBase={`${idPrefix}-directie-nieuw`}
                   layer={directie}
                   onChange={setDirectie}
                   problem={directieProblem}
-                  example="Bijvoorbeeld Directie Communicatie"
+                  example="Bijvoorbeeld Ontwikkeling, Digitalisering, Innovatie"
+                  codeExample="ODI"
                   onKeyDown={keys}
                 />
-                {directies.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setNewDirectie(false);
-                      setDirectie(EMPTY_LAYER);
-                    }}
-                    disabled={sending}
-                    className={`${LINK} mt-2`}
-                  >
-                    Toch een bestaande kiezen
-                  </button>
-                )}
-              </>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewDirectie(false);
+                    setDirectie(EMPTY_LAYER);
+                  }}
+                  disabled={sending}
+                  className={`${LINK} mt-2`}
+                >
+                  Niet aanvragen, toch zoeken in de lijst
+                </button>
+              </div>
             )}
           </fieldset>
 
@@ -416,6 +421,7 @@ function LayerFields({
   onChange,
   problem,
   example,
+  codeExample,
   onKeyDown,
   inputRef,
 }: {
@@ -424,6 +430,8 @@ function LayerFields({
   onChange: (layer: Layer) => void;
   problem: string | null;
   example: string;
+  /** Voorbeeld in het vak Afkorting; leeg laat het vak leeg. */
+  codeExample?: string;
   onKeyDown: (e: KeyboardEvent) => void;
   inputRef?: RefObject<HTMLInputElement>;
 }) {
@@ -467,6 +475,7 @@ function LayerFields({
             autoComplete="off"
             onChange={(e) => onChange({ ...layer, code: e.target.value })}
             onKeyDown={onKeyDown}
+            placeholder={codeExample}
           />
         </div>
       </div>
