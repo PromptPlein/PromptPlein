@@ -76,6 +76,20 @@ export function sharingLabel(level: SharingLevel): string {
   return SHARING_LEVELS.find((s) => s.value === level)?.label ?? level;
 }
 
+/** De kleur van het label per deelniveau, dezelfde tinten als op main: grijs, blauw, paars en groen. */
+export function sharingTagColor(level: SharingLevel): 'neutral' | 'hemelblauw' | 'paars' | 'mintgroen' {
+  switch (level) {
+    case 'department':
+      return 'hemelblauw';
+    case 'ministry':
+      return 'paars';
+    case 'public':
+      return 'mintgroen';
+    default:
+      return 'neutral';
+  }
+}
+
 const USER_KEY = 'opl.currentUser';
 
 /** Eenvoudige "wie ben ik" zonder auth (Phase 1). */

@@ -4,16 +4,14 @@ import { useReferenceData } from '@/context/ReferenceDataContext';
 import { isContextPrompt } from '@/lib/techniques';
 import { TECHNIEK_DOELEN, techniekKaart, type DoelTegel, type TechniekDoel } from '@/lib/techniekDoelen';
 import type { Technique } from '@/types';
+import '@nldd/design-system/button';
+import '@nldd/design-system/card';
 import '@nldd/design-system/container';
-import '@nldd/design-system/icon-cell';
-import '@nldd/design-system/list';
-import '@nldd/design-system/list-item';
-import '@nldd/design-system/list-item-segment';
+import '@nldd/design-system/icon';
+import '@nldd/design-system/icon-button';
 import '@nldd/design-system/popover';
-import '@nldd/design-system/spacer-cell';
 import '@nldd/design-system/segmented-control';
 import '@nldd/design-system/text';
-import '@nldd/design-system/text-cell';
 import '@nldd/design-system/title';
 
 /**
@@ -72,17 +70,18 @@ export default function TechniqueChooser({
           text={actief.naam}
           supporting-text={`${actief.zin}: ${lijst.length} ${lijst.length === 1 ? 'keuze' : 'keuzes'}. Een framework bouwt je hele prompt op, een techniek stuurt hoe de AI werkt.`}
         ></nldd-title>
-        <nldd-list appearance="box-base" accessible-label={`Keuzes bij ${actief.naam}`}>
+        {/* Zoals op main: elke keuze een eigen kaart, twee naast elkaar. */}
+        <nldd-container layout="grid" column-count={2} sm-column-count={1} gap="12">
           {lijst.map((t) => (
-            <TechniqueRow
+            <TechniqueCard
               key={t.id}
               technique={t}
               active={t.id === selectedId}
               onSelect={() => onSelect(t.id)}
             />
           ))}
-        </nldd-list>
-        {/* Outside the list: inside a row a screen reader would read it as part of that row. */}
+        </nldd-container>
+        {/* Buiten de kaarten: één plek voor alle uitlegvensters. */}
         {lijst.map((t) => {
           const info = techniekKaart(t).info;
           return info ? (
@@ -135,7 +134,7 @@ function DoelTabs({
 
 const uitlegId = (t: Technique) => `techniek-uitleg-${t.id}`;
 
-function TechniqueRow({
+function TechniqueCard({
   technique: t,
   active,
   onSelect,
@@ -146,37 +145,45 @@ function TechniqueRow({
 }) {
   const kaart = techniekKaart(t);
   const framework = isContextPrompt(t);
-  const popoverId = uitlegId(t);
 
-  // The explanation is a segment of its own beside the choice: a button inside a
-  // button is invalid and a screen reader skips it.
+  // De kaart zelf is geen knop: de uitleg is een knop van zichzelf, en een knop in
+  // een knop slaat een schermlezer over. Kies is daarom een eigen knop op de kaart.
   return (
-    <nldd-list-item selected={active || undefined}>
-      <nldd-list-item-segment
-        button
-        width="full"
-        accessible-label={`${active ? 'Gekozen' : 'Kies'} ${t.name}`}
-        onClick={onSelect}
-      >
-        <nldd-icon-cell icon={kaart.icon} color={framework ? 'accent' : 'secondary'}></nldd-icon-cell>
-        <nldd-spacer-cell size="12"></nldd-spacer-cell>
-        <nldd-text-cell
-          overline={framework ? 'Framework' : 'Techniek'}
-          text={`**${t.name}**`}
-          supporting-text={kaart.kort || undefined}
-        ></nldd-text-cell>
-        <nldd-spacer-cell size="12"></nldd-spacer-cell>
-        <nldd-icon-cell
-          size="20"
-          color={active ? 'accent' : 'secondary'}
-          icon={active ? 'check-mark' : 'chevron-right'}
-        ></nldd-icon-cell>
-      </nldd-list-item-segment>
-      {kaart.info && (
-        <nldd-list-item-segment button popovertarget={popoverId} accessible-label={`Uitleg over ${t.name}`}>
-          <nldd-icon-cell icon="info-circle" size="20" color="secondary"></nldd-icon-cell>
-        </nldd-list-item-segment>
-      )}
-    </nldd-list-item>
+    <nldd-card background={active ? 'accent-tinted' : undefined}>
+      <nldd-container padding="16" layout="row" gap="12" vertical-alignment="center">
+        <nldd-container width="40px" min-width="40px">
+          <nldd-icon icon={kaart.icon} size="40" color={framework ? 'lintblauw' : 'lichtblauw'} box></nldd-icon>
+        </nldd-container>
+        <nldd-container gap="2" width="100%">
+          <nldd-text size="md" weight="bold">
+            {t.name}
+          </nldd-text>
+          {kaart.kort && <nldd-text size="sm">{kaart.kort}</nldd-text>}
+          <nldd-text size="xs" color="secondary">
+            {framework ? 'Framework' : 'Techniek'}
+          </nldd-text>
+        </nldd-container>
+        <nldd-container horizontal-alignment="right" gap="4">
+          {kaart.info && (
+            <nldd-icon-button
+              appearance="neutral-transparent"
+              size="sm"
+              icon="info-circle"
+              popovertarget={uitlegId(t)}
+              accessible-label={`Uitleg over ${t.name}`}
+            ></nldd-icon-button>
+          )}
+          <nldd-button
+            appearance={active ? 'primary' : 'neutral-transparent'}
+            size="sm"
+            start-icon={active ? 'check-mark' : undefined}
+            end-icon={active ? undefined : 'arrow-right'}
+            text={active ? 'Gekozen' : 'Kies'}
+            accessible-label={`${active ? 'Gekozen' : 'Kies'} ${t.name}`}
+            onClick={onSelect}
+          ></nldd-button>
+        </nldd-container>
+      </nldd-container>
+    </nldd-card>
   );
 }
