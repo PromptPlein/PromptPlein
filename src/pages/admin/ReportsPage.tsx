@@ -45,7 +45,7 @@ export default function ReportsPage() {
   if (loading || !data) {
     return (
       <nldd-container layout="stack" gap="24">
-        <nldd-title heading-level={1} size={2} text={PAGE_TITLE} supporting-text={PAGE_INTRO}></nldd-title>
+        <nldd-title heading-level={1} size={3} text={PAGE_TITLE} supporting-text={PAGE_INTRO}></nldd-title>
         <nldd-container min-height="16rem">
           {loading && <nldd-activity-indicator></nldd-activity-indicator>}
         </nldd-container>
@@ -58,7 +58,7 @@ export default function ReportsPage() {
   return (
     <nldd-container layout="stack" gap="24">
       <nldd-container gap="16">
-        <nldd-title heading-level={1} size={2} text={PAGE_TITLE} supporting-text={PAGE_INTRO}></nldd-title>
+        <nldd-title heading-level={1} size={3} text={PAGE_TITLE} supporting-text={PAGE_INTRO}></nldd-title>
         <nldd-button-group>
           <nldd-button
             appearance="secondary"

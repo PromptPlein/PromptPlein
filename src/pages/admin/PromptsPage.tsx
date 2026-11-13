@@ -141,7 +141,7 @@ export default function PromptsPage() {
   const intro = (
     <nldd-title
       heading-level={1}
-      size={2}
+      size={3}
       text="Prompts"
       supporting-text="Alle systeemprompts van de AI-laag, gegroepeerd naar waar ze gebruikt worden."
     >

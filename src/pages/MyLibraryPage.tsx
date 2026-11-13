@@ -97,7 +97,7 @@ export default function MyLibraryPage() {
       <nldd-container slot="header" layout="wrap" gap="16" vertical-alignment="center">
         <nldd-title
           heading-level={1}
-          size={2}
+          size={3}
           text="Mijn prompts"
           supporting-text="De prompts die je zelf maakte en de prompts die je bewaarde."
         ></nldd-title>

@@ -67,7 +67,7 @@ export default function KeepProjectFilesPage() {
 
   return (
     <nldd-simple-section>
-      <nldd-title slot="header" heading-level={1} size={2} text="Bronbestanden bewaren"></nldd-title>
+      <nldd-title slot="header" heading-level={1} size={3} text="Bronbestanden bewaren"></nldd-title>
         <nldd-container max-width="42rem" gap="16">
           {state === 'laden' && <nldd-activity-indicator size="32" show-text text="Bezig met laden"></nldd-activity-indicator>}
 

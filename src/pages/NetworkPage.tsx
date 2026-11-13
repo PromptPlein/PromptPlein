@@ -67,7 +67,7 @@ export default function NetworkPage() {
       <nldd-title
         slot="header"
         heading-level={1}
-        size={2}
+        size={3}
         text="Netwerkverkenner"
         supporting-text={
           tab === 'lijst'

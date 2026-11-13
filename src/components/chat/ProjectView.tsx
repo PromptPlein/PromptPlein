@@ -112,7 +112,7 @@ export default function ProjectView({
     <nldd-container>
       {/* The name with the two counts, then the three things a project is for:
           talk, build a prompt with it, or set it up. */}
-      <nldd-title id="chat-titel" heading-level={1} size={2} text={project.name}></nldd-title>
+      <nldd-title id="chat-titel" heading-level={1} size={3} text={project.name}></nldd-title>
       <nldd-spacer size="8"></nldd-spacer>
       <nldd-container layout="wrap" gap="8">
         <nldd-tag icon="text-document" text={String(fileCount)} accessible-label={`${fileCount} bronbestanden`}></nldd-tag>

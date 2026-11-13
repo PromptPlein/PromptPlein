@@ -1,4 +1,4 @@
-import { Children, Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Children, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNlddEvent, useNlddValue } from '@/lib/nldd';
 import { notify } from '@/lib/notify';
 import MenuAction from '@/components/common/MenuAction';
@@ -38,6 +38,7 @@ import { logAdminAction } from '@/services/adminService';
 import '@nldd/design-system/banner';
 import '@nldd/design-system/button';
 import '@nldd/design-system/button-group';
+import '@nldd/design-system/card';
 import '@nldd/design-system/container';
 import '@nldd/design-system/divider';
 import '@nldd/design-system/form';
@@ -208,7 +209,7 @@ export default function SettingsPage() {
   if (loading) {
     return (
       <nldd-container layout="stack" gap="24">
-        <nldd-title heading-level={1} size={2} text="AI-instellingen"></nldd-title>
+        <nldd-title heading-level={1} size={3} text="AI-instellingen"></nldd-title>
         <nldd-inline-dialog variant="loading" text="Instellingen laden"></nldd-inline-dialog>
       </nldd-container>
     );
@@ -246,7 +247,7 @@ export default function SettingsPage() {
 
   return (
     <nldd-container layout="stack" gap="24">
-      <nldd-title heading-level={1} size={2} text="AI-instellingen">
+      <nldd-title heading-level={1} size={3} text="AI-instellingen">
         <nldd-text slot="supporting-text" color="secondary">
           Bepaal globaal hoe de AI reageert en welke grenzen er gelden. Deze instellingen gelden voor{' '}
           <strong>alle</strong> gebruikers.
@@ -773,14 +774,16 @@ export default function SettingsPage() {
 
 /** The content of one tab: its blocks, with a divider between each two. */
 function Panel({ children }: { children: ReactNode }) {
+  // Zoals op main: elk blok instellingen op een eigen witte kaart.
   const blocks = Children.toArray(children);
   return (
-    <nldd-container layout="stack" gap="32">
+    <nldd-container layout="stack" gap="16">
       {blocks.map((block, i) => (
-        <Fragment key={i}>
-          {i > 0 && <nldd-divider></nldd-divider>}
-          {block}
-        </Fragment>
+        <nldd-card key={i}>
+          <nldd-container padding="24" sm-padding="16">
+            {block}
+          </nldd-container>
+        </nldd-card>
       ))}
     </nldd-container>
   );

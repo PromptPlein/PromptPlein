@@ -23,7 +23,7 @@ export default function AuditLogPage() {
 
   return (
     <nldd-container layout="stack" gap="24">
-      <nldd-title heading-level={1} size={2} text="Audit log" supporting-text="Alle wijzigingen door beheerders."></nldd-title>
+      <nldd-title heading-level={1} size={3} text="Audit log" supporting-text="Alle wijzigingen door beheerders."></nldd-title>
 
       {loading ? (
         <nldd-container min-height="12rem">

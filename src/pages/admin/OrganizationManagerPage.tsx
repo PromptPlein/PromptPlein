@@ -243,7 +243,7 @@ export default function OrganizationManagerPage() {
   return (
     <nldd-container layout="stack" gap="24">
       <nldd-container layout="stack" gap="16">
-        <nldd-title heading-level={1} size={2} text="Organisaties beheren" supporting-text={`${orgs.length} organisaties`}></nldd-title>
+        <nldd-title heading-level={1} size={3} text="Organisaties beheren" supporting-text={`${orgs.length} organisaties`}></nldd-title>
         <nldd-button-group>
           <nldd-button
             appearance="primary"

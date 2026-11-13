@@ -78,7 +78,7 @@ export default function App() {
   return (
     <ReferenceDataProvider>
       <RouteFocus />
-        <nldd-page>
+        <nldd-page background="tinted">
           <nldd-skip-link slot="header" text="Sla navigatie over">
             <Header />
           </nldd-skip-link>

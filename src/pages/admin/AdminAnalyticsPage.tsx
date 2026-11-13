@@ -120,7 +120,7 @@ export default function AdminAnalyticsPage() {
   if (loading) {
     return (
       <nldd-container layout="stack" gap="24">
-        <nldd-title heading-level={1} size={2} text={title}></nldd-title>
+        <nldd-title heading-level={1} size={3} text={title}></nldd-title>
         <nldd-container min-height="16rem">
           <nldd-activity-indicator></nldd-activity-indicator>
         </nldd-container>
@@ -131,7 +131,7 @@ export default function AdminAnalyticsPage() {
   return (
     <nldd-container layout="stack" gap="24">
       <nldd-container gap="16">
-        <nldd-title heading-level={1} size={2} text={title} supporting-text={intro}></nldd-title>
+        <nldd-title heading-level={1} size={3} text={title} supporting-text={intro}></nldd-title>
         <nldd-button-group>
           <nldd-button
             appearance="secondary"

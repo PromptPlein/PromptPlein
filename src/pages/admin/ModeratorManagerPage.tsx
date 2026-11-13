@@ -167,7 +167,7 @@ export default function ModeratorManagerPage() {
     <nldd-container layout="stack" gap="24">
       <nldd-title
         heading-level={1}
-        size={2}
+        size={3}
         text="Moderatoren beheren"
         supporting-text="Wijs gebruikers aan als moderator van een ministerie. Zij beoordelen de prompts die op ministerieniveau worden gedeeld binnen die hele tak."
       ></nldd-title>

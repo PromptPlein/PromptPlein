@@ -61,7 +61,7 @@ export default function PublicProfilePage() {
   if (loading) {
     return (
       <nldd-simple-section background="tinted">
-        <nldd-title slot="header" heading-level={1} size={2} text="Profiel"></nldd-title>
+        <nldd-title slot="header" heading-level={1} size={3} text="Profiel"></nldd-title>
         <nldd-activity-indicator size="32" show-text text="Profiel laden"></nldd-activity-indicator>
       </nldd-simple-section>
     );
@@ -92,7 +92,7 @@ export default function PublicProfilePage() {
           <nldd-container layout="row" gap="16" vertical-alignment="center">
             <nldd-avatar name={displayName} size="64" decorative></nldd-avatar>
             <nldd-container>
-              <nldd-title heading-level={1} size={2} text={displayName}></nldd-title>
+              <nldd-title heading-level={1} size={3} text={displayName}></nldd-title>
               <nldd-spacer size="4"></nldd-spacer>
               <nldd-text size="sm" color="secondary">
                 {orgPath.length > 0

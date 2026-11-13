@@ -8,17 +8,15 @@ import { APP_ROLE_LABELS } from '@/services/orgService';
 import { requestFunction } from '@/services/functionRequestService';
 import { buildOrgOptions, orgOptionToSearchable } from '@/lib/orgTree';
 import SearchableSelect from '@/components/common/SearchableSelect';
+import PageColumn, { Panel } from '@/components/common/PageColumn';
 import '@nldd/design-system/button';
 import '@nldd/design-system/button-group';
-import '@nldd/design-system/container';
 import '@nldd/design-system/form';
 import '@nldd/design-system/form-actions';
 import '@nldd/design-system/form-field';
-import '@nldd/design-system/simple-section';
 import '@nldd/design-system/spacer';
 import '@nldd/design-system/text';
 import '@nldd/design-system/text-field';
-import '@nldd/design-system/title';
 
 export default function ProfilePage() {
   const { user, profile, refreshProfile } = useAuth();
@@ -62,15 +60,8 @@ export default function ProfilePage() {
   }
 
   return (
-    <nldd-simple-section>
-      <nldd-title
-        slot="header"
-        heading-level={1}
-        size={2}
-        text="Mijn profiel"
-        supporting-text="Beheer je gegevens en organisatie."
-      ></nldd-title>
-      <nldd-container max-width="42rem">
+    <PageColumn title="Mijn profiel" supporting="Beheer je gegevens en organisatie." icon="user">
+      <Panel>
           <nldd-text size="sm" color="secondary">
             {user?.email ?? ''}
             {profile ? ` · ${APP_ROLE_LABELS[profile.role]}` : ''}. Rollen worden door een beheerder toegekend.
@@ -142,7 +133,7 @@ export default function ProfilePage() {
               </nldd-form-actions>
             </form>
           </nldd-form>
-      </nldd-container>
-    </nldd-simple-section>
+      </Panel>
+    </PageColumn>
   );
 }

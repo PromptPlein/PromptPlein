@@ -76,7 +76,7 @@ export default function ApprovalQueuePage() {
     <nldd-container layout="stack" gap="24">
       <nldd-title
         heading-level={1}
-        size={2}
+        size={3}
         text="Goedkeuringen"
         supporting-text={`${rows.length} deelniveau${rows.length === 1 ? '' : 's'} wacht${rows.length === 1 ? '' : 'en'} op jouw beoordeling`}
       ></nldd-title>

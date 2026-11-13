@@ -336,17 +336,18 @@ export default function OptimizerPage() {
       main-background="base"
       main-position="bottom-center"
       main-width="960px"
-      media-height="clamp(120px, 24vw, 300px)"
-      overlap-size="clamp(64px, 17vw, 220px)"
+      media-height="max(clamp(120px, 24vw, 300px), min(max(40rem, 100dvh - 12rem), (100vw - 48rem) * 9999))"
+      overlap-size="max(clamp(64px, 17vw, 220px), min(max(40rem, 100dvh - 12rem) - 3rem, (100vw - 48rem) * 9999))"
       media-src="/lijnen.jpg"
       media-alt=""
     >
-      {/* Het lijnenbeeld bovenaan, de witte kaart valt eroverheen: zo zag Maken er
-          op main uit. Alles staat op die ene kaart, want de pagina heeft veel
+      {/* Zoals op main: op een breed scherm vult het lijnenbeeld het venster en ligt
+          de witte kaart er helemaal op. Op een smal scherm (onder 48rem) blijft het
+          een lage band, zodat het formulier meteen in beeld staat. Alles staat op die ene kaart, want de pagina heeft veel
           tussenstappen en meldingen, en die horen bij elkaar. */}
       <nldd-container>
         <nldd-container layout="row" gap="4" vertical-alignment="center">
-          <nldd-title heading-level={1} size={2} text="Prompt maken"></nldd-title>
+          <nldd-title heading-level={1} size={3} text="Prompt maken"></nldd-title>
           <InfoDot
             label="Uitleg over prompt maken"
             text={

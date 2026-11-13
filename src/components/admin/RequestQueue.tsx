@@ -48,7 +48,7 @@ export default function RequestQueue<R extends QueueRequest>({
     <nldd-container layout="stack" gap="24">
       <nldd-title
         heading-level={1}
-        size={2}
+        size={3}
         text={title}
         supporting-text={`${requests.length} ${requests.length === 1 ? 'aanvraag wacht' : 'aanvragen wachten'} op beoordeling`}
       ></nldd-title>

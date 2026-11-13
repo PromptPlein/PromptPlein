@@ -136,7 +136,7 @@ export default function CategoryManagerPage() {
     <nldd-container layout="stack" gap="24">
       <nldd-title
         heading-level={1}
-        size={2}
+        size={3}
         text="Categorieën beheren"
         supporting-text={`${categories.length} categorieën`}
       ></nldd-title>

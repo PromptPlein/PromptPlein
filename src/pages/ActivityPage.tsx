@@ -79,7 +79,7 @@ export default function ActivityPage() {
     <nldd-title
       slot="header"
       heading-level={1}
-      size={2}
+      size={3}
       text="Mijn activiteit"
       supporting-text={topTechnique ? `Je meest gebruikte techniek is ${topTechnique}.` : undefined}
     ></nldd-title>

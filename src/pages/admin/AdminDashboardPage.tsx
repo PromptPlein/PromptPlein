@@ -72,7 +72,7 @@ export default function AdminDashboardPage() {
   if (loading) {
     return (
       <nldd-container layout="stack" gap="24">
-        <nldd-title heading-level={1} size={2} text={PAGE_TITLE} supporting-text={PAGE_INTRO}></nldd-title>
+        <nldd-title heading-level={1} size={3} text={PAGE_TITLE} supporting-text={PAGE_INTRO}></nldd-title>
         <nldd-container min-height="16rem">
           <nldd-activity-indicator></nldd-activity-indicator>
         </nldd-container>
@@ -82,7 +82,7 @@ export default function AdminDashboardPage() {
 
   return (
     <nldd-container layout="stack" gap="24">
-      <nldd-title heading-level={1} size={2} text={PAGE_TITLE} supporting-text={PAGE_INTRO}></nldd-title>
+      <nldd-title heading-level={1} size={3} text={PAGE_TITLE} supporting-text={PAGE_INTRO}></nldd-title>
 
       <nldd-container layout="grid" gap="16" column-count={2} md-column-count={4}>
         <KeyFigure label="Prompts" value={prompts.length} />

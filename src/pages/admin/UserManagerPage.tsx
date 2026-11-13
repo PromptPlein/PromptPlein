@@ -154,7 +154,7 @@ export default function UserManagerPage() {
 
   return (
     <nldd-container layout="stack" gap="24">
-      <nldd-title heading-level={1} size={2} text="Gebruikers beheren" supporting-text={count}></nldd-title>
+      <nldd-title heading-level={1} size={3} text="Gebruikers beheren" supporting-text={count}></nldd-title>
 
       <nldd-container layout="wrap" gap="16" vertical-alignment="bottom">
         <nldd-container width="18rem">

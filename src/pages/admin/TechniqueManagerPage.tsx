@@ -335,7 +335,7 @@ export default function TechniqueManagerPage() {
       <nldd-container layout="stack" gap="16">
         <nldd-title
           heading-level={1}
-          size={2}
+          size={3}
           text="Technieken beheren"
           supporting-text={`${techniques.length} technieken. Wijzig de volgorde met de greep of via het menu.`}
         ></nldd-title>

@@ -81,7 +81,7 @@ export default function SharePreviewPage() {
   if (loading || authLoading) {
     return (
       <nldd-simple-section background="tinted">
-        <nldd-title slot="header" heading-level={1} size={2} text="Gedeelde prompt"></nldd-title>
+        <nldd-title slot="header" heading-level={1} size={3} text="Gedeelde prompt"></nldd-title>
         <nldd-activity-indicator size="32" show-text text="Prompt laden"></nldd-activity-indicator>
       </nldd-simple-section>
     );
@@ -167,7 +167,7 @@ export default function SharePreviewPage() {
       <nldd-title
         slot="header"
         heading-level={1}
-        size={2}
+        size={3}
         overline="Gedeelde prompt"
         text={prompt.title}
         supporting-text={prompt.description || undefined}

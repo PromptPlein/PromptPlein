@@ -209,7 +209,7 @@ export default function PromptDetailPage() {
   if (loading) {
     return (
       <nldd-simple-section background="tinted">
-        <nldd-title slot="header" heading-level={1} size={2} text="Prompt laden"></nldd-title>
+        <nldd-title slot="header" heading-level={1} size={3} text="Prompt laden"></nldd-title>
         <nldd-inline-dialog
           horizontal-alignment="left"
           variant="loading"
@@ -280,14 +280,14 @@ export default function PromptDetailPage() {
           {editing ? (
             <nldd-title
               heading-level={1}
-              size={2}
+              size={3}
               text="Prompt bewerken"
               overline={prompt.title}
             ></nldd-title>
           ) : (
             <nldd-title
               heading-level={1}
-              size={2}
+              size={3}
               text={prompt.title}
               supporting-text={prompt.description || undefined}
             ></nldd-title>

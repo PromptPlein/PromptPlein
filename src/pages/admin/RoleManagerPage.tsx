@@ -109,7 +109,7 @@ export default function RoleManagerPage() {
 
   return (
     <nldd-container layout="stack" gap="24">
-      <nldd-title heading-level={1} size={2} text="Functies beheren" supporting-text={`${roles.length} functies`}></nldd-title>
+      <nldd-title heading-level={1} size={3} text="Functies beheren" supporting-text={`${roles.length} functies`}></nldd-title>
       <nldd-button-group>
         <nldd-button appearance="primary" start-icon="plus" text="Nieuwe functie" onClick={() => setEditor({ name: '', description: '' })}></nldd-button>
         <nldd-button appearance="secondary" start-icon="upload" text="CSV importeren" onClick={() => setCsvOpen(true)}></nldd-button>
