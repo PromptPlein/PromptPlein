@@ -381,7 +381,8 @@ export default function OrgPicker({
               layer={afdeling}
               onChange={setAfdeling}
               problem={afdelingProblem}
-              example="Bijvoorbeeld Strategie en Advies"
+              example="Bijvoorbeeld Rijks Academie Digitalisering Informatisering Overheid"
+              codeExample="RADIO"
               onKeyDown={keys}
               inputRef={firstRef}
             />
