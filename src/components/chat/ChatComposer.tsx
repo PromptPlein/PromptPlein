@@ -502,7 +502,7 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
   return (
     <div
       className={clsx(
-        'px-4 pb-3 pt-3 sm:px-6 laag:!pb-1 laag:!pt-1',
+        'opl-chat-invoer px-4 pb-3 pt-3 sm:px-6 laag:!pb-1 laag:!pt-1',
         // In een leeg gesprek staat het veld los in het midden, zonder scheidslijn.
         !prominent && 'border-t border-slate-200 dark:border-slate-700',
       )}

@@ -310,7 +310,9 @@ vraag passen (`match_user_memories`).
 
 De hele app werkt op de telefoon, ook het beheer. Testen doe je op 320 pixels breed
 met tekstgrootte Extra groot: wat daar past, past overal. Staat er iets nieuws, kijk
-dan ook liggend en met het toetsenbord open.
+dan ook liggend en met het toetsenbord open. Kijk voor de chat ook op een laag
+laptopscherm: 1280 bij 600 pixels, wat een laptop met 150% schaling in de browser
+overhoudt. Daar viel de leesruimte eerder terug tot een kwart van het venster.
 
 - **Menu**: op de telefoon staat het hoofdmenu onderaan (`--onderbalk`, 60 pixels plus
   de thuisbalk), vanaf `sm` plakt het bovenaan. Wat vast onderaan staat, houdt daar
@@ -408,9 +410,14 @@ bij elke regel van het antwoord op, en wie met vergroting werkt raakt het kwijt.
 
 De chat scrolt bewust niet mee: een nieuwe vraag gaat bovenaan staan en het
 antwoord groeit eronder, zodat je vanaf het begin in je eigen tempo leest.
-"Naar beneden" zet volgen aan, omhoog scrollen zet het weer uit. Op de telefoon
-schuiven de kop van de app, de titelbalk en het menu onderaan weg als je naar
-beneden leest en komen ze terug als je omhoog scrolt (`useReadingMode`). Het tekstvak blijft altijd staan:
+"Naar beneden" zet volgen aan, omhoog scrollen zet het weer uit. Die knop is een klein
+rond icoon op een vervaagde onderrand, nooit een knop met tekst: die lag midden op de
+regel die je las. Op de telefoon en op elk scherm tot 900 pixels hoog
+schuiven de kop van de app, de titelbalk en het menu weg als je naar
+beneden leest en komen ze terug als je omhoog scrolt (`useReadingMode`). Op zo'n laag
+scherm zijn kop, menu, titelbalk en tekstvak ook in rust al smaller (`index.css`), en
+staat "Chats blijven in deze browser" onder in de lijst met chats, niet onder het
+gesprek. Het tekstvak blijft altijd staan:
 toen dat ook wegschoof, voelde het alsof de chat verdween. De leeskolom is
 `60ch`, wat in Rijks Sans zo'n 72 tekens per regel is (gemeten). Maak hem niet
 breder zonder opnieuw te meten. Het tekstvak heeft dezelfde breedte, zodat vraag

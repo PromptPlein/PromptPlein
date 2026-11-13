@@ -345,8 +345,12 @@ html[data-toetsenbord='open'] .opl-app:has(.opl-chat-kop) {
  * krijgt het gesprek de vrijgekomen ruimte echt, in plaats van dat er alleen iets
  * overheen schuift. :where houdt de specificiteit op nul, zodat laag:hidden en
  * de regels voor het toetsenbord gewoon voorgaan.
+ *
+ * Ook op een laag scherm (tot 900 pixels hoog, zoals een laptop met 125 of 150%
+ * schaling): daar bleef met kop, menu, titel en tekstvak maar een kwart van het
+ * venster over om te lezen.
  */
-@media (max-width: 39.99rem), (max-height: 31.25rem) {
+@media (max-width: 39.99rem), (max-height: 56.25rem) {
   :where(.opl-inklap) {
     display: grid;
     grid-template-rows: 1fr;
@@ -368,9 +372,10 @@ html[data-toetsenbord='open'] .opl-app:has(.opl-chat-kop) {
   }
 
   /* De kop heeft een vaste hoogte, en daar krimpt een raster niet onder. Hij
-     klapt daarom zelf in. Zijn menu's staan hier vast in het venster, dus
-     afknippen kan altijd. */
-  .opl-chat-kop {
+     klapt daarom zelf in. Afknippen alleen tijdens en na het inklappen: buiten
+     de telefoon hangen zijn menu's onder de kop en die moeten zichtbaar blijven. */
+  html[data-leesstand='aan'] .opl-chat-kop,
+  html[data-leesstand-wissel] .opl-chat-kop {
     overflow: hidden;
   }
 
@@ -416,6 +421,65 @@ html[data-toetsenbord='open'] .opl-app:has(.opl-chat-kop) {
 
   html[data-leesstand='aan'] .opl-onderbalk {
     transform: translateY(100%);
+  }
+}
+
+/*
+ * Laag scherm, breder dan een telefoon: het menu staat hier bovenaan. In de
+ * leesstand klapt het in, net als de kop. Een menu-item met de focus haalt hem
+ * terug (useReadingMode).
+ */
+@media (min-width: 40rem) and (max-height: 56.25rem) {
+  .opl-onderbalk {
+    overflow: hidden;
+  }
+
+  .opl-onderbalk > div {
+    max-height: max(80px, 3.5rem);
+    transition:
+      max-height 0.25s ease,
+      opacity 0.25s ease;
+  }
+
+  html[data-leesstand='aan'] .opl-onderbalk > div {
+    max-height: 0;
+    opacity: 0;
+  }
+
+  /* Ook als alles in beeld staat, is de chat hier zuiniger met hoogte: de kop
+     krijgt de maat van de telefoon, het menu één regel, de titelbalk en het
+     tekstvak minder witruimte. Samen zo'n 80 pixels meer gesprek. */
+  .opl-chat-kop > div {
+    height: 64px;
+  }
+
+  .opl-chat-kop .opl-lint {
+    height: 64px;
+    width: 32px;
+  }
+
+  .opl-chat-menu > div > a {
+    min-height: 44px;
+    height: 48px;
+    flex-direction: row;
+    gap: 0.5rem;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+
+  .opl-chat-pagina {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+
+  .opl-chat-kaart .opl-chat-titel {
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
+  }
+
+  .opl-chat-kaart .opl-chat-invoer {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
   }
 }
 
@@ -665,6 +729,11 @@ html[data-contrast='high'].dark [class*='border-slate-'],
 html[data-contrast='high'].dark .opl-card,
 html[data-contrast='high'].dark .opl-input {
   border-color: theme('colors.slate.300') !important;
+}
+
+/* Geen vervaagde tekst onder aan het gesprek: bij hoog contrast telt elke letter. */
+html[data-contrast='high'] .opl-vervaag {
+  display: none;
 }
 
 html[data-contrast='high'] ::placeholder {

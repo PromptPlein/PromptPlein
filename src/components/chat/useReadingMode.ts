@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import { isKeyboardOpen, VIEWPORT_EVENT } from '@/lib/viewportWatch';
 
-/** Alleen op de telefoon, staand en liggend: daar telt elke regel leesruimte. */
-const PHONE_QUERY = '(max-width: 39.99rem), (max-height: 31.25rem)';
+/**
+ * Op de telefoon, staand en liggend, en op elk scherm tot 900 pixels hoog: daar
+ * telt elke regel leesruimte. Gelijk aan de media query in index.css.
+ */
+const SMALL_QUERY = '(max-width: 39.99rem), (max-height: 56.25rem)';
 /** Zo ver moet de vinger omhoog voor de bovenkant wegschuift, in pixels. */
 const HIDE_AFTER = 48;
 /** Zo ver omlaag brengt hem terug. Kleiner, want terugkrijgen moet makkelijk zijn. */
@@ -13,8 +16,9 @@ const BARS = '.opl-chat-kop, .opl-chat-titel, .opl-onderbalk';
 const ANIMATE_MS = 400;
 
 /**
- * Leesstand van de chat op de telefoon. Wie het gesprek naar beneden scrolt,
- * krijgt de kop van de app, de titelbalk en het menu onderaan uit beeld; omhoog
+ * Leesstand van de chat op de telefoon en op een laag scherm. Wie het gesprek
+ * naar beneden scrolt, krijgt de kop van de app, de titelbalk en het menu uit
+ * beeld; omhoog
  * scrollen haalt ze terug. Het tekstvak blijft altijd staan: de chat zelf
  * verdwijnt nooit, hij zakt alleen mee naar de onderrand. De stand staat als
  * `data-leesstand` op `<html>`, zodat ook de kop en het menu van de app (buiten
@@ -78,14 +82,14 @@ export default function useReadingMode(
   useEffect(() => {
     const card = rootRef.current;
     if (!card || !enabled) return;
-    const phone = window.matchMedia(PHONE_QUERY);
+    const small = window.matchMedia(SMALL_QUERY);
 
     let lastY: number | null = null;
     let travel = 0;
 
     /** Positief: de inhoud schuift omhoog, de lezer gaat naar beneden. */
     const move = (list: HTMLElement, delta: number) => {
-      if (!phone.matches || isKeyboardOpen()) return;
+      if (!small.matches || isKeyboardOpen()) return;
       // Steeds opnieuw tellen als de richting omdraait.
       if (Math.sign(delta) !== Math.sign(travel)) travel = 0;
       travel += delta;
@@ -124,9 +128,9 @@ export default function useReadingMode(
     const onFocusIn = (e: FocusEvent) => {
       if (hiddenRef.current && e.target instanceof Element && e.target.closest(BARS)) set(false);
     };
-    // Toetsenbord open of geen telefoon meer: dan hoort alles gewoon in beeld.
+    // Toetsenbord open of het venster groot genoeg: dan hoort alles gewoon in beeld.
     const onViewport = () => {
-      if (hiddenRef.current && (isKeyboardOpen() || !phone.matches)) set(false);
+      if (hiddenRef.current && (isKeyboardOpen() || !small.matches)) set(false);
     };
 
     card.addEventListener('touchstart', onTouchStart, { passive: true });
@@ -136,7 +140,7 @@ export default function useReadingMode(
     card.addEventListener('wheel', onWheel, { passive: true });
     document.addEventListener('focusin', onFocusIn);
     window.addEventListener(VIEWPORT_EVENT, onViewport);
-    phone.addEventListener('change', onViewport);
+    small.addEventListener('change', onViewport);
     return () => {
       card.removeEventListener('touchstart', onTouchStart);
       card.removeEventListener('touchmove', onTouchMove);
@@ -145,7 +149,7 @@ export default function useReadingMode(
       card.removeEventListener('wheel', onWheel);
       document.removeEventListener('focusin', onFocusIn);
       window.removeEventListener(VIEWPORT_EVENT, onViewport);
-      phone.removeEventListener('change', onViewport);
+      small.removeEventListener('change', onViewport);
     };
   }, [rootRef, enabled, set]);
 }

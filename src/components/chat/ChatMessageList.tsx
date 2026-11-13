@@ -292,14 +292,25 @@ export default function ChatMessageList({
         </div>
       </div>
 
+      {/* Er staat meer onder: de onderrand vervaagt en daarop ligt een klein rond
+          knopje. Zo ligt er nooit een knop met tekst midden op de regel die je
+          leest. De naam staat in aria-label en title. */}
       {showJump && (
-        <button
-          type="button"
-          onClick={jumpToEnd}
-          className="absolute bottom-3 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 whitespace-nowrap rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-rijksblauw-700 shadow-md hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-rijksblauw-500 dark:border-slate-600 dark:bg-slate-800 dark:text-rijksblauw-200 dark:hover:bg-slate-700"
-        >
-          <ArrowDown size={15} /> Naar beneden
-        </button>
+        <>
+          <div
+            aria-hidden="true"
+            className="opl-vervaag pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-white to-transparent dark:from-slate-800"
+          />
+          <button
+            type="button"
+            onClick={jumpToEnd}
+            aria-label="Naar beneden"
+            title="Naar beneden"
+            className="absolute bottom-1.5 left-1/2 flex h-9 w-9 -translate-x-1/2 items-center justify-center rounded-full border border-slate-300 bg-white text-rijksblauw-700 shadow-md hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 dark:border-slate-600 dark:bg-slate-800 dark:text-rijksblauw-200 dark:hover:bg-slate-700"
+          >
+            <ArrowDown size={18} />
+          </button>
+        </>
       )}
 
       <div role="status" aria-atomic="true" className="sr-only">

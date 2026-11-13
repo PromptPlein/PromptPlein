@@ -5,11 +5,6 @@ import { isKeyboardOpen, VIEWPORT_EVENT, visibleHeight } from '@/lib/viewportWat
 const MIN_HEIGHT = 220;
 /** Met het schermtoetsenbord open is er minder over, en dat moet ook passen. */
 const MIN_HEIGHT_KEYBOARD = 100;
-/**
- * Ruimte die onder het element vrij blijft, in rem: de onderste paginamarge
- * (`py-4`). In rem omdat de tekstgrootte uit Toegankelijkheid die marge meeschaalt.
- */
-const BOTTOM_GAP_REM = 1;
 /** De marge boven het element met `data-fit-below` (`mt-3`), in rem. */
 const BELOW_MARGIN_REM = 0.75;
 /** Zo lang schuift de ruimte van het menu mee in de leesstand (0.25 s), met marge. */
@@ -55,10 +50,10 @@ export default function useFitHeight<T extends HTMLElement>(): RefObject<T> {
       // De onderbalk van de telefoon: de pagina houdt daar ruimte voor vrij.
       const shell = document.getElementById('app-shell');
       const bar = shell ? parseFloat(getComputedStyle(shell).paddingBottom) : 0;
-      // Op de telefoon loopt de chat tot de rand door, zonder marge eronder.
-      const edge = window.matchMedia('(max-width: 39.99rem), (max-height: 31.25rem)').matches
-        ? 0
-        : BOTTOM_GAP_REM * rem;
+      // De onderste marge van de pagina eromheen blijft vrij. Die verschilt per
+      // scherm: nul op de telefoon, smaller op een laag scherm (index.css).
+      const parent = el.parentElement;
+      const edge = parent ? parseFloat(getComputedStyle(parent).paddingBottom) || 0 : 0;
       const keyboard = isKeyboardOpen();
       const available = visibleHeight() - top - footerHeight - belowHeight - bar - edge;
       const height = Math.round(Math.max(keyboard ? MIN_HEIGHT_KEYBOARD : MIN_HEIGHT, available));

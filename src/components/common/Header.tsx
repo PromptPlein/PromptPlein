@@ -99,7 +99,7 @@ export default function Header() {
             alt="Logo Rijksoverheid"
             width={40}
             height={80}
-            className="absolute left-1/2 top-0 h-[64px] w-[32px] -translate-x-1/2 sm:h-[80px] sm:w-[40px]"
+            className="opl-lint absolute left-1/2 top-0 h-[64px] w-[32px] -translate-x-1/2 sm:h-[80px] sm:w-[40px]"
           />
 
           {/* Naast het lint is op een smalle telefoon plek voor drie knoppen.
@@ -167,6 +167,8 @@ export default function Header() {
           'max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:border-t max-sm:border-rijksblauw-500',
           'max-sm:pb-[env(safe-area-inset-bottom)] max-sm:pl-[env(safe-area-inset-left)] max-sm:pr-[env(safe-area-inset-right)]',
           'sm:sticky sm:top-0 dark:sm:border-b',
+          // Op een laag scherm wordt het menu in de chat één smalle regel (index.css).
+          pathname === '/chat' && 'opl-chat-menu',
         )}
         aria-label="Hoofdnavigatie"
       >

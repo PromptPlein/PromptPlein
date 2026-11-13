@@ -629,40 +629,43 @@ function ChatPageInner() {
 
   /* Waar blijven je chats? De scheiding tussen projecten (database) en chats (dit
      apparaat) is de belangrijkste privacy-afspraak van deze pagina. Eén korte
-     belofte in beeld, de rest achter het infobolletje; ernaast de twee knoppen
-     waarmee je je chats als bestand meeneemt. Het bestand gaat nergens heen:
-     opbouwen en inlezen gebeurt in de browser. */
-  const storagePromise = (
-    <>
-      <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white py-0.5 pl-3 pr-1 font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+     belofte, de rest achter het infobolletje; eronder de twee knoppen waarmee je
+     je chats als bestand meeneemt. Het bestand gaat nergens heen: opbouwen en
+     inlezen gebeurt in de browser. Dit staat onder in de lijst met chats en niet
+     onder het gesprek: op een laag scherm kostte die balk een flink stuk leesruimte. */
+  const storageFooter = (
+    <div className="mt-2 border-t border-slate-200 pt-2 text-sm dark:border-slate-700">
+      <p className="flex items-center gap-1.5 px-2 font-medium text-slate-700 dark:text-slate-200">
         <ShieldCheck size={15} className="shrink-0 text-rijksblauw-700 dark:text-rijksblauw-200" />
-        Chats blijven in deze browser
+        <span className="min-w-0">Chats blijven in deze browser</span>
         <InfoDot
           label="Uitleg over waar chats en projecten staan"
           text={
             'Chats staan alleen in deze browser, ook zonder account en na uitloggen. Wis je de browsergegevens of wissel je van pc, dan zie je ze daar niet.\nProjecten staan bij je account in de database.\nMet Bewaren en Terugzetten neem je je chats mee als bestand.'
           }
         />
-      </span>
-      <button
-        type="button"
-        className="opl-btn-ghost !px-2.5 !py-1.5"
-        onClick={controller.exportHistory}
-        disabled={controller.streaming || controller.index.length === 0}
-        title="Download al je chats als één bestand op dit apparaat"
-      >
-        <Download size={15} /> Bewaren
-      </button>
-      <button
-        type="button"
-        className="opl-btn-ghost !px-2.5 !py-1.5"
-        onClick={() => restoreInputRef.current?.click()}
-        disabled={controller.streaming}
-        title="Zet een eerder bewaard bestand terug op dit apparaat"
-      >
-        <Upload size={15} /> Terugzetten
-      </button>
-    </>
+      </p>
+      <div className="mt-1 flex flex-wrap gap-1">
+        <button
+          type="button"
+          className="opl-btn-ghost flex-1 !px-2 !py-1.5"
+          onClick={controller.exportHistory}
+          disabled={controller.streaming || controller.index.length === 0}
+          title="Download al je chats als één bestand op dit apparaat"
+        >
+          <Download size={15} /> Bewaren
+        </button>
+        <button
+          type="button"
+          className="opl-btn-ghost flex-1 !px-2 !py-1.5"
+          onClick={() => restoreInputRef.current?.click()}
+          disabled={controller.streaming}
+          title="Zet een eerder bewaard bestand terug op dit apparaat"
+        >
+          <Upload size={15} /> Terugzetten
+        </button>
+      </div>
+    </div>
   );
 
   const sidebarProps = {
@@ -681,7 +684,7 @@ function ChatPageInner() {
        (useFitHeight): zo blijft de leesruimte zo groot mogelijk en houdt het
        tekstvak tijdens een gesprek een vaste plek. Alleen de berichtenlijst
        scrollt. Op de telefoon vervalt de kaart en loopt de chat tot de rand. */
-    <div className="mx-auto w-full max-w-6xl sm:px-6 sm:py-4 lg:px-8 laag:!py-0">
+    <div className="opl-chat-pagina mx-auto w-full max-w-6xl sm:px-6 sm:py-4 lg:px-8 laag:!py-0">
       <div
         ref={cardRef}
         className="opl-card opl-chat-kaart flex h-[calc(100dvh-14rem)] overflow-hidden max-sm:rounded-none max-sm:border-0 max-sm:shadow-none"
@@ -694,6 +697,7 @@ function ChatPageInner() {
           onOpenProject={handleOpenProject}
           onRequestDelete={setConfirmDeleteId}
           onRequestDeleteAll={() => setConfirmDeleteAll(true)}
+          footer={storageFooter}
         />
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -950,14 +954,6 @@ function ChatPageInner() {
         </div>
       </div>
 
-      {/* Onder de kaart, en dus ook tijdens een lopend gesprek zichtbaar. Op de
-          telefoon telt elke regel: daar staat dit in de lijst met chats. */}
-      <div
-        data-fit-below
-        className="mt-3 hidden flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm sm:flex laag:hidden"
-      >
-        {storagePromise}
-      </div>
       <input
         ref={restoreInputRef}
         type="file"
@@ -992,11 +988,7 @@ function ChatPageInner() {
           }}
           onRequestDelete={setConfirmDeleteId}
           onRequestDeleteAll={() => setConfirmDeleteAll(true)}
-          footer={
-            <div className="mt-3 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 border-t border-slate-200 pt-3 text-sm dark:border-slate-700">
-              {storagePromise}
-            </div>
-          }
+          footer={storageFooter}
         />
       </Drawer>
 
