@@ -15,7 +15,7 @@ import { SkeletonGrid } from '@/components/common/Skeleton';
 import { searchPrompts } from '@/services/repository';
 import { trackEvent } from '@/services/analyticsService';
 import { categoryIcon } from '@/lib/categoryIcons';
-import { ministryOf, orgPathLabel, orgSubtreeIds, searchOrgIds } from '@/lib/orgTree';
+import { ministryOf, orgChain, orgPathLabel, orgSubtreeIds, searchOrgIds } from '@/lib/orgTree';
 import {
   activityIdentifier,
   formatDate,
@@ -95,15 +95,12 @@ export default function SearchPage() {
   const paramKey = searchParams.toString();
   const rawFilters = useMemo(() => readFilters(searchParams), [searchParams]);
 
-  // Op organisatie filter je alleen binnen je eigen ministerie: het ministerie, de
-  // directies en de afdelingen eronder. Een oude link naar een ander ministerie
-  // telt daarom niet mee.
-  const ownMinistry = profile?.organization_id
-    ? ministryOf(profile.organization_id, organizations)
-    : null;
+  // Op organisatie filter je alleen langs je eigen lijn: je afdeling, je directie
+  // en je ministerie. Die volgt uit je afdeling; een link naar een andere
+  // afdeling, directie of een ander ministerie telt daarom niet mee.
   const ownTree = useMemo(
-    () => new Set(ownMinistry ? orgSubtreeIds(ownMinistry.id, organizations) : []),
-    [ownMinistry, organizations],
+    () => new Set(orgChain(profile?.organization_id, organizations).map((o) => o.id)),
+    [profile?.organization_id, organizations],
   );
   const filters = useMemo(
     () => ({

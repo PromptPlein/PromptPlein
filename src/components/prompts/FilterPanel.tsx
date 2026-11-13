@@ -6,16 +6,7 @@ import { useReferenceData } from '@/context/ReferenceDataContext';
 import { useAuth } from '@/context/AuthContext';
 import { categoryIcon } from '@/lib/categoryIcons';
 import { SHARING_LEVELS, toggled } from '@/lib/utils';
-import {
-  descendantsInOrder,
-  directorateOf,
-  ministryOf,
-  orgChain,
-  orgDisplayName,
-  orgSubtreeIds,
-  ORG_PATH_SEPARATOR,
-} from '@/lib/orgTree';
-import SearchableSelect from '@/components/common/SearchableSelect';
+import { directorateOf, ministryOf, orgChain, orgDisplayName, orgSubtreeIds } from '@/lib/orgTree';
 import type { Organization } from '@/types';
 import useDialogFocus from '@/lib/useDialogFocus';
 import type { AdvancedPromptFilters, SharingLevel } from '@/types';
@@ -36,9 +27,9 @@ interface FilterPanelProps {
  *
  * "Zoek binnen" is één keuze, net als de deelniveaus: alles wat je mag zien, je
  * afdeling, je directie, je ministerie, of wat voor de hele Rijksoverheid is
- * goedgekeurd. Een balkje laat zien hoe breed dat is. Een andere directie of
- * afdeling kies je eronder, maar alleen binnen je eigen ministerie. Een laag neemt
- * alles mee wat eronder valt (zie `searchOrgIds`). De rasters rekenen in rem: met grote letters op een smal
+ * goedgekeurd. Een balkje laat zien hoe breed dat is. Alleen je eigen lijn, die
+ * volgt uit je afdeling: een andere afdeling of directie is bewust niet te kiezen.
+ * Een laag neemt alles mee wat eronder valt (zie `searchOrgIds`). De rasters rekenen in rem: met grote letters op een smal
  * scherm krijgen ze vanzelf minder kolommen.
  */
 export default function FilterPanel({
@@ -88,11 +79,9 @@ export default function FilterPanel({
     (id) => !selectedOrgs.some((o) => o !== id && orgSubtreeIds(id, organizations).includes(o)),
   );
   const pickedId = deepestSelected.length === 1 ? deepestSelected[0] : null;
-  const current: Scope | 'anders' = filters.rijksbreed
+  const current: Scope = filters.rijksbreed
     ? 'rijk'
-    : selectedOrgs.length === 0
-      ? 'alles'
-      : (shown.find((sc) => sc.org && sc.org.id === pickedId)?.key ?? 'anders');
+    : (shown.find((sc) => sc.org && sc.org.id === pickedId)?.key ?? 'alles');
 
   function chooseScope(scope: (typeof scopes)[number]) {
     onChange({
@@ -100,23 +89,6 @@ export default function FilterPanel({
       organization_ids: scope.org ? [scope.org.id] : [],
     });
   }
-
-  // De andere directies en afdelingen van je ministerie, met waar ze onder vallen.
-  const otherOptions = ownMinistry
-    ? descendantsInOrder(ownMinistry.id, organizations).map(({ org }) => {
-        const above = orgChain(org.id, organizations).slice(1, -1).map(orgDisplayName);
-        return {
-          id: org.id,
-          label: orgDisplayName(org),
-          hint:
-            org.organization_type === 'department'
-              ? above.length
-                ? `Afdeling onder ${above.join(ORG_PATH_SEPARATOR)}`
-                : 'Afdeling'
-              : 'Directie of dienst',
-        };
-      })
-    : [];
 
   return createPortal(
     <div className="fixed inset-0 z-50">
@@ -229,28 +201,7 @@ export default function FilterPanel({
               })}
             </div>
 
-            {ownMinistry ? (
-              <div className="mt-3">
-                <label
-                  htmlFor="filter-andere-plek"
-                  className="mb-1 block text-sm text-slate-700 dark:text-slate-200"
-                >
-                  Of een andere directie of afdeling binnen {ownMinistry.code || ownMinistry.name}
-                </label>
-                <SearchableSelect
-                  id="filter-andere-plek"
-                  options={otherOptions}
-                  value={current === 'anders' ? pickedId : null}
-                  onChange={(id) =>
-                    onChange({ rijksbreed: false, organization_ids: id ? [id] : [] })
-                  }
-                  placeholder="Kies een directie of afdeling"
-                  clearLabel="Geen"
-                  searchPlaceholder="Zoek op naam of afkorting"
-                  emptyLabel="Nog geen directies of afdelingen."
-                />
-              </div>
-            ) : (
+            {!ownMinistry && (
               <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
                 {profile
                   ? 'Kies je ministerie en afdeling op je profiel om binnen je eigen organisatie te zoeken.'
