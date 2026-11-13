@@ -8,7 +8,7 @@ import '@nldd/design-system/cell';
 import '@nldd/design-system/container';
 import '@nldd/design-system/card';
 import '@nldd/design-system/icon-cell';
-import '@nldd/design-system/hero';
+import '@nldd/design-system/icon';
 import '@nldd/design-system/inline-dialog';
 import '@nldd/design-system/list';
 import '@nldd/design-system/list-item';
@@ -51,41 +51,31 @@ function CommunityTab() {
 
   return (
     <>
-      {/* De opening zoals op Start: het lijnenbeeld met in het midden een
-          donkerblauw vlak, met de drie aantallen erin. */}
-      <nldd-hero
-        width="full"
-        background="tinted"
-        layout="contained"
-        main-background="accent"
-        main-position="top-center"
-        media-height="clamp(180px, 26vw, 320px)"
-        media-src="/lijnen.jpg"
-        media-alt=""
-      >
-        <nldd-container gap="20">
-          <nldd-title
-            color="inherit"
-            heading-level={1}
-            size={1}
-            text="Community"
-            supporting-text="Wie maakt de prompts, en welke waarderen collega’s het meest."
-          ></nldd-title>
+      {/* De opening zoals op main: titel met icoon, de twee tabbladen en de drie
+          aantallen elk op een eigen kaart. */}
+      <nldd-simple-section background="tinted" padding-bottom="24">
+        <nldd-container gap="24">
+          <nldd-container layout="row" gap="16" vertical-alignment="center">
+            <nldd-icon icon="users" size="48" color="accent" box></nldd-icon>
+            <nldd-title
+              heading-level={1}
+              size={3}
+              text="Community"
+              supporting-text="Wie maakt de prompts, en welke waarderen collega’s het meest."
+            ></nldd-title>
+          </nldd-container>
+          <nldd-tab-bar navigation accessible-label="Onderdelen van Community">
+            <nldd-tab-bar-item href="/community" text="Community" icon="users" current></nldd-tab-bar-item>
+            <nldd-tab-bar-item href="/trending" text="Trending" icon="line-chart"></nldd-tab-bar-item>
+          </nldd-tab-bar>
           {!loading && (
-            <nldd-container layout="grid" column-count={3} gap="16">
-              <Stat value={members.length} label={members.length === 1 ? 'Maker' : 'Makers'} />
-              <Stat value={totalPrompts} label={totalPrompts === 1 ? 'Prompt' : 'Prompts'} />
-              <Stat value={totalLikes} label={totalLikes === 1 ? 'Like' : 'Likes'} />
+            <nldd-container layout="grid" column-count={3} sm-column-count={1} gap="16">
+              <Stat icon="users" value={members.length} label={members.length === 1 ? 'Maker' : 'Makers'} />
+              <Stat icon="file-text" value={totalPrompts} label={totalPrompts === 1 ? 'Prompt' : 'Prompts'} />
+              <Stat icon="hand-thumbs-up" value={totalLikes} label={totalLikes === 1 ? 'Like' : 'Likes'} />
             </nldd-container>
           )}
         </nldd-container>
-      </nldd-hero>
-
-      <nldd-simple-section background="tinted" padding-top="0">
-        <nldd-tab-bar navigation accessible-label="Onderdelen van Community">
-          <nldd-tab-bar-item href="/community" text="Community" current></nldd-tab-bar-item>
-          <nldd-tab-bar-item href="/trending" text="Trending"></nldd-tab-bar-item>
-        </nldd-tab-bar>
       </nldd-simple-section>
 
       <nldd-one-half-one-half-section background="tinted" padding-top="0">
@@ -153,15 +143,18 @@ function CommunityTab() {
 }
 
 /** Eén aantal in het donkerblauwe vlak: het getal groot en wat het telt eronder. */
-function Stat({ value, label }: { value: number; label: string }) {
+function Stat({ icon, value, label }: { icon: string; value: number; label: string }) {
   return (
-    <nldd-container>
-      <nldd-text size="display-6" color="inherit">
-        {value}
-      </nldd-text>
-      <nldd-text size="sm" color="inherit">
-        {label}
-      </nldd-text>
-    </nldd-container>
+    <nldd-card>
+      <nldd-container padding="16" layout="row" gap="12" vertical-alignment="center">
+        <nldd-icon icon={icon} size="40" color="lichtblauw" box></nldd-icon>
+        <nldd-container>
+          <nldd-text size="display-6">{value}</nldd-text>
+          <nldd-text size="sm" color="secondary">
+            {label}
+          </nldd-text>
+        </nldd-container>
+      </nldd-container>
+    </nldd-card>
   );
 }

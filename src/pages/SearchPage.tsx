@@ -31,7 +31,6 @@ import '@nldd/design-system/button';
 import '@nldd/design-system/collection';
 import '@nldd/design-system/container';
 import '@nldd/design-system/dropdown';
-import '@nldd/design-system/hero';
 import '@nldd/design-system/inline-dialog';
 import '@nldd/design-system/link';
 import '@nldd/design-system/search-field';
@@ -208,21 +207,13 @@ export default function SearchPage() {
 
   return (
     <>
-      {/* Zoekvak en categorieën op een witte kaart over het lijnenbeeld, zoals Maken. */}
-      <nldd-hero
-        width="full"
-        background="tinted"
-        layout="overlap"
-        main-background="base"
-        main-position="bottom-center"
-        main-width="768px"
-        media-height="clamp(120px, 24vw, 300px)"
-        overlap-size="clamp(64px, 17vw, 220px)"
-        media-src="/lijnen.jpg"
-        media-alt=""
-      >
-        <nldd-container>
-        <nldd-title heading-level={1} size={2} text="Wat zoek je?"></nldd-title>
+      {/* Zoals op main: de vraag, het zoekvak en de categorieën in het midden van
+          de grijze ondergrond, zonder kaart eromheen. */}
+      <nldd-simple-section background="tinted" horizontal-alignment="center" padding-bottom="0">
+        <nldd-container width="100%" max-width="768px">
+        <nldd-container horizontal-alignment="center">
+          <nldd-title heading-level={1} size={3} text="Wat zoek je?"></nldd-title>
+        </nldd-container>
         <nldd-spacer size="24"></nldd-spacer>
 
         <nldd-toolbar role="search" accessible-label="Zoeken en filteren">
@@ -281,7 +272,7 @@ export default function SearchPage() {
           </>
         )}
         </nldd-container>
-      </nldd-hero>
+      </nldd-simple-section>
 
       <nldd-simple-section background="tinted">
         {browsing ? (

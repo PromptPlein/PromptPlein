@@ -29,7 +29,6 @@ import '@nldd/design-system/form-actions';
 import '@nldd/design-system/form-field';
 import '@nldd/design-system/icon';
 import '@nldd/design-system/icon-button';
-import '@nldd/design-system/hero';
 import '@nldd/design-system/inline-dialog';
 import '@nldd/design-system/link';
 import '@nldd/design-system/modal-dialog';
@@ -247,20 +246,11 @@ export default function PromptDetailPage() {
 
   return (
     <>
-      {/* De prompt op een witte kaart over het lijnenbeeld, zoals Maken. */}
-      <nldd-hero
-        width="full"
-        background="tinted"
-        layout="overlap"
-        main-background="base"
-        main-position="bottom-center"
-        main-width="48rem"
-        media-height="clamp(120px, 24vw, 300px)"
-        overlap-size="clamp(64px, 17vw, 220px)"
-        media-src="/lijnen.jpg"
-        media-alt=""
-      >
-      <nldd-container>
+      {/* De prompt op een witte kaart in het midden van de grijze ondergrond, zoals op main. */}
+      <nldd-simple-section background="tinted" horizontal-alignment="center" padding-bottom="0">
+      <nldd-container width="100%" max-width="48rem">
+      <nldd-card>
+      <nldd-container padding="24" sm-padding="16">
         <nldd-container>
           {editing ? (
             <nldd-link
@@ -522,7 +512,9 @@ export default function PromptDetailPage() {
           )}
 
       </nldd-container>
-      </nldd-hero>
+      </nldd-card>
+      </nldd-container>
+      </nldd-simple-section>
 
       {/* Reacties, deelniveaus en versies eronder, in dezelfde breedte. */}
       <nldd-simple-section background="tinted" horizontal-alignment="center">

@@ -62,10 +62,8 @@ export default function PersonalSettingsPage() {
           )}
         </>
       )}
-      <nldd-spacer size="24"></nldd-spacer>
-
-      {/* Elk onderdeel een eigen blok op de kaart, met ruimte ertussen. */}
-      <nldd-container gap="40">
+      {/* Elk onderdeel een eigen witte kaart, zoals op main. */}
+      <nldd-container gap="16">
         {onderdeel === 'chat' && (
           <>
             <Panel>

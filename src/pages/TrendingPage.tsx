@@ -10,7 +10,8 @@ import type { AnalyticsEvent, Prompt } from '@/types';
 import '@nldd/design-system/button';
 import '@nldd/design-system/button-group';
 import '@nldd/design-system/collection';
-import '@nldd/design-system/hero';
+import '@nldd/design-system/container';
+import '@nldd/design-system/icon';
 import '@nldd/design-system/inline-dialog';
 import '@nldd/design-system/simple-section';
 import '@nldd/design-system/spacer';
@@ -68,29 +69,22 @@ export default function TrendingPage({ embedded = false }: { embedded?: boolean 
   // en de tabbladen eronder, zodat wisselen tussen de twee niets laat springen.
   const header = embedded ? null : (
     <>
-      <nldd-hero
-        width="full"
-        background="tinted"
-        layout="contained"
-        main-background="accent"
-        main-position="top-center"
-        media-height="clamp(180px, 26vw, 320px)"
-        media-src="/lijnen.jpg"
-        media-alt=""
-      >
-        <nldd-title
-          color="inherit"
-          heading-level={1}
-          size={1}
-          text="Trending"
-          supporting-text="De prompts en technieken waar collega’s nu het meest mee werken."
-        ></nldd-title>
-      </nldd-hero>
-      <nldd-simple-section background="tinted" padding-top="0">
-        <nldd-tab-bar navigation accessible-label="Onderdelen van Community">
-          <nldd-tab-bar-item href="/community" text="Community"></nldd-tab-bar-item>
-          <nldd-tab-bar-item href="/trending" text="Trending" current></nldd-tab-bar-item>
-        </nldd-tab-bar>
+      <nldd-simple-section background="tinted" padding-bottom="24">
+        <nldd-container gap="24">
+          <nldd-container layout="row" gap="16" vertical-alignment="center">
+            <nldd-icon icon="line-chart" size="48" color="accent" box></nldd-icon>
+            <nldd-title
+              heading-level={1}
+              size={3}
+              text="Trending"
+              supporting-text="De prompts en technieken waar collega’s nu het meest mee werken."
+            ></nldd-title>
+          </nldd-container>
+          <nldd-tab-bar navigation accessible-label="Onderdelen van Community">
+            <nldd-tab-bar-item href="/community" text="Community" icon="users"></nldd-tab-bar-item>
+            <nldd-tab-bar-item href="/trending" text="Trending" icon="line-chart" current></nldd-tab-bar-item>
+          </nldd-tab-bar>
+        </nldd-container>
       </nldd-simple-section>
     </>
   );

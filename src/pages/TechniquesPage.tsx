@@ -62,12 +62,10 @@ import type { OptimizeResult, Technique } from '@/types';
 import '@nldd/design-system/banner';
 import '@nldd/design-system/box';
 import '@nldd/design-system/button';
-import '@nldd/design-system/button-group';
 import '@nldd/design-system/card';
 import '@nldd/design-system/container';
 import '@nldd/design-system/icon';
 import '@nldd/design-system/inline-dialog';
-import '@nldd/design-system/hero';
 import '@nldd/design-system/simple-section';
 import '@nldd/design-system/spacer';
 import '@nldd/design-system/text';
@@ -641,37 +639,26 @@ export default function TechniquesPage() {
 
   return (
     <>
-    {/* De opening zoals op Start: het lijnenbeeld met in het midden een donkerblauw
-        vlak. Je keuze staat daar, ook bij het resultaat: zo blijft zichtbaar waar je
-        mee werkt en is de weg terug naar de kiezer één klik. */}
-    <nldd-hero
-      width="full"
-      background="tinted"
-      layout="contained"
-      main-background="accent"
-      main-position="top-center"
-      media-height="clamp(160px, 26vw, 320px)"
-      media-src="/lijnen.jpg"
-      media-alt=""
-    >
-      <nldd-container gap="20">
+    {/* De opening zoals op main: de vraag als titel met Help mij kiezen ernaast. Je
+        keuze staat daar, ook bij het resultaat: zo blijft zichtbaar waar je mee werkt
+        en is de weg terug naar de kiezer één klik. */}
+    <nldd-simple-section background="tinted" padding-bottom="24">
+      <nldd-container layout="wrap" gap="16" vertical-alignment="center">
         <nldd-title
-          color="inherit"
           heading-level={1}
-          size={1}
+          size={3}
           overline={technique ? (isContextPrompt(technique) ? 'Framework gekozen' : 'Techniek gekozen') : undefined}
           text={technique ? technique.name : 'Wat wil je bereiken?'}
           supporting-text={
             technique ? chosenInfo(technique) : 'Kies je doel en daarna een framework of techniek.'
           }
         ></nldd-title>
+        <nldd-spacer size="flexible"></nldd-spacer>
         {!technique && !advisorOpen && (
-          <nldd-button-group>
-            <nldd-button appearance="inherit-filled" start-icon="signpost" text="Help mij kiezen" onClick={openAdvisor}></nldd-button>
-          </nldd-button-group>
+          <nldd-button appearance="primary" start-icon="signpost" text="Help mij kiezen" onClick={openAdvisor}></nldd-button>
         )}
       </nldd-container>
-    </nldd-hero>
+    </nldd-simple-section>
     <nldd-simple-section background="tinted" padding-top="0">
       <nldd-container gap="24">
         {technique && phase === 'input' && (
@@ -735,7 +722,7 @@ export default function TechniquesPage() {
                   selectedId={techniqueId}
                   onSelect={handleSelectTechnique}
                   help={
-                    // Zonder keuze staat Help mij kiezen al in de hero.
+                    // Zonder keuze staat Help mij kiezen al naast de titel.
                     ((!advisorOpen && technique) || (!technique && hasContent)) && (
                       <nldd-container layout="wrap" gap="8">
                         {!advisorOpen && technique && (

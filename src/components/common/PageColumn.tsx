@@ -1,15 +1,15 @@
 import type { ReactNode } from 'react';
+import '@nldd/design-system/card';
 import '@nldd/design-system/container';
-import '@nldd/design-system/hero';
 import '@nldd/design-system/icon';
-import '@nldd/design-system/spacer';
+import '@nldd/design-system/simple-section';
 import '@nldd/design-system/title';
 
 /**
- * Een pagina om iets in te vullen of te lezen, zoals Maken: het lijnenbeeld
- * bovenaan en een witte kaart die eroverheen valt, met de titel (eventueel met
- * een icoon in een vlak ervoor) en daaronder de inhoud. Zet blokken inhoud elk
- * in een `Panel`.
+ * Een pagina om iets in te vullen of te lezen, zoals Contact en Instellingen op
+ * main: een smalle kolom in het midden van de grijze ondergrond, met bovenaan de
+ * titel (eventueel met een icoon in een vlak ervoor) en daaronder de inhoud. Zet
+ * blokken inhoud elk in een `Panel`: dat is de witte kaart.
  */
 export default function PageColumn({
   title,
@@ -29,32 +29,26 @@ export default function PageColumn({
   children: ReactNode;
 }) {
   return (
-    <nldd-hero
-      width="full"
-      background="tinted"
-      layout="overlap"
-      main-background="base"
-      main-position="bottom-center"
-      main-width={width}
-      media-height="clamp(120px, 24vw, 300px)"
-      overlap-size="clamp(64px, 17vw, 220px)"
-      media-src="/lijnen.jpg"
-      media-alt=""
-    >
-      <nldd-container>
+    <nldd-simple-section background="tinted" horizontal-alignment="center" grow>
+      <nldd-container width="100%" max-width={width} gap="24">
         <nldd-container layout="row" gap="16" vertical-alignment="center">
           {icon && <nldd-icon icon={icon} size="48" color="accent" box></nldd-icon>}
-          <nldd-title heading-level={1} size={2} text={title} supporting-text={supporting}></nldd-title>
+          <nldd-title heading-level={1} size={3} text={title} supporting-text={supporting}></nldd-title>
           {header}
         </nldd-container>
-        <nldd-spacer size="24"></nldd-spacer>
         {children}
       </nldd-container>
-    </nldd-hero>
+    </nldd-simple-section>
   );
 }
 
-/** Eén blok inhoud op de kaart van een `PageColumn`. */
+/** Eén blok inhoud van een `PageColumn`: een witte kaart op de grijze ondergrond. */
 export function Panel({ children }: { children: ReactNode }) {
-  return <nldd-container>{children}</nldd-container>;
+  return (
+    <nldd-card>
+      <nldd-container padding="24" sm-padding="16">
+        {children}
+      </nldd-container>
+    </nldd-card>
+  );
 }
