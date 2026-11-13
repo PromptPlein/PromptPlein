@@ -114,19 +114,80 @@ export function orgSubtreeIds(rootId: string, organizations: Organization[]): st
   return [...ids];
 }
 
+/** De scheiding tussen de lagen van een pad, zoals in de rest van de app. */
+export const ORG_PATH_SEPARATOR = ' › ';
+
+/**
+ * De keten van het ministerie tot en met de organisatie zelf, van boven naar
+ * beneden, zonder de Rijksoverheid-wortel. Een onbekende id geeft een lege keten.
+ */
+export function orgChain(orgId: string | null | undefined, organizations: Organization[]): Organization[] {
+  if (!orgId) return [];
+  const byId = new Map(organizations.map((o) => [o.id, o]));
+  const chain: Organization[] = [];
+  let current = byId.get(orgId);
+  // Begrens de diepte zodat een (kapotte) cyclus nooit oneindig loopt.
+  for (let i = 0; i < 12 && current; i++) {
+    if (current.organization_type !== 'government') chain.unshift(current);
+    current = current.parent_id ? byId.get(current.parent_id) : undefined;
+  }
+  return chain;
+}
+
+/** Het pad als tekst, bijvoorbeeld "BZK › ODI › RADIO". Leeg als de id onbekend is. */
+export function orgPathLabel(
+  orgId: string | null | undefined,
+  organizations: Organization[],
+  options: { short?: boolean } = {},
+): string {
+  return orgChain(orgId, organizations)
+    .map((o) => (options.short && o.organization_type === 'ministry' ? o.code || o.name : o.name))
+    .join(ORG_PATH_SEPARATOR);
+}
+
+/** De directe kinderen van een organisatie, op naam gesorteerd. */
+export function childrenOf(parentId: string, organizations: Organization[]): Organization[] {
+  return organizations
+    .filter((o) => o.parent_id === parentId)
+    .sort((a, b) => a.name.localeCompare(b.name, 'nl', { sensitivity: 'base' }));
+}
+
+/**
+ * Alles onder een organisatie als geordende lijst, elk onderdeel direct onder zijn
+ * ouder. `depth` is 1 voor een direct kind, zodat een lijst kan inspringen.
+ */
+export function descendantsInOrder(
+  rootId: string,
+  organizations: Organization[],
+): { org: Organization; depth: number }[] {
+  const byParent = new Map<string, Organization[]>();
+  for (const o of organizations) {
+    if (!o.parent_id) continue;
+    const list = byParent.get(o.parent_id) ?? [];
+    list.push(o);
+    byParent.set(o.parent_id, list);
+  }
+  const out: { org: Organization; depth: number }[] = [];
+  const seen = new Set<string>([rootId]);
+  function walk(parentId: string, depth: number) {
+    const kids = (byParent.get(parentId) ?? []).sort((a, b) =>
+      a.name.localeCompare(b.name, 'nl', { sensitivity: 'base' }),
+    );
+    for (const kid of kids) {
+      if (seen.has(kid.id) || depth > 12) continue;
+      seen.add(kid.id);
+      out.push({ org: kid, depth });
+      walk(kid.id, depth + 1);
+    }
+  }
+  walk(rootId, 1);
+  return out;
+}
+
 /** De ministeries, op naam gesorteerd. */
 export function listMinistries(organizations: Organization[]): Organization[] {
   return organizations
     .filter((o) => o.organization_type === 'ministry')
-    .sort((a, b) => a.name.localeCompare(b.name, 'nl', { sensitivity: 'base' }));
-}
-
-/** Alles wat onder een ministerie hangt, zonder het ministerie zelf, op naam. */
-export function departmentsUnder(ministryId: string, organizations: Organization[]): Organization[] {
-  const ids = new Set(orgSubtreeIds(ministryId, organizations));
-  ids.delete(ministryId);
-  return organizations
-    .filter((o) => ids.has(o.id))
     .sort((a, b) => a.name.localeCompare(b.name, 'nl', { sensitivity: 'base' }));
 }
 

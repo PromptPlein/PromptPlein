@@ -9,18 +9,23 @@ import {
   listOwnPendingFunctionRequests,
   requestFunction,
 } from '@/services/functionRequestService';
+import {
+  listOwnPendingOrganizationRequests,
+} from '@/services/organizationRequestService';
+import { orgPathLabel, ORG_PATH_SEPARATOR } from '@/lib/orgTree';
 import FunctionPicker from '@/components/common/FunctionPicker';
 import OrgPicker from '@/components/common/OrgPicker';
-import type { FunctionRequest } from '@/types';
+import type { FunctionRequest, OrganizationRequest } from '@/types';
 
 export default function ProfilePage() {
   const { user, profile, refreshProfile } = useAuth();
-  const { roles } = useReferenceData();
+  const { roles, organizations } = useReferenceData();
   const [fullName, setFullName] = useState(profile?.full_name ?? '');
   const [orgId, setOrgId] = useState<string | null>(profile?.organization_id ?? null);
   const [functionId, setFunctionId] = useState<string | null>(profile?.function_id ?? null);
   const [saving, setSaving] = useState(false);
   const [pending, setPending] = useState<FunctionRequest[]>([]);
+  const [pendingOrgs, setPendingOrgs] = useState<OrganizationRequest[]>([]);
 
   useEffect(() => {
     if (!user) return;
@@ -33,15 +38,19 @@ export default function ProfilePage() {
     };
   }, [user]);
 
-  // Een nieuwe afdeling gaat meteen op het profiel: wie hem toevoegt, werkt er.
-  async function saveOrganization(id: string) {
+  useEffect(() => {
     if (!user) return;
-    await updateOwnProfile(user.id, { organization_id: id });
-    await refreshProfile();
-  }
+    let active = true;
+    listOwnPendingOrganizationRequests(user.id)
+      .then((rows) => active && setPendingOrgs(rows))
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [user]);
 
-  // Alleen bij een ander profiel overnemen: het opslaan van een nieuwe afdeling
-  // ververst het profiel en mag de rest van wat je aan het invullen bent niet wissen.
+  // Alleen bij een ander profiel overnemen: het ververst het profiel en mag de rest
+  // van wat je aan het invullen bent niet wissen.
   useEffect(() => {
     setFullName(profile?.full_name ?? '');
     setOrgId(profile?.organization_id ?? null);
@@ -113,8 +122,22 @@ export default function ProfilePage() {
           value={orgId}
           onChange={setOrgId}
           allowCreate
-          onCreated={saveOrganization}
+          onRequested={(request) => setPendingOrgs((prev) => [...prev, request])}
         />
+        {pendingOrgs.length > 0 && (
+          <ul className="-mt-2 space-y-1 text-sm text-slate-600 dark:text-slate-300">
+            {pendingOrgs.map((r) => (
+              <li key={r.id}>
+                <span className="font-medium">
+                  {[orgPathLabel(r.parent_id, organizations, { short: true }), ...r.names]
+                    .filter(Boolean)
+                    .join(ORG_PATH_SEPARATOR)}
+                </span>
+                : wacht op goedkeuring
+              </li>
+            ))}
+          </ul>
+        )}
 
         <FunctionPicker
           idPrefix="profile"

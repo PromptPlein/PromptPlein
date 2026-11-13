@@ -948,7 +948,7 @@ export interface Organization {
   organization_type: OrganizationType;
   contact_email?: string | null;
   is_active: boolean;
-  /** Wie de afdeling aanmaakte; leeg bij wat een beheerder aanmaakte (0055). */
+  /** Wie het onderdeel aanvroeg; leeg bij wat een beheerder zelf aanmaakte (0055, 0056). */
   created_by?: string | null;
   created_at?: string;
   updated_at?: string;
@@ -1056,6 +1056,26 @@ export interface FunctionRequest {
   reviewed_at?: string | null;
   review_note?: string | null;
   created_role_id?: string | null;
+  created_at: string;
+  /** Verrijkt vanuit het profiel van de aanvrager (optioneel). */
+  requester?: Pick<Profile, 'email' | 'full_name'> | null;
+}
+
+/** Een aanvraag voor een of meer nieuwe lagen onder een bestaande plek (0056). */
+export interface OrganizationRequest {
+  id: string;
+  /** De bestaande plek waaronder het nieuwe onderdeel komt. */
+  parent_id: string;
+  /** De nieuwe lagen van boven naar beneden, bijvoorbeeld ODI en RADIO. */
+  names: string[];
+  motivation?: string | null;
+  status: FunctionRequestStatus;
+  requested_by?: string | null;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  review_note?: string | null;
+  /** Het diepste onderdeel dat bij goedkeuring is aangemaakt. */
+  created_org_id?: string | null;
   created_at: string;
   /** Verrijkt vanuit het profiel van de aanvrager (optioneel). */
   requester?: Pick<Profile, 'email' | 'full_name'> | null;

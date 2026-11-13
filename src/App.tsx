@@ -40,6 +40,7 @@ const AdminDashboardPage = lazy(() => import('@/pages/admin/AdminDashboardPage')
 const TechniqueManagerPage = lazy(() => import('@/pages/admin/TechniqueManagerPage'));
 const RoleManagerPage = lazy(() => import('@/pages/admin/RoleManagerPage'));
 const FunctionRequestQueuePage = lazy(() => import('@/pages/admin/FunctionRequestQueuePage'));
+const OrganizationRequestQueuePage = lazy(() => import('@/pages/admin/OrganizationRequestQueuePage'));
 const CategoryManagerPage = lazy(() => import('@/pages/admin/CategoryManagerPage'));
 const CategoryRequestQueuePage = lazy(() => import('@/pages/admin/CategoryRequestQueuePage'));
 const AdminAnalyticsPage = lazy(() => import('@/pages/admin/AdminAnalyticsPage'));
@@ -162,6 +163,7 @@ export default function App() {
                   <Route path="technieken" element={<TechniqueManagerPage />} />
                   <Route path="rollen" element={<RoleManagerPage />} />
                   <Route path="functie-aanvragen" element={<FunctionRequestQueuePage />} />
+                  <Route path="onderdeel-aanvragen" element={<OrganizationRequestQueuePage />} />
                   <Route path="categorieen" element={<CategoryManagerPage />} />
                   <Route path="categorie-aanvragen" element={<CategoryRequestQueuePage />} />
                   <Route path="analytics" element={<AdminAnalyticsPage />} />

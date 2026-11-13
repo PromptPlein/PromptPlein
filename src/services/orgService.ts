@@ -69,25 +69,6 @@ export async function listOrganizations(includeInactive = false): Promise<Organi
   return (data as Organization[]) ?? [];
 }
 
-/**
- * Een afdeling onder een ministerie, door de gebruiker zelf en zonder
- * goedkeuring (migratie 0055). Bestaat de naam al onder dat ministerie, dan
- * komt die afdeling terug in plaats van een kopie.
- */
-export async function createDepartment(ministryId: string, name: string): Promise<Organization> {
-  const client = requireClient();
-  const { data, error } = await client.rpc('create_department', {
-    p_ministry: ministryId,
-    p_name: name,
-  });
-  if (error) {
-    // De database geeft zelf een leesbare melding; een ontbrekende functie niet.
-    if (error.code === 'PGRST202') throw new Error('Afdelingen toevoegen kan nog niet. Probeer het later opnieuw.');
-    throw new Error(error.message);
-  }
-  return data as Organization;
-}
-
 export interface OrganizationInput {
   name: string;
   code?: string | null;

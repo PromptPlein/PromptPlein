@@ -169,9 +169,11 @@ function buildLayout(orgs: Organization[]): {
     node.children.forEach((c) => shiftSubtree(c, dx));
   }
 
-  // Plaats een subtree; retourneer het midden-x van deze knoop.
-  function place(node: TreeNode): number {
-    const row = TYPE_ROW[node.org.organization_type] ?? 0;
+  // Plaats een subtree; retourneer het midden-x van deze knoop. De rij volgt het
+  // type, maar ligt altijd onder de ouder: een team onder een zelf aangevraagd
+  // onderdeel heeft hetzelfde type en komt zo toch een rij lager.
+  function place(node: TreeNode, parentRow = -1): number {
+    const row = Math.max(TYPE_ROW[node.org.organization_type] ?? 0, parentRow + 1);
     const y = rowY(row);
     const w = widthOf.get(node.org.id) ?? NODE_MIN_W;
 
@@ -184,7 +186,7 @@ function buildLayout(orgs: Organization[]): {
       return x;
     }
 
-    const childCenters = node.children.map((c) => place(c));
+    const childCenters = node.children.map((c) => place(c, row));
     const half = w / 2;
     // Gewenst midden = midden van de span van de kinderen.
     let x = (childCenters[0] + childCenters[childCenters.length - 1]) / 2;

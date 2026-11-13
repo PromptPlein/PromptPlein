@@ -20,6 +20,7 @@ import ShareModal from '@/components/share/ShareModal';
 import ExportModal from '@/components/export/ExportModal';
 import CollaborationPanel from '@/components/collaboration/CollaborationPanel';
 import { useReferenceData } from '@/context/ReferenceDataContext';
+import { orgPathLabel } from '@/lib/orgTree';
 import { useAuth } from '@/context/AuthContext';
 import {
   deletePrompt,
@@ -41,7 +42,8 @@ import type { Optimization, Prompt, PublicProfile } from '@/types';
 export default function PromptDetailPage() {
   const { promptId } = useParams<{ promptId: string }>();
   const navigate = useNavigate();
-  const { categoryById, roleById, techniqueById, organizationById } = useReferenceData();
+  const { categoryById, roleById, techniqueById, organizationById, organizations } =
+    useReferenceData();
   const { user, configured, isAdmin } = useAuth();
 
   const [prompt, setPrompt] = useState<Prompt | null>(null);
@@ -366,7 +368,7 @@ export default function PromptDetailPage() {
             const org = organizationById(author?.organization_id ?? prompt.organization_id);
             return org ? (
               <span className="inline-flex items-center gap-1 text-slate-400 dark:text-slate-500">
-                <Building2 size={12} /> {org.name}
+                <Building2 size={12} /> {orgPathLabel(org.id, organizations, { short: true }) || org.name}
               </span>
             ) : null;
           })()}

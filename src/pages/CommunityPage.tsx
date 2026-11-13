@@ -4,6 +4,7 @@ import { Users, Trophy, ThumbsUp, FileText, Building2, ChevronRight, Flame } fro
 import OrgTree from '@/components/network/OrgTree';
 import clsx from 'clsx';
 import { useReferenceData } from '@/context/ReferenceDataContext';
+import { orgPathLabel } from '@/lib/orgTree';
 import { listCommunityMembers, firstName } from '@/services/communityService';
 import TrendingPage from '@/pages/TrendingPage';
 import type { CommunityMember } from '@/types';
@@ -78,7 +79,7 @@ function TabButton({
 }
 
 function CommunityTab() {
-  const { organizations, organizationById } = useReferenceData();
+  const { organizations } = useReferenceData();
   const [members, setMembers] = useState<CommunityMember[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -138,7 +139,8 @@ function CommunityTab() {
                         {firstName(m.full_name)}
                       </p>
                       <p className="truncate text-xs text-slate-500 dark:text-slate-400">
-                        {organizationById(m.organization_id)?.name ?? 'Onbekende organisatie'}
+                        {orgPathLabel(m.organization_id, organizations, { short: true }) ||
+                          'Onbekende organisatie'}
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-3 text-xs text-slate-500 dark:text-slate-400">

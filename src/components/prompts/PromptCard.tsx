@@ -4,6 +4,7 @@ import { Copy, Star, Check, Share2, ThumbsUp } from '@/components/common/icons';
 import toast from 'react-hot-toast';
 import InfoDot from '@/components/common/InfoDot';
 import { categoryIcon } from '@/lib/categoryIcons';
+import { orgPathLabel } from '@/lib/orgTree';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { useAuth } from '@/context/AuthContext';
 import {
@@ -28,7 +29,7 @@ interface PromptCardProps {
 
 export default function PromptCard({ prompt, author, onChanged }: PromptCardProps) {
   const navigate = useNavigate();
-  const { categoryById, roleById, organizationById } = useReferenceData();
+  const { categoryById, roleById, organizationById, organizations } = useReferenceData();
   const { user, profile, configured } = useAuth();
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -121,7 +122,10 @@ export default function PromptCard({ prompt, author, onChanged }: PromptCardProp
   // staat achter het infobolletje: één blik op de kaart, de rest op verzoek.
   const info = [
     prompt.description,
-    [org?.name, role?.name, formatDate(prompt.created_at)].filter(Boolean).join(' · '),
+    // Het hele pad, zodat bij een team ook het onderdeel en het ministerie erboven staan.
+    [org ? orgPathLabel(org.id, organizations, { short: true }) || org.name : null, role?.name, formatDate(prompt.created_at)]
+      .filter(Boolean)
+      .join(' · '),
   ]
     .filter(Boolean)
     .join('\n');

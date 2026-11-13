@@ -5,7 +5,7 @@ import { X } from '@/components/common/icons';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { categoryIcon } from '@/lib/categoryIcons';
 import { SHARING_LEVELS, toggled } from '@/lib/utils';
-import { departmentsUnder, ministryOf } from '@/lib/orgTree';
+import { descendantsInOrder, ministryOf, orgSubtreeIds } from '@/lib/orgTree';
 import useDialogFocus from '@/lib/useDialogFocus';
 import type { AdvancedPromptFilters, SharingLevel } from '@/types';
 
@@ -63,7 +63,7 @@ export default function FilterPanel({
       selectedOrgs.some((id) => id === m.id || ministryOf(id, organizations)?.id === m.id),
   );
   const departmentGroups = openMinistries
-    .map((m) => ({ ministry: m, departments: departmentsUnder(m.id, organizations) }))
+    .map((m) => ({ ministry: m, departments: descendantsInOrder(m.id, organizations) }))
     .filter((g) => g.departments.length > 0);
 
   return createPortal(
@@ -148,19 +148,31 @@ export default function FilterPanel({
           )}
 
           {departmentGroups.map(({ ministry, departments }) => (
-            <FilterGroup key={ministry.id} title={`Afdeling bij ${ministry.code ?? ministry.name}`}>
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-1.5">
-                {departments.map((d) => (
-                  <ToggleButton
-                    key={d.id}
-                    active={selectedOrgs.includes(d.id)}
-                    onClick={() => onChange({ organization_ids: toggled(selectedOrgs, d.id) })}
-                    className="justify-start text-left text-sm"
-                  >
-                    {d.name}
-                  </ToggleButton>
+            <FilterGroup key={ministry.id} title={`Onderdeel bij ${ministry.code ?? ministry.name}`}>
+              {/* Een boom: elk onderdeel springt in onder zijn ouder, zodat de lagen
+                  erboven zichtbaar blijven. Een onderdeel kiezen neemt alles eronder mee. */}
+              <ul className="space-y-1.5">
+                {departments.map(({ org: d, depth }) => (
+                  <li key={d.id} style={{ paddingLeft: `${(depth - 1) * 1.25}rem` }}>
+                    <ToggleButton
+                      active={selectedOrgs.includes(d.id)}
+                      onClick={() =>
+                        onChange({
+                          // Een onderdeel uitzetten zet ook wat eronder gekozen is uit.
+                          organization_ids: selectedOrgs.includes(d.id)
+                            ? selectedOrgs.filter(
+                                (id) => !orgSubtreeIds(d.id, organizations).includes(id),
+                              )
+                            : [...selectedOrgs, d.id],
+                        })
+                      }
+                      className="w-full justify-start text-left text-sm"
+                    >
+                      {d.name}
+                    </ToggleButton>
+                  </li>
                 ))}
-              </div>
+              </ul>
             </FilterGroup>
           ))}
 

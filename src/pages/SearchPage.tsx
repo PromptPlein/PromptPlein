@@ -15,7 +15,7 @@ import { SkeletonGrid } from '@/components/common/Skeleton';
 import { searchPrompts } from '@/services/repository';
 import { trackEvent } from '@/services/analyticsService';
 import { categoryIcon } from '@/lib/categoryIcons';
-import { ministryOf, orgSubtreeIds, searchOrgIds } from '@/lib/orgTree';
+import { ministryOf, orgPathLabel, orgSubtreeIds, searchOrgIds } from '@/lib/orgTree';
 import {
   activityIdentifier,
   formatDate,
@@ -284,7 +284,11 @@ export default function SearchPage() {
               return (
                 <ActiveChip
                   key={id}
-                  label={org?.code ?? org?.name ?? 'Organisatie'}
+                  label={
+                    org?.organization_type === 'ministry'
+                      ? org.code ?? org.name
+                      : orgPathLabel(id, organizations, { short: true }) || 'Organisatie'
+                  }
                   onRemove={() =>
                     update({ organization_ids: toggled(filters.organization_ids, id) })
                   }

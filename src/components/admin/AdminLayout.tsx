@@ -29,6 +29,7 @@ const adminNav = [
   { to: '/admin/gebruikers', label: 'Gebruikers', icon: UserCog, end: false },
   { to: '/admin/moderatoren', label: 'Moderatoren', icon: UserCheck, end: false },
   { to: '/admin/organisaties', label: 'Organisaties', icon: Building2, end: false },
+  { to: '/admin/onderdeel-aanvragen', label: 'Onderdeel-aanvragen', icon: Building2, end: false },
   { to: '/admin/technieken', label: 'Technieken', icon: Sparkles, end: false },
   { to: '/admin/rollen', label: 'Functies', icon: Users, end: false },
   { to: '/admin/functie-aanvragen', label: 'Functie-aanvragen', icon: Briefcase, end: false },

@@ -223,13 +223,19 @@ Prompts hebben een zichtbaarheidsniveau met een goedkeuringsstroom
 (`visibilityService`, `ApprovalQueuePage`). Organisaties vormen een boom van
 ministeries (`orgTree.ts`, migraties 0020/0021/0024).
 
-Afdelingen maakt de gebruiker zelf aan onder een ministerie, zonder goedkeuring
-(`create_department`, 0055, met `OrgPicker` op het profiel). Dat is een keuze van
-de eigenaar: wie dezelfde afdeling kiest, deelt de prompts op het deelniveau
-Afdeling. Een functie blijft een aanvraag die een beheerder goedkeurt; de
-aanvrager krijgt mail bij indienen en besluit, en de goedgekeurde functie komt
-op zijn profiel als daar nog geen stond. In Ontdekken zoekt een ministerie met
-een gekozen afdeling alleen in die afdeling (`searchOrgIds`).
+Onder een ministerie hangen onderdelen en daaronder teams, zo diep als nodig
+(bijvoorbeeld BZK › ODI › RADIO, hoogstens zes lagen). `OrgPicker` toont een
+keuzelijst per laag; het profiel hangt aan de diepste gekozen plek. Een ontbrekend
+onderdeel vraagt de gebruiker aan op zijn profiel, ook meerdere lagen in één
+aanvraag (`request_organization`, 0056), en een beheerder keurt het goed in
+Beheer, Onderdeel-aanvragen (`approve_organization_request` maakt de hele keten).
+Bij goedkeuring verhuist het profiel van de aanvrager naar het nieuwe onderdeel.
+Het direct aanmaken uit 0055 is daarmee vervallen: keuze van de eigenaar. Wie op
+dezelfde plek zit, deelt de prompts op het deelniveau Afdeling (exacte match).
+Een functie is op dezelfde manier een aanvraag; de aanvrager krijgt mail bij
+indienen en besluit. Overal waar een organisatie staat, toont de app het hele pad
+(`orgPathLabel`). In Ontdekken zoekt een gekozen onderdeel in alles eronder, en
+een dieper gekozen onderdeel vernauwt dat (`searchOrgIds`).
 
 ## Opslagscheiding: dit is een bewuste keuze
 
