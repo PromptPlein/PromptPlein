@@ -12,7 +12,6 @@ import type { ChatSettings } from '@/services/settingsService';
 import {
   addProjectFile,
   deleteProjectFile,
-  indexProject,
   listProjectFiles,
   markProjectUsed,
   MAX_PROJECT_FILES,
@@ -20,10 +19,12 @@ import {
   MAX_PROJECT_FILE_CHARS,
   MAX_PROJECT_INSTRUCTIONS_CHARS,
   MAX_PROJECT_NAME_CHARS,
+  getProjectPrepareStatus,
   onProjectPrepare,
   prepareProjectForBuilder,
-  type BriefProgress,
+  type ProjectPrepareStatus,
 } from '@/services/chatProjectService';
+import SourceProcessing from '@/components/chat/SourceProcessing';
 import type { ChatProject, ChatProjectFile } from '@/types';
 
 /**
@@ -76,7 +77,6 @@ export default function ProjectSettingsModal({
   const [loadingFiles, setLoadingFiles] = useState(false);
   const [uploading, setUploading] = useState<{ current: number; total: number } | null>(null);
   /** Stukken die nog doorzoekbaar moeten worden; 0 is klaar. */
-  const [indexRemaining, setIndexRemaining] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [confirmDeleteFile, setConfirmDeleteFile] = useState<ChatProjectFile | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -139,24 +139,20 @@ export default function ProjectSettingsModal({
   // bij elke opdracht de passende passages in. Daarna de analyse voor de bouwer,
   // bewaard op de projectrij, zodat aanhaken daar niets meer hoeft te lezen. Ook
   // bij openen, want een eerdere verwerking kan zijn afgebroken; wat er al staat
-  // kost dan één kleine query.
+  // kost dan een paar kleine query's. Het loopt los van dit venster door.
   const filesChars = files.reduce((sum, f) => sum + f.chars, 0);
   const hasFiles = files.length > 0;
-  useEffect(() => {
-    if (open && projectId && hasFiles) void indexProject(projectId, setIndexRemaining);
-    // files.length erbij: een nieuw bestand heeft ook vectoren nodig.
-  }, [open, projectId, hasFiles, files.length]);
   useEffect(() => {
     if (open && projectId && hasFiles) prepareProjectForBuilder(projectId);
   }, [open, projectId, hasFiles]);
 
-  // Hoe ver de analyse voor de bouwer is.
-  const [prepareProgress, setPrepareProgress] = useState<BriefProgress | null>(null);
+  // De stand van het verwerken; bij opnieuw openen meteen de laatste stand.
+  const [prepareStatus, setPrepareStatus] = useState<ProjectPrepareStatus | null>(null);
   useEffect(() => {
-    setPrepareProgress(null);
     if (!projectId) return;
-    return onProjectPrepare((id, progress) => {
-      if (id === projectId) setPrepareProgress(progress);
+    setPrepareStatus(getProjectPrepareStatus(projectId));
+    return onProjectPrepare((id, status) => {
+      if (id === projectId) setPrepareStatus(status);
     });
   }, [projectId]);
 
@@ -496,24 +492,11 @@ export default function ProjectSettingsModal({
               </p>
             )}
 
-            {indexRemaining > 0 && (
-              <p
-                role="status"
-                className="mt-1 flex items-center gap-1.5 text-[0.6875rem] text-slate-400 dark:text-slate-500"
-              >
-                <Loader2 size={12} className="animate-spin" />
-                Bestanden doorzoekbaar maken
-              </p>
-            )}
-
-            {indexRemaining <= 0 && prepareProgress && prepareProgress.total > 0 && (
-              <p
-                role="status"
-                className="mt-1 flex items-center gap-1.5 text-[0.6875rem] text-slate-400 dark:text-slate-500"
-              >
-                <Loader2 size={12} className="animate-spin" />
-                Bronnen lezen voor de promptbouwer: {prepareProgress.done} van {prepareProgress.total}
-              </p>
+            {files.length > 0 && (
+              <SourceProcessing
+                status={prepareStatus}
+                onRetry={() => projectId && prepareProjectForBuilder(projectId)}
+              />
             )}
           </div>
 

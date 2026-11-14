@@ -364,8 +364,16 @@ export function indexProject(
   projectId: string,
   onProgress?: (remaining: number) => void,
 ): Promise<void> {
+  // Wie aanhaakt bij een verwerking die al loopt, krijgt ook de voortgang.
+  let listeners = indexListeners.get(projectId);
+  if (!listeners) {
+    listeners = new Set();
+    indexListeners.set(projectId, listeners);
+  }
+  if (onProgress) listeners.add(onProgress);
   const running = indexing.get(projectId);
   if (running) return running;
+  const notify = (remaining: number) => listeners!.forEach((listener) => listener(remaining));
   const run = (async () => {
     try {
       for (;;) {
@@ -373,21 +381,24 @@ export function indexProject(
           mode: 'project-index',
           projectId,
         });
-        onProgress?.(remaining);
+        notify(remaining);
         if (remaining <= 0) {
           indexed.add(projectId);
           return;
         }
       }
     } catch {
-      onProgress?.(0);
+      notify(0);
     } finally {
       indexing.delete(projectId);
+      indexListeners.delete(projectId);
     }
   })();
   indexing.set(projectId, run);
   return run;
 }
+
+const indexListeners = new Map<string, Set<(remaining: number) => void>>();
 
 /**
  * Haalt de tekststukken op die bij de vraag passen: eerst op betekenis en woorden
@@ -915,7 +926,9 @@ async function makeProjectBrief(args: {
 
   let brief: string;
   if (parts.length === 1) {
+    onProgress?.({ done: 0, total: 1 });
     const result = await analyze(parts[0]);
+    onProgress?.({ done: 1, total: 1 });
     if (!result.success || !result.brief) return '';
     brief = result.brief;
   } else {
@@ -1153,17 +1166,64 @@ function readingGuide(brief: string): string {
   return text.slice(0, 1000);
 }
 
+/**
+ * Hoe ver het verwerken van de bronnen van een project is. Twee stappen:
+ * doorzoekbaar maken (de vectoren) en lezen voor de promptbouwer (de analyse).
+ */
+export interface ProjectPrepareStatus {
+  phase: 'index' | 'read' | 'done' | 'failed';
+  /** Stukken met een vector, van het totaal. */
+  indexDone: number;
+  indexTotal: number;
+  /** Gelezen delen plus samenvoegstappen, van het totaal; 0 van 0 als hij al klaarstond. */
+  readDone: number;
+  readTotal: number;
+}
+
 /** Lopende voorbereidingen per project; `again` vraagt om nog een ronde erna. */
 const preparing = new Map<string, { again: boolean }>();
+/** De laatste stand per project, zodat een venster dat later opengaat hem meteen ziet. */
+const prepareStatus = new Map<string, ProjectPrepareStatus>();
 
-/** Voortgang van de voorbereiding, voor wie hem wil tonen. */
-type PrepareListener = (projectId: string, progress: BriefProgress | null) => void;
+type PrepareListener = (projectId: string, status: ProjectPrepareStatus) => void;
 const prepareListeners = new Set<PrepareListener>();
 
-/** Volg de voorbereiding van projecten; geeft een functie om te stoppen. */
+/** Volg het verwerken van projecten; geeft een functie om te stoppen. */
 export function onProjectPrepare(listener: PrepareListener): () => void {
   prepareListeners.add(listener);
   return () => prepareListeners.delete(listener);
+}
+
+/** De laatst bekende stand van dit project, of null als er in deze sessie niets liep. */
+export function getProjectPrepareStatus(projectId: string): ProjectPrepareStatus | null {
+  return prepareStatus.get(projectId) ?? null;
+}
+
+/**
+ * Vraagt de browser om bevestiging als het tabblad sluit terwijl er nog bronnen
+ * worden verwerkt. Binnen de app wisselen van pagina breekt niets af; alleen het
+ * tabblad sluiten of herladen doet dat.
+ */
+let unloadGuarded = false;
+function guardUnload(): void {
+  if (unloadGuarded || typeof window === 'undefined') return;
+  unloadGuarded = true;
+  window.addEventListener('beforeunload', (event) => {
+    if (preparing.size === 0) return;
+    event.preventDefault();
+    // Oudere browsers tonen de vraag alleen met een returnValue.
+    event.returnValue = '';
+  });
+}
+
+/** Aantal stukken van een project; 0 als het tellen niet lukt. */
+async function countChunks(projectId: string): Promise<number> {
+  if (!supabase) return 0;
+  const { count, error } = await supabase
+    .from('chat_project_file_chunks')
+    .select('id', { count: 'exact', head: true })
+    .eq('project_id', projectId);
+  return error ? 0 : (count ?? 0);
 }
 
 /**
@@ -1171,15 +1231,17 @@ export function onProjectPrepare(listener: PrepareListener): () => void {
  * te analyseren: vectoren voor alle bronbestanden en de analyse van de
  * instructie met alle bronnen, bewaard op de projectrij. Draait na toevoegen of
  * verwijderen van een bestand, na opslaan van de instructie en bij het openen
- * van de projectinstellingen. Staat de analyse er al, dan kost dat één kleine
- * query.
+ * van de projectinstellingen. Staat alles er al, dan kost dat een paar kleine
+ * query's.
  *
- * Loopt per project één keer tegelijk; een wijziging tijdens het lopen geeft
- * daarna nog een ronde, met het nieuwe materiaal. Gooit nooit: lukt het niet,
- * dan maakt de bouwer de analyse alsnog bij het aanhaken.
+ * Hangt niet aan een venster: sluiten of opslaan breekt het niet af, alleen het
+ * tabblad sluiten. Loopt per project één keer tegelijk; een wijziging tijdens
+ * het lopen geeft daarna nog een ronde, met het nieuwe materiaal. Gooit nooit:
+ * lukt het niet, dan maakt de bouwer de analyse alsnog bij het aanhaken.
  */
 export function prepareProjectForBuilder(projectId: string): void {
   if (!isSupabaseConfigured || !supabase) return;
+  guardUnload();
   const running = preparing.get(projectId);
   if (running) {
     running.again = true;
@@ -1187,27 +1249,44 @@ export function prepareProjectForBuilder(projectId: string): void {
   }
   const state = { again: false };
   preparing.set(projectId, state);
-  const emit = (progress: BriefProgress | null) =>
-    prepareListeners.forEach((listener) => listener(projectId, progress));
+  let status: ProjectPrepareStatus = {
+    phase: 'index',
+    indexDone: 0,
+    indexTotal: 0,
+    readDone: 0,
+    readTotal: 0,
+  };
+  const emit = (patch: Partial<ProjectPrepareStatus>) => {
+    status = { ...status, ...patch };
+    prepareStatus.set(projectId, status);
+    prepareListeners.forEach((listener) => listener(projectId, status));
+  };
   void (async () => {
+    let analyzed = false;
     try {
       do {
         state.again = false;
-        await indexProject(projectId);
+        const total = await countChunks(projectId);
+        emit({ phase: 'index', indexTotal: total, indexDone: 0, readDone: 0, readTotal: 0 });
+        await indexProject(projectId, (remaining) =>
+          emit({ indexDone: Math.max(0, total - remaining) }),
+        );
+        emit({ phase: 'read', indexDone: total });
         const ai = await getAiSettings().catch(() => null);
-        await buildGeneratorContext(
+        const context = await buildGeneratorContext(
           projectId,
           'all',
           ai ? { provider: ai.provider, model: ai.model } : undefined,
-          emit,
+          (progress) => emit({ readDone: progress.done, readTotal: progress.total }),
           { markUsed: false },
         );
+        analyzed = !context || context.analyzed;
       } while (state.again);
     } catch {
-      /* de bouwer probeert het zelf bij het aanhaken */
+      analyzed = false;
     } finally {
       preparing.delete(projectId);
-      emit(null);
+      emit({ phase: analyzed ? 'done' : 'failed' });
     }
   })();
 }
