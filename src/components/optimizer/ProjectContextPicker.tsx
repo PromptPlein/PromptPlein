@@ -18,7 +18,7 @@ import { writeNewProjectHandoff } from '@/services/handoffService';
 import {
   generatorCharsUsed,
   listProjectFiles,
-  MAX_GENERATOR_CONTEXT_CHARS,
+  type BriefProgress,
   type GeneratorContext,
 } from '@/services/chatProjectService';
 import type { ChatProject, ChatProjectFile } from '@/types';
@@ -68,6 +68,7 @@ export default function ProjectContextPicker({
   context,
   activeProjectId,
   loading,
+  progress,
   text,
   onStripMention,
   onPick,
@@ -81,6 +82,8 @@ export default function ProjectContextPicker({
   /** Het gekozen project; loopt voor op `context` zolang die nog laadt. */
   activeProjectId: string | null;
   loading: boolean;
+  /** Bij een groot project: hoeveel delen er al gelezen zijn. */
+  progress?: BriefProgress | null;
   /** De tekst in het invoerveld, voor `@` en het voorstel. */
   text: string;
   /** Haal de getypte `@` weer uit het invoerveld. */
@@ -233,10 +236,9 @@ export default function ProjectContextPicker({
 
   const chosenFiles = files.filter((f) => selected.includes(f.id));
   const used = generatorCharsUsed(activeProject?.instructions ?? '', chosenFiles);
-  const over = used > MAX_GENERATOR_CONTEXT_CHARS;
 
-  // De labels tonen wat er echt meegaat, niet wat er in de lijst is aangevinkt:
-  // een bron die niet paste hoort hier niet te staan alsof de AI hem kent.
+  // De labels tonen wat er gelezen is, niet wat er in de lijst is aangevinkt:
+  // de keuze gaat pas in bij "Klaar".
   const chips = context?.files ?? [];
   const hiddenChips = chips.length - MAX_FILE_CHIPS;
 
@@ -334,15 +336,8 @@ export default function ProjectContextPicker({
 
       <div className="border-t border-slate-200 p-1.5 dark:border-slate-700">
         {activeProjectId && files.length > 0 && (
-          <p
-            className={clsx(
-              'px-2.5 pb-1.5 pt-1 text-[0.8125rem] font-medium',
-              over ? 'text-amber-800 dark:text-amber-400' : 'text-slate-600 dark:text-slate-300',
-            )}
-          >
-            {over
-              ? 'Past niet meer: zet een bron uit.'
-              : `${nl(used)} van ${nl(MAX_GENERATOR_CONTEXT_CHARS)} tekens`}
+          <p className="px-2.5 pb-1.5 pt-1 text-[0.8125rem] font-medium text-slate-600 dark:text-slate-300">
+            {nl(used)} tekens, alles wordt gelezen
           </p>
         )}
         <div className="flex items-center justify-between gap-2">
@@ -449,7 +444,9 @@ export default function ProjectContextPicker({
 
         {loading && (
           <span className="text-[0.8125rem] text-slate-600 dark:text-slate-300">
-            Je project wordt geanalyseerd…
+            {progress && progress.total > 1
+              ? `Je project wordt gelezen: ${progress.done} van ${progress.total}…`
+              : 'Je project wordt geanalyseerd…'}
           </span>
         )}
 
@@ -482,12 +479,6 @@ export default function ProjectContextPicker({
           />
         )}
       </div>
-
-      {context && context.skipped.length > 0 && (
-        <p className="mt-1.5 text-[0.8125rem] font-medium text-amber-800 dark:text-amber-400">
-          Past niet meer, weggelaten: {context.skipped.join(', ')}. Haal een bron weg.
-        </p>
-      )}
 
       {panel && createPortal(panel, document.body)}
     </div>

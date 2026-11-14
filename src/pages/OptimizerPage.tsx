@@ -21,6 +21,8 @@ import { getPrompt, saveOptimization } from '@/services/repository';
 import { trackEvent } from '@/services/analyticsService';
 import {
   buildGeneratorContext,
+  withGeneratorSources,
+  type BriefProgress,
   type GeneratorContext,
   type GeneratorFileSelection,
 } from '@/services/chatProjectService';
@@ -109,6 +111,8 @@ export default function OptimizerPage() {
   const chatProjects = useChatProjects();
   const [projectContext, setProjectContext] = useState<GeneratorContext | null>(null);
   const [projectContextLoading, setProjectContextLoading] = useState(false);
+  // Hoe ver het lezen van een groot project is: deel zoveel van zoveel.
+  const [projectProgress, setProjectProgress] = useState<BriefProgress | null>(null);
   // Het gekozen project onthouden we los van de context: hij is er al terwijl de
   // analyse nog loopt, en een andere bronkeuze bouwt de context opnieuw op.
   const [projectContextId, setProjectContextId] = useState<string | null>(null);
@@ -120,16 +124,24 @@ export default function OptimizerPage() {
     async (projectId: string, selection: GeneratorFileSelection) => {
       const request = ++projectRequest.current;
       setProjectContextLoading(true);
+      setProjectProgress(null);
       setProjectContextId(projectId);
       setProjectContext((current) => (current?.id === projectId ? current : null));
       try {
         // De AI-instellingen gaan mee omdat het aanhaken van een project nu ook
         // een AI-stap ÍS: het project wordt eerst geanalyseerd (één keer per
         // versie, daarna uit de cache) en pas daarna bouwt de gebruiker.
-        const ctx = await buildGeneratorContext(projectId, selection, {
-          provider: settingsRef.current.provider,
-          model: settingsRef.current.model,
-        });
+        const ctx = await buildGeneratorContext(
+          projectId,
+          selection,
+          {
+            provider: settingsRef.current.provider,
+            model: settingsRef.current.model,
+          },
+          (progress) => {
+            if (request === projectRequest.current) setProjectProgress(progress);
+          },
+        );
         if (request !== projectRequest.current) return;
         setProjectContext(ctx);
         // Een project zonder instructie én zonder bestanden levert niets op; dan
@@ -140,7 +152,10 @@ export default function OptimizerPage() {
         setProjectContext(null);
         setProjectContextId(null);
       } finally {
-        if (request === projectRequest.current) setProjectContextLoading(false);
+        if (request === projectRequest.current) {
+          setProjectContextLoading(false);
+          setProjectProgress(null);
+        }
       }
     },
     [],
@@ -170,9 +185,18 @@ export default function OptimizerPage() {
   const clearProjectContext = useCallback(() => {
     projectRequest.current += 1;
     setProjectContextLoading(false);
+    setProjectProgress(null);
     setProjectContext(null);
     setProjectContextId(null);
   }, []);
+
+  // Bij elke bouwstap: de analyse plus de passages uit de bronnen die bij de
+  // opdracht passen. Hangt aan de context, zodat een andere bronkeuze ook andere
+  // passages oplevert.
+  const projectSources = useCallback(
+    (task: string) => withGeneratorSources(projectContext, task),
+    [projectContext],
+  );
 
   const selectProjectFiles = useCallback(
     (fileIds: string[]) => {
@@ -408,6 +432,7 @@ export default function OptimizerPage() {
                 context={projectContext}
                 activeProjectId={projectContextId}
                 loading={projectContextLoading}
+                progress={projectProgress}
                 text={text}
                 onStripMention={stripMention}
                 onPick={pickProject}
@@ -434,6 +459,7 @@ export default function OptimizerPage() {
                 toggles={toggles}
                 initialPrompt={initialPrompt}
                 projectContext={projectContext?.text}
+                projectSources={projectSources}
                 renderProjectContext={renderProjectContext}
                 thinking={thinkingOn}
                 webSearch={webSearchOn}
@@ -450,6 +476,7 @@ export default function OptimizerPage() {
                 header={tabs}
                 toggles={toggles}
                 projectContext={projectContext?.text}
+                projectSources={projectSources}
                 renderProjectContext={renderProjectContext}
                 thinking={thinkingOn}
                 webSearch={webSearchOn}

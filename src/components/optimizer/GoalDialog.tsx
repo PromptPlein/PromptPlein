@@ -17,6 +17,7 @@ import MakeProgress from '@/components/optimizer/MakeProgress';
 import { compactFieldLabel } from '@/lib/fieldLabel';
 import toast from 'react-hot-toast';
 import { useReferenceData } from '@/context/ReferenceDataContext';
+import { useProjectSources } from '@/hooks/useProjectSources';
 import {
   generatePrompt,
   inventTestAnswer,
@@ -137,6 +138,11 @@ interface GoalDialogProps {
    * de AI naar achtergrond die in het project allang beschreven staat.
    */
   projectContext?: string;
+  /**
+   * Zoekt bij de opdracht de passende passages uit de gekozen bronbestanden en
+   * zet ze onder de analyse. Zonder deze functie gaat alleen `projectContext` mee.
+   */
+  projectSources?: (task: string) => Promise<string | undefined>;
   /** De knop "Context" met zijn labels, boven het tekstvak. */
   renderProjectContext?: (slot: ProjectContextSlot) => ReactNode;
   /**
@@ -186,13 +192,19 @@ export default function GoalDialog({
   onResult,
   header,
   toggles,
-  projectContext,
+  projectContext: projectBrief,
+  projectSources,
   renderProjectContext,
   thinking,
   webSearch,
   restore,
 }: GoalDialogProps) {
   const { techniques, techniqueById } = useReferenceData();
+  // De analyse van het project, aangevuld met de passages die bij dit doel passen.
+  const { resolve: resolveProjectContext, current: projectContext } = useProjectSources(
+    projectBrief,
+    projectSources,
+  );
   const { profile, user, isAdmin } = useAuth();
 
   // Gedragslog-sessie voor deze run + een korte log-helper (fire-and-forget).
@@ -426,7 +438,7 @@ export default function GoalDialog({
         forceFinish,
         preferredProvider: settings.provider,
         preferredModel: settings.model,
-        projectContext,
+        projectContext: await resolveProjectContext(goalRef.current.trim()),
         // Alleen de losse technieken: hieruit kiest het gesprek de techniek
         // waarvan het de bouwstenen uitvraagt. Frameworks komen pas ná de
         // opdrachtbeschrijving aan bod.
@@ -487,7 +499,7 @@ export default function GoalDialog({
         transcript,
         preferredProvider: settings.provider,
         preferredModel: settings.model,
-        projectContext,
+        projectContext: await resolveProjectContext(goalRef.current.trim()),
       });
       if (!invented) {
         toast.error('Er kon geen testantwoord worden verzonnen.');
@@ -563,7 +575,7 @@ export default function GoalDialog({
         fromDialogue: true,
         preferredProvider: settings.provider,
         preferredModel: settings.model,
-        projectContext,
+        projectContext: await resolveProjectContext(goalRef.current.trim()),
       });
       setFrameworkFits(fit.recommendations);
       keuze = fit.recommendations[0]?.id ?? keuze;
@@ -615,7 +627,7 @@ export default function GoalDialog({
         onSources: (sources, queries) => setPrefillProgress((p) => ({ ...p, sources, queries })),
         preferredProvider: settings.provider,
         preferredModel: settings.model,
-        projectContext,
+        projectContext: await resolveProjectContext(goalRef.current.trim()),
         onStatus: (status) =>
           setPrefillProgress((p) => ({
             ...p,
@@ -694,7 +706,7 @@ export default function GoalDialog({
         interviewResolved: true,
         preferredProvider: settings.provider,
         preferredModel: settings.model,
-        projectContext,
+        projectContext: await resolveProjectContext(goalRef.current.trim()),
         thinking,
         webSearch,
         webSearchInstruction: settings.webSearchInstruction.trim() || undefined,

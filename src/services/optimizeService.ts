@@ -3238,8 +3238,12 @@ export async function analyzeProjectContext(args: {
   preferredProvider?: AiProvider;
   /** Het model uit de optimalisatie-instellingen; leeg = de server kiest. */
   preferredModel?: string;
+  /** Bij een groot project: welk deel van het materiaal dit is. */
+  part?: { index: number; total: number };
+  /** true: `material` zijn deelanalyses die tot één analyse samen moeten. */
+  merge?: boolean;
 }): Promise<{ brief: string; provider: string; success: boolean; error?: string }> {
-  const { material, projectName, preferredProvider, preferredModel } = args;
+  const { material, projectName, preferredProvider, preferredModel, part, merge } = args;
   const functionUrl = getFunctionUrl('optimize-prompt');
   const failed = { brief: '', provider: 'local-template', success: false };
   if (!isSupabaseConfigured || !supabase || !functionUrl || !material.trim()) {
@@ -3263,6 +3267,8 @@ export async function analyzeProjectContext(args: {
         mode: 'project-brief',
         projectContext: material,
         projectName,
+        ...(part ? { briefPart: part } : {}),
+        ...(merge ? { briefMerge: true } : {}),
         preferredProvider: preferredProvider ?? 'auto',
         // Het model uit de optimalisatie-instellingen, net als de bouwstappen
         // die deze analyse daarna stuurt. Zonder geldige keuze kiest de server

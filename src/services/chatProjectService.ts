@@ -398,6 +398,7 @@ async function searchProjectChunks(
   projectId: string,
   query: string,
   nameOf: Map<string, string>,
+  budget: number = MAX_PROJECT_CONTEXT_CHARS,
 ): Promise<{ name: string; text: string }[] | null> {
   let rows: ChunkRow[];
   try {
@@ -443,7 +444,7 @@ async function searchProjectChunks(
     let size = 0;
     for (const text of ordered) {
       const extra = text.length + (parts.length ? separator.length : 0);
-      if (used + size + extra > MAX_PROJECT_CONTEXT_CHARS) break;
+      if (used + size + extra > budget) break;
       size += extra;
       parts.push(text);
     }
@@ -569,18 +570,45 @@ export async function loadProjectContext(
 // --- De brug naar de promptbouwer ---
 
 /**
- * Tekenbudget van de projectcontext in de GENERATOR. Bewust veel lager dan
- * {@link MAX_PROJECT_CONTEXT_CHARS} voor de chat: de bouwer draait per prompt
- * meerdere AI-stappen (raamwerkkeuze, voor-invulling, vragenronde, schrijven) en
- * die context gaat in elke stap opnieuw mee. Wat in de chat één keer 200.000
- * tekens kost, kost hier een veelvoud. Spiegel van
+ * Hoeveel projecttekst er hoogstens in één bouwstap meegaat: de analyse plus de
+ * passages die bij de opdracht passen. Spiegel van
  * MAX_PROJECT_CONTEXT_IN_GENERATOR in de edge function.
+ *
+ * Dit is GEEN grens op wat er gelezen wordt. De analyse leest alle gekozen
+ * bronnen volledig, in delen als het moet (zie {@link ensureProjectBrief}), en
+ * de passages komen uit alle gekozen bronnen. Alleen wat daarna in elke stap
+ * meegaat is begrensd: de bouwer draait per prompt meerdere AI-stappen
+ * (raamwerkkeuze, voor-invulling, vragenronde, schrijven) en die context gaat in
+ * elke stap opnieuw mee.
  */
 export const MAX_GENERATOR_CONTEXT_CHARS = 60_000;
 
 /**
+ * Zoveel tekens bronpassages gaan er hoogstens mee naast de analyse. Ruim onder
+ * {@link MAX_GENERATOR_CONTEXT_CHARS}, zodat analyse en passages samen passen.
+ */
+const MAX_GENERATOR_PASSAGE_CHARS = 40_000;
+
+/**
+ * Zoveel tekens materiaal leest één analyse-aanroep. Groter materiaal wordt in
+ * delen van deze maat geanalyseerd en daarna samengevoegd. Spiegel van
+ * MAX_PROJECT_BRIEF_CHARS in de edge function, die er wat ruimte bovenop houdt.
+ *
+ * Waarom niet alles in één keer: het contextvenster zou het halen, maar een klein
+ * model leest het midden van een heel lange tekst slecht. In delen leest het
+ * elk deel echt.
+ */
+const BRIEF_PART_CHARS = 120_000;
+
+/** Zoveel analyse-aanroepen lopen er tegelijk. */
+const BRIEF_CONCURRENCY = 4;
+
+/** Zoveel deelanalyses voegt één aanroep hoogstens samen. */
+const BRIEF_MERGE_GROUP = 12;
+
+/**
  * Welke bronbestanden mee naar de bouwer gaan: een eigen keuze, of `'all'` voor
- * de knop op de projectpagina (oudste eerst, tot het budget vol is).
+ * de knop op de projectpagina.
  */
 export type GeneratorFileSelection = 'all' | string[];
 
@@ -588,9 +616,8 @@ const instructionBlock = (instructions: string) => `Projectinstructie:\n${instru
 const fileHeading = (name: string) => `Bronbestand "${name}":\n`;
 
 /**
- * Hoeveel tekens instructie en bestanden samen van het bouwerbudget gebruiken.
- * Dezelfde telling als in {@link buildGeneratorContext}, zodat de teller in de
- * keuzelijst precies zegt wat er straks wel of niet past.
+ * Hoeveel tekens instructie en bestanden samen tellen: de omvang van wat de
+ * analyse leest. De keuzelijst toont dit getal.
  */
 export function generatorCharsUsed(
   instructions: string,
@@ -602,9 +629,9 @@ export function generatorCharsUsed(
 
 export interface GeneratorContext {
   /**
-   * De tekst die als `projectContext` naar de AI-stappen gaat. Normaal is dit de
-   * PROJECTANALYSE (zie {@link ensureProjectBrief}); alleen wanneer die niet
-   * gemaakt kon worden staat hier het ruwe bronmateriaal.
+   * De PROJECTANALYSE, of bij een mislukte analyse het begin van het ruwe
+   * bronmateriaal. Dit is de vaste basis; de passages bij een opdracht komen er
+   * via {@link withGeneratorSources} bij.
    */
   text: string;
   /**
@@ -616,11 +643,14 @@ export interface GeneratorContext {
   id: string;
   /** Naam van het project, voor het label in de bouwer. */
   name: string;
-  /** De bronbestanden die echt zijn meegegaan; de bouwer toont ze als labels. */
+  /** De bronbestanden die zijn gelezen; de bouwer toont ze als labels. */
   files: { id: string; name: string }[];
-  /** Bestanden die niet meer in het generator-budget pasten. */
-  skipped: string[];
+  /** Totale omvang van de gelezen bronbestanden, in tekens. */
+  fileChars: number;
 }
+
+/** Voortgang van het lezen: hoeveel delen klaar zijn van hoeveel. */
+export type BriefProgress = { done: number; total: number };
 
 // --- De projectanalyse en zijn cache ---
 //
@@ -726,21 +756,114 @@ async function writeBrief(
 }
 
 /**
+ * Knipt het materiaal in delen van hoogstens {@link BRIEF_PART_CHARS}. De
+ * bestanden lopen op volgorde door; past een bestand niet meer in het lopende
+ * deel, dan gaat de rest mee naar het volgende, geknipt op een alinea. De kop
+ * van zo'n stuk zegt dat het een begin, vervolg of slot is, zodat het model weet
+ * dat het geen heel document leest. De projectinstructie staat vooraan in elk
+ * deel: zonder die beschrijving weet een deel uit het midden van een bestand
+ * niet waar het over gaat.
+ */
+function splitMaterial(
+  instructions: string,
+  files: { name: string; text: string }[],
+): string[] {
+  const head = instructions ? instructionBlock(instructions) : '';
+  // Een lange instructie herhalen kost per deel te veel; dan staat hij alleen in deel 1.
+  const repeatHead = head.length <= BRIEF_PART_CHARS / 6;
+  const room = BRIEF_PART_CHARS - (repeatHead ? head.length + 2 : 0);
+  /** Kleiner dan dit begint een bestand liever in een nieuw deel. */
+  const MIN_PIECE = 4_000;
+
+  const parts: string[] = [];
+  let current: string[] = [];
+  let size = 0;
+  const flush = () => {
+    if (current.length) parts.push(current.join('\n\n'));
+    current = [];
+    size = 0;
+  };
+
+  for (const file of files) {
+    let rest = file.text;
+    let first = true;
+    while (rest) {
+      const whole = first ? fileHeading(file.name) : `Bronbestand "${file.name}", vervolg:\n`;
+      const free = room - size - (current.length ? 2 : 0);
+      if (whole.length + rest.length <= free) {
+        current.push(`${whole}${rest}`);
+        size += whole.length + rest.length + (current.length > 1 ? 2 : 0);
+        rest = '';
+        break;
+      }
+      const label = first
+        ? `Bronbestand "${file.name}", begin (loopt door in het volgende deel):\n`
+        : `Bronbestand "${file.name}", vervolg (loopt door in het volgende deel):\n`;
+      const take = free - label.length;
+      if (take < MIN_PIECE) {
+        flush();
+        continue;
+      }
+      // Knip op de laatste alinea in de tweede helft, anders op een regel, anders hard.
+      let cut = rest.lastIndexOf('\n\n', take);
+      if (cut < take / 2) cut = rest.lastIndexOf('\n', take);
+      if (cut < take / 2) cut = take;
+      current.push(`${label}${rest.slice(0, cut)}`);
+      rest = rest.slice(cut).replace(/^\n+/, '');
+      first = false;
+      flush();
+    }
+  }
+  flush();
+
+  if (!parts.length) return head ? [head] : [];
+  return parts.map((part, i) => (head && (repeatHead || i === 0) ? `${head}\n\n${part}` : part));
+}
+
+/** Voert de taken uit met hoogstens `limit` tegelijk, in de volgorde van de lijst. */
+async function runLimited<T>(tasks: (() => Promise<T>)[], limit: number): Promise<T[]> {
+  const results: T[] = new Array(tasks.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < tasks.length) {
+      const i = next++;
+      results[i] = await tasks[i]();
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, tasks.length) }, worker));
+  return results;
+}
+
+/**
  * Levert de analyse van dit bronmateriaal: uit het geheugen, uit de database,
  * of anders vers gemaakt en meteen bewaard.
  *
+ * Alles wordt gelezen. Past het materiaal in één aanroep, dan is het één
+ * analyse. Is het groter, dan krijgt elk deel een eigen analyse en voegt een
+ * laatste aanroep die samen tot één (bij heel veel delen in rondes). Zo leest
+ * het model elk deel echt, in plaats van de staart weg te laten.
+ *
  * Geeft een lege string terug wanneer er geen analyse te maken viel (geen
- * backend, niet ingelogd, provider onbereikbaar). De aanroeper valt dan terug op
- * het ruwe materiaal: ongefilterde context is minder goed dan de analyse, maar
- * veel beter dan een prompt die het project helemaal niet kent.
+ * backend, niet ingelogd, provider onbereikbaar, of een deel mislukte). De
+ * aanroeper valt dan terug op het ruwe materiaal.
  */
 async function ensureProjectBrief(args: {
   projectId: string;
   projectName: string;
-  material: string;
+  instructions: string;
+  files: { name: string; text: string }[];
   ai?: { provider?: AiProvider; model?: string };
+  onProgress?: (progress: BriefProgress) => void;
 }): Promise<string> {
-  const { projectId, projectName, material, ai } = args;
+  const { projectId, projectName, instructions, files, ai, onProgress } = args;
+  const parts = splitMaterial(instructions, files);
+  if (!parts.length) return '';
+  // De sleutel blijft de hash van het hele materiaal: een analyse die vóór het
+  // lezen in delen is gemaakt, geldt nog steeds voor precies dat materiaal.
+  const material = [
+    ...(instructions ? [instructionBlock(instructions)] : []),
+    ...files.map((f) => `${fileHeading(f.name)}${f.text}`),
+  ].join('\n\n');
   const hash = await hashMaterial(material);
   const memoryKey = `${projectId}:${hash}`;
 
@@ -754,17 +877,70 @@ async function ensureProjectBrief(args: {
     return hit;
   }
 
-  const result = await analyzeProjectContext({
-    material,
-    projectName,
-    preferredProvider: ai?.provider,
-    preferredModel: ai?.model,
-  });
-  if (!result.success || !result.brief) return '';
+  const analyze = (text: string, extra?: { part?: { index: number; total: number }; merge?: boolean }) =>
+    analyzeProjectContext({
+      material: text,
+      projectName,
+      preferredProvider: ai?.provider,
+      preferredModel: ai?.model,
+      ...extra,
+    });
 
-  briefCache.set(memoryKey, result.brief);
-  void writeBrief(projectId, hash, result.brief, stored);
-  return result.brief;
+  let brief: string;
+  if (parts.length === 1) {
+    const result = await analyze(parts[0]);
+    if (!result.success || !result.brief) return '';
+    brief = result.brief;
+  } else {
+    // Delen plus de samenvoegrondes tellen samen als de voortgang.
+    let mergeCalls = 0;
+    for (let n = parts.length; n > 1; n = Math.ceil(n / BRIEF_MERGE_GROUP)) {
+      mergeCalls += Math.ceil(n / BRIEF_MERGE_GROUP);
+    }
+    const total = parts.length + mergeCalls;
+    let done = 0;
+    onProgress?.({ done, total });
+    const tick = () => onProgress?.({ done: ++done, total });
+
+    const partials = await runLimited(
+      parts.map((text, i) => async () => {
+        const result = await analyze(text, { part: { index: i + 1, total: parts.length } });
+        tick();
+        return result.success ? result.brief : '';
+      }),
+      BRIEF_CONCURRENCY,
+    );
+    // Een ontbrekend deel is een gat in wat er gelezen is; dan liever eerlijk
+    // terugvallen dan een analyse die doet alsof hij alles kent.
+    if (partials.some((p) => !p)) return '';
+
+    let layer = partials.map((p, i) => `DEELANALYSE ${i + 1} VAN ${partials.length}:\n${p}`);
+    while (layer.length > 1) {
+      const groups: string[][] = [];
+      for (let i = 0; i < layer.length; i += BRIEF_MERGE_GROUP) {
+        groups.push(layer.slice(i, i + BRIEF_MERGE_GROUP));
+      }
+      const merged = await runLimited(
+        groups.map((group) => async () => {
+          const result = await analyze(group.join('\n\n'), { merge: true });
+          tick();
+          // Lukt het samenvoegen niet, dan zijn de deelanalyses zelf nog altijd
+          // beter dan het ruwe begin van het materiaal.
+          return result.success && result.brief ? result.brief : group.join('\n\n');
+        }),
+        BRIEF_CONCURRENCY,
+      );
+      layer =
+        merged.length > 1
+          ? merged.map((m, i) => `DEELANALYSE ${i + 1} VAN ${merged.length}:\n${m}`)
+          : merged;
+    }
+    brief = layer[0];
+  }
+
+  briefCache.set(memoryKey, brief);
+  void writeBrief(projectId, hash, brief, stored);
+  return brief;
 }
 
 /**
@@ -775,30 +951,21 @@ async function ensureProjectBrief(args: {
  * platte tekst in plaats van losse bronblokken: de generator-modi kennen geen
  * bijlagen, ze kennen alleen hun systeemprompt.
  *
- * De bestanden komen hier bewust rechtstreeks uit de database en niet uit
- * {@link loadProjectContext}: die stopt bij het chatbudget op volgorde van
- * uploaden, waardoor een bron die de gebruiker zelf koos stilletjes zou
- * ontbreken. De volgorde blijft die van uploaden, ook als er andersom is
- * aangevinkt: dezelfde keuze levert zo dezelfde tekst en dus dezelfde
- * bewaarde analyse op.
+ * De volgorde blijft die van uploaden, ook als er andersom is aangevinkt:
+ * dezelfde keuze levert zo dezelfde tekst en dus dezelfde bewaarde analyse op.
  *
  * De projectinstructie gaat ALTIJD mee: dat is de beschrijving van het ding
- * waar de prompt over gaat, en zonder die beschrijving schrijft de bouwer een
- * algemene prompt. Bronbestanden gaan alleen mee als de gebruiker ze kiest:
- * voor "schrijf een prompt over mijn plugin" is de instructie meestal genoeg, en
- * tienduizenden tekens spec door meerdere achtereenvolgende AI-stappen duwen is
- * traag en duur voor wat het toevoegt.
- *
- * Wat er daarna uitgaat is niet dat materiaal zelf maar de analyse ervan (zie
- * {@link ensureProjectBrief}). Een projectinstructie is geschreven voor een mens
- * of voor een chat (stack, mappen, tabellen) en wie daar een prompt over wil,
- * heeft daar een handvol regels van nodig. Het model kreeg voorheen alles en
- * gebruikte er niets van.
+ * waar de prompt over gaat. Bronbestanden gaan mee als de gebruiker ze kiest,
+ * en dan VOLLEDIG: er is geen tekengrens meer op wat er gelezen wordt (zie
+ * {@link ensureProjectBrief}). Wat er daarna in elke bouwstap meegaat, is de
+ * analyse, plus de passages die bij de opdracht passen
+ * ({@link withGeneratorSources}).
  */
 export async function buildGeneratorContext(
   projectId: string,
   selection: GeneratorFileSelection,
   ai?: { provider?: AiProvider; model?: string },
+  onProgress?: (progress: BriefProgress) => void,
 ): Promise<GeneratorContext | null> {
   if (!isSupabaseConfigured || !supabase) return null;
 
@@ -812,11 +979,7 @@ export async function buildGeneratorContext(
   const project = projectData as Pick<ProjectRow, 'id' | 'name' | 'instructions'>;
   const instructions = (project.instructions ?? '').trim();
 
-  const parts: string[] = [];
-  if (instructions) parts.push(instructionBlock(instructions));
-
-  const included: { id: string; name: string }[] = [];
-  const skipped: string[] = [];
+  const files: { id: string; name: string; text: string }[] = [];
   if (selection === 'all' || selection.length > 0) {
     let query = supabase
       .from('chat_project_files')
@@ -826,41 +989,112 @@ export async function buildGeneratorContext(
     if (selection !== 'all') query = query.in('id', selection);
     const { data: fileData, error: fileError } = await query;
     if (fileError) throw fileError;
-
-    let used = generatorCharsUsed(instructions, []);
     for (const file of (fileData ?? []) as { id: string; name: string; text: string | null }[]) {
-      if (!file.text) continue;
-      const block = `${fileHeading(file.name)}${file.text}`;
-      // Niet halverwege afkappen: een half document leest als een compleet
-      // document en stuurt de prompt dan de verkeerde kant op.
-      if (used + block.length > MAX_GENERATOR_CONTEXT_CHARS) {
-        skipped.push(file.name);
-        continue;
-      }
-      parts.push(block);
-      included.push({ id: file.id, name: file.name });
-      used += block.length;
+      if (file.text) files.push({ id: file.id, name: file.name, text: file.text });
     }
   }
 
-  const material = parts.join('\n\n').trim();
-  // Een project zonder instructie én zonder (passende) bestanden levert geen
-  // context op; dan is aanhaken zinloos en zeggen we dat eerlijk met null.
-  if (!material) return null;
+  // Een project zonder instructie én zonder bestanden levert geen context op;
+  // dan is aanhaken zinloos en zeggen we dat eerlijk met null.
+  if (!instructions && !files.length) return null;
+  markProjectUsed(projectId);
+
+  // Een groot project zoekt bij het bouwen op betekenis; laat de vectoren alvast
+  // maken terwijl de analyse loopt. Een klein project krijgt er nooit.
+  const fileChars = files.reduce((sum, f) => sum + f.text.length, 0);
+  if (fileChars > MAX_PROJECT_CONTEXT_CHARS && !indexed.has(projectId)) {
+    void indexProject(projectId);
+  }
 
   const brief = await ensureProjectBrief({
     projectId,
     projectName: project.name,
-    material,
+    instructions,
+    files,
     ai,
+    onProgress,
   });
 
+  // Zonder analyse gaat het begin van het ruwe materiaal mee; de passages bij de
+  // opdracht vullen daarna aan wat hier niet in past.
+  const raw = [
+    ...(instructions ? [instructionBlock(instructions)] : []),
+    ...files.map((f) => `${fileHeading(f.name)}${f.text}`),
+  ]
+    .join('\n\n')
+    .slice(0, MAX_GENERATOR_CONTEXT_CHARS - MAX_GENERATOR_PASSAGE_CHARS);
+
   return {
-    text: brief || material,
+    text: brief || raw,
     analyzed: Boolean(brief),
     id: project.id,
     name: project.name,
-    files: included,
-    skipped,
+    files: files.map((f) => ({ id: f.id, name: f.name })),
+    fileChars,
   };
+}
+
+/** Gevonden passages per project, bronkeuze en opdracht; één zoekactie per opdracht. */
+const passageCache = new Map<string, Promise<string>>();
+
+/**
+ * Zoekt in de gekozen bronbestanden de passages die bij deze opdracht passen:
+ * op betekenis (de vectoren uit 0049) en op woorden samen, net als de chat. Geeft
+ * een lege string terug als er niets past of het zoeken faalt; de analyse blijft
+ * dan de context.
+ */
+function findGeneratorPassages(context: GeneratorContext, task: string): Promise<string> {
+  const key = `${context.id}:${context.files.map((f) => f.id).join(',')}:${task}`;
+  const cached = passageCache.get(key);
+  if (cached) return cached;
+  const run = (async () => {
+    try {
+      if (context.fileChars > MAX_PROJECT_CONTEXT_CHARS && !indexed.has(context.id)) {
+        await Promise.race([
+          indexProject(context.id),
+          new Promise((resolve) => setTimeout(resolve, INDEX_WAIT_MS)),
+        ]);
+      }
+      // Alleen de gekozen bestanden: een stuk uit een bron die uit staat, valt weg.
+      const nameOf = new Map(context.files.map((f) => [f.id, f.name]));
+      const found = await searchProjectChunks(
+        context.id,
+        task.slice(0, 2000),
+        nameOf,
+        MAX_GENERATOR_PASSAGE_CHARS,
+      );
+      if (!found) return '';
+      return found.map((f) => `Uit "${f.name}":\n${f.text}`).join('\n\n');
+    } catch {
+      return '';
+    }
+  })();
+  passageCache.set(key, run);
+  // Een mislukte zoekactie niet vasthouden: de volgende stap mag het opnieuw proberen.
+  void run.then((text) => {
+    if (!text) passageCache.delete(key);
+  });
+  return run;
+}
+
+/**
+ * De projectcontext voor één bouwstap: de analyse, met daaronder de passages uit
+ * de bronbestanden die bij deze opdracht passen. Zo kent de stap het project als
+ * geheel én de details die voor deze prompt tellen. Zonder gekozen bestanden of
+ * zonder opdracht is het alleen de analyse.
+ */
+export async function withGeneratorSources(
+  context: GeneratorContext | null,
+  task: string,
+): Promise<string | undefined> {
+  if (!context) return undefined;
+  const clean = task.trim();
+  if (!clean || !context.files.length) return context.text;
+  const passages = await findGeneratorPassages(context, clean);
+  if (!passages) return context.text;
+  return (
+    `${context.text}\n\n` +
+    `PASSAGES UIT DE BRONBESTANDEN DIE BIJ DEZE OPDRACHT PASSEN ` +
+    `(letterlijk geciteerd; "…" betekent dat er tekst tussen zit):\n\n${passages}`
+  );
 }

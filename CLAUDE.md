@@ -551,6 +551,14 @@ wijzigbaar. Een stuk zonder vector blijft vindbaar met de woordzoeker en een sto
 bij Mistral kost niemand zijn bronnen: `project-search` zoekt dan op woorden en daarna
 valt de client terug op `search_project_chunks`.
 
+In de bouwer (knop Context) is er geen tekengrens op de bronnen: alles wat de gebruiker
+aanvinkt wordt gelezen. De projectanalyse (`project-brief`) leest tot 120.000 tekens per
+aanroep; groter materiaal gaat in delen, met daarna één samenvoegstap
+(`PROJECT_BRIEF_MERGE_SYSTEM_PROMPT`, `ensureProjectBrief`). Bij elke bouwstap gaan naast
+die analyse de passages mee die bij de opdracht passen, gezocht met dezelfde
+`project-search` als de chat (`withGeneratorSources`). Samen blijven ze onder de 60.000
+tekens per stap (`MAX_GENERATOR_CONTEXT_CHARS`), want die context gaat in elke stap mee.
+
 Let op de privacy: in een groot project gaat elk bestand in zijn geheel naar Mistral,
 ook de delen waar nooit iets over wordt gevraagd. Daarom zoekt de browser vóór het
 toevoegen naar persoonsgegevens (`countPii` en `redactPii` in `guardrails`,

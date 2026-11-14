@@ -421,6 +421,10 @@ interface RequestBody {
   projectName?: string;
   /** 'project-optimize': de namen van de bronbestanden; alleen de namen, niet de inhoud. */
   projectFileNames?: string[];
+  /** 'project-brief': bij een groot project, welk deel van het materiaal dit is. */
+  briefPart?: { index?: unknown; total?: unknown };
+  /** 'project-brief': true als projectContext deelanalyses zijn die samen moeten. */
+  briefMerge?: boolean;
   // 'refine'-velden: herschrijf een gegenereerde template op basis van een testrun.
   /** De te verbeteren prompt-template. */
   refinePrompt?: string;
@@ -1006,8 +1010,11 @@ const corsHeaders = {
 };
 
 /**
- * Maximale omvang van de projectcontext in een generator-aanroep. De client kapt
- * op dezelfde grens af (MAX_GENERATOR_CONTEXT_CHARS); dit is het vangnet.
+ * Maximale omvang van de projectcontext in een generator-aanroep: de
+ * projectanalyse plus de passages uit de bronbestanden die bij de opdracht
+ * passen. De client blijft eronder (MAX_GENERATOR_CONTEXT_CHARS); dit is het
+ * vangnet. Wat er GELEZEN wordt is niet begrensd: de analyse leest alle gekozen
+ * bronnen, in delen als het moet.
  */
 const MAX_PROJECT_CONTEXT_IN_GENERATOR = 60_000;
 
@@ -2140,6 +2147,44 @@ in plaats van overal.)
 Geef alleen de analyse terug, zonder inleiding, afsluitende vraag of opmaak-markeringen.`;
 
 /**
+ * Voegt de deelanalyses van een groot project samen tot één analyse. Dezelfde
+ * zeven kopjes als {@link PROJECT_BRIEF_SYSTEM_PROMPT}, zodat de bouwstappen geen
+ * verschil zien tussen een klein en een groot project.
+ */
+let PROJECT_BRIEF_MERGE_SYSTEM_PROMPT = `Je voegt de deelanalyses van één groot project samen tot één vaste analyse, zodat er later prompts voor het project geschreven kunnen worden.
+
+<context>
+Het projectmateriaal was te groot om in één keer te lezen. Elk deel is apart geanalyseerd, met dezelfde zeven kopjes. Jij maakt daar één analyse van die voor het hele project geldt.
+</context>
+
+<regels>
+- Gebruik alleen wat in de deelanalyses staat. Verzin nooit een feit, een doelgroep of een toon.
+- Een feit uit één deelanalyse geldt voor het hele project. "Niet vermeld" in het ene deel wist een feit uit een ander deel niet uit.
+- Schrijf alleen "Niet vermeld" onder een kopje als geen enkele deelanalyse er iets onder heeft.
+- Staat hetzelfde in meer delen, noem het één keer.
+- Spreken twee delen elkaar tegen, noem dan beide en zeg dat het materiaal het niet eenduidig zegt.
+- Neem namen, producttermen en vaste formuleringen letterlijk over.
+- Schrijf in dezelfde taal als de deelanalyses.
+- Hooguit 500 woorden in totaal, korte regels, geen opvulling.
+- Gebruik geen sterretjes, hekjes of lage streepjes.
+- Zet nooit een gedachtestreepje tussen twee zinsdelen. Gebruik een komma, een dubbele punt of een punt.
+</regels>
+
+<vorm>
+Precies deze zeven kopjes, in deze volgorde, elk op een eigen regel, in de taal van de deelanalyses:
+
+WAT DIT PROJECT IS
+VOOR WIE HET IS
+STEM EN TAAL
+VASTE TERMEN
+HARDE GRENZEN
+WAAR JE VOOR MOET OPPASSEN
+WAT ELKE PROMPT VOOR DIT PROJECT CONCREET MOET MAKEN
+</vorm>
+
+Geef alleen de samengevoegde analyse terug, zonder inleiding, zonder de woorden "deelanalyse" of "deel", en zonder afsluitende vraag.`;
+
+/**
  * Plafond van de vragenronde bij "Prompt maken" in een nieuw project. Hier
  * afgedwongen en niet alleen in de prompt: bij het plafond komt er geen
  * modelaanroep meer en gaat de ronde door naar het voorstel.
@@ -2896,25 +2941,48 @@ function parseProjectFramework(
 }
 
 /** Bouwt het gebruikersbericht van de projectanalyse. */
-function buildProjectBriefUserMessage(projectName: string, material: string): string {
+function buildProjectBriefUserMessage(
+  projectName: string,
+  material: string,
+  part?: { index: number; total: number },
+): string {
   const parts: string[] = [];
   if (projectName) parts.push(`NAAM VAN HET PROJECT: ${projectName}`);
+  if (part) {
+    parts.push(
+      `Dit is deel ${part.index} van ${part.total} van het projectmateriaal. De andere delen worden ` +
+        `apart gelezen en de analyses worden daarna samengevoegd. Schrijf de analyse van wat in DIT deel ` +
+        `staat. Een kopje waarover dit deel niets zegt, krijgt "Niet vermeld".`,
+    );
+  }
   parts.push(`PROJECTMATERIAAL:\n"""\n${material}\n"""`);
-  parts.push('Schrijf de vaste analyse van dit project.');
+  parts.push(part ? 'Schrijf de analyse van dit deel.' : 'Schrijf de vaste analyse van dit project.');
+  return parts.join('\n\n');
+}
+
+/** Bouwt het gebruikersbericht dat deelanalyses tot één analyse laat samenvoegen. */
+function buildProjectBriefMergeUserMessage(projectName: string, partials: string): string {
+  const parts: string[] = [];
+  if (projectName) parts.push(`NAAM VAN HET PROJECT: ${projectName}`);
+  parts.push(`DEELANALYSES:\n"""\n${partials}\n"""`);
+  parts.push('Voeg deze deelanalyses samen tot één analyse van het hele project.');
   return parts.join('\n\n');
 }
 
 /**
- * Hoeveel projectmateriaal er hoogstens wordt geanalyseerd.
+ * Hoeveel projectmateriaal één analyse-aanroep hoogstens leest.
  *
- * Lager dan {@link MAX_PROJECT_CONTEXT_IN_GENERATOR}, en met opzet: het aanhaken
- * van een project vuurt een aanroep met het STERKSTE model af, en zonder deze
- * grens zou een project met tien bronbestanden daar 60.000 tekens in duwen. Het
- * materiaal begint altijd met de projectinstructie (zie `buildGeneratorContext`
- * in de client), dus wat er bij afkappen als eerste afvalt is de staart van de
- * bronbestanden — precies de goedkoopste plek om te snijden.
+ * Dit is een plafond per aanroep, niet op het project. De client knipt groter
+ * materiaal in delen van 120.000 tekens (BRIEF_PART_CHARS in
+ * chatProjectService), laat elk deel apart analyseren en voegt die analyses
+ * daarna samen; zo wordt elk bronbestand volledig gelezen. Hier staat er wat
+ * ruimte bovenop voor de koppen. Vroeger stond dit op 20.000 en las de analyse
+ * alleen het begin, terwijl de keuzelijst 60.000 tekens beloofde.
+ *
+ * 130.000 tekens is zo'n 40.000 tokens: ruim binnen het kleinste contextvenster
+ * (256k), en klein genoeg dat het model het midden van de tekst nog echt leest.
  */
-const MAX_PROJECT_BRIEF_CHARS = 20_000;
+const MAX_PROJECT_BRIEF_CHARS = 130_000;
 
 /**
  * Haalt aanhalingstekens weg die het model om zijn hele antwoord heeft gezet.
@@ -9738,6 +9806,7 @@ const PROMPT_CATALOG: PromptCatalogEntry[] = [
   { id: 'PROJECT_PROMPT_ADJUST_SYSTEM_PROMPT', groep: "Uitvoeren, Testkamer en projecten", titel: "Project: prompt aanpassen", uitleg: "Past het voorstel aan op het verzoek van de medewerker.", get: () => PROJECT_PROMPT_ADJUST_SYSTEM_PROMPT, set: (v) => { PROJECT_PROMPT_ADJUST_SYSTEM_PROMPT = v; } },
   { id: 'MEMORY_EXTRACT_SYSTEM_PROMPT', groep: "Uitvoeren, Testkamer en projecten", titel: "Chat: wens onthouden", uitleg: "Draait als een bericht in de chat woorden bevat als voortaan, onthoud dit of vanaf nu. Schrijft de wens als korte regel voor het geheugen van de gebruiker en wijst aan welke oude regel hij vervangt. Antwoordt met JSON: onthouden en vervangt.", get: () => MEMORY_EXTRACT_SYSTEM_PROMPT, set: (v) => { MEMORY_EXTRACT_SYSTEM_PROMPT = v; } },
   { id: 'PROJECT_BRIEF_SYSTEM_PROMPT', groep: "Uitvoeren, Testkamer en projecten", titel: "Projectanalyse", uitleg: "De vaste analyse van de bronbestanden van een chatproject.", get: () => PROJECT_BRIEF_SYSTEM_PROMPT, set: (v) => { PROJECT_BRIEF_SYSTEM_PROMPT = v; } },
+  { id: 'PROJECT_BRIEF_MERGE_SYSTEM_PROMPT', groep: "Uitvoeren, Testkamer en projecten", titel: "Projectanalyse samenvoegen", uitleg: "Voegt de analyses van de delen van een groot project samen tot één analyse.", get: () => PROJECT_BRIEF_MERGE_SYSTEM_PROMPT, set: (v) => { PROJECT_BRIEF_MERGE_SYSTEM_PROMPT = v; } },
 ];
 
 /** De standaardteksten, vastgelegd voordat er ooit een eigen versie is toegepast. */
@@ -11652,6 +11721,14 @@ Deno.serve(async (req: Request) => {
       }
 
       const material = (body.projectContext ?? '').trim().slice(0, MAX_PROJECT_BRIEF_CHARS);
+      const briefMerge = body.briefMerge === true;
+      const partIndex = Number(body.briefPart?.index);
+      const partTotal = Number(body.briefPart?.total);
+      const briefPart =
+        Number.isInteger(partIndex) && Number.isInteger(partTotal) && partTotal > 1 &&
+        partIndex >= 1 && partIndex <= partTotal
+          ? { index: partIndex, total: partTotal }
+          : undefined;
       if (!material) {
         return new Response(
           JSON.stringify({ success: false, error: 'projectContext is verplicht' }),
@@ -11659,17 +11736,18 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      const briefUserMessage = buildProjectBriefUserMessage(
-        (body.projectName ?? '').trim().slice(0, 200),
-        material,
-      );
+      const briefName = (body.projectName ?? '').trim().slice(0, 200);
+      const briefUserMessage = briefMerge
+        ? buildProjectBriefMergeUserMessage(briefName, material)
+        : buildProjectBriefUserMessage(briefName, material, briefPart);
+      const briefSystem = briefMerge ? PROJECT_BRIEF_MERGE_SYSTEM_PROMPT : PROJECT_BRIEF_SYSTEM_PROMPT;
       // Laag, en om dezelfde reden als bij project-optimize: de faalmodus is niet
       // saaiheid maar fantasie, en een verzonnen doelgroep hier kleurt daarna
       // élke prompt van dit project.
       const briefTemp = clampTemp(body.temperature ?? 0.2);
       // Dezelfde sectietags als bij project-optimize: Mistral leest ze het best,
       // maar een klein model echoot ze met enige regelmaat mee in zijn antwoord.
-      const briefTags = ['waarvoor', 'regels', 'vorm'];
+      const briefTags = ['waarvoor', 'context', 'regels', 'vorm'];
 
       let brief = '';
       let briefProvider: Provider | 'local-template' = 'local-template';
@@ -11677,7 +11755,7 @@ Deno.serve(async (req: Request) => {
         try {
           const raw = await PROVIDERS[candidate](
             briefUserMessage,
-            PROJECT_BRIEF_SYSTEM_PROMPT,
+            briefSystem,
             briefTemp,
             // Het optimalisatiemodel uit Beheer; zonder geldige keuze het
             // sterkste model van de provider (zie resolveProjectModel).

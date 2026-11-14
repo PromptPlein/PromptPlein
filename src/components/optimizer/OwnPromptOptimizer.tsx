@@ -24,6 +24,7 @@ import {
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import { useReferenceData } from '@/context/ReferenceDataContext';
+import { useProjectSources } from '@/hooks/useProjectSources';
 import VerantwoordGebruikHint from '@/components/optimizer/VerantwoordGebruikHint';
 import StepHeading from '@/components/optimizer/StepHeading';
 import AanpakKaart, { type AanpakOptie } from '@/components/optimizer/AanpakKaart';
@@ -118,6 +119,11 @@ interface OwnPromptOptimizerProps {
    * échte onderwerp gaat in plaats van over een algemeen geval.
    */
   projectContext?: string;
+  /**
+   * Zoekt bij de opdracht de passende passages uit de gekozen bronbestanden en
+   * zet ze onder de analyse. Zonder deze functie gaat alleen `projectContext` mee.
+   */
+  projectSources?: (task: string) => Promise<string | undefined>;
   /** De knop "Context" met zijn labels, boven het tekstvak. */
   renderProjectContext?: (slot: ProjectContextSlot) => ReactNode;
   /**
@@ -204,7 +210,8 @@ export default function OwnPromptOptimizer({
   onResult,
   header,
   initialPrompt,
-  projectContext,
+  projectContext: projectBrief,
+  projectSources,
   renderProjectContext,
   thinking,
   webSearch,
@@ -212,6 +219,11 @@ export default function OwnPromptOptimizer({
   restore,
 }: OwnPromptOptimizerProps) {
   const { techniques, techniqueById } = useReferenceData();
+  // De analyse van het project, aangevuld met de passages die bij deze prompt passen.
+  const { resolve: resolveProjectContext, current: projectContext } = useProjectSources(
+    projectBrief,
+    projectSources,
+  );
   const navigate = useNavigate();
   const frameworks = techniques.filter(isContextPrompt);
 
@@ -491,7 +503,7 @@ export default function OwnPromptOptimizer({
         frameworks: candidates,
         preferredProvider: settings.provider,
         preferredModel: settings.model,
-        projectContext,
+        projectContext: await resolveProjectContext(promptText),
         onPhase: setSearchPhase,
       });
       setRecommendations(res.recommendations);
@@ -629,7 +641,7 @@ export default function OwnPromptOptimizer({
         clarification: clarify?.trim() || undefined,
         preferredProvider: settings.provider,
         preferredModel: settings.model,
-        projectContext,
+        projectContext: await resolveProjectContext(promptText),
         onStatus: (status) =>
           setPrefillProgress((p) => ({
             ...p,
@@ -692,7 +704,7 @@ export default function OwnPromptOptimizer({
         followUpAnswers: answers,
         preferredProvider: settings.provider,
         preferredModel: settings.model,
-        projectContext,
+        projectContext: await resolveProjectContext(promptText),
         thinking,
         webSearch,
         webSearchInstruction: settings.webSearchInstruction.trim() || undefined,
