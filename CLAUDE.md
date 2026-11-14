@@ -540,11 +540,16 @@ woordzoeker juist beter.
 Bewust geen HNSW-index: die zoekt over alle projecten en filtert daarna pas, zodat
 treffers binnen één project wegvallen. Per project exact vergelijken is snel genoeg.
 
+Een project stel je in op de projectpagina zelf (`ProjectView`, `ProjectFiles`): naam,
+projectinstructie en bronbestanden zijn daar direct te bewerken. Er is bewust geen apart
+instellingenvenster meer, keuze van de eigenaar. De instructie wordt pas bij Opslaan bewaard,
+een bestand meteen. Een nieuw project dat leeg blijft, verdwijnt weer zodra je de pagina verlaat.
+
 Elk project met bestanden krijgt vectoren, meteen bij het toevoegen (sinds 14-11-2026,
 keuze van de eigenaar; `PROJECT_INDEX_MIN_CHARS` staat op 0). De chat zoekt er pas mee
 boven de 200.000 tekens, de bouwer bij elke opdracht. Ze worden gemaakt in porties
-(`project-index`, `indexProject` in `chatProjectService`) zodra de projectinstellingen
-bestanden zien, en anders bij de eerste vraag, die daar hoogstens 20 seconden op wacht.
+(`project-index`, `indexProject` in `chatProjectService`) zodra de projectpagina
+bestanden ziet, en anders bij de eerste vraag, die daar hoogstens 20 seconden op wacht.
 Alles loopt met het token van de
 gebruiker, dus RLS bewaakt ook dit pad, en van de stukken is alleen `embedding`
 wijzigbaar. Een stuk zonder vector blijft vindbaar met de woordzoeker en een storing
@@ -561,7 +566,7 @@ tekens per stap (`MAX_GENERATOR_CONTEXT_CHARS`), want die context gaat in elke s
 
 De analyse van de instructie met alle bronnen wordt vooraf gemaakt: na toevoegen of
 verwijderen van een bestand, na opslaan van de instructie en bij het openen van de
-projectinstellingen (`prepareProjectForBuilder`). Hij staat op de projectrij in
+projectpagina (`prepareProjectForBuilder`). Hij staat op de projectrij in
 `generator_briefs` (0061; 0032 is nooit uitgevoerd en mag niet meer, want die zet een oude
 `touch_chat_project` terug). In de bouwer gaat een project daarom standaard met alle bronnen
 mee. Schrijft de gebruiker in zijn projectinstructie hoe de bronbestanden gelezen moeten

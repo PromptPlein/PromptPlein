@@ -1231,7 +1231,7 @@ async function countChunks(projectId: string): Promise<number> {
  * te analyseren: vectoren voor alle bronbestanden en de analyse van de
  * instructie met alle bronnen, bewaard op de projectrij. Draait na toevoegen of
  * verwijderen van een bestand, na opslaan van de instructie en bij het openen
- * van de projectinstellingen. Staat alles er al, dan kost dat een paar kleine
+ * van de projectpagina. Staat alles er al, dan kost dat een paar kleine
  * query's.
  *
  * Hangt niet aan een venster: sluiten of opslaan breekt het niet af, alleen het

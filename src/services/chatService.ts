@@ -311,7 +311,7 @@ export async function optimizeChatInput(args: {
 
 /**
  * Maakt van de ruwe projectinstructie een volwaardige systeemprompt (het rode
- * sterretje in de projectinstellingen). Anders dan `optimizeChatInput` hierboven
+ * sterretje bij de instructie op de projectpagina). Anders dan `optimizeChatInput` hierboven
  * is dit géén lichte herschrijving: het resultaat stuurt élk gesprek in het
  * project, dus rol, eindproduct, werkwijze, vorm en grenzen worden echt
  * uitgewerkt (zie PROJECTINSTRUCTIE_Framework.md).

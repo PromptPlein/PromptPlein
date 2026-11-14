@@ -83,7 +83,7 @@ export default function ProjectPromptWizard({
   /** Nieuw project: eerst de keuze, en de AI mag de naam voorstellen. */
   isNewProject: boolean;
   settings: ChatSettings | null;
-  /** Zelf instellen: door naar de projectinstellingen. */
+  /** Zelf instellen: naam, instructie en bestanden op de projectpagina. */
   onManual: () => void;
   onClose: () => void;
   onSave: (patch: { name: string; instructions: string }) => Promise<boolean>;

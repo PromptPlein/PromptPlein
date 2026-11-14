@@ -1,38 +1,52 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import clsx from 'clsx';
+import toast from 'react-hot-toast';
 import {
-  ChevronDown,
-  ChevronUp,
-  FileText,
+  Loader2,
   MessageSquare,
+  Pencil,
   Plus,
-  Settings2,
+  RotateCcw,
+  Sparkles,
   Trash2,
-  Upload,
   Wand2,
+  FileText,
 } from '@/components/common/icons';
 import InfoDot from '@/components/common/InfoDot';
-import { TILE, TILE_PRIMARY, TILE_SOFT } from '@/components/chat/projectTiles';
+import ProjectFiles from '@/components/chat/ProjectFiles';
+import { TILE, TILE_PRIMARY } from '@/components/chat/projectTiles';
+import { optimizeProjectInstructions } from '@/services/chatService';
+import type { ChatSettings } from '@/services/settingsService';
+import {
+  markProjectUsed,
+  MAX_PROJECT_INSTRUCTIONS_CHARS,
+  MAX_PROJECT_NAME_CHARS,
+  prepareProjectForBuilder,
+} from '@/services/chatProjectService';
 import { formatDate } from '@/lib/utils';
 import type { ChatIndexEntry, ChatProject } from '@/types';
 
 // Dezelfde gele tint als "Technieken leren" op de startpagina: de tegel die
-// naar de bouwer leidt valt op naast de twee blauwe.
+// naar de bouwer leidt valt op naast de blauwe.
 const TILE_ACCENT =
   'bg-[#ffb612]/20 text-rijksblauw-700 hover:bg-[#ffb612]/35 dark:bg-[#ffb612]/15 dark:text-white dark:hover:bg-[#ffb612]/25';
 const SECTION_HEADING =
   'flex items-center text-base font-bold text-rijksblauw-700 dark:text-rijksblauw-200';
+/** Hoe hoog het instructieveld vanzelf meegroeit; daarboven scrolt het. */
+const INSTRUCTIONS_MAX_REM = 24;
 
 /**
- * De projectpagina: wat je ziet als je links op een project klikt.
+ * De projectpagina: wat je ziet als je links op een project klikt, en meteen de
+ * plek waar je het project instelt. Er is geen apart instellingenvenster: naam,
+ * projectinstructie en bronbestanden pas je hier aan.
  *
- * Bewust géén chat. Een project is een plek, geen gesprek — hier zie je waar het
+ * Bewust géén chat. Een project is een plek, geen gesprek: hier zie je waar het
  * project voor staat (de projectinstructie), waar het uit put (de bronbestanden)
  * en wat je er al mee gedaan hebt (de gesprekken). Vanaf hier begin je een nieuw
  * gesprek, en dat gesprek draagt de instructie van dit project automatisch mee.
  *
- * De projectinstructie staat hier ingekort in beeld en niet in een invoerveld:
- * lezen is de normale handeling, bewerken de zeldzame. Dat laatste zit achter
- * "Projectinstellingen".
+ * De instructie wordt pas bij Opslaan bewaard: een halfgeschreven instructie
+ * moet geen gesprekken sturen. Een bestand is meteen definitief.
  */
 export default function ProjectView({
   project,
@@ -40,7 +54,11 @@ export default function ProjectView({
   onNewChat,
   onNewPrompt,
   onMakeInstruction,
-  onOpenSettings,
+  onSave,
+  onFilesChanged,
+  chatSettings,
+  checkPii = true,
+  editNameOnOpen = false,
   onSelectConversation,
   onRequestDeleteConversation,
   onRequestDeleteProject,
@@ -54,69 +72,276 @@ export default function ProjectView({
   onNewPrompt: (includeFiles: boolean) => void;
   /** Laat de AI met een paar vragen de projectinstructie maken. */
   onMakeInstruction: () => void;
-  onOpenSettings: () => void;
+  /** Bewaart naam of instructie; geeft false terug als het misging. */
+  onSave: (patch: { name?: string; instructions?: string }) => Promise<boolean>;
+  /** Er is een bestand bij gekomen of verwijderd (voor de telling in de zijbalk). */
+  onFilesChanged: () => void;
+  /**
+   * De AI-instellingen van de beheerder. Staat de verbeterslag uit of zijn ze
+   * nog niet geladen, dan blijft het sterretje bij de instructie weg.
+   */
+  chatSettings?: ChatSettings | null;
+  /** De controle op persoonsgegevens uit Beheer, AI-instellingen. Standaard aan. */
+  checkPii?: boolean;
+  /** Een net aangemaakt project: begin met de naam open om in te vullen. */
+  editNameOnOpen?: boolean;
   onSelectConversation: (id: string) => void;
   onRequestDeleteConversation: (id: string) => void;
   onRequestDeleteProject: () => void;
   disabled: boolean;
 }) {
-  const instructions = project.instructions.trim();
   const fileCount = project.fileCount ?? 0;
   const chatCount = conversations.length;
 
-  // De instructie staat standaard ingekort. Een projectinstructie kan een heel
-  // document zijn (20.000 tekens mag); dan duwt hij de bronbestanden en de
-  // gesprekken van het scherm en is de projectpagina alleen nog een lap tekst.
-  // Zes regels is genoeg om te zien waar het project over gaat, de rest is er
-  // voor wie hem echt wil lezen.
-  const [instructionsOpen, setInstructionsOpen] = useState(false);
-  const [instructionsOverflow, setInstructionsOverflow] = useState(false);
-  const instructionsRef = useRef<HTMLParagraphElement>(null);
-
-  // Ander project, weer ingeklapt: de uitklap hoort bij de instructie die je
-  // aan het lezen was, niet bij de pagina.
+  // Openen telt als gebruik, voor de bewaartermijn van de bronbestanden.
   useEffect(() => {
-    setInstructionsOpen(false);
+    markProjectUsed(project.id);
   }, [project.id]);
 
-  // Of er iets ónder de zesde regel staat kun je alleen meten, niet aan de tekst
-  // aflezen: dat hangt af van de breedte van het venster. Vandaar de meting bij
-  // elke maatverandering — en alleen in ingeklapte staat, want uitgeklapt past
-  // alles per definitie en zou de knop meteen weer laten verdwijnen.
+  // --- Naam ---
+  const [editingName, setEditingName] = useState(editNameOnOpen);
+  const [name, setName] = useState(project.name);
+  const [savingName, setSavingName] = useState(false);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  // Alleen na een klik op het potlood: vanzelf openen zet op een aanraakscherm
+  // geen toetsenbord over de pagina.
+  const focusNameRef = useRef(false);
+
+  useEffect(() => {
+    setEditingName(editNameOnOpen);
+    setName(project.name);
+  }, [project.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // De wizard sluit met "Zelf instellen" terwijl deze pagina al openstaat.
+  useEffect(() => {
+    if (!editNameOnOpen) return;
+    setName(project.name);
+    setEditingName(true);
+  }, [editNameOnOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!editingName) return;
+    const el = nameInputRef.current;
+    if (!el) return;
+    const byClick = focusNameRef.current;
+    focusNameRef.current = false;
+    if (!byClick && window.matchMedia('(pointer: coarse)').matches) return;
+    el.focus();
+    el.select();
+  }, [editingName]);
+
+  function startEditName() {
+    setName(project.name);
+    focusNameRef.current = true;
+    setEditingName(true);
+  }
+
+  async function saveName() {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      toast.error('Geef het project een naam.');
+      return;
+    }
+    if (trimmed === project.name) {
+      setEditingName(false);
+      return;
+    }
+    setSavingName(true);
+    const ok = await onSave({ name: trimmed });
+    setSavingName(false);
+    if (ok) setEditingName(false);
+  }
+
+  // --- Instructie ---
+  const [instructions, setInstructions] = useState(project.instructions);
+  const [savingInstructions, setSavingInstructions] = useState(false);
+  const [optimizing, setOptimizing] = useState(false);
+  // De instructie van vóór de laatste verbetering, met wat eruit kwam. Zolang
+  // het veld nog exact het resultaat bevat, kan de gebruiker terug.
+  const [beforeOptimize, setBeforeOptimize] = useState<{ before: string; after: string } | null>(
+    null,
+  );
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // De namen van de bronbestanden gaan mee naar het sterretje.
+  const [fileNames, setFileNames] = useState<string[]>([]);
+  // De bewaarde tekst waar het veld van uitging. Verandert hij van buitenaf (de
+  // AI maakte een instructie) terwijl de gebruiker niets had aangepast, dan
+  // volgt het veld; anders blijft zijn eigen tekst staan.
+  const baselineRef = useRef(project.instructions);
+
+  useEffect(() => {
+    setInstructions(project.instructions);
+    baselineRef.current = project.instructions;
+    setBeforeOptimize(null);
+  }, [project.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const previous = baselineRef.current;
+    baselineRef.current = project.instructions;
+    setInstructions((cur) => (cur === previous ? project.instructions : cur));
+  }, [project.instructions]);
+
+  const dirty = instructions !== project.instructions;
+  const busy = savingInstructions || optimizing;
+
+  // Een niet opgeslagen instructie gaat niet stilletjes verloren bij sluiten of
+  // verversen van het tabblad.
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [dirty]);
+
+  // Het veld groeit mee met de tekst tot een vaste hoogte en scrolt daarna zelf,
+  // zodat een lange instructie de bestanden en chats niet van de pagina duwt.
   useLayoutEffect(() => {
-    const el = instructionsRef.current;
-    if (!el || instructionsOpen) return;
-    const measure = () => setInstructionsOverflow(el.scrollHeight > el.clientHeight + 1);
-    measure();
-    if (typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [instructions, instructionsOpen]);
+    const el = textareaRef.current;
+    if (!el) return;
+    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight + 2, INSTRUCTIONS_MAX_REM * rem)}px`;
+  }, [instructions, project.id]);
+
+  const canOptimize =
+    Boolean(chatSettings?.projectOptimizeEnabled) && !busy && instructions.trim().length > 0;
+  const canUndoOptimize =
+    beforeOptimize !== null && instructions === beforeOptimize.after && !optimizing;
+
+  // Het rode sterretje schrijft de instructie om tot een volledige systeemprompt.
+  // Het resultaat vervangt het veld maar wordt niet opgeslagen: de gebruiker
+  // leest het eerst na en drukt zelf op Opslaan.
+  async function optimize() {
+    if (!canOptimize || !chatSettings) return;
+    const before = instructions;
+    setOptimizing(true);
+    try {
+      const result = await optimizeProjectInstructions({
+        instructions: before,
+        projectName: project.name,
+        fileNames,
+        settings: chatSettings,
+      });
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+      if (!result.changed || !result.text.trim()) {
+        toast('Je instructie was al compleet genoeg.', { icon: '✨' });
+        return;
+      }
+      setInstructions(result.text);
+      setBeforeOptimize({ before, after: result.text });
+      toast.success('Instructie herschreven. Lees hem na en sla op als hij klopt.');
+    } finally {
+      setOptimizing(false);
+    }
+  }
+
+  function undoOptimize() {
+    if (!canUndoOptimize || !beforeOptimize) return;
+    setInstructions(beforeOptimize.before);
+    setBeforeOptimize(null);
+  }
+
+  async function saveInstructions() {
+    if (!dirty || busy) return;
+    setSavingInstructions(true);
+    const ok = await onSave({ instructions });
+    setSavingInstructions(false);
+    if (!ok) return;
+    setBeforeOptimize(null);
+    // Een andere instructie is ander materiaal, dus een nieuwe analyse.
+    if (fileCount > 0) prepareProjectForBuilder(project.id);
+    toast.success('Instructie opgeslagen.');
+  }
+
+  function discardInstructions() {
+    setInstructions(project.instructions);
+    setBeforeOptimize(null);
+  }
 
   return (
     <div className="min-h-0 flex-auto overflow-y-auto px-4 py-6 sm:px-6">
       <div className="mx-auto max-w-2xl space-y-6">
-        {/* Naam met de twee aantallen als bolletjes, daaronder de drie dingen
-            die je met een project kunt doen als tegels: praten, er een prompt
-            mee bouwen, of het instellen. Tegels in plaats van een rij knoppen
-            naast de titel: zo wordt een lange projectnaam nooit afgekapt en
-            lees je de acties in één blik, net als op de startpagina. */}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <h2 className="min-w-0 break-words text-2xl font-bold text-rijksblauw-700 dark:text-slate-100">
-            {project.name}
-          </h2>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-rijksblauw-50 px-2.5 py-0.5 text-sm font-semibold text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-100">
-            <FileText size={14} aria-hidden="true" />
-            <span aria-label={`${fileCount} bronbestanden`}>{fileCount}</span>
-          </span>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-rijksblauw-50 px-2.5 py-0.5 text-sm font-semibold text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-100">
-            <MessageSquare size={14} aria-hidden="true" />
-            <span aria-label={`${chatCount} chats`}>{chatCount}</span>
-          </span>
-        </div>
+        {/* Naam met de twee aantallen als bolletjes. Het potlood zet de naam in
+            een invoerveld; Enter bewaart, Escape laat hem zoals hij was. */}
+        {editingName ? (
+          <form
+            className="flex flex-wrap items-center gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void saveName();
+            }}
+          >
+            <label htmlFor="project-name" className="sr-only">
+              Naam van het project
+            </label>
+            <input
+              id="project-name"
+              ref={nameInputRef}
+              className="opl-input min-w-0 flex-1 text-lg font-bold"
+              value={name}
+              maxLength={MAX_PROJECT_NAME_CHARS}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  e.preventDefault();
+                  setName(project.name);
+                  setEditingName(false);
+                }
+              }}
+              placeholder="Bijvoorbeeld: Merkstem, Verkoopmails, Kwartaalrapport"
+              disabled={savingName}
+            />
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="opl-btn-secondary"
+                onClick={() => {
+                  setName(project.name);
+                  setEditingName(false);
+                }}
+                disabled={savingName}
+              >
+                Annuleren
+              </button>
+              <button type="submit" className="opl-btn-primary" disabled={savingName}>
+                {savingName && <Loader2 size={15} className="animate-spin" />}
+                Opslaan
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <h2 className="min-w-0 break-words text-2xl font-bold text-rijksblauw-700 dark:text-slate-100">
+              {project.name}
+            </h2>
+            <button
+              type="button"
+              className="rounded-md p-1.5 text-slate-500 transition-colors hover:bg-slate-100 hover:text-rijksblauw-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
+              onClick={startEditName}
+              disabled={disabled}
+              aria-label="Naam van het project wijzigen"
+              title="Naam wijzigen"
+            >
+              <Pencil size={16} />
+            </button>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-rijksblauw-50 px-2.5 py-0.5 text-sm font-semibold text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-100">
+              <FileText size={14} aria-hidden="true" />
+              <span aria-label={`${fileCount} bronbestanden`}>{fileCount}</span>
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-rijksblauw-50 px-2.5 py-0.5 text-sm font-semibold text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-100">
+              <MessageSquare size={14} aria-hidden="true" />
+              <span aria-label={`${chatCount} chats`}>{chatCount}</span>
+            </span>
+          </div>
+        )}
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <button type="button" className={`${TILE} ${TILE_PRIMARY}`} onClick={onNewChat} disabled={disabled}>
             <Plus size={28} />
             <span className="text-base font-bold leading-tight">Nieuwe chat</span>
@@ -136,110 +361,136 @@ export default function ProjectView({
             <Wand2 size={28} strokeWidth={1.5} />
             <span className="text-base font-bold leading-tight">Prompt maken</span>
           </button>
-          <button type="button" className={`${TILE} ${TILE_SOFT}`} onClick={onOpenSettings} disabled={disabled}>
-            <Settings2 size={28} />
-            <span className="text-base font-bold leading-tight">Instellingen</span>
-          </button>
         </div>
 
-        {/* De instructie: het eerste wat je wilt weten als je een project opent.
-            Staat er niets, dan is dat geen fout maar een uitnodiging. */}
+        {/* De instructie staat er meteen als invoerveld: lezen en aanpassen
+            gebeuren op dezelfde plek. Opslaan verschijnt pas als er iets is
+            veranderd. */}
         <section className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-900/40">
-          <h3 className={`${SECTION_HEADING} mb-1.5`}>
-            Projectinstructie
-            <InfoDot
-              label="Uitleg over de projectinstructie"
-              text="Elke chat in dit project volgt deze instructie. Je past hem aan bij Instellingen."
-            />
-          </h3>
-          {instructions ? (
-            <>
-              <p
-                ref={instructionsRef}
-                id="project-instructions-text"
-                // max-h is precies zes regels van 1.5rem, dus de afkapping valt
-                // op een regelgrens en niet dwars door een letter heen. De mask
-                // laat de laatste regel vervagen: dat werkt op elke achtergrond,
-                // waar een gradient-overlay de kleur van de kaart zou moeten
-                // raden — inclusief de doorzichtige donkere variant.
-                className={`whitespace-pre-wrap text-sm leading-6 text-slate-700 dark:text-slate-300 ${
-                  instructionsOpen
-                    ? ''
-                    : `max-h-36 overflow-hidden ${
-                        instructionsOverflow
-                          ? '[mask-image:linear-gradient(to_bottom,black_60%,transparent)]'
-                          : ''
-                      }`
-                }`}
-              >
-                {instructions}
-              </p>
-              {(instructionsOverflow || instructionsOpen) && (
-                <button
-                  type="button"
-                  className="mt-2 flex items-center gap-1 text-sm font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
-                  onClick={() => setInstructionsOpen((open) => !open)}
-                  aria-expanded={instructionsOpen}
-                  aria-controls="project-instructions-text"
-                >
-                  {instructionsOpen ? (
-                    <>
-                      <ChevronUp size={14} /> Minder tonen
-                    </>
-                  ) : (
-                    <>
-                      <ChevronDown size={14} /> Volledige instructie tonen
-                    </>
-                  )}
-                </button>
-              )}
-            </>
-          ) : (
-            <p className="text-sm text-slate-600 dark:text-slate-400">
-              Nog geen instructie.{' '}
+          <div className="mb-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+            <h3 className={SECTION_HEADING}>
+              <label htmlFor="project-instructions">Projectinstructie</label>
+              <InfoDot
+                label="Uitleg over de projectinstructie"
+                text="Elke chat in dit project volgt deze instructie. Beschrijf wie de assistent is, hoe hij antwoordt en welk eindproduct eruit moet komen."
+              />
+            </h3>
+            {!instructions.trim() && (
               <button
                 type="button"
-                className="font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
+                className="opl-raak inline-flex items-center gap-1 text-sm font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
                 onClick={onMakeInstruction}
+                disabled={disabled}
               >
-                Laat de AI er een maken
-              </button>{' '}
-              of{' '}
+                <Wand2 size={14} aria-hidden="true" /> Laat de AI er een maken
+              </button>
+            )}
+          </div>
+          <div className="relative">
+            <textarea
+              id="project-instructions"
+              ref={textareaRef}
+              // pb-12 houdt de onderste regel vrij van het sterretje.
+              className={clsx(
+                'opl-input min-h-[10rem] w-full resize-y font-normal leading-6',
+                chatSettings?.projectOptimizeEnabled && 'pb-12',
+              )}
+              value={instructions}
+              maxLength={MAX_PROJECT_INSTRUCTIONS_CHARS}
+              onChange={(e) => setInstructions(e.target.value)}
+              onKeyDown={(e) => {
+                if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                  e.preventDefault();
+                  void saveInstructions();
+                }
+              }}
+              readOnly={optimizing}
+              placeholder="Je bent de tekstschrijver van ons merk. Schrijf altijd in de wij-vorm, kort en concreet. Lever elke tekst als: titel, drie alinea's, afsluitende oproep."
+            />
+            {chatSettings?.projectOptimizeEnabled && (instructions.trim().length > 0 || optimizing) && (
               <button
                 type="button"
-                className="font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
-                onClick={onOpenSettings}
+                className={clsx(
+                  // Naast het sleepgreepje en de schuifbalk, niet erop.
+                  'absolute bottom-2.5 right-[22px] flex h-8 w-8 items-center justify-center rounded-lg',
+                  'bg-nadruk text-white shadow-sm ring-2 ring-white dark:ring-slate-800',
+                  'transition-all duration-200 focus:outline-none focus:ring-nadruk/40',
+                  canOptimize
+                    ? 'hover:shadow-md motion-safe:hover:-translate-y-px'
+                    : 'cursor-default opacity-60',
+                )}
+                onClick={() => void optimize()}
+                disabled={!canOptimize}
+                title={
+                  optimizing
+                    ? 'Bezig met omschrijven…'
+                    : 'Schrijf mijn instructie om tot een volledige systeemprompt; je eigen tekst kun je daarna terughalen'
+                }
+                aria-label="Schrijf mijn projectinstructie om met AI"
               >
-                schrijf er zelf een
+                {optimizing ? (
+                  <Loader2 size={15} className="animate-spin" />
+                ) : (
+                  <Sparkles size={15} strokeWidth={2.25} />
+                )}
               </button>
+            )}
+          </div>
+          <div className="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+            {canUndoOptimize ? (
+              <button
+                type="button"
+                className="opl-raak inline-flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-rijksblauw-600 hover:underline dark:text-slate-400 dark:hover:text-rijksblauw-300"
+                onClick={undoOptimize}
+              >
+                <RotateCcw size={12} aria-hidden="true" /> Herstel mijn eigen tekst
+              </button>
+            ) : (
+              <span />
+            )}
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              {instructions.length.toLocaleString('nl-NL')} van{' '}
+              {MAX_PROJECT_INSTRUCTIONS_CHARS.toLocaleString('nl-NL')} tekens
             </p>
+          </div>
+          {dirty && (
+            <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+              <span className="mr-auto text-sm text-slate-600 dark:text-slate-300">
+                Niet opgeslagen
+              </span>
+              <button
+                type="button"
+                className="opl-btn-secondary"
+                onClick={discardInstructions}
+                disabled={busy}
+              >
+                Annuleren
+              </button>
+              <button
+                type="button"
+                className="opl-btn-primary"
+                onClick={() => void saveInstructions()}
+                // Ook tijdens het omschrijven dicht: anders bewaart een klik de
+                // oude instructie terwijl de nieuwe onderweg is.
+                disabled={busy || disabled}
+              >
+                {savingInstructions && <Loader2 size={15} className="animate-spin" />}
+                Opslaan
+              </button>
+            </div>
           )}
         </section>
 
-        <section>
-          <h3 className={`${SECTION_HEADING} mb-1`}>
-            Bronbestanden
-            <span
-              aria-label={`${fileCount} bronbestanden`}
-              className="ml-1.5 min-w-[1.5rem] rounded-full bg-rijksblauw-700 px-1.5 text-center text-xs font-bold leading-6 text-white dark:bg-rijksblauw-500"
-            >
-              {fileCount}
-            </span>
-            <InfoDot
-              label="Uitleg over bronbestanden"
-              text="Documenten waar de chats in dit project uit putten. Je beheert ze bij Instellingen."
-            />
-          </h3>
-          <button
-            type="button"
-            className="mt-1 flex min-h-[4rem] w-full items-center justify-center gap-3 rounded-xl border-2 border-dashed border-rijksblauw-300 px-4 py-3 text-base font-bold text-rijksblauw-700 transition-colors hover:border-rijksblauw-500 hover:bg-rijksblauw-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-rijksblauw-500 dark:text-white dark:hover:bg-rijksblauw-500/15"
-            onClick={onOpenSettings}
-            disabled={disabled}
-          >
-            <Upload size={24} aria-hidden="true" />
-            {fileCount > 0 ? 'Bestanden beheren' : 'Bestanden toevoegen'}
-          </button>
-        </section>
+        <ProjectFiles
+          key={project.id}
+          projectId={project.id}
+          fileCount={fileCount}
+          onFilesChanged={onFilesChanged}
+          checkPii={checkPii}
+          onFileNames={setFileNames}
+          headingClassName={SECTION_HEADING}
+          disabled={disabled}
+        />
 
         <section>
           <h3 className={`${SECTION_HEADING} mb-1`}>

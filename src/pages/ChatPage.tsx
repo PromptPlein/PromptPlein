@@ -28,7 +28,6 @@ import ChatContextWizard, { type ContextPrompt } from '@/components/chat/ChatCon
 import ChatIntake from '@/components/chat/ChatIntake';
 import useChatIntake from '@/components/chat/useChatIntake';
 import ProjectPromptWizard from '@/components/chat/ProjectPromptWizard';
-import ProjectSettingsModal from '@/components/chat/ProjectSettingsModal';
 import ProjectView from '@/components/chat/ProjectView';
 import useChatController from '@/components/chat/useChatController';
 import MemoryNoticeBar from '@/components/chat/MemoryNoticeBar';
@@ -290,7 +289,9 @@ function ChatPageInner() {
   // daar en niet in een gesprek. Zodra je in dat project een chat opent of start,
   // gaat hij weer op null en neemt het gesprek het scherm over.
   const [projectPage, setProjectPage] = useState<string | null>(null);
-  const [settingsProjectId, setSettingsProjectId] = useState<string | null>(null);
+  // Een net aangemaakt project waarvoor de gebruiker "Zelf instellen" koos: de
+  // projectpagina opent dan met de naam klaar om in te vullen.
+  const [nameEditProjectId, setNameEditProjectId] = useState<string | null>(null);
   const [wizard, setWizard] = useState<{ projectId: string; isNew: boolean } | null>(null);
   const [confirmDeleteProject, setConfirmDeleteProject] = useState<string | null>(null);
 
@@ -298,7 +299,6 @@ function ChatPageInner() {
   const openProject = projectList.find((p) => p.id === projectPage) ?? null;
   // Op de telefoon: wie naar beneden leest, krijgt de bovenkant uit beeld.
   useReadingMode(cardRef, messages.length > 0 && !openProject, conversationId);
-  const settingsProject = projectList.find((p) => p.id === settingsProjectId) ?? null;
   const wizardProject = projectList.find((p) => p.id === wizard?.projectId) ?? null;
 
   const knownProjectIds = useMemo(() => new Set(projectList.map((p) => p.id)), [projectList]);
@@ -340,9 +340,10 @@ function ChatPageInner() {
   }, []);
 
   // Een zojuist aangemaakt project dat nog nooit is opgeslagen: bestaat al in de
-  // database (de instellingen hebben een id nodig voor bestanden), maar is voor
-  // de gebruiker nog een leeg formulier. Annuleert hij, dan hoort het weer weg —
-  // anders vult de zijbalk zich met regels "Nieuw project" die niets bevatten.
+  // database (bestanden hebben een project-id nodig), maar is voor de gebruiker
+  // nog leeg. Annuleert hij, of verlaat hij de projectpagina zonder iets in te
+  // vullen, dan hoort het weer weg. Anders vult de zijbalk zich met regels
+  // "Nieuw project" die niets bevatten.
   // Een ref en geen state: opslaan en sluiten gebeuren in dezelfde tick, en dan
   // is een state-waarde in de sluitfunctie nog de oude.
   const draftProjectRef = useRef<string | null>(null);
@@ -374,13 +375,13 @@ function ChatPageInner() {
 
   /** Opslaan gelukt = het is een echt project geworden; niet meer opruimen. */
   const handleSaveProject = useCallback(
-    async (patch: { name: string; instructions: string }) => {
-      if (!settingsProjectId) return false;
-      const ok = await projects.update(settingsProjectId, patch);
-      if (ok) draftProjectRef.current = null;
+    async (patch: { name?: string; instructions?: string }) => {
+      if (!projectPage) return false;
+      const ok = await projects.update(projectPage, patch);
+      if (ok && draftProjectRef.current === projectPage) draftProjectRef.current = null;
       return ok;
     },
-    [settingsProjectId, projects],
+    [projectPage, projects],
   );
 
   // Alleen een nooit opgeslagen, nog helemaal leeg project wordt opgeruimd; alles
@@ -449,11 +450,15 @@ function ChatPageInner() {
     discardDraftProject(id);
   }, [wizard, discardDraftProject]);
 
-  const handleCloseSettings = useCallback(() => {
-    const id = settingsProjectId;
-    setSettingsProjectId(null);
-    discardDraftProject(id);
-  }, [settingsProjectId, discardDraftProject]);
+  // Weg van de pagina van een nog leeg nieuw project: dan ruimen we het op.
+  const prevProjectPage = useRef<string | null>(null);
+  useEffect(() => {
+    const prev = prevProjectPage.current;
+    prevProjectPage.current = projectPage;
+    if (!prev || prev === projectPage) return;
+    setNameEditProjectId(null);
+    discardDraftProject(prev);
+  }, [projectPage, discardDraftProject]);
 
   const handleNewChatInProject = useCallback(
     (projectId: string) => {
@@ -486,10 +491,9 @@ function ChatPageInner() {
     // De lokale gesprekken van dit project blijven bestaan; ze verhuizen vanzelf
     // naar de losse lijst omdat hun projectId nergens meer op slaat.
     if (projectPage === confirmDeleteProject) setProjectPage(null);
-    if (settingsProjectId === confirmDeleteProject) setSettingsProjectId(null);
     if (draftProjectRef.current === confirmDeleteProject) draftProjectRef.current = null;
     toast.success('Project verwijderd.');
-  }, [confirmDeleteProject, projects, projectPage, settingsProjectId]);
+  }, [confirmDeleteProject, projects, projectPage]);
 
   const activeProject = conversation?.projectId
     ? (projectList.find((p) => p.id === conversation.projectId) ?? null)
@@ -789,7 +793,15 @@ function ChatPageInner() {
                   onNewChat={() => handleNewChatInProject(openProject.id)}
                   onNewPrompt={handleNewPrompt}
                   onMakeInstruction={() => setWizard({ projectId: openProject.id, isNew: false })}
-                  onOpenSettings={() => setSettingsProjectId(openProject.id)}
+                  onSave={handleSaveProject}
+                  onFilesChanged={() => {
+                    // Er staat nu een bronbestand in: dit is geen leeg project meer.
+                    if (draftProjectRef.current === openProject.id) draftProjectRef.current = null;
+                    projects.refresh();
+                  }}
+                  chatSettings={settings}
+                  checkPii={aiSettings?.pii.enabled ?? true}
+                  editNameOnOpen={nameEditProjectId === openProject.id}
                   onSelectConversation={handleSelectConversation}
                   onRequestDeleteConversation={setConfirmDeleteId}
                   onRequestDeleteProject={() => setConfirmDeleteProject(openProject.id)}
@@ -1065,27 +1077,15 @@ function ChatPageInner() {
           isNewProject={Boolean(wizard?.isNew)}
           settings={settings}
           onManual={() => {
+            // Zelf instellen gebeurt op de projectpagina zelf, die al openstaat.
             setWizard(null);
-            setSettingsProjectId(wizardProject.id);
+            setProjectPage(wizardProject.id);
+            if (wizard?.isNew) setNameEditProjectId(wizardProject.id);
           }}
           onClose={handleCloseWizard}
           onSave={handleSaveWizard}
         />
       )}
-      <ProjectSettingsModal
-        open={settingsProject !== null}
-        project={settingsProject}
-        onClose={handleCloseSettings}
-        onSave={handleSaveProject}
-        onFilesChanged={() => {
-          // Er staat nu een bronbestand in: dit is geen leeg formulier meer, ook
-          // niet als de gebruiker daarna op annuleren drukt.
-          draftProjectRef.current = null;
-          projects.refresh();
-        }}
-        chatSettings={settings}
-        checkPii={aiSettings?.pii.enabled ?? true}
-      />
       <ConfirmDialog
         open={confirmDeleteProject !== null}
         title="Project verwijderen?"

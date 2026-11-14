@@ -760,7 +760,7 @@ export default function SettingsPage() {
             </div>
             <p className="mb-4 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
               Hetzelfde rode sterretje, maar dan in het veld
-              &ldquo;Projectinstructie&rdquo; van de projectinstellingen. Eén klik schrijft de ruwe
+              &ldquo;Projectinstructie&rdquo; op de projectpagina. Eén klik schrijft de ruwe
               instructie om tot een volwaardige systeemprompt. Dit is een <strong>zwaardere</strong>{' '}
               slag dan het sterretje in de chat: de uitkomst stuurt <em>elk</em> gesprek in dat
               project, dus er wordt een vaste rol, een vast eindproduct en een uitweg bij twijfel in
