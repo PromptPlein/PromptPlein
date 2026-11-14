@@ -15,12 +15,14 @@ import {
   indexProject,
   listProjectFiles,
   markProjectUsed,
-  MAX_PROJECT_CONTEXT_CHARS,
   MAX_PROJECT_FILES,
   MAX_PROJECT_FILE_BYTES,
   MAX_PROJECT_FILE_CHARS,
   MAX_PROJECT_INSTRUCTIONS_CHARS,
   MAX_PROJECT_NAME_CHARS,
+  onProjectPrepare,
+  prepareProjectForBuilder,
+  type BriefProgress,
 } from '@/services/chatProjectService';
 import type { ChatProject, ChatProjectFile } from '@/types';
 
@@ -133,15 +135,30 @@ export default function ProjectSettingsModal({
     if (open && projectId) markProjectUsed(projectId);
   }, [open, projectId]);
 
-  // Vectoren alleen voor een project dat te groot is om heel mee te gaan: een
-  // klein project zoekt nooit, dus dan hoeft de tekst daarvoor niet naar Mistral.
-  // Ook bij openen, want een eerdere verwerking kan zijn afgebroken.
+  // Vectoren voor elk project met bestanden, meteen: de promptbouwer zoekt er
+  // bij elke opdracht de passende passages in. Daarna de analyse voor de bouwer,
+  // bewaard op de projectrij, zodat aanhaken daar niets meer hoeft te lezen. Ook
+  // bij openen, want een eerdere verwerking kan zijn afgebroken; wat er al staat
+  // kost dan één kleine query.
   const filesChars = files.reduce((sum, f) => sum + f.chars, 0);
-  const needsIndex = filesChars > MAX_PROJECT_CONTEXT_CHARS;
+  const hasFiles = files.length > 0;
   useEffect(() => {
-    if (open && projectId && needsIndex) void indexProject(projectId, setIndexRemaining);
-    // files.length erbij: een nieuw bestand in een groot project heeft ook vectoren nodig.
-  }, [open, projectId, needsIndex, files.length]);
+    if (open && projectId && hasFiles) void indexProject(projectId, setIndexRemaining);
+    // files.length erbij: een nieuw bestand heeft ook vectoren nodig.
+  }, [open, projectId, hasFiles, files.length]);
+  useEffect(() => {
+    if (open && projectId && hasFiles) prepareProjectForBuilder(projectId);
+  }, [open, projectId, hasFiles]);
+
+  // Hoe ver de analyse voor de bouwer is.
+  const [prepareProgress, setPrepareProgress] = useState<BriefProgress | null>(null);
+  useEffect(() => {
+    setPrepareProgress(null);
+    if (!projectId) return;
+    return onProjectPrepare((id, progress) => {
+      if (id === projectId) setPrepareProgress(progress);
+    });
+  }, [projectId]);
 
   // --- Het rode sterretje: van ruwe instructie naar systeemprompt ---
   // Bewust een zwaardere slag dan het sterretje in de chat: daar wordt één
@@ -196,6 +213,8 @@ export default function ProjectSettingsModal({
     setSaving(true);
     const ok = await onSave({ name: trimmed, instructions });
     setSaving(false);
+    // Een andere instructie is ander materiaal, dus een nieuwe analyse.
+    if (ok && projectId) prepareProjectForBuilder(projectId);
     if (ok) {
       toast.success('Project opgeslagen.');
       onClose();
@@ -255,6 +274,7 @@ export default function ProjectSettingsModal({
     }
     setUploading(null);
     if (done > 1) onFilesChanged();
+    if (done > 0) prepareProjectForBuilder(projectId);
     if (done > 0) toast.success(done === 1 ? 'Bestand toegevoegd.' : `${done} bestanden toegevoegd.`);
   }
 
@@ -264,6 +284,7 @@ export default function ProjectSettingsModal({
       await deleteProjectFile(projectId, file.id);
       setFiles((cur) => cur.filter((f) => f.id !== file.id));
       onFilesChanged();
+      prepareProjectForBuilder(projectId);
       toast.success(`"${file.name}" verwijderd.`);
     } catch {
       toast.error('Het bestand kon niet worden verwijderd.');
@@ -482,6 +503,16 @@ export default function ProjectSettingsModal({
               >
                 <Loader2 size={12} className="animate-spin" />
                 Bestanden doorzoekbaar maken
+              </p>
+            )}
+
+            {indexRemaining <= 0 && prepareProgress && prepareProgress.total > 0 && (
+              <p
+                role="status"
+                className="mt-1 flex items-center gap-1.5 text-[0.6875rem] text-slate-400 dark:text-slate-500"
+              >
+                <Loader2 size={12} className="animate-spin" />
+                Bronnen lezen voor de promptbouwer: {prepareProgress.done} van {prepareProgress.total}
               </p>
             )}
           </div>

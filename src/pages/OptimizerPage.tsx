@@ -173,13 +173,12 @@ export default function OptimizerPage() {
 
   const pickProject = useCallback(
     (projectId: string) => {
-      // Normaal begint een project met alleen de instructie. Zonder instructie
-      // zou dat niets opleveren en liet het project zich niet aanhaken, dus dan
-      // gaan de bronnen mee en kan de gebruiker er daarna uit weghalen.
-      const project = chatProjects.projects.find((p) => p.id === projectId);
-      void loadProjectContext(projectId, project?.instructions.trim() ? [] : 'all');
+      // Een project gaat mee met al zijn bronnen. De analyse daarvan is al gemaakt
+      // toen de bronnen werden toegevoegd (prepareProjectForBuilder), dus dit is
+      // één kleine query. De gebruiker kan er daarna bronnen uit weghalen.
+      void loadProjectContext(projectId, 'all');
     },
-    [chatProjects.projects, loadProjectContext],
+    [loadProjectContext],
   );
 
   const clearProjectContext = useCallback(() => {

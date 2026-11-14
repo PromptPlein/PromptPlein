@@ -15,6 +15,7 @@
 
 import { getAnonKey, getFunctionUrl, isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { analyzeProjectContext } from '@/services/optimizeService';
+import { getAiSettings } from '@/services/settingsService';
 import type { AiProvider } from '@/config/aiModels';
 import type { ChatProject, ChatProjectContext, ChatProjectFile } from '@/types';
 
@@ -793,7 +794,6 @@ function splitMaterial(
       if (whole.length + rest.length <= free) {
         current.push(`${whole}${rest}`);
         size += whole.length + rest.length + (current.length > 1 ? 2 : 0);
-        rest = '';
         break;
       }
       const label = first
@@ -855,7 +855,7 @@ async function ensureProjectBrief(args: {
   ai?: { provider?: AiProvider; model?: string };
   onProgress?: (progress: BriefProgress) => void;
 }): Promise<string> {
-  const { projectId, projectName, instructions, files, ai, onProgress } = args;
+  const { projectId, instructions, files } = args;
   const parts = splitMaterial(instructions, files);
   if (!parts.length) return '';
   // De sleutel blijft de hash van het hele materiaal: een analyse die vóór het
@@ -870,6 +870,33 @@ async function ensureProjectBrief(args: {
   const remembered = briefCache.get(memoryKey);
   if (remembered) return remembered;
 
+  // Loopt dezelfde analyse al (de voorbereiding na een upload, terwijl de
+  // gebruiker het project in de bouwer aanhaakt), wacht dan daarop in plaats van
+  // hem twee keer te betalen.
+  const pending = briefInFlight.get(memoryKey);
+  if (pending) return pending;
+  const run = makeProjectBrief({ ...args, hash, memoryKey, parts });
+  briefInFlight.set(memoryKey, run);
+  try {
+    return await run;
+  } finally {
+    briefInFlight.delete(memoryKey);
+  }
+}
+
+/** Analyses die nu lopen, per `${projectId}:${hash}`. */
+const briefInFlight = new Map<string, Promise<string>>();
+
+async function makeProjectBrief(args: {
+  projectId: string;
+  projectName: string;
+  ai?: { provider?: AiProvider; model?: string };
+  onProgress?: (progress: BriefProgress) => void;
+  hash: string;
+  memoryKey: string;
+  parts: string[];
+}): Promise<string> {
+  const { projectId, projectName, ai, onProgress, hash, memoryKey, parts } = args;
   const stored = await readBriefs(projectId);
   const hit = stored[hash]?.brief;
   if (typeof hit === 'string' && hit.trim()) {
@@ -966,6 +993,7 @@ export async function buildGeneratorContext(
   selection: GeneratorFileSelection,
   ai?: { provider?: AiProvider; model?: string },
   onProgress?: (progress: BriefProgress) => void,
+  options: { markUsed?: boolean } = {},
 ): Promise<GeneratorContext | null> {
   if (!isSupabaseConfigured || !supabase) return null;
 
@@ -997,14 +1025,12 @@ export async function buildGeneratorContext(
   // Een project zonder instructie én zonder bestanden levert geen context op;
   // dan is aanhaken zinloos en zeggen we dat eerlijk met null.
   if (!instructions && !files.length) return null;
-  markProjectUsed(projectId);
+  if (options.markUsed !== false) markProjectUsed(projectId);
 
-  // Een groot project zoekt bij het bouwen op betekenis; laat de vectoren alvast
-  // maken terwijl de analyse loopt. Een klein project krijgt er nooit.
+  // De bouwer zoekt bij elke opdracht op betekenis; ontbreken er nog vectoren,
+  // laat ze dan maken terwijl de analyse loopt.
   const fileChars = files.reduce((sum, f) => sum + f.text.length, 0);
-  if (fileChars > MAX_PROJECT_CONTEXT_CHARS && !indexed.has(projectId)) {
-    void indexProject(projectId);
-  }
+  if (files.length && !indexed.has(projectId)) void indexProject(projectId);
 
   const brief = await ensureProjectBrief({
     projectId,
@@ -1049,7 +1075,7 @@ function findGeneratorPassages(context: GeneratorContext, task: string): Promise
   if (cached) return cached;
   const run = (async () => {
     try {
-      if (context.fileChars > MAX_PROJECT_CONTEXT_CHARS && !indexed.has(context.id)) {
+      if (!indexed.has(context.id)) {
         await Promise.race([
           indexProject(context.id),
           new Promise((resolve) => setTimeout(resolve, INDEX_WAIT_MS)),
@@ -1092,9 +1118,96 @@ export async function withGeneratorSources(
   if (!clean || !context.files.length) return context.text;
   const passages = await findGeneratorPassages(context, clean);
   if (!passages) return context.text;
+  // De leeswijzer van de gebruiker vlak boven de passages, en niet alleen in de
+  // analyse: de passages zijn ruwe brontekst, en zegt de gebruiker "alleen de
+  // functionele kant", dan moet dat bij die tekst staan.
+  const guide = readingGuide(context.text);
   return (
     `${context.text}\n\n` +
     `PASSAGES UIT DE BRONBESTANDEN DIE BIJ DEZE OPDRACHT PASSEN ` +
-    `(letterlijk geciteerd; "…" betekent dat er tekst tussen zit):\n\n${passages}`
+    `(letterlijk geciteerd; "…" betekent dat er tekst tussen zit).` +
+    (guide
+      ? `\nLeeswijzer van de gebruiker voor deze bronnen: ${guide}\n` +
+        `Gebruik uit deze passages alleen wat die leeswijzer toelaat.`
+      : '') +
+    `\n\n${passages}`
   );
+}
+
+/**
+ * De leeswijzer uit de analyse: wat de projectinstructie zegt over hoe de
+ * bronbestanden gebruikt moeten worden. Leeg als er geen is.
+ */
+function readingGuide(brief: string): string {
+  const lines = brief.split('\n');
+  const start = lines.findIndex((line) => /^\s*LEESWIJZER BRONNEN\b/i.test(line));
+  if (start < 0) return '';
+  const body: string[] = [];
+  for (const line of lines.slice(start + 1)) {
+    // Het volgende kopje: een regel in hoofdletters.
+    if (/^\s*[A-ZÀ-Ý][A-ZÀ-Ý ]{5,}\s*$/.test(line)) break;
+    body.push(line);
+  }
+  const text = body.join(' ').replace(/\s+/g, ' ').trim();
+  if (!text || /^(geen|niet vermeld)\.?$/i.test(text)) return '';
+  return text.slice(0, 1000);
+}
+
+/** Lopende voorbereidingen per project; `again` vraagt om nog een ronde erna. */
+const preparing = new Map<string, { again: boolean }>();
+
+/** Voortgang van de voorbereiding, voor wie hem wil tonen. */
+type PrepareListener = (projectId: string, progress: BriefProgress | null) => void;
+const prepareListeners = new Set<PrepareListener>();
+
+/** Volg de voorbereiding van projecten; geeft een functie om te stoppen. */
+export function onProjectPrepare(listener: PrepareListener): () => void {
+  prepareListeners.add(listener);
+  return () => prepareListeners.delete(listener);
+}
+
+/**
+ * Maakt een project klaar voor de promptbouwer, zodat hij daar niets meer hoeft
+ * te analyseren: vectoren voor alle bronbestanden en de analyse van de
+ * instructie met alle bronnen, bewaard op de projectrij. Draait na toevoegen of
+ * verwijderen van een bestand, na opslaan van de instructie en bij het openen
+ * van de projectinstellingen. Staat de analyse er al, dan kost dat één kleine
+ * query.
+ *
+ * Loopt per project één keer tegelijk; een wijziging tijdens het lopen geeft
+ * daarna nog een ronde, met het nieuwe materiaal. Gooit nooit: lukt het niet,
+ * dan maakt de bouwer de analyse alsnog bij het aanhaken.
+ */
+export function prepareProjectForBuilder(projectId: string): void {
+  if (!isSupabaseConfigured || !supabase) return;
+  const running = preparing.get(projectId);
+  if (running) {
+    running.again = true;
+    return;
+  }
+  const state = { again: false };
+  preparing.set(projectId, state);
+  const emit = (progress: BriefProgress | null) =>
+    prepareListeners.forEach((listener) => listener(projectId, progress));
+  void (async () => {
+    try {
+      do {
+        state.again = false;
+        await indexProject(projectId);
+        const ai = await getAiSettings().catch(() => null);
+        await buildGeneratorContext(
+          projectId,
+          'all',
+          ai ? { provider: ai.provider, model: ai.model } : undefined,
+          emit,
+          { markUsed: false },
+        );
+      } while (state.again);
+    } catch {
+      /* de bouwer probeert het zelf bij het aanhaken */
+    } finally {
+      preparing.delete(projectId);
+      emit(null);
+    }
+  })();
 }

@@ -540,12 +540,12 @@ woordzoeker juist beter.
 Bewust geen HNSW-index: die zoekt over alle projecten en filtert daarna pas, zodat
 treffers binnen één project wegvallen. Per project exact vergelijken is snel genoeg.
 
-Vectoren komen alleen in een project boven de 200.000 tekens: een klein project zoekt
-nooit. `PROJECT_INDEX_MIN_CHARS` in de edge function bewaakt dat ook, gelijk aan
-`MAX_PROJECT_CONTEXT_CHARS`; wijzig je de een, wijzig dan de ander. Ze worden gemaakt in
-porties (`project-index`, `indexProject` in `chatProjectService`) zodra de
-projectinstellingen een groot project zien, en anders bij de eerste vraag, die daar
-hoogstens 20 seconden op wacht. Alles loopt met het token van de
+Elk project met bestanden krijgt vectoren, meteen bij het toevoegen (sinds 14-11-2026,
+keuze van de eigenaar; `PROJECT_INDEX_MIN_CHARS` staat op 0). De chat zoekt er pas mee
+boven de 200.000 tekens, de bouwer bij elke opdracht. Ze worden gemaakt in porties
+(`project-index`, `indexProject` in `chatProjectService`) zodra de projectinstellingen
+bestanden zien, en anders bij de eerste vraag, die daar hoogstens 20 seconden op wacht.
+Alles loopt met het token van de
 gebruiker, dus RLS bewaakt ook dit pad, en van de stukken is alleen `embedding`
 wijzigbaar. Een stuk zonder vector blijft vindbaar met de woordzoeker en een storing
 bij Mistral kost niemand zijn bronnen: `project-search` zoekt dan op woorden en daarna
@@ -558,6 +558,15 @@ aanroep; groter materiaal gaat in delen, met daarna één samenvoegstap
 die analyse de passages mee die bij de opdracht passen, gezocht met dezelfde
 `project-search` als de chat (`withGeneratorSources`). Samen blijven ze onder de 60.000
 tekens per stap (`MAX_GENERATOR_CONTEXT_CHARS`), want die context gaat in elke stap mee.
+
+De analyse van de instructie met alle bronnen wordt vooraf gemaakt: na toevoegen of
+verwijderen van een bestand, na opslaan van de instructie en bij het openen van de
+projectinstellingen (`prepareProjectForBuilder`). Hij staat op de projectrij in
+`generator_briefs` (0061; 0032 is nooit uitgevoerd en mag niet meer, want die zet een oude
+`touch_chat_project` terug). In de bouwer gaat een project daarom standaard met alle bronnen
+mee. Schrijft de gebruiker in zijn projectinstructie hoe de bronbestanden gelezen moeten
+worden, dan zet de analyse dat letterlijk onder LEESWIJZER BRONNEN en past hem toe; de client
+zet die leeswijzer ook boven de passages (`readingGuide`).
 
 Let op de privacy: in een groot project gaat elk bestand in zijn geheel naar Mistral,
 ook de delen waar nooit iets over wordt gevraagd. Daarom zoekt de browser vóór het
