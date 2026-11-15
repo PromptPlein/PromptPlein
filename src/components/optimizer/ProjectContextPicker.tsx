@@ -30,6 +30,15 @@ export interface ProjectContextSlot {
   /** Haal de getypte `@` weer uit het invoerveld. */
   stripMention: () => void;
   className?: string;
+  /** Opschrift van de knop; standaard "Context". */
+  label?: string;
+  /**
+   * Alleen de projectinstructie telt (bij Afbeelding, waar het project de
+   * beeldstijl is): geen bronnen in de lijst en geen bronlabels.
+   */
+  instructionOnly?: boolean;
+  /** Eigen uitleg achter het infobolletje. */
+  info?: string;
 }
 
 /** Zoveel bronlabels staan er los; de rest wordt één knop "+3". */
@@ -75,6 +84,9 @@ export default function ProjectContextPicker({
   onClear,
   onSelectFiles,
   className,
+  label = 'Context',
+  instructionOnly = false,
+  info,
 }: {
   /** De projecten van de ingelogde gebruiker. */
   projects: ChatProject[];
@@ -92,6 +104,9 @@ export default function ProjectContextPicker({
   onClear: () => void;
   onSelectFiles: (fileIds: string[]) => void;
   className?: string;
+  label?: string;
+  instructionOnly?: boolean;
+  info?: string;
 }) {
   const { isAuthenticated, configured } = useAuth();
   const [open, setOpen] = useState(false);
@@ -239,14 +254,14 @@ export default function ProjectContextPicker({
 
   // De labels tonen wat er gelezen is, niet wat er in de lijst is aangevinkt:
   // de keuze gaat pas in bij "Klaar".
-  const chips = context?.files ?? [];
+  const chips = instructionOnly ? [] : (context?.files ?? []);
   const hiddenChips = chips.length - MAX_FILE_CHIPS;
 
   const panel = open && (
     <div
       ref={panelRef}
       role="dialog"
-      aria-label="Context kiezen"
+      aria-label={instructionOnly ? 'Project kiezen' : 'Context kiezen'}
       className="fixed z-50 flex flex-col rounded-xl border border-slate-300 bg-white shadow-xl dark:border-slate-600 dark:bg-slate-800"
       style={{
         left: pos?.left ?? 0,
@@ -289,7 +304,7 @@ export default function ProjectContextPicker({
               );
             })}
 
-            {activeProjectId && files.length > 0 && (
+            {activeProjectId && files.length > 0 && !instructionOnly && (
               <>
                 <div className="mx-1 my-1.5 border-t border-slate-200 dark:border-slate-700" />
                 <p className="px-2.5 pb-1 pt-1 text-xs font-bold text-slate-600 dark:text-slate-300">
@@ -335,7 +350,7 @@ export default function ProjectContextPicker({
       </div>
 
       <div className="border-t border-slate-200 p-1.5 dark:border-slate-700">
-        {activeProjectId && files.length > 0 && (
+        {activeProjectId && files.length > 0 && !instructionOnly && (
           <p className="px-2.5 pb-1.5 pt-1 text-[0.8125rem] font-medium text-slate-600 dark:text-slate-300">
             {nl(used)} tekens, alles wordt gelezen
           </p>
@@ -388,7 +403,7 @@ export default function ProjectContextPicker({
           aria-haspopup="dialog"
           className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded border border-rijksblauw-500 bg-white px-3 text-sm font-semibold text-rijksblauw-700 transition-colors hover:bg-rijksblauw-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 dark:bg-slate-800 dark:text-rijksblauw-200 dark:hover:bg-slate-700"
         >
-          <Plus size={15} /> Context
+          <Plus size={15} /> {label}
         </button>
 
         {activeProjectId && projectName && (
@@ -472,10 +487,13 @@ export default function ProjectContextPicker({
           </span>
         )}
 
-        {!activeProjectId && !suggestion && (
+        {(info || (!activeProjectId && !suggestion)) && (
           <InfoDot
-            label="Uitleg over context"
-            text={'Voeg een project toe. De AI kent je onderwerp dan al en schrijft een scherpere prompt.\nTyp @ om te kiezen.'}
+            label={info ? 'Uitleg over de beeldstijl uit een project' : 'Uitleg over context'}
+            text={
+              info ??
+              'Voeg een project toe. De AI kent je onderwerp dan al en schrijft een scherpere prompt.\nTyp @ om te kiezen.'
+            }
           />
         )}
       </div>

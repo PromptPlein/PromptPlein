@@ -44,12 +44,14 @@ import {
 import { usePersistentDraft } from '@/lib/usePersistentDraft';
 import { stripMarkdown, copyToClipboard } from '@/lib/utils';
 import {
+  fetchImageOptions,
   generatePrompt,
   prefillFields,
   recommendFramework,
   type BeeldKeuze,
   type FrameworkSearchPhase,
   type PrefillPhase,
+  type VeldKeuzes,
 } from '@/services/optimizeService';
 import OptimizingLoader from './OptimizingLoader';
 import PrefillLoader from './PrefillLoader';
@@ -80,6 +82,8 @@ export interface OwnPromptRestore {
   prefill: PrefillResult | null;
   answers: Record<string, string>;
   fieldMeta: FieldMeta;
+  /** Bij Afbeelding: de keuzes per veld. */
+  keuzes?: VeldKeuzes | null;
 }
 
 /** De stijl bij Afbeelding: vrij, de Rijkshuisstijl, of die uit een project. */
@@ -319,6 +323,11 @@ export default function OwnPromptOptimizer({
   const [answers, setAnswers] = useState<Record<string, string>>(restore?.answers ?? {});
   // Herkomst per voor-ingevuld veld (origin-badges); vervalt zodra de gebruiker zelf typt.
   const [fieldMeta, setFieldMeta] = useState<FieldMeta>(restore?.fieldMeta ?? {});
+  // Bij Afbeelding: per veld een vraag en keuzes, bedacht naast het voor-invullen.
+  const [keuzes, setKeuzes] = useState<VeldKeuzes | null>(restore?.keuzes ?? null);
+  const [keuzesLoading, setKeuzesLoading] = useState(false);
+  // Alleen het antwoord op de laatste aanvraag telt; een oudere komt te laat.
+  const keuzesRun = useRef(0);
   const [prefilling, setPrefilling] = useState(false);
   // Live voortgang van het voor-invullen: welk model werkt, welke fase loopt en
   // welke velden al binnen zijn. Voedt het laadscherm, zodat de
@@ -355,7 +364,36 @@ export default function OwnPromptOptimizer({
     setPrefill(null);
     setAnswers({});
     setFieldMeta({});
+    clearKeuzes();
     setUnclearReason(null);
+  }
+
+  function clearKeuzes() {
+    keuzesRun.current += 1;
+    setKeuzes(null);
+    setKeuzesLoading(false);
+  }
+
+  /**
+   * Bij Afbeelding: bedenk per veld keuzes die bij deze soort beeld passen. Loopt
+   * naast het voor-invullen en houdt dat niet op; lukt het niet, dan blijven de
+   * velden gewoon zonder keuzes.
+   */
+  function loadKeuzes(chosen: Technique) {
+    const run = ++keuzesRun.current;
+    setKeuzes(null);
+    setKeuzesLoading(true);
+    void fetchImageOptions({
+      ownPrompt: promptText,
+      technique: chosen,
+      beeld,
+      preferredProvider: settings.provider,
+      preferredModel: settings.model,
+    }).then((result) => {
+      if (keuzesRun.current !== run) return;
+      setKeuzes(result);
+      setKeuzesLoading(false);
+    });
   }
 
   // Komt de gebruiker binnen via /genereren/:promptId, dan zetten we die prompt
@@ -507,6 +545,7 @@ export default function OwnPromptOptimizer({
     setPrefill(null);
     setAnswers({});
     setFieldMeta({});
+    clearKeuzes();
     setUnclearReason(null);
     // Nieuw framework = een nieuwe "wat mist nog"-lus; oude toelichting vervalt.
     setClarification('');
@@ -528,6 +567,7 @@ export default function OwnPromptOptimizer({
    */
   async function runPrefill(chosen: Technique, clarify?: string) {
     setPrefilling(true);
+    if (beeld) loadKeuzes(chosen);
     // Voortgang van een vorige ronde wissen; het laadscherm begint weer leeg.
     setPrefillProgress({
       models: [],
@@ -565,6 +605,7 @@ export default function OwnPromptOptimizer({
         setPrefill(null);
         setTechniqueId(null);
         setRecommendations(null);
+        clearKeuzes();
         setUnclearReason(
           res.reason?.trim() ||
             'Je prompt is nog niet duidelijk genoeg om de velden voor te vullen. Beschrijf concreet wat je wilt bereiken.',
@@ -638,6 +679,7 @@ export default function OwnPromptOptimizer({
         prefill,
         answers,
         fieldMeta,
+        keuzes,
       });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Optimaliseren mislukt');
@@ -848,11 +890,14 @@ export default function OwnPromptOptimizer({
         {/* Het invoerveld met "Wat wil je maken?" als balk erboven en de
             schakelaar, de opzet en de zoekknop eronder: één geheel. */}
         <div className="overflow-hidden rounded-xl border border-slate-300 bg-slate-50 transition-colors focus-within:border-rijksblauw-500 focus-within:ring-2 focus-within:ring-rijksblauw-500/20 dark:border-slate-600 dark:bg-slate-900/40">
-          {renderProjectContext?.({
-            text: ownPrompt,
-            stripMention: () => setOwnPrompt(ownPrompt.replace(/@$/, '')),
-            className: 'border-b border-slate-200 bg-white px-2.5 py-2 dark:border-slate-700 dark:bg-slate-800',
-          })}
+          {/* Bij Afbeelding gaat een project alleen mee als stijl; de knop staat dan
+              bij "Uit een project", onder de stijlkeuze. */}
+          {kind !== 'image' &&
+            renderProjectContext?.({
+              text: ownPrompt,
+              stripMention: () => setOwnPrompt(ownPrompt.replace(/@$/, '')),
+              className: 'border-b border-slate-200 bg-white px-2.5 py-2 dark:border-slate-700 dark:bg-slate-800',
+            })}
           {/* Vervolgkeuze bij Code en Dashboard: twee opties die elk een eigen
               framework aanwijzen. Zichtbaar zodra de soort gekozen is, zodat je
               ziet dát er een keuze is in plaats van hem te moeten ontdekken. */}
@@ -964,12 +1009,23 @@ export default function OwnPromptOptimizer({
                   })}
                 </div>
               </div>
-              {beeldStijl === 'project' && !projectStijl && (
-                <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-                  Kies bij Context het project met je beeldstijl. Beschrijf die stijl in de
-                  projectinstructie: illustratie of foto, de kleuren met hun code en wat er altijd in
-                  moet of nooit in mag. Tot je een project kiest, gaat er geen vaste stijl mee.
-                </p>
+              {beeldStijl === 'project' && (
+                <div className="mt-2.5">
+                  {!projectStijl && (
+                    <p className="mb-2 text-sm text-slate-600 dark:text-slate-300">
+                      Kies het project met je beeldstijl. Tot je dat doet, gaat er geen vaste stijl
+                      mee.
+                    </p>
+                  )}
+                  {renderProjectContext?.({
+                    text: ownPrompt,
+                    stripMention: () => setOwnPrompt(ownPrompt.replace(/@$/, '')),
+                    label: 'Project kiezen',
+                    instructionOnly: true,
+                    info:
+                      'De projectinstructie is je beeldstijl: illustratie of foto, de kleuren met hun code en wat er altijd in moet of nooit in mag. Elk beeld uit dit project krijgt die stijl, met een ander onderwerp.\nBronbestanden gaan bij een beeld niet mee.',
+                  })}
+                </div>
               )}
             </div>
           )}
@@ -1143,6 +1199,8 @@ export default function OwnPromptOptimizer({
                 heading={<StepHeading title="Kijk na en vul aan" />}
                 showLetters={false}
                 askIfEmpty={prefill.fields.length > 0}
+                choices={beeld ? keuzes : null}
+                choicesLoading={Boolean(beeld) && keuzesLoading}
               />
 
               {/* Een nieuwe invulronde met extra uitleg: handig als de AI op het

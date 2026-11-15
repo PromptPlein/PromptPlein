@@ -425,7 +425,14 @@ export default function OptimizerPage() {
 
             // De projectcontext staat bij het tekstvak en niet in de kop: beide
             // instappen hebben een eigen veld, dus geven ze hun tekst hier door.
-            const renderProjectContext = ({ text, stripMention, className }: ProjectContextSlot) => (
+            const renderProjectContext = ({
+              text,
+              stripMention,
+              className,
+              label,
+              instructionOnly,
+              info,
+            }: ProjectContextSlot) => (
               <ProjectContextPicker
                 projects={chatProjects.projects}
                 context={projectContext}
@@ -438,6 +445,9 @@ export default function OptimizerPage() {
                 onClear={clearProjectContext}
                 onSelectFiles={selectProjectFiles}
                 className={className}
+                label={label}
+                instructionOnly={instructionOnly}
+                info={info}
               />
             );
 

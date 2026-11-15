@@ -50,6 +50,62 @@ export interface BeeldKeuze {
   stijlTekst?: string;
 }
 
+/** Bij Afbeelding: per veld een vraag en een paar keuzes die bij de soort beeld passen. */
+export type VeldKeuzes = Record<string, { vraag: string; opties: string[] }>;
+
+/**
+ * Bedenkt bij een beeldprompt per veld een vraag en drie keuzes (mode
+ * image-options). Draait naast het voor-invullen en is inspiratie, geen
+ * voorwaarde: lukt het niet, dan blijven de velden gewoon zonder keuzes.
+ */
+export async function fetchImageOptions(args: {
+  ownPrompt: string;
+  technique: Technique;
+  beeld?: BeeldKeuze;
+  preferredProvider?: AiProvider;
+  preferredModel?: string;
+}): Promise<VeldKeuzes | null> {
+  const content = args.ownPrompt.trim();
+  const functionUrl = getFunctionUrl('optimize-prompt');
+  if (!content || !isSupabaseConfigured || !functionUrl) return null;
+  try {
+    const anonKey = getAnonKey();
+    const response = await fetch(functionUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(anonKey ? { Authorization: `Bearer ${anonKey}`, apikey: anonKey } : {}),
+      },
+      body: JSON.stringify({
+        mode: 'image-options',
+        ownPrompt: content,
+        analyzeFields: args.technique.follow_up_questions.map((q) => ({ id: q.id, label: q.label })),
+        ...(args.beeld ? { beeld: args.beeld } : {}),
+        preferredProvider: args.preferredProvider ?? 'auto',
+        preferredModel: args.preferredModel,
+      }),
+    });
+    if (!response.ok) return null;
+    const data = (await response.json()) as {
+      success?: boolean;
+      velden?: { id?: unknown; vraag?: unknown; opties?: unknown }[];
+    };
+    if (!data.success || !Array.isArray(data.velden)) return null;
+    const keuzes: VeldKeuzes = {};
+    for (const v of data.velden) {
+      if (typeof v.id !== 'string') continue;
+      const opties = (Array.isArray(v.opties) ? v.opties : []).filter(
+        (o): o is string => typeof o === 'string' && o.trim() !== '',
+      );
+      const vraag = typeof v.vraag === 'string' ? v.vraag.trim() : '';
+      if (opties.length > 0 || vraag) keuzes[v.id] = { vraag, opties };
+    }
+    return Object.keys(keuzes).length > 0 ? keuzes : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Vult een techniek-template met de prompt-inhoud en vervolgvragen.
  * {{PROMPT}} -> promptContent, {{vraag_id}} -> antwoord.

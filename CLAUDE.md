@@ -434,13 +434,13 @@ en antwoord op één lijn beginnen.
 
 Eén edge function, `optimize-prompt`, ongeveer 8000 regels, met een
 `mode`-veld in de body als router. Nieuwe AI-functionaliteit wordt een nieuwe
-mode in dat bestand, niet een nieuwe function. De 42 modes, gegroepeerd:
+mode in dat bestand, niet een nieuwe function. De 43 modes, gegroepeerd:
 
 | Groep | Modes |
 | --- | --- |
 | Streamende vrije tekst | `generate`, `execute`, `chat` |
 | Techniek- en frameworkkeuze | `recommend`, `recommend-framework`, `framework-fit`, `technique-advisor` |
-| Veldhulp in de bouwer | `analyze`, `prefill`, `expand-field`, `title`, `metadata` |
+| Veldhulp in de bouwer | `analyze`, `prefill`, `expand-field`, `title`, `metadata`, `image-options` |
 | PlanWizard | `plan`, `plan-step`, `plan-step-analyze`, `clarify`, `assumption-check` |
 | Techniekbouwers | `persona-fill`, `fewshot-example`, `fewshot-extract`, `meta-build`, `cove-scan`, `stepback-ladder`, `rubric-propose`, `skill-draft`, `skill-trigger` |
 | Chat en projecten | `chat-optimize`, `project-optimize`, `project-brief`, `project-interview`, `project-prompt`, `context-interview`, `context-prompt`, `chat-intake`, `chat-intake-check`, `memory-save`, `memory-search` |
@@ -679,6 +679,14 @@ clarity-gate, en geen tweede ronde. De Rijkshuisstijl (`RIJKSHUISSTIJL_BEELD`) i
 opgesteld uit de kleuren in `brandColors.js`, zonder logo en met een illustratie
 tenzij iemand om een foto vraagt; hij is nog niet getoetst aan het officiële
 beeldbeleid. Alle vier staan in Beheer, Prompts, groep Afbeelding.
+
+Naast het voor-invullen bedenkt `image-options` per veld een vraag en drie keuzes die bij de
+soort beeld passen (`IMAGE_OPTIONS_SYSTEM_PROMPT`). Ze staan als knoppen onder het veld; een
+klik vervangt de tekst, Herstel zet hem terug. In de indeling Stap voor stap is dat het
+doorvragen, één veld tegelijk. Elke keuze moet iets zijn wat de beeldgenerator kan uitvoeren:
+een doel zonder gevolg voor het beeld is ruis, keuze van de eigenaar. Context staat bij
+Afbeelding niet boven het tekstvak; de knop Project kiezen verschijnt pas bij Uit een project,
+en dan zonder bronbestanden, want alleen de projectinstructie gaat mee.
 
 Elk HTML-bestand in de chat wordt na het schrijven onzichtbaar en afgeschermd
 gedraaid (`src/lib/fileCheck.ts`); scriptfouten komen met regelnummer op de

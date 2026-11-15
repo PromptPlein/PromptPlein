@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { ArrowLeft, ArrowRight, Check, Loader2, Pencil, Sparkles, Wand2 } from '@/components/common/icons';
+import { ArrowLeft, ArrowRight, Check, Loader2, Pencil, Sparkles, Undo2, Wand2 } from '@/components/common/icons';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import InfoDot from '@/components/common/InfoDot';
@@ -8,7 +8,7 @@ import PrefillLoader from './PrefillLoader';
 import FieldLayoutToggle from './FieldLayoutToggle';
 import ExpandProposal from './ExpandProposal';
 import { useFieldLayout } from '@/lib/useFieldLayout';
-import { expandField, type PrefillPhase } from '@/services/optimizeService';
+import { expandField, type PrefillPhase, type VeldKeuzes } from '@/services/optimizeService';
 import { getAiSettings, DEFAULT_AI_SETTINGS, type AiSettings } from '@/services/settingsService';
 import { structureFormat } from '@/lib/techniques';
 import { compactFieldLabel } from '@/lib/fieldLabel';
@@ -42,6 +42,72 @@ interface FieldBlockProps {
   proposal: { proposed: string; improvements: string[] } | null;
   onAccept: () => void;
   onReject: () => void;
+  /** Bij een beeldprompt: de vraag en de keuzes voor dit veld. */
+  choice?: { vraag: string; opties: string[] };
+  /** Zet een keuze in het veld. */
+  onPick?: (option: string) => void;
+  /** Zet terug wat er stond vóór de eerste keuze; alleen na een keuze. */
+  onUndo?: () => void;
+}
+
+/**
+ * De keuzes onder een veld van een beeldprompt: de vraag in de woorden van dit
+ * beeld en een paar knoppen. Een klik vervangt de tekst in het veld; Herstel zet
+ * terug wat er eerst stond.
+ */
+function FieldChoices({
+  name,
+  choice,
+  value,
+  onPick,
+  onUndo,
+}: {
+  name: string;
+  choice: { vraag: string; opties: string[] };
+  value: string;
+  onPick: (option: string) => void;
+  onUndo?: () => void;
+}) {
+  if (choice.opties.length === 0) return null;
+  const current = value.trim();
+  return (
+    <div className="mt-2">
+      {choice.vraag && (
+        <p className="text-sm text-slate-600 dark:text-slate-300">{choice.vraag}</p>
+      )}
+      <div role="group" aria-label={`Keuzes voor ${name}`} className="mt-1 flex flex-wrap gap-1.5">
+        {choice.opties.map((option) => {
+          const on = current === option;
+          return (
+            <button
+              key={option}
+              type="button"
+              aria-pressed={on}
+              onClick={() => onPick(option)}
+              className={clsx(
+                'min-h-9 max-w-full rounded-lg border px-2.5 py-1 text-left text-sm leading-snug transition-colors',
+                'focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500',
+                on
+                  ? 'border-rijksblauw-500 bg-rijksblauw-50 font-semibold text-rijksblauw-800 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-100'
+                  : 'border-slate-300 bg-white text-slate-700 hover:border-rijksblauw-300 hover:bg-rijksblauw-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700',
+              )}
+            >
+              {option}
+            </button>
+          );
+        })}
+        {onUndo && (
+          <button
+            type="button"
+            onClick={onUndo}
+            className="inline-flex min-h-9 items-center gap-1 rounded px-1.5 text-sm font-semibold text-rijksblauw-700 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 dark:text-rijksblauw-200"
+          >
+            <Undo2 size={14} aria-hidden="true" /> Herstel
+          </button>
+        )}
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -71,6 +137,9 @@ function FieldBlock({
   proposal,
   onAccept,
   onReject,
+  choice,
+  onPick,
+  onUndo,
 }: FieldBlockProps) {
   const fieldId = `${idPrefix}-${question.id}`;
   const active = expanding || proposal !== null;
@@ -156,11 +225,18 @@ function FieldBlock({
         placeholder={question.placeholder}
         onChange={(e) => onChange(e.target.value)}
       />
-      <div>
-        {meta?.note && filled && (
-          <p className="mt-1 flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
-            <Sparkles size={12} className="shrink-0" /> {meta.note}
-          </p>
+      <div className="min-w-0">
+        {/* De keuzes zeggen meer dan de toelichting van het voor-invullen, dus
+            staan ze op zijn plek. */}
+        {choice && choice.opties.length > 0 && onPick ? (
+          <FieldChoices name={name} choice={choice} value={value} onPick={onPick} onUndo={onUndo} />
+        ) : (
+          meta?.note &&
+          filled && (
+            <p className="mt-1 flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+              <Sparkles size={12} className="shrink-0" /> {meta.note}
+            </p>
+          )
         )}
       </div>
       <div className="min-w-0">
@@ -243,6 +319,10 @@ interface FollowUpQuestionsProps {
   showLetters?: boolean;
   /** Vraag om lege velden (na het voor-invullen door de AI). */
   askIfEmpty?: boolean;
+  /** Bij een beeldprompt: per veld een vraag en keuzes om aan te klikken. */
+  choices?: VeldKeuzes | null;
+  /** De keuzes worden nog bedacht. */
+  choicesLoading?: boolean;
 }
 
 /**
@@ -269,6 +349,8 @@ export default function FollowUpQuestions({
   heading,
   showLetters = true,
   askIfEmpty = false,
+  choices,
+  choicesLoading = false,
 }: FollowUpQuestionsProps) {
   const questions = technique.follow_up_questions;
   const total = questions.length;
@@ -291,6 +373,8 @@ export default function FollowUpQuestions({
     proposed: string;
     improvements: string[];
   } | null>(null);
+  // Wat er in een veld stond vóór de eerste klik op een keuze, voor Herstel.
+  const [beforePick, setBeforePick] = useState<Record<string, string>>({});
   // Eigen AI-voorkeuren; alleen gebruikt als de props niet zijn meegegeven.
   const [settings, setSettings] = useState<AiSettings>(DEFAULT_AI_SETTINGS);
 
@@ -299,6 +383,7 @@ export default function FollowUpQuestions({
     setStep(0);
     setReviewing(false);
     setProposal(null);
+    setBeforePick({});
   }, [technique.id]);
 
   // Laad de AI-instellingen zelf, zodat "Vul verder aan" ook werkt zonder props.
@@ -344,6 +429,53 @@ export default function FollowUpQuestions({
     // Zodra de gebruiker zelf typt, is de herkomst-badge niet meer accuraat.
     onUserEdit?.(id);
   }
+
+  /** Zelf getypt: Herstel zou dat wissen, dus die vervalt. */
+  function typeField(id: string, value: string) {
+    if (id in beforePick) {
+      setBeforePick((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+    }
+    editField(id, value);
+  }
+
+  /** Een keuze aangeklikt: die komt in het veld, en wat er stond onthouden we. */
+  function pickChoice(id: string, option: string) {
+    if ((answers[id] ?? '').trim() === option) return;
+    if (!(id in beforePick)) setBeforePick((prev) => ({ ...prev, [id]: answers[id] ?? '' }));
+    editField(id, option);
+  }
+
+  function undoChoice(id: string) {
+    const previous = beforePick[id];
+    if (previous === undefined) return;
+    setBeforePick((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    editField(id, previous);
+  }
+
+  /** De keuze-props voor één veld; leeg zonder keuzes. */
+  function choiceProps(id: string) {
+    const choice = choices?.[id];
+    if (!choice) return {};
+    return {
+      choice,
+      onPick: (option: string) => pickChoice(id, option),
+      onUndo: id in beforePick ? () => undoChoice(id) : undefined,
+    };
+  }
+
+  const choicesNote = choicesLoading ? (
+    <span role="status" className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 dark:text-slate-400">
+      <Loader2 size={12} className="animate-spin" aria-hidden="true" /> Keuzes per veld worden bedacht
+    </span>
+  ) : null;
 
   /**
    * "Vul verder aan": laat de AI de tekst van één veld verbeteren, toegespitst op
@@ -422,6 +554,7 @@ export default function FollowUpQuestions({
             <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
               {answeredCount} van {total} ingevuld, leeg laten mag
             </span>
+            {choicesNote}
           </div>
           <FieldLayoutToggle layout={layout} onChange={setLayout} />
         </div>
@@ -435,13 +568,14 @@ export default function FollowUpQuestions({
               idPrefix="fu-stacked"
               marker={fieldMarker(i)}
               askIfEmpty={askIfEmpty}
-              onChange={(v) => editField(q.id, v)}
+              onChange={(v) => typeField(q.id, v)}
               onExpand={() => handleExpand(q)}
               expanding={expandingId === q.id}
               busy={expandingId !== null}
               proposal={proposal?.fieldId === q.id ? proposal : null}
               onAccept={acceptProposal}
               onReject={rejectProposal}
+              {...choiceProps(q.id)}
             />
           ))}
         </div>
@@ -458,7 +592,7 @@ export default function FollowUpQuestions({
   const currentMeta = fieldMeta?.[current?.id ?? ''];
 
   function update(value: string) {
-    editField(current.id, value);
+    typeField(current.id, value);
   }
 
   function next() {
@@ -555,6 +689,7 @@ export default function FollowUpQuestions({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2 [&>div:first-child]:mb-0">
         {heading ?? <span />}
+        {choicesNote}
         <FieldLayoutToggle layout={layout} onChange={setLayout} />
       </div>
       {/* Voortgang */}
@@ -603,6 +738,7 @@ export default function FollowUpQuestions({
           proposal={proposal?.fieldId === current.id ? proposal : null}
           onAccept={acceptProposal}
           onReject={rejectProposal}
+          {...choiceProps(current.id)}
         />
       </div>
 

@@ -67,7 +67,8 @@ type Mode =
   | 'stepback-ladder'
   | 'rubric-propose'
   | 'skill-draft'
-  | 'skill-trigger';
+  | 'skill-trigger'
+  | 'image-options';
 
 /**
  * Eén beurt in een chatgesprek. De chat-modus stuurt de volledige (al
@@ -6999,6 +7000,8 @@ const MODE_MAX_TOKENS: Record<Mode, number> = {
   'refine-suggest': 768,
   // Prefill vult álle velden van een raamwerk in één keer en mag detailrijk zijn.
   prefill: 8192,
+  // Keuzes bij een beeldprompt: negen velden met elk een vraag en drie korte keuzes.
+  'image-options': 1536,
   'meta-build': 4096,
   'fewshot-extract': 4096,
   plan: 3072,
@@ -9659,6 +9662,111 @@ function withBeeldStijl(system: string, beeld?: RequestBody['beeld']): string {
   return `${system}\n\n${IMAGE_STYLE_BLOCK.replace('{{stijl}}', () => stijl)}`;
 }
 
+/**
+ * Keuzes per veld bij een beeldprompt (mode image-options). Draait naast het
+ * voor-invullen: de medewerker ziet bij elk veld een vraag en drie keuzes die bij
+ * zijn soort beeld horen, als inspiratie. Een keuze moet iets zijn wat de
+ * beeldgenerator kan uitvoeren; een doel zonder gevolg voor het beeld is ruis.
+ */
+let IMAGE_OPTIONS_SYSTEM_PROMPT = `Je bedenkt per veld van een beeldprompt drie keuzes, zodat een medewerker ziet welke kanten zijn beeld op kan.
+
+<taak>
+1. Bepaal wat voor beeld de medewerker wil maken, zoals een schilderij, een affiche, een foto bij een bericht of een icoon. Zet dat in "soort".
+2. Geef per veld één vraag en drie keuzes die bij die soort beeld horen.
+</taak>
+
+<regels_voor_keuzes>
+- Elke keuze is een aanwijzing die een beeldgenerator kan uitvoeren. Hij noemt iets wat je in het beeld ziet: techniek, materiaal, kleur, licht, afstand, plek, houding of wat er gebeurt.
+- Een keuze zonder gevolg voor het beeld is fout. Zet daarom bij het doel achter de plek wat die plek van het beeld vraagt.
+  fout: "als cadeau"
+  goed: "op een verjaardagskaart: klein formaat, vrolijk, één duidelijk figuur"
+- De drie keuzes zijn echt verschillend, geen drie varianten van hetzelfde.
+- Een keuze is één korte regel zonder punt aan het eind.
+- Blijf in de wereld van het verzoek. Bij een schilderij gaat het over schildertechniek en doek, bij een affiche over lezen op afstand, bij een foto over camera en licht.
+- Staat er voor een veld al iets in het verzoek, geef dan drie verfijningen daarvan.
+- Tekst in beeld: verzin geen woorden. Gebruik alleen woorden die in het verzoek staan. Noemt het verzoek geen woorden, beschrijf dan plek en vorm, met [tekst] op de plaats van de woorden, zoals "een korte kop onderaan: [tekst]". Past tekst niet bij deze soort beeld, geef dan "opties": [].
+- Niet in beeld: noem dingen die juist dit beeld kunnen bederven, zoals "geen moderne gebouwen" bij een historisch tafereel. Watermerk, logo's en merknamen staan al vast en zijn dus nooit een keuze.
+  fout: "geen logo's of watermerken"
+  goed: "geen auto's op het fietspad"
+- Formaat: kies uit vierkant (1:1), liggend (3:2) en staand (2:3) en zeg erbij waarvoor, zoals "staand (2:3), voor een affiche in de gang".
+- Geen namen van bestaande kunstenaars, merken of echte personen.
+- Staat er onder deze instructie een vaste beeldstijl, geef bij het veld voor de stijl dan "opties": [] en houd de keuzes voor licht en kleur binnen die beeldstijl. Herhaal geen eisen uit de beeldstijl als keuze.
+</regels_voor_keuzes>
+
+<regels_voor_vragen>
+- De vraag is gericht aan de medewerker, gaat over dit beeld en eindigt op een vraagteken.
+- Gebruik de soort beeld in de vraag, zoals "Waar komt het affiche te hangen?"
+</regels_voor_vragen>
+
+<taal>
+Schrijf natuurlijk Nederlands, geen vertaald Engels. Zet nooit een gedachtestreepje tussen zinsdelen; gebruik een komma of een dubbele punt.
+</taal>
+
+<uitvoer>
+Geef alleen geldige JSON terug, in precies deze vorm:
+{"soort":"<wat voor beeld, in een paar woorden>","velden":[{"id":"<veld-id>","vraag":"<vraag aan de medewerker>","opties":["<keuze>","<keuze>","<keuze>"]}]}
+Neem elk veld-id uit de lijst precies één keer op, in dezelfde volgorde.
+</uitvoer>`;
+
+/** Wat de medewerker wil en welke velden er zijn, voor image-options. */
+function IMAGE_OPTIONS_USER_PROMPT(ownPrompt: string, fields: AnalyzeField[]): string {
+  return (
+    `VELDEN VAN DE BEELDPROMPT:\n` +
+    fields.map((f) => `- id: ${f.id} | ${f.label}`).join('\n') +
+    `\n\nWAT DE MEDEWERKER WIL:\n"""\n${ownPrompt}\n"""`
+  );
+}
+
+/** Eén veld met keuzes uit image-options. */
+interface ImageOptionField {
+  id: string;
+  vraag: string;
+  opties: string[];
+}
+
+/** Hoogstens zoveel keuzes per veld. */
+const MAX_IMAGE_OPTIONS = 4;
+
+/**
+ * Leest het antwoord van image-options. Een keuze die het model als object
+ * teruggeeft, wordt tekst; dubbele en lege keuzes vallen weg. Null als er geen
+ * enkel bruikbaar veld in staat.
+ */
+function parseImageOptions(
+  raw: string,
+  fields: AnalyzeField[],
+): { soort: string; velden: ImageOptionField[] } | null {
+  const byId = new Map(fields.map((f) => [normalizeFieldId(f.id), f.id]));
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  try {
+    const parsed = JSON.parse(escapeRawControlChars(match[0])) as {
+      soort?: unknown;
+      velden?: Array<{ id?: unknown; vraag?: unknown; opties?: unknown }>;
+    };
+    const seen = new Set<string>();
+    const velden = (Array.isArray(parsed.velden) ? parsed.velden : [])
+      .map((v): ImageOptionField | null => {
+        const id = typeof v?.id === 'string' ? byId.get(normalizeFieldId(v.id)) : undefined;
+        if (!id || seen.has(id)) return null;
+        seen.add(id);
+        const opties = (Array.isArray(v.opties) ? v.opties : [])
+          .map((o) => coerceFieldValue(o))
+          .filter((o): o is string => Boolean(o))
+          .map((o) => stripEmphasis(o).replace(/\s+/g, ' ').trim().replace(/\.$/, ''))
+          .filter((o, i, all) => o && all.findIndex((x) => x.toLowerCase() === o.toLowerCase()) === i)
+          .slice(0, MAX_IMAGE_OPTIONS);
+        const vraag = typeof v.vraag === 'string' ? stripEmphasis(v.vraag).trim() : '';
+        return { id, vraag, opties };
+      })
+      .filter((v): v is ImageOptionField => v !== null && (v.opties.length > 0 || v.vraag !== ''));
+    if (velden.length === 0) return null;
+    return { soort: typeof parsed.soort === 'string' ? parsed.soort.trim() : '', velden };
+  } catch {
+    return null;
+  }
+}
+
 // --- Prompts in Beheer ---
 // Elke systeemprompt hieronder is in Beheer, Prompts te bewerken. De tekst in
 // deze code is de standaard; een eigen versie staat in app_settings onder
@@ -9731,6 +9839,7 @@ const PROMPT_CATALOG: PromptCatalogEntry[] = [
   { id: 'STEP_BACK_SYSTEM_PROMPT', groep: "Techniekbouwers", titel: "Step-back: ladder", uitleg: "Bouwt de abstractieladder bij Step-back.", get: () => STEP_BACK_SYSTEM_PROMPT, set: (v) => { STEP_BACK_SYSTEM_PROMPT = v; } },
   { id: 'RUBRIC_CRITERIA_PROMPT', groep: "Techniekbouwers", titel: "Rubric: criteria voorstellen", uitleg: "Stelt criteria voor een toetsingskader voor. {{sleutels}} wordt de lijst schaalpunten, {{sleutels_json}} het JSON-sjabloon per schaalpunt.", get: () => RUBRIC_CRITERIA_PROMPT, set: (v) => { RUBRIC_CRITERIA_PROMPT = v; } },
   { id: 'IMAGE_SYSTEM_PROMPT', groep: "Afbeelding", titel: "Beeldprompt schrijven", uitleg: "Schrijft bij Afbeelding de beeldprompt die de medewerker in ChatGPT of Copilot plakt. Vervangt daar de hoofdprompt, de toon en de lengteregel. De vaste beeldstijl komt eronder.", get: () => IMAGE_SYSTEM_PROMPT, set: (v) => { IMAGE_SYSTEM_PROMPT = v; } },
+  { id: 'IMAGE_OPTIONS_SYSTEM_PROMPT', groep: "Afbeelding", titel: "Keuzes per veld", uitleg: "Bedenkt bij Afbeelding per veld een vraag en drie keuzes die bij de soort beeld passen, als inspiratie onder het veld.", get: () => IMAGE_OPTIONS_SYSTEM_PROMPT, set: (v) => { IMAGE_OPTIONS_SYSTEM_PROMPT = v; } },
   { id: 'IMAGE_PREFILL_INSTRUCTION', groep: "Afbeelding", titel: "Velden van een beeldprompt invullen", uitleg: "Komt vóór \"Velden voor-invullen\" bij Afbeelding: lege onderdelen krijgen een voorstel, met een andere keuze in de toelichting.", get: () => IMAGE_PREFILL_INSTRUCTION, set: (v) => { IMAGE_PREFILL_INSTRUCTION = v; } },
   { id: 'IMAGE_STYLE_BLOCK', groep: "Afbeelding", titel: "Vaste beeldstijl toepassen", uitleg: "Hoe een vaste beeldstijl meegaat bij het invullen en het schrijven. {{stijl}} wordt de Rijkshuisstijl of de instructie van het gekozen project.", get: () => IMAGE_STYLE_BLOCK, set: (v) => { IMAGE_STYLE_BLOCK = v; } },
   { id: 'RIJKSHUISSTIJL_BEELD', groep: "Afbeelding", titel: "Beeldstijl: Rijkshuisstijl", uitleg: "De beeldstijl bij de keuze Rijkshuisstijl: kleuren met hun code, illustratie of foto, kader, sfeer en wat er nooit in mag.", get: () => RIJKSHUISSTIJL_BEELD, set: (v) => { RIJKSHUISSTIJL_BEELD = v; } },
@@ -10062,7 +10171,9 @@ Deno.serve(async (req: Request) => {
                                                       ? 'skill-draft'
                                                       : body.mode === 'skill-trigger'
                                                         ? 'skill-trigger'
-                                                        : 'generate';
+                                                        : body.mode === 'image-options'
+                                                          ? 'image-options'
+                                                          : 'generate';
     const order = buildOrder(body.preferredProvider);
     const temperature = clampTemp(body.temperature);
     // Uitvoerbudget van deze modus: bepaalt het max_tokens-plafond van elke
@@ -12217,6 +12328,45 @@ Deno.serve(async (req: Request) => {
     }
 
     // --- Skill Creator: testverzoeken bedenken, of de beschrijving aanscherpen ---
+    // --- Keuzes per veld bij een beeldprompt ---
+    if (mode === 'image-options') {
+      const ownPrompt = body.ownPrompt?.trim();
+      const fields = Array.isArray(body.analyzeFields) ? body.analyzeFields : [];
+      if (!ownPrompt || fields.length === 0) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'ownPrompt en analyzeFields zijn verplicht' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+      const system = withBeeldStijl(IMAGE_OPTIONS_SYSTEM_PROMPT, body.beeld);
+      const userMessage = IMAGE_OPTIONS_USER_PROMPT(ownPrompt, fields);
+      for (const candidate of order) {
+        try {
+          const raw = await JSON_PROVIDERS[candidate](
+            userMessage,
+            system,
+            0.7,
+            resolveModel(candidate, body.preferredProvider, body.preferredModel),
+            maxTokens,
+          );
+          const parsed = parseImageOptions(raw, fields);
+          if (parsed) {
+            return new Response(
+              JSON.stringify({ success: true, ...parsed, provider: candidate }),
+              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            );
+          }
+          console.warn(`${candidate} (image-options) gaf geen bruikbare keuzes`);
+        } catch (providerErr) {
+          console.error(`${candidate} (image-options) mislukt, probeer volgende:`, providerErr);
+        }
+      }
+      return new Response(
+        JSON.stringify({ success: false, error: 'De keuzes konden niet worden bedacht' }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
     if (mode === 'skill-trigger') {
       const beschrijving = body.skillBeschrijving?.trim();
       if (!beschrijving) {
