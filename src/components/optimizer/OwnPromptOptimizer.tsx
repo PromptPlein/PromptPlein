@@ -31,6 +31,8 @@ import { compactFieldLabel } from '@/lib/fieldLabel';
 import { techniekKaart } from '@/lib/techniekDoelen';
 import PrefillSources from '@/components/optimizer/PrefillSources';
 import BeeldSpiekkaart from '@/components/optimizer/BeeldSpiekkaart';
+import VoorbeeldStijl, { type Voorbeeld } from '@/components/optimizer/VoorbeeldStijl';
+import { fileToJpegDataUrl } from '@/lib/imageResize';
 import { PROMPT_CATEGORIES } from '@/data/promptCategories';
 import { PROMPT_EXAMPLES } from '@/data/promptExamples';
 import {
@@ -46,6 +48,7 @@ import { stripMarkdown, copyToClipboard } from '@/lib/utils';
 import {
   fetchImageOptions,
   generatePrompt,
+  readImageStyle,
   prefillFields,
   recommendFramework,
   type BeeldKeuze,
@@ -86,7 +89,7 @@ export interface OwnPromptRestore {
   keuzes?: VeldKeuzes | null;
 }
 
-/** De stijl bij Afbeelding: vrij, de Rijkshuisstijl, of die uit een project. */
+/** De stijl bij Afbeelding: vrij, de Rijkshuisstijl, uit een project of van een voorbeeldbeeld. */
 type BeeldStijl = BeeldKeuze['stijl'];
 
 /** Per browser onthouden, zodat wie altijd in huisstijl werkt dat één keer kiest. */
@@ -95,9 +98,37 @@ const BEELD_STIJL_KEY = 'opl.beeld.stijl';
 function readBeeldStijl(): BeeldStijl {
   try {
     const v = localStorage.getItem(BEELD_STIJL_KEY);
-    return v === 'rijkshuisstijl' || v === 'project' ? v : 'vrij';
+    return v === 'rijkshuisstijl' || v === 'project' || v === 'voorbeeld' ? v : 'vrij';
   } catch {
     return 'vrij';
+  }
+}
+
+/**
+ * De stijl die uit een voorbeeldbeeld is gelezen, per browser onthouden. Alleen
+ * de tekst: het beeld zelf bewaren we niet.
+ */
+const BEELD_VOORBEELD_KEY = 'opl.beeld.voorbeeld';
+
+function readVoorbeeld(): Voorbeeld | null {
+  try {
+    const raw = localStorage.getItem(BEELD_VOORBEELD_KEY);
+    if (!raw) return null;
+    const v = JSON.parse(raw) as { naam?: unknown; tekst?: unknown };
+    return typeof v.tekst === 'string' && v.tekst.trim()
+      ? { naam: typeof v.naam === 'string' ? v.naam : '', tekst: v.tekst }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeVoorbeeld(v: Voorbeeld | null) {
+  try {
+    if (v) localStorage.setItem(BEELD_VOORBEELD_KEY, JSON.stringify({ naam: v.naam, tekst: v.tekst }));
+    else localStorage.removeItem(BEELD_VOORBEELD_KEY);
+  } catch {
+    // Zonder opslag geldt de stijl alleen voor nu.
   }
 }
 
@@ -105,6 +136,7 @@ const BEELD_STIJLEN: { value: BeeldStijl; label: string; detail: string }[] = [
   { value: 'vrij', label: 'Vrij', detail: 'de AI kiest wat bij je beeld past' },
   { value: 'rijkshuisstijl', label: 'Rijkshuisstijl', detail: 'kleuren en beeldtaal van het Rijk' },
   { value: 'project', label: 'Uit een project', detail: 'je eigen vaste stijl' },
+  { value: 'voorbeeld', label: 'Van een voorbeeld', detail: 'de stijl van een beeld dat je mooi vindt' },
 ];
 
 interface OwnPromptOptimizerProps {
@@ -270,6 +302,11 @@ export default function OwnPromptOptimizer({
     restore?.beeldStijl ?? readBeeldStijl(),
   );
   const projectStijl = projectStyle?.text.trim() ? projectStyle : null;
+  // Van een voorbeeld: de stijl die de AI uit het toegevoegde beeld las.
+  const [voorbeeld, setVoorbeeldState] = useState<Voorbeeld | null>(readVoorbeeld);
+  const [voorbeeldBezig, setVoorbeeldBezig] = useState(false);
+  const voorbeeldInput = useRef<HTMLInputElement>(null);
+  const voorbeeldTekst = voorbeeld?.tekst.trim() ?? '';
   const beeld: BeeldKeuze | undefined =
     kind !== 'image'
       ? undefined
@@ -277,7 +314,11 @@ export default function OwnPromptOptimizer({
         ? projectStijl
           ? { stijl: 'project', stijlTekst: projectStijl.text }
           : { stijl: 'vrij' }
-        : { stijl: beeldStijl };
+        : beeldStijl === 'voorbeeld'
+          ? voorbeeldTekst
+            ? { stijl: 'voorbeeld', stijlTekst: voorbeeldTekst }
+            : { stijl: 'vrij' }
+          : { stijl: beeldStijl };
   // Wie bij Afbeelding een project aanhaakt, wil daar de stijl van.
   const projectNaam = projectStijl?.name;
   useEffect(() => {
@@ -459,6 +500,48 @@ export default function OwnPromptOptimizer({
     } catch {
       // Zonder opslag geldt de keuze alleen voor nu.
     }
+    resetDownstream();
+  }
+
+  function setVoorbeeld(next: Voorbeeld | null) {
+    setVoorbeeldState(next);
+    writeVoorbeeld(next);
+  }
+
+  /**
+   * Opent de bestandskeuze voor een voorbeeldbeeld. Synchroon in de klik, anders
+   * houdt de browser het venster tegen; daarom staat het invoerveld hier en niet
+   * in VoorbeeldStijl, die er bij de eerste klik nog niet is.
+   */
+  function kiesVoorbeeld() {
+    handleBeeldStijl('voorbeeld');
+    voorbeeldInput.current?.click();
+  }
+
+  /** Een beeld gekozen: verkleinen, de stijl laten lezen en die tonen. */
+  async function handleVoorbeeldBestand(file: File | undefined) {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('Kies een afbeelding, zoals een jpg of png.');
+      return;
+    }
+    let dataUrl: string;
+    try {
+      dataUrl = await fileToJpegDataUrl(file);
+    } catch {
+      toast.error('Dit beeld kan de browser niet openen. Probeer een jpg of png.');
+      return;
+    }
+    setVoorbeeldBezig(true);
+    setVoorbeeldState({ naam: '', tekst: '', beeld: dataUrl });
+    const res = await readImageStyle(dataUrl);
+    setVoorbeeldBezig(false);
+    if ('error' in res) {
+      toast.error(res.error);
+      setVoorbeeld(voorbeeld);
+      return;
+    }
+    setVoorbeeld({ naam: res.naam, tekst: res.stijlTekst, beeld: dataUrl });
     resetDownstream();
   }
 
@@ -966,12 +1049,16 @@ export default function OwnPromptOptimizer({
                 <div
                   role="radiogroup"
                   aria-label="Welke stijl?"
-                  className="grid min-w-0 flex-1 grid-cols-1 gap-2 sm:grid-cols-3"
+                  className="grid min-w-0 flex-1 grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4"
                 >
                   {BEELD_STIJLEN.map((option) => {
                     const active = beeldStijl === option.value;
                     const detail =
-                      option.value === 'project' && projectStijl ? projectStijl.name : option.detail;
+                      option.value === 'project' && projectStijl
+                        ? projectStijl.name
+                        : option.value === 'voorbeeld' && voorbeeld?.naam
+                          ? voorbeeld.naam
+                          : option.detail;
                     return (
                       <button
                         key={option.value}
@@ -1027,6 +1114,28 @@ export default function OwnPromptOptimizer({
                   })}
                 </div>
               )}
+              {beeldStijl === 'voorbeeld' && (
+                <VoorbeeldStijl
+                  voorbeeld={voorbeeld}
+                  bezig={voorbeeldBezig}
+                  onKies={kiesVoorbeeld}
+                  onTekst={(tekst) => setVoorbeeld(voorbeeld ? { ...voorbeeld, tekst } : { naam: '', tekst })}
+                  onWis={() => setVoorbeeld(null)}
+                />
+              )}
+              <input
+                ref={voorbeeldInput}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/*"
+                className="hidden"
+                tabIndex={-1}
+                aria-hidden="true"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = '';
+                  void handleVoorbeeldBestand(file);
+                }}
+              />
             </div>
           )}
 
@@ -1047,7 +1156,7 @@ export default function OwnPromptOptimizer({
 
         </div>
         <VerantwoordGebruikHint text={promptText} />
-        {kind === 'image' && <BeeldSpiekkaart />}
+        {kind === 'image' && <BeeldSpiekkaart onVoorbeeld={kiesVoorbeeld} />}
         <div className="mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5">
           <span className="text-sm text-slate-600 dark:text-slate-300">
             {kind === 'skill'
@@ -1175,7 +1284,9 @@ export default function OwnPromptOptimizer({
                 <strong className="font-semibold text-slate-800 dark:text-slate-100">Vaste stijl: </strong>
                 {beeld.stijl === 'rijkshuisstijl'
                   ? 'Rijkshuisstijl. Die gaat altijd mee; jij kiest het onderwerp.'
-                  : `de stijl van ${projectStijl?.name ?? 'je project'}. Die gaat altijd mee; jij kiest het onderwerp.`}
+                  : beeld.stijl === 'voorbeeld'
+                    ? `de stijl van je voorbeeld${voorbeeld?.naam ? ` (${voorbeeld.naam})` : ''}. Die gaat altijd mee; jij kiest het onderwerp.`
+                    : `de stijl van ${projectStijl?.name ?? 'je project'}. Die gaat altijd mee; jij kiest het onderwerp.`}
               </p>
             )}
 

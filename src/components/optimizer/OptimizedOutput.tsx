@@ -160,10 +160,9 @@ export default function OptimizedOutput({
 
       {image ? (
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          Plak deze prompt in een beeldgenerator, zoals ChatGPT of Copilot. Heb je een beeld dat je
-          mooi vindt? Voeg het daar toe en schrijf erbij: neem de stijl over, niet het onderwerp. Wil
-          je elke keer dezelfde stijl, zet hem dan in een project en kies dat project hier met
-          Context.
+          Plak deze prompt in een beeldgenerator, zoals ChatGPT of Copilot. Wil je elke keer dezelfde
+          stijl, zet die dan in de instructie van een project en kies bij Welke stijl de optie Uit een
+          project.
         </p>
       ) : skill ? (
         <p className="text-sm text-slate-500 dark:text-slate-400">

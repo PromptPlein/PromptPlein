@@ -434,13 +434,13 @@ en antwoord op één lijn beginnen.
 
 Eén edge function, `optimize-prompt`, ongeveer 8000 regels, met een
 `mode`-veld in de body als router. Nieuwe AI-functionaliteit wordt een nieuwe
-mode in dat bestand, niet een nieuwe function. De 43 modes, gegroepeerd:
+mode in dat bestand, niet een nieuwe function. De 44 modes, gegroepeerd:
 
 | Groep | Modes |
 | --- | --- |
 | Streamende vrije tekst | `generate`, `execute`, `chat` |
 | Techniek- en frameworkkeuze | `recommend`, `recommend-framework`, `framework-fit`, `technique-advisor` |
-| Veldhulp in de bouwer | `analyze`, `prefill`, `expand-field`, `title`, `metadata`, `image-options` |
+| Veldhulp in de bouwer | `analyze`, `prefill`, `expand-field`, `title`, `metadata`, `image-options`, `image-style` |
 | PlanWizard | `plan`, `plan-step`, `plan-step-analyze`, `clarify`, `assumption-check` |
 | Techniekbouwers | `persona-fill`, `fewshot-example`, `fewshot-extract`, `meta-build`, `cove-scan`, `stepback-ladder`, `rubric-propose`, `skill-draft`, `skill-trigger` |
 | Chat en projecten | `chat-optimize`, `project-optimize`, `project-brief`, `project-interview`, `project-prompt`, `context-interview`, `context-prompt`, `chat-intake`, `chat-intake-check`, `memory-save`, `memory-search` |
@@ -687,6 +687,13 @@ doorvragen, één veld tegelijk. Elke keuze moet iets zijn wat de beeldgenerator
 een doel zonder gevolg voor het beeld is ruis, keuze van de eigenaar. Context staat bij
 Afbeelding niet boven het tekstvak; de knop Project kiezen verschijnt pas bij Uit een project,
 en dan zonder bronbestanden, want alleen de projectinstructie gaat mee.
+
+Van een voorbeeld is de vierde stijl: de gebruiker voegt een beeld toe, de browser verkleint het
+tot 1024 pixels en `image-style` laat Mistral Small 4 de stijl lezen (stijl, kleuren met code,
+licht, kader, sfeer, details), zonder het onderwerp. Die tekst is te bewerken en gaat mee zoals een
+projectinstructie. Het beeld wordt nergens bewaard; alleen de tekst staat per browser in
+localStorage (`opl.beeld.voorbeeld`). Dit is de enige plek waar een beeld naar Mistral gaat
+(`runMistralVision`).
 
 Elk HTML-bestand in de chat wordt na het schrijven onzichtbaar en afgeschermd
 gedraaid (`src/lib/fileCheck.ts`); scriptfouten komen met regelnummer op de

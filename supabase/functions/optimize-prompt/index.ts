@@ -68,7 +68,8 @@ type Mode =
   | 'rubric-propose'
   | 'skill-draft'
   | 'skill-trigger'
-  | 'image-options';
+  | 'image-options'
+  | 'image-style';
 
 /**
  * Eén beurt in een chatgesprek. De chat-modus stuurt de volledige (al
@@ -361,7 +362,9 @@ interface RequestBody {
    * in `stijlTekst`. Zolang dit er staat, gaat de projectcontext niet via
    * withProject mee: bij een beeld is het project de stijl, geen onderwerp.
    */
-  beeld?: { stijl?: 'vrij' | 'rijkshuisstijl' | 'project'; stijlTekst?: string };
+  beeld?: { stijl?: 'vrij' | 'rijkshuisstijl' | 'project' | 'voorbeeld'; stijlTekst?: string };
+  /** image-style: het voorbeeldbeeld als data-URL (jpeg, png of webp). */
+  voorbeeldBeeld?: string;
   // 'title'-velden: vat een gegenereerde template samen tot een korte titel.
   templateContent?: string;
   // 'metadata'-velden: stel titel + omschrijving + best passende categorie voor.
@@ -7002,6 +7005,8 @@ const MODE_MAX_TOKENS: Record<Mode, number> = {
   prefill: 8192,
   // Keuzes bij een beeldprompt: negen velden met elk een vraag en drie korte keuzes.
   'image-options': 1536,
+  // De stijl van een voorbeeldbeeld: een naam en zes korte regels.
+  'image-style': 1024,
   'meta-build': 4096,
   'fewshot-extract': 4096,
   plan: 3072,
@@ -9655,7 +9660,7 @@ function withBeeldStijl(system: string, beeld?: RequestBody['beeld']): string {
   const stijl =
     beeld?.stijl === 'rijkshuisstijl'
       ? RIJKSHUISSTIJL_BEELD
-      : beeld?.stijl === 'project'
+      : beeld?.stijl === 'project' || beeld?.stijl === 'voorbeeld'
         ? (beeld.stijlTekst ?? '').trim().slice(0, MAX_BEELDSTIJL_CHARS)
         : '';
   if (!stijl) return system;
@@ -9707,6 +9712,127 @@ Geef alleen geldige JSON terug, in precies deze vorm:
 {"soort":"<wat voor beeld, in een paar woorden>","velden":[{"id":"<veld-id>","vraag":"<vraag aan de medewerker>","opties":["<keuze>","<keuze>","<keuze>"]}]}
 Neem elk veld-id uit de lijst precies één keer op, in dezelfde volgorde.
 </uitvoer>`;
+
+/**
+ * De stijl van een voorbeeldbeeld (mode image-style). Wie een beeld mooi vindt,
+ * voegt het toe; de beschrijving gaat daarna als vaste beeldstijl mee, net als
+ * de instructie van een project. Alleen hoe het beeld gemaakt is, nooit wat
+ * erop staat: anders komt het onderwerp van het voorbeeld in elk nieuw beeld.
+ */
+let IMAGE_STYLE_FROM_EXAMPLE_PROMPT = `Je beschrijft de beeldstijl van een voorbeeldbeeld, zodat een beeldgenerator nieuwe beelden in dezelfde stijl kan maken met een ander onderwerp.
+
+<taak>
+Kijk naar hoe het beeld gemaakt is, niet naar wat erop staat. Beschrijf de stijl in zes regels: stijl, kleuren, licht, kader, sfeer en details.
+</taak>
+
+<regels>
+- stijl: foto, illustratie, schilderij, 3D of iets anders, met de techniek, zoals "aquarel op ruw papier" of "vlakke illustratie met dikke contouren".
+- kleuren: de drie tot vijf kleuren die het beeld bepalen, elk met een naam en een geschatte hexcode, zoals "oker (#C8962E)". Zeg welke kleur de hoofdkleur is.
+- licht: soort licht, richting en schaduw.
+- kader: afstand, standpunt en hoe het beeld is opgebouwd.
+- sfeer: het gevoel in een paar woorden.
+- details: lijnen, textuur, korrel en hoeveel detail.
+- Noem het onderwerp niet. Schrijf dus niet wie of wat er op staat, en neem geen tekst, logo, merk of naam uit het beeld over.
+- Noem nergens lichaamsdelen (hoofd, gezicht, kin, borst, huid, haar), kleding, dieren, planten of voorwerpen uit het beeld. Schrijf daarvoor "het onderwerp" of "de achtergrond".
+- Staand, liggend of vierkant lees je af aan de verhouding van het beeld.
+- Noem geen bestaande kunstenaar of maker.
+- Schrijf elke regel als aanwijzing die een beeldgenerator kan uitvoeren, zonder oordeel zoals "mooi" of "sterk".
+</regels>
+
+<taal>
+Schrijf natuurlijk Nederlands, geen vertaald Engels. Zet nooit een gedachtestreepje tussen zinsdelen; gebruik een komma of een dubbele punt.
+</taal>
+
+<uitvoer>
+Geef alleen geldige JSON terug, in precies deze vorm:
+{"naam":"<de stijl in hoogstens zes woorden>","stijl":"<regel>","kleuren":"<regel>","licht":"<regel>","kader":"<regel>","sfeer":"<regel>","details":"<regel>"}
+Is er geen beeld te zien, geef dan {"naam":"","stijl":""}.
+</uitvoer>`;
+
+/** Zo groot mag een voorbeeldbeeld als data-URL zijn; de client verkleint het eerst. */
+const MAX_VOORBEELD_CHARS = 4_000_000;
+
+/** Volgorde van de regels in de beschreven stijl, met hun kop. */
+const STIJL_REGELS: [string, string][] = [
+  ['stijl', 'Stijl'],
+  ['kleuren', 'Kleuren'],
+  ['licht', 'Licht'],
+  ['kader', 'Kader'],
+  ['sfeer', 'Sfeer'],
+  ['details', 'Details'],
+];
+
+/** Zet het antwoord van image-style om naar de tekst van een vaste beeldstijl. */
+function parseImageStyle(raw: string): { naam: string; stijlTekst: string } | null {
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  try {
+    const parsed = JSON.parse(escapeRawControlChars(match[0])) as Record<string, unknown>;
+    const regels = STIJL_REGELS.map(([key, kop]) => {
+      const text = coerceFieldValue(parsed[key]);
+      const clean = text ? stripEmphasis(text).replace(/\s+/g, ' ').trim() : '';
+      return clean ? `- ${kop}: ${clean}` : null;
+    }).filter((r): r is string => r !== null);
+    if (regels.length < 2) return null;
+    const naam = typeof parsed.naam === 'string' ? stripEmphasis(parsed.naam).trim() : '';
+    return {
+      naam,
+      stijlTekst: `Beeldstijl${naam ? `: ${naam}` : ''}\n${regels.join('\n')}`,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Eén aanroep met een beeld erbij. Bewust los van runOpenAiCompatible: dit is
+ * de enige plek waar een beeld meegaat, en het antwoord is kort JSON.
+ */
+async function runMistralVision(
+  system: string,
+  text: string,
+  imageDataUrl: string,
+  model: string,
+  maxTokens: number,
+): Promise<string> {
+  const apiKey = Deno.env.get('MISTRAL_API_KEY');
+  if (!apiKey) throw new Error('MISTRAL_API_KEY ontbreekt');
+  const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model,
+      temperature: 0.3,
+      max_tokens: maxTokens,
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: system },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text },
+            { type: 'image_url', image_url: imageDataUrl },
+          ],
+        },
+      ],
+    }),
+    signal: AbortSignal.timeout(45_000),
+  });
+  if (!response.ok) {
+    throw new Error(`Mistral ${response.status}: ${(await response.text()).slice(0, 300)}`);
+  }
+  const data = (await response.json()) as {
+    choices?: { message?: { content?: unknown } }[];
+  };
+  const content = data.choices?.[0]?.message?.content;
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    return content
+      .map((c) => (c && typeof (c as { text?: unknown }).text === 'string' ? (c as { text: string }).text : ''))
+      .join('');
+  }
+  return '';
+}
 
 /** Wat de medewerker wil en welke velden er zijn, voor image-options. */
 function IMAGE_OPTIONS_USER_PROMPT(ownPrompt: string, fields: AnalyzeField[]): string {
@@ -9839,6 +9965,7 @@ const PROMPT_CATALOG: PromptCatalogEntry[] = [
   { id: 'STEP_BACK_SYSTEM_PROMPT', groep: "Techniekbouwers", titel: "Step-back: ladder", uitleg: "Bouwt de abstractieladder bij Step-back.", get: () => STEP_BACK_SYSTEM_PROMPT, set: (v) => { STEP_BACK_SYSTEM_PROMPT = v; } },
   { id: 'RUBRIC_CRITERIA_PROMPT', groep: "Techniekbouwers", titel: "Rubric: criteria voorstellen", uitleg: "Stelt criteria voor een toetsingskader voor. {{sleutels}} wordt de lijst schaalpunten, {{sleutels_json}} het JSON-sjabloon per schaalpunt.", get: () => RUBRIC_CRITERIA_PROMPT, set: (v) => { RUBRIC_CRITERIA_PROMPT = v; } },
   { id: 'IMAGE_SYSTEM_PROMPT', groep: "Afbeelding", titel: "Beeldprompt schrijven", uitleg: "Schrijft bij Afbeelding de beeldprompt die de medewerker in ChatGPT of Copilot plakt. Vervangt daar de hoofdprompt, de toon en de lengteregel. De vaste beeldstijl komt eronder.", get: () => IMAGE_SYSTEM_PROMPT, set: (v) => { IMAGE_SYSTEM_PROMPT = v; } },
+  { id: 'IMAGE_STYLE_FROM_EXAMPLE_PROMPT', groep: "Afbeelding", titel: "Stijl uit een voorbeeldbeeld", uitleg: "Beschrijft bij Van een voorbeeld hoe het toegevoegde beeld gemaakt is (stijl, kleuren met code, licht, kader, sfeer, details), zonder het onderwerp. Die beschrijving gaat als vaste beeldstijl mee.", get: () => IMAGE_STYLE_FROM_EXAMPLE_PROMPT, set: (v) => { IMAGE_STYLE_FROM_EXAMPLE_PROMPT = v; } },
   { id: 'IMAGE_OPTIONS_SYSTEM_PROMPT', groep: "Afbeelding", titel: "Keuzes per veld", uitleg: "Bedenkt bij Afbeelding per veld een vraag en drie keuzes die bij de soort beeld passen, als inspiratie onder het veld.", get: () => IMAGE_OPTIONS_SYSTEM_PROMPT, set: (v) => { IMAGE_OPTIONS_SYSTEM_PROMPT = v; } },
   { id: 'IMAGE_PREFILL_INSTRUCTION', groep: "Afbeelding", titel: "Velden van een beeldprompt invullen", uitleg: "Komt vóór \"Velden voor-invullen\" bij Afbeelding: lege onderdelen krijgen een voorstel, met een andere keuze in de toelichting.", get: () => IMAGE_PREFILL_INSTRUCTION, set: (v) => { IMAGE_PREFILL_INSTRUCTION = v; } },
   { id: 'IMAGE_STYLE_BLOCK', groep: "Afbeelding", titel: "Vaste beeldstijl toepassen", uitleg: "Hoe een vaste beeldstijl meegaat bij het invullen en het schrijven. {{stijl}} wordt de Rijkshuisstijl of de instructie van het gekozen project.", get: () => IMAGE_STYLE_BLOCK, set: (v) => { IMAGE_STYLE_BLOCK = v; } },
@@ -10173,7 +10300,9 @@ Deno.serve(async (req: Request) => {
                                                         ? 'skill-trigger'
                                                         : body.mode === 'image-options'
                                                           ? 'image-options'
-                                                          : 'generate';
+                                                          : body.mode === 'image-style'
+                                                            ? 'image-style'
+                                                            : 'generate';
     const order = buildOrder(body.preferredProvider);
     const temperature = clampTemp(body.temperature);
     // Uitvoerbudget van deze modus: bepaalt het max_tokens-plafond van elke
@@ -12328,6 +12457,43 @@ Deno.serve(async (req: Request) => {
     }
 
     // --- Skill Creator: testverzoeken bedenken, of de beschrijving aanscherpen ---
+    // --- De stijl van een voorbeeldbeeld ---
+    if (mode === 'image-style') {
+      const beeld = typeof body.voorbeeldBeeld === 'string' ? body.voorbeeldBeeld : '';
+      if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(beeld) || beeld.length > MAX_VOORBEELD_CHARS) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Voeg een jpg-, png- of webp-beeld toe.' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+      // Small 4 ziet beelden; Medium 3.5 is de tweede kans.
+      for (const model of [MISTRAL_MODEL, 'mistral-medium-latest']) {
+        try {
+          const raw = await runMistralVision(
+            IMAGE_STYLE_FROM_EXAMPLE_PROMPT,
+            'Beschrijf de beeldstijl van dit voorbeeld.',
+            beeld,
+            model,
+            maxTokens,
+          );
+          const parsed = parseImageStyle(raw);
+          if (parsed) {
+            return new Response(
+              JSON.stringify({ success: true, ...parsed, provider: 'mistral', model }),
+              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            );
+          }
+          console.warn(`image-style: ${model} gaf geen bruikbare stijl`);
+        } catch (err) {
+          console.error(`image-style: ${model} mislukt:`, err);
+        }
+      }
+      return new Response(
+        JSON.stringify({ success: false, error: 'De stijl van dit beeld kon niet worden gelezen.' }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
     // --- Keuzes per veld bij een beeldprompt ---
     if (mode === 'image-options') {
       const ownPrompt = body.ownPrompt?.trim();

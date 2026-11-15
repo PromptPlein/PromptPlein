@@ -46,8 +46,45 @@ import type {
  * van een project in dezelfde stijl, met een ander onderwerp.
  */
 export interface BeeldKeuze {
-  stijl: 'vrij' | 'rijkshuisstijl' | 'project';
+  stijl: 'vrij' | 'rijkshuisstijl' | 'project' | 'voorbeeld';
   stijlTekst?: string;
+}
+
+/**
+ * Leest de stijl van een voorbeeldbeeld (mode image-style): hoe het gemaakt is,
+ * niet wat erop staat. Het beeld gaat alleen voor deze aanroep mee en wordt
+ * nergens bewaard. `dataUrl` is al verkleind, zie `fileToJpegDataUrl`.
+ */
+export async function readImageStyle(
+  dataUrl: string,
+): Promise<{ naam: string; stijlTekst: string } | { error: string }> {
+  const functionUrl = getFunctionUrl('optimize-prompt');
+  if (!isSupabaseConfigured || !functionUrl) {
+    return { error: 'Een voorbeeldbeeld lezen kan alleen met de AI aan.' };
+  }
+  try {
+    const anonKey = getAnonKey();
+    const response = await fetch(functionUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(anonKey ? { Authorization: `Bearer ${anonKey}`, apikey: anonKey } : {}),
+      },
+      body: JSON.stringify({ mode: 'image-style', voorbeeldBeeld: dataUrl }),
+    });
+    const data = (await response.json().catch(() => ({}))) as {
+      success?: boolean;
+      naam?: string;
+      stijlTekst?: string;
+      error?: string;
+    };
+    if (data.success && data.stijlTekst?.trim()) {
+      return { naam: data.naam?.trim() ?? '', stijlTekst: data.stijlTekst.trim() };
+    }
+    return { error: data.error ?? 'De stijl van dit beeld kon niet worden gelezen.' };
+  } catch {
+    return { error: 'De stijl van dit beeld kon niet worden gelezen. Probeer het opnieuw.' };
+  }
 }
 
 /** Bij Afbeelding: per veld een vraag en een paar keuzes die bij de soort beeld passen. */

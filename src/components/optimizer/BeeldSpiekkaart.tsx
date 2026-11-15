@@ -1,5 +1,6 @@
 import {
   Ban,
+  ImagePlus,
   Frame,
   MapPin,
   Palette,
@@ -34,7 +35,7 @@ const BOUWSTENEN: { naam: string; vraag: string; icon: LucideIcon }[] = [
  * vergeet de rest. De kaart staat er vóór het typen, zodat de wens meteen meer
  * zegt; wat de gebruiker openlaat, stelt de AI daarna per veld voor.
  */
-export default function BeeldSpiekkaart() {
+export default function BeeldSpiekkaart({ onVoorbeeld }: { onVoorbeeld?: () => void }) {
   return (
     <section
       aria-labelledby="beeld-spiekkaart-titel"
@@ -71,10 +72,21 @@ export default function BeeldSpiekkaart() {
           </li>
         ))}
       </ul>
-      <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">
-        Heb je een beeld dat je mooi vindt? Voeg het in de beeldgenerator toe en schrijf erbij: neem
-        de stijl over, niet het onderwerp.
-      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <p className="text-sm text-slate-600 dark:text-slate-300">
+          Heb je een beeld dat je mooi vindt? Voeg het toe, dan neemt de AI de stijl over en niet het
+          onderwerp.
+        </p>
+        {onVoorbeeld && (
+          <button
+            type="button"
+            onClick={onVoorbeeld}
+            className="opl-raak inline-flex items-center gap-1.5 text-sm font-semibold text-rijksblauw-700 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 dark:text-rijksblauw-200"
+          >
+            <ImagePlus size={15} aria-hidden="true" /> Voorbeeld toevoegen
+          </button>
+        )}
+      </div>
     </section>
   );
 }
