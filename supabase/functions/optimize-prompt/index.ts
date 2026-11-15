@@ -9567,8 +9567,10 @@ let IMAGE_SYSTEM_PROMPT = `Je schrijft voor een medewerker van de rijksoverheid 
 1. Lees de velden van de medewerker en de achtergrond. De velden zijn leidend.
 2. Bepaal eerst waar het beeld voor is. Een affiche vraagt een andere afwerking dan een schets voor een presentatie.
 3. Werk elk onderdeel van het uitvoersjabloon uit met zichtbare details: materialen, kleuren, vormen, houding en plek in het beeld. Ook de sfeer beschrijf je met wat je ziet, zoals licht, kleur en houding.
-4. Is een onderdeel leeg, kies dan zelf iets wat past bij het doel en het onderwerp. Laat geen onderdeel leeg en gebruik geen plaatshouders tussen vierkante haken.
-5. Staat er onder deze instructie een vaste beeldstijl, pas die dan toe zoals daar staat.
+4. Neem elk detail uit de velden over. Bij Kleuren komen alle kleuren die in de velden staan, ook die uit Stijl en uit Licht en sfeer.
+5. Een beeldgenerator maakt één beeld en kan niet kiezen. Schrijf daarom nooit twee mogelijkheden naast elkaar met "of", "bijvoorbeeld" of "zoals". Staan ze zo in een veld, neem dan de eerste en laat de rest weg.
+6. Is een onderdeel leeg, kies dan zelf iets wat past bij het doel en het onderwerp. Laat geen onderdeel leeg en gebruik geen plaatshouders tussen vierkante haken.
+7. Staat er onder deze instructie een vaste beeldstijl, pas die dan toe zoals daar staat.
 </werkwijze>
 
 <regels>
@@ -9641,12 +9643,14 @@ let RIJKSHUISSTIJL_BEELD = `Beeldstijl: Rijkshuisstijl
  * prompt-template is een eigen keuze hier geen gok maar het werk: de medewerker
  * ziet bij elk onderdeel een voorstel en denkt daarop verder.
  */
-let IMAGE_PREFILL_INSTRUCTION = `BELANGRIJK: DE MEDEWERKER MAAKT EEN BEELDPROMPT.
+let IMAGE_PREFILL_INSTRUCTION = `BELANGRIJK: DE MEDEWERKER MAAKT EEN BEELDPROMPT. Deze regels gaan voor de regels hierboven.
 De velden beschrijven één afbeelding. Wat de medewerker niet noemt, vul jij in met een concrete keuze die past bij het doel en het onderwerp. Die keuze is een voorstel waar de medewerker op verder denkt.
 
 <regels>
 - Schrijf per veld zichtbare details: wat er staat, waar, in welk licht en in welke kleuren. Een veld is één of twee zinnen.
+- Kies per veld één ding. Zet geen tweede mogelijkheid in een veld met "of", "bijvoorbeeld" of "zoals"; een beeldgenerator kan maar één ding maken. Andere mogelijkheden krijgt de medewerker apart onder het veld te zien.
 - Bij een veld dat je zelf invult zet je "source":"ai", en in "note" één andere keuze die ook kan, zoals "Of: van bovenaf, met meer lucht".
+- Een beeld hoeft niet over werk te gaan, en "intern gericht" geldt hier niet. Noemt de medewerker geen plek of doel, kies dan een plek die bij deze soort beeld hoort. Leid geen doel voor werk, overheid, een document, een presentatie of een campagne af uit het feit dat de medewerker bij de overheid werkt.
 - Tekst in beeld vul je alleen in als de medewerker woorden noemt die in het beeld moeten. Anders schrijf je "Geen tekst".
 - Staat er onder deze instructie een vaste beeldstijl, schrijf dan in het veld voor de stijl alleen wat de medewerker er deze keer zelf bij wil, of "Volgt de vaste beeldstijl". Licht en kleur vul je in binnen die beeldstijl.
 </regels>
@@ -9687,10 +9691,10 @@ let IMAGE_OPTIONS_SYSTEM_PROMPT = `Je bedenkt per veld van een beeldprompt drie 
 
 <regels_voor_keuzes>
 - Elke keuze is een aanwijzing die een beeldgenerator kan uitvoeren. Hij noemt iets wat je in het beeld ziet: techniek, materiaal, kleur, licht, afstand, plek, houding of wat er gebeurt.
-- Een keuze zonder gevolg voor het beeld is fout. Schrijf een keuze voor het doel daarom altijd in de vorm "<plek>: <formaat>, <sfeer>, <hoeveel detail>". Noem achter de dubbele punt geen onderwerp; dat staat in een ander veld.
+- Een keuze zonder gevolg voor het beeld is fout. Schrijf een keuze voor het doel daarom altijd in de vorm "<plek waar het beeld komt>: <van hoe ver je kijkt>, <sfeer>". Noem achter de dubbele punt geen onderwerp en geen formaat; die hebben een eigen veld. Het label van een doel is de plek.
 - De drie keuzes zijn echt verschillend, geen drie varianten van hetzelfde.
 - Een keuze is één korte regel zonder punt aan het eind.
-- Geef elke keuze ook een label van twee tot vier woorden dat de kern noemt, zonder punt. Het label staat op een knop; de keuze zelf gaat naar de beeldgenerator.
+- Geef elke keuze ook een label van twee tot vier woorden, zonder punt. Het label staat op een knop en moet zonder de keuze te begrijpen zijn: noem het concrete ding waarin de keuzes van elkaar verschillen. Bij het doel is dat de plek, bij licht het soort licht, bij stijl de techniek. Een label met alleen een gevoel of een abstract woord is fout.
 - Blijf in de wereld van het verzoek. Bij een schilderij gaat het over schildertechniek en doek, bij een affiche over lezen op afstand, bij een foto over camera en licht.
 - Staat er voor een veld al iets in het verzoek, geef dan drie verfijningen daarvan.
 - Tekst in beeld: verzin geen woorden. Gebruik alleen woorden die in het verzoek staan. Noemt het verzoek geen woorden, beschrijf dan plek en vorm, met [tekst] op de plaats van de woorden, zoals "een korte kop onderaan: [tekst]". Past tekst niet bij deze soort beeld, geef dan "opties": [].
@@ -10427,7 +10431,12 @@ Deno.serve(async (req: Request) => {
     //     raamwerk alvast voor (afgeleid uit de prompt of als AI-suggestie) ---
     if (mode === 'prefill') {
       const ownPrompt = body.ownPrompt?.trim();
-      const fields = Array.isArray(body.analyzeFields) ? body.analyzeFields : [];
+      // Bij een beeldprompt geen voorbeeldtekst van de velden mee: het model nam
+      // "bovenaan een intranetbericht" uit het voorbeeld bij Doel over als doel,
+      // ook bij een schilderij. Het label zegt genoeg.
+      const fields = (Array.isArray(body.analyzeFields) ? body.analyzeFields : []).map((f) =>
+        body.beeld ? { id: f.id, label: f.label } : f,
+      );
       if (!ownPrompt || fields.length === 0) {
         // Diagnostisch: benoem precies wat ontbrak, zodat de client-side melding
         // (en de logs) duidelijk maken waarom de prefill werd geweigerd.
@@ -10456,13 +10465,15 @@ Deno.serve(async (req: Request) => {
       // niet-streamende route eronder werkt met dezelfde instructie.
       // Een afbeelding: bij lege onderdelen juist wél een keuze voorstellen, als
       // inspiratie, en de vaste beeldstijl meegeven.
+      // Bij een beeld komt de beeldinstructie achter de algemene prompt: die zegt
+      // "houd het intern gericht", en daar maakte het model bij elk beeld een
+      // werkdoel van, ook bij een tekening van een kat. Wat achteraan staat, wint.
       const prefillBase =
-        (body.beeld ? IMAGE_PREFILL_INSTRUCTION : '') +
         (body.fromDocument
           ? PREFILL_DOCUMENT_INSTRUCTION + PREFILL_SYSTEM_PROMPT
           : body.fromFormatBrief
             ? PREFILL_FORMAT_BRIEF_INSTRUCTION + PREFILL_SYSTEM_PROMPT
-            : PREFILL_SYSTEM_PROMPT);
+            : PREFILL_SYSTEM_PROMPT) + (body.beeld ? `\n\n${IMAGE_PREFILL_INSTRUCTION}` : '');
       // Zoeken bij het invullen: voor iedereen, net als in de chat, zolang er een
       // zoekdienst is ingesteld. Ontbreekt die, dan krijgt de gebruiker dat te
       // zien in plaats van een stille beurt zonder bronnen.

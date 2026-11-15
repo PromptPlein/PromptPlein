@@ -690,7 +690,13 @@ iemand daarna een andere optie, dan werkt de AI vanaf de tekst van vóór de eer
 vorige er niet in blijft hangen; het model haalde die zelf niet goed weg. Elke optie moet iets
 zijn wat de beeldgenerator kan uitvoeren: een doel zonder gevolg voor het beeld is ruis. Zet
 geen voorbeeldkeuze in die systeemprompt: een verjaardagskaart uit het voorbeeld kwam letterlijk
-als optie terug. Context staat bij
+als optie terug.
+
+Bij het voor-invullen van een beeld kiest de AI per veld één ding, zonder "of": de schrijfstap
+nam twee mogelijkheden anders stilletjes over of koos zelf, en dan leek het alsof er context
+verdween. `IMAGE_PREFILL_INSTRUCTION` staat daarom achter de algemene invulprompt, die "houd het
+intern gericht" zegt en van elk beeld een werkdoel maakte. De voorbeeldtekst van de velden gaat
+bij een beeld niet mee naar de AI: "bovenaan een intranetbericht" kwam zo in elk doel terecht. Context staat bij
 Afbeelding niet boven het tekstvak; de knop Project kiezen verschijnt pas bij Uit een project,
 en dan zonder bronbestanden, want alleen de projectinstructie gaat mee.
 
