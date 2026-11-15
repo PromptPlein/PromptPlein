@@ -692,18 +692,26 @@ zijn wat de beeldgenerator kan uitvoeren: een doel zonder gevolg voor het beeld 
 geen voorbeeldkeuze in die systeemprompt: een verjaardagskaart uit het voorbeeld kwam letterlijk
 als optie terug.
 
-Bij het voor-invullen van een beeld kiest de AI per veld één ding, zonder "of": de schrijfstap
-nam twee mogelijkheden anders stilletjes over of koos zelf, en dan leek het alsof er context
-verdween. `IMAGE_PREFILL_INSTRUCTION` staat daarom achter de algemene invulprompt, die "houd het
-intern gericht" zegt en van elk beeld een werkdoel maakte. De voorbeeldtekst van de velden gaat
-bij een beeld niet mee naar de AI: "bovenaan een intranetbericht" kwam zo in elk doel terecht. Context staat bij
+Het voor-invullen van een beeld heeft een eigen systeemprompt (`IMAGE_PREFILL_SYSTEM_PROMPT`), los
+van "Velden voor-invullen": die zegt "houd het intern gericht" en maakte van elk beeld een intranet
+of campagne, welke regel er ook naast stond. Hij kiest per veld één ding, zonder "of": de
+schrijfstap nam twee mogelijkheden anders over of koos stilletjes, en dan leek het alsof er context
+verdween. Noemt de gebruiker geen plek, dan begint het doel met "De kijker ziet meteen". Noem in
+zo'n prompt geen verboden woorden: een lijst met "intranet, campagne, communicatiemiddel" bracht
+ze juist in de uitvoer. De voorbeeldtekst van de velden gaat bij een beeld niet mee naar de AI. Context staat bij
 Afbeelding niet boven het tekstvak; de knop Project kiezen verschijnt pas bij Uit een project,
 en dan zonder bronbestanden, want alleen de projectinstructie gaat mee.
 
 Van een voorbeeld is de vierde stijl: de gebruiker voegt een beeld toe, de browser verkleint het
-tot 1024 pixels en `image-style` laat Mistral Small 4 de stijl lezen (stijl, kleuren met code,
-licht, kader, sfeer, details), zonder het onderwerp. Die tekst is te bewerken en gaat mee zoals een
-projectinstructie. Het beeld wordt nergens bewaard; alleen de tekst staat per browser in
+tot 1024 pixels en `image-style` laat Mistral Large 4 het hele beeld beschrijven: wat erop staat
+(figuren, haar, kleding, houding), opbouw, emotie, techniek, lijnen, kleuren met code en licht.
+De eigenaar wil dat het nieuwe beeld er echt op lijkt, niet alleen in stijl. Small 4 zag een
+blonde vrouw met vleugels in een paarse gouache waar die niet stond; Large 4 klopte, in zo'n 20
+seconden, met Medium 3.5 als tweede kans. Large 4 denkt altijd ('none' weigert hij), dus krijgt
+hij `reasoning_effort` 'low' en extra tokens, anders at het denken het antwoord op. De
+beschrijving is te bewerken. Bij het invullen staat hij naast de wens in de gebruikersprompt,
+niet alleen onder de systeemprompt: daar negeerde het model hem. Bij opties en schrijven gaat hij
+mee in `IMAGE_EXAMPLE_BLOCK`. Het beeld wordt nergens bewaard; alleen de tekst staat per browser in
 localStorage (`opl.beeld.voorbeeld`). Dit is de enige plek waar een beeld naar Mistral gaat
 (`runMistralVision`).
 

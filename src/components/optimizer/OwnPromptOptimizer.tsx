@@ -137,7 +137,7 @@ const BEELD_STIJLEN: { value: BeeldStijl; label: string; detail: string }[] = [
   { value: 'vrij', label: 'Vrij', detail: 'de AI kiest wat bij je beeld past' },
   { value: 'rijkshuisstijl', label: 'Rijkshuisstijl', detail: 'kleuren en beeldtaal van het Rijk' },
   { value: 'project', label: 'Uit een project', detail: 'je eigen vaste stijl' },
-  { value: 'voorbeeld', label: 'Van een voorbeeld', detail: 'de stijl van een beeld dat je mooi vindt' },
+  { value: 'voorbeeld', label: 'Van een voorbeeld', detail: 'lijkt op een beeld dat je mooi vindt' },
 ];
 
 interface OwnPromptOptimizerProps {
@@ -1282,11 +1282,13 @@ export default function OwnPromptOptimizer({
 
             {beeld && beeld.stijl !== 'vrij' && (
               <p className="text-sm text-slate-600 dark:text-slate-300">
-                <strong className="font-semibold text-slate-800 dark:text-slate-100">Vaste stijl: </strong>
+                <strong className="font-semibold text-slate-800 dark:text-slate-100">
+                  {beeld.stijl === 'voorbeeld' ? 'Voorbeeld: ' : 'Vaste stijl: '}
+                </strong>
                 {beeld.stijl === 'rijkshuisstijl'
                   ? 'Rijkshuisstijl. Die gaat altijd mee; jij kiest het onderwerp.'
                   : beeld.stijl === 'voorbeeld'
-                    ? `de stijl van je voorbeeld${voorbeeld?.naam ? ` (${voorbeeld.naam})` : ''}. Die gaat altijd mee; jij kiest het onderwerp.`
+                    ? `${voorbeeld?.naam || 'je beeld'}. Je nieuwe beeld gaat daarop lijken; wat jij vraagt, gaat voor.`
                     : `de stijl van ${projectStijl?.name ?? 'je project'}. Die gaat altijd mee; jij kiest het onderwerp.`}
               </p>
             )}

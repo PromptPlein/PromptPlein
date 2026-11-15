@@ -74,8 +74,7 @@ export default function BeeldSpiekkaart({ onVoorbeeld }: { onVoorbeeld?: () => v
       </ul>
       <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <p className="text-sm text-slate-600 dark:text-slate-300">
-          Heb je een beeld dat je mooi vindt? Voeg het toe, dan neemt de AI de stijl over en niet het
-          onderwerp.
+          Heb je een beeld dat je mooi vindt? Voeg het toe, dan gaat je nieuwe beeld erop lijken.
         </p>
         {onVoorbeeld && (
           <button

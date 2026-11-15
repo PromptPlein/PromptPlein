@@ -51,9 +51,9 @@ export interface BeeldKeuze {
 }
 
 /**
- * Leest de stijl van een voorbeeldbeeld (mode image-style): hoe het gemaakt is,
- * niet wat erop staat. Het beeld gaat alleen voor deze aanroep mee en wordt
- * nergens bewaard. `dataUrl` is al verkleind, zie `fileToJpegDataUrl`.
+ * Beschrijft een voorbeeldbeeld (mode image-style): wat erop staat en hoe het
+ * gemaakt is. Het beeld gaat alleen voor deze aanroep mee en wordt nergens
+ * bewaard. `dataUrl` is al verkleind, zie `fileToJpegDataUrl`.
  */
 export async function readImageStyle(
   dataUrl: string,

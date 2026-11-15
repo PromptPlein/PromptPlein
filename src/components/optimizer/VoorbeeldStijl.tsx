@@ -1,6 +1,6 @@
 import { ImagePlus, Loader2, Trash2 } from '@/components/common/icons';
 
-/** De stijl die uit een voorbeeldbeeld is gelezen. */
+/** Wat de AI in een voorbeeldbeeld zag: wat erop staat en hoe het gemaakt is. */
 export interface Voorbeeld {
   naam: string;
   tekst: string;
@@ -12,10 +12,11 @@ const KNOP =
   'inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded border border-rijksblauw-500 bg-white px-3 text-sm font-semibold text-rijksblauw-700 transition-colors hover:bg-rijksblauw-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-slate-800 dark:text-rijksblauw-200 dark:hover:bg-slate-700';
 
 /**
- * Bij de stijlkeuze Van een voorbeeld: een beeld toevoegen, en de stijl die de
- * AI eruit leest. Die tekst is te bewerken en gaat als vaste beeldstijl mee,
- * net als de instructie van een project. Het beeld zelf gaat alleen mee om de
- * stijl te lezen.
+ * Bij de stijlkeuze Van een voorbeeld: een beeld toevoegen, en de beschrijving
+ * die de AI ervan maakt (figuren, opbouw, emotie, techniek, kleuren, licht).
+ * Die tekst is te bewerken en gaat mee bij invullen en schrijven, zodat het
+ * nieuwe beeld op het voorbeeld lijkt. Het beeld zelf gaat alleen mee om het te
+ * beschrijven.
  */
 export default function VoorbeeldStijl({
   voorbeeld,
@@ -45,8 +46,8 @@ export default function VoorbeeldStijl({
           <img src={voorbeeld.beeld} alt="" className="h-16 w-16 shrink-0 rounded object-cover" />
         )}
         <p role="status" className="inline-flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-300">
-          <Loader2 size={15} className="animate-spin" aria-hidden="true" /> De stijl van je beeld wordt
-          gelezen
+          <Loader2 size={15} className="animate-spin" aria-hidden="true" /> De AI bekijkt je beeld. Dat
+          duurt zo'n 20 seconden.
         </p>
       </div>
     );
@@ -56,8 +57,8 @@ export default function VoorbeeldStijl({
     return (
       <div className="mt-2.5">
         <p className="mb-2 text-sm text-slate-600 dark:text-slate-300">
-          Voeg een beeld toe waarvan je de stijl mooi vindt. De AI neemt de stijl over, niet het
-          onderwerp.
+          Voeg een beeld toe dat je mooi vindt. De AI beschrijft wat erop staat en hoe het gemaakt is,
+          en je nieuwe beeld gaat daarop lijken.
         </p>
         <button type="button" onClick={onKies} className={KNOP}>
           <ImagePlus size={15} aria-hidden="true" /> Beeld toevoegen
@@ -82,11 +83,10 @@ export default function VoorbeeldStijl({
             htmlFor="voorbeeld-stijl"
             className="block text-sm font-semibold text-slate-800 dark:text-slate-100"
           >
-            De stijl van je voorbeeld
+            Wat de AI in je voorbeeld ziet
           </label>
           <p className="text-sm text-slate-600 dark:text-slate-300">
-            Pas aan wat niet klopt. Wil je deze stijl vaker gebruiken, zet hem dan in de instructie
-            van een project.
+            Pas aan wat niet klopt. Wat je in je eigen tekst vraagt, gaat voor.
           </p>
         </div>
       </div>
