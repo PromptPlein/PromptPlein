@@ -87,8 +87,58 @@ export async function readImageStyle(
   }
 }
 
-/** Bij Afbeelding: per veld een vraag en een paar keuzes die bij de soort beeld passen. */
-export type VeldKeuzes = Record<string, { vraag: string; opties: string[] }>;
+/**
+ * Verwerkt een aangeklikte keuze in één veld van de beeldprompt (mode
+ * image-option-apply): de AI herschrijft het veld met de keuze erin en houdt
+ * wat er al stond en niet botst. Null als het niet lukt; dan blijft het veld
+ * zoals het was.
+ */
+export async function applyImageOption(args: {
+  field: { id: string; label: string };
+  currentValue: string;
+  keuze: string;
+  ownPrompt: string;
+  siblings: { label: string; value: string }[];
+  beeld?: BeeldKeuze;
+  preferredProvider?: AiProvider;
+  preferredModel?: string;
+}): Promise<string | null> {
+  const functionUrl = getFunctionUrl('optimize-prompt');
+  if (!isSupabaseConfigured || !functionUrl) return null;
+  try {
+    const anonKey = getAnonKey();
+    const response = await fetch(functionUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(anonKey ? { Authorization: `Bearer ${anonKey}`, apikey: anonKey } : {}),
+      },
+      body: JSON.stringify({
+        mode: 'image-option-apply',
+        fieldId: args.field.id,
+        fieldLabel: args.field.label,
+        currentValue: args.currentValue,
+        keuze: args.keuze,
+        ownPrompt: args.ownPrompt,
+        siblings: args.siblings,
+        ...(args.beeld ? { beeld: args.beeld } : {}),
+        preferredProvider: args.preferredProvider ?? 'auto',
+        preferredModel: args.preferredModel,
+      }),
+    });
+    if (!response.ok) return null;
+    const data = (await response.json()) as { success?: boolean; value?: string };
+    return data.success && data.value?.trim() ? data.value.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Bij Afbeelding: per veld een paar opties die bij de soort beeld passen. Het
+ * label staat op de knop, de tekst gaat naar de AI als iemand hem kiest.
+ */
+export type VeldKeuzes = Record<string, { opties: { label: string; tekst: string }[] }>;
 
 /**
  * Bedenkt bij een beeldprompt per veld een vraag en drie keuzes (mode
@@ -125,17 +175,20 @@ export async function fetchImageOptions(args: {
     if (!response.ok) return null;
     const data = (await response.json()) as {
       success?: boolean;
-      velden?: { id?: unknown; vraag?: unknown; opties?: unknown }[];
+      velden?: { id?: unknown; opties?: unknown }[];
     };
     if (!data.success || !Array.isArray(data.velden)) return null;
     const keuzes: VeldKeuzes = {};
     for (const v of data.velden) {
       if (typeof v.id !== 'string') continue;
-      const opties = (Array.isArray(v.opties) ? v.opties : []).filter(
-        (o): o is string => typeof o === 'string' && o.trim() !== '',
-      );
-      const vraag = typeof v.vraag === 'string' ? v.vraag.trim() : '';
-      if (opties.length > 0 || vraag) keuzes[v.id] = { vraag, opties };
+      const opties = (Array.isArray(v.opties) ? v.opties : [])
+        .map((o) => o as { label?: unknown; tekst?: unknown })
+        .filter((o) => o && typeof o.tekst === 'string' && o.tekst.trim() !== '')
+        .map((o) => ({
+          tekst: (o.tekst as string).trim(),
+          label: typeof o.label === 'string' && o.label.trim() ? o.label.trim() : (o.tekst as string).trim(),
+        }));
+      if (opties.length > 0) keuzes[v.id] = { opties };
     }
     return Object.keys(keuzes).length > 0 ? keuzes : null;
   } catch {

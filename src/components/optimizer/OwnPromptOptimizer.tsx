@@ -46,6 +46,7 @@ import {
 import { usePersistentDraft } from '@/lib/usePersistentDraft';
 import { stripMarkdown, copyToClipboard } from '@/lib/utils';
 import {
+  applyImageOption,
   fetchImageOptions,
   generatePrompt,
   readImageStyle,
@@ -1312,6 +1313,27 @@ export default function OwnPromptOptimizer({
                 askIfEmpty={prefill.fields.length > 0}
                 choices={beeld ? keuzes : null}
                 choicesLoading={Boolean(beeld) && keuzesLoading}
+                onApplyChoice={
+                  beeld
+                    ? (id, option, current) => {
+                        const fields = technique.follow_up_questions;
+                        const field = fields.find((f) => f.id === id);
+                        if (!field) return Promise.resolve(null);
+                        return applyImageOption({
+                          field: { id, label: field.label },
+                          currentValue: current[id] ?? '',
+                          keuze: option,
+                          ownPrompt: promptText,
+                          siblings: fields
+                            .filter((f) => f.id !== id && (current[f.id] ?? '').trim())
+                            .map((f) => ({ label: f.label, value: current[f.id] ?? '' })),
+                          beeld,
+                          preferredProvider: settings.provider,
+                          preferredModel: settings.model,
+                        });
+                      }
+                    : undefined
+                }
               />
 
               {/* Een nieuwe invulronde met extra uitleg: handig als de AI op het

@@ -1,9 +1,10 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import { ArrowLeft, ArrowRight, Check, Loader2, Pencil, Sparkles, Undo2, Wand2 } from '@/components/common/icons';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { ArrowLeft, ArrowRight, Check, Loader2, Pencil, Sparkles, Wand2 } from '@/components/common/icons';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import InfoDot from '@/components/common/InfoDot';
 import PrefillBadge from './PrefillBadge';
+import FieldChoices, { type ChoiceProposal, type FieldOption } from './FieldChoices';
 import PrefillLoader from './PrefillLoader';
 import FieldLayoutToggle from './FieldLayoutToggle';
 import ExpandProposal from './ExpandProposal';
@@ -42,72 +43,10 @@ interface FieldBlockProps {
   proposal: { proposed: string; improvements: string[] } | null;
   onAccept: () => void;
   onReject: () => void;
-  /** Bij een beeldprompt: de vraag en de keuzes voor dit veld. */
-  choice?: { vraag: string; opties: string[] };
-  /** Zet een keuze in het veld. */
-  onPick?: (option: string) => void;
-  /** Zet terug wat er stond vóór de eerste keuze; alleen na een keuze. */
-  onUndo?: () => void;
-}
-
-/**
- * De keuzes onder een veld van een beeldprompt: de vraag in de woorden van dit
- * beeld en een paar knoppen. Een klik vervangt de tekst in het veld; Herstel zet
- * terug wat er eerst stond.
- */
-function FieldChoices({
-  name,
-  choice,
-  value,
-  onPick,
-  onUndo,
-}: {
-  name: string;
-  choice: { vraag: string; opties: string[] };
-  value: string;
-  onPick: (option: string) => void;
-  onUndo?: () => void;
-}) {
-  if (choice.opties.length === 0) return null;
-  const current = value.trim();
-  return (
-    <div className="mt-2">
-      {choice.vraag && (
-        <p className="text-sm text-slate-600 dark:text-slate-300">{choice.vraag}</p>
-      )}
-      <div role="group" aria-label={`Keuzes voor ${name}`} className="mt-1 flex flex-wrap gap-1.5">
-        {choice.opties.map((option) => {
-          const on = current === option;
-          return (
-            <button
-              key={option}
-              type="button"
-              aria-pressed={on}
-              onClick={() => onPick(option)}
-              className={clsx(
-                'min-h-9 max-w-full rounded-lg border px-2.5 py-1 text-left text-sm leading-snug transition-colors',
-                'focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500',
-                on
-                  ? 'border-rijksblauw-500 bg-rijksblauw-50 font-semibold text-rijksblauw-800 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-100'
-                  : 'border-slate-300 bg-white text-slate-700 hover:border-rijksblauw-300 hover:bg-rijksblauw-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700',
-              )}
-            >
-              {option}
-            </button>
-          );
-        })}
-        {onUndo && (
-          <button
-            type="button"
-            onClick={onUndo}
-            className="inline-flex min-h-9 items-center gap-1 rounded px-1.5 text-sm font-semibold text-rijksblauw-700 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 dark:text-rijksblauw-200"
-          >
-            <Undo2 size={14} aria-hidden="true" /> Herstel
-          </button>
-        )}
-      </div>
-    </div>
-  );
+  /** Bij een beeldprompt: de kaart met opties onder het veld. */
+  choicesSlot?: ReactNode;
+  /** Er staat een voorstel open of de AI werkt aan een optie; het veld staat dan vast. */
+  locked?: boolean;
 }
 
 /**
@@ -137,9 +76,8 @@ function FieldBlock({
   proposal,
   onAccept,
   onReject,
-  choice,
-  onPick,
-  onUndo,
+  choicesSlot,
+  locked,
 }: FieldBlockProps) {
   const fieldId = `${idPrefix}-${question.id}`;
   const active = expanding || proposal !== null;
@@ -220,16 +158,18 @@ function FieldBlock({
         className={clsx(
           'opl-input block min-h-full resize-y self-stretch text-[0.9375rem]',
           vraag && 'border-2 border-nadruk',
+          locked && 'bg-slate-50 text-slate-600 dark:bg-slate-900/40',
         )}
         value={value}
         placeholder={question.placeholder}
+        readOnly={locked}
         onChange={(e) => onChange(e.target.value)}
       />
       <div className="min-w-0">
         {/* De keuzes zeggen meer dan de toelichting van het voor-invullen, dus
             staan ze op zijn plek. */}
-        {choice && choice.opties.length > 0 && onPick ? (
-          <FieldChoices name={name} choice={choice} value={value} onPick={onPick} onUndo={onUndo} />
+        {choicesSlot ? (
+          choicesSlot
         ) : (
           meta?.note &&
           filled && (
@@ -323,6 +263,11 @@ interface FollowUpQuestionsProps {
   choices?: VeldKeuzes | null;
   /** De keuzes worden nog bedacht. */
   choicesLoading?: boolean;
+  /**
+   * Verwerkt een keuze in een veld en geeft de nieuwe tekst, of null als dat
+   * niet lukt. Zonder deze functie vervangt een keuze de tekst.
+   */
+  onApplyChoice?: (fieldId: string, option: string, answers: Record<string, string>) => Promise<string | null>;
 }
 
 /**
@@ -351,6 +296,7 @@ export default function FollowUpQuestions({
   askIfEmpty = false,
   choices,
   choicesLoading = false,
+  onApplyChoice,
 }: FollowUpQuestionsProps) {
   const questions = technique.follow_up_questions;
   const total = questions.length;
@@ -375,6 +321,14 @@ export default function FollowUpQuestions({
   } | null>(null);
   // Wat er in een veld stond vóór de eerste klik op een keuze, voor Herstel.
   const [beforePick, setBeforePick] = useState<Record<string, string>>({});
+  // Welke optie er per veld het laatst is overgenomen, en het open voorstel.
+  const [picked, setPicked] = useState<Record<string, string>>({});
+  const [choiceProposal, setChoiceProposal] = useState<(ChoiceProposal & { id: string }) | null>(null);
+  // Alleen het antwoord op de laatste klik telt.
+  const choiceRun = useRef(0);
+  // Het verwerken duurt even; ondertussen kan de gebruiker andere velden aanpassen.
+  const answersRef = useRef(answers);
+  answersRef.current = answers;
   // Eigen AI-voorkeuren; alleen gebruikt als de props niet zijn meegegeven.
   const [settings, setSettings] = useState<AiSettings>(DEFAULT_AI_SETTINGS);
 
@@ -384,6 +338,8 @@ export default function FollowUpQuestions({
     setReviewing(false);
     setProposal(null);
     setBeforePick({});
+    setPicked({});
+    setChoiceProposal(null);
   }, [technique.id]);
 
   // Laad de AI-instellingen zelf, zodat "Vul verder aan" ook werkt zonder props.
@@ -430,44 +386,92 @@ export default function FollowUpQuestions({
     onUserEdit?.(id);
   }
 
-  /** Zelf getypt: Herstel zou dat wissen, dus die vervalt. */
+  /** Haal een veld uit een lijst per veld-id. */
+  function without<T>(record: Record<string, T>, id: string): Record<string, T> {
+    if (!(id in record)) return record;
+    const next = { ...record };
+    delete next[id];
+    return next;
+  }
+
+  /** Zelf getypt: Herstel en een open voorstel kloppen dan niet meer. */
   function typeField(id: string, value: string) {
-    if (id in beforePick) {
-      setBeforePick((prev) => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
-    }
+    setBeforePick((prev) => without(prev, id));
+    setPicked((prev) => without(prev, id));
+    if (choiceProposal?.id === id) setChoiceProposal(null);
     editField(id, value);
   }
 
-  /** Een keuze aangeklikt: die komt in het veld, en wat er stond onthouden we. */
-  function pickChoice(id: string, option: string) {
-    if ((answers[id] ?? '').trim() === option) return;
-    if (!(id in beforePick)) setBeforePick((prev) => ({ ...prev, [id]: answers[id] ?? '' }));
-    editField(id, option);
+  /**
+   * Een optie aangeklikt: de AI maakt een voorstel met de optie erin, met de
+   * andere velden als context. Was er al een optie overgenomen, dan werkt hij
+   * vanaf de tekst van daarvoor, zodat de vorige optie er niet in blijft hangen.
+   * Het veld verandert pas bij Overnemen.
+   */
+  async function pickChoice(id: string, option: FieldOption) {
+    if (choiceProposal?.id === id && choiceProposal.option.tekst === option.tekst) {
+      setChoiceProposal(null);
+      return;
+    }
+    if (choiceProposal && choiceProposal.value === null) return;
+    if (picked[id] === option.tekst) return;
+    const run = ++choiceRun.current;
+    if (!onApplyChoice) {
+      setChoiceProposal({ id, option, value: option.tekst });
+      return;
+    }
+    setChoiceProposal({ id, option, value: null });
+    const base = beforePick[id] ?? answersRef.current[id] ?? '';
+    const value = await onApplyChoice(id, option.tekst, { ...answersRef.current, [id]: base });
+    if (choiceRun.current !== run) return;
+    if (!value) {
+      setChoiceProposal(null);
+      toast.error('Deze optie kon niet worden verwerkt. Je tekst is niet veranderd.');
+      return;
+    }
+    setChoiceProposal({ id, option, value });
+  }
+
+  function acceptChoice() {
+    if (!choiceProposal || choiceProposal.value === null) return;
+    const { id, option, value } = choiceProposal;
+    const before = answersRef.current[id] ?? '';
+    setBeforePick((prev) => (id in prev ? prev : { ...prev, [id]: before }));
+    setPicked((prev) => ({ ...prev, [id]: option.tekst }));
+    setChoiceProposal(null);
+    onChange({ ...answersRef.current, [id]: value });
+    onUserEdit?.(id);
   }
 
   function undoChoice(id: string) {
     const previous = beforePick[id];
     if (previous === undefined) return;
-    setBeforePick((prev) => {
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
+    setBeforePick((prev) => without(prev, id));
+    setPicked((prev) => without(prev, id));
     editField(id, previous);
   }
 
-  /** De keuze-props voor één veld; leeg zonder keuzes. */
+  /** De kaart met opties voor één veld, plus of het veld vaststaat. */
   function choiceProps(id: string) {
-    const choice = choices?.[id];
-    if (!choice) return {};
+    const opties = choices?.[id]?.opties ?? [];
+    if (opties.length === 0) return {};
+    const proposalHere = choiceProposal?.id === id ? choiceProposal : null;
     return {
-      choice,
-      onPick: (option: string) => pickChoice(id, option),
-      onUndo: id in beforePick ? () => undoChoice(id) : undefined,
+      locked: proposalHere !== null,
+      choicesSlot: (
+        <FieldChoices
+          name={compactFieldLabel(questions.find((q) => q.id === id)?.label ?? '').name}
+          opties={opties}
+          value={answers[id] ?? ''}
+          proposal={proposalHere}
+          picked={picked[id]}
+          busy={choiceProposal !== null && choiceProposal.value === null}
+          onPick={(option) => void pickChoice(id, option)}
+          onAccept={acceptChoice}
+          onReject={() => setChoiceProposal(null)}
+          onUndo={id in beforePick ? () => undoChoice(id) : undefined}
+        />
+      ),
     };
   }
 

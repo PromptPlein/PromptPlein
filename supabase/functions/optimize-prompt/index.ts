@@ -9682,7 +9682,7 @@ let IMAGE_OPTIONS_SYSTEM_PROMPT = `Je bedenkt per veld van een beeldprompt drie 
 
 <taak>
 1. Bepaal wat voor beeld de medewerker wil maken, zoals een schilderij, een affiche, een foto bij een bericht of een icoon. Zet dat in "soort".
-2. Geef per veld één vraag en drie keuzes die bij die soort beeld horen.
+2. Geef per veld drie keuzes die bij die soort beeld horen.
 </taak>
 
 <regels_voor_keuzes>
@@ -9690,6 +9690,7 @@ let IMAGE_OPTIONS_SYSTEM_PROMPT = `Je bedenkt per veld van een beeldprompt drie 
 - Een keuze zonder gevolg voor het beeld is fout. Schrijf een keuze voor het doel daarom altijd in de vorm "<plek>: <formaat>, <sfeer>, <hoeveel detail>". Noem achter de dubbele punt geen onderwerp; dat staat in een ander veld.
 - De drie keuzes zijn echt verschillend, geen drie varianten van hetzelfde.
 - Een keuze is één korte regel zonder punt aan het eind.
+- Geef elke keuze ook een label van twee tot vier woorden dat de kern noemt, zonder punt. Het label staat op een knop; de keuze zelf gaat naar de beeldgenerator.
 - Blijf in de wereld van het verzoek. Bij een schilderij gaat het over schildertechniek en doek, bij een affiche over lezen op afstand, bij een foto over camera en licht.
 - Staat er voor een veld al iets in het verzoek, geef dan drie verfijningen daarvan.
 - Tekst in beeld: verzin geen woorden. Gebruik alleen woorden die in het verzoek staan. Noemt het verzoek geen woorden, beschrijf dan plek en vorm, met [tekst] op de plaats van de woorden, zoals "een korte kop onderaan: [tekst]". Past tekst niet bij deze soort beeld, geef dan "opties": [].
@@ -9701,18 +9702,13 @@ let IMAGE_OPTIONS_SYSTEM_PROMPT = `Je bedenkt per veld van een beeldprompt drie 
 - Staat er onder deze instructie een vaste beeldstijl, geef bij het veld voor de stijl dan "opties": [] en houd de keuzes voor licht en kleur binnen die beeldstijl. Herhaal geen eisen uit de beeldstijl als keuze.
 </regels_voor_keuzes>
 
-<regels_voor_vragen>
-- De vraag is gericht aan de medewerker, gaat over dit beeld en eindigt op een vraagteken.
-- Gebruik de soort beeld in de vraag, zoals "Waar komt het affiche te hangen?"
-</regels_voor_vragen>
-
 <taal>
 Schrijf natuurlijk Nederlands, geen vertaald Engels. Zet nooit een gedachtestreepje tussen zinsdelen; gebruik een komma of een dubbele punt.
 </taal>
 
 <uitvoer>
 Geef alleen geldige JSON terug, in precies deze vorm:
-{"soort":"<wat voor beeld, in een paar woorden>","velden":[{"id":"<veld-id>","vraag":"<vraag aan de medewerker>","opties":["<keuze>","<keuze>","<keuze>"]}]}
+{"soort":"<wat voor beeld, in een paar woorden>","velden":[{"id":"<veld-id>","opties":[{"label":"<twee tot vier woorden>","tekst":"<keuze>"},{"label":"<twee tot vier woorden>","tekst":"<keuze>"},{"label":"<twee tot vier woorden>","tekst":"<keuze>"}]}]}
 Neem elk veld-id uit de lijst precies één keer op, in dezelfde volgorde.
 </uitvoer>`;
 
@@ -9898,7 +9894,30 @@ function IMAGE_OPTIONS_USER_PROMPT(ownPrompt: string, fields: AnalyzeField[]): s
 interface ImageOptionField {
   id: string;
   vraag: string;
-  opties: string[];
+  /** label: kort, voor op de knop; tekst: wat er in het veld verwerkt wordt. */
+  opties: { label: string; tekst: string }[];
+}
+
+/** Maakt van één keuze uit het model een label plus tekst. */
+function toImageOption(o: unknown): { label: string; tekst: string } | null {
+  const clean = (v: unknown) => {
+    const t = coerceFieldValue(v);
+    return t ? stripEmphasis(t).replace(/\s+/g, ' ').trim().replace(/\.$/, '') : '';
+  };
+  let tekst = '';
+  let label = '';
+  if (o && typeof o === 'object' && !Array.isArray(o)) {
+    const obj = o as { label?: unknown; tekst?: unknown };
+    tekst = clean(obj.tekst);
+    label = clean(obj.label);
+  } else {
+    tekst = clean(o);
+  }
+  if (!tekst) tekst = label;
+  if (!tekst) return null;
+  // Zonder label: het stuk voor de dubbele punt, of de eerste vier woorden.
+  if (!label) label = tekst.includes(':') ? tekst.split(':')[0].trim() : tekst.split(' ').slice(0, 4).join(' ');
+  return { label: label.charAt(0).toUpperCase() + label.slice(1), tekst };
 }
 
 /** Hoogstens zoveel keuzes per veld. */
@@ -9928,15 +9947,16 @@ function parseImageOptions(
         if (!id || seen.has(id)) return null;
         seen.add(id);
         const opties = (Array.isArray(v.opties) ? v.opties : [])
-          .map((o) => coerceFieldValue(o))
-          .filter((o): o is string => Boolean(o))
-          .map((o) => stripEmphasis(o).replace(/\s+/g, ' ').trim().replace(/\.$/, ''))
-          .filter((o, i, all) => o && all.findIndex((x) => x.toLowerCase() === o.toLowerCase()) === i)
+          .map(toImageOption)
+          .filter((o): o is { label: string; tekst: string } => o !== null)
+          .filter(
+            (o, i, all) => all.findIndex((x) => x.tekst.toLowerCase() === o.tekst.toLowerCase()) === i,
+          )
           .slice(0, MAX_IMAGE_OPTIONS);
         const vraag = typeof v.vraag === 'string' ? stripEmphasis(v.vraag).trim() : '';
         return { id, vraag, opties };
       })
-      .filter((v): v is ImageOptionField => v !== null && (v.opties.length > 0 || v.vraag !== ''));
+      .filter((v): v is ImageOptionField => v !== null && v.opties.length > 0);
     if (velden.length === 0) return null;
     return { soort: typeof parsed.soort === 'string' ? parsed.soort.trim() : '', velden };
   } catch {

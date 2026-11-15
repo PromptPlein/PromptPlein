@@ -434,13 +434,13 @@ en antwoord op één lijn beginnen.
 
 Eén edge function, `optimize-prompt`, ongeveer 8000 regels, met een
 `mode`-veld in de body als router. Nieuwe AI-functionaliteit wordt een nieuwe
-mode in dat bestand, niet een nieuwe function. De 44 modes, gegroepeerd:
+mode in dat bestand, niet een nieuwe function. De 45 modes, gegroepeerd:
 
 | Groep | Modes |
 | --- | --- |
 | Streamende vrije tekst | `generate`, `execute`, `chat` |
 | Techniek- en frameworkkeuze | `recommend`, `recommend-framework`, `framework-fit`, `technique-advisor` |
-| Veldhulp in de bouwer | `analyze`, `prefill`, `expand-field`, `title`, `metadata`, `image-options`, `image-style` |
+| Veldhulp in de bouwer | `analyze`, `prefill`, `expand-field`, `title`, `metadata`, `image-options`, `image-option-apply`, `image-style` |
 | PlanWizard | `plan`, `plan-step`, `plan-step-analyze`, `clarify`, `assumption-check` |
 | Techniekbouwers | `persona-fill`, `fewshot-example`, `fewshot-extract`, `meta-build`, `cove-scan`, `stepback-ladder`, `rubric-propose`, `skill-draft`, `skill-trigger` |
 | Chat en projecten | `chat-optimize`, `project-optimize`, `project-brief`, `project-interview`, `project-prompt`, `context-interview`, `context-prompt`, `chat-intake`, `chat-intake-check`, `memory-save`, `memory-search` |
@@ -680,11 +680,17 @@ opgesteld uit de kleuren in `brandColors.js`, zonder logo en met een illustratie
 tenzij iemand om een foto vraagt; hij is nog niet getoetst aan het officiële
 beeldbeleid. Alle vier staan in Beheer, Prompts, groep Afbeelding.
 
-Naast het voor-invullen bedenkt `image-options` per veld een vraag en drie keuzes die bij de
-soort beeld passen (`IMAGE_OPTIONS_SYSTEM_PROMPT`). Ze staan als knoppen onder het veld; een
-klik vervangt de tekst, Herstel zet hem terug. In de indeling Stap voor stap is dat het
-doorvragen, één veld tegelijk. Elke keuze moet iets zijn wat de beeldgenerator kan uitvoeren:
-een doel zonder gevolg voor het beeld is ruis, keuze van de eigenaar. Context staat bij
+Naast het voor-invullen bedenkt `image-options` per veld drie opties die bij de soort beeld
+passen, elk met een kort label voor de knop en een tekst voor de AI. Ze staan onder het veld in
+één kaart, "Kies uit deze opties (optioneel)", zonder verdere uitleg, keuze van de eigenaar
+(`FieldChoices`). Een klik vervangt de tekst niet: `image-option-apply` verwerkt de optie in het
+veld met de andere velden als context, en de gebruiker ziet eerst het voorstel met wat erbij komt
+en wat eruit gaat (`wordDiff`). Pas Overnemen verandert het veld; Herstel zet het terug. Kiest
+iemand daarna een andere optie, dan werkt de AI vanaf de tekst van vóór de eerste optie, zodat de
+vorige er niet in blijft hangen; het model haalde die zelf niet goed weg. Elke optie moet iets
+zijn wat de beeldgenerator kan uitvoeren: een doel zonder gevolg voor het beeld is ruis. Zet
+geen voorbeeldkeuze in die systeemprompt: een verjaardagskaart uit het voorbeeld kwam letterlijk
+als optie terug. Context staat bij
 Afbeelding niet boven het tekstvak; de knop Project kiezen verschijnt pas bij Uit een project,
 en dan zonder bronbestanden, want alleen de projectinstructie gaat mee.
 
