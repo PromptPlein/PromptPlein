@@ -14,6 +14,7 @@ import {
   LayoutDashboard,
   Lightbulb,
   ImageIcon,
+  Pencil,
   RefreshCw,
   Sparkles,
   Wand2,
@@ -1056,7 +1057,7 @@ export default function OwnPromptOptimizer({
           {kind === 'image' && (
             <div className="border-b border-slate-200 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-slate-800">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">
                   Welke stijl?
                 </span>
                 <div
@@ -1168,12 +1169,33 @@ export default function OwnPromptOptimizer({
             </div>
           )}
 
+          {/* Bij Afbeelding een eigen kop boven het tekstvak. Na een voorbeeldbeeld
+              met zijn analyse was niet meer te zien dat hier je eigen wens hoort:
+              eerst de stijl, dan wat er op het beeld moet. */}
+          {kind === 'image' && (
+            <div className="border-t-2 border-rijksblauw-100 bg-white px-3.5 pt-3.5 dark:border-rijksblauw-500/30 dark:bg-slate-800">
+              <label
+                htmlFor="own-prompt-input"
+                className="flex items-center gap-1.5 text-base font-bold text-rijksblauw-700 dark:text-rijksblauw-200"
+              >
+                <Pencil size={16} aria-hidden="true" />
+                Wat moet er op je beeld?
+              </label>
+              <p className="text-sm text-slate-600 dark:text-slate-300">
+                {beeld && beeld.stijl !== 'vrij'
+                  ? 'De stijl staat hierboven. Beschrijf hier het onderwerp en waar het beeld voor is.'
+                  : 'Beschrijf het onderwerp, de stijl en waar het beeld voor is.'}
+              </p>
+            </div>
+          )}
           <textarea
             id="own-prompt-input"
             className="block min-h-[6.5rem] w-full resize-y border-0 bg-white px-3.5 py-3 text-[0.9375rem] leading-relaxed text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-0 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
             value={ownPrompt}
             placeholder={
-              kindOption
+              kind === 'image' && beeld && beeld.stijl !== 'vrij'
+                ? 'Bijv. een vuurtoren aan zee bij storm, voor de kop van onze nieuwsbrief.'
+                : kindOption
                 ? (!variantOn && kindOption.placeholderOff) || kindOption.placeholder
                 : 'Plak hier de prompt of stel hier je vraag. Typ @ voor een project.'
             }
