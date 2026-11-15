@@ -32,6 +32,7 @@ import { techniekKaart } from '@/lib/techniekDoelen';
 import PrefillSources from '@/components/optimizer/PrefillSources';
 import BeeldSpiekkaart from '@/components/optimizer/BeeldSpiekkaart';
 import VoorbeeldStijl, { type Voorbeeld } from '@/components/optimizer/VoorbeeldStijl';
+import BewaarStijlDialog from '@/components/optimizer/BewaarStijlDialog';
 import { fileToJpegDataUrl } from '@/lib/imageResize';
 import { PROMPT_CATEGORIES } from '@/data/promptCategories';
 import { PROMPT_EXAMPLES } from '@/data/promptExamples';
@@ -184,6 +185,11 @@ interface OwnPromptOptimizerProps {
    */
   projectStyle?: { name: string; text: string } | null;
   /**
+   * Bewaar de stijl van een voorbeeldbeeld als nieuw project en haak dat aan.
+   * Geeft false terug als het niet lukte (of als de gebruiker eerst moet inloggen).
+   */
+  onSaveStyleProject?: (name: string, instructions: string) => Promise<boolean>;
+  /**
    * Denken aan: het model redeneert eerst en schrijft de prompt daarna pas.
    * Komt van de knop boven de bouwer; geldt alleen voor de laatste stap, het
    * schrijven zelf. De analyse- en voor-invulstappen leveren JSON en kunnen er
@@ -271,6 +277,7 @@ export default function OwnPromptOptimizer({
   projectSources,
   renderProjectContext,
   projectStyle,
+  onSaveStyleProject,
   thinking,
   webSearch: webSearchSetting,
   toggles,
@@ -310,6 +317,7 @@ export default function OwnPromptOptimizer({
   // Van een voorbeeld: de stijl die de AI uit het toegevoegde beeld las.
   const [voorbeeld, setVoorbeeldState] = useState<Voorbeeld | null>(readVoorbeeld);
   const [voorbeeldBezig, setVoorbeeldBezig] = useState(false);
+  const [bewaarStijlOpen, setBewaarStijlOpen] = useState(false);
   const voorbeeldInput = useRef<HTMLInputElement>(null);
   const voorbeeldTekst = voorbeeld?.tekst.trim() ?? '';
   const beeld: BeeldKeuze | undefined =
@@ -1126,6 +1134,22 @@ export default function OwnPromptOptimizer({
                   onKies={kiesVoorbeeld}
                   onTekst={(tekst) => setVoorbeeld(voorbeeld ? { ...voorbeeld, tekst } : { naam: '', tekst })}
                   onWis={() => setVoorbeeld(null)}
+                  onBewaar={onSaveStyleProject ? () => setBewaarStijlOpen(true) : undefined}
+                />
+              )}
+              {onSaveStyleProject && voorbeeld && (
+                <BewaarStijlDialog
+                  open={bewaarStijlOpen}
+                  voorbeeldNaam={voorbeeld.naam}
+                  voorbeeldTekst={voorbeeld.tekst}
+                  ai={{ provider: settings.provider, model: settings.model }}
+                  onClose={() => setBewaarStijlOpen(false)}
+                  onSave={async (name, instructions) => {
+                    const ok = await onSaveStyleProject(name, instructions);
+                    // Het nieuwe project hangt nu aan: vanaf hier geldt die stijl.
+                    if (ok) handleBeeldStijl('project');
+                    return ok;
+                  }}
                 />
               )}
               <input

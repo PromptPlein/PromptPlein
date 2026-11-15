@@ -1,4 +1,5 @@
-import { ImagePlus, Loader2, Trash2 } from '@/components/common/icons';
+import { useEffect, useState } from 'react';
+import { Check, FolderPlus, ImagePlus, Loader2, Pencil, Trash2 } from '@/components/common/icons';
 
 /** Wat de AI in een voorbeeldbeeld zag: wat erop staat en hoe het gemaakt is. */
 export interface Voorbeeld {
@@ -14,9 +15,13 @@ const KNOP =
 /**
  * Bij de stijlkeuze Van een voorbeeld: een beeld toevoegen, en de beschrijving
  * die de AI ervan maakt (figuren, opbouw, emotie, techniek, kleuren, licht).
- * Die tekst is te bewerken en gaat mee bij invullen en schrijven, zodat het
- * nieuwe beeld op het voorbeeld lijkt. Het beeld zelf gaat alleen mee om het te
- * beschrijven.
+ * Die tekst gaat mee bij invullen en schrijven, zodat het nieuwe beeld op het
+ * voorbeeld lijkt. Het beeld zelf gaat alleen mee om het te beschrijven.
+ *
+ * De beschrijving staat er als gewone tekst en niet als invoerveld: het is een
+ * analyse. Stond hij open, dan typten mensen er hun eigen wens in in plaats van
+ * in het tekstvak eronder. Aanpassen kan wel, na een klik op Aanpassen. Keuze
+ * van de eigenaar.
  */
 export default function VoorbeeldStijl({
   voorbeeld,
@@ -24,6 +29,7 @@ export default function VoorbeeldStijl({
   onKies,
   onTekst,
   onWis,
+  onBewaar,
 }: {
   voorbeeld: Voorbeeld | null;
   bezig: boolean;
@@ -31,7 +37,15 @@ export default function VoorbeeldStijl({
   onKies: () => void;
   onTekst: (tekst: string) => void;
   onWis: () => void;
+  /** Bewaar de stijl als project, zodat elk volgend beeld hem krijgt. */
+  onBewaar?: () => void;
 }) {
+  // Een nieuw beeld begint weer als analyse om te lezen.
+  const [bewerken, setBewerken] = useState(false);
+  useEffect(() => {
+    setBewerken(false);
+  }, [voorbeeld?.beeld]);
+
   const privacy = (
     <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
       Het beeld wordt alleen gelezen en nergens bewaard. Voeg geen beeld toe met herkenbare mensen
@@ -79,25 +93,87 @@ export default function VoorbeeldStijl({
           />
         )}
         <div className="min-w-0 flex-1">
-          <label
-            htmlFor="voorbeeld-stijl"
-            className="block text-sm font-semibold text-slate-800 dark:text-slate-100"
-          >
-            Wat de AI in je voorbeeld ziet
-          </label>
+          {bewerken ? (
+            <label
+              htmlFor="voorbeeld-stijl"
+              className="block text-sm font-semibold text-slate-800 dark:text-slate-100"
+            >
+              Wat de AI in je voorbeeld ziet
+            </label>
+          ) : (
+            <p
+              id="voorbeeld-stijl-kop"
+              className="text-sm font-semibold text-slate-800 dark:text-slate-100"
+            >
+              Wat de AI in je voorbeeld ziet
+            </p>
+          )}
           <p className="text-sm text-slate-600 dark:text-slate-300">
-            Pas aan wat niet klopt. Wat je in je eigen tekst vraagt, gaat voor.
+            Wat je wilt maken, schrijf je in het tekstvak hieronder. Dat gaat voor.
           </p>
         </div>
       </div>
-      <textarea
-        id="voorbeeld-stijl"
-        rows={7}
-        value={voorbeeld.tekst}
-        onChange={(e) => onTekst(e.target.value)}
-        className="opl-input mt-2 block w-full resize-y text-[0.9375rem]"
-      />
+      {bewerken ? (
+        <textarea
+          id="voorbeeld-stijl"
+          rows={9}
+          value={voorbeeld.tekst}
+          onChange={(e) => onTekst(e.target.value)}
+          className="opl-input mt-2 block w-full resize-y text-[0.9375rem]"
+        />
+      ) : (
+        <div
+          id="voorbeeld-stijl"
+          className="mt-2 max-h-80 overflow-y-auto rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 text-[0.9375rem] leading-relaxed text-slate-700 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-200"
+          tabIndex={0}
+          role="region"
+          aria-labelledby="voorbeeld-stijl-kop"
+        >
+          {voorbeeld.tekst.split('\n').map((regel, i) => {
+            const m = regel.match(/^-\s*([^:]{1,40}):\s*(.*)$/);
+            if (m) {
+              return (
+                <p key={i} className="mt-1.5 first:mt-0">
+                  <span className="font-semibold text-slate-800 dark:text-slate-100">{m[1]}:</span>{' '}
+                  {m[2]}
+                </p>
+              );
+            }
+            return regel.trim() ? (
+              <p key={i} className="mt-1.5 font-semibold text-slate-800 first:mt-0 dark:text-slate-100">
+                {regel}
+              </p>
+            ) : null;
+          })}
+        </div>
+      )}
       <div className="mt-2 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => setBewerken((b) => !b)}
+          className={KNOP}
+          aria-controls="voorbeeld-stijl"
+        >
+          {bewerken ? (
+            <>
+              <Check size={15} aria-hidden="true" /> Klaar met aanpassen
+            </>
+          ) : (
+            <>
+              <Pencil size={15} aria-hidden="true" /> Aanpassen
+            </>
+          )}
+        </button>
+        {onBewaar && (
+          <button
+            type="button"
+            onClick={onBewaar}
+            className={KNOP}
+            disabled={!voorbeeld.tekst.trim()}
+          >
+            <FolderPlus size={15} aria-hidden="true" /> Bewaar als vaste stijl
+          </button>
+        )}
         <button type="button" onClick={onKies} className={KNOP}>
           <ImagePlus size={15} aria-hidden="true" /> Ander beeld
         </button>

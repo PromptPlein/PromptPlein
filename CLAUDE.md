@@ -709,11 +709,20 @@ De eigenaar wil dat het nieuwe beeld er echt op lijkt, niet alleen in stijl. Sma
 blonde vrouw met vleugels in een paarse gouache waar die niet stond; Large 4 klopte, in zo'n 20
 seconden, met Medium 3.5 als tweede kans. Large 4 denkt altijd ('none' weigert hij), dus krijgt
 hij `reasoning_effort` 'low' en extra tokens, anders at het denken het antwoord op. De
-beschrijving is te bewerken. Bij het invullen staat hij naast de wens in de gebruikersprompt,
+beschrijving staat er als tekst om te lezen, niet als invoerveld: het is een analyse, en in een open
+veld typten mensen hun eigen wens. Aanpassen kan na de knop Aanpassen (keuze van de eigenaar). Bij het invullen staat hij naast de wens in de gebruikersprompt,
 niet alleen onder de systeemprompt: daar negeerde het model hem. Bij opties en schrijven gaat hij
 mee in `IMAGE_EXAMPLE_BLOCK`. Het beeld wordt nergens bewaard; alleen de tekst staat per browser in
 localStorage (`opl.beeld.voorbeeld`). Dit is de enige plek waar een beeld naar Mistral gaat
 (`runMistralVision`).
+
+Bewaar als vaste stijl maakt van een voorbeeld een project met de stijl als instructie en haakt dat
+aan, zodat elk volgend beeld bij Uit een project die stijl krijgt (`BewaarStijlDialog`). Eerst haalt
+`image-style-save` het onderwerp eruit: de beschrijving koppelt kleur en licht aan de figuren
+("oranje voor de katten"), en als vaste beeldstijl kwamen die figuren anders in elk beeld terug. De
+gebruiker ziet de stijl en past hem aan voor hij hem bewaart. Een vraag om een bestaand logo of merk
+wordt in de beeldprompt een eigen embleem zonder merknaam, en bij Afbeelding wordt nooit op internet
+gezocht: de treffers gingen over het merk en het auteursrecht, niet over hoe het beeld eruitziet.
 
 Elk HTML-bestand in de chat wordt na het schrijven onzichtbaar en afgeschermd
 gedraaid (`src/lib/fileCheck.ts`); scriptfouten komen met regelnummer op de

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { Compass, Wand2 } from '@/components/common/icons';
 import GoalDialog, { type GoalDialogRestore } from '@/components/optimizer/GoalDialog';
 import DailyBackground from '@/components/common/DailyBackground';
@@ -195,6 +196,32 @@ export default function OptimizerPage() {
   const projectSources = useCallback(
     (task: string) => withGeneratorSources(projectContext, task),
     [projectContext],
+  );
+
+  // Bewaar als vaste stijl: een voorbeeldbeeld wordt een project met de stijl als
+  // instructie, en dat project hangt meteen aan. Projecten vragen een account.
+  const navigate = useNavigate();
+  const location = useLocation();
+  const saveStyleProject = useCallback(
+    async (name: string, instructions: string): Promise<boolean> => {
+      if (!user) {
+        toast('Log in om een vaste stijl te bewaren. Je voorbeeld blijft staan.');
+        navigate('/auth/login', { state: { from: location.pathname } });
+        return false;
+      }
+      const created = await chatProjects.create(name);
+      if (!created) return false;
+      const ok = await chatProjects.update(created.id, { instructions });
+      if (!ok) {
+        // Een leeg project zonder stijl heeft niemand iets aan.
+        void chatProjects.remove(created.id);
+        return false;
+      }
+      void loadProjectContext(created.id, 'all');
+      toast.success(`Bewaard als project "${name}". Elk beeld met dit project krijgt deze stijl.`);
+      return true;
+    },
+    [user, navigate, location.pathname, chatProjects, loadProjectContext],
   );
 
   const selectProjectFiles = useCallback(
@@ -475,6 +502,7 @@ export default function OptimizerPage() {
                 }
                 projectSources={projectSources}
                 renderProjectContext={renderProjectContext}
+                onSaveStyleProject={saveStyleProject}
                 thinking={thinkingOn}
                 webSearch={webSearchOn}
               />

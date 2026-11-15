@@ -88,6 +88,49 @@ export async function readImageStyle(
 }
 
 /**
+ * Maakt van de beschrijving van een voorbeeldbeeld een vaste beeldstijl (mode
+ * image-style-save): hoe het beeld gemaakt is, zonder wat erop staat. Die komt
+ * als instructie in een project, zodat elk volgend beeld dezelfde stijl krijgt.
+ */
+export async function imageStyleForProject(
+  voorbeeldTekst: string,
+  ai?: { provider?: string; model?: string },
+): Promise<{ naam: string; stijlTekst: string } | { error: string }> {
+  const functionUrl = getFunctionUrl('optimize-prompt');
+  if (!isSupabaseConfigured || !functionUrl) {
+    return { error: 'Een stijl omzetten kan alleen met de AI aan.' };
+  }
+  try {
+    const anonKey = getAnonKey();
+    const response = await fetch(functionUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(anonKey ? { Authorization: `Bearer ${anonKey}`, apikey: anonKey } : {}),
+      },
+      body: JSON.stringify({
+        mode: 'image-style-save',
+        voorbeeldTekst,
+        preferredProvider: ai?.provider,
+        preferredModel: ai?.model,
+      }),
+    });
+    const data = (await response.json().catch(() => ({}))) as {
+      success?: boolean;
+      naam?: string;
+      stijlTekst?: string;
+      error?: string;
+    };
+    if (data.success && data.stijlTekst?.trim()) {
+      return { naam: data.naam?.trim() ?? '', stijlTekst: data.stijlTekst.trim() };
+    }
+    return { error: data.error ?? 'De stijl kon niet worden omgezet.' };
+  } catch {
+    return { error: 'De stijl kon niet worden omgezet. Probeer het opnieuw.' };
+  }
+}
+
+/**
  * Verwerkt een aangeklikte keuze in één veld van de beeldprompt (mode
  * image-option-apply): de AI herschrijft het veld met de keuze erin en houdt
  * wat er al stond en niet botst. Null als het niet lukt; dan blijft het veld
