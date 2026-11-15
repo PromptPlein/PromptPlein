@@ -272,7 +272,7 @@ export default function OwnPromptOptimizer({
   renderProjectContext,
   projectStyle,
   thinking,
-  webSearch,
+  webSearch: webSearchSetting,
   toggles,
   restore,
 }: OwnPromptOptimizerProps) {
@@ -289,6 +289,10 @@ export default function OwnPromptOptimizer({
   // stand van de schakelaar eronder. Die staat bij een nieuwe soort weer aan,
   // want aan is de aanbevolen stand (iets nieuws, eerst een prototype).
   const [kind, setKind] = useState<PromptKind | null>(restore?.kind ?? null);
+  // Bij Afbeelding nooit zoeken op internet: een beeldgenerator heeft niets aan
+  // webbronnen, en de treffers gingen over het merk of het auteursrecht in plaats
+  // van over hoe het beeld eruitziet.
+  const webSearch = Boolean(webSearchSetting) && kind !== 'image';
   const [variantOn, setVariantOn] = useState(restore?.variantOn ?? true);
   const variant = kind ? KIND_VARIANTS[kind] : undefined;
   const candidates = frameworksForKind(frameworks, kind, variantOn);
