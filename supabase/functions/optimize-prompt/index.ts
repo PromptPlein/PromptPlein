@@ -69,7 +69,8 @@ type Mode =
   | 'skill-draft'
   | 'skill-trigger'
   | 'image-options'
-  | 'image-style';
+  | 'image-style'
+  | 'image-option-apply';
 
 /**
  * Eén beurt in een chatgesprek. De chat-modus stuurt de volledige (al
@@ -328,6 +329,8 @@ interface RequestBody {
   currentValue?: string;
   /** De OVERIGE velden (label + huidige waarde), voor consistentie/afstemming. */
   siblings?: Array<{ label: string; value: string }>;
+  /** image-option-apply: de keuze die de medewerker onder het veld aanklikte. */
+  keuze?: string;
   // 'analyze'-velden: toets de eigen prompt aan de eisen van het prompt framework.
   ownPrompt?: string;
   analyzeFields?: AnalyzeField[];
@@ -7007,6 +7010,8 @@ const MODE_MAX_TOKENS: Record<Mode, number> = {
   'image-options': 1536,
   // De stijl van een voorbeeldbeeld: een naam en zes korte regels.
   'image-style': 1024,
+  // Eén veld van een beeldprompt opnieuw, met de gekozen keuze erin: hooguit twee zinnen.
+  'image-option-apply': 768,
   'meta-build': 4096,
   'fewshot-extract': 4096,
   plan: 3072,
@@ -9682,9 +9687,7 @@ let IMAGE_OPTIONS_SYSTEM_PROMPT = `Je bedenkt per veld van een beeldprompt drie 
 
 <regels_voor_keuzes>
 - Elke keuze is een aanwijzing die een beeldgenerator kan uitvoeren. Hij noemt iets wat je in het beeld ziet: techniek, materiaal, kleur, licht, afstand, plek, houding of wat er gebeurt.
-- Een keuze zonder gevolg voor het beeld is fout. Zet daarom bij het doel achter de plek wat die plek van het beeld vraagt.
-  fout: "als cadeau"
-  goed: "op een verjaardagskaart: klein formaat, vrolijk, één duidelijk figuur"
+- Een keuze zonder gevolg voor het beeld is fout. Schrijf een keuze voor het doel daarom altijd in de vorm "<plek>: <formaat>, <sfeer>, <hoeveel detail>". Noem achter de dubbele punt geen onderwerp; dat staat in een ander veld.
 - De drie keuzes zijn echt verschillend, geen drie varianten van hetzelfde.
 - Een keuze is één korte regel zonder punt aan het eind.
 - Blijf in de wereld van het verzoek. Bij een schilderij gaat het over schildertechniek en doek, bij een affiche over lezen op afstand, bij een foto over camera en licht.
@@ -9834,6 +9837,54 @@ async function runMistralVision(
   return '';
 }
 
+/**
+ * Een aangeklikte keuze verwerken in één veld (mode image-option-apply). Een
+ * klik vervangt de tekst niet: wat er al stond en niet botst blijft, zodat de
+ * medewerker geen context kwijtraakt. Keuze van de eigenaar.
+ */
+let IMAGE_OPTION_APPLY_SYSTEM_PROMPT = `Je verwerkt een gekozen idee in één veld van een beeldprompt, zonder de tekst die er al stond kwijt te raken.
+
+<taak>
+Herschrijf de huidige tekst van het veld zo dat het gekozen idee erin zit. Houd alles uit de huidige tekst wat niet botst met het idee.
+</taak>
+
+<regels>
+- Vervang alleen wat over hetzelfde gaat als het idee. Gaat het idee over het soort licht, dan vervangt het het oude soort licht en blijft het gevoel uit de huidige tekst staan, en andersom.
+- Neem de details uit de huidige tekst die het idee niet raakt letterlijk mee, zoals het gevoel, de kleur of wie er in beeld is.
+- Sluit aan bij wat de medewerker wil en bij de andere velden. Neem niets over wat al in een ander veld staat.
+- Schrijf één of twee zinnen met zichtbare details die een beeldgenerator kan uitvoeren.
+- Is het veld leeg, schrijf het idee dan uit in één zin die past bij de andere velden.
+</regels>
+
+<taal>
+Schrijf natuurlijk Nederlands, geen vertaald Engels. Zet nooit een gedachtestreepje tussen zinsdelen; gebruik een komma of een dubbele punt.
+</taal>
+
+<uitvoer>
+Geef alleen geldige JSON terug, in precies deze vorm:
+{"value":"<de nieuwe tekst van het veld>"}
+</uitvoer>`;
+
+/** Het veld, de keuze en de rest van het beeld, voor image-option-apply. */
+function IMAGE_OPTION_APPLY_USER_PROMPT(args: {
+  label: string;
+  current: string;
+  keuze: string;
+  ownPrompt: string;
+  siblings: { label: string; value: string }[];
+}): string {
+  const andere = args.siblings
+    .filter((s) => s.value.trim())
+    .map((s) => `- ${s.label}: ${s.value.trim()}`)
+    .join('\n');
+  return (
+    `VELD: ${args.label}\n\n<huidige_tekst>\n${args.current || '(leeg)'}\n</huidige_tekst>\n\n` +
+    `GEKOZEN IDEE: ${args.keuze}\n\n` +
+    (args.ownPrompt ? `<wens_van_de_medewerker>\n${args.ownPrompt}\n</wens_van_de_medewerker>\n\n` : '') +
+    (andere ? `ANDERE VELDEN:\n${andere}` : '')
+  ).trim();
+}
+
 /** Wat de medewerker wil en welke velden er zijn, voor image-options. */
 function IMAGE_OPTIONS_USER_PROMPT(ownPrompt: string, fields: AnalyzeField[]): string {
   return (
@@ -9966,6 +10017,7 @@ const PROMPT_CATALOG: PromptCatalogEntry[] = [
   { id: 'RUBRIC_CRITERIA_PROMPT', groep: "Techniekbouwers", titel: "Rubric: criteria voorstellen", uitleg: "Stelt criteria voor een toetsingskader voor. {{sleutels}} wordt de lijst schaalpunten, {{sleutels_json}} het JSON-sjabloon per schaalpunt.", get: () => RUBRIC_CRITERIA_PROMPT, set: (v) => { RUBRIC_CRITERIA_PROMPT = v; } },
   { id: 'IMAGE_SYSTEM_PROMPT', groep: "Afbeelding", titel: "Beeldprompt schrijven", uitleg: "Schrijft bij Afbeelding de beeldprompt die de medewerker in ChatGPT of Copilot plakt. Vervangt daar de hoofdprompt, de toon en de lengteregel. De vaste beeldstijl komt eronder.", get: () => IMAGE_SYSTEM_PROMPT, set: (v) => { IMAGE_SYSTEM_PROMPT = v; } },
   { id: 'IMAGE_STYLE_FROM_EXAMPLE_PROMPT', groep: "Afbeelding", titel: "Stijl uit een voorbeeldbeeld", uitleg: "Beschrijft bij Van een voorbeeld hoe het toegevoegde beeld gemaakt is (stijl, kleuren met code, licht, kader, sfeer, details), zonder het onderwerp. Die beschrijving gaat als vaste beeldstijl mee.", get: () => IMAGE_STYLE_FROM_EXAMPLE_PROMPT, set: (v) => { IMAGE_STYLE_FROM_EXAMPLE_PROMPT = v; } },
+  { id: 'IMAGE_OPTION_APPLY_SYSTEM_PROMPT', groep: "Afbeelding", titel: "Keuze verwerken in een veld", uitleg: "Na een klik op een keuze: herschrijft het veld met de keuze erin en houdt wat er al stond, zolang het niet botst.", get: () => IMAGE_OPTION_APPLY_SYSTEM_PROMPT, set: (v) => { IMAGE_OPTION_APPLY_SYSTEM_PROMPT = v; } },
   { id: 'IMAGE_OPTIONS_SYSTEM_PROMPT', groep: "Afbeelding", titel: "Keuzes per veld", uitleg: "Bedenkt bij Afbeelding per veld een vraag en drie keuzes die bij de soort beeld passen, als inspiratie onder het veld.", get: () => IMAGE_OPTIONS_SYSTEM_PROMPT, set: (v) => { IMAGE_OPTIONS_SYSTEM_PROMPT = v; } },
   { id: 'IMAGE_PREFILL_INSTRUCTION', groep: "Afbeelding", titel: "Velden van een beeldprompt invullen", uitleg: "Komt vóór \"Velden voor-invullen\" bij Afbeelding: lege onderdelen krijgen een voorstel, met een andere keuze in de toelichting.", get: () => IMAGE_PREFILL_INSTRUCTION, set: (v) => { IMAGE_PREFILL_INSTRUCTION = v; } },
   { id: 'IMAGE_STYLE_BLOCK', groep: "Afbeelding", titel: "Vaste beeldstijl toepassen", uitleg: "Hoe een vaste beeldstijl meegaat bij het invullen en het schrijven. {{stijl}} wordt de Rijkshuisstijl of de instructie van het gekozen project.", get: () => IMAGE_STYLE_BLOCK, set: (v) => { IMAGE_STYLE_BLOCK = v; } },
@@ -10302,7 +10354,9 @@ Deno.serve(async (req: Request) => {
                                                           ? 'image-options'
                                                           : body.mode === 'image-style'
                                                             ? 'image-style'
-                                                            : 'generate';
+                                                            : body.mode === 'image-option-apply'
+                                                              ? 'image-option-apply'
+                                                              : 'generate';
     const order = buildOrder(body.preferredProvider);
     const temperature = clampTemp(body.temperature);
     // Uitvoerbudget van deze modus: bepaalt het max_tokens-plafond van elke
@@ -12457,6 +12511,56 @@ Deno.serve(async (req: Request) => {
     }
 
     // --- Skill Creator: testverzoeken bedenken, of de beschrijving aanscherpen ---
+    // --- Een aangeklikte keuze verwerken in een veld van de beeldprompt ---
+    if (mode === 'image-option-apply') {
+      const keuze = body.keuze?.trim();
+      const label = body.fieldLabel?.trim();
+      if (!keuze || !label) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'keuze en fieldLabel zijn verplicht' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+      const userMessage = IMAGE_OPTION_APPLY_USER_PROMPT({
+        label,
+        current: body.currentValue?.trim() ?? '',
+        keuze,
+        ownPrompt: body.ownPrompt?.trim() ?? '',
+        siblings: Array.isArray(body.siblings)
+          ? body.siblings.filter((s) => s && typeof s.label === 'string' && typeof s.value === 'string')
+          : [],
+      });
+      const system = withBeeldStijl(IMAGE_OPTION_APPLY_SYSTEM_PROMPT, body.beeld);
+      for (const candidate of order) {
+        try {
+          const raw = await JSON_PROVIDERS[candidate](
+            userMessage,
+            system,
+            0.4,
+            resolveModel(candidate, body.preferredProvider, body.preferredModel),
+            maxTokens,
+          );
+          const match = raw.match(/\{[\s\S]*\}/);
+          const parsed = match ? (JSON.parse(escapeRawControlChars(match[0])) as { value?: unknown }) : null;
+          const text = parsed ? coerceFieldValue(parsed.value) : null;
+          const value = text ? stripEmphasis(text).trim() : '';
+          if (value) {
+            return new Response(
+              JSON.stringify({ success: true, value, provider: candidate }),
+              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            );
+          }
+          console.warn(`${candidate} (image-option-apply) gaf geen tekst`);
+        } catch (providerErr) {
+          console.error(`${candidate} (image-option-apply) mislukt, probeer volgende:`, providerErr);
+        }
+      }
+      return new Response(
+        JSON.stringify({ success: false, error: 'De keuze kon niet worden verwerkt' }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
     // --- De stijl van een voorbeeldbeeld ---
     if (mode === 'image-style') {
       const beeld = typeof body.voorbeeldBeeld === 'string' ? body.voorbeeldBeeld : '';
