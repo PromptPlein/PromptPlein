@@ -9,9 +9,10 @@ import { MAX_PROJECT_INSTRUCTIONS_CHARS, MAX_PROJECT_NAME_CHARS } from '@/servic
  * instructie de beeldstijl is. Daarna krijgt elk beeld dat je met dat project
  * maakt dezelfde stijl, met een ander onderwerp.
  *
- * De AI haalt eerst het onderwerp van het voorbeeld eruit. Zonder die stap zou
+ * De AI haalt eerst het uiterlijk van het onderwerp eruit. Zonder die stap zou
  * "oranje voor de katten" in elk volgend beeld katten opleveren, want de vaste
- * beeldstijl gaat in elk onderdeel van de prompt mee. De medewerker ziet de
+ * beeldstijl gaat in elk onderdeel van de prompt mee. Formaat, indeling en het
+ * verhaal per paneel blijven wel: die maken een voorbeeld tot een sjabloon. De medewerker ziet de
  * uitkomst en past hem aan voordat hij hem bewaart.
  */
 export default function BewaarStijlDialog({
@@ -74,7 +75,7 @@ export default function BewaarStijlDialog({
       {bezig ? (
         <p role="status" className="flex items-center gap-2 py-6 text-sm text-slate-600 dark:text-slate-300">
           <Loader2 size={16} className="animate-spin" aria-hidden="true" />
-          De AI haalt het onderwerp uit je voorbeeld, zodat alleen de stijl overblijft.
+          De AI haalt het onderwerp uit je voorbeeld. De stijl, de indeling en het verhaal blijven.
         </p>
       ) : (
         <form
@@ -112,7 +113,7 @@ export default function BewaarStijlDialog({
             </label>
             <p className="mb-2 text-sm text-slate-600 dark:text-slate-300">
               {mislukt
-                ? 'Het omzetten lukte niet. Haal zelf weg wat er op je voorbeeld staat, zoals personen en dieren, en houd de techniek, kleuren en het licht.'
+                ? 'Het omzetten lukte niet. Haal zelf weg hoe de personen en dieren op je voorbeeld eruitzien. Houd het formaat, de indeling, het verhaal, de techniek, de kleuren en het licht.'
                 : 'Pas aan wat niet klopt. Je kunt dit later ook aanpassen op de projectpagina.'}
             </p>
             <textarea

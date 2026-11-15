@@ -720,7 +720,16 @@ Bewaar als vaste stijl maakt van een voorbeeld een project met de stijl als inst
 aan, zodat elk volgend beeld bij Uit een project die stijl krijgt (`BewaarStijlDialog`). Eerst haalt
 `image-style-save` het onderwerp eruit: de beschrijving koppelt kleur en licht aan de figuren
 ("oranje voor de katten"), en als vaste beeldstijl kwamen die figuren anders in elk beeld terug. De
-gebruiker ziet de stijl en past hem aan voor hij hem bewaart. Een vraag om een bestaand logo of merk
+gebruiker ziet de stijl en past hem aan voor hij hem bewaart.
+
+Een voorbeeld is vaak een sjabloon, niet alleen een stijl: drie panelen met golvende randen die
+samen een verhaal vertellen (zitten, liggen, lopen). Daarom beschrijft `image-style` ook de
+indeling en het verhaal per paneel, en meet de server het formaat zelf uit de JPEG (`beeldMaten`,
+`formaatVan`): het model schatte een staand beeld als liggend. Bij bewaren blijven formaat,
+indeling en verhaal staan, met "de hoofdpersoon" in plaats van wie er op het voorbeeld staat. De
+beeldprompt heeft daarvoor een regel Indeling, en een verhaal uit de stijl wordt met het onderwerp
+van de gebruiker opnieuw verteld, één paneel per moment. Large 4 noemde een (AI-)foto soms
+"digitale schildering"; de analyse kiest daarom foto zodra het op een camera-opname lijkt. Een vraag om een bestaand logo of merk
 wordt in de beeldprompt een eigen embleem zonder merknaam, en bij Afbeelding wordt nooit op internet
 gezocht: de treffers gingen over het merk en het auteursrecht, niet over hoe het beeld eruitziet.
 
