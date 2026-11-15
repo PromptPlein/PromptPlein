@@ -655,6 +655,11 @@ export interface GeneratorContext {
   id: string;
   /** Naam van het project, voor het label in de bouwer. */
   name: string;
+  /**
+   * De projectinstructie zelf, ongewijzigd. Bij Afbeelding is dat de vaste
+   * beeldstijl: die gaat woord voor woord mee in plaats van via de analyse.
+   */
+  instructions: string;
   /** De bronbestanden die zijn gelezen; de bouwer toont ze als labels. */
   files: { id: string; name: string }[];
   /** Totale omvang van de gelezen bronbestanden, in tekens. */
@@ -1068,6 +1073,7 @@ export async function buildGeneratorContext(
     analyzed: Boolean(brief),
     id: project.id,
     name: project.name,
+    instructions,
     files: files.map((f) => ({ id: f.id, name: f.name })),
     fileChars,
   };

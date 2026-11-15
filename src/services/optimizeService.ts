@@ -6,13 +6,9 @@ import {
   type StreamOutcome,
 } from '@/lib/ndjsonStream';
 import {
-  fillSjabloon,
   ensureGoalCommand,
   isContextPrompt,
   isGoalCommand,
-  isSjabloon,
-  openPlaatshouders,
-  sjabloonNaam,
   structureFormat,
 } from '@/lib/techniques';
 import { tidyPromptMarkup } from '@/lib/utils';
@@ -42,6 +38,17 @@ import type {
   TechniqueRecommendation,
   TranscriptTurn,
 } from '@/types';
+
+/**
+ * De beeldstijl bij Afbeelding. 'vrij' laat de stijl aan de AI en de velden,
+ * 'rijkshuisstijl' neemt de vaste huisstijl van de server, 'project' de
+ * instructie van het gekozen project (`stijlTekst`). Zo komt elke afbeelding
+ * van een project in dezelfde stijl, met een ander onderwerp.
+ */
+export interface BeeldKeuze {
+  stijl: 'vrij' | 'rijkshuisstijl' | 'project';
+  stijlTekst?: string;
+}
 
 /**
  * Vult een techniek-template met de prompt-inhoud en vervolgvragen.
@@ -163,6 +170,8 @@ export async function optimizePrompt(args: {
    * dialoog nog moet "aanzetten".
    */
   interviewResolved?: boolean;
+  /** Bij een afbeelding: welke beeldstijl vast meegaat. Zie {@link BeeldKeuze}. */
+  beeld?: BeeldKeuze;
   /**
    * Meelezen terwijl de AI schrijft. Geef je dit mee, dan vraagt de service een
    * streamend antwoord en roept `onChunk` aan met de tekst tot dan toe — de
@@ -195,15 +204,10 @@ export async function optimizePrompt(args: {
     kennisbankInstruction,
     extraAnsweredFields,
     interviewResolved,
+    beeld,
     onChunk,
     onStatus,
   } = args;
-
-  // Een vast sjabloon (routekaart in rijksstijl, …) schrijft alleen de inhoud;
-  // de vormgeving en techniek staan in het sjabloon en blijven letterlijk staan.
-  if (isSjabloon(technique) && sjabloonNaam(technique.template)) {
-    return writeSjabloon(args);
-  }
 
   // Een /goal-opdracht moet met /goal beginnen, anders zet de agent het doel
   // niet aan; ook als het model of de lokale terugval dat woord weglaat.
@@ -265,6 +269,9 @@ export async function optimizePrompt(args: {
             )
           : undefined,
         kennisbankInstruction,
+        // Afbeelding: de vaste beeldstijl. Het project gaat dan als stijl mee
+        // en niet als onderwerp.
+        ...(beeld ? { beeld } : {}),
         // Denken of zoeken aan: de server controleert en verbetert in een
         // tweede ronde zijn eerste versie. Kan alleen streamend ('reset').
         ...(onChunk && (thinking || webSearch) ? { review: true } : {}),
@@ -375,236 +382,6 @@ export async function optimizePrompt(args: {
     success: true,
     provider: 'local-template',
   };
-}
-
-/**
- * Een sjabloon invullen (mode 'sjabloon'). De AI schrijft alleen het blok op de
- * plek van `{{INHOUD:naam}}`, met de systeemprompt die bij die naam hoort; de
- * rest van het sjabloon gaat letterlijk mee. Zo ziet elke routekaart er hetzelfde
- * uit en verschilt alleen wat erop staat.
- *
- * Staan er na het schrijven nog [plaatshouders] in de inhoud, dan krijgt de
- * gebruiker die als melding te zien: dat zijn gegevens die hij nog niet gaf en
- * die de AI dus niet mocht verzinnen.
- */
-async function writeSjabloon(args: Parameters<typeof optimizePrompt>[0]): Promise<OptimizeResult> {
-  const {
-    technique,
-    promptContent,
-    followUpAnswers,
-    preferredProvider,
-    preferredModel,
-    projectContext,
-    thinking,
-    onChunk,
-    onStatus,
-  } = args;
-  const answeredFields = technique.follow_up_questions
-    .map((q) => ({ id: q.id, label: q.label, answer: followUpAnswers[q.id] ?? '' }))
-    .filter((f) => f.answer.trim());
-
-  // Zonder AI: het sjabloon met de ruwe gegevens op de plek van de inhoud. Het
-  // bouwende model zet ze dan zelf in de vorm; beter dan een lege plek.
-  const localResult = (error?: string): OptimizeResult => ({
-    optimized_content: fillSjabloon(
-      technique.template,
-      [
-        'Zet deze gegevens van de gebruiker zelf in de vorm die hierboven beschreven staat:',
-        promptContent,
-        ...answeredFields.map((f) => `${f.label}\n${f.answer}`),
-      ].join('\n\n'),
-    ),
-    success: true,
-    provider: 'local-template',
-    ...(error ? { error } : {}),
-  });
-
-  const functionUrl = getFunctionUrl('optimize-prompt');
-  if (!isSupabaseConfigured || !functionUrl) return localResult();
-
-  const payload = {
-    mode: 'sjabloon',
-    sjabloon: sjabloonNaam(technique.template),
-    techniqueName: technique.name,
-    promptContent,
-    answeredFields,
-    preferredProvider: preferredProvider ?? 'auto',
-    preferredModel,
-    projectContext,
-    thinking,
-  };
-
-  try {
-    const notices: string[] = [];
-    const streamed = await streamFromFunction(payload, onChunk ?? (() => {}), tidyPromptMarkup, (status) => {
-      if (status.notice) notices.push(status.notice);
-      onStatus?.(status);
-    });
-    if (streamed.unclear) {
-      return {
-        optimized_content: '',
-        success: false,
-        unclear: true,
-        reason: streamed.reason,
-        provider: (streamed.provider as OptimizeResult['provider']) ?? 'mistral',
-      };
-    }
-    if (streamed.error) throw new Error(streamed.error);
-    const inhoud = tidyPromptMarkup(streamed.text);
-    if (!inhoud.trim()) throw new Error('De AI-service gaf geen inhoud terug');
-    const open = openPlaatshouders(inhoud);
-    if (open.length > 0) {
-      notices.push(
-        `Nog in te vullen: ${open.join(', ')}. Vul ze aan in de prompt of geef ze mee in je toelichting en genereer opnieuw.`,
-      );
-    }
-    return {
-      optimized_content: fillSjabloon(technique.template, inhoud),
-      success: true,
-      provider: (streamed.provider as OptimizeResult['provider']) ?? 'mistral',
-      ...(notices.length ? { notices } : {}),
-    };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Onbekende fout';
-    return localResult(`Sjabloon invullen met AI mislukt (${message}); de gegevens staan er ruw in.`);
-  }
-}
-
-/** Waar het antwoord op een vraag van een sjabloon vandaan komt. */
-export type VraagHerkomst = 'tekst' | 'aangevuld' | 'ai';
-
-/** De kop boven wat de AI zelf aan een antwoord toevoegt. */
-export const AANGEVULD_KOP = 'Aangevuld door de AI:';
-
-/** Tekst zonder hoofdletters en leestekens, om herhaling te herkennen. */
-const kaal = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
-
-/**
- * Een aanvulling die alleen herhaalt wat er al staat, voegt niets toe. Ook
- * niet als ze het in andere woorden doet: staan vrijwel alle inhoudswoorden
- * (langer dan drie letters) van de aanvulling al in het antwoord, dan telt ze
- * als herhaling.
- */
-function herhaalt(bestaand: string | undefined, aanvulling: string): boolean {
-  if (!bestaand) return false;
-  const oud = kaal(bestaand);
-  const nieuw = kaal(aanvulling);
-  if (oud.includes(nieuw)) return true;
-  const woorden = nieuw.split(' ').filter((w) => w.length > 3);
-  if (woorden.length === 0) return true;
-  const bekend = new Set(oud.split(' '));
-  return woorden.filter((w) => bekend.has(w)).length / woorden.length >= 0.8;
-}
-
-/** Zet een aanvulling onder een antwoord, met de kop ertussen. */
-export function voegAanvullingToe(antwoord: string, aanvulling: string): string {
-  return antwoord.trim()
-    ? `${antwoord.trim()}\n\n${AANGEVULD_KOP}\n${aanvulling.trim()}`
-    : `${AANGEVULD_KOP}\n${aanvulling.trim()}`;
-}
-
-/**
- * Vul de vragen van een sjabloon in uit tekst die de gebruiker al had
- * voorbereid (bijvoorbeeld een uitwerking uit een andere chat). Twee opdrachten
- * lopen tegelijk: één haalt eruit wat in de tekst staat, één schrijft alleen
- * wat de AI erbij bedenkt. Per vraag komen ze onder elkaar, met de aanvulling
- * na "Aangevuld door de AI:", en per vraag komt terug waar het antwoord vandaan
- * komt. Zo hangt de scheiding tussen tekst en aanvulling niet af van het model.
- */
-export async function vragenUitVoorbereiding(args: {
-  technique: Technique;
-  tekst: string;
-  preferredProvider?: AiProvider;
-  preferredModel?: string;
-}): Promise<{
-  antwoorden: Record<string, string>;
-  herkomst: Record<string, VraagHerkomst>;
-  onduidelijk?: string;
-}> {
-  const opdracht = (sjabloonVragen: 'uithalen' | 'aanvullen') =>
-    prefillFields({
-      ownPrompt: args.tekst,
-      technique: args.technique,
-      sjabloonVragen,
-      preferredProvider: args.preferredProvider,
-      preferredModel: args.preferredModel,
-    });
-  // Het aanvullen is een extraatje: mislukt het, dan blijft wat uit de tekst komt staan.
-  const [uit, bij] = await Promise.all([
-    opdracht('uithalen'),
-    opdracht('aanvullen').catch(() => null),
-  ]);
-  if (uit.unclear) {
-    return {
-      antwoorden: {},
-      herkomst: {},
-      onduidelijk:
-        uit.reason?.trim() || 'Uit deze tekst kon de AI geen antwoorden op de vragen halen.',
-    };
-  }
-  const uitTekst = new Map(
-    uit.fields
-      .filter((f) => f.source !== 'ai' && f.value.trim())
-      .map((f) => [f.id, f.value.trim()]),
-  );
-  const aanvulling = new Map(
-    (bij && !bij.unclear ? bij.fields : [])
-      .map((f) => [f.id, f.value.replace(/^\s*aangevuld door de ai:\s*/i, '').trim()] as const)
-      .filter(([, v]) => v),
-  );
-  const antwoorden: Record<string, string> = {};
-  const herkomst: Record<string, VraagHerkomst> = {};
-  for (const q of args.technique.follow_up_questions) {
-    const tekst = uitTekst.get(q.id);
-    const bijTekst = aanvulling.get(q.id);
-    const extra = bijTekst && !herhaalt(tekst, bijTekst) ? bijTekst : undefined;
-    if (tekst && extra) {
-      antwoorden[q.id] = voegAanvullingToe(tekst, extra);
-      herkomst[q.id] = 'aangevuld';
-    } else if (tekst) {
-      antwoorden[q.id] = tekst;
-      herkomst[q.id] = 'tekst';
-    } else if (extra) {
-      antwoorden[q.id] = voegAanvullingToe('', extra);
-      herkomst[q.id] = 'ai';
-    }
-  }
-  return { antwoorden, herkomst };
-}
-
-/**
- * Na "Klaar" bij een sjabloon: de antwoorden staan letterlijk in de velden, en
- * de AI stelt per veld alleen een aanvulling voor. Die verandert niets aan het
- * antwoord; de gebruiker voegt haar toe of verwerpt haar. Een veld dat al een
- * aanvulling van de AI heeft, krijgt geen tweede (geen AI over AI), en een
- * aanvulling die alleen herhaalt wat er staat, valt weg.
- *
- * `tekst` is alles wat de gebruiker gaf: de voorbereide tekst en de antwoorden.
- */
-export async function aanvullingenVoorVelden(args: {
-  technique: Technique;
-  tekst: string;
-  antwoorden: Record<string, string>;
-  preferredProvider?: AiProvider;
-  preferredModel?: string;
-}): Promise<Record<string, string>> {
-  const res = await prefillFields({
-    ownPrompt: args.tekst,
-    technique: args.technique,
-    sjabloonVragen: 'aanvullen',
-    preferredProvider: args.preferredProvider,
-    preferredModel: args.preferredModel,
-  });
-  if (res.unclear) return {};
-  const voorstellen: Record<string, string> = {};
-  for (const f of res.fields) {
-    const antwoord = args.antwoorden[f.id];
-    if (antwoord && /aangevuld door de ai:/i.test(antwoord)) continue;
-    const extra = f.value.replace(/^\s*aangevuld door de ai:\s*/i, '').trim();
-    if (!extra || herhaalt(antwoord, extra)) continue;
-    voorstellen[f.id] = extra;
-  }
-  return voorstellen;
 }
 
 /**
@@ -2685,12 +2462,8 @@ export async function prefillFields(args: {
    * basis van gangbare (rijks)overheidsconventies.
    */
   fromFormatBrief?: boolean;
-  /**
-   * Sjabloon: de vragen van de contextstap invullen uit een voorbereide tekst.
-   * 'uithalen' neemt alleen over wat erin staat, 'aanvullen' schrijft alleen wat
-   * de AI toevoegt (zie vragenUitVoorbereiding).
-   */
-  sjabloonVragen?: 'uithalen' | 'aanvullen';
+  /** Bij een afbeelding: welke beeldstijl vast meegaat. Zie {@link BeeldKeuze}. */
+  beeld?: BeeldKeuze;
   /**
    * Context van het aangehaakte chatproject; zie {@link buildGeneratorContext}.
    * Hiermee vult de AI de velden van het raamwerk vast met wat het project al
@@ -2725,7 +2498,7 @@ export async function prefillFields(args: {
     clarification,
     fromDocument,
     fromFormatBrief,
-    sjabloonVragen,
+    beeld,
     projectContext,
     onStatus,
     onSummary,
@@ -2785,10 +2558,8 @@ export async function prefillFields(args: {
         clarification,
         fromDocument,
         fromFormatBrief,
-        // Een sjabloon gaat letterlijk op een vaste vorm: de server laat feiten
-        // die ontbreken dan open en zet er een vraag bij, in plaats van te gokken.
-        ...(isSjabloon(technique) ? { sjabloon: sjabloonNaam(technique.template) ?? 'algemeen' } : {}),
-        ...(isSjabloon(technique) && sjabloonVragen ? { sjabloonVragen } : {}),
+        // Afbeelding: lege onderdelen krijgen een voorstel, met de vaste beeldstijl erbij.
+        ...(beeld ? { beeld } : {}),
         techniqueName: technique.name,
         analyzeFields,
         preferredProvider: preferredProvider ?? 'auto',

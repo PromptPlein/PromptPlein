@@ -42,10 +42,6 @@ interface FieldBlockProps {
   proposal: { proposed: string; improvements: string[] } | null;
   onAccept: () => void;
   onReject: () => void;
-  /** Voorgestelde aanvulling onder het eigen antwoord (sjabloon), of null. */
-  aanvulling?: string | null;
-  onAanvullingToevoegen?: () => void;
-  onAanvullingVerwerpen?: () => void;
 }
 
 /**
@@ -75,9 +71,6 @@ function FieldBlock({
   proposal,
   onAccept,
   onReject,
-  aanvulling,
-  onAanvullingToevoegen,
-  onAanvullingVerwerpen,
 }: FieldBlockProps) {
   const fieldId = `${idPrefix}-${question.id}`;
   const active = expanding || proposal !== null;
@@ -92,7 +85,7 @@ function FieldBlock({
         'min-w-0 rounded-xl border p-2 transition-all duration-200',
         // Alleen in het raster: stap voor stap staat er één veld, zonder buren.
         !tall && 'row-span-5 grid grid-cols-1 grid-rows-subgrid',
-        (active || aanvulling) && 'col-span-full',
+        active && 'col-span-full',
         active
           ? 'border-rijksblauw-300 bg-rijksblauw-50/60 ring-4 ring-rijksblauw-500/10 dark:border-rijksblauw-500/50 dark:bg-rijksblauw-500/10 dark:ring-rijksblauw-500/15'
           : 'border-transparent',
@@ -180,19 +173,6 @@ function FieldBlock({
           onReject={onReject}
         />
       )}
-      {/* Een aanvulling vervangt niets: ze komt pas onder het eigen antwoord als
-          de gebruiker haar toevoegt, zodat zichtbaar blijft wat er veranderde. */}
-      {aanvulling && onAanvullingToevoegen && onAanvullingVerwerpen && (
-        <ExpandProposal
-          title={`Aanvulling van de AI voor ${name}`}
-          proposed={aanvulling}
-          improvements={[]}
-          hint='Je eigen antwoord blijft staan. Voeg je dit toe, dan komt het eronder na "Aangevuld door de AI:".'
-          acceptLabel="Toevoegen aan mijn antwoord"
-          onAccept={onAanvullingToevoegen}
-          onReject={onAanvullingVerwerpen}
-        />
-      )}
       </div>
     </div>
   );
@@ -257,12 +237,6 @@ interface FollowUpQuestionsProps {
   onBuild?: () => void;
   /** Opschrift van die bouw-knop. */
   buildLabel?: string;
-  /**
-   * Sjabloon: per veld een voorgestelde aanvulling van de AI. Die verandert het
-   * antwoord niet; de gebruiker voegt haar toe of verwerpt haar.
-   */
-  aanvullingen?: Record<string, string>;
-  onAanvulling?: (id: string, toevoegen: boolean) => void;
   /** Kop boven de velden, links van de indelingsknop (bijv. een StepHeading). */
   heading?: ReactNode;
   /** Toon de letter van het framework bij elk veld; uit op Prompt maken. */
@@ -292,8 +266,6 @@ export default function FollowUpQuestions({
   finishLabel = 'Genereren en optimaliseren prompt',
   onBuild,
   buildLabel = 'Bouw prompt',
-  aanvullingen,
-  onAanvulling,
   heading,
   showLetters = true,
   askIfEmpty = false,
@@ -470,9 +442,6 @@ export default function FollowUpQuestions({
               proposal={proposal?.fieldId === q.id ? proposal : null}
               onAccept={acceptProposal}
               onReject={rejectProposal}
-              aanvulling={aanvullingen?.[q.id] ?? null}
-              onAanvullingToevoegen={onAanvulling && (() => onAanvulling(q.id, true))}
-              onAanvullingVerwerpen={onAanvulling && (() => onAanvulling(q.id, false))}
             />
           ))}
         </div>
@@ -634,9 +603,6 @@ export default function FollowUpQuestions({
           proposal={proposal?.fieldId === current.id ? proposal : null}
           onAccept={acceptProposal}
           onReject={rejectProposal}
-          aanvulling={aanvullingen?.[current.id] ?? null}
-          onAanvullingToevoegen={onAanvulling && (() => onAanvulling(current.id, true))}
-          onAanvullingVerwerpen={onAanvulling && (() => onAanvulling(current.id, false))}
         />
       </div>
 

@@ -458,6 +458,11 @@ export default function OptimizerPage() {
                 toggles={toggles}
                 initialPrompt={initialPrompt}
                 projectContext={projectContext?.text}
+                projectStyle={
+                  projectContext
+                    ? { name: projectContext.name, text: projectContext.instructions || projectContext.text }
+                    : null
+                }
                 projectSources={projectSources}
                 renderProjectContext={renderProjectContext}
                 thinking={thinkingOn}

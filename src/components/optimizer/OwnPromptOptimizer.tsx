@@ -3,7 +3,6 @@ import type { ProjectContextSlot } from '@/components/optimizer/ProjectContextPi
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
-  ArrowDown,
   ArrowRight,
   Blocks,
   Bot,
@@ -14,9 +13,8 @@ import {
   HelpCircle,
   LayoutDashboard,
   Lightbulb,
-  Loader2,
+  ImageIcon,
   RefreshCw,
-  Route,
   Sparkles,
   Wand2,
   type LucideIcon,
@@ -32,7 +30,7 @@ import MakeProgress from '@/components/optimizer/MakeProgress';
 import { compactFieldLabel } from '@/lib/fieldLabel';
 import { techniekKaart } from '@/lib/techniekDoelen';
 import PrefillSources from '@/components/optimizer/PrefillSources';
-import SjabloonVragen from '@/components/optimizer/SjabloonVragen';
+import BeeldSpiekkaart from '@/components/optimizer/BeeldSpiekkaart';
 import { PROMPT_CATEGORIES } from '@/data/promptCategories';
 import { PROMPT_EXAMPLES } from '@/data/promptExamples';
 import {
@@ -40,9 +38,7 @@ import {
   PROMPT_KINDS,
   frameworksForKind,
   isContextPrompt,
-  isSjabloon,
   localFrameworkGuess,
-  sjabloonContextTekst,
   type PromptKind,
 } from '@/lib/techniques';
 import { usePersistentDraft } from '@/lib/usePersistentDraft';
@@ -51,12 +47,9 @@ import {
   generatePrompt,
   prefillFields,
   recommendFramework,
+  type BeeldKeuze,
   type FrameworkSearchPhase,
   type PrefillPhase,
-  type VraagHerkomst,
-  aanvullingenVoorVelden,
-  voegAanvullingToe,
-  vragenUitVoorbereiding,
 } from '@/services/optimizeService';
 import OptimizingLoader from './OptimizingLoader';
 import PrefillLoader from './PrefillLoader';
@@ -79,15 +72,36 @@ import type {
 export interface OwnPromptRestore {
   kind: PromptKind | null;
   variantOn: boolean;
-  sjabloonId: string | null;
+  /** Bij Afbeelding: de gekozen beeldstijl. */
+  beeldStijl?: BeeldStijl;
   pickedByKind: boolean;
   recommendations: TechniqueRecommendation[] | null;
   techniqueId: string;
   prefill: PrefillResult | null;
   answers: Record<string, string>;
   fieldMeta: FieldMeta;
-  vraagHerkomst: Record<string, VraagHerkomst>;
 }
+
+/** De stijl bij Afbeelding: vrij, de Rijkshuisstijl, of die uit een project. */
+type BeeldStijl = BeeldKeuze['stijl'];
+
+/** Per browser onthouden, zodat wie altijd in huisstijl werkt dat één keer kiest. */
+const BEELD_STIJL_KEY = 'opl.beeld.stijl';
+
+function readBeeldStijl(): BeeldStijl {
+  try {
+    const v = localStorage.getItem(BEELD_STIJL_KEY);
+    return v === 'rijkshuisstijl' || v === 'project' ? v : 'vrij';
+  } catch {
+    return 'vrij';
+  }
+}
+
+const BEELD_STIJLEN: { value: BeeldStijl; label: string; detail: string }[] = [
+  { value: 'vrij', label: 'Vrij', detail: 'de AI kiest wat bij je beeld past' },
+  { value: 'rijkshuisstijl', label: 'Rijkshuisstijl', detail: 'kleuren en beeldtaal van het Rijk' },
+  { value: 'project', label: 'Uit een project', detail: 'je eigen vaste stijl' },
+];
 
 interface OwnPromptOptimizerProps {
   /** Admin-bepaalde AI-instellingen (provider, systeemprompt, toon, temperatuur). */
@@ -126,6 +140,12 @@ interface OwnPromptOptimizerProps {
   projectSources?: (task: string) => Promise<string | undefined>;
   /** De knop "Context" met zijn labels, boven het tekstvak. */
   renderProjectContext?: (slot: ProjectContextSlot) => ReactNode;
+  /**
+   * Het aangehaakte project als beeldstijl: de naam en de projectinstructie. Bij
+   * Afbeelding gaat die instructie woord voor woord mee als vaste stijl, zodat
+   * elk beeld uit dat project dezelfde stijl krijgt met een ander onderwerp.
+   */
+  projectStyle?: { name: string; text: string } | null;
   /**
    * Denken aan: het model redeneert eerst en schrijft de prompt daarna pas.
    * Komt van de knop boven de bouwer; geldt alleen voor de laatste stap, het
@@ -190,12 +210,12 @@ const KIND_OPTIONS: Record<
     placeholder:
       'Bijv. geef feedback op conceptbrieven aan burgers, elke keer volgens de schrijfwijzer van ons ministerie.',
   },
-  template: {
-    label: 'Routekaart',
-    icon: Route,
-    hint: 'Een geanimeerde routekaart in rijksstijl: waar je vandaan komt, waar je nu staat en waar je naartoe wilt. Jij geeft de inhoud; de vormgeving is elke keer hetzelfde.',
+  image: {
+    label: 'Afbeelding',
+    icon: ImageIcon,
+    hint: 'Een prompt voor een beeldgenerator, zoals ChatGPT of Copilot. PromptPlein maakt zelf geen beeld. Kies een vrije stijl, de Rijkshuisstijl of de vaste stijl van een project.',
     placeholder:
-      'Bijv. een routekaart van ons opleidingstraject: vijf bijeenkomsten vanaf 3 maart, met per bijeenkomst het thema, het huiswerk en wat het oplevert. We staan nu bij de tweede.',
+      'Bijv. een illustratie bij ons intranetbericht over de nieuwe thuiswerkregeling: een medewerker aan de keukentafel met een laptop, rustig en licht.',
   },
 };
 
@@ -213,6 +233,7 @@ export default function OwnPromptOptimizer({
   projectContext: projectBrief,
   projectSources,
   renderProjectContext,
+  projectStyle,
   thinking,
   webSearch,
   toggles,
@@ -235,18 +256,29 @@ export default function OwnPromptOptimizer({
   const variant = kind ? KIND_VARIANTS[kind] : undefined;
   const candidates = frameworksForKind(frameworks, kind, variantOn);
   const kindOption = kind ? KIND_OPTIONS[kind] : null;
-  // Bij Sjabloon kiest de gebruiker zelf welk sjabloon; er valt niets te wegen.
-  const [sjabloonId, setSjabloonId] = useState<string | null>(restore?.sjabloonId ?? null);
-  const sjabloon =
-    kind === 'template' ? (candidates.find((t) => t.id === sjabloonId) ?? candidates[0] ?? null) : null;
   // De soort wees precies één framework aan: dan zoeken we niet, maar gaan we
-  // meteen door naar de velden.
+  // meteen door naar de velden. Bij Afbeelding is dat altijd zo.
   const directFramework =
-    kind === 'template'
-      ? sjabloon
-      : kind && kind !== 'skill' && candidates.length === 1
-        ? candidates[0]
-        : null;
+    kind && kind !== 'skill' && candidates.length === 1 ? candidates[0] : null;
+  // Bij Afbeelding: welke stijl vast meegaat. "Uit een project" werkt pas als er
+  // een project aanhangt; tot dan gaat er geen vaste stijl mee.
+  const [beeldStijl, setBeeldStijlState] = useState<BeeldStijl>(
+    restore?.beeldStijl ?? readBeeldStijl(),
+  );
+  const projectStijl = projectStyle?.text.trim() ? projectStyle : null;
+  const beeld: BeeldKeuze | undefined =
+    kind !== 'image'
+      ? undefined
+      : beeldStijl === 'project'
+        ? projectStijl
+          ? { stijl: 'project', stijlTekst: projectStijl.text }
+          : { stijl: 'vrij' }
+        : { stijl: beeldStijl };
+  // Wie bij Afbeelding een project aanhaakt, wil daar de stijl van.
+  const projectNaam = projectStijl?.name;
+  useEffect(() => {
+    if (projectNaam && kind === 'image') setBeeldStijlState('project');
+  }, [projectNaam, kind]);
   // De aanbeveling kwam uit de soortkeuze, niet uit een AI-afweging.
   const [pickedByKind, setPickedByKind] = useState(restore?.pickedByKind ?? false);
 
@@ -255,14 +287,8 @@ export default function OwnPromptOptimizer({
   const [ownPrompt, setOwnPrompt, clearOwnPromptDraft] = usePersistentDraft('ownPromptFlow');
   // Bij Sjabloon: de antwoorden op de vragen van het sjabloon, net als de prompt
   // bewaard zodat een herlaadactie ze niet wist (als JSON in één concept).
-  const [sjabloonDraft, setSjabloonDraft, clearSjabloonDraft] =
-    usePersistentDraft('sjabloonAntwoorden');
-  const sjabloonAntwoorden = parseAntwoorden(sjabloonDraft);
-  // Wat er als context naar de AI gaat. Bij een sjabloon de antwoorden op de
-  // vragen, elk onder zijn vraag, plus het vrije vak eronder.
-  const promptText = sjabloon
-    ? sjabloonContextTekst(sjabloon, sjabloonAntwoorden, ownPrompt)
-    : ownPrompt.trim();
+  // Wat er als context naar de AI gaat.
+  const promptText = ownPrompt.trim();
   const [showExamples, setShowExamples] = useState(false);
   const [recommending, setRecommending] = useState(false);
   const [recommendations, setRecommendations] = useState<TechniqueRecommendation[] | null>(
@@ -329,7 +355,6 @@ export default function OwnPromptOptimizer({
     setPrefill(null);
     setAnswers({});
     setFieldMeta({});
-    setAanvullingen({});
     setUnclearReason(null);
   }
 
@@ -354,8 +379,6 @@ export default function OwnPromptOptimizer({
   /** "Opschonen": wis de geplakte prompt (ook uit localStorage) én alle voortgang. */
   function handleClearAll() {
     clearOwnPromptDraft();
-    clearSjabloonDraft();
-    setVraagHerkomst({});
     resetDownstream();
     setComposerOpen(true);
     setShowExamples(false);
@@ -380,62 +403,6 @@ export default function OwnPromptOptimizer({
     toast.success('Voorbeeld ingevuld.');
   }
 
-  // Loopt het invullen van de vragen uit de voorbereide tekst?
-  const [vragenVullen, setVragenVullen] = useState(false);
-  // Waar elk antwoord vandaan komt na "Vul de vragen in uit je tekst".
-  const [vraagHerkomst, setVraagHerkomst] = useState<Record<string, VraagHerkomst>>(
-    restore?.vraagHerkomst ?? {},
-  );
-  // Na "Velden invullen" bij de routekaart: per veld een voorgestelde aanvulling
-  // van de AI, die de gebruiker toevoegt of verwerpt. null = wordt nog gezocht.
-  const [aanvullingen, setAanvullingen] = useState<Record<string, string> | null>({});
-
-  /**
-   * Routekaart: haal uit de voorbereide tekst de antwoorden op de vragen. Wat de
-   * gebruiker al had ingevuld blijft staan; een vraag waar de tekst niets over
-   * zegt blijft leeg.
-   */
-  async function handleVragenUitTekst() {
-    if (!sjabloon || !ownPrompt.trim()) return;
-    setVragenVullen(true);
-    try {
-      const { antwoorden, herkomst, onduidelijk } = await vragenUitVoorbereiding({
-        technique: sjabloon,
-        tekst: ownPrompt.trim(),
-        preferredProvider: settings.provider,
-        preferredModel: settings.model,
-      });
-      if (onduidelijk) {
-        toast(onduidelijk, { icon: 'ℹ️' });
-        return;
-      }
-      const nieuw = Object.entries(antwoorden).filter(([id]) => !sjabloonAntwoorden[id]?.trim());
-      if (nieuw.length === 0) {
-        toast('Je tekst gaf geen antwoord op de vragen die nog leeg waren.', { icon: 'ℹ️' });
-        return;
-      }
-      setSjabloonDraft(JSON.stringify({ ...Object.fromEntries(nieuw), ...sjabloonAntwoorden }));
-      setVraagHerkomst((prev) => ({
-        ...prev,
-        ...Object.fromEntries(nieuw.map(([id]) => [id, herkomst[id] ?? 'tekst'])),
-      }));
-      resetDownstream();
-      const alIngevuld = sjabloon.follow_up_questions.filter((q) =>
-        sjabloonAntwoorden[q.id]?.trim(),
-      ).length;
-      const leeg = sjabloon.follow_up_questions.length - alIngevuld - nieuw.length;
-      toast.success(
-        leeg > 0
-          ? `${nieuw.length} vragen ingevuld uit je tekst. Kijk ze na; ${leeg} vragen zijn nog leeg.`
-          : `${nieuw.length} vragen ingevuld uit je tekst. Kijk na wat de AI heeft aangevuld en klik dan op Velden invullen.`,
-      );
-    } catch {
-      toast.error('Vragen invullen uit je tekst mislukt. Probeer het opnieuw.');
-    } finally {
-      setVragenVullen(false);
-    }
-  }
-
   /** Kies een soort bij "Wat wil je maken?". Dezelfde soort nog eens kiezen doet niets. */
   function handleKind(clicked: PromptKind) {
     // Nog eens op de gekozen soort klikken zet hem uit: zonder soort kiest de
@@ -444,6 +411,17 @@ export default function OwnPromptOptimizer({
     setKind(next);
     setVariantOn(true);
     resetDownstream(); // andere soort = andere frameworks, het oude advies vervalt
+  }
+
+  function handleBeeldStijl(next: BeeldStijl) {
+    if (next === beeldStijl) return;
+    setBeeldStijlState(next);
+    try {
+      localStorage.setItem(BEELD_STIJL_KEY, next);
+    } catch {
+      // Zonder opslag geldt de keuze alleen voor nu.
+    }
+    resetDownstream();
   }
 
   function handleVariant(on: boolean) {
@@ -475,7 +453,7 @@ export default function OwnPromptOptimizer({
    */
   async function handleRecommend() {
     if (!promptText) {
-      toast.error(sjabloon ? 'Beantwoord eerst een paar vragen.' : 'Plak eerst je eigen prompt.');
+      toast.error(kind === 'image' ? 'Beschrijf eerst het beeld.' : 'Plak eerst je eigen prompt.');
       return;
     }
     if (kind === 'skill') {
@@ -535,85 +513,11 @@ export default function OwnPromptOptimizer({
     setClarifyOpen(false);
     const chosen = frameworks.find((t) => t.id === id);
     if (!chosen) return;
-    setAanvullingen({});
-    // Routekaart met beantwoorde vragen: die antwoorden gaan letterlijk in de
-    // velden, de AI stelt alleen aanvullingen voor (zie startSjabloonVelden).
-    if (isSjabloon(chosen) && Object.values(sjabloonAntwoorden).some((v) => v.trim())) {
-      void startSjabloonVelden(chosen);
-      return;
-    }
     // Wacht tot het laadblok is gerenderd en scroll het rustig in beeld.
     requestAnimationFrame(() => {
       analysisRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
     void runPrefill(chosen);
-  }
-
-  /**
-   * Routekaart: de antwoorden op de vragen gaan letterlijk in de velden; de AI
-   * schrijft ze niet opnieuw. Daarna stelt de AI per veld hooguit een aanvulling
-   * voor, die pas iets verandert als de gebruiker haar toevoegt.
-   */
-  async function startSjabloonVelden(chosen: Technique) {
-    const overgenomen = Object.fromEntries(
-      chosen.follow_up_questions
-        .filter((q) => sjabloonAntwoorden[q.id]?.trim())
-        .map((q) => [q.id, sjabloonAntwoorden[q.id].trim()]),
-    );
-    const note = 'Jouw antwoord, ongewijzigd overgenomen.';
-    setPrefill({
-      summary: 'Je antwoorden staan ongewijzigd in de velden.',
-      fields: Object.entries(overgenomen).map(([id, value]) => ({
-        id,
-        value,
-        source: 'prompt' as const,
-        note,
-      })),
-      success: true,
-      provider: 'local-template',
-    });
-    setAnswers(overgenomen);
-    setFieldMeta(
-      Object.fromEntries(Object.keys(overgenomen).map((id) => [id, { source: 'prompt' as const, note }])),
-    );
-    setAanvullingen(null);
-    try {
-      setAanvullingen(
-        await aanvullingenVoorVelden({
-          technique: chosen,
-          tekst: promptText,
-          antwoorden: overgenomen,
-          preferredProvider: settings.provider,
-          preferredModel: settings.model,
-        }),
-      );
-    } catch {
-      // Aanvullen is een extraatje; zonder blijven de antwoorden gewoon staan.
-      setAanvullingen({});
-    }
-  }
-
-  /** Voeg een voorgestelde aanvulling toe aan het veld, of verwerp haar. */
-  function handleAanvulling(id: string, toevoegen: boolean) {
-    const extra = aanvullingen?.[id];
-    if (toevoegen && extra) {
-      setAnswers((prev) => ({ ...prev, [id]: voegAanvullingToe(prev[id] ?? '', extra) }));
-      setFieldMeta((prev) => ({
-        ...prev,
-        [id]: {
-          source: 'ai',
-          note: prev[id]
-            ? 'Jouw antwoord, met de aanvulling van de AI eronder.'
-            : 'Aanvulling van de AI; dit veld had je nog niet ingevuld.',
-        },
-      }));
-    }
-    setAanvullingen((prev) => {
-      if (!prev) return prev;
-      const rest = { ...prev };
-      delete rest[id];
-      return rest;
-    });
   }
 
   /**
@@ -641,7 +545,9 @@ export default function OwnPromptOptimizer({
         clarification: clarify?.trim() || undefined,
         preferredProvider: settings.provider,
         preferredModel: settings.model,
-        projectContext: await resolveProjectContext(promptText),
+        // Bij een afbeelding is het project de stijl, en die gaat via `beeld` mee.
+        beeld,
+        projectContext: beeld ? undefined : await resolveProjectContext(promptText),
         onStatus: (status) =>
           setPrefillProgress((p) => ({
             ...p,
@@ -696,15 +602,12 @@ export default function OwnPromptOptimizer({
     try {
       const res = await generatePrompt({
         technique,
-        // Bij de routekaart staan de antwoorden al in de velden; als context gaat
-        // dan alleen de voorbereide tekst mee, zodat niets dubbel binnenkomt.
-        promptContent: isSjabloon(technique)
-          ? ownPrompt.trim() || '(geen voorbereide tekst; alles staat in de velden)'
-          : promptText || '[BESCHRIJF HIER WAT JE WILT BEREIKEN]',
+        promptContent: promptText || '[BESCHRIJF HIER WAT JE WILT BEREIKEN]',
         followUpAnswers: answers,
         preferredProvider: settings.provider,
         preferredModel: settings.model,
-        projectContext: await resolveProjectContext(promptText),
+        beeld,
+        projectContext: beeld ? undefined : await resolveProjectContext(promptText),
         thinking,
         webSearch,
         webSearchInstruction: settings.webSearchInstruction.trim() || undefined,
@@ -728,14 +631,13 @@ export default function OwnPromptOptimizer({
       onResult(res, technique, {
         kind,
         variantOn,
-        sjabloonId,
+        beeldStijl,
         pickedByKind,
         recommendations,
         techniqueId: technique.id,
         prefill,
         answers,
         fieldMeta,
-        vraagHerkomst,
       });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Optimaliseren mislukt');
@@ -818,7 +720,7 @@ export default function OwnPromptOptimizer({
               info={
                 kindOption
                   ? kindOption.hint
-                  : 'Kies niets, dan kiest de AI het framework dat bij je tekst past.\nSkill en Routekaart kies je zelf.'
+                  : 'Kies niets, dan kiest de AI het framework dat bij je tekst past.\nSkill en Afbeelding kies je zelf.'
               }
             />
             <div
@@ -1008,38 +910,30 @@ export default function OwnPromptOptimizer({
             </div>
           )}
 
-          {/* Bij Routekaart: welk vast sjabloon. Alleen als er iets te kiezen
-              valt; met één sjabloon zegt de knop zelf al wat je krijgt. */}
-          {kind === 'template' && candidates.length !== 1 && (
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-slate-200 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-slate-800">
-              <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                Welk sjabloon?
-              </span>
-              {candidates.length === 0 ? (
-                <span className="text-sm text-slate-500 dark:text-slate-400">
-                  Er zijn nog geen sjablonen. Vraag een beheerder er één toe te voegen.
+          {/* Bij Afbeelding: welke stijl vast meegaat. Uit een project gebruikt de
+              projectinstructie van het project dat bij Context is gekozen. */}
+          {kind === 'image' && (
+            <div className="border-b border-slate-200 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-slate-800">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                  Welke stijl?
                 </span>
-              ) : (
                 <div
                   role="radiogroup"
-                  aria-label="Welk sjabloon?"
-                  className="grid min-w-0 flex-1 grid-cols-1 gap-2 sm:grid-cols-2"
+                  aria-label="Welke stijl?"
+                  className="grid min-w-0 flex-1 grid-cols-1 gap-2 sm:grid-cols-3"
                 >
-                  {candidates.map((t) => {
-                    const active = sjabloon?.id === t.id;
+                  {BEELD_STIJLEN.map((option) => {
+                    const active = beeldStijl === option.value;
+                    const detail =
+                      option.value === 'project' && projectStijl ? projectStijl.name : option.detail;
                     return (
                       <button
-                        key={t.id}
+                        key={option.value}
                         type="button"
                         role="radio"
                         aria-checked={active}
-                        onClick={() => {
-                          if (active) return;
-                          setSjabloonId(t.id);
-                          clearSjabloonDraft();
-                          setVraagHerkomst({});
-                          resetDownstream();
-                        }}
+                        onClick={() => handleBeeldStijl(option.value)}
                         disabled={recommending || prefilling}
                         className={clsx(
                           'flex min-w-0 items-start gap-2.5 rounded-lg border px-3 py-2 text-left transition-colors',
@@ -1059,38 +953,25 @@ export default function OwnPromptOptimizer({
                         </span>
                         <span className="min-w-0">
                           <span className="block text-sm font-semibold text-slate-800 dark:text-slate-100">
-                            {t.name}
+                            {option.label}
                           </span>
-                          {t.description && (
-                            <span className="line-clamp-2 text-xs text-slate-500 dark:text-slate-400">
-                              {t.description}
-                            </span>
-                          )}
+                          <span className="block break-words text-xs text-slate-500 dark:text-slate-400">
+                            {detail}
+                          </span>
                         </span>
                       </button>
                     );
                   })}
                 </div>
+              </div>
+              {beeldStijl === 'project' && !projectStijl && (
+                <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                  Kies bij Context het project met je beeldstijl. Beschrijf die stijl in de
+                  projectinstructie: illustratie of foto, de kleuren met hun code en wat er altijd in
+                  moet of nooit in mag. Tot je een project kiest, gaat er geen vaste stijl mee.
+                </p>
               )}
             </div>
-          )}
-
-          {/* Routekaart: eerst het vak voor wat je al hebt voorbereid, dan de
-              vragen van het sjabloon (onder het tekstvak). */}
-          {sjabloon && (
-            <label
-              htmlFor="own-prompt-input"
-              className="block border-b border-slate-100 bg-white px-3.5 pt-3 pb-2 dark:border-slate-700 dark:bg-slate-800"
-            >
-              <span className="block text-sm font-semibold text-slate-800 dark:text-slate-100">
-                Heb je al iets voorbereid? (optioneel)
-              </span>
-              <span className="block text-xs text-slate-500 dark:text-slate-400">
-                Plak hier wat je al hebt, bijvoorbeeld een uitwerking uit een andere chat, een
-                planning of aantekeningen. De AI haalt eruit wat bij de vragen hoort en vult aan;
-                per vraag zie je wat uit je tekst komt en wat de AI heeft bedacht.
-              </span>
-            </label>
           )}
 
           <textarea
@@ -1098,9 +979,7 @@ export default function OwnPromptOptimizer({
             className="block min-h-[6.5rem] w-full resize-y border-0 bg-white px-3.5 py-3 text-[0.9375rem] leading-relaxed text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-0 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
             value={ownPrompt}
             placeholder={
-              sjabloon
-                ? 'Plak hier je voorbereide tekst.'
-                : kindOption
+              kindOption
                 ? (!variantOn && kindOption.placeholderOff) || kindOption.placeholder
                 : 'Plak hier de prompt of stel hier je vraag. Typ @ voor een project.'
             }
@@ -1110,64 +989,15 @@ export default function OwnPromptOptimizer({
             }}
           />
 
-          {/* De vragen van het sjabloon, elk met een eigen vak. Bovenaan de knop
-              die ze invult uit de voorbereide tekst hierboven. */}
-          {sjabloon && (
-            <div className="border-t border-slate-200 bg-white px-3.5 py-4 dark:border-slate-700 dark:bg-slate-800">
-              <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-                  De vragen van de routekaart
-                </p>
-                <button
-                  type="button"
-                  className="opl-btn-secondary text-sm"
-                  disabled={!ownPrompt.trim() || vragenVullen || recommending || prefilling}
-                  title={ownPrompt.trim() ? undefined : 'Plak eerst je voorbereide tekst hierboven'}
-                  onClick={() => void handleVragenUitTekst()}
-                >
-                  {vragenVullen ? (
-                    <>
-                      <Loader2 size={15} className="animate-spin" /> Vragen invullen…
-                    </>
-                  ) : (
-                    <>
-                      <ArrowDown size={15} /> Vul de vragen in uit je tekst
-                    </>
-                  )}
-                </button>
-              </div>
-              <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
-                Sta bij elke vraag even stil en schrijf op wat je al weet. Met Velden invullen zet
-                de AI je antwoorden in de velden van het sjabloon, laat open wat je niet gaf en
-                vraagt daar naar.
-              </p>
-              <SjabloonVragen
-                technique={sjabloon}
-                antwoorden={sjabloonAntwoorden}
-                herkomst={vraagHerkomst}
-                onChange={(next, aangepast) => {
-                  setSjabloonDraft(JSON.stringify(next));
-                  setVraagHerkomst((prev) => {
-                    if (!prev[aangepast]) return prev;
-                    const rest = { ...prev };
-                    delete rest[aangepast];
-                    return rest;
-                  });
-                  resetDownstream(); // andere context = oude voor-invulling vervalt
-                }}
-                disabled={recommending || prefilling || vragenVullen}
-              />
-            </div>
-          )}
-
         </div>
         <VerantwoordGebruikHint text={promptText} />
+        {kind === 'image' && <BeeldSpiekkaart />}
         <div className="mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5">
           <span className="text-sm text-slate-600 dark:text-slate-300">
             {kind === 'skill'
               ? 'Opzet: Skill Creator'
-              : kind === 'template' && !sjabloon
-                ? 'Nog geen sjabloon beschikbaar'
+              : kind === 'image' && !directFramework
+                ? 'Nog geen beeldprompt beschikbaar'
                 : directFramework
                   ? `Opzet: ${directFramework.name}`
                   : `De AI kiest uit ${candidates.length} frameworks`}
@@ -1178,7 +1008,7 @@ export default function OwnPromptOptimizer({
               type="button"
               className="opl-btn-primary min-h-12 px-5 text-base"
               onClick={() => void handleRecommend()}
-              disabled={recommending || prefilling || !promptText || (kind === 'template' && !sjabloon)}
+              disabled={recommending || prefilling || !promptText || (kind === 'image' && !directFramework)}
             >
               {kind === 'skill' ? (
                 <>
@@ -1187,7 +1017,7 @@ export default function OwnPromptOptimizer({
               ) : (
                 <>
                   <Sparkles size={20} className="text-nadruk-vast" />
-                  {kind === 'template' ? 'Velden invullen' : 'Maak mijn prompt'}
+                  {kind === 'image' ? 'Maak mijn beeldprompt' : 'Maak mijn prompt'}
                 </>
               )}
             </button>
@@ -1247,9 +1077,7 @@ export default function OwnPromptOptimizer({
             <AanpakKaart
               technique={technique}
               titel={
-                isSjabloon(technique)
-                  ? 'Je antwoorden staan in de velden'
-                  : 'De AI heeft je prompt alvast ingevuld'
+                beeld ? 'De AI heeft je beeld alvast ingevuld' : 'De AI heeft je prompt alvast ingevuld'
               }
               reden={stripMarkdown(chosenRec?.value || chosenRec?.reason || '')}
               opties={aanpakOpties}
@@ -1286,29 +1114,21 @@ export default function OwnPromptOptimizer({
 
             <PrefillSources prefill={prefill} />
 
-            {isSjabloon(technique) && (
-              <p className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300">
-                {aanvullingen === null && (
-                  <Loader2 size={15} className="mt-0.5 shrink-0 animate-spin text-rijksblauw-500" />
-                )}
-                {aanvullingen === null
-                  ? 'De AI kijkt nog of er per veld iets aan te vullen is.'
-                  : Object.keys(aanvullingen).length > 0
-                    ? `De AI stelt bij ${Object.keys(aanvullingen).length} ${
-                        Object.keys(aanvullingen).length === 1 ? 'veld' : 'velden'
-                      } een aanvulling voor; die staat in het rood onder het veld. Voeg toe wat klopt, de rest verwerp je.`
-                    : 'De AI had niets aan te vullen. Wat je leeg laat, blijft een plaatshouder in de prompt.'}
+            {beeld && beeld.stijl !== 'vrij' && (
+              <p className="text-sm text-slate-600 dark:text-slate-300">
+                <strong className="font-semibold text-slate-800 dark:text-slate-100">Vaste stijl: </strong>
+                {beeld.stijl === 'rijkshuisstijl'
+                  ? 'Rijkshuisstijl. Die gaat altijd mee; jij kiest het onderwerp.'
+                  : `de stijl van ${projectStijl?.name ?? 'je project'}. Die gaat altijd mee; jij kiest het onderwerp.`}
               </p>
             )}
 
             <section className="opl-card p-5">
               <FollowUpQuestions
-                projectContext={projectContext}
+                projectContext={beeld ? undefined : projectContext}
                 technique={technique}
                 answers={answers}
                 onChange={setAnswers}
-                aanvullingen={isSjabloon(technique) ? (aanvullingen ?? undefined) : undefined}
-                onAanvulling={isSjabloon(technique) ? handleAanvulling : undefined}
                 fieldMeta={fieldMeta}
                 onUserEdit={(id) =>
                   setFieldMeta((prev) => {
@@ -1326,10 +1146,8 @@ export default function OwnPromptOptimizer({
               />
 
               {/* Een nieuwe invulronde met extra uitleg: handig als de AI op het
-                  verkeerde spoor zit. Bij de routekaart niet, daar zou een nieuwe
-                  ronde de velden opnieuw laten schrijven. */}
-              {!isSjabloon(technique) && (
-                <div className="mt-3 border-t border-slate-200 pt-3 dark:border-slate-700">
+                  verkeerde spoor zit. */}
+              <div className="mt-3 border-t border-slate-200 pt-3 dark:border-slate-700">
                   <button
                     type="button"
                     aria-expanded={clarifyOpen}
@@ -1361,8 +1179,7 @@ export default function OwnPromptOptimizer({
                       </button>
                     </div>
                   )}
-                </div>
-              )}
+              </div>
             </section>
           </div>
         )}
@@ -1385,20 +1202,4 @@ export default function OwnPromptOptimizer({
       )}
     </div>
   );
-}
-
-/** De bewaarde antwoorden van een sjabloon; leeg of kapot concept = geen antwoorden. */
-function parseAntwoorden(draft: string): Record<string, string> {
-  if (!draft) return {};
-  try {
-    const parsed = JSON.parse(draft) as unknown;
-    if (!parsed || typeof parsed !== 'object') return {};
-    return Object.fromEntries(
-      Object.entries(parsed as Record<string, unknown>).filter(
-        (e): e is [string, string] => typeof e[1] === 'string',
-      ),
-    );
-  } catch {
-    return {};
-  }
 }

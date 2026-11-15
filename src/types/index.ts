@@ -482,7 +482,8 @@ export interface PlanStep {
     | 'step-back'
     | 'rubric'
     | 'skill'
-    | 'goal';
+    | 'goal'
+    | 'image';
   /** Afgeleid: true bij chain-of-thought/socratic (vraag-na-vraag stappen). */
   interactive?: boolean;
 }
@@ -714,9 +715,9 @@ export interface ChatMessage {
    */
   incomplete?: boolean;
   /**
-   * Niet door de AI geschreven maar door PromptPlein zelf gemaakt:
-   * 'routekaart' = de vaste routekaart met de inhoud uit het bericht ervoor.
-   * Gaat niet mee als geschiedenis naar het model; het is een bestand, geen
+   * Niet door de AI geschreven maar door PromptPlein zelf gemaakt. Alleen nog in
+   * oude chats: 'routekaart' was de vaste routekaart, die er niet meer is. Gaat
+   * niet mee als geschiedenis naar het model; het is een bestand, geen
    * gespreksbeurt.
    */
   madeBy?: 'routekaart';

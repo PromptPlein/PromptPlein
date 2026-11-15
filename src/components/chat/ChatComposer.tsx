@@ -14,7 +14,6 @@ import {
   FolderOpen,
   Gauge,
   Loader2,
-  Map as MapIcon,
   Maximize2,
   Minimize2,
   Paperclip,
@@ -32,7 +31,6 @@ import ThinkingToggle from '@/components/common/ThinkingToggle';
 import WebSearchToggle from '@/components/common/WebSearchToggle';
 import { ACCEPTED_DOC_ACCEPT } from '@/lib/extractDocument';
 import { usePersistentDraft } from '@/lib/usePersistentDraft';
-import { parseRoutekaart } from '@/lib/routekaart';
 import { hasMemoryTrigger } from '@/lib/memoryTriggers';
 import { checkPrompt } from '@/lib/promptCheck';
 import ComposerPlusMenu from './ComposerPlusMenu';
@@ -154,12 +152,6 @@ interface ChatComposerProps {
    */
   prominent?: boolean;
   /**
-   * Staat er een routekaart in het veld (het inhoudsblok van het sjabloon
-   * Routekaart), dan biedt de balk aan hem direct te maken met de vaste
-   * routekaart, zonder AI. Afwezig = geen aanbod.
-   */
-  onRoutekaart?: (text: string) => void;
-  /**
    * Kijk tijdens het typen of het bericht korter en scherper kan (`checkPrompt`,
    * zonder AI). Kan het, dan staat in de balk de knop "Kan korter" met een
    * strakkere versie erachter. Alleen bij het eerste bericht van een gewone chat.
@@ -210,7 +202,6 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
     webSearch = false,
     onToggleWebSearch,
     prominent = false,
-    onRoutekaart,
     promptCheck = false,
   },
   ref,
@@ -227,11 +218,6 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
   useEffect(() => {
     if (!text) setEnlarged(false);
   }, [text]);
-  // Een routekaart herken je aan het inhoudsblok: een regel KOP, haltes en FINISH.
-  const isRoutekaart = useMemo(
-    () => Boolean(onRoutekaart) && /^\s*KOP\s*$/m.test(text) && parseRoutekaart(text) !== null,
-    [onRoutekaart, text],
-  );
   const [optimizing, setOptimizing] = useState(false);
   // Sleept de gebruiker op dit moment bestanden boven het veld?
   const [dragging, setDragging] = useState(false);
@@ -399,13 +385,6 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
 
   function submit() {
     if (!canSend) return;
-    // Een routekaart gaat niet naar de AI: die programmeerde de pagina zelf en
-    // leverde overlappende labels en een weg die niet aansloot. De vaste
-    // routekaart maakt hem altijd in dezelfde, geteste opmaak.
-    if (isRoutekaart) {
-      makeRoutekaart();
-      return;
-    }
     const value = text.trim();
     clearText();
     setBeforeOptimize(null);
@@ -487,14 +466,6 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
     }
   }
 
-  function makeRoutekaart() {
-    if (!onRoutekaart || disabled || streaming) return;
-    const value = text.trim();
-    clearText();
-    setBeforeOptimize(null);
-    onRoutekaart(value);
-  }
-
   const enterHint = touchKeyboard
     ? 'Verstuur met de knop Verstuur. De returntoets geeft een nieuwe regel.'
     : 'Enter verstuurt. Shift+Enter geeft een nieuwe regel.';
@@ -510,25 +481,6 @@ const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function 
       {/* Even breed als de leeskolom in ChatMessageList, zodat je tekst en het
           antwoord op dezelfde lijn beginnen. */}
       <div className="mx-auto max-w-[60ch]">
-        {/* Een routekaart programmeert de AI niet zelf: PromptPlein heeft een
-            vaste, geteste versie, en Verstuur maakt hem daarmee. */}
-        {isRoutekaart && !streaming && (
-          <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-rijksblauw-200 bg-rijksblauw-50/70 px-3 py-2 text-xs text-slate-700 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10 dark:text-slate-200">
-            <MapIcon size={15} className="shrink-0 text-rijksblauw-600 dark:text-rijksblauw-300" />
-            <span className="min-w-0 flex-1 basis-48">
-              Dit is een routekaart. PromptPlein maakt hem direct in de vaste rijksstijl, zonder AI:
-              altijd dezelfde opmaak en meteen klaar. Ook Verstuur maakt hem zo.
-            </span>
-            <button
-              type="button"
-              className="opl-btn-primary !px-2.5 !py-1.5 text-xs"
-              onClick={makeRoutekaart}
-              disabled={disabled}
-            >
-              <MapIcon size={14} /> Maak de routekaart
-            </button>
-          </div>
-        )}
         {/* Promptcheck: de strakkere versie, boven het veld zodat je beide ziet. */}
         {check && checkOpen && (
           <section

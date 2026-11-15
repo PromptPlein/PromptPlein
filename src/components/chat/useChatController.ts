@@ -22,7 +22,6 @@ import {
   titleFromFirstMessage,
 } from '@/lib/chatStorage';
 import { splitAnswer } from '@/lib/chatFiles';
-import { buildRoutekaartHtml, parseRoutekaart } from '@/lib/routekaart';
 import { downloadText } from '@/lib/download';
 import { sendChatMessage } from '@/services/chatService';
 import { hasMemoryTrigger } from '@/lib/memoryTriggers';
@@ -103,11 +102,6 @@ export interface ChatController {
   stop: () => void;
   /** Probeer het laatste, mislukte antwoord opnieuw. */
   retry: () => void;
-  /**
-   * Maak de routekaart uit `text` direct met de vaste routekaart van
-   * PromptPlein, zonder AI. Het bericht en het bestand komen in het gesprek.
-   */
-  addRoutekaart: (text: string) => Promise<void>;
   /**
    * Schrijf het laatste antwoord verder vanaf waar het ophield: na de stop-knop,
    * of als ook het automatisch verderschrijven het niet heeft afgemaakt.
@@ -543,59 +537,13 @@ export default function useChatController(
     void streamAnswer(cur, last.id, history, last.content);
   }, [streamAnswer]);
 
-  const addRoutekaart = useCallback(
-    async (rawText: string) => {
-      const text = rawText.trim();
-      if (!text || streamingRef.current) return;
-      const data = parseRoutekaart(text);
-      if (!data) {
-        toast.error('In dit bericht staat geen volledige routekaart (KOP, haltes en FINISH).');
-        return;
-      }
-      let html: string;
-      try {
-        html = await buildRoutekaartHtml(data);
-      } catch {
-        toast.error('De routekaart kon niet worden gemaakt.');
-        return;
-      }
-      const base = conversationRef.current ?? createConversation(defaultKind);
-      const now = new Date().toISOString();
-      const userMsg: ChatMessage = { id: uuid(), role: 'user', content: text, createdAt: now };
-      const fileMsg: ChatMessage = {
-        id: uuid(),
-        role: 'assistant',
-        content: `Gemaakt met de vaste routekaart van PromptPlein, met de inhoud uit je bericht. Zonder AI, dus elke routekaart heeft dezelfde opmaak.\n\n\`\`\`html\n${html}\n\`\`\``,
-        createdAt: now,
-        provider: 'local-template',
-        madeBy: 'routekaart',
-      };
-      const next: ChatConversation = {
-        ...base,
-        title: base.messages.length === 0 ? data.kop.titel || titleFromFirstMessage(text) : base.title,
-        updatedAt: now,
-        messages: [...base.messages, userMsg, fileMsg],
-      };
-      update(next);
-      persistNow(next);
-    },
-    [defaultKind, update, persistNow],
-  );
-
   const sendInNewConversation = useCallback(
     (text: string, kind?: ChatConversation['kind']) => {
       if (streamingRef.current) return;
       update(createConversation(kind ?? defaultKind));
-      // Een routekaart (vanuit de bouwer via "Uitvoeren in chat") laat de AI
-      // niet zelf programmeren: met Mistral liepen labels en weg dan door elkaar.
-      // De vaste routekaart maakt hem altijd in dezelfde opmaak.
-      if (parseRoutekaart(text)) {
-        void addRoutekaart(text);
-        return;
-      }
       void send(text);
     },
-    [send, update, defaultKind, addRoutekaart],
+    [send, update, defaultKind],
   );
 
   const stop = useCallback(() => {
@@ -843,7 +791,6 @@ export default function useChatController(
     sendInNewConversation,
     stop,
     retry,
-    addRoutekaart,
     continueLast,
     editMessage,
     newConversation,

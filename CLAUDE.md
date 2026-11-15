@@ -434,7 +434,7 @@ en antwoord op één lijn beginnen.
 
 Eén edge function, `optimize-prompt`, ongeveer 8000 regels, met een
 `mode`-veld in de body als router. Nieuwe AI-functionaliteit wordt een nieuwe
-mode in dat bestand, niet een nieuwe function. De 43 modes, gegroepeerd:
+mode in dat bestand, niet een nieuwe function. De 42 modes, gegroepeerd:
 
 | Groep | Modes |
 | --- | --- |
@@ -445,7 +445,6 @@ mode in dat bestand, niet een nieuwe function. De 43 modes, gegroepeerd:
 | Techniekbouwers | `persona-fill`, `fewshot-example`, `fewshot-extract`, `meta-build`, `cove-scan`, `stepback-ladder`, `rubric-propose`, `skill-draft`, `skill-trigger` |
 | Chat en projecten | `chat-optimize`, `project-optimize`, `project-brief`, `project-interview`, `project-prompt`, `context-interview`, `context-prompt`, `chat-intake`, `chat-intake-check`, `memory-save`, `memory-search` |
 | Testkamer-loop | `mock-answer`, `refine`, `refine-suggest` |
-| Sjablonen | `sjabloon` |
 | Projectbronnen | `project-index`, `project-search` |
 
 ### Providers en modellen
@@ -659,18 +658,27 @@ zodat de band met bijvoorbeeld C-O-S-T-A-R blijft. De techniekbouwers volgen dez
 regel: een nieuwe bouwer begint met `BuilderIntro` en zet uitleg achter een `InfoDot`,
 niet als alinea boven of onder een veld.
 
-**Sjablonen** (soort "Routekaart" bij "Wat wil je maken?", migratie 0039) zijn
-frameworks met `modality = 'template'`. De template is een vaste opdracht met
-één plek `{{INHOUD:<naam>}}`; alleen die plek schrijft de AI (mode `sjabloon`,
-systeemprompt per naam via `sjabloonSystemPrompt`), de rest gaat letterlijk mee.
-Een nieuw sjabloon is dus een rij in `techniques` plus een systeemprompt in
-`PROMPT_CATALOG`. Kiest de gebruiker geen soort, dan doen sjablonen niet mee.
+**Afbeelding** (bij "Wat wil je maken?", migratie 0062) staat op de plek van de
+routekaart, die er helemaal uit is, keuze van de eigenaar. PromptPlein maakt zelf
+geen beeld: er komt een beeldprompt uit die de gebruiker in ChatGPT of Copilot
+plakt, en daarom staat "Kopiëren in chat" er niet bij. De soort heeft één
+framework, Beeldprompt (`modality = 'image'`, `structureFormat` 'image'), met
+negen velden in de volgorde van de promptgids van OpenAI: doel, onderwerp,
+omgeving, stijl, kader, licht, tekst, niet in beeld, formaat. Dezelfde bouwstenen
+staan op de spiekkaart (`BeeldSpiekkaart`) die verschijnt zodra iemand Afbeelding
+kiest. De beeldprompt doet niet mee als de AI kiest, en staat niet op /technieken.
 
-De routekaart zelf (de HTML-pagina) programmeert geen taalmodel meer:
-`src/lib/routekaart/` leest het inhoudsblok en zet het in één vaste, geteste
-pagina (`routekaart.html`). Dat bestand verschijnt in de bouwer onder de
-opdracht en in de chat via "Maak de routekaart". Wijzig je het formaat van het
-inhoudsblok in de systeemprompt, pas dan ook `parseRoutekaart` aan.
+Boven het tekstvak kiest de gebruiker de stijl: Vrij, Rijkshuisstijl of Uit een
+project (per browser onthouden, `opl.beeld.stijl`). Bij een project gaat de
+projectinstructie woord voor woord mee als vaste beeldstijl (`beeld` in de body,
+`withBeeldStijl`), zodat elk beeld uit dat project dezelfde stijl heeft met een
+ander onderwerp. Het project gaat dan niet via `withProject` mee: bij een beeld is
+het project de stijl, geen onderwerp. De beeldprompt heeft een eigen systeemprompt
+(`IMAGE_SYSTEM_PROMPT`) in plaats van de hoofdprompt, de toon, de lengteregel en de
+clarity-gate, en geen tweede ronde. De Rijkshuisstijl (`RIJKSHUISSTIJL_BEELD`) is
+opgesteld uit de kleuren in `brandColors.js`, zonder logo en met een illustratie
+tenzij iemand om een foto vraagt; hij is nog niet getoetst aan het officiële
+beeldbeleid. Alle vier staan in Beheer, Prompts, groep Afbeelding.
 
 Elk HTML-bestand in de chat wordt na het schrijven onzichtbaar en afgeschermd
 gedraaid (`src/lib/fileCheck.ts`); scriptfouten komen met regelnummer op de

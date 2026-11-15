@@ -919,7 +919,6 @@ function ChatPageInner() {
                     extracting={controller.extracting}
                     attachments={conversation?.attachments ?? []}
                     onSend={guardedSend}
-                    onRoutekaart={(text) => void controller.addRoutekaart(text)}
                     // Net als Doorvragen: alleen het eerste bericht van een gewone chat.
                     promptCheck={
                       promptCheckEnabled &&

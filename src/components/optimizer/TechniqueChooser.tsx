@@ -3,7 +3,7 @@ import clsx from 'clsx';
 import { ArrowRight, Check } from '@/components/common/icons';
 import InfoDot from '@/components/common/InfoDot';
 import { useReferenceData } from '@/context/ReferenceDataContext';
-import { isContextPrompt } from '@/lib/techniques';
+import { isContextPrompt, isImagePrompt } from '@/lib/techniques';
 import { TECHNIEK_DOELEN, techniekKaart, type TechniekDoel } from '@/lib/techniekDoelen';
 import type { Technique } from '@/types';
 
@@ -26,6 +26,8 @@ export default function TechniqueChooser({
   const perDoel = useMemo(() => {
     const groepen = new Map<TechniekDoel, Technique[]>();
     for (const t of techniques) {
+      // De beeldprompt hoort bij Maken, Afbeelding: daar kies je ook de beeldstijl.
+      if (isImagePrompt(t)) continue;
       const { doel } = techniekKaart(t);
       groepen.set(doel, [...(groepen.get(doel) ?? []), t]);
     }

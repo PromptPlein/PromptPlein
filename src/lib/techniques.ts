@@ -24,7 +24,9 @@ const CONTEXT_PROMPT_NAMES = new Set([
  * volledige {@link Technique}, zodat ook het admin-formulier (dat nog niet is
  * opgeslagen) kan bepalen met wat voor techniek het te maken heeft.
  */
-type TechniqueIdentity = Pick<Technique, 'id' | 'name' | 'family'>;
+type TechniqueIdentity = Pick<Technique, 'id' | 'name' | 'family'> & {
+  modality?: string | null;
+};
 
 /** Is deze techniek een prompt framework (raamwerk) i.p.v. een losse techniek? */
 export function isContextPrompt(t: TechniqueIdentity): boolean {
@@ -42,10 +44,10 @@ export function isContextPrompt(t: TechniqueIdentity): boolean {
  * framework uit. Binnen Tekst kiest de AI dus zelf.
  *
  * Skill kiest geen framework: die soort stuurt door naar de Skill Creator op
- * /technieken. Sjabloon kiest ook niets af te wegen: de gebruiker wijst zelf een
- * vast sjabloon aan (zoals de routekaart in rijksstijl) en vult dat in.
+ * /technieken. Afbeelding heeft één framework, de beeldprompt (migratie 0062),
+ * en gaat dus meteen naar de velden.
  */
-export const PROMPT_KINDS = ['text', 'code', 'dashboard', 'agent', 'skill', 'template'] as const;
+export const PROMPT_KINDS = ['text', 'code', 'dashboard', 'agent', 'skill', 'image'] as const;
 
 export type PromptKind = (typeof PROMPT_KINDS)[number];
 
@@ -60,7 +62,7 @@ export type Modality =
   | 'dashboard_prototype'
   | 'dashboard_full'
   | 'agent'
-  | 'template';
+  | 'image';
 
 /**
  * De vervolgkeuze onder een soort: twee opties die elk een eigen framework
@@ -95,7 +97,7 @@ export const KIND_VARIANTS: Partial<Record<PromptKind, KindVariant>> = {
 const KIND_MODALITIES: Record<Exclude<PromptKind, 'code' | 'dashboard' | 'skill'>, Modality> = {
   text: 'text',
   agent: 'agent',
-  template: 'template',
+  image: 'image',
 };
 
 /** Welke `modality` hoort bij deze soort en stand van de schakelaar? */
@@ -109,79 +111,34 @@ function modalityFor(kind: PromptKind, variantOn: boolean): Modality | null {
 /**
  * De frameworks die bij de gekozen soort horen, in de volgorde van de lijst.
  *
- * Zonder soort (of bij Skill) komen ze allemaal terug, behalve de sjablonen:
+ * Zonder soort (of bij Skill) komen ze allemaal terug, behalve de beeldprompt:
  * zonder keuze weegt de AI alleen frameworks voor tekst, code, dashboard en
- * agent. Met soort blijven de frameworks van die soort over, plus die zonder
- * `modality`: die zijn aan geen vorm gebonden en doen overal mee.
+ * agent. Een afbeelding kies je zelf, want een tekstvraag mag nooit een
+ * beeldprompt opleveren. Met soort blijven de frameworks van die soort over,
+ * plus die zonder `modality`: die zijn aan geen vorm gebonden en doen overal mee.
  *
  * Levert het filter niets op (de migratie draait nog niet, of de lokale modus
  * kent de soort niet), dan bewust de volledige lijst. Een lege lijst laat de
  * zoekknop stil falen; een bredere keuze levert hooguit een minder scherp
- * framework op. Sjabloon is de uitzondering: daar komen alleen echte sjablonen
- * terug, ook als dat er nul zijn, want een gewoon framework is geen sjabloon.
+ * framework op. Afbeelding is de uitzondering: daar komt alleen de beeldprompt
+ * terug, want een tekstframework schrijft geen beeldprompt.
  */
 export function frameworksForKind<T extends { modality?: string | null }>(
   frameworks: T[],
   kind: PromptKind | null,
   variantOn = true,
 ): T[] {
-  if (kind === 'template') return frameworks.filter(isSjabloon);
+  if (kind === 'image') return frameworks.filter(isImagePrompt);
   const modality = kind ? modalityFor(kind, variantOn) : null;
-  const general = frameworks.filter((f) => !isSjabloon(f));
+  const general = frameworks.filter((f) => !isImagePrompt(f));
   if (!modality) return general;
   const matching = general.filter((f) => !f.modality || f.modality === modality);
   return matching.some((f) => f.modality === modality) ? matching : general;
 }
 
-/**
- * Is dit framework een vast sjabloon? Een sjabloon heeft een vaste opmaak en
- * één plek `{{INHOUD:<naam>}}` waar de AI de inhoud schrijft; de rest van de
- * template gaat letterlijk mee (zie {@link fillSjabloon}).
- */
-export function isSjabloon(t: { modality?: string | null }): boolean {
-  return t.modality === 'template';
-}
-
-const INHOUD_PLACEHOLDER = /\{\{\s*INHOUD(?::([\w-]+))?\s*\}\}/;
-
-/** De naam achter `{{INHOUD:naam}}`: welke schrijfprompt de server gebruikt. */
-export function sjabloonNaam(template: string): string | null {
-  const match = INHOUD_PLACEHOLDER.exec(template);
-  return match ? (match[1] ?? 'algemeen') : null;
-}
-
-/**
- * Zet de door de AI geschreven inhoud op de plek van `{{INHOUD:naam}}`. De
- * vaste delen van het sjabloon (vormgeving, beweging, techniek) blijven zo
- * letterlijk staan en zijn bij elke routekaart gelijk.
- */
-export function fillSjabloon(template: string, inhoud: string): string {
-  return template.replace(INHOUD_PLACEHOLDER, () => inhoud.trim()).trim();
-}
-
-/**
- * De context van een sjabloon als één tekst: de antwoorden op de vragen van het
- * sjabloon (zie SjabloonVragen), elk onder zijn vraag, met daarvóór wat de
- * gebruiker al had voorbereid en erin plakte. Die tekst gaat naar het voor-invullen en het schrijven, net
- * als de vrije context bij een gewoon framework. Leeg als er niets is ingevuld.
- */
-export function sjabloonContextTekst(
-  t: Pick<Technique, 'follow_up_questions'>,
-  antwoorden: Record<string, string>,
-  overig: string,
-): string {
-  const delen = t.follow_up_questions
-    .filter((q) => antwoorden[q.id]?.trim())
-    .map((q) => `${q.label}\n${antwoorden[q.id].trim()}`);
-  // De voorbereide tekst staat bovenaan de contextstap en gaat ook vooraan mee.
-  if (overig.trim()) delen.unshift(`VOORBEREIDE CONTEXT\n${overig.trim()}`);
-  return delen.join('\n\n');
-}
-
-/** De plaatshouders die nog in de inhoud staan, zoals [datum halte 2]. */
-export function openPlaatshouders(text: string): string[] {
-  const found = text.match(/\[[^\]\n]{2,80}\]/g) ?? [];
-  return [...new Set(found)];
+/** Is dit de beeldprompt? Die schrijft een opdracht voor een beeldgenerator. */
+export function isImagePrompt(t: { modality?: string | null }): boolean {
+  return t.modality === 'image';
 }
 
 /**
@@ -231,6 +188,7 @@ export function localFrameworkGuess(ownPrompt: string, frameworks: Technique[]):
  *  - 'rubric'           → toetsingskader met niveaubeschrijvingen, bewijsregel en eindoordeel.
  *  - 'skill'            → vaste instructie in secties die elke invoer op dezelfde manier afhandelt.
  *  - 'goal'             → één /goal-regel voor een agent: taak, succesvoorwaarde, scope en grens.
+ *  - 'image'            → een beeldprompt in vaste blokken, voor een beeldgenerator.
  *  - undefined          → geen vaste structuur; de AI bepaalt zelf de vorm.
  */
 export type StructureFormat =
@@ -246,7 +204,8 @@ export type StructureFormat =
   | 'step-back'
   | 'rubric'
   | 'skill'
-  | 'goal';
+  | 'goal'
+  | 'image';
 
 const FEW_SHOT_IDS = new Set(['tech-few-shot']);
 const FEW_SHOT_NAMES = new Set(['few-shot voorbeelden', 'few-shot', 'few shot']);
@@ -282,6 +241,9 @@ export function structureFormat(t: TechniqueIdentity): StructureFormat | undefin
   // Vóór de context-raamwerken: Goal (Agents) hoort bij die familie, maar levert
   // één /goal-regel op in plaats van koppen.
   if (isGoalCommand(t)) return 'goal';
+  // Vóór de context-raamwerken: de beeldprompt hoort bij die familie, maar
+  // levert een vaste opdracht voor een beeldgenerator op in plaats van koppen.
+  if (isImagePrompt(t)) return 'image';
   if (isContextPrompt(t)) return 'care';
   const id = t.id;
   const name = t.name.trim().toLowerCase();
@@ -465,6 +427,7 @@ const FORMAT_EXAMPLES: Record<StructureFormat, string> = {
   rubric: 'beoordeel dit projectplan op volledigheid, onderbouwing en haalbaarheid',
   skill: 'geef feedback op conceptbrieven aan burgers, elke keer volgens onze schrijfwijzer',
   goal: 'los de fout in de export op tot alle tests weer slagen',
+  image: 'een illustratie bij een intranetbericht over de nieuwe thuiswerkregeling',
 };
 
 const DEFAULT_EXAMPLE = 'schrijf een brief aan bewoners over werkzaamheden in hun straat';

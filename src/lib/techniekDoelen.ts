@@ -17,7 +17,6 @@ import {
   Palette,
   PenLine,
   Repeat,
-  Route,
   ShieldCheck,
   Table,
   Telescope,
@@ -27,7 +26,7 @@ import {
   Zap,
   type LucideIcon,
 } from '@/components/common/icons';
-import { isContextPrompt, isSjabloon } from '@/lib/techniques';
+import { isContextPrompt } from '@/lib/techniques';
 import type { Technique } from '@/types';
 
 /**
@@ -187,12 +186,6 @@ const KAARTEN: Record<string, TechniekKaart> = {
     info: 'Een fout oplossen, een functie toevoegen of gericht opruimen.',
     icon: CodeXml,
   },
-  'routekaart (rijksstijl)': {
-    doel: 'vast',
-    kort: 'Een traject in stappen',
-    info: 'Sjabloon: laat zien waar je vandaan komt, waar je staat en waar je heen wilt.',
-    icon: Route,
-  },
   'few-shot voorbeelden': {
     doel: 'vast',
     kort: 'Leren van jouw voorbeelden',
@@ -222,7 +215,7 @@ const KAARTEN: Record<string, TechniekKaart> = {
 /**
  * De tegel van een techniek. Staat hij niet in de lijst, dan valt hij terug op
  * zijn eigen omschrijving en een doel dat bij zijn soort past: liever op een
- * ruime plek dan onvindbaar. Een nieuw sjabloon hoort altijd bij Vaste vorm.
+ * ruime plek dan onvindbaar.
  */
 export function techniekKaart(t: Technique): TechniekKaart {
   const kaart = KAARTEN[t.name.trim().toLowerCase()];
@@ -230,7 +223,7 @@ export function techniekKaart(t: Technique): TechniekKaart {
   const framework = isContextPrompt(t);
   const omschrijving = t.description?.trim() ?? '';
   return {
-    doel: isSjabloon(t) ? 'vast' : framework ? 'schrijven' : 'uitdenken',
+    doel: framework ? 'schrijven' : 'uitdenken',
     kort: omschrijving,
     info: omschrijving,
     icon: framework ? Layers : Wrench,

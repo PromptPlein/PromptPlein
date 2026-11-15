@@ -26,7 +26,7 @@ import {
   runClarifyTurn,
   type PrefillPhase,
 } from '@/services/optimizeService';
-import { isContextPrompt, isSjabloon } from '@/lib/techniques';
+import { isContextPrompt, isImagePrompt } from '@/lib/techniques';
 import { activityIdentifier, stripMarkdown, copyToClipboard } from '@/lib/utils';
 import { usePersistentDraft } from '@/lib/usePersistentDraft';
 import { detectPii, detectBlockedTopics, type GuardrailFinding } from '@/services/guardrails';
@@ -553,8 +553,8 @@ export default function GoalDialog({
    * we door met het eerste framework: het gesprek is te veel werk om te laten vallen.
    */
   async function offerFramework(briefText: string, turns: TranscriptTurn[]) {
-    // Sjablonen niet: die kies je zelf bij "Wat wil je maken?", een gesprek weegt ze niet.
-    const frameworks = techniques.filter((tq) => isContextPrompt(tq) && !isSjabloon(tq));
+    // De beeldprompt niet: die kies je zelf bij "Wat wil je maken?", een gesprek weegt hem niet.
+    const frameworks = techniques.filter((tq) => isContextPrompt(tq) && !isImagePrompt(tq));
     if (frameworks.length === 0) {
       setError('Er zijn geen frameworks beschikbaar om je prompt in op te bouwen.');
       setPhase('error');

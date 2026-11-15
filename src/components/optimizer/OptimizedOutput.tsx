@@ -25,8 +25,7 @@ import { getChatSettingsCached, type ChatSettings } from '@/services/settingsSer
 import { useAuth } from '@/context/AuthContext';
 import ShareModal from '@/components/share/ShareModal';
 import SavePromptPanel from '@/components/prompts/SavePromptPanel';
-import RoutekaartResult from '@/components/optimizer/RoutekaartResult';
-import { isSjabloon, sjabloonNaam } from '@/lib/techniques';
+import { isImagePrompt } from '@/lib/techniques';
 import type { OptimizeResult, Prompt, PromptDialogue, Technique } from '@/types';
 
 interface OptimizedOutputProps {
@@ -85,6 +84,9 @@ export default function OptimizedOutput({
     };
   }, []);
   const chatAvailable = configured && chatSettings?.enabled !== false;
+  // Een beeldprompt gaat naar een beeldgenerator. De chat van PromptPlein maakt
+  // geen afbeeldingen, dus daar valt hij niet te gebruiken.
+  const image = Boolean(technique && isImagePrompt(technique));
 
   // Opslaan: het formulier zelf (titel/omschrijving/categorie/functie/
   // zichtbaarheid + AI-metadata) staat in SavePromptPanel, gedeeld met de chat.
@@ -153,10 +155,17 @@ export default function OptimizedOutput({
   return (
     <div className="space-y-4 animate-fade-in">
       <h3 className="text-lg font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
-        {skill ? 'Je skill' : 'Je herbruikbare prompt'}
+        {skill ? 'Je skill' : image ? 'Je beeldprompt' : 'Je herbruikbare prompt'}
       </h3>
 
-      {skill ? (
+      {image ? (
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          Plak deze prompt in een beeldgenerator, zoals ChatGPT of Copilot. Heb je een beeld dat je
+          mooi vindt? Voeg het daar toe en schrijf erbij: neem de stijl over, niet het onderwerp. Wil
+          je elke keer dezelfde stijl, zet hem dan in een project en kies dat project hier met
+          Context.
+        </p>
+      ) : skill ? (
         <p className="text-sm text-slate-500 dark:text-slate-400">
           Plak deze skill één keer in je eigen AI-omgeving, bijvoorbeeld als instructie van een
           Mistral-agent of als projectinstructie. Daarna geef je alleen je invoer, en de AI pakt die
@@ -179,12 +188,6 @@ export default function OptimizedOutput({
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300">
           {result.error}
         </div>
-      )}
-
-      {/* Routekaart: het bestand zelf, met de vaste opmaak van PromptPlein. De
-          opdracht eronder blijft bruikbaar voor een andere AI-omgeving. */}
-      {technique && isSjabloon(technique) && sjabloonNaam(technique.template) === 'route' && (
-        <RoutekaartResult content={result.optimized_content} />
       )}
 
       {/* Versie-chips: verschijnen zodra de verbeter-lus een tweede versie
@@ -354,6 +357,7 @@ export default function OptimizedOutput({
             te staan en wordt niet verstuurd. Uitgeschakeld wanneer de beheerder
             de chat uitzette, anders zou de prompt stilletjes verdwijnen in een
             handoff die nooit vuurt. */}
+        {!image && (
         <button
           className="opl-btn-accent"
           onClick={handleSendToChat}
@@ -366,6 +370,7 @@ export default function OptimizedOutput({
         >
           <MessageSquarePlus size={16} /> Kopiëren in chat
         </button>
+        )}
         {skill && (
           <button
             className="opl-btn-secondary"
