@@ -45,14 +45,16 @@ function SectionHeading({
   className?: string;
 }) {
   return (
-    <div className={clsx('flex items-center gap-0.5 px-2 pb-1 pt-1', className)}>
-      <h2 className="truncate text-sm font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
-        {label}
-      </h2>
+    // Kopje met een rood streepje ervoor en een lijn tot aan het plusje: zo
+    // springt het eruit tussen de regels eronder, zonder zwaar vlak.
+    <div className={clsx('flex items-center gap-2 px-2 pb-1 pt-2', className)}>
+      <span aria-hidden="true" className="h-4 w-[3px] shrink-0 rounded-full bg-nadruk" />
+      <h2 className="truncate text-[0.9375rem] font-bold text-slate-900 dark:text-white">{label}</h2>
       {info && <InfoDot label={`Uitleg over ${label.toLowerCase()}`} text={info} />}
+      <span aria-hidden="true" className="h-px min-w-3 flex-1 bg-slate-300 dark:bg-slate-600" />
       <button
         type="button"
-        className="-mr-1 ml-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-rijksblauw-700 transition-colors hover:bg-rijksblauw-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 disabled:pointer-events-none disabled:opacity-40 dark:text-rijksblauw-200 dark:hover:bg-rijksblauw-500/15"
+        className="-mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-200/80 text-nadruk transition-colors hover:bg-slate-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 disabled:pointer-events-none disabled:opacity-40 dark:bg-slate-400/15 dark:hover:bg-slate-400/25"
         onClick={onAdd}
         disabled={disabled}
         aria-label={addLabel}
@@ -240,7 +242,7 @@ export default function ChatSidebar({
           </>
         )}
 
-        <SectionHeading label="Chats" addLabel="Nieuwe chat" onAdd={onNew} disabled={disabled} className="pt-3" />
+        <SectionHeading label="Chats" addLabel="Nieuwe chat" onAdd={onNew} disabled={disabled} className="pt-5" />
 
         {entries.length === 0 && (
           <p className="px-2 py-3 text-sm text-slate-600 dark:text-slate-400">Nog geen chats.</p>
