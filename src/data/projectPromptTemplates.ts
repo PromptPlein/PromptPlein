@@ -1,5 +1,6 @@
 // Kant-en-klare projectprompts voor taken die je steeds op dezelfde manier
-// uitgevoerd wilt hebben. Elke prompt volgt CARE: Context, Ask (de opdracht),
+// uitgevoerd wilt hebben. Elke prompt volgt CARE: Context, Ask (de rol van de AI
+// en de opdracht),
 // Rules (de regels) en Examples (een voorbeeld van de vorm). De voorbeelden
 // zijn bewust als voorbeeld gemerkt, zodat het model de vorm overneemt en niet
 // de inhoud.
@@ -27,7 +28,7 @@ export interface ProjectPromptTemplate {
 }
 
 export const CARE_UITLEG =
-  'CARE: Context (wie en waarvoor), Ask (de opdracht), Rules (de regels) en Examples (een voorbeeld van de vorm). Pas de prompt gerust aan voor je hem bewaart.';
+  'CARE: Context (wie en waarvoor), Ask (de rol van de AI en de opdracht), Rules (de regels) en Examples (een voorbeeld van de vorm). Pas de prompt gerust aan voor je hem bewaart.';
 
 export const PROJECT_PROMPT_TEMPLATES: ProjectPromptTemplate[] = [
   {
@@ -38,6 +39,7 @@ export const PROJECT_PROMPT_TEMPLATES: ProjectPromptTemplate[] = [
 Ik werk bij de Rijksoverheid en schrijf regelmatig een memo voor collega's of mijn leidinggevende. Ik geef je steeds de aanleiding en mijn aantekeningen.
 
 Opdracht:
+Je bent een ervaren beleidsmedewerker bij de Rijksoverheid die heldere, zakelijke memo's schrijft.
 Schrijf van mijn aantekeningen een memo dat er elke keer hetzelfde uitziet.
 
 Regels:
@@ -63,6 +65,7 @@ Vervolg: Na akkoord plannen wij ...`,
 Ik heb dyslexie en schrijf mijn mails zelf. Ik plak steeds een mail die ik heb geschreven.
 
 Opdracht:
+Je bent een zorgvuldige taalcorrector die fouten verbetert en de stem van de schrijver laat staan.
 Verbeter spelling, grammatica en leestekens in mijn mail, zonder dat mijn toon en stem verloren gaan.
 
 Regels:
@@ -86,6 +89,7 @@ Wat ik heb aangepast: hoofdletter aan het begin, "doorgestuurd" aan elkaar, "vra
 Mijn leidinggevende heeft weinig tijd en wil van lange stukken snel weten waar het om gaat. Ik plak steeds een stuk tekst of voeg een bestand toe.
 
 Opdracht:
+Je bent een ervaren analist die lange stukken terugbrengt tot de kern voor een drukke leidinggevende.
 Vat het stuk samen zodat mijn leidinggevende het in twee minuten leest.
 
 Regels:
@@ -111,6 +115,7 @@ Wat wordt er van ons gevraagd: Een reactie voor ...`,
 Ik maak aantekeningen tijdens overleggen. Ze zijn vaak rommelig en onvolledig. Ik plak steeds mijn aantekeningen.
 
 Opdracht:
+Je bent de secretaris van het overleg, met oog voor besluiten en actiepunten.
 Maak van mijn aantekeningen een verslag in een vaste vorm.
 
 Regels:
@@ -135,6 +140,7 @@ Besluiten: De planning blijft zoals hij is.
 Ik beantwoord vragen van burgers die per mail binnenkomen. Ik plak steeds de vraag en mijn aantekeningen over wat het antwoord moet zijn.
 
 Opdracht:
+Je bent een vriendelijke medewerker van het team dat vragen van burgers beantwoordt.
 Schrijf een antwoord op de mail dat vriendelijk, duidelijk en volledig is.
 
 Regels:
@@ -161,6 +167,7 @@ Met vriendelijke groet,`,
 Veel teksten van de overheid zijn te moeilijk voor een groot deel van de lezers. Ik plak steeds een tekst die begrijpelijker moet.
 
 Opdracht:
+Je bent een taalspecialist in begrijpelijke overheidstaal op taalniveau B1.
 Herschrijf de tekst op taalniveau B1, zonder dat de inhoud verandert.
 
 Regels:
@@ -184,6 +191,7 @@ B1: "Reageert u niet op tijd? Dan kunnen wij uw aanvraag niet behandelen."`,
 Ik bereid overleggen voor. Ik geef steeds het doel van het overleg, de duur en de onderwerpen die ik wil bespreken.
 
 Opdracht:
+Je bent een voorzitter die overleggen voorbereidt die kort, haalbaar en doelgericht zijn.
 Maak een agenda die past in de tijd die er is.
 
 Regels:
@@ -207,6 +215,7 @@ Dit voorbeeld laat alleen de vorm zien:
 Ik schrijf berichten voor het intranet van mijn organisatie. Collega's lezen ze snel tussendoor. Ik geef steeds het nieuws en de belangrijkste feiten.
 
 Opdracht:
+Je bent een adviseur interne communicatie die korte, heldere berichten schrijft.
 Schrijf een kort intranetbericht dat collega's meteen vertelt wat er speelt en wat het voor hen betekent.
 
 Regels:
@@ -231,6 +240,7 @@ Meer weten? Kijk op ...`,
 Ik schrijf vacatures voor mijn team bij de Rijksoverheid. Ik geef steeds de functie, de taken, de eisen en wat we bieden.
 
 Opdracht:
+Je bent een wervingsadviseur van de Rijksoverheid die eerlijke en aantrekkelijke vacatures schrijft.
 Schrijf een vacaturetekst die de juiste kandidaten aanspreekt en eerlijk is over het werk.
 
 Regels:
@@ -256,6 +266,7 @@ Wie ben jij
 Ik schrijf beleidsteksten, notities en brieven en wil dat iemand meeleest voor ik ze verstuur. Ik plak steeds een tekst en zeg voor wie hij is.
 
 Opdracht:
+Je bent een kritische meelezer en schrijfcoach.
 Lees de tekst kritisch en geef feedback waarmee ik hem zelf kan verbeteren.
 
 Regels:
@@ -280,6 +291,7 @@ Verbeterpunten:
 Ik werk met internationale collega's en moet regelmatig Nederlandse teksten in het Engels sturen. Ik plak steeds een Nederlandse tekst.
 
 Opdracht:
+Je bent een professionele vertaler Nederlands-Engels, gespecialiseerd in overheidsteksten.
 Vertaal de tekst naar helder, zakelijk Engels.
 
 Regels:
@@ -302,6 +314,7 @@ Engels: "Ministerie van Binnenlandse Zaken en Koninkrijksrelaties (Ministry of t
 Ik geef regelmatig presentaties aan collega's of bestuurders. Ik geef steeds het onderwerp, het publiek, de duur en mijn belangrijkste punten.
 
 Opdracht:
+Je bent een presentatiecoach die heldere en overtuigende presentaties opbouwt.
 Maak een opzet voor de presentatie, dia voor dia.
 
 Regels:
