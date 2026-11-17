@@ -324,6 +324,12 @@ export default function GoalDialog({
   }, [phase, goal, transcript]);
 
   /** Kopieer een voorbeelddoel naar het klembord. */
+  function pickExample(text: string) {
+    setGoal(text);
+    setShowExamples(false);
+    toast.success('Voorbeeld ingevuld.');
+  }
+
   async function copyExample(text: string) {
     try {
       await copyToClipboard(text);
@@ -860,7 +866,16 @@ export default function GoalDialog({
                     {GOAL_EXAMPLES.map((ex) => {
               const CategoryIcon = categoryOf(ex).icon;
               return (
-                      <div key={ex.title} className="group rounded-lg border border-slate-200 bg-white p-2.5 transition-colors hover:border-rijksblauw-300 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-rijksblauw-500/40">
+                      <div
+                        key={ex.title}
+                        // Overal op het kaartje klikken is Gebruik; de knoppen
+                        // blijven voor het toetsenbord en voor Kopieer.
+                        onClick={(e) => {
+                          if ((e.target as HTMLElement).closest('button')) return;
+                          pickExample(ex.goal);
+                        }}
+                        className="group cursor-pointer rounded-lg border border-slate-200 bg-white p-2.5 transition-colors hover:border-rijksblauw-300 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-rijksblauw-500/40"
+                      >
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
                             <span className="inline-flex items-center gap-1 text-[0.6875rem] font-medium text-rijksblauw-600 dark:text-rijksblauw-300">
@@ -885,11 +900,7 @@ export default function GoalDialog({
                             </button>
                             <button
                               type="button"
-                              onClick={() => {
-                                setGoal(ex.goal);
-                                setShowExamples(false);
-                                toast.success('Voorbeeld ingevuld.');
-                              }}
+                              onClick={() => pickExample(ex.goal)}
                               title="Gebruik dit voorbeeld in het invoerveld"
                               className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-rijksblauw-600 transition-colors hover:bg-rijksblauw-50 dark:text-rijksblauw-300 dark:hover:bg-rijksblauw-500/15"
                             >

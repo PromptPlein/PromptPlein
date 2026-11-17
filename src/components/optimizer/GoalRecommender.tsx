@@ -195,7 +195,16 @@ export default function GoalRecommender({
               return (
               // De doelomschrijving zelf staat niet op het kaartje; "Gebruik"
               // zet hem in het tekstvak.
-              <div key={ex.title} className="group rounded-lg border border-slate-200 bg-white p-2.5 transition-colors hover:border-rijksblauw-300 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-rijksblauw-500/40">
+              <div
+                key={ex.title}
+                // Overal op het kaartje klikken is Gebruik; de knoppen blijven
+                // voor het toetsenbord en voor Kopieer.
+                onClick={(e) => {
+                  if ((e.target as HTMLElement).closest('button')) return;
+                  applyExample(ex.goal);
+                }}
+                className="group cursor-pointer rounded-lg border border-slate-200 bg-white p-2.5 transition-colors hover:border-rijksblauw-300 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-rijksblauw-500/40"
+              >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <span className="inline-flex items-center gap-1 text-[0.6875rem] font-medium text-rijksblauw-600 dark:text-rijksblauw-300">
