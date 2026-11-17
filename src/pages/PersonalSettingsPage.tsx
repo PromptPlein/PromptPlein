@@ -7,6 +7,7 @@ import ChatInstructionSettings from '@/components/settings/ChatInstructionSettin
 import ChatIntakeSettings from '@/components/settings/ChatIntakeSettings';
 import PromptCheckSettings from '@/components/settings/PromptCheckSettings';
 import ChatMemorySettings from '@/components/settings/ChatMemorySettings';
+import WordSettings from '@/components/settings/WordSettings';
 import { HELP_PATH } from '@/lib/shortcuts';
 
 const PARTS = [
@@ -97,6 +98,7 @@ export default function PersonalSettingsPage() {
         <>
           <ChatIntakeSettings />
           <PromptCheckSettings />
+          <WordSettings />
           <ChatInstructionSettings />
           <ChatMemorySettings />
         </>

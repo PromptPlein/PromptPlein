@@ -25,3 +25,8 @@ function downloadBlob(filename: string, blob: Blob): void {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+
+/** Downloadt een binair bestand, zoals een .docx of .xlsx. */
+export function downloadBinary(filename: string, data: Uint8Array, mime: string): void {
+  downloadBlob(filename, new Blob([data as Uint8Array<ArrayBuffer>], { type: mime }));
+}

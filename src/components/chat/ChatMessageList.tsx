@@ -27,6 +27,7 @@ import { matchesShortcut, SHORTCUTS } from '@/lib/shortcuts';
 import { isSpeaking, speak, stopSpeaking, toSpeakableText, useSpeakingId } from '@/lib/speech';
 import ChatAnswer from './ChatAnswer';
 import CopyMessageButton from './CopyMessageButton';
+import DocumentDownloads from './DocumentDownloads';
 import type { ChatMessage } from '@/types';
 
 /** Ruimte boven de vraag zodra die bovenaan staat; gelijk aan de `py-4` van de lijst. */
@@ -679,6 +680,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
           className={clsx('-ml-1.5 flex flex-wrap items-center gap-2', !canRetry && 'opl-msg-actions')}
         >
           <CopyMessageButton text={message.content} label="Kopieer antwoord" />
+          <DocumentDownloads text={message.content} sources={message.sources} />
           {canRetry && !message.error && !message.madeBy && (
             <button
               type="button"

@@ -737,6 +737,19 @@ van de gebruiker opnieuw verteld, één paneel per moment. Large 4 noemde een (A
 wordt in de beeldprompt een eigen embleem zonder merknaam, en bij Afbeelding wordt nooit op internet
 gezocht: de treffers gingen over het merk en het auteursrecht, niet over hoe het beeld eruitziet.
 
+Onder elk chatantwoord staan Word en, als er een tabel in staat, Excel
+(`DocumentDownloads`). De browser maakt het bestand zelf: een .docx en een .xlsx zijn een
+zip met XML, en `fflate` pakt die in (`wordExport.ts`, `excelExport.ts`). Geen server, geen
+extra AI-aanroep en geen nieuwe bibliotheek; de tekst verlaat de browser niet. De AI levert
+de inhoud, de opmaak komt uit de vormgeving bij Instellingen, Chat (`WordSettings`):
+Rijkshuisstijl, Eenvoudig, of een eigen Word-sjabloon. Dat sjabloon staat per browser in
+IndexedDB (`wordSettings.ts`). Kop- en voettekst, logo en stijlen blijven staan; `{inhoud}`
+geeft aan waar de tekst komt, `{titel}` en `{datum}` worden ingevuld. Kopstijlen worden op
+naam gezocht ("heading 1"), want in een Nederlandse Word is de id "Kop1". Rijks Sans wordt
+bij naam genoemd, niet ingebed. Scherm en document lezen de Markdown met dezelfde regels
+(`markdownBlocks.ts`). Controleer een wijziging door het bestand in Word en Excel te openen:
+geldige XML is nog geen bestand dat Word zonder reparatiemelding opent.
+
 Elk HTML-bestand in de chat wordt na het schrijven onzichtbaar en afgeschermd
 gedraaid (`src/lib/fileCheck.ts`); scriptfouten komen met regelnummer op de
 bestandskaart.
