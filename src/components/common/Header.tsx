@@ -163,10 +163,12 @@ export default function Header() {
           toetsenbord en schermlezer komen hem eerst tegen. */}
       <nav
         className={clsx(
-          'opl-onderbalk z-40 bg-rijksblauw-700 text-white dark:border-slate-700',
-          'max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:border-t max-sm:border-rijksblauw-500',
+          // Geen lijn tussen menu en pagina: het gekozen item is een tabblad in de
+          // paginakleur en moet er zonder naad in overlopen.
+          'opl-onderbalk z-40 bg-rijksblauw-700 text-white',
+          'max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0',
           'max-sm:pb-[env(safe-area-inset-bottom)] max-sm:pl-[env(safe-area-inset-left)] max-sm:pr-[env(safe-area-inset-right)]',
-          'sm:sticky sm:top-0 dark:sm:border-b',
+          'sm:sticky sm:top-0',
           // Op een laag scherm wordt het menu in de chat één smalle regel (index.css).
           pathname === '/chat' && 'opl-chat-menu',
         )}
@@ -187,17 +189,28 @@ export default function Header() {
                   // onbeperkt mee met de tekstgrootte (net als de tabbalk van iOS).
                   'flex min-h-[60px] min-w-[48px] flex-auto flex-col items-center justify-center gap-[4px] whitespace-nowrap px-[2px] py-[6px]',
                   'text-[min(0.8125rem,15px)] font-semibold leading-none sm:px-2 sm:py-2',
-                  'transition-colors hover:bg-white/10 focus-visible:outline focus-visible:outline-2',
+                  'transition-colors focus-visible:outline focus-visible:outline-2',
                   'focus-visible:-outline-offset-2 focus-visible:outline-white',
                   'laag:min-h-[44px] laag:flex-row laag:gap-2 laag:py-2',
                   'lg:h-14 lg:min-h-0 lg:flex-none lg:flex-row lg:gap-2.5 lg:px-5 lg:py-0 lg:text-lg',
-                  isActive && 'shadow-[inset_0_-3px_0_0_theme(colors.nadruk.vast)]',
+                  // Het gekozen item is een tabblad in de kleur van de pagina, met
+                  // een rood streepje aan de kant van de balk. Het is iets lager
+                  // dan de balk, zodat het als tab uit de pagina komt: bovenaan
+                  // als de balk boven de pagina staat, op de telefoon gespiegeld.
+                  isActive
+                    ? [
+                        'bg-slate-100 text-rijksblauw-700 dark:bg-slate-900 dark:text-white',
+                        'max-sm:mb-1.5 max-sm:min-h-0 max-sm:rounded-b-lg max-sm:shadow-[inset_0_-3px_0_0_theme(colors.nadruk.DEFAULT)]',
+                        'sm:mt-1.5 sm:min-h-0 sm:rounded-t-lg sm:shadow-[inset_0_3px_0_0_theme(colors.nadruk.DEFAULT)] lg:h-auto',
+                        'focus-visible:outline-rijksblauw-500',
+                      ]
+                    : 'hover:bg-white/10',
                 )
               }
             >
               {({ isActive }) => (
                 <>
-                  <Icon size={22} className={isActive ? 'text-nadruk-vast' : undefined} />
+                  <Icon size={22} className={isActive ? 'text-nadruk' : undefined} />
                   {label}
                 </>
               )}

@@ -467,6 +467,12 @@ html[data-toetsenbord='open'] .opl-app:has(.opl-chat-kop) {
     padding-bottom: 0;
   }
 
+  /* Het gekozen item is een tabblad dat iets lager is dan de balk. */
+  .opl-chat-menu > div > a[aria-current='page'] {
+    min-height: 0;
+    height: auto;
+  }
+
   .opl-chat-pagina {
     padding-top: 0.5rem;
     padding-bottom: 0.5rem;
