@@ -11,8 +11,8 @@ import clsx from 'clsx';
  * vast, zodat hij ook op een aanraakscherm werkt; nog een klik, Escape of een
  * klik ernaast sluit hem weer.
  *
- * Het paneel hangt via een portal aan `document.body` en staat `fixed`, net als
- * HoverPreview: zo knipt een kaart met `overflow-hidden` hem niet af.
+ * Het paneel hangt via een portal aan `document.body` en staat `fixed`: zo
+ * knipt een kaart met `overflow-hidden` hem niet af.
  */
 export default function InfoDot({
   label,

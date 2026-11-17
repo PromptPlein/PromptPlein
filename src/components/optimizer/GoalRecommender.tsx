@@ -3,7 +3,6 @@ import { AlertTriangle, Check, ClipboardCopy, Eraser, Info, Loader2, Sparkles, W
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import { useReferenceData } from '@/context/ReferenceDataContext';
-import HoverPreview from '@/components/common/HoverPreview';
 import { GOAL_EXAMPLES, categoryOf } from '@/data/goalExamples';
 import { recommendTechniques } from '@/services/optimizeService';
 import { isContextPrompt, isSkillCreator } from '@/lib/techniques';
@@ -194,10 +193,9 @@ export default function GoalRecommender({
             {GOAL_EXAMPLES.map((ex) => {
               const CategoryIcon = categoryOf(ex).icon;
               return (
-              // De doelomschrijving zelf staat niet op het kaartje; hover of
-              // "Gebruik" laat hem zien.
-              <HoverPreview key={ex.title} label="Doelomschrijving" text={ex.goal}>
-              <div className="group rounded-lg border border-slate-200 bg-white p-2.5 transition-colors hover:border-rijksblauw-300 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-rijksblauw-500/40">
+              // De doelomschrijving zelf staat niet op het kaartje; "Gebruik"
+              // zet hem in het tekstvak.
+              <div key={ex.title} className="group rounded-lg border border-slate-200 bg-white p-2.5 transition-colors hover:border-rijksblauw-300 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-rijksblauw-500/40">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <span className="inline-flex items-center gap-1 text-[0.6875rem] font-medium text-rijksblauw-600 dark:text-rijksblauw-300">
@@ -229,7 +227,6 @@ export default function GoalRecommender({
                   </div>
                 </div>
               </div>
-              </HoverPreview>
               );
             })}
           </div>

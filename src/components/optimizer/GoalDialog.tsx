@@ -32,7 +32,6 @@ import { usePersistentDraft } from '@/lib/usePersistentDraft';
 import { detectPii, detectBlockedTopics, type GuardrailFinding } from '@/services/guardrails';
 import { logBehavior, newBehaviorSession, type BehaviorSession } from '@/services/behaviorService';
 import { useAuth } from '@/context/AuthContext';
-import HoverPreview from '@/components/common/HoverPreview';
 import { GOAL_EXAMPLES, categoryOf } from '@/data/goalExamples';
 import { overheidsContext, type AiSettings } from '@/services/settingsService';
 import OptimizingLoader from './OptimizingLoader';
@@ -861,8 +860,7 @@ export default function GoalDialog({
                     {GOAL_EXAMPLES.map((ex) => {
               const CategoryIcon = categoryOf(ex).icon;
               return (
-                      <HoverPreview key={ex.title} label="Doelomschrijving" text={ex.goal}>
-                      <div className="group rounded-lg border border-slate-200 bg-white p-2.5 transition-colors hover:border-rijksblauw-300 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-rijksblauw-500/40">
+                      <div key={ex.title} className="group rounded-lg border border-slate-200 bg-white p-2.5 transition-colors hover:border-rijksblauw-300 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-rijksblauw-500/40">
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
                             <span className="inline-flex items-center gap-1 text-[0.6875rem] font-medium text-rijksblauw-600 dark:text-rijksblauw-300">
@@ -900,7 +898,6 @@ export default function GoalDialog({
                           </div>
                         </div>
                       </div>
-                      </HoverPreview>
                     );
                     })}
                   </div>

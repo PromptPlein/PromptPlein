@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { ChevronDown, Lightbulb, Wand2 } from '@/components/common/icons';
 import clsx from 'clsx';
-import HoverPreview from '@/components/common/HoverPreview';
 import { PROMPT_CATEGORIES } from '@/data/promptCategories';
 import { PROMPT_EXAMPLES, type PromptExample } from '@/data/promptExamples';
 
@@ -63,8 +62,7 @@ export default function PromptExamplePicker({
             {PROMPT_EXAMPLES.map((ex) => {
               const category = PROMPT_CATEGORIES[ex.category];
               return (
-                <HoverPreview key={ex.title} label="Voorbeeldprompt" text={ex.prompt}>
-                  <button
+                  <button key={ex.title}
                     type="button"
                     onClick={() => pick(ex)}
                     className="group flex w-full items-start justify-between gap-2 rounded-lg border border-slate-200 bg-white p-2.5 text-left transition-colors hover:border-rijksblauw-300 hover:bg-rijksblauw-50/60 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-rijksblauw-500/40 dark:hover:bg-rijksblauw-500/10"
@@ -85,7 +83,6 @@ export default function PromptExamplePicker({
                       <Wand2 size={13} /> Gebruik
                     </span>
                   </button>
-                </HoverPreview>
               );
             })}
           </div>
