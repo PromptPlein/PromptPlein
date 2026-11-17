@@ -236,8 +236,12 @@ vaag, keuze van de eigenaar. Mensen zoeken hun afdeling, niet de directie:
 `OrgPicker` toont na het ministerie één zoeklijst met alle afdelingen, met bij
 elke afdeling de afkorting en de directie erboven, zodat je op alle drie zoekt.
 Het profiel hangt aan de afdeling. Een ontbrekende afdeling vraagt de gebruiker
-aan op zijn profiel: eerst kiest hij de directie of dienst, en staat die er ook
-niet bij, dan vraagt hij die mee aan (`request_organization`, 0056). Een beheerder
+aan bij het registreren of op zijn profiel: eerst kiest hij de directie of dienst,
+en staat die er ook niet bij, dan vraagt hij die mee aan (`request_organization`,
+0056). Bij het registreren is er nog geen sessie: de aanvraag gaat mee in de
+metadata en de database dient hem in zodra het e-mailadres is bevestigd
+(`signup_organization_request`, 0063). Tot de goedkeuring staat het profiel op de
+laag erboven. Een beheerder
 keurt goed in Beheer, Afdeling-aanvragen; `approve_organization_request` maakt de
 keten en zet de onderste laag als afdeling (0058). Bij goedkeuring verhuist het
 profiel van de aanvrager naar de nieuwe afdeling. Het direct aanmaken uit 0055 is

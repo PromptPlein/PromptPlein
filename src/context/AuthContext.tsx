@@ -35,6 +35,7 @@ interface AuthContextValue {
     password: string;
     fullName?: string;
     organizationId?: string;
+    organizationRequest?: { parentId: string; names: string[]; codes: string[] };
   }) => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -109,6 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password: string;
       fullName?: string;
       organizationId?: string;
+      organizationRequest?: { parentId: string; names: string[]; codes: string[] };
     }) => {
       await authService.signUp(params);
     },

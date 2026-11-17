@@ -1,4 +1,4 @@
-import { useId, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from 'react';
 import toast from 'react-hot-toast';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { requestOrganization } from '@/services/organizationRequestService';
@@ -51,6 +51,18 @@ function layerProblem(layer: Layer): string | null {
 const isDepartment = (o: Organization) => o.organization_type === 'department';
 
 /**
+ * Een aanvraag die nog niet is ingediend: bij het registreren is er geen sessie,
+ * dus gaat hij mee met het account en dient de database hem in zodra het
+ * e-mailadres is bevestigd (0063). `ready` is false zolang er iets mist.
+ */
+export interface OrgRequestDraft {
+  parentId: string;
+  names: string[];
+  codes: string[];
+  ready: boolean;
+}
+
+/**
  * Het ministerie, en dan je afdeling in één zoeklijst. Bij elke afdeling staat de
  * directie of dienst erboven, zodat je ook daarop zoekt en ziet waar hij onder
  * valt. De waarde is de afdeling, of het ministerie zolang er geen gekozen is.
@@ -58,6 +70,9 @@ const isDepartment = (o: Organization) => o.organization_type === 'department';
  * Met `allowCreate` vraagt een ingelogde gebruiker een ontbrekende afdeling aan.
  * Eerst kiest hij de directie of dienst; staat die er ook niet bij, dan vraagt hij
  * die mee aan. Een beheerder keurt het goed en pas dan staat het in de lijst.
+ *
+ * Met `onDraftRequest` (bij het registreren) wordt er niets verstuurd: de
+ * ingevulde aanvraag gaat naar de ouder, die hem met het account meestuurt.
  */
 export default function OrgPicker({
   value,
@@ -65,6 +80,7 @@ export default function OrgPicker({
   idPrefix,
   allowCreate = false,
   onRequested,
+  onDraftRequest,
   disabled = false,
 }: {
   value: string | null;
@@ -73,8 +89,12 @@ export default function OrgPicker({
   allowCreate?: boolean;
   /** Na het indienen van een aanvraag, bijvoorbeeld om hem op het profiel te tonen. */
   onRequested?: (request: OrganizationRequest) => void;
+  /** Bij het registreren: de aanvraag niet versturen maar doorgeven, of null zonder aanvraag. */
+  onDraftRequest?: (draft: OrgRequestDraft | null) => void;
   disabled?: boolean;
 }) {
+  const deferred = !!onDraftRequest;
+  const canRequest = allowCreate || deferred;
   const { organizations, loading } = useReferenceData();
   const [adding, setAdding] = useState(false);
   /** De bestaande directie of dienst waar de nieuwe afdeling onder komt. */
@@ -174,6 +194,26 @@ export default function OrgPicker({
   const ready =
     !!parent && layers.every((l) => l.name.length >= 2) && !directieProblem && !afdelingProblem;
 
+  // Bij het registreren gaat de aanvraag mee met het account; geef hem steeds door.
+  const draftKey = adding && parent
+    ? JSON.stringify([parent.id, layers, ready && !alreadyThere])
+    : '';
+  useEffect(() => {
+    if (!onDraftRequest) return;
+    if (!draftKey) {
+      onDraftRequest(null);
+      return;
+    }
+    const [parentId, draftLayers, draftReady] = JSON.parse(draftKey) as [string, Layer[], boolean];
+    onDraftRequest({
+      parentId,
+      names: draftLayers.map((l) => l.name),
+      codes: draftLayers.map((l) => l.code),
+      ready: draftReady,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftKey]);
+
   function openAdd(afdelingTerm = '') {
     const current = value ? organizations.find((o) => o.id === value) : undefined;
     // Staat je profiel al op een afdeling, dan ligt de directie daarvan voor de hand.
@@ -201,7 +241,7 @@ export default function OrgPicker({
       closeAdd();
       return;
     }
-    if (!ready || !parent) return;
+    if (deferred || !ready || !parent) return;
     setSending(true);
     try {
       const request = await requestOrganization(parent.id, layers);
@@ -262,7 +302,7 @@ export default function OrgPicker({
           <InfoDot
             label="Uitleg over de afdeling"
             text={
-              allowCreate
+              canRequest
                 ? "Zoek op de naam of afkorting van je afdeling, of op de directie of dienst erboven. Collega's in dezelfde afdeling zien elkaars prompts met het deelniveau Afdeling. Staat de jouwe er niet bij? Vraag hem aan; een beheerder keurt hem goed."
                 : "Zoek op de naam of afkorting van je afdeling, of op de directie of dienst erboven. Collega's in dezelfde afdeling zien elkaars prompts met het deelniveau Afdeling. Staat de jouwe er niet bij? Vraag hem na het registreren aan bij je profiel."
             }
@@ -281,13 +321,13 @@ export default function OrgPicker({
           clearLabel="Geen afdeling"
           searchPlaceholder="Zoek op afdeling, afkorting of directie"
           emptyLabel={`Nog geen afdelingen bij ${ministryShort || 'dit ministerie'}.`}
-          onRequestNew={allowCreate ? (term) => openAdd(term) : undefined}
+          onRequestNew={canRequest ? (term) => openAdd(term) : undefined}
           requestNewLabel={(term) => `“${term}” aanvragen als afdeling`}
           requestNewHint={`Nieuw bij ${ministryShort}`}
         />
       </div>
 
-      {allowCreate && ministryId && !adding && (
+      {canRequest && ministryId && !adding && (
         <button type="button" onClick={() => openAdd()} disabled={disabled} className={LINK}>
           <Plus size={14} aria-hidden />
           Mijn afdeling staat er niet bij
@@ -387,22 +427,26 @@ export default function OrgPicker({
             {alreadyThere && existing.deepest
               ? `“${orgDisplayName(existing.deepest)}” bestaat al. Kies hem met de knop hieronder.`
               : ready
-                ? `Dit wordt aangevraagd: ${preview}. Een beheerder beoordeelt het.`
+                ? deferred
+                  ? `Dit wordt aangevraagd als je je e-mailadres hebt bevestigd: ${preview}. Een beheerder beoordeelt het.`
+                  : `Dit wordt aangevraagd: ${preview}. Een beheerder beoordeelt het.`
                 : 'Schrijf de namen voluit, zodat collega’s ze vinden en begrijpen.'}
           </p>
 
           <div className="flex flex-wrap justify-end gap-2">
             <button type="button" className="opl-btn-ghost" onClick={closeAdd} disabled={sending}>
-              Annuleren
+              {deferred ? 'Niet aanvragen' : 'Annuleren'}
             </button>
-            <button
-              type="button"
-              onClick={() => void submit()}
-              className="opl-btn-primary"
-              disabled={sending || !(ready || alreadyThere)}
-            >
-              {sending ? 'Aanvragen…' : alreadyThere ? 'Deze kiezen' : 'Aanvragen'}
-            </button>
+            {(!deferred || alreadyThere) && (
+              <button
+                type="button"
+                onClick={() => void submit()}
+                className="opl-btn-primary"
+                disabled={sending || !(ready || alreadyThere)}
+              >
+                {sending ? 'Aanvragen…' : alreadyThere ? 'Deze kiezen' : 'Aanvragen'}
+              </button>
+            )}
           </div>
         </div>
       )}

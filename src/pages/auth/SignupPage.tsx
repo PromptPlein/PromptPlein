@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/context/AuthContext';
 import { useReferenceData } from '@/context/ReferenceDataContext';
-import OrgPicker from '@/components/common/OrgPicker';
+import OrgPicker, { type OrgRequestDraft } from '@/components/common/OrgPicker';
 import AuthLayout from './AuthLayout';
 
 export default function SignupPage() {
@@ -20,6 +20,8 @@ export default function SignupPage() {
   // De gekozen organisatie/afdeling: kies de diepste eenheid, dan ben je
   // automatisch verbonden met alle lagen daarboven (ministerie, dienst …).
   const [organizationId, setOrganizationId] = useState<string | null>(null);
+  // Een afdeling die er nog niet staat: die vraagt de database aan na het bevestigen.
+  const [orgDraft, setOrgDraft] = useState<OrgRequestDraft | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function submit(e: FormEvent) {
@@ -33,15 +35,27 @@ export default function SignupPage() {
       toast.error('Kies je ministerie.');
       return;
     }
+    if (orgDraft && !orgDraft.ready) {
+      toast.error('Vul je nieuwe afdeling voluit in, of kies Niet aanvragen.');
+      return;
+    }
     setBusy(true);
     try {
       await signUp({
         email: email.trim(),
         password,
         fullName: fullName.trim() || undefined,
-        organizationId,
+        // Met een aanvraag staat het profiel op de laag erboven tot de afdeling er is.
+        organizationId: orgDraft ? orgDraft.parentId : organizationId,
+        organizationRequest: orgDraft
+          ? { parentId: orgDraft.parentId, names: orgDraft.names, codes: orgDraft.codes }
+          : undefined,
       });
-      toast.success('Account aangemaakt. Controleer je e-mail om te bevestigen.');
+      toast.success(
+        orgDraft
+          ? 'Account aangemaakt. Bevestig je e-mailadres; daarna gaat je afdeling naar een beheerder.'
+          : 'Account aangemaakt. Controleer je e-mail om te bevestigen.',
+      );
       navigate('/auth/login', { replace: true, state: from ? { from } : undefined });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Registreren mislukt.');
@@ -102,12 +116,13 @@ export default function SignupPage() {
           onChange={(e) => setPassword(e.target.value)}
         />
 
-        {/* Ministerie verplicht, afdeling als die er al is. Een nieuwe afdeling
-            toevoegen kan pas na het inloggen, bij het profiel. */}
+        {/* Ministerie verplicht, afdeling als die er al is. Staat hij er niet bij,
+            dan vraag je hem hier aan; die aanvraag gaat in na het bevestigen. */}
         <OrgPicker
           idPrefix="signup"
           value={organizationId}
           onChange={setOrganizationId}
+          onDraftRequest={setOrgDraft}
           disabled={orgsLoading || !configured}
         />
 
