@@ -150,7 +150,7 @@ export default function ChatSidebar({
         'flex-col p-3',
         inDrawer
           ? 'flex h-full'
-          : 'hidden w-64 shrink-0 border-r border-slate-200 bg-slate-50/70 lg:flex dark:border-slate-700 dark:bg-slate-900/40',
+          : 'hidden w-72 shrink-0 xl:w-80 border-r border-slate-200 bg-slate-50/70 lg:flex dark:border-slate-700 dark:bg-slate-900/40',
       )}
     >
       {/* Eén knop met een klein menu erachter: nieuw gesprek is de gewone daad,
