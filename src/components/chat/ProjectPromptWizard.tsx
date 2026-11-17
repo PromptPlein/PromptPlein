@@ -165,7 +165,9 @@ export default function ProjectPromptWizard({
           >
             <Wand2 size={28} strokeWidth={1.5} />
             <span>
-              <span className="block text-base font-bold leading-tight">Prompt maken</span>
+              <span className="block text-base font-bold leading-tight">
+                {isNewProject ? 'Project maken' : 'Prompt maken'}
+              </span>
               <span className="mt-1 block text-sm">De AI stelt een paar vragen</span>
             </span>
           </button>
