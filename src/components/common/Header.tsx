@@ -52,8 +52,6 @@ const navItems: NavItem[] = [
 export default function Header() {
   const { isAdmin, isModerator, configured } = useAuth();
   const { pathname } = useLocation();
-  // Maken staat op de bewegende achtergrond van de dag, die altijd blauw is.
-  const onBlueBackground = pathname === '/genereren' || pathname.startsWith('/genereren/');
   const [chatEnabled, setChatEnabled] = useState(true);
 
   useEffect(() => {
@@ -199,14 +197,9 @@ export default function Header() {
                   // een rood streepje aan de kant van de balk. Het is iets lager
                   // dan de balk, zodat het als tab uit de pagina komt: bovenaan
                   // als de balk boven de pagina staat, op de telefoon gespiegeld.
-                  // In de donkere stand en op de blauwe achtergrond van Maken
-                  // valt een tab in de paginakleur als een gat in de balk. Daar is
-                  // het tabblad een lichter vlak van de balk zelf.
                   isActive
                     ? [
-                        onBlueBackground
-                          ? 'bg-white/15 text-white'
-                          : 'bg-slate-100 text-rijksblauw-700 dark:bg-white/15 dark:text-white',
+                        'bg-slate-100 text-rijksblauw-700 dark:bg-slate-900 dark:text-white',
                         'max-sm:mb-1.5 max-sm:min-h-0 max-sm:rounded-b-lg max-sm:shadow-[inset_0_-3px_0_0_theme(colors.rijksrood)]',
                         'sm:mt-1.5 sm:min-h-0 sm:rounded-t-lg sm:shadow-[inset_0_3px_0_0_theme(colors.rijksrood)] lg:h-auto',
                         'focus-visible:outline-rijksblauw-500',
@@ -219,15 +212,7 @@ export default function Header() {
                 <>
                   <Icon
                     size={22}
-                    // Rood op het lichtere blauwe vlak is slecht te zien; daar
-                    // draagt het streepje het rood en blijft het icoon wit.
-                    className={
-                      isActive
-                        ? onBlueBackground
-                          ? undefined
-                          : 'text-rijksrood dark:text-white'
-                        : undefined
-                    }
+                    className={isActive ? 'text-rijksrood' : undefined}
                   />
                   {label}
                 </>

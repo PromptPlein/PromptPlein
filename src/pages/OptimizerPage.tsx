@@ -375,12 +375,14 @@ export default function OptimizerPage() {
   const ownActive = entryMode === 'own-prompt';
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+    // Het paneel sluit boven aan op de menubalk: het tabblad Maken heeft de kleur
+    // van het paneel, zodat tab en paneel één geheel zijn.
+    <div className="mx-auto max-w-5xl px-4 pb-8 pt-4 sm:px-6 sm:pt-0 lg:px-8">
       {/* De bewegende achtergrond van de dag. Alle inhoud staat op een dekkend
           paneel: deze pagina heeft veel tussenstappen en meldingen die los op
           de pagina staan, en die moeten op elke achtergrond leesbaar blijven. */}
       <DailyBackground />
-      <div className="rounded-2xl bg-slate-100 p-4 shadow-lg sm:p-6 dark:bg-slate-900">
+      <div className="rounded-2xl bg-slate-100 p-4 shadow-lg sm:rounded-t-none sm:p-6 dark:bg-slate-900">
       <div className="mb-5 flex items-center gap-1">
         <h1 className="text-3xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
           Prompt maken
