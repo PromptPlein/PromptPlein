@@ -3,16 +3,23 @@ import {
   AlignLeft,
   ArrowLeft,
   ArrowRight,
+  BookOpen,
+  Briefcase,
+  CalendarDays,
   Check,
   ClipboardList,
   FileText,
+  Languages,
   Loader2,
   Mail,
+  MessageSquareText,
+  Newspaper,
+  Presentation,
+  Reply,
   Settings2,
   Sparkles,
   Wand2,
 } from '@/components/common/icons';
-import clsx from 'clsx';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import InfoDot from '@/components/common/InfoDot';
 import Modal from '@/components/common/Modal';
@@ -36,35 +43,32 @@ import {
   WizardWaiting,
 } from './PromptInterviewParts';
 import { submitOnEnter, usePromptInterview } from './usePromptInterview';
+import {
+  CARE_UITLEG,
+  PROJECT_PROMPT_TEMPLATES,
+  type ProjectPromptTemplate,
+} from '@/data/projectPromptTemplates';
 
 type Step = 'keuze' | 'taak' | 'vragen' | 'voorstel';
 
 const STAPPEN: Step[] = ['taak', 'vragen', 'voorstel'];
 const STAP_LABELS = ['Taak', 'Vragen', 'Prompt'];
 
-/** Vaste startpunten: één klik zet de richting, daarna kun je hem nog aanvullen. */
-const RICHTINGEN = [
-  {
-    label: 'Memo in vaste vorm',
-    tekst: 'Een memo schrijven dat er elke keer hetzelfde uitziet',
-    icon: FileText,
-  },
-  {
-    label: 'Mail op dyslexie',
-    tekst: 'Mijn mail nakijken op dyslexie zonder dat mijn toon en stem verloren gaan',
-    icon: Mail,
-  },
-  {
-    label: 'Stuk samenvatten',
-    tekst: 'Lange stukken samenvatten voor mijn leidinggevende',
-    icon: AlignLeft,
-  },
-  {
-    label: 'Verslag maken',
-    tekst: 'Aantekeningen van een overleg omzetten naar een vast verslag',
-    icon: ClipboardList,
-  },
-];
+/** De iconen van de kant-en-klare prompts, op naam. */
+const TEMPLATE_ICONS = {
+  FileText,
+  Mail,
+  AlignLeft,
+  ClipboardList,
+  Reply,
+  BookOpen,
+  CalendarDays,
+  Newspaper,
+  Briefcase,
+  MessageSquareText,
+  Languages,
+  Presentation,
+} satisfies Record<ProjectPromptTemplate['icon'], unknown>;
 
 /**
  * "Prompt maken" in een project: taak, vragen, voorstel. De AI analyseert de taak
@@ -139,8 +143,22 @@ export default function ProjectPromptWizard({
     });
   };
 
+  // Een kant-en-klare prompt slaat de vragen over: hij staat meteen klaar om
+  // na te lezen en aan te passen. Terug brengt je weer bij de keuze.
+  const pickTemplate = (template: ProjectPromptTemplate) => {
+    setDraft({
+      prompt: template.prompt,
+      framework: { id: 'tech-care', name: 'CARE' },
+      reden: CARE_UITLEG,
+      titel: template.naam,
+    });
+    setPrompt(template.prompt);
+    if (isNewProject) setName(template.naam.slice(0, MAX_PROJECT_NAME_CHARS));
+    setStep('voorstel');
+  };
+
   const requestClose = () => {
-    if (goal.trim() || answered.length > 0) setConfirmClose(true);
+    if (goal.trim() || answered.length > 0 || draft) setConfirmClose(true);
     else onClose();
   };
 
@@ -201,24 +219,6 @@ export default function ProjectPromptWizard({
               onKeyDown={submitOnEnter(() => goal.trim() && interview.start())}
             />
           </div>
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] gap-2">
-            {RICHTINGEN.map(({ label, tekst, icon: Icon }) => (
-              <button
-                key={label}
-                type="button"
-                aria-pressed={goal === tekst}
-                onClick={() => setGoal(tekst)}
-                className={clsx(
-                  'flex min-h-[3rem] items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500',
-                  goal === tekst
-                    ? 'bg-rijksblauw-700 text-white dark:bg-rijksblauw-600'
-                    : 'bg-rijksblauw-50 text-rijksblauw-700 hover:bg-rijksblauw-100 dark:bg-rijksblauw-500/20 dark:text-white dark:hover:bg-rijksblauw-500/30',
-                )}
-              >
-                <Icon size={18} className="shrink-0" /> {label}
-              </button>
-            ))}
-          </div>
           <div className="flex justify-end">
             <button
               type="button"
@@ -229,9 +229,29 @@ export default function ProjectPromptWizard({
               Verder <ArrowRight size={16} />
             </button>
           </div>
+          <div>
+            <h3 className="mb-2 flex items-center gap-1 text-sm font-bold text-slate-700 dark:text-slate-200">
+              Of begin met een kant-en-klare prompt
+              <InfoDot label="Uitleg over de kant-en-klare prompts" text={CARE_UITLEG} />
+            </h3>
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] gap-2">
+              {PROJECT_PROMPT_TEMPLATES.map((template) => {
+                const Icon = TEMPLATE_ICONS[template.icon];
+                return (
+                  <button
+                    key={template.label}
+                    type="button"
+                    onClick={() => pickTemplate(template)}
+                    className="flex min-h-[3rem] items-center gap-2 rounded-xl bg-rijksblauw-50 px-3 py-2 text-left text-sm font-semibold text-rijksblauw-700 transition-colors hover:bg-rijksblauw-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 dark:bg-rijksblauw-500/20 dark:text-white dark:hover:bg-rijksblauw-500/30"
+                  >
+                    <Icon size={18} className="shrink-0" /> {template.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
       )}
-
       {step === 'vragen' && (
         <div className="space-y-4">
           {errorBox}
