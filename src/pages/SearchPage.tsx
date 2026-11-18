@@ -275,7 +275,7 @@ export default function SearchPage() {
                 aria-pressed={active}
                 onClick={() => update({ kinds: k ? [k] : [] })}
                 className={clsx(
-                  'relative flex min-w-[6.5rem] shrink-0 flex-col items-center gap-1 rounded-t-lg px-2 pb-2.5 pt-3 text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-rijksblauw-500 sm:min-w-0',
+                  'relative flex flex-1 flex-col items-center gap-1 rounded-t-lg px-2 pb-2.5 pt-3 text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-rijksblauw-500 sm:min-w-0',
                   active
                     ? 'z-10 -mb-px border border-b-0 border-t-[3px] border-slate-200 border-t-nadruk bg-white font-bold text-rijksblauw-700 dark:border-slate-700 dark:border-t-nadruk dark:bg-slate-800 dark:text-rijksblauw-200'
                     : clsx(
