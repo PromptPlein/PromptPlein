@@ -35,6 +35,20 @@ export async function requestCategory(params: {
   return data as CategoryRequest;
 }
 
+/** Naam en status van één aanvraag; de aanvrager en beheerders mogen hem lezen. */
+export async function getCategoryRequest(
+  id: string,
+): Promise<Pick<CategoryRequest, 'id' | 'name' | 'status'> | null> {
+  if (!isSupabaseConfigured || !supabase) return null;
+  const { data, error } = await supabase
+    .from('category_requests')
+    .select('id, name, status')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) return null;
+  return data as Pick<CategoryRequest, 'id' | 'name' | 'status'> | null;
+}
+
 /** Aantal openstaande (pending) aanvragen — voor een badge in het admin-menu. */
 export async function countPendingCategoryRequests(): Promise<number> {
   if (!isSupabaseConfigured || !supabase) return 0;

@@ -212,7 +212,9 @@ export async function createPrompt(input: NewPromptInput): Promise<Prompt> {
   if (!valid) {
     throw new Error('Je sessie is verlopen. Log opnieuw in om de prompt op te slaan.');
   }
-  const { sharing_levels, ...rest } = input;
+  const { sharing_levels, requested_category_id, ...rest } = input;
+  // Alleen meesturen als er een aanvraag is, zodat opslaan ook werkt zonder kolom 0065.
+  if (requested_category_id) Object.assign(rest, { requested_category_id });
   // De prompt-rij houdt één representatief sharing_level (voor badge/filters);
   // de echte zichtbaarheid leeft per niveau in prompt_visibility.
   const row = { ...rest, sharing_level: representativeSharingLevel(sharing_levels) };

@@ -108,6 +108,8 @@ export interface Prompt {
   category_id?: string | null;
   /** Wat de prompt oplevert (migratie 0064). Ontbreekt bij oude rijen: dan tekst. */
   kind?: PromptKind | null;
+  /** Aangevraagde categorie die nog wacht op goedkeuring (0065); daarna komt hij in category_id. */
+  requested_category_id?: string | null;
   role_id?: string | null;
   organization_id?: string | null;
   sharing_level: SharingLevel;
@@ -152,6 +154,8 @@ export interface NewPromptInput {
   category_id?: string | null;
   /** Wat de prompt oplevert. Zonder waarde maakt de database er tekst van. */
   kind?: PromptKind;
+  /** Openstaande categorie-aanvraag; na goedkeuring krijgt de prompt die categorie. */
+  requested_category_id?: string | null;
   role_id?: string | null;
   organization_id?: string | null;
   /**

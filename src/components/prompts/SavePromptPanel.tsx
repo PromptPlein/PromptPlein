@@ -88,6 +88,8 @@ export default function SavePromptPanel({
   const [catRequestBusy, setCatRequestBusy] = useState(false);
   // Naam van de aangevraagde categorie zodra de aanvraag is verstuurd (pending).
   const [pendingCategory, setPendingCategory] = useState<string | null>(null);
+  // De aanvraag zelf: de prompt onthoudt hem en krijgt na goedkeuring die categorie.
+  const [pendingCategoryId, setPendingCategoryId] = useState<string | null>(null);
   // Functie-aanvraag: paneel om een ontbrekende functie aan te vragen (zelfde
   // patroon als de categorie-aanvraag hierboven).
   const [showRoleRequest, setShowRoleRequest] = useState(false);
@@ -143,7 +145,8 @@ export default function SavePromptPanel({
     }
     setCatRequestBusy(true);
     try {
-      await requestCategory({ name, requestedBy: user.id });
+      const request = await requestCategory({ name, requestedBy: user.id });
+      setPendingCategoryId(request.id);
       // Categorie nog niet beschikbaar: laat de keuze leeg (status blijft 'anders'
       // tot een beheerder de categorie goedkeurt) en toon de aanvraag als pending.
       categoryTouched.current = true;
@@ -213,6 +216,7 @@ export default function SavePromptPanel({
         description: description.trim() || undefined,
         content,
         category_id: categoryId,
+        requested_category_id: categoryId ? null : pendingCategoryId,
         kind,
         role_id: roleId,
         organization_id: organizationId || null,
@@ -324,7 +328,11 @@ export default function SavePromptPanel({
           onChange={(id) => {
             categoryTouched.current = true;
             setCategoryId(id);
-            if (id) setPendingCategory(null); // echte keuze vervangt een aanvraag
+            if (id) {
+              // Een echte keuze vervangt de aanvraag voor deze prompt.
+              setPendingCategory(null);
+              setPendingCategoryId(null);
+            }
           }}
           placeholder="Waar gaat deze prompt over?"
           clearLabel="Geen categorie"
@@ -335,7 +343,7 @@ export default function SavePromptPanel({
         {pendingCategory && (
           <p className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-2.5 py-1.5 text-xs text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">
             <Loader2 size={12} className="animate-spin" />
-            Categorie “{pendingCategory}” aangevraagd, in afwachting van goedkeuring.
+            Categorie “{pendingCategory}” aangevraagd. Na goedkeuring krijgt deze prompt hem vanzelf.
           </p>
         )}
 
@@ -384,8 +392,8 @@ export default function SavePromptPanel({
               </button>
             </div>
             <p className="text-xs text-slate-400 dark:text-slate-500">
-              Een beheerder beoordeelt je aanvraag. Tot die tijd blijft de categorie op
-              &ldquo;anders&rdquo;.
+              Een beheerder beoordeelt je aanvraag. Tot die tijd staat de prompt onder Overig;
+              na goedkeuring krijgt hij de nieuwe categorie vanzelf.
             </p>
           </div>
         )}

@@ -295,7 +295,7 @@ export default function SearchPage() {
           })}
         </div>
         <div className="rounded-b-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-2">
+          <div className="grid grid-cols-1 gap-2 min-[22rem]:grid-cols-2 sm:grid-cols-3">
             {categories.map((c) => {
               const Icon = categoryIcon(c.icon);
               const active = catSel.includes(c.id);

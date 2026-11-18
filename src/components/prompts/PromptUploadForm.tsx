@@ -32,6 +32,8 @@ export default function PromptUploadForm({ onCreated, onCancel }: PromptUploadFo
   const [content, setContent, clearContent] = usePersistentDraft('upload.content');
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [kind, setKind] = useState<PromptKind>('text');
+  // Aangevraagde categorie: de prompt krijgt hem na goedkeuring vanzelf.
+  const [pendingCategory, setPendingCategory] = useState<{ id: string; name: string } | null>(null);
   const [roleId, setRoleId] = useState<string | null>(null);
   const [organizationId, setOrganizationId] = useState<string>('');
   const [sharingLevels, setSharingLevels] = useState<VisibilityLevel[]>([]);
@@ -58,6 +60,7 @@ export default function PromptUploadForm({ onCreated, onCancel }: PromptUploadFo
       description: description.trim() || undefined,
       content: content.trim(),
       category_id: categoryId,
+      requested_category_id: categoryId ? null : (pendingCategory?.id ?? null),
       kind,
       role_id: roleId,
       organization_id: organizationId || null,
@@ -139,7 +142,10 @@ export default function PromptUploadForm({ onCreated, onCancel }: PromptUploadFo
           id="up-category"
           options={categories.map((c) => ({ id: c.id, label: c.name, hint: c.description }))}
           value={categoryId}
-          onChange={(id) => setCategoryId(id)}
+          onChange={(id) => {
+            setCategoryId(id);
+            if (id) setPendingCategory(null);
+          }}
           placeholder="Waar gaat deze prompt over?"
           clearLabel="Geen categorie"
           searchPlaceholder="Zoek een categorie…"
@@ -147,7 +153,9 @@ export default function PromptUploadForm({ onCreated, onCancel }: PromptUploadFo
             user
               ? async (term) => {
                   try {
-                    await requestCategory({ name: term, requestedBy: user.id });
+                    const request = await requestCategory({ name: term, requestedBy: user.id });
+                    setCategoryId(null);
+                    setPendingCategory({ id: request.id, name: term });
                     toast.success(`Aanvraag voor “${term}” verstuurd; een beheerder beoordeelt hem.`);
                   } catch (err) {
                     toast.error(err instanceof Error ? err.message : 'Aanvraag mislukt');
@@ -157,8 +165,13 @@ export default function PromptUploadForm({ onCreated, onCancel }: PromptUploadFo
           }
           requestNewLabel={(term) => `“${term}” als nieuwe categorie aanvragen`}
         />
+        {pendingCategory && (
+          <p className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-2.5 py-1.5 text-xs text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">
+            Categorie “{pendingCategory.name}” aangevraagd. Na goedkeuring krijgt deze prompt hem vanzelf.
+          </p>
+        )}
         <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-          Waar is deze prompt voor bedoeld? Staat de juiste categorie er niet bij? Vraag hem aan.
+          Staat de juiste categorie er niet bij? Typ de naam en vraag hem aan.
         </p>
       </div>
 

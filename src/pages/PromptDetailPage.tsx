@@ -17,6 +17,7 @@ import {
   Info,
 } from '@/components/common/icons';
 import KindPicker from '@/components/prompts/KindPicker';
+import { getCategoryRequest } from '@/services/categoryRequestService';
 import { PROMPT_KIND_META, PROMPT_KIND_USE, promptKindOf } from '@/lib/promptKinds';
 import type { PromptKind } from '@/lib/techniques';
 import toast from 'react-hot-toast';
@@ -66,6 +67,21 @@ export default function PromptDetailPage() {
   const [draftDescription, setDraftDescription] = useState('');
   const [draftContent, setDraftContent] = useState('');
   const [draftKind, setDraftKind] = useState<PromptKind>('text');
+  // Een aangevraagde categorie die nog op goedkeuring wacht (alleen de aanvrager ziet hem).
+  const [requestedCategory, setRequestedCategory] = useState<string | null>(null);
+
+  const requestedCategoryId = prompt?.requested_category_id ?? null;
+  useEffect(() => {
+    setRequestedCategory(null);
+    if (!requestedCategoryId) return;
+    let active = true;
+    void getCategoryRequest(requestedCategoryId).then((r) => {
+      if (active && r?.status === 'pending') setRequestedCategory(r.name);
+    });
+    return () => {
+      active = false;
+    };
+  }, [requestedCategoryId]);
   const [saving, setSaving] = useState(false);
   // Verhoogd na een opslag, zodat de versiegeschiedenis ververst.
   const [versionRefresh, setVersionRefresh] = useState(0);
@@ -311,6 +327,11 @@ export default function PromptDetailPage() {
           <span className="opl-badge bg-rijksblauw-700 font-semibold text-white dark:bg-rijksblauw-500">
             {kindMeta.label}
           </span>
+          {!category && requestedCategory && (
+            <span className="opl-badge bg-amber-50 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">
+              Categorie “{requestedCategory}” aangevraagd
+            </span>
+          )}
           {category && (
             <span className="opl-badge bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">{category.name}</span>
           )}
