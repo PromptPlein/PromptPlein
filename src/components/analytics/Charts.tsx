@@ -120,6 +120,64 @@ export function LineChartCard({ title, data, emptyHint }: ChartCardProps) {
   );
 }
 
+export interface LineSeries {
+  key: string;
+  label: string;
+  color: string;
+}
+
+/** Meerdere lijnen over dezelfde dagen, met een legenda in tekst eronder. */
+export function MultiLineChartCard({
+  title,
+  data,
+  series,
+  emptyHint,
+}: {
+  title: string;
+  data: Record<string, string | number>[];
+  series: LineSeries[];
+  emptyHint?: string;
+}) {
+  const c = useChartColors();
+  return (
+    <CardShell title={title}>
+      {data.length === 0 ? (
+        <EmptyState hint={emptyHint} />
+      ) : (
+        <>
+          <ResponsiveContainer width="100%" height={240}>
+            <LineChart data={data} margin={{ top: 4, right: 8, left: -16, bottom: 4 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={c.grid} />
+              <XAxis dataKey="label" tick={{ fontSize: 11, fill: c.tick }} />
+              <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: c.tick }} />
+              <Tooltip contentStyle={c.tooltip} />
+              {series.map((s) => (
+                <Line
+                  key={s.key}
+                  type="monotone"
+                  dataKey={s.key}
+                  name={s.label}
+                  stroke={s.color}
+                  strokeWidth={2}
+                  dot={{ r: 2 }}
+                />
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
+          <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+            {series.map((s) => (
+              <li key={s.key} className="flex items-center gap-1.5">
+                <span aria-hidden="true" className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: s.color }} />
+                {s.label}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </CardShell>
+  );
+}
+
 export function PieChartCard({ title, data, emptyHint }: ChartCardProps) {
   const c = useChartColors();
   return (

@@ -205,7 +205,12 @@ export type AnalyticsEventType =
   | 'optimization_run'
   | 'share_created'
   | 'share_viewed'
-  | 'favorite_toggled';
+  | 'favorite_toggled'
+  // Gebruik per dag (0066): bezoek, chatbericht en downloads uit de chat.
+  | 'visit'
+  | 'chat_message'
+  | 'export_word'
+  | 'export_excel';
 
 export interface AnalyticsEvent {
   id: string;

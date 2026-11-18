@@ -7,6 +7,7 @@ import Footer from '@/components/common/Footer';
 import DictationLayer from '@/components/common/DictationLayer';
 import HelpShortcut from '@/components/common/HelpShortcut';
 import RouteFocus from '@/components/common/RouteFocus';
+import VisitTracker from '@/components/common/VisitTracker';
 import { HELP_PATH } from '@/lib/shortcuts';
 import HomePage from '@/pages/HomePage';
 import RequireAuth from '@/components/auth/RequireAuth';
@@ -76,6 +77,7 @@ export default function App() {
           hoger dan wat je ziet, en dan kan een pagina die precies past toch schuiven. */}
       <div id="app-shell" className="opl-app flex min-h-full flex-col">
         <RouteFocus />
+        <VisitTracker />
         <a href="#inhoud" className="opl-skip-link">
           Naar de inhoud
         </a>

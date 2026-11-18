@@ -4,6 +4,7 @@ import { FileSpreadsheet, FileText, Loader2 } from '@/components/common/icons';
 import { downloadBinary } from '@/lib/download';
 import { buildExcelWorkbook, hasTable, XLSX_MIME } from '@/lib/excelExport';
 import { loadWordTemplate, useWordLook } from '@/lib/wordSettings';
+import { trackEvent } from '@/services/analyticsService';
 
 const BUTTON_CLASS =
   'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-rijksblauw-700 disabled:opacity-60 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-rijksblauw-200';
@@ -37,6 +38,7 @@ export default function DocumentDownloads({
       const effective = template ? 'sjabloon' : look === 'sjabloon' ? 'rijk' : look;
       const result = await buildWordDocument({ markdown: text, sources }, effective, template?.bytes);
       downloadBinary(result.fileName, result.data, DOCX_MIME);
+      void trackEvent({ event_type: 'export_word', metadata: { vormgeving: effective } });
     } catch (error) {
       toast.error(error instanceof Error && error.message ? error.message : 'Het Word-bestand is niet gelukt.');
     } finally {
@@ -48,7 +50,10 @@ export default function DocumentDownloads({
     setBusy('excel');
     try {
       const result = await buildExcelWorkbook(text);
-      if (result) downloadBinary(result.fileName, result.data, XLSX_MIME);
+      if (result) {
+        downloadBinary(result.fileName, result.data, XLSX_MIME);
+        void trackEvent({ event_type: 'export_excel' });
+      }
     } catch {
       toast.error('Het Excel-bestand is niet gelukt.');
     } finally {

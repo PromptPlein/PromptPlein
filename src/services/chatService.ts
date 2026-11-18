@@ -24,6 +24,7 @@ import {
 } from '@/services/settingsService';
 import { getPersonalInstructionForChat } from '@/services/personalInstructionService';
 import { getMemoriesForChat } from '@/services/memoryService';
+import { trackEvent } from '@/services/analyticsService';
 import type { ChatProjectContext, ChatSource } from '@/types';
 
 /**
@@ -138,6 +139,14 @@ export async function sendChatMessage(args: {
   const functionUrl = getFunctionUrl('optimize-prompt');
   if (!isSupabaseConfigured || !supabase || !functionUrl) {
     return { text: '', error: 'Geen AI-service geconfigureerd. Neem contact op met de beheerder.' };
+  }
+
+  // Een vervolg schrijft hetzelfde antwoord af en is geen nieuw bericht.
+  if (!continueFrom) {
+    void trackEvent({
+      event_type: 'chat_message',
+      metadata: { soort: isExecution ? 'uitvoer' : isProject ? 'project' : 'gewoon' },
+    });
   }
 
   const anonKey = getAnonKey();

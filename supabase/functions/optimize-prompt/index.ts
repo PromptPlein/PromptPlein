@@ -26,6 +26,89 @@
 // Runtime: Deno (Supabase Edge Functions)
 
 import Anthropic from 'npm:@anthropic-ai/sdk@^0.65.0';
+import { AsyncLocalStorage } from 'node:async_hooks';
+
+// --- Gebruik meten ----------------------------------------------------------
+//
+// Elke aanroep van een taalmodel komt als één regel in ai_calls (migratie 0066):
+// mode, soort, provider, model, of het lukte en hoe lang het duurde. Nooit de
+// tekst en nooit wie het vroeg, alleen of het verzoek van een ingelogde
+// gebruiker kwam. Beheer, Analytics telt daarmee per dag. De mode en de
+// inlogstand reizen per verzoek mee in callContext, zodat de functies die het
+// model aanroepen ze niet als parameter hoeven te krijgen.
+
+interface CallContext {
+  mode: string;
+  ingelogd: boolean;
+}
+
+const callContext = new AsyncLocalStorage<CallContext>();
+
+type AiCallSoort = 'tekst' | 'beeld' | 'embedding' | 'transcriptie' | 'spraak';
+
+/** Eén keer per instantie melden dat wegschrijven niet lukt, niet bij elke aanroep. */
+let aiCallLogWarned = false;
+
+/** Schrijft de regel weg zonder het antwoord op te houden; een fout blijft een logregel. */
+function logAiCall(entry: {
+  soort: AiCallSoort;
+  provider: string;
+  model: string;
+  gelukt: boolean;
+  duurMs: number;
+}): void {
+  const url = Deno.env.get('SUPABASE_URL');
+  const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if (!url || !key) return;
+  const ctx = callContext.getStore();
+  const write = fetch(`${url.replace(/\/+$/, '')}/rest/v1/ai_calls`, {
+    method: 'POST',
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=minimal',
+    },
+    body: JSON.stringify({
+      mode: ctx?.mode ?? 'onbekend',
+      soort: entry.soort,
+      provider: entry.provider,
+      model: entry.model,
+      ingelogd: ctx?.ingelogd ?? false,
+      gelukt: entry.gelukt,
+      duur_ms: Math.round(entry.duurMs),
+    }),
+  })
+    .then(async (response) => {
+      if (!response.ok && !aiCallLogWarned) {
+        aiCallLogWarned = true;
+        console.warn(`ai_calls wegschrijven gaf status ${response.status}: ${(await response.text()).slice(0, 200)}`);
+      }
+    })
+    .catch(() => {});
+  // Na het antwoord mag de runtime de instantie stilleggen; zo komt de regel er toch.
+  const runtime = (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } })
+    .EdgeRuntime;
+  runtime?.waitUntil?.(write);
+}
+
+/** Voert één aanroep van een model uit en schrijft hem weg, gelukt of niet. */
+async function measured<T>(
+  soort: AiCallSoort,
+  provider: string,
+  model: string,
+  run: () => Promise<T>,
+): Promise<T> {
+  const started = performance.now();
+  try {
+    const result = await run();
+    logAiCall({ soort, provider, model, gelukt: true, duurMs: performance.now() - started });
+    return result;
+  } catch (err) {
+    logAiCall({ soort, provider, model, gelukt: false, duurMs: performance.now() - started });
+    throw err;
+  }
+}
 
 type Provider = 'claude' | 'openai' | 'deepseek' | 'mistral';
 type PreferredProvider = 'auto' | Provider;
@@ -3965,7 +4048,11 @@ function audioExtension(mimeType: string): string {
   return 'webm';
 }
 
-async function transcribeAudio(base64: string, mimeType: string): Promise<string> {
+function transcribeAudio(base64: string, mimeType: string): Promise<string> {
+  return measured('transcriptie', 'mistral', TRANSCRIBE_MODEL, () => transcribeAudioOnce(base64, mimeType));
+}
+
+async function transcribeAudioOnce(base64: string, mimeType: string): Promise<string> {
   const apiKey = Deno.env.get('MISTRAL_API_KEY');
   if (!apiKey) throw new Error('MISTRAL_API_KEY ontbreekt');
 
@@ -4014,7 +4101,11 @@ const SPEECH_VOICE = 'voice_3145';
 const MAX_SPEECH_CHARS = 1000;
 
 /** Geeft de audio als base64 (mp3) terug. */
-async function synthesizeSpeech(input: string): Promise<string> {
+function synthesizeSpeech(input: string): Promise<string> {
+  return measured('spraak', 'mistral', SPEECH_MODEL, () => synthesizeSpeechOnce(input));
+}
+
+async function synthesizeSpeechOnce(input: string): Promise<string> {
   const apiKey = Deno.env.get('MISTRAL_API_KEY');
   if (!apiKey) throw new Error('MISTRAL_API_KEY ontbreekt');
 
@@ -4074,7 +4165,12 @@ class EmbedRequestError extends Error {
 }
 
 /** Zet teksten om in vectoren, in dezelfde volgorde. */
-async function embedTexts(inputs: string[]): Promise<number[][]> {
+function embedTexts(inputs: string[]): Promise<number[][]> {
+  return measured('embedding', 'mistral', EMBED_MODEL, () => embedTextsOnce(inputs));
+}
+
+/** Een gehalveerde portie telt als dezelfde aanroep, daarom roept hij zichzelf aan. */
+async function embedTextsOnce(inputs: string[]): Promise<number[][]> {
   const apiKey = Deno.env.get('MISTRAL_API_KEY');
   if (!apiKey) throw new Error('MISTRAL_API_KEY ontbreekt');
 
@@ -4090,8 +4186,8 @@ async function embedTexts(inputs: string[]): Promise<number[][]> {
     if (response.status === 400 && inputs.length > 1) {
       const half = Math.ceil(inputs.length / 2);
       return [
-        ...(await embedTexts(inputs.slice(0, half))),
-        ...(await embedTexts(inputs.slice(half))),
+        ...(await embedTextsOnce(inputs.slice(0, half))),
+        ...(await embedTextsOnce(inputs.slice(half))),
       ];
     }
     throw new EmbedRequestError(`Mistral embeddings gaf status ${response.status}: ${detail}`, response.status);
@@ -7375,7 +7471,12 @@ async function readSseDeltas(
 }
 
 /** Gedeelde aanroep voor de drie OpenAI-compatibele providers. */
-async function runOpenAiCompatible(args: {
+/** Eén aanroep, met de herkansingen erin, telt als één regel in ai_calls. */
+function runOpenAiCompatible(args: Parameters<typeof callOpenAiCompatible>[0]): Promise<string> {
+  return measured('tekst', args.provider ?? args.label, args.model, () => callOpenAiCompatible(args));
+}
+
+async function callOpenAiCompatible(args: {
   url: string;
   apiKey: string;
   label: string;
@@ -9980,7 +10081,19 @@ function parseStyleSave(raw: string, voorbeeldTekst = ''): { naam: string; stijl
  * Eén aanroep met een beeld erbij. Bewust los van runOpenAiCompatible: dit is
  * de enige plek waar een beeld meegaat, en het antwoord is kort JSON.
  */
-async function runMistralVision(
+function runMistralVision(
+  system: string,
+  text: string,
+  imageDataUrl: string,
+  model: string,
+  maxTokens: number,
+): Promise<string> {
+  return measured('beeld', 'mistral', model, () =>
+    runMistralVisionOnce(system, text, imageDataUrl, model, maxTokens),
+  );
+}
+
+async function runMistralVisionOnce(
   system: string,
   text: string,
   imageDataUrl: string,
@@ -10313,7 +10426,11 @@ function applyPromptOverrides(overrides: Record<string, string>): void {
   }
 }
 
-Deno.serve(async (req: Request) => {
+Deno.serve((req: Request) =>
+  callContext.run({ mode: 'onbekend', ingelogd: isAuthenticatedRequest(req) }, () => handleRequest(req)),
+);
+
+async function handleRequest(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -10327,6 +10444,11 @@ Deno.serve(async (req: Request) => {
 
   try {
     const body = (await req.json()) as RequestBody;
+    const context = callContext.getStore();
+    if (context) {
+      const requested = (body as { mode?: unknown }).mode;
+      context.mode = typeof requested === 'string' && requested ? requested.slice(0, 40) : 'generate';
+    }
 
     // Dicteren: alleen voor ingelogde gebruikers, anders is dit een gratis
     // transcriptiedienst voor wie het adres vindt. Staat vóór de prompts uit
@@ -13349,4 +13471,4 @@ Deno.serve(async (req: Request) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
-});
+}

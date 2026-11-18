@@ -22,6 +22,7 @@ import { downloadText } from '@/lib/download';
 import { formatDate } from '@/lib/utils';
 import type { AnalyticsEvent, BehaviorLog } from '@/types';
 import StackTable from '@/components/common/StackTable';
+import UsageOverview from '@/components/analytics/UsageOverview';
 
 const EVENT_LABELS: Record<string, string> = {
   prompt_created: 'Prompt aangemaakt',
@@ -30,6 +31,10 @@ const EVENT_LABELS: Record<string, string> = {
   share_created: 'Deel-link',
   share_viewed: 'Deel-weergave',
   favorite_toggled: 'Favoriet',
+  visit: 'Bezoek',
+  chat_message: 'Chatbericht',
+  export_word: 'Word-download',
+  export_excel: 'Excel-download',
 };
 
 /** Leesbare NL-labels voor de gedragslog-acties. */
@@ -122,6 +127,9 @@ export default function AdminAnalyticsPage() {
         </button>
       </div>
 
+      <UsageOverview />
+
+      <h2 className="pt-2 text-lg font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Gebeurtenissen</h2>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <PieChartCard title="Events per type" data={byType} />
         <BarChartCard title="Meest gebruikte technieken" data={techniqueData} />
