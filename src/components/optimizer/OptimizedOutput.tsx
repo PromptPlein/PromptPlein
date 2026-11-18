@@ -25,7 +25,7 @@ import { getChatSettingsCached, type ChatSettings } from '@/services/settingsSer
 import { useAuth } from '@/context/AuthContext';
 import ShareModal from '@/components/share/ShareModal';
 import SavePromptPanel from '@/components/prompts/SavePromptPanel';
-import { isImagePrompt } from '@/lib/techniques';
+import { isImagePrompt, type PromptKind } from '@/lib/techniques';
 import type { OptimizeResult, Prompt, PromptDialogue, Technique } from '@/types';
 
 interface OptimizedOutputProps {
@@ -34,6 +34,8 @@ interface OptimizedOutputProps {
   technique?: Technique | null;
   /** Het doel dat de gebruiker beschreef (voor een zinvolle standaardtitel). */
   goal?: string;
+  /** De soort die bij Maken is gekozen; gaat mee naar het opslaanformulier. */
+  kind?: PromptKind | null;
   onReset: () => void;
   /**
    * Terug naar de velden waaruit deze prompt is gebouwd, om ze aan te passen en
@@ -60,6 +62,7 @@ export default function OptimizedOutput({
   result,
   technique,
   goal,
+  kind,
   onReset,
   onEditFields,
   versions,
@@ -325,6 +328,7 @@ export default function OptimizedOutput({
           content={result.optimized_content}
           technique={technique}
           goal={goal}
+          kind={skill ? 'skill' : kind}
           onSaved={(p) => {
             setSaved(p);
             setShowSave(false);

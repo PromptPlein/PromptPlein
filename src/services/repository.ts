@@ -3,6 +3,7 @@ import { representativeSharingLevel } from '@/lib/utils';
 import { localStore } from '@/services/localStore';
 import { setInitialVisibility } from '@/services/visibilityService';
 import { ensureValidSession } from '@/services/authService';
+import type { PromptKind } from '@/lib/techniques';
 import type {
   AdvancedPromptFilters,
   Category,
@@ -28,7 +29,7 @@ export async function getRoles(): Promise<Role[]> {
 
 export async function getCategories(): Promise<Category[]> {
   if (local) return localStore.listCategories();
-  const { data, error } = await supabase!.from('categories').select('*').order('sort_order');
+  const { data, error } = await supabase!.from('categories').select('*').order('sort_order').order('name');
   if (error) throw error;
   return (data ?? []) as Category[];
 }
@@ -168,6 +169,7 @@ export async function searchPrompts(filters: AdvancedPromptFilters = {}): Promis
   }
   if (filters.favorites_only) query = query.eq('is_favorite', true);
   if (filters.category_ids?.length) query = query.in('category_id', filters.category_ids);
+  if (filters.kinds?.length) query = query.in('kind', filters.kinds);
   if (filters.role_ids?.length) query = query.in('role_id', filters.role_ids);
   if (filters.organization_ids?.length) query = query.in('organization_id', filters.organization_ids);
   if (filters.sharing_levels?.length) query = query.in('sharing_level', filters.sharing_levels);
@@ -246,6 +248,8 @@ export interface PromptEdit {
   title: string;
   description: string;
   content: string;
+  /** Wat de prompt oplevert. Weggelaten = ongewijzigd. */
+  kind?: PromptKind;
 }
 
 /** Vat samen welke velden zijn gewijzigd, voor de versiegeschiedenis. */
@@ -254,6 +258,7 @@ function summarizeChanges(before: Prompt, after: PromptEdit): string {
   if ((before.title ?? '') !== after.title) changed.push('titel');
   if ((before.description ?? '') !== after.description) changed.push('omschrijving');
   if ((before.content ?? '') !== after.content) changed.push('prompt-inhoud');
+  if (after.kind && (before.kind ?? 'text') !== after.kind) changed.push('soort');
   return changed.length ? `Aangepast: ${changed.join(', ')}.` : 'Opgeslagen zonder inhoudelijke wijziging.';
 }
 
@@ -272,6 +277,7 @@ export async function savePromptEdit(
     title: edit.title.trim(),
     description: edit.description.trim(),
     content: edit.content,
+    ...(edit.kind ? { kind: edit.kind } : {}),
     updated_at: new Date().toISOString(),
   };
 

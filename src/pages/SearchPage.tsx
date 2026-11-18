@@ -15,6 +15,8 @@ import { SkeletonGrid } from '@/components/common/Skeleton';
 import { searchPrompts } from '@/services/repository';
 import { trackEvent } from '@/services/analyticsService';
 import { categoryIcon } from '@/lib/categoryIcons';
+import { PROMPT_KIND_META, isPromptKind } from '@/lib/promptKinds';
+import { PROMPT_KINDS } from '@/lib/techniques';
 import { ministryOf, orgChain, orgPathLabel, orgSubtreeIds, searchOrgIds } from '@/lib/orgTree';
 import {
   activityIdentifier,
@@ -52,6 +54,7 @@ function readFilters(params: URLSearchParams): AdvancedPromptFilters {
   return {
     query: params.get('q') ?? '',
     category_ids: params.getAll('category'),
+    kinds: params.getAll('soort').filter(isPromptKind),
     organization_ids: params.getAll('org'),
     role_ids: params.getAll('functie'),
     sharing_levels: params
@@ -68,6 +71,7 @@ function writeFilters(filters: AdvancedPromptFilters, showAll: boolean): URLSear
   const params = new URLSearchParams();
   if (filters.query) params.set('q', filters.query);
   filters.category_ids?.forEach((id) => params.append('category', id));
+  filters.kinds?.forEach((k) => params.append('soort', k));
   filters.organization_ids?.forEach((id) => params.append('org', id));
   filters.role_ids?.forEach((id) => params.append('functie', id));
   filters.sharing_levels?.forEach((level) => params.append('niveau', level));
@@ -113,6 +117,7 @@ export default function SearchPage() {
 
   const activeCount =
     (filters.category_ids?.length ?? 0) +
+    (filters.kinds?.length ?? 0) +
     (filters.organization_ids?.length ?? 0) +
     (filters.role_ids?.length ?? 0) +
     (filters.sharing_levels?.length ?? 0) +
@@ -225,7 +230,33 @@ export default function SearchPage() {
           </button>
         </div>
 
-        <div className="grid w-full grid-cols-3 gap-1 min-[352px]:grid-cols-4 lg:grid-cols-8">
+        {/* Soort: wat de prompt oplevert. Alles wist de keuze; meer soorten tegelijk kan. */}
+        <div role="group" aria-label="Soort prompt" className="flex flex-wrap justify-center gap-1.5">
+          {[null, ...PROMPT_KINDS].map((k) => {
+            const active = k ? (filters.kinds?.includes(k) ?? false) : !filters.kinds?.length;
+            const meta = k ? PROMPT_KIND_META[k] : null;
+            const Icon = meta?.icon;
+            return (
+              <button
+                key={k ?? 'alles'}
+                type="button"
+                aria-pressed={active}
+                onClick={() => update({ kinds: k ? toggled(filters.kinds, k) : [] })}
+                className={clsx(
+                  'inline-flex min-h-[2.5rem] items-center gap-1.5 rounded-full border px-3.5 text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500',
+                  active
+                    ? 'border-rijksblauw-700 bg-rijksblauw-700 font-bold text-white dark:border-rijksblauw-500 dark:bg-rijksblauw-500'
+                    : 'border-slate-300 bg-white text-rijksblauw-700 hover:border-rijksblauw-500 dark:border-slate-600 dark:bg-slate-800 dark:text-rijksblauw-200',
+                )}
+              >
+                {Icon && <Icon size={16} aria-hidden="true" />}
+                {meta?.label ?? 'Alles'}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="grid w-full grid-cols-3 gap-1 sm:grid-cols-6">
           {categories.map((c) => {
             const Icon = categoryIcon(c.icon);
             const active = filters.category_ids?.includes(c.id) ?? false;
@@ -295,6 +326,13 @@ export default function SearchPage() {
                 key={id}
                 label={categoryById(id)?.name ?? 'Categorie'}
                 onRemove={() => update({ category_ids: toggled(filters.category_ids, id) })}
+              />
+            ))}
+            {filters.kinds?.map((k) => (
+              <ActiveChip
+                key={k}
+                label={PROMPT_KIND_META[k].label}
+                onRemove={() => update({ kinds: toggled(filters.kinds, k) })}
               />
             ))}
             {filters.rijksbreed && (

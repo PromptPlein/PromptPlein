@@ -11,6 +11,9 @@ import { useAuth } from '@/context/AuthContext';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import SearchableSelect from '@/components/common/SearchableSelect';
 import VisibilityPicker from '@/components/prompts/VisibilityPicker';
+import KindPicker from '@/components/prompts/KindPicker';
+import { kindFromModality } from '@/lib/promptKinds';
+import type { PromptKind } from '@/lib/techniques';
 import type { Prompt, Technique, VisibilityLevel } from '@/types';
 
 interface SavePromptPanelProps {
@@ -20,6 +23,8 @@ interface SavePromptPanelProps {
   technique?: Technique | null;
   /** Het doel dat de gebruiker beschreef (voor een zinvolle standaardtitel). */
   goal?: string;
+  /** De soort uit Maken, Wat wordt het? Zonder keuze volgt hij uit het framework. */
+  kind?: PromptKind | null;
   onSaved: (prompt: Prompt) => void;
   onCancel: () => void;
   /**
@@ -39,6 +44,7 @@ export default function SavePromptPanel({
   content,
   technique,
   goal,
+  kind: initialKind,
   onSaved,
   onCancel,
   frameless = false,
@@ -52,6 +58,9 @@ export default function SavePromptPanel({
   const [description, setDescription] = useState('');
   // Categorie en organisatie moeten net als bij het uploaden gekozen kunnen worden.
   const [categoryId, setCategoryId] = useState<string | null>(null);
+  // Soort: uit de bouwer als die bekend is, anders tekst. De gebruiker kan hem wijzigen.
+  const knownKind = initialKind ?? kindFromModality(technique?.modality);
+  const [kind, setKind] = useState<PromptKind>(knownKind ?? 'text');
   // Functie: voor welke functie is deze prompt geschreven (zelfde keuze als bij het uploaden).
   const [roleId, setRoleId] = useState<string | null>(null);
   // Organisatie staat standaard op die van de gebruiker (uit het profiel), zodat
@@ -204,6 +213,7 @@ export default function SavePromptPanel({
         description: description.trim() || undefined,
         content,
         category_id: categoryId,
+        kind,
         role_id: roleId,
         organization_id: organizationId || null,
         sharing_levels: sharingLevels,
@@ -294,6 +304,15 @@ export default function SavePromptPanel({
           }
         />
       </div>
+      <KindPicker
+        value={kind}
+        onChange={setKind}
+        hint={
+          knownKind
+            ? 'Overgenomen uit Maken. Klopt het niet, kies dan een andere.'
+            : 'Wat levert de prompt op?'
+        }
+      />
       <div>
         <label className="opl-label" htmlFor="tpl-category">
           Categorie
@@ -307,7 +326,7 @@ export default function SavePromptPanel({
             setCategoryId(id);
             if (id) setPendingCategory(null); // echte keuze vervangt een aanvraag
           }}
-          placeholder="Waar is deze prompt voor bedoeld?"
+          placeholder="Waar gaat deze prompt over?"
           clearLabel="Geen categorie"
           searchPlaceholder="Zoek een categorie…"
         />

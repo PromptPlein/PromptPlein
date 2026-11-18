@@ -131,7 +131,7 @@ function ensureSeeded(): void {
       description: 'Genereert een afwijzingsbrief op B1-taalniveau, vriendelijk en duidelijk.',
       content:
         'Schrijf een afwijzingsbrief voor een aanvraag van een vergunning. Leg duidelijk uit waarom de aanvraag is afgewezen en welke mogelijkheden de aanvrager nog heeft.',
-      category_id: 'cat-burgerbrieven',
+      category_id: 'cat-communicatie',
       role_id: 'role-klantcontact',
       organization_id: LOCAL_ORG_BZK,
       sharing_level: 'public',
@@ -221,6 +221,8 @@ export const localStore = {
     if (filters.favorites_only) prompts = prompts.filter((p) => p.is_favorite);
     if (filters.category_ids?.length)
       prompts = prompts.filter((p) => p.category_id && filters.category_ids!.includes(p.category_id));
+    if (filters.kinds?.length)
+      prompts = prompts.filter((p) => filters.kinds!.includes(p.kind ?? 'text'));
     if (filters.role_ids?.length)
       prompts = prompts.filter((p) => p.role_id && filters.role_ids!.includes(p.role_id));
     if (filters.organization_ids?.length)

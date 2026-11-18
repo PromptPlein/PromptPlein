@@ -14,7 +14,11 @@ import {
   Download,
   ThumbsUp,
   Building2,
+  Info,
 } from '@/components/common/icons';
+import KindPicker from '@/components/prompts/KindPicker';
+import { PROMPT_KIND_META, PROMPT_KIND_USE, promptKindOf } from '@/lib/promptKinds';
+import type { PromptKind } from '@/lib/techniques';
 import toast from 'react-hot-toast';
 import ShareModal from '@/components/share/ShareModal';
 import ExportModal from '@/components/export/ExportModal';
@@ -61,6 +65,7 @@ export default function PromptDetailPage() {
   const [draftTitle, setDraftTitle] = useState('');
   const [draftDescription, setDraftDescription] = useState('');
   const [draftContent, setDraftContent] = useState('');
+  const [draftKind, setDraftKind] = useState<PromptKind>('text');
   const [saving, setSaving] = useState(false);
   // Verhoogd na een opslag, zodat de versiegeschiedenis ververst.
   const [versionRefresh, setVersionRefresh] = useState(0);
@@ -158,6 +163,7 @@ export default function PromptDetailPage() {
     setDraftTitle(prompt.title);
     setDraftDescription(prompt.description ?? '');
     setDraftContent(prompt.content);
+    setDraftKind(promptKindOf(prompt));
     setEditing(true);
   }
 
@@ -175,7 +181,7 @@ export default function PromptDetailPage() {
     try {
       const updated = await savePromptEdit(
         prompt,
-        { title: draftTitle, description: draftDescription, content: draftContent },
+        { title: draftTitle, description: draftDescription, content: draftContent, kind: draftKind },
         user?.id,
       );
       setPrompt(updated);
@@ -211,6 +217,10 @@ export default function PromptDetailPage() {
 
   const category = categoryById(prompt.category_id);
   const role = roleById(prompt.role_id);
+  const kind = promptKindOf(prompt);
+  const kindMeta = PROMPT_KIND_META[kind];
+  const KindIcon = kindMeta.icon;
+  const kindUse = PROMPT_KIND_USE[kind];
   // Alleen de eigenaar of een admin mag de prompt bewerken of verwijderen.
   const isOwner = !!user && prompt.created_by_user === user.id;
   const canManage = isAdmin || isOwner;
@@ -235,7 +245,21 @@ export default function PromptDetailPage() {
               aria-label="Titel"
             />
           ) : (
-            <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">{prompt.title}</h1>
+            <div className="flex min-w-0 items-start gap-3">
+              <span
+                aria-hidden="true"
+                className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-rijksblauw-700 text-white dark:bg-rijksblauw-500"
+              >
+                <KindIcon size={22} />
+              </span>
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
+                  <span className="sr-only">Soort: </span>
+                  {kindMeta.label}
+                </p>
+                <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">{prompt.title}</h1>
+              </div>
+            </div>
           )}
           <div className="flex shrink-0 items-center gap-1">
             <button
@@ -277,7 +301,16 @@ export default function PromptDetailPage() {
           )
         )}
 
+        {editing && (
+          <div className="mb-4">
+            <KindPicker value={draftKind} onChange={setDraftKind} name="bewerk-soort" />
+          </div>
+        )}
+
         <div className="mb-5 flex flex-wrap gap-1.5">
+          <span className="opl-badge bg-rijksblauw-700 font-semibold text-white dark:bg-rijksblauw-500">
+            {kindMeta.label}
+          </span>
           {category && (
             <span className="opl-badge bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">{category.name}</span>
           )}
@@ -288,6 +321,13 @@ export default function PromptDetailPage() {
             {sharingLabel(prompt.sharing_level)}
           </span>
         </div>
+
+        {kindUse && !editing && (
+          <p className="mb-5 flex items-start gap-2.5 rounded-md bg-rijksblauw-50 px-3.5 py-3 text-sm text-rijksblauw-800 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-100">
+            <Info size={18} aria-hidden="true" className="mt-0.5 shrink-0" />
+            <span>{kindUse}</span>
+          </p>
+        )}
 
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Prompt-inhoud</h2>

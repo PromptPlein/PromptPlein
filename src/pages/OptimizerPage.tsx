@@ -401,6 +401,7 @@ export default function OptimizerPage() {
             result={result}
             technique={resultTechnique}
             goal={goal}
+            kind={builderState?.mode === 'own' ? builderState.data.kind : null}
             onReset={handleReset}
             onEditFields={builderState ? handleEditFields : undefined}
             versions={versions}

@@ -11,6 +11,8 @@ import { getCurrentUser } from '@/lib/utils';
 import { usePersistentDraft } from '@/lib/usePersistentDraft';
 import SearchableSelect from '@/components/common/SearchableSelect';
 import VisibilityPicker from '@/components/prompts/VisibilityPicker';
+import KindPicker from '@/components/prompts/KindPicker';
+import type { PromptKind } from '@/lib/techniques';
 import type { NewPromptInput, Prompt, VisibilityLevel } from '@/types';
 
 interface PromptUploadFormProps {
@@ -29,6 +31,7 @@ export default function PromptUploadForm({ onCreated, onCancel }: PromptUploadFo
   const [description, setDescription, clearDescription] = usePersistentDraft('upload.description');
   const [content, setContent, clearContent] = usePersistentDraft('upload.content');
   const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [kind, setKind] = useState<PromptKind>('text');
   const [roleId, setRoleId] = useState<string | null>(null);
   const [organizationId, setOrganizationId] = useState<string>('');
   const [sharingLevels, setSharingLevels] = useState<VisibilityLevel[]>([]);
@@ -55,6 +58,7 @@ export default function PromptUploadForm({ onCreated, onCancel }: PromptUploadFo
       description: description.trim() || undefined,
       content: content.trim(),
       category_id: categoryId,
+      kind,
       role_id: roleId,
       organization_id: organizationId || null,
       sharing_levels: sharingLevels,
@@ -125,6 +129,8 @@ export default function PromptUploadForm({ onCreated, onCancel }: PromptUploadFo
         {errors.content && <p className="mt-1 text-xs text-rijksrood">{errors.content}</p>}
       </div>
 
+      <KindPicker value={kind} onChange={setKind} name="up-soort" hint="Wat levert de prompt op?" />
+
       <div>
         <label className="opl-label" htmlFor="up-category">
           Categorie
@@ -134,7 +140,7 @@ export default function PromptUploadForm({ onCreated, onCancel }: PromptUploadFo
           options={categories.map((c) => ({ id: c.id, label: c.name, hint: c.description }))}
           value={categoryId}
           onChange={(id) => setCategoryId(id)}
-          placeholder="Waar is deze prompt voor bedoeld?"
+          placeholder="Waar gaat deze prompt over?"
           clearLabel="Geen categorie"
           searchPlaceholder="Zoek een categorie…"
           onRequestNew={

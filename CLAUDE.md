@@ -781,6 +781,14 @@ een andere afdeling, directie of een ander ministerie is bewust niet te kiezen, 
 niet via een oude link. Keuze van de eigenaar: filteren volgt de goedkeuringsstroom. Een laag neemt alles mee wat eronder hangt
 (`orgSubtreeIds`).
 
+Een prompt heeft twee assen. De categorie zegt waar hij over gaat (Beleid & Advies,
+Communicatie, Juridisch, Data & Analyse, Vergaderingen, Onderzoek, of Overig als er geen is).
+De soort zegt wat hij oplevert: dezelfde zes als bij Maken, Wat wordt het? (`prompts.kind`,
+0064, `promptKinds.ts`). Op de kaart staat de soort als blauw vierkant met de categorie
+eronder (variant A, keuze van de eigenaar). De soort komt bij opslaan mee uit de bouwer en
+staat in de URL als `?soort=`. Burgerbrieven en Applicatie ontwikkeling zijn bewust geen
+categorie meer: een brief is Communicatie, een applicatie is een soort.
+
 In de rijen doen privéprompts niet mee. Populair toont alleen prompts met een
 like, anders is die rij gelijk aan Nieuw. Een lege rij verdwijnt. Populairste
 eerst sorteert de client, want likes staan niet op de prompt-rij. Technieken staan

@@ -1,3 +1,6 @@
+import type { PromptKind } from '@/lib/techniques';
+
+
 // Domeinmodellen voor de Overheid Prompt Library (Phase 1).
 
 export type SharingLevel = 'private' | 'department' | 'directorate' | 'ministry' | 'public';
@@ -103,6 +106,8 @@ export interface Prompt {
   description?: string;
   content: string;
   category_id?: string | null;
+  /** Wat de prompt oplevert (migratie 0064). Ontbreekt bij oude rijen: dan tekst. */
+  kind?: PromptKind | null;
   role_id?: string | null;
   organization_id?: string | null;
   sharing_level: SharingLevel;
@@ -145,6 +150,8 @@ export interface NewPromptInput {
   description?: string;
   content: string;
   category_id?: string | null;
+  /** Wat de prompt oplevert. Zonder waarde maakt de database er tekst van. */
+  kind?: PromptKind;
   role_id?: string | null;
   organization_id?: string | null;
   /**
@@ -173,6 +180,8 @@ export interface PromptFilters {
 export interface AdvancedPromptFilters {
   query?: string;
   category_ids?: string[];
+  /** Soorten (Tekst, Code, …); leeg = alle soorten. */
+  kinds?: PromptKind[];
   role_ids?: string[];
   organization_ids?: string[];
   sharing_levels?: SharingLevel[];

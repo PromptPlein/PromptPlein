@@ -5,6 +5,8 @@ import { X } from '@/components/common/icons';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { useAuth } from '@/context/AuthContext';
 import { categoryIcon } from '@/lib/categoryIcons';
+import { PROMPT_KIND_META } from '@/lib/promptKinds';
+import { PROMPT_KINDS } from '@/lib/techniques';
 import { SHARING_LEVELS, toggled } from '@/lib/utils';
 import { directorateOf, ministryOf, orgChain, orgDisplayName, orgSubtreeIds } from '@/lib/orgTree';
 import type { Organization } from '@/types';
@@ -123,6 +125,25 @@ export default function FilterPanel({
         </div>
 
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
+          <FilterGroup title="Soort">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-1.5">
+              {PROMPT_KINDS.map((k) => {
+                const { label, icon: Icon } = PROMPT_KIND_META[k];
+                return (
+                  <ToggleButton
+                    key={k}
+                    active={filters.kinds?.includes(k) ?? false}
+                    onClick={() => onChange({ kinds: toggled(filters.kinds, k) })}
+                    className="justify-start gap-2 text-left text-sm"
+                  >
+                    <Icon size={18} className="shrink-0" />
+                    {label}
+                  </ToggleButton>
+                );
+              })}
+            </div>
+          </FilterGroup>
+
           <FilterGroup title="Categorie">
             <div className="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-1.5">
               {categories.map((c) => {
@@ -284,6 +305,7 @@ export default function FilterPanel({
             onClick={() =>
               onChange({
                 category_ids: [],
+                kinds: [],
                 organization_ids: [],
                 role_ids: [],
                 sharing_levels: [],

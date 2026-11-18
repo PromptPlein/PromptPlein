@@ -23,7 +23,6 @@ export const SEED_CATEGORIES: Category[] = [
   { id: 'cat-communicatie', name: 'Communicatie', description: 'Persberichten, nieuwsbrieven en woordvoering.', icon: 'Megaphone' },
   { id: 'cat-juridisch', name: 'Juridisch', description: 'Juridische teksten en toetsing.', icon: 'Scale' },
   { id: 'cat-data', name: 'Data & Analyse', description: 'Data-analyse, rapportages en dashboards.', icon: 'BarChart3' },
-  { id: 'cat-burgerbrieven', name: 'Burgerbrieven', description: 'Correspondentie met burgers en bedrijven.', icon: 'Mail' },
   { id: 'cat-vergaderingen', name: 'Vergaderingen', description: 'Agenda’s, notulen en samenvattingen.', icon: 'Users' },
   { id: 'cat-onderzoek', name: 'Onderzoek', description: 'Literatuuronderzoek en samenvattingen.', icon: 'Search' },
 ];

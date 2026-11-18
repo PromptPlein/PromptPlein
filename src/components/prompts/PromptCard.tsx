@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Copy, Star, Check, Share2, ThumbsUp } from '@/components/common/icons';
 import toast from 'react-hot-toast';
 import InfoDot from '@/components/common/InfoDot';
-import { categoryIcon } from '@/lib/categoryIcons';
+import { PROMPT_KIND_META, promptKindOf } from '@/lib/promptKinds';
 import { orgPathLabel } from '@/lib/orgTree';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { useAuth } from '@/context/AuthContext';
@@ -117,7 +117,9 @@ export default function PromptCard({ prompt, author, onChanged }: PromptCardProp
     toast.success('Deelbare link gekopieerd');
   }
 
-  const CategoryIcon = categoryIcon(category?.icon);
+  // Variant A: het vierkant zegt wat de prompt oplevert, de regel eronder waar hij over gaat.
+  const kind = PROMPT_KIND_META[promptKindOf(prompt)];
+  const KindIcon = kind.icon;
   // Wat van de kaart af is gegaan (omschrijving, organisatie, functie, datum)
   // staat achter het infobolletje: één blik op de kaart, de rest op verzoek.
   const info = [
@@ -137,11 +139,23 @@ export default function PromptCard({ prompt, author, onChanged }: PromptCardProp
     // De knoppen liggen er met z-10 bovenop en blijven dus gewone knoppen.
     <article className="opl-card group relative flex h-full flex-col gap-3 p-4 transition-shadow duration-200 hover:shadow-md">
       <div className="flex items-center justify-between gap-2 flex-wrap gap-y-1">
-        <span className="inline-flex min-w-0 items-center gap-2 text-sm font-semibold text-rijksblauw-700 dark:text-rijksblauw-200">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-rijksblauw-50 dark:bg-rijksblauw-500/15">
-            <CategoryIcon size={16} />
+        <span className="inline-flex min-w-0 items-center gap-2.5">
+          <span
+            aria-hidden="true"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-rijksblauw-700 text-white dark:bg-rijksblauw-500"
+          >
+            <KindIcon size={18} />
           </span>
-          <span className="truncate">{category?.name ?? 'Overig'}</span>
+          <span className="flex min-w-0 flex-col leading-tight">
+            <span className="truncate text-sm font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
+              <span className="sr-only">Soort: </span>
+              {kind.label}
+            </span>
+            <span className="truncate text-xs text-slate-500 dark:text-slate-400">
+              <span className="sr-only">Categorie: </span>
+              {category?.name ?? 'Overig'}
+            </span>
+          </span>
         </span>
         <span className="flex shrink-0 items-center gap-1">
           <span className={`opl-badge ${sharingBadgeClasses(prompt.sharing_level)}`}>

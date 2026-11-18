@@ -9,6 +9,8 @@ import { listPrompts } from '@/services/repository';
 import { listPromptsByAuthor } from '@/services/communityService';
 import { usePromptCommunity } from '@/hooks/usePromptCommunity';
 import { useAuth } from '@/context/AuthContext';
+import { PROMPT_KIND_META, promptKindOf } from '@/lib/promptKinds';
+import { PROMPT_KINDS, type PromptKind } from '@/lib/techniques';
 import type { Prompt } from '@/types';
 
 type Tab = 'mine' | 'favorites';
@@ -22,6 +24,8 @@ type Tab = 'mine' | 'favorites';
 export default function MyLibraryPage() {
   const { user } = useAuth();
   const [tab, setTab] = useState<Tab>('mine');
+  // Filter op soort binnen het tabblad; null = alle soorten.
+  const [soort, setSoort] = useState<PromptKind | null>(null);
   const [mine, setMine] = useState<Prompt[]>([]);
   const [favorites, setFavorites] = useState<Prompt[]>([]);
   const [loadingMine, setLoadingMine] = useState(true);
@@ -62,6 +66,12 @@ export default function MyLibraryPage() {
   const prompts = tab === 'mine' ? mine : favorites;
   const loading = tab === 'mine' ? loadingMine : loadingFavorites;
   const { enriched, authors } = usePromptCommunity(prompts);
+  // Per soort tellen; alleen soorten met prompts krijgen een knop, en pas bij twee of meer.
+  const counts = new Map<PromptKind, number>();
+  for (const p of prompts) counts.set(promptKindOf(p), (counts.get(promptKindOf(p)) ?? 0) + 1);
+  const kindsPresent = PROMPT_KINDS.filter((k) => counts.has(k));
+  const activeSoort = soort && counts.has(soort) ? soort : null;
+  const visible = activeSoort ? enriched.filter((p) => promptKindOf(p) === activeSoort) : enriched;
 
   function handleCreated(prompt: Prompt) {
     setMine((prev) => [prompt, ...prev]);
@@ -111,13 +121,41 @@ export default function MyLibraryPage() {
         />
       </div>
 
+      {!loading && kindsPresent.length > 1 && (
+        <div role="group" aria-label="Soort prompt" className="mb-5 flex flex-wrap gap-2">
+          {[null, ...kindsPresent].map((k) => {
+            const active = activeSoort === k;
+            const meta = k ? PROMPT_KIND_META[k] : null;
+            const Icon = meta?.icon;
+            return (
+              <button
+                key={k ?? 'alles'}
+                type="button"
+                aria-pressed={active}
+                onClick={() => setSoort(k)}
+                className={clsx(
+                  'inline-flex min-h-[2.5rem] items-center gap-1.5 rounded-full border px-3.5 text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500',
+                  active
+                    ? 'border-rijksblauw-700 bg-rijksblauw-700 font-bold text-white dark:border-rijksblauw-500 dark:bg-rijksblauw-500'
+                    : 'border-slate-300 bg-white text-rijksblauw-700 hover:border-rijksblauw-500 dark:border-slate-600 dark:bg-slate-800 dark:text-rijksblauw-200',
+                )}
+              >
+                {Icon && <Icon size={16} aria-hidden="true" />}
+                {meta?.label ?? 'Alles'}
+                <span className="tabular-nums opacity-80">{k ? counts.get(k) : prompts.length}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {loading ? (
         <SkeletonGrid count={3} />
       ) : prompts.length === 0 ? (
         <EmptyState tab={tab} onAdd={() => setUploadOpen(true)} />
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {enriched.map((p) => (
+          {visible.map((p) => (
             <PromptCard
               key={p.id}
               prompt={p}
