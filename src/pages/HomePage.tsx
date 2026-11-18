@@ -10,9 +10,7 @@ import {
   type LucideIcon,
 } from '@/components/common/icons';
 import clsx from 'clsx';
-import InfoDot from '@/components/common/InfoDot';
 import { useReferenceData } from '@/context/ReferenceDataContext';
-import { categoryIcon } from '@/lib/categoryIcons';
 import { listPrompts } from '@/services/repository';
 import { getChatSettingsCached } from '@/services/settingsService';
 import { usePromptCommunity } from '@/hooks/usePromptCommunity';
@@ -23,16 +21,15 @@ import type { Prompt } from '@/types';
 
 /**
  * De startpagina in tegels: eerst de vier dingen die je hier kunt doen, dan de
- * categorieën als iconen met een aantal, dan de nieuwste prompts. Uitleg staat
+ * nieuwste prompts. Zoeken op soort en categorie gebeurt op Ontdekken, niet hier. Uitleg staat
  * niet als lopende tekst op de pagina, maar achter een infobolletje.
  */
 export default function HomePage() {
   const navigate = useNavigate();
-  const { categories, techniques } = useReferenceData();
+  const { techniques } = useReferenceData();
   const [recent, setRecent] = useState<Prompt[]>([]);
-  // Aantal prompts in totaal en per categorie, voor de getallen op de tegels.
+  // Aantal prompts in totaal, voor het getal op de tegel Prompts zoeken.
   const [total, setTotal] = useState<number | null>(null);
-  const [perCategory, setPerCategory] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [uploadOpen, setUploadOpen] = useState(false);
   // De chattegel staat er alleen zolang de beheerder de chat aan heeft, net als
@@ -46,11 +43,6 @@ export default function HomePage() {
         if (!active) return;
         setRecent(p.slice(0, 6));
         setTotal(p.length);
-        const counts: Record<string, number> = {};
-        for (const prompt of p) {
-          if (prompt.category_id) counts[prompt.category_id] = (counts[prompt.category_id] ?? 0) + 1;
-        }
-        setPerCategory(counts);
       })
       .finally(() => active && setLoading(false));
     void getChatSettingsCached().then((s) => {
@@ -104,51 +96,6 @@ export default function HomePage() {
             countLabel="technieken"
             className="bg-[#fff0c9] text-rijksblauw-700 hover:bg-[#ffe6a6] dark:bg-[#403a24] dark:text-white dark:hover:bg-[#524a2d]"
           />
-        </div>
-      </section>
-
-      {/* Categorieën als iconen met het aantal prompts. */}
-      <section className="mb-10" aria-labelledby="home-categorieen">
-        <div className="mb-3 flex items-center gap-1">
-          <h2
-            id="home-categorieen"
-            className="text-xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200"
-          >
-            Categorieën
-          </h2>
-          <InfoDot
-            label="Uitleg over categorieën"
-            text="Klik een categorie. Het getal is het aantal prompts."
-          />
-        </div>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
-          {categories.map((c) => {
-            const Icon = categoryIcon(c.icon);
-            const count = perCategory[c.id] ?? 0;
-            return (
-              <Link
-                key={c.id}
-                to={`/zoeken?category=${c.id}`}
-                title={c.description || undefined}
-                className="opl-card group relative flex min-h-[7.5rem] flex-col items-center justify-center gap-2.5 px-2 pb-3 pt-5 text-center hover:border-rijksblauw-500 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500"
-              >
-                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-rijksblauw-50 text-rijksblauw-700 transition-colors group-hover:bg-rijksblauw-700 group-hover:text-white dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">
-                  <Icon size={24} />
-                </span>
-                <span className="text-sm font-semibold leading-tight text-slate-900 dark:text-slate-100">
-                  {c.name}
-                </span>
-                {!loading && (
-                  <span
-                    aria-label={`${count} prompts`}
-                    className="absolute right-2 top-2 min-w-[1.5rem] rounded-full bg-rijksblauw-700 px-1.5 text-center text-xs font-bold leading-6 text-white dark:bg-rijksblauw-500"
-                  >
-                    {count}
-                  </span>
-                )}
-              </Link>
-            );
-          })}
         </div>
       </section>
 

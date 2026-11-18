@@ -786,7 +786,11 @@ Communicatie, Juridisch, Data & Analyse, Vergaderingen, Onderzoek, of Overig als
 De soort zegt wat hij oplevert: dezelfde zes als bij Maken, Wat wordt het? (`prompts.kind`,
 0064, `promptKinds.ts`). Op de kaart staat de soort als blauw vierkant met de categorie
 eronder (variant A, keuze van de eigenaar). De soort komt bij opslaan mee uit de bouwer en
-staat in de URL als `?soort=`. Burgerbrieven en Applicatie ontwikkeling zijn bewust geen
+staat in de URL als `?soort=`. Op Ontdekken is de soort een rij tabbladen (Alles plus de
+zes, met tellers) en staan de categorieën in het vlak eronder, geteld binnen de gekozen soort
+(variant 7B). Daarom haalt de pagina alles op zonder soort en categorie en filtert de client
+die twee. Het filterpaneel heeft geen eigen blok Soort. Start toont geen categorieën meer,
+alleen de vier tegels en Nieuwe prompts. Burgerbrieven en Applicatie ontwikkeling zijn bewust geen
 categorie meer: een brief is Communicatie, een applicatie is een soort.
 
 In de rijen doen privéprompts niet mee. Populair toont alleen prompts met een

@@ -6,6 +6,7 @@ import {
   ArrowRight,
   Search,
   SearchX,
+  LayoutGrid,
   SlidersHorizontal,
   X,
 } from '@/components/common/icons';
@@ -15,7 +16,7 @@ import { SkeletonGrid } from '@/components/common/Skeleton';
 import { searchPrompts } from '@/services/repository';
 import { trackEvent } from '@/services/analyticsService';
 import { categoryIcon } from '@/lib/categoryIcons';
-import { PROMPT_KIND_META, isPromptKind } from '@/lib/promptKinds';
+import { PROMPT_KIND_META, isPromptKind, promptKindOf } from '@/lib/promptKinds';
 import { PROMPT_KINDS } from '@/lib/techniques';
 import { ministryOf, orgChain, orgPathLabel, orgSubtreeIds, searchOrgIds } from '@/lib/orgTree';
 import {
@@ -129,7 +130,9 @@ export default function SearchPage() {
 
   const [query, setQuery] = useState(urlQuery);
   const debouncedQuery = useDebouncedValue(query, 300);
-  const [prompts, setPrompts] = useState<Prompt[]>([]);
+  // Alles wat bij de zoekvraag en de overige filters past, nog zonder soort en
+  // categorie: daaruit komen de tellers op de tabbladen en de categorietegels.
+  const [base, setBase] = useState<Prompt[]>([]);
   const [loading, setLoading] = useState(true);
   const [panelOpen, setPanelOpen] = useState(false);
   const lastTrackedQuery = useRef('');
@@ -160,8 +163,8 @@ export default function SearchPage() {
   useEffect(() => {
     let active = true;
     setLoading(true);
-    searchPrompts({ ...filters, organization_ids: orgIds })
-      .then((p) => active && setPrompts(p))
+    searchPrompts({ ...filters, kinds: [], category_ids: [], organization_ids: orgIds })
+      .then((p) => active && setBase(p))
       .finally(() => active && setLoading(false));
 
     // Log een zoekopdracht (alleen bij een niet-lege, nieuwe zoekterm).
@@ -180,8 +183,28 @@ export default function SearchPage() {
   }, [paramKey, orgIdsKey]);
 
   function handleChanged(updated: Prompt) {
-    setPrompts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+    setBase((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
   }
+
+  // Soort en categorie filtert de client, zodat de tellers bij elke keuze kloppen.
+  const kindSel = filters.kinds ?? [];
+  const catSel = filters.category_ids ?? [];
+  const inKind = useMemo(
+    () => base.filter((p) => !kindSel.length || kindSel.includes(promptKindOf(p))),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [base, kindSel.join(',')],
+  );
+  const prompts = useMemo(
+    () => inKind.filter((p) => !catSel.length || (p.category_id ? catSel.includes(p.category_id) : false)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [inKind, catSel.join(',')],
+  );
+  const kindCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const p of base) m.set(promptKindOf(p), (m.get(promptKindOf(p)) ?? 0) + 1);
+    return m;
+  }, [base]);
+  const activeKind = kindSel.length === 1 ? kindSel[0] : null;
 
   const { enriched, authors, likesReady } = usePromptCommunity(prompts);
   const waiting = loading || ((browsing || filters.sort === 'popular') && !likesReady);
@@ -230,66 +253,89 @@ export default function SearchPage() {
           </button>
         </div>
 
-        {/* Soort: wat de prompt oplevert. Alles wist de keuze; meer soorten tegelijk kan. */}
-        <div role="group" aria-label="Soort prompt" className="flex flex-wrap justify-center gap-1.5">
+      </section>
+
+      {/* Soort als tabbladen; het vlak eronder toont de categorieën binnen die soort,
+          met tellers. Op de telefoon schuiven de tabbladen opzij. */}
+      <section aria-label="Soort en categorie" className="mx-auto mb-8 max-w-5xl">
+        <div
+          role="group"
+          aria-label="Soort"
+          className="-mx-4 flex gap-1.5 overflow-x-auto px-4 sm:mx-0 sm:grid sm:grid-cols-7 sm:overflow-visible sm:px-0"
+        >
           {[null, ...PROMPT_KINDS].map((k) => {
-            const active = k ? (filters.kinds?.includes(k) ?? false) : !filters.kinds?.length;
+            const active = k ? activeKind === k : kindSel.length === 0;
             const meta = k ? PROMPT_KIND_META[k] : null;
-            const Icon = meta?.icon;
+            const Icon = meta?.icon ?? LayoutGrid;
+            const n = k ? (kindCounts.get(k) ?? 0) : base.length;
             return (
               <button
                 key={k ?? 'alles'}
                 type="button"
                 aria-pressed={active}
-                onClick={() => update({ kinds: k ? toggled(filters.kinds, k) : [] })}
+                onClick={() => update({ kinds: k ? [k] : [] })}
                 className={clsx(
-                  'inline-flex min-h-[2.5rem] items-center gap-1.5 rounded-full border px-3.5 text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500',
+                  'relative flex min-w-[6.5rem] shrink-0 flex-col items-center gap-1 rounded-t-lg px-2 pb-2.5 pt-3 text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-rijksblauw-500 sm:min-w-0',
                   active
-                    ? 'border-rijksblauw-700 bg-rijksblauw-700 font-bold text-white dark:border-rijksblauw-500 dark:bg-rijksblauw-500'
-                    : 'border-slate-300 bg-white text-rijksblauw-700 hover:border-rijksblauw-500 dark:border-slate-600 dark:bg-slate-800 dark:text-rijksblauw-200',
+                    ? 'z-10 -mb-px border border-b-0 border-t-[3px] border-slate-200 border-t-nadruk bg-white font-bold text-rijksblauw-700 dark:border-slate-700 dark:border-t-nadruk dark:bg-slate-800 dark:text-rijksblauw-200'
+                    : clsx(
+                        'border border-transparent bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600',
+                        n === 0 ? 'text-slate-500 dark:text-slate-400' : 'text-rijksblauw-700 dark:text-rijksblauw-200',
+                      ),
                 )}
               >
-                {Icon && <Icon size={16} aria-hidden="true" />}
-                {meta?.label ?? 'Alles'}
+                <Icon size={22} aria-hidden="true" />
+                <span>{meta?.label ?? 'Alles'}</span>
+                <span className="text-xs font-normal text-slate-500 dark:text-slate-400">
+                  {n}
+                  <span className="sr-only"> prompts</span>
+                </span>
               </button>
             );
           })}
         </div>
-
-        <div className="grid w-full grid-cols-3 gap-1 sm:grid-cols-6">
-          {categories.map((c) => {
-            const Icon = categoryIcon(c.icon);
-            const active = filters.category_ids?.includes(c.id) ?? false;
-            return (
-              <button
-                key={c.id}
-                type="button"
-                aria-pressed={active}
-                title={c.description || undefined}
-                onClick={() => update({ category_ids: toggled(filters.category_ids, c.id) })}
-                className="group flex flex-col items-center gap-1.5 rounded px-0.5 py-1 text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500"
-              >
-                <span
+        <div className="rounded-b-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-2">
+            {categories.map((c) => {
+              const Icon = categoryIcon(c.icon);
+              const active = catSel.includes(c.id);
+              const n = inKind.filter((p) => p.category_id === c.id).length;
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  aria-pressed={active}
+                  title={c.description || undefined}
+                  onClick={() => update({ category_ids: toggled(filters.category_ids, c.id) })}
                   className={clsx(
-                    'flex h-11 w-11 items-center justify-center rounded-full transition-colors',
+                    'flex min-h-[3rem] items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500',
                     active
-                      ? 'bg-rijksblauw-700 text-white dark:bg-rijksblauw-600'
-                      : 'bg-rijksblauw-50 text-rijksblauw-700 group-hover:bg-rijksblauw-700 group-hover:text-white dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200',
+                      ? 'border-2 border-rijksblauw-700 bg-rijksblauw-50 font-bold text-slate-900 dark:border-rijksblauw-300 dark:bg-rijksblauw-500/15 dark:text-slate-100'
+                      : clsx(
+                          'border border-slate-200 bg-white hover:border-rijksblauw-400 dark:border-slate-600 dark:bg-slate-800',
+                          n === 0 ? 'text-slate-500 dark:text-slate-400' : 'text-slate-900 dark:text-slate-100',
+                        ),
                   )}
                 >
-                  <Icon size={22} />
-                </span>
-                <span
-                  className={clsx(
-                    'max-w-full text-[0.8125rem] leading-tight text-slate-900 [hyphens:auto] [overflow-wrap:anywhere] dark:text-slate-100',
-                    active ? 'font-bold' : 'font-medium',
-                  )}
-                >
-                  {c.name}
-                </span>
-              </button>
-            );
-          })}
+                  <span
+                    className={clsx(
+                      'flex h-8 w-8 shrink-0 items-center justify-center rounded-full',
+                      active
+                        ? 'bg-rijksblauw-700 text-white dark:bg-rijksblauw-500'
+                        : 'bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200',
+                    )}
+                  >
+                    <Icon size={18} />
+                  </span>
+                  <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{c.name}</span>
+                  <span className="text-xs font-normal text-slate-500 dark:text-slate-400">
+                    {n}
+                    <span className="sr-only"> prompts</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </section>
 
