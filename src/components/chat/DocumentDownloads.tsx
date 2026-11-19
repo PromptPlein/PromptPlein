@@ -1,10 +1,14 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useId, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
-import { FileSpreadsheet, FileText, Loader2 } from '@/components/common/icons';
+import clsx from 'clsx';
+import { ChevronDown, Download, FileSpreadsheet, FileText, Loader2 } from '@/components/common/icons';
 import { downloadBinary } from '@/lib/download';
 import { buildExcelWorkbook, hasTable, XLSX_MIME } from '@/lib/excelExport';
+import { recommendFormat, type ExportFormat } from '@/lib/exportRequest';
+import useDismiss from '@/lib/useDismiss';
 import { loadWordTemplate, useWordLook } from '@/lib/wordSettings';
 import { trackEvent } from '@/services/analyticsService';
+import type { ChatSource } from '@/types';
 
 const BUTTON_CLASS =
   'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-rijksblauw-700 disabled:opacity-60 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-rijksblauw-200';
@@ -12,20 +16,14 @@ const BUTTON_CLASS =
 const LOOK_LABEL = { rijk: 'Rijkshuisstijl', eenvoudig: 'eenvoudige opmaak', sjabloon: 'je eigen sjabloon' };
 
 /**
- * Word en Excel onder een chatantwoord. Het bestand wordt in de browser gemaakt:
- * de AI levert de inhoud, de opmaak komt uit de gekozen vormgeving (Instellingen,
- * Chat). Excel staat er alleen als het antwoord een tabel heeft.
+ * Maakt een Word- of Excel-bestand van een chatantwoord, in de browser: de AI
+ * levert de inhoud, de opmaak komt uit de gekozen vormgeving (Instellingen, Chat).
+ * Excel kan alleen als het antwoord een tabel heeft.
  */
-export default function DocumentDownloads({
-  text,
-  sources,
-}: {
-  text: string;
-  sources?: { title: string; url: string }[];
-}) {
+function useDocumentExport(text: string, sources?: ChatSource[]) {
   const look = useWordLook();
   const withTable = useMemo(() => hasTable(text), [text]);
-  const [busy, setBusy] = useState<'word' | 'excel' | null>(null);
+  const [busy, setBusy] = useState<ExportFormat | null>(null);
 
   async function downloadWord() {
     setBusy('word');
@@ -61,34 +59,233 @@ export default function DocumentDownloads({
     }
   }
 
+  const download = (format: ExportFormat) => (format === 'word' ? downloadWord() : downloadExcel());
+  return { look, withTable, busy, download };
+}
+
+const FORMATS: Record<ExportFormat, { label: string; file: string; icon: typeof FileText }> = {
+  word: { label: 'Word', file: 'Word-document', icon: FileText },
+  excel: { label: 'Excel', file: 'Excel-bestand', icon: FileSpreadsheet },
+};
+
+function FormatIcon({ format, busy }: { format: ExportFormat; busy: boolean }) {
+  const Icon = FORMATS[format].icon;
+  return busy ? (
+    <Loader2 size={12} className="animate-spin" aria-hidden="true" />
+  ) : (
+    <Icon size={12} aria-hidden="true" />
+  );
+}
+
+/**
+ * Eén knop Downloaden onder een antwoord, met de formaten in een menu. Zo blijft
+ * de rij kort, ook als er later meer formaten bij komen.
+ */
+export default function DocumentDownloads({ text, sources }: { text: string; sources?: ChatSource[] }) {
+  const { look, withTable, busy, download } = useDocumentExport(text, sources);
+  const [open, setOpen] = useState(false);
+  // Omhoog openen, tenzij de knop bovenin het gesprek staat: dan valt het menu
+  // buiten de lijst.
+  const [up, setUp] = useState(true);
+  const ref = useRef<HTMLDivElement>(null);
+  const menuId = useId();
+  useDismiss(open, ref, useCallback(() => setOpen(false), []));
+
+  const options: { format: ExportFormat; hint: string }[] = [
+    { format: 'word', hint: `tekst met opmaak, in ${LOOK_LABEL[look]}` },
+    ...(withTable ? [{ format: 'excel' as const, hint: 'de tabellen, om mee te rekenen' }] : []),
+  ];
+
   return (
-    <>
+    <div ref={ref} className="relative">
       <button
         type="button"
         className={BUTTON_CLASS}
-        onClick={() => void downloadWord()}
+        onClick={() => {
+          const box = ref.current;
+          const list = box?.closest('[data-chat-lijst]');
+          if (box && list) setUp(box.getBoundingClientRect().top - list.getBoundingClientRect().top > 160);
+          setOpen((v) => !v);
+        }}
         disabled={busy !== null}
-        title={`Download als Word-document, in ${LOOK_LABEL[look]}`}
+        aria-expanded={open}
+        aria-controls={menuId}
+        title="Download dit antwoord als bestand"
       >
-        {busy === 'word' ? <Loader2 size={12} className="animate-spin" aria-hidden="true" /> : <FileText size={12} aria-hidden="true" />}
-        Word
+        {busy ? <Loader2 size={12} className="animate-spin" aria-hidden="true" /> : <Download size={12} aria-hidden="true" />}
+        Downloaden
+        <ChevronDown size={10} aria-hidden="true" />
       </button>
-      {withTable && (
-        <button
-          type="button"
-          className={BUTTON_CLASS}
-          onClick={() => void downloadExcel()}
-          disabled={busy !== null}
-          title="Download de tabellen als Excel-bestand"
-        >
-          {busy === 'excel' ? (
-            <Loader2 size={12} className="animate-spin" aria-hidden="true" />
-          ) : (
-            <FileSpreadsheet size={12} aria-hidden="true" />
+      {open && (
+        <ul
+          id={menuId}
+          aria-label="Download als"
+          className={clsx(
+            'z-30 rounded-lg border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-700 dark:bg-slate-800',
+            'max-sm:fixed max-sm:inset-x-4 max-sm:bottom-[calc(var(--onderbalk)+6rem)] sm:absolute sm:left-0 sm:w-64',
+            up ? 'sm:bottom-full sm:mb-1' : 'sm:top-full sm:mt-1',
           )}
-          Excel
-        </button>
+        >
+          {options.map(({ format, hint }) => (
+            <li key={format}>
+              <button
+                type="button"
+                className="flex w-full items-start gap-2 rounded-md px-2.5 py-2 text-left text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700"
+                onClick={() => {
+                  setOpen(false);
+                  void download(format);
+                }}
+              >
+                <span className="mt-1 shrink-0">
+                  <FormatIcon format={format} busy={false} />
+                </span>
+                <span>
+                  <span className="block font-medium">{FORMATS[format].file}</span>
+                  <span className="block text-xs text-slate-500 dark:text-slate-400">{hint}</span>
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
-    </>
+    </div>
+  );
+}
+
+/**
+ * Voorstel onder het laatste antwoord als dat er uitziet als iets om te bewaren:
+ * een brief of stuk met kopjes wordt Word, een tabel wordt Excel.
+ */
+export function ExportSuggestion({
+  text,
+  sources,
+  format,
+}: {
+  text: string;
+  sources?: ChatSource[];
+  format: ExportFormat;
+}) {
+  const { withTable, busy, download } = useDocumentExport(text, sources);
+  if (format === 'excel' && !withTable) return null;
+  return (
+    <button
+      type="button"
+      className="inline-flex items-center gap-1 rounded-md border border-rijksblauw-200 px-2 py-0.5 text-xs font-medium text-rijksblauw-700 transition-colors hover:bg-rijksblauw-50 disabled:opacity-60 dark:border-rijksblauw-500/40 dark:text-rijksblauw-200 dark:hover:bg-rijksblauw-500/15"
+      onClick={() => void download(format)}
+      disabled={busy !== null}
+      title={`Download dit antwoord als ${FORMATS[format].file}`}
+    >
+      <FormatIcon format={format} busy={busy === format} />
+      Als {FORMATS[format].file}
+    </button>
+  );
+}
+
+/**
+ * Het antwoord op "maak hier een Word-document van": een kaart met het bestand.
+ * Zonder formaat kiest de gebruiker, met het formaat dat bij het antwoord past
+ * voorop. Vraagt iemand Excel bij een antwoord zonder tabel, dan biedt de kaart
+ * aan om het eerst in een tabel te zetten.
+ */
+export function ExportCard({
+  target,
+  format,
+  onMakeTable,
+}: {
+  /** Het antwoord waar het bestand van wordt gemaakt; weg = verwijderd. */
+  target?: { content: string; sources?: ChatSource[] };
+  format?: ExportFormat;
+  onMakeTable?: () => void;
+}) {
+  const text = target?.content ?? '';
+  const { look, withTable, busy, download } = useDocumentExport(text, target?.sources);
+  const recommended = useMemo(() => recommendFormat(text), [text]);
+
+  if (!target) {
+    return <ExportFrame title="Bestand">Het antwoord waar dit bestand van zou komen, staat niet meer in dit gesprek.</ExportFrame>;
+  }
+
+  const button = (f: ExportFormat, primary: boolean) => (
+    <button
+      key={f}
+      type="button"
+      onClick={() => void download(f)}
+      disabled={busy !== null}
+      className={clsx(
+        'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-60',
+        primary
+          ? 'bg-rijksblauw-600 text-white hover:bg-rijksblauw-700'
+          : 'border border-slate-300 text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700',
+      )}
+    >
+      <FormatIcon format={f} busy={busy === f} />
+      Download {FORMATS[f].file}
+    </button>
+  );
+
+  // Excel gevraagd, maar er staat geen tabel in het antwoord.
+  if (format === 'excel' && !withTable) {
+    return (
+      <ExportFrame title="Excel-bestand">
+        <p>In dit antwoord staat geen tabel, en Excel neemt alleen tabellen over. Zal ik het eerst in een tabel zetten?</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {onMakeTable && (
+            <button
+              type="button"
+              onClick={onMakeTable}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-rijksblauw-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-rijksblauw-700"
+            >
+              <FileSpreadsheet size={14} aria-hidden="true" /> Zet het in een tabel
+            </button>
+          )}
+          {button('word', false)}
+        </div>
+      </ExportFrame>
+    );
+  }
+
+  if (format) {
+    return (
+      <ExportFrame title={FORMATS[format].file}>
+        <p>
+          {format === 'word'
+            ? `Je Word-document staat klaar, in ${LOOK_LABEL[look]}.`
+            : 'Je Excel-bestand staat klaar. Elke tabel krijgt een eigen tabblad.'}
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">{button(format, true)}</div>
+      </ExportFrame>
+    );
+  }
+
+  // Geen formaat genoemd: zonder tabel kan alleen Word, met tabel kiest de gebruiker.
+  if (!withTable) {
+    return (
+      <ExportFrame title="Word-document">
+        <p>Dit antwoord is tekst met opmaak, dus het wordt een Word-document, in {LOOK_LABEL[look]}.</p>
+        <div className="mt-3 flex flex-wrap gap-2">{button('word', true)}</div>
+      </ExportFrame>
+    );
+  }
+  const order: ExportFormat[] = recommended === 'excel' ? ['excel', 'word'] : ['word', 'excel'];
+  return (
+    <ExportFrame title="Word of Excel?">
+      <p>
+        {recommended === 'excel'
+          ? 'Dit antwoord is vooral een tabel. In Excel kun je er meteen mee rekenen en filteren. Liever de tekst met opmaak? Kies dan Word.'
+          : 'Dit antwoord is vooral tekst met opmaak, dus Word ligt voor de hand. Wil je alleen de tabel, om mee te rekenen? Kies dan Excel.'}
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">{order.map((f, i) => button(f, i === 0))}</div>
+    </ExportFrame>
+  );
+}
+
+function ExportFrame({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="w-full rounded-xl border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200">
+      <p className="mb-1 flex items-center gap-1.5 font-semibold text-slate-900 dark:text-white">
+        <Download size={14} aria-hidden="true" /> {title}
+      </p>
+      {children}
+    </div>
   );
 }

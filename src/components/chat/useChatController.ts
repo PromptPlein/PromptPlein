@@ -25,6 +25,7 @@ import { splitAnswer } from '@/lib/chatFiles';
 import { downloadText } from '@/lib/download';
 import { sendChatMessage } from '@/services/chatService';
 import { hasMemoryTrigger } from '@/lib/memoryTriggers';
+import { parseExportRequest, type ExportFormat } from '@/lib/exportRequest';
 import { rememberWish, type MemoryNotice } from '@/components/chat/rememberWish';
 import { generateTitle } from '@/services/optimizeService';
 import { loadProjectContext } from '@/services/chatProjectService';
@@ -93,7 +94,11 @@ export interface ChatController {
    */
   phase: string | null;
   extracting: boolean;
-  send: (text: string) => Promise<void>;
+  /**
+   * Verstuur een bericht. `offerExport` zet onder het antwoord een bestand klaar,
+   * bijvoorbeeld na "zet dit eerst in een tabel" vanaf een exportkaart.
+   */
+  send: (text: string, options?: { offerExport?: ExportFormat }) => Promise<void>;
   /** Wat het geheugen bij het laatste bericht deed; de chat toont het boven het tekstvak. */
   memoryNotice: MemoryNotice | null;
   dismissMemoryNotice: () => void;
@@ -455,7 +460,7 @@ export default function useChatController(
   );
 
   const send = useCallback(
-    async (rawText: string) => {
+    async (rawText: string, options?: { offerExport?: ExportFormat }) => {
       const text = rawText.trim();
       if (!text || streamingRef.current || !settings) return;
       // Een nieuw bericht: de melding over het vorige geldt niet meer.
@@ -463,8 +468,48 @@ export default function useChatController(
 
       const base = conversationRef.current ?? createConversation(defaultKind);
       const now = new Date().toISOString();
+
+      // "Maak hier een Word-document van": de browser maakt het bestand uit het
+      // vorige antwoord, zonder AI. Vraag en kaart gaan niet mee naar het model.
+      const request = parseExportRequest(text);
+      const previous = [...base.messages]
+        .reverse()
+        .find((m) => m.role === 'assistant' && !m.madeBy && !m.error && m.content.trim());
+      if (request?.aboutPrevious && previous) {
+        const card: ChatMessage = {
+          id: uuid(),
+          role: 'assistant',
+          content: request.format === 'excel' ? 'Excel-bestand' : request.format === 'word' ? 'Word-document' : 'Bestand',
+          createdAt: now,
+          madeBy: 'export',
+          exportOf: previous.id,
+          ...(request.format ? { exportFormat: request.format } : {}),
+        };
+        const next: ChatConversation = {
+          ...base,
+          updatedAt: now,
+          messages: [
+            ...base.messages,
+            { id: uuid(), role: 'user', content: text, createdAt: now, madeBy: 'export' },
+            card,
+          ],
+        };
+        update(next);
+        persistNow(next);
+        return;
+      }
+
       const userMsg: ChatMessage = { id: uuid(), role: 'user', content: text, createdAt: now };
-      const assistantMsg: ChatMessage = { id: uuid(), role: 'assistant', content: '', createdAt: now };
+      // Een formaat genoemd bij een nieuwe opdracht ("schrijf een brief in Word"):
+      // het bestand staat onder het antwoord klaar.
+      const offerExport = options?.offerExport ?? (request && !request.aboutPrevious ? request.format : null);
+      const assistantMsg: ChatMessage = {
+        id: uuid(),
+        role: 'assistant',
+        content: '',
+        createdAt: now,
+        ...(offerExport ? { offerExport } : {}),
+      };
       const updated: ChatConversation = {
         ...base,
         title: base.messages.length === 0 ? titleFromFirstMessage(text) : base.title,

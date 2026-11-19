@@ -737,8 +737,18 @@ van de gebruiker opnieuw verteld, één paneel per moment. Large 4 noemde een (A
 wordt in de beeldprompt een eigen embleem zonder merknaam, en bij Afbeelding wordt nooit op internet
 gezocht: de treffers gingen over het merk en het auteursrecht, niet over hoe het beeld eruitziet.
 
-Onder elk chatantwoord staan Word en, als er een tabel in staat, Excel
-(`DocumentDownloads`). De browser maakt het bestand zelf: een .docx en een .xlsx zijn een
+Onder elk chatantwoord staat één knop Downloaden met de formaten in een menu: Word en, als er
+een tabel in staat, Excel (`DocumentDownloads`). Bewust een menu en geen losse knoppen, zodat de
+rij kort blijft als er formaten bijkomen (keuze van de eigenaar). Onder het laatste antwoord staat
+een voorstel als het eruitziet als iets om te bewaren: een brief of stuk met kopjes wordt Word, een
+tabel wordt Excel (`suggestFormat`). Typt de gebruiker "maak hier een Word-document van",
+"exporteer naar Excel" of "exporteer dit", dan herkent `parseExportRequest`
+(`src/lib/exportRequest.ts`) dat zonder AI en komt er een exportkaart in het gesprek
+(`madeBy: 'export'`); vraag en kaart gaan niet naar het model. Zonder formaat vraagt de kaart Word
+of Excel, met voorop wat bij het antwoord past (`recommendFormat`). Excel bij een antwoord zonder
+tabel biedt aan het eerst in een tabel te zetten. Vraagt het bericht ook om nieuwe inhoud ("schrijf
+een brief in Word"), dan gaat het gewoon naar de AI en staat het bestand onder het antwoord klaar
+(`offerExport`). De browser maakt het bestand zelf: een .docx en een .xlsx zijn een
 zip met XML, en `fflate` pakt die in (`wordExport.ts`, `excelExport.ts`). Geen server, geen
 extra AI-aanroep en geen nieuwe bibliotheek; de tekst verlaat de browser niet. De AI levert
 de inhoud, de opmaak komt uit de vormgeving bij Instellingen, Chat (`WordSettings`):

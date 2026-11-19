@@ -560,7 +560,8 @@ function ChatPageInner() {
       setNudgeMessageId(null);
     }
     if (nudgeOptOut || !conversation || conversation.kind === 'execution') return;
-    if (controller.streaming || !lastUser) return;
+    // Een verzoek om een bestand ("maak hier een Word-document van") is geen prompt.
+    if (controller.streaming || !lastUser || lastUser.madeBy) return;
     if (nudgedConvsRef.current.has(conversation.id)) return;
     if (!looksLikeMessyPrompt(lastUser.content)) return;
     nudgedConvsRef.current.add(conversation.id);
@@ -593,6 +594,13 @@ function ChatPageInner() {
     },
     [projectNeedsLogin, requireLogin, sendMessage],
   );
+
+  // Excel gevraagd bij een antwoord zonder tabel: de AI zet het eerst in een
+  // tabel, en daaronder staat het Excel-bestand klaar.
+  const handleMakeTable = useCallback(() => {
+    if (projectNeedsLogin) requireLogin('Log in om verder te gaan in deze projectchat.');
+    else void sendMessage('Zet de inhoud van je vorige antwoord in een tabel.', { offerExport: 'excel' });
+  }, [projectNeedsLogin, requireLogin, sendMessage]);
 
   const composerDisabled =
     !configured || !settings || settings.enabled === false || projectNeedsLogin;
@@ -868,6 +876,7 @@ function ChatPageInner() {
                         : controller.continueLast
                     }
                     onRepair={handleRepair}
+                    onMakeTable={handleMakeTable}
                     onEdit={composerDisabled ? undefined : (id, text) => guardedSend(text, id)}
                     onImprove={handleImprove}
                     onSaveAsPrompt={handleSaveAsPrompt}

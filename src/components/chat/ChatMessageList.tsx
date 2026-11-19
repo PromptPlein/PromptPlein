@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowDown,
@@ -27,7 +27,8 @@ import { matchesShortcut, SHORTCUTS } from '@/lib/shortcuts';
 import { isSpeaking, speak, stopSpeaking, toSpeakableText, useSpeakingId } from '@/lib/speech';
 import ChatAnswer from './ChatAnswer';
 import CopyMessageButton from './CopyMessageButton';
-import DocumentDownloads from './DocumentDownloads';
+import DocumentDownloads, { ExportCard, ExportSuggestion } from './DocumentDownloads';
+import { suggestFormat } from '@/lib/exportRequest';
 import type { ChatMessage } from '@/types';
 
 /** Ruimte boven de vraag zodra die bovenaan staat; gelijk aan de `py-4` van de lijst. */
@@ -52,6 +53,7 @@ export default function ChatMessageList({
   onEdit,
   onImprove,
   onSaveAsPrompt,
+  onMakeTable,
   nudgeMessageId,
   onNudgeDismiss,
 }: {
@@ -68,6 +70,8 @@ export default function ChatMessageList({
   onContinue?: () => void;
   /** Stuur de fouten uit de controle van een bestand als nieuw bericht. */
   onRepair?: (text: string) => void;
+  /** Exportkaart: Excel gevraagd zonder tabel; laat de AI het eerst in een tabel zetten. */
+  onMakeTable?: () => void;
   /** Vervang je laatste bericht en laat het antwoord opnieuw schrijven. */
   onEdit?: (messageId: string, text: string) => void;
   /**
@@ -281,6 +285,10 @@ export default function ChatMessageList({
               onRetry={onRetry}
               onContinue={onContinue}
               onRepair={streaming ? undefined : onRepair}
+              onMakeTable={streaming ? undefined : onMakeTable}
+              exportTarget={
+                message.exportOf ? messages.find((m) => m.id === message.exportOf) : undefined
+              }
               canRetry={!streaming && i === messages.length - 1}
               fillsTurn={lastIsAnswerToQuestion && i === messages.length - 1}
               onEdit={!streaming && i === lastUserIndex ? onEdit : undefined}
@@ -557,6 +565,8 @@ const ChatMessageRow = memo(function ChatMessageRow({
   onRetry,
   onContinue,
   onRepair,
+  onMakeTable,
+  exportTarget,
   canRetry,
   fillsTurn,
   onEdit,
@@ -571,6 +581,9 @@ const ChatMessageRow = memo(function ChatMessageRow({
   onRetry: () => void;
   onContinue?: () => void;
   onRepair?: (text: string) => void;
+  onMakeTable?: () => void;
+  /** Bij een exportkaart: het antwoord waar het bestand van komt. */
+  exportTarget?: ChatMessage;
   canRetry: boolean;
   /** Dit antwoord hoort bij de laatste vraag en vult de rest van de lijst. */
   fillsTurn: boolean;
@@ -581,6 +594,14 @@ const ChatMessageRow = memo(function ChatMessageRow({
   onNudgeDismiss?: () => void;
 }) {
   const { speechOn } = useAccessibility();
+  // Alleen onder het laatste antwoord een voorstel, anders staat het overal.
+  const suggested = useMemo(
+    () =>
+      canRetry && message.role === 'assistant' && !message.madeBy && !message.error
+        ? (message.offerExport ?? suggestFormat(message.content))
+        : null,
+    [canRetry, message],
+  );
 
   if (message.role === 'user') {
     return (
@@ -592,6 +613,19 @@ const ChatMessageRow = memo(function ChatMessageRow({
         showNudge={showNudge}
         onNudgeDismiss={onNudgeDismiss}
       />
+    );
+  }
+
+  if (message.madeBy === 'export') {
+    return (
+      <div className="flex flex-col items-start">
+        <h2 className="sr-only">Antwoord</h2>
+        <ExportCard
+          target={exportTarget}
+          format={message.exportFormat}
+          onMakeTable={canRetry ? onMakeTable : undefined}
+        />
+      </div>
     );
   }
 
@@ -680,6 +714,9 @@ const ChatMessageRow = memo(function ChatMessageRow({
           className={clsx('-ml-1.5 flex flex-wrap items-center gap-2', !canRetry && 'opl-msg-actions')}
         >
           <CopyMessageButton text={message.content} label="Kopieer antwoord" />
+          {suggested && (
+            <ExportSuggestion text={message.content} sources={message.sources} format={suggested} />
+          )}
           <DocumentDownloads text={message.content} sources={message.sources} />
           {canRetry && !message.error && !message.madeBy && (
             <button

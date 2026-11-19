@@ -738,7 +738,20 @@ export interface ChatMessage {
    * niet mee als geschiedenis naar het model; het is een bestand, geen
    * gespreksbeurt.
    */
-  madeBy?: 'routekaart';
+  madeBy?: 'routekaart' | 'export';
+  /**
+   * Bij `madeBy: 'export'` op het antwoord: het antwoord waar het bestand van
+   * gemaakt wordt. Het verzoek ("maak hier een Word-document van") en deze kaart
+   * gaan geen van beide naar het model.
+   */
+  exportOf?: string;
+  /** Bij een exportkaart: het gevraagde formaat; ontbreekt = de gebruiker kiest. */
+  exportFormat?: 'word' | 'excel';
+  /**
+   * De vraag noemde een formaat én vroeg om nieuwe inhoud ("schrijf een brief in
+   * Word"): onder het antwoord staat dat bestand dan als voorstel klaar.
+   */
+  offerExport?: 'word' | 'excel';
   /**
    * De internetbronnen die dit antwoord heeft meegekregen, in de volgorde waarin
    * ze aan het model zijn voorgelegd: bron 1 in de tekst is hier het eerste
