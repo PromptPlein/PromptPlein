@@ -645,11 +645,6 @@ html.dark .skeleton::after {
   }
 }
 
-/* Heldachtergrond "effen" (LightSweepBackground): vlak lintblauw. */
-.hero-sweep {
-  background-color: theme('colors.rijksblauw.700');
-}
-
 /*
  * Vaste kolom voor het microfoontje (DictationLayer). Ruimte opzij scrolt niet
  * mee, dus de tekst kan nooit onder de knop door lopen.

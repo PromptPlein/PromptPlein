@@ -11,8 +11,12 @@ import { rijksblauw, nadruk, hexToVec3 } from '@/config/brandColors';
 //    de kop leesbaar blijft.
 //  - polder: hoogtelijnen zoals op een topografische kaart, die traag omhoog
 //    schuiven. Elke vierde lijn is iets sterker.
+//  - getij: zes lagen water die als eb en vloed op en neer gaan. Af en toe kleurt
+//    één golfrand een paar seconden rood.
+//  - lucht: een Hollandse lucht met wolken boven een lage horizon. Af en toe slaat
+//    er aan de rand een rode bliksem door, zodat het midden rustig blijft.
 
-export type ShaderBackground = 'tegels' | 'polder';
+export type ShaderBackground = 'tegels' | 'polder' | 'getij' | 'lucht';
 
 const vertexShader = /* glsl */ `
   varying vec2 vUv;
@@ -128,9 +132,97 @@ const polderShader = /* glsl */ `
   }
 `;
 
+const getijShader = /* glsl */ `
+  void main() {
+    vec2 uv = gl_FragCoord.xy / uResolution;
+    float x = uv.x * uResolution.x / uResolution.y;
+    float t = uTime;
+    float px = 1.5 / uResolution.y;
+
+    // Elke 8 seconden een beurt; in ruim de helft daarvan wordt één rand rood.
+    float cycle = floor(t / 8.0);
+    float redLayer = floor(hash(vec2(cycle, 4.2)) * 6.0);
+    float redAmount = step(0.45, hash(vec2(cycle, 9.1))) * pow(sin(3.14159 * fract(t / 8.0)), 3.0);
+
+    vec3 col = mix(${hexToVec3(rijksblauw[900])}, ${hexToVec3(rijksblauw[800])}, uv.y);
+    for (int i = 0; i < 6; i++) {
+      float fi = float(i);
+      float base = 0.80 - fi * 0.135;
+      float tide = sin(t * 0.22 + fi * 0.7) * 0.022;
+      float wave = snoise(vec2(x * 0.8 + t * (0.04 + fi * 0.012), fi * 3.7)) * 0.03
+                 + sin(x * 2.4 - t * (0.35 + fi * 0.05) + fi * 1.3) * 0.01;
+      float edge = base + tide + wave;
+      float below = 1.0 - smoothstep(edge - px, edge + px, uv.y);
+      col = mix(col, mix(${hexToVec3(rijksblauw[700])}, ${hexToVec3(rijksblauw[500])}, fi / 5.0), below * 0.42);
+      float red = abs(fi - redLayer) < 0.5 ? redAmount : 0.0;
+      float rim = 1.0 - smoothstep(0.0, px * mix(1.5, 2.6, red), abs(uv.y - edge));
+      col = mix(col, mix(${hexToVec3(rijksblauw[200])}, ${hexToVec3(nadruk)}, red), rim * mix(0.35, 0.95, red));
+    }
+
+    vec2 fromCenter = (uv - 0.5) * vec2(1.0, 1.7);
+    float calm = smoothstep(0.08, 0.6, length(fromCenter));
+    col = mix(${hexToVec3(rijksblauw[900])}, col, mix(0.45, 1.0, calm));
+    gl_FragColor = vec4(col, 1.0);
+  }
+`;
+
+const luchtShader = /* glsl */ `
+  void main() {
+    vec2 uv = gl_FragCoord.xy / uResolution;
+    float aspect = uResolution.x / uResolution.y;
+    float t = uTime * 0.02;
+    float horizon = 0.15;
+    float h = smoothstep(horizon, 1.0, uv.y);
+    vec3 sky = mix(mix(${hexToVec3(rijksblauw[600])}, ${hexToVec3(rijksblauw[500])}, 0.55), ${hexToVec3(rijksblauw[800])}, h);
+
+    // Wolken op een vlak boven de kijker: bij de horizon kleiner en dichter.
+    float z = 1.0 / (max(uv.y - horizon, 0.0) + 0.14);
+    vec2 p = vec2((uv.x - 0.5) * aspect * z * 0.55 - t * 3.0, z * 0.7 + t * 0.6);
+    float n = fbm(p);
+    float d = fbm(p * 2.1 + vec2(-t * 2.0, 5.0));
+    float fade = smoothstep(horizon, horizon + 0.25, uv.y);
+    float cloud = smoothstep(0.0, 0.55, n + d * 0.35 - 0.1) * fade;
+    vec3 cloudCol = mix(${hexToVec3(rijksblauw[300])}, ${hexToVec3(rijksblauw[100])}, clamp(d * 0.6 + 0.5, 0.0, 1.0));
+    vec3 col = mix(sky, cloudCol, cloud * 0.5);
+
+    float edge = horizon + snoise(vec2(uv.x * aspect * 2.5, 1.0)) * 0.006;
+    float land = 1.0 - smoothstep(edge - 1.5 / uResolution.y, edge + 1.5 / uResolution.y, uv.y);
+    col = mix(col, ${hexToVec3(rijksblauw[900])}, land);
+
+    vec2 fromCenter = (uv - 0.5) * vec2(1.0, 1.7);
+    float calm = smoothstep(0.08, 0.6, length(fromCenter));
+    col = mix(${hexToVec3(rijksblauw[900])}, col, mix(0.55, 1.0, calm));
+
+    // Bliksem: elke 6 seconden een kans van de helft, aan de linker- of
+    // rechterrand. Twee flitsen kort na elkaar, zoals bij echt onweer.
+    float bc = floor(uTime / 6.0);
+    float bt = uTime - bc * 6.0;
+    float flash = step(0.5, hash(vec2(bc, 1.7)))
+      * (step(bt, 0.12) + step(0.2, bt) * step(bt, 0.45) * (1.0 - (bt - 0.2) / 0.25));
+    if (flash > 0.0) {
+      float x0 = mix(0.06, 0.26, hash(vec2(bc, 5.1)));
+      if (hash(vec2(bc, 3.3)) > 0.5) x0 = 1.0 - x0;
+      float top = 0.78 + hash(vec2(bc, 8.8)) * 0.12;
+      float jag = snoise(vec2(uv.y * 9.0, bc * 7.1)) * 0.025
+                + snoise(vec2(uv.y * 31.0, bc * 3.7)) * 0.008;
+      float dist = abs(uv.x * aspect - (x0 + jag) * aspect);
+      float inRange = step(edge, uv.y) * step(uv.y, top);
+      float core = 1.0 - smoothstep(0.0, 1.8 / uResolution.y, dist);
+      float halo = exp(-dist * 60.0) * 0.5;
+      col = mix(col, ${hexToVec3(nadruk)}, clamp(core + halo, 0.0, 1.0) * flash * inRange);
+      float glow = exp(-length(vec2((uv.x - x0) * aspect, uv.y - top)) * 6.0) * 0.3;
+      col = mix(col, ${hexToVec3(nadruk)}, glow * flash);
+    }
+
+    gl_FragColor = vec4(col, 1.0);
+  }
+`;
+
 const FRAGMENT_SHADERS: Record<ShaderBackground, string> = {
   tegels: shaderHeader + tegelsShader,
   polder: shaderHeader + polderShader,
+  getij: shaderHeader + getijShader,
+  lucht: shaderHeader + luchtShader,
 };
 
 function ShaderPlane({ variant }: { variant: ShaderBackground }) {
