@@ -1,4 +1,5 @@
-import { useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Loader2, Trash2, Upload } from '@/components/common/icons';
 import InfoDot from '@/components/common/InfoDot';
@@ -33,6 +34,16 @@ export default function WordSettings() {
   const titleId = useId();
   const fileRef = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
+  const sectionRef = useRef<HTMLElement>(null);
+  const { hash } = useLocation();
+
+  // Vanuit het menu Downloaden in de chat: meteen naar dit blok. Na het wisselen
+  // van pagina zet RouteFocus de focus op de kop, dus even daarna.
+  useEffect(() => {
+    if (hash !== '#word-document') return;
+    const timer = window.setTimeout(() => sectionRef.current?.scrollIntoView({ block: 'start' }), 150);
+    return () => window.clearTimeout(timer);
+  }, [hash]);
 
   async function addTemplate(file: File) {
     if (!/\.(docx|dotx)$/i.test(file.name)) {
@@ -64,14 +75,14 @@ export default function WordSettings() {
   }
 
   return (
-    <section className={SECTION_CLASS} aria-labelledby={titleId}>
+    <section ref={sectionRef} id="word-document" className={`${SECTION_CLASS} scroll-mt-24`} aria-labelledby={titleId}>
       <div className="flex items-center gap-1">
         <h2 id={titleId} className={TITLE_CLASS}>
           Word-document
         </h2>
         <InfoDot
           label="Uitleg over het Word-document"
-          text="Onder elk antwoord staat Word. Je krijgt het antwoord als Word-document in de vormgeving die je hier kiest. Zet in je eigen sjabloon {inhoud} waar de tekst moet komen, en eventueel {titel} en {datum}. Zonder {inhoud} vervangt de tekst de inhoud van het sjabloon en blijven kop- en voettekst staan. Het document wordt in je browser gemaakt."
+          text="Onder elk antwoord staat Downloaden, met Word in het menu. Je krijgt het antwoord als Word-document in de vormgeving die je hier kiest. Zet in je eigen sjabloon {inhoud} waar de tekst moet komen, en eventueel {titel} en {datum}. Zonder {inhoud} vervangt de tekst de inhoud van het sjabloon en blijven kop- en voettekst staan. Het document wordt in je browser gemaakt."
         />
       </div>
 

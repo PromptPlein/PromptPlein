@@ -760,6 +760,17 @@ bij naam genoemd, niet ingebed. Scherm en document lezen de Markdown met dezelfd
 (`markdownBlocks.ts`). Controleer een wijziging door het bestand in Word en Excel te openen:
 geldige XML is nog geen bestand dat Word zonder reparatiemelding opent.
 
+Het document gebruikt de stijlen van Word zelf: Titel, Kop 1 tot en met 4 en Lijstalinea, zodat
+het navigatievenster en een inhoudsopgave meteen werken. De systeemprompt in Beheer verbiedt
+kopjes en vet, dus het model schrijft een kop vaak als kale korte regel. `readAnswer`
+(`answerDocument.ts`) leest zo'n regel daarom als kop als hij kort is, zonder slotteken, en
+boven een zin, lijst of tabel staat; aanhef, groet, ondertekening en "Onderwerp:" van een brief
+blijven tekst. Een vet label wordt ook een kop. Een brief in een codeblok zonder taal leest als
+tekst, niet als code. Dit geldt alleen voor de documenten, niet voor het scherm. Een eigen
+sjabloon bevat alleen de stijlen die erin gebruikt zijn; ontbrekende kopstijlen komen er bij het
+maken bij (`completeTemplateStyles`), met de letter en accentkleur van het sjabloon. De opmaak
+(Rijkshuisstijl, Eenvoudig, eigen sjabloon) kies je ook in het menu Downloaden zelf.
+
 Elk HTML-bestand in de chat wordt na het schrijven onzichtbaar en afgeschermd
 gedraaid (`src/lib/fileCheck.ts`); scriptfouten komen met regelnummer op de
 bestandskaart.

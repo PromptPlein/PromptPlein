@@ -6,7 +6,9 @@ import { downloadBinary } from '@/lib/download';
 import { buildExcelWorkbook, hasTable, XLSX_MIME } from '@/lib/excelExport';
 import { recommendFormat, type ExportFormat } from '@/lib/exportRequest';
 import useDismiss from '@/lib/useDismiss';
-import { loadWordTemplate, useWordLook } from '@/lib/wordSettings';
+import { Link } from 'react-router-dom';
+import type { WordLook } from '@/lib/wordExport';
+import { loadWordTemplate, setWordLook, useWordLook, useWordTemplateName } from '@/lib/wordSettings';
 import { trackEvent } from '@/services/analyticsService';
 import type { ChatSource } from '@/types';
 
@@ -14,6 +16,50 @@ const BUTTON_CLASS =
   'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-rijksblauw-700 disabled:opacity-60 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-rijksblauw-200';
 
 const LOOK_LABEL = { rijk: 'Rijkshuisstijl', eenvoudig: 'eenvoudige opmaak', sjabloon: 'je eigen sjabloon' };
+
+const LOOK_CHOICES: { value: WordLook; label: string }[] = [
+  { value: 'rijk', label: 'Rijkshuisstijl' },
+  { value: 'eenvoudig', label: 'Eenvoudig' },
+  { value: 'sjabloon', label: 'Mijn eigen sjabloon' },
+];
+
+/**
+ * De opmaak van het Word-document, meteen in het menu te kiezen. Een eigen
+ * sjabloon toevoegen gaat via Instellingen, Chat: daar staat ook hoe je
+ * {inhoud}, {titel} en {datum} gebruikt.
+ */
+function WordLookChoice({ look }: { look: WordLook }) {
+  const templateName = useWordTemplateName();
+  const name = useId();
+  const choices = LOOK_CHOICES.filter((c) => c.value !== 'sjabloon' || templateName);
+  return (
+    <fieldset className="mt-1 border-t border-slate-200 px-2.5 pb-1 pt-2 dark:border-slate-700">
+      <legend className="sr-only">Opmaak van het Word-document</legend>
+      <p aria-hidden="true" className="text-xs font-medium text-slate-500 dark:text-slate-400">
+        Opmaak van Word
+      </p>
+      {choices.map((choice) => (
+        <label key={choice.value} className="flex cursor-pointer items-center gap-2 py-1 text-sm text-slate-700 dark:text-slate-200">
+          <input
+            type="radio"
+            name={name}
+            value={choice.value}
+            checked={look === choice.value}
+            onChange={() => setWordLook(choice.value)}
+            className="h-4 w-4 shrink-0 accent-rijksblauw-700"
+          />
+          {choice.label}
+        </label>
+      ))}
+      <Link
+        to="/instellingen/chat#word-document"
+        className="opl-raak mt-1 inline-block text-xs font-medium text-rijksblauw-700 underline hover:no-underline dark:text-rijksblauw-200"
+      >
+        {templateName ? 'Ander sjabloon kiezen' : 'Eigen Word-sjabloon gebruiken'}
+      </Link>
+    </fieldset>
+  );
+}
 
 /**
  * Maakt een Word- of Excel-bestand van een chatantwoord, in de browser: de AI
@@ -117,15 +163,15 @@ export default function DocumentDownloads({ text, sources }: { text: string; sou
         <ChevronDown size={10} aria-hidden="true" />
       </button>
       {open && (
-        <ul
+        <div
           id={menuId}
-          aria-label="Download als"
           className={clsx(
             'z-30 rounded-lg border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-700 dark:bg-slate-800',
-            'max-sm:fixed max-sm:inset-x-4 max-sm:bottom-[calc(var(--onderbalk)+6rem)] sm:absolute sm:left-0 sm:w-64',
+            'max-sm:fixed max-sm:inset-x-4 max-sm:bottom-[calc(var(--onderbalk)+6rem)] sm:absolute sm:left-0 sm:w-72',
             up ? 'sm:bottom-full sm:mb-1' : 'sm:top-full sm:mt-1',
           )}
         >
+        <ul aria-label="Download als">
           {options.map(({ format, hint }) => (
             <li key={format}>
               <button
@@ -147,6 +193,8 @@ export default function DocumentDownloads({ text, sources }: { text: string; sou
             </li>
           ))}
         </ul>
+        <WordLookChoice look={look} />
+        </div>
       )}
     </div>
   );

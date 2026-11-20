@@ -4,9 +4,9 @@
 // gebruiker met zijn kop- en voettekst, logo en stijlen. Er gaat niets naar een
 // server, dus dit past bij de belofte dat chats in de browser blijven.
 
-import { splitAnswer } from './chatFiles';
-import { inlineRuns, parseBlocks, type Block, type InlineRun, type ListNode } from './markdownBlocks';
-import { fileNameFrom, todayLong, XML_HEAD, xmlEscape, zipOffice } from './officeXml';
+import { documentBaseName, readAnswer, type AnswerDocument } from './answerDocument';
+import { inlineRuns, type Block, type InlineRun, type ListNode } from './markdownBlocks';
+import { todayLong, XML_HEAD, xmlEscape, zipOffice } from './officeXml';
 
 export type WordLook = 'rijk' | 'eenvoudig' | 'sjabloon';
 
@@ -100,6 +100,8 @@ const SJABLOON: Palette = {
 interface StyleIds {
   title?: string;
   headings: (string | undefined)[];
+  /** "List Paragraph", in een Nederlandse Word "Lijstalinea". */
+  list?: string;
 }
 
 // --- Nummering voor lijsten ---
@@ -241,7 +243,8 @@ function listXml(list: ListNode, level: number, ctx: Ctx, endsBlock = true): str
     // Alleen na het laatste item van de hele lijst komt witruimte, ook als dat genest is.
     const last = endsBlock && lastItem && item.children.length === 0;
     out += paragraph(
-      `<w:numPr><w:ilvl w:val="${level}"/><w:numId w:val="${numId}"/></w:numPr>` +
+      (ctx.styles.list ? `<w:pStyle w:val="${ctx.styles.list}"/>` : '') +
+        `<w:numPr><w:ilvl w:val="${level}"/><w:numId w:val="${numId}"/></w:numPr>` +
         `<w:spacing w:before="0" w:after="${last ? 160 : 60}"/>`,
       inlineXml(item.text, ctx),
     );
@@ -344,45 +347,7 @@ function codeXml(code: string, ctx: Ctx): string {
     .join('');
 }
 
-/** Leest het antwoord en geeft de titel en de blokken in volgorde. */
-function readAnswer(markdown: string) {
-  type Part = { kind: 'blocks'; blocks: Block[] } | { kind: 'code'; code: string } | { kind: 'html' };
-  const parts: Part[] = splitAnswer(markdown).map((segment) =>
-    segment.kind === 'text'
-      ? { kind: 'blocks', blocks: parseBlocks(segment.text) }
-      : segment.isHtmlFile
-        ? { kind: 'html' }
-        : { kind: 'code', code: segment.code },
-  );
-
-  const all = parts.flatMap((p) => (p.kind === 'blocks' ? p.blocks : [])).filter((b) => b.kind !== 'spacer');
-  const first = parts[0]?.kind === 'blocks' ? parts[0].blocks.find((b) => b.kind !== 'spacer') : undefined;
-
-  // Begint het antwoord met "# Titel", dan is dat de titel van het document. Staat
-  // er verder geen "# ", dan schuiven de koppen een niveau op: "## " wordt Kop 1.
-  let title = '';
-  let shift = 0;
-  if (first?.kind === 'heading' && first.level === 1) {
-    title = first.text;
-    const firstPart = parts[0] as { kind: 'blocks'; blocks: Block[] };
-    firstPart.blocks = firstPart.blocks.filter((b) => b !== first);
-    const others = all.filter((b) => b !== first && b.kind === 'heading');
-    if (!others.some((b) => b.kind === 'heading' && b.level === 1)) {
-      shift = Math.max(Math.min(...others.map((b) => (b.kind === 'heading' ? b.level : 9)), 9) - 1, 0);
-    }
-  } else {
-    const shallowest = Math.min(...all.map((b) => (b.kind === 'heading' ? b.level : 9)));
-    if (shallowest < 9) shift = shallowest - 1;
-  }
-
-  const plainTitle = inlineRuns(title)
-    .map((r) => r.text)
-    .join('')
-    .trim();
-  return { parts, title, plainTitle, shift };
-}
-
-function buildBody(input: WordInput, ctx: Ctx, read: ReturnType<typeof readAnswer>, withTitle: boolean): string {
+function buildBody(input: WordInput, ctx: Ctx, read: AnswerDocument, withTitle: boolean): string {
   let body = '';
   if (withTitle && read.title) {
     body += ctx.styles.title
@@ -415,15 +380,8 @@ function buildBody(input: WordInput, ctx: Ctx, read: ReturnType<typeof readAnswe
   return body || paragraph('', '');
 }
 
-function fileNameFor(read: ReturnType<typeof readAnswer>, markdown: string): string {
-  const firstLine =
-    read.plainTitle ||
-    inlineRuns(markdown.split('\n').find((l) => l.trim() && !l.trim().startsWith('```')) ?? '')
-      .map((r) => r.text)
-      .join('')
-      .replace(/^#+\s*/, '')
-      .split(/[.:!?]/)[0];
-  return `${fileNameFrom(firstLine, `PromptPlein ${new Date().toLocaleDateString('nl-NL')}`)}.docx`;
+function fileNameFor(read: AnswerDocument, markdown: string): string {
+  return `${documentBaseName(read, markdown)}.docx`;
 }
 
 // --- Een document met onze eigen stijl ---
@@ -453,6 +411,7 @@ function stylesXml(look: 'rijk' | 'eenvoudig'): string {
     heading(2, 26, p.heading, 280) +
     heading(3, 23, p.subheading, 220) +
     heading(4, 21, p.subheading, 200) +
+    '<w:style w:type="paragraph" w:styleId="ListParagraph"><w:name w:val="List Paragraph"/><w:basedOn w:val="Normal"/><w:uiPriority w:val="34"/><w:qFormat/><w:pPr><w:ind w:left="720"/></w:pPr></w:style>' +
     '<w:style w:type="paragraph" w:styleId="Footer"><w:name w:val="footer"/><w:basedOn w:val="Normal"/>' +
     `<w:pPr><w:tabs><w:tab w:val="right" w:pos="${TEXT_WIDTH}"/></w:tabs><w:spacing w:after="0"/></w:pPr><w:rPr><w:color w:val="${p.muted}"/><w:sz w:val="16"/></w:rPr></w:style>` +
     '</w:styles>'
@@ -477,7 +436,11 @@ async function buildOwn(input: WordInput, look: 'rijk' | 'eenvoudig'): Promise<W
   const numbering = new Numbering(1, 2, 1);
   const ctx: Ctx = {
     palette: look === 'rijk' ? RIJK : EENVOUDIG,
-    styles: { title: 'Title', headings: ['Heading1', 'Heading2', 'Heading3', 'Heading4', 'Heading4', 'Heading4'] },
+    styles: {
+      title: 'Title',
+      headings: ['Heading1', 'Heading2', 'Heading3', 'Heading4', 'Heading4', 'Heading4'],
+      list: 'ListParagraph',
+    },
     numbering,
     shift: read.shift,
   };
@@ -567,6 +530,74 @@ function templateStyles(stylesXmlText: string): StyleIds {
   return {
     title: byName.get('title'),
     headings: [1, 2, 3, 4, 5, 6].map((n) => byName.get(`heading ${n}`)),
+    list: byName.get('list paragraph'),
+  };
+}
+
+/**
+ * Een sjabloon bevat alleen de stijlen die erin gebruikt zijn. Een sjabloon met
+ * alleen een logo en voettekst kent dus geen Kop 1, en dan werden de koppen
+ * vette gewone tekst. Ontbrekende stijlen komen er hier bij, met de standaard
+ * van Word: de letter van het sjabloon en de accentkleur van zijn thema.
+ */
+const TEMPLATE_STYLE_DEFS: { name: string; id: string; xml: string }[] = [
+  { name: 'title', id: 'Title', xml: templateHeadingStyle('Title', 'Title', 56, null) },
+  { name: 'heading 1', id: 'Heading1', xml: templateHeadingStyle('Heading1', 'heading 1', 32, 0) },
+  { name: 'heading 2', id: 'Heading2', xml: templateHeadingStyle('Heading2', 'heading 2', 26, 1) },
+  { name: 'heading 3', id: 'Heading3', xml: templateHeadingStyle('Heading3', 'heading 3', 24, 2) },
+  { name: 'heading 4', id: 'Heading4', xml: templateHeadingStyle('Heading4', 'heading 4', 22, 3) },
+  {
+    name: 'list paragraph',
+    id: 'ListParagraph',
+    xml: '<w:style w:type="paragraph" w:styleId="ListParagraph"><w:name w:val="List Paragraph"/><w:basedOn w:val="Normal"/><w:uiPriority w:val="34"/><w:qFormat/><w:pPr><w:ind w:left="720"/></w:pPr></w:style>',
+  },
+];
+
+function templateHeadingStyle(id: string, name: string, size: number, outline: number | null): string {
+  const pPr =
+    outline === null
+      ? '<w:spacing w:before="0" w:after="240"/>'
+      : `<w:keepNext/><w:keepLines/><w:spacing w:before="${outline === 0 ? 360 : 240}" w:after="80"/><w:outlineLvl w:val="${outline}"/>`;
+  return (
+    `<w:style w:type="paragraph" w:styleId="${id}"><w:name w:val="${name}"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/>` +
+    `<w:uiPriority w:val="${outline === null ? 10 : 9}"/><w:qFormat/><w:pPr>${pPr}</w:pPr>` +
+    `<w:rPr><w:b/><w:color w:val="2F5496" w:themeColor="accent1" w:themeShade="BF"/><w:sz w:val="${size}"/><w:szCs w:val="${size}"/></w:rPr></w:style>`
+  );
+}
+
+/** Vult de stijlen van het sjabloon aan; geeft de nieuwe styles.xml en de stijl-id's. */
+function completeTemplateStyles(stylesXmlText: string): { xml: string; styles: StyleIds } {
+  const found = templateStyles(stylesXmlText);
+  if (!/<\/w:styles>/.test(stylesXmlText)) return { xml: stylesXmlText, styles: found };
+  const usedIds = new Set([...stylesXmlText.matchAll(/w:styleId="([^"]+)"/g)].map((m) => m[1]));
+  const have = new Map<string, string | undefined>([
+    ['title', found.title],
+    ['list paragraph', found.list],
+    ...[1, 2, 3, 4].map((n) => [`heading ${n}`, found.headings[n - 1]] as [string, string | undefined]),
+  ]);
+  // In een Nederlandse Word heet de standaardstijl vaak "Standaard" als id.
+  const normal =
+    /<w:style\b[^>]*w:type="paragraph"[^>]*w:default="1"[^>]*w:styleId="([^"]+)"/.exec(stylesXmlText)?.[1] ??
+    /<w:style\b[^>]*w:default="1"[^>]*w:type="paragraph"[^>]*w:styleId="([^"]+)"/.exec(stylesXmlText)?.[1];
+  let added = '';
+  for (const def of TEMPLATE_STYLE_DEFS) {
+    if (have.get(def.name)) continue;
+    // Bestaat de id al onder een andere naam, dan krijgt de onze een eigen id.
+    const id = usedIds.has(def.id) ? `PromptPlein${def.id}` : def.id;
+    let xml = def.xml.replace(`w:styleId="${def.id}"`, `w:styleId="${id}"`);
+    xml = normal ? xml.replace(/w:val="Normal"/g, `w:val="${normal}"`) : xml.replace(/<w:basedOn w:val="Normal"\/><w:next w:val="Normal"\/>|<w:basedOn w:val="Normal"\/>/g, '');
+    added += xml;
+    usedIds.add(id);
+    have.set(def.name, id);
+  }
+  const h = (n: number) => have.get(`heading ${n}`);
+  return {
+    xml: added ? stylesXmlText.replace('</w:styles>', `${added}</w:styles>`) : stylesXmlText,
+    styles: {
+      title: have.get('title'),
+      headings: [h(1), h(2), h(3), h(4), found.headings[4] ?? h(4), found.headings[5] ?? h(4)],
+      list: have.get('list paragraph'),
+    },
   };
 }
 
@@ -621,7 +652,9 @@ async function buildFromTemplate(input: WordInput, template: Uint8Array): Promis
   const base = numberingXml ? Math.max(maxId(numberingXml, 'w:abstractNumId'), maxId(numberingXml, 'w:numId')) + 1 : 1;
   const numbering = new Numbering(base, base + 1, base + 2);
 
-  const ctx: Ctx = { palette: SJABLOON, styles: templateStyles(stylesText), numbering, shift: read.shift };
+  const completed = completeTemplateStyles(stylesText);
+  if (completed.xml !== stylesText) out['word/styles.xml'] = completed.xml;
+  const ctx: Ctx = { palette: SJABLOON, styles: completed.styles, numbering, shift: read.shift };
   const values = { titel: read.plainTitle, datum: todayLong() };
 
   const bodyMatch = /(<w:body\b[^>]*>)([\s\S]*)(<\/w:body>)/.exec(documentXml);
