@@ -210,7 +210,9 @@ export type AnalyticsEventType =
   | 'visit'
   | 'chat_message'
   | 'export_word'
-  | 'export_excel';
+  | 'export_excel'
+  // PDF, PowerPoint, CSV en Markdown, met het formaat in metadata.formaat.
+  | 'export_file';
 
 export interface AnalyticsEvent {
   id: string;
@@ -746,12 +748,12 @@ export interface ChatMessage {
    */
   exportOf?: string;
   /** Bij een exportkaart: het gevraagde formaat; ontbreekt = de gebruiker kiest. */
-  exportFormat?: 'word' | 'excel';
+  exportFormat?: 'word' | 'excel' | 'pdf' | 'pptx' | 'csv' | 'md';
   /**
    * De vraag noemde een formaat én vroeg om nieuwe inhoud ("schrijf een brief in
    * Word"): onder het antwoord staat dat bestand dan als voorstel klaar.
    */
-  offerExport?: 'word' | 'excel';
+  offerExport?: 'word' | 'excel' | 'pdf' | 'pptx' | 'csv' | 'md';
   /**
    * De internetbronnen die dit antwoord heeft meegekregen, in de volgorde waarin
    * ze aan het model zijn voorgelegd: bron 1 in de tekst is hier het eerste

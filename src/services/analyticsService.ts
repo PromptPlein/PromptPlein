@@ -96,7 +96,7 @@ export async function trackEvent(input: {
  * in de database geteld (getUsageReport). Ze blijven uit deze lijst, anders
  * verdringen ze binnen de grens van 2000 alle andere gebeurtenissen.
  */
-const USAGE_ONLY_EVENTS: AnalyticsEventType[] = ['visit', 'chat_message', 'export_word', 'export_excel'];
+const USAGE_ONLY_EVENTS: AnalyticsEventType[] = ['visit', 'chat_message', 'export_word', 'export_excel', 'export_file'];
 
 export async function listEvents(): Promise<AnalyticsEvent[]> {
   if (local) return localStore.listEvents().filter((e) => !USAGE_ONLY_EVENTS.includes(e.event_type));
@@ -129,6 +129,7 @@ export function countByEventType(events: AnalyticsEvent[]): Record<AnalyticsEven
     chat_message: 0,
     export_word: 0,
     export_excel: 0,
+    export_file: 0,
   };
   for (const e of events) base[e.event_type] = (base[e.event_type] ?? 0) + 1;
   return base;

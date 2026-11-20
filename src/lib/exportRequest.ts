@@ -9,7 +9,20 @@
 import { findTables, hasTable } from './excelExport';
 import { parseBlocks } from './markdownBlocks';
 
-export type ExportFormat = 'word' | 'excel';
+export type ExportFormat = 'word' | 'excel' | 'pdf' | 'pptx' | 'csv' | 'md';
+
+/** De naam van het bestand per formaat, zoals de gebruiker hem kent. */
+export const EXPORT_LABELS: Record<ExportFormat, string> = {
+  word: 'Word-document',
+  excel: 'Excel-bestand',
+  pdf: 'PDF',
+  pptx: 'PowerPoint',
+  csv: 'CSV-bestand',
+  md: 'Markdown-bestand',
+};
+
+/** Formaten die alleen de tabellen uit het antwoord meenemen. */
+export const TABLE_FORMATS: readonly ExportFormat[] = ['excel', 'csv'];
 
 export interface ExportRequest {
   /** Het genoemde formaat; null = "exporteer dit" zonder formaat. */
@@ -25,9 +38,32 @@ const WORD = [
   /\bword[- ]?(document|documentje|bestand|bestandje|versie|file|doc|formaat|bestandsformaat)\b/,
   /\b(in|naar|als|tot|via|met|voor)\s+(ms[- ]?|microsoft\s+)?word\b/,
   /\bdocx\b/,
+  /^word\s+of\b/,
+  /\bof\s+word\b/,
   /^(ms[- ]?|microsoft\s+)?word\b(\s+(graag|alsjeblieft|aub|svp|please))?$/,
 ];
 const EXCEL = [/\bexcel\b/, /\bxlsx\b/, /\bspreadsheet\b/, /\brekenblad\b/];
+const PDF = [/\bpdf(je|-?(bestand|bestandje|document|versie))?\b/];
+const PPTX = [
+  /\bpower ?point\b/,
+  /\bpptx?\b/,
+  /\bslides?\b/,
+  /\bdia'?s\b/,
+  /\bdia s\b/,
+  /\b(als|naar|in|tot)\s+(een\s+)?presentatie\b/,
+  /\bpresentatie(\s+\w+)?\s+van\b/,
+];
+const CSV = [/\bcsv(-?(bestand|bestandje|export))?\b/];
+const MD = [/\bmarkdown\b/, /\.md\b/, /\bmd-?bestand\b/, /\b(als|naar|in)\s+(platte|kale)\s+tekst\b/, /\btekstbestand(je)?\b/, /\btxt\b/];
+
+const FORMAT_PATTERNS: [ExportFormat, RegExp[]][] = [
+  ['word', WORD],
+  ['excel', EXCEL],
+  ['pdf', PDF],
+  ['pptx', PPTX],
+  ['csv', CSV],
+  ['md', MD],
+];
 const EXPORT = [
   /\bexporte(er|ert|ren)\b/,
   /\bexport\b/,
@@ -49,7 +85,8 @@ const REQUEST_WORDS = new Set(
     'hier hiervan dit dat deze die het er ervan daarvan hierover daar bovenstaande vorige laatste ' +
     'van een als in naar tot via met voor de het en of aan ' +
     'bestand bestandje document documentje versie file doc docx xlsx formaat bestandsformaat ' +
-    'word ms microsoft excel spreadsheet rekenblad sheet werkblad ' +
+    'word ms microsoft excel spreadsheet rekenblad sheet werkblad pdf pdfje power point powerpoint ppt pptx ' +
+    'presentatie presentatietje slide slides dia dias s csv markdown md txt tekstbestand tekstbestandje platte kale ' +
     'antwoord tekst tabel tabellen inhoud resultaat overzicht lijst openen'
   ).split(/\s+/),
 );
@@ -70,18 +107,18 @@ function normalize(text: string): string {
 export function parseExportRequest(raw: string): ExportRequest | null {
   const text = normalize(raw);
   if (!text || text.length > 400) return null;
-  const word = WORD.some((p) => p.test(text));
-  const excel = EXCEL.some((p) => p.test(text));
+  const named = FORMAT_PATTERNS.filter(([, patterns]) => patterns.some((p) => p.test(text))).map(([f]) => f);
   const generic = EXPORT.some((p) => p.test(text));
-  if (!word && !excel && !generic) return null;
+  if (!named.length && !generic) return null;
   // "Wat is het verschil tussen Word en Excel?" gaat over de programma's zelf.
   if (QUESTION_START.test(text)) return null;
 
-  const format: ExportFormat | null = word && !excel ? 'word' : excel && !word ? 'excel' : null;
+  // Twee formaten tegelijk ("Word of PDF?"): dan kiest de gebruiker op de kaart.
+  const format: ExportFormat | null = named.length === 1 ? named[0] : null;
   const leftover = text
     .split(' ')
     .map((w) => w.replace(/^[-.]+|[-.]+$/g, ''))
-    .filter((w) => w && !REQUEST_WORDS.has(w) && !/^(word|excel)-?/.test(w));
+    .filter((w) => w && !REQUEST_WORDS.has(w) && !/^(word|excel|pdf|csv|powerpoint|presentatie)-?/.test(w));
   return { format, aboutPrevious: leftover.length <= 1 };
 }
 

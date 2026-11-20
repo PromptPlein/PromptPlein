@@ -25,7 +25,7 @@ import { splitAnswer } from '@/lib/chatFiles';
 import { downloadText } from '@/lib/download';
 import { sendChatMessage } from '@/services/chatService';
 import { hasMemoryTrigger } from '@/lib/memoryTriggers';
-import { parseExportRequest, type ExportFormat } from '@/lib/exportRequest';
+import { EXPORT_LABELS, parseExportRequest, type ExportFormat } from '@/lib/exportRequest';
 import { rememberWish, type MemoryNotice } from '@/components/chat/rememberWish';
 import { generateTitle } from '@/services/optimizeService';
 import { loadProjectContext } from '@/services/chatProjectService';
@@ -479,7 +479,7 @@ export default function useChatController(
         const card: ChatMessage = {
           id: uuid(),
           role: 'assistant',
-          content: request.format === 'excel' ? 'Excel-bestand' : request.format === 'word' ? 'Word-document' : 'Bestand',
+          content: request.format ? EXPORT_LABELS[request.format] : 'Bestand',
           createdAt: now,
           madeBy: 'export',
           exportOf: previous.id,

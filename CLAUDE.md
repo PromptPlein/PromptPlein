@@ -737,16 +737,16 @@ van de gebruiker opnieuw verteld, één paneel per moment. Large 4 noemde een (A
 wordt in de beeldprompt een eigen embleem zonder merknaam, en bij Afbeelding wordt nooit op internet
 gezocht: de treffers gingen over het merk en het auteursrecht, niet over hoe het beeld eruitziet.
 
-Onder elk chatantwoord staat één knop Downloaden met de formaten in een menu: Word en, als er
-een tabel in staat, Excel (`DocumentDownloads`). Bewust een menu en geen losse knoppen, zodat de
+Onder elk chatantwoord staat één knop Downloaden met de formaten in een menu: Word, PDF,
+PowerPoint en Markdown, en als er een tabel in staat ook Excel en CSV (`DocumentDownloads`). Bewust een menu en geen losse knoppen, zodat de
 rij kort blijft als er formaten bijkomen (keuze van de eigenaar). Onder het laatste antwoord staat
 een voorstel als het eruitziet als iets om te bewaren: een brief of stuk met kopjes wordt Word, een
 tabel wordt Excel (`suggestFormat`). Typt de gebruiker "maak hier een Word-document van",
-"exporteer naar Excel" of "exporteer dit", dan herkent `parseExportRequest`
+"maak er een presentatie van", "exporteer naar Excel" of "exporteer dit", dan herkent `parseExportRequest`
 (`src/lib/exportRequest.ts`) dat zonder AI en komt er een exportkaart in het gesprek
 (`madeBy: 'export'`); vraag en kaart gaan niet naar het model. Zonder formaat vraagt de kaart Word
-of Excel, met voorop wat bij het antwoord past (`recommendFormat`). Excel bij een antwoord zonder
-tabel biedt aan het eerst in een tabel te zetten. Vraagt het bericht ook om nieuwe inhoud ("schrijf
+of Excel, met voorop wat bij het antwoord past (`recommendFormat`). De andere formaten staan klein
+eronder. Excel of CSV bij een antwoord zonder tabel biedt aan het eerst in een tabel te zetten. Vraagt het bericht ook om nieuwe inhoud ("schrijf
 een brief in Word"), dan gaat het gewoon naar de AI en staat het bestand onder het antwoord klaar
 (`offerExport`). De browser maakt het bestand zelf: een .docx en een .xlsx zijn een
 zip met XML, en `fflate` pakt die in (`wordExport.ts`, `excelExport.ts`). Geen server, geen
@@ -759,6 +759,19 @@ naam gezocht ("heading 1"), want in een Nederlandse Word is de id "Kop1". Rijks 
 bij naam genoemd, niet ingebed. Scherm en document lezen de Markdown met dezelfde regels
 (`markdownBlocks.ts`). Controleer een wijziging door het bestand in Word en Excel te openen:
 geldige XML is nog geen bestand dat Word zonder reparatiemelding opent.
+
+PDF (`pdfExport.ts`) schrijft de browser zelf, zonder bibliotheek, in Helvetica met de
+letterbreedtes in het bestand; Rijks Sans gaat er niet in, want een PDF moet een lettertype
+meenemen en dat mag hier niet. Het is geen getagde PDF: voor een toegankelijk document is Word
+de betere keuze. PowerPoint (`pptxExport.ts`) is net als Word een zip met XML: een titeldia,
+een dia per kop van niveau 1 of 2, vervolgdia's als het niet past, en tabellen als echte
+PowerPoint-tabel. Elke dia heeft zijn titel in de titelplek, zodat schermlezer en overzicht hem
+kennen. PDF en PowerPoint volgen Rijkshuisstijl of Eenvoudig; bij een eigen Word-sjabloon krijgen
+ze de Rijkshuisstijl. CSV (`textExport.ts`) gebruikt een puntkomma en een BOM, zodat een
+Nederlandse Excel hem meteen in kolommen opent; meer tabellen gaan samen in een zip. Deze vier
+tellen in analytics als `export_file` met het formaat erbij. Test PowerPoint door het bestand echt
+te openen: kopieer het naar `~/Library/Containers/com.microsoft.Powerpoint/Data/tmp` en laat
+PowerPoint via AppleScript een PDF bewaren.
 
 Het document gebruikt de stijlen van Word zelf: Titel, Kop 1 tot en met 4 en Lijstalinea, zodat
 het navigatievenster en een inhoudsopgave meteen werken. De systeemprompt in Beheer verbiedt

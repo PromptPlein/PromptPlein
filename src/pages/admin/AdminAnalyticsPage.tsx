@@ -35,6 +35,7 @@ const EVENT_LABELS: Record<string, string> = {
   chat_message: 'Chatbericht',
   export_word: 'Word-download',
   export_excel: 'Excel-download',
+  export_file: 'Andere download',
 };
 
 /** Leesbare NL-labels voor de gedragslog-acties. */
