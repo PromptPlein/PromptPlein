@@ -1,143 +1,150 @@
 import { useCallback, useId, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
-import { ChevronDown, Download, FileCode, FileSpreadsheet, FileText, FileType, Loader2, Presentation, Sheet } from '@/components/common/icons';
+import { ChevronDown, Download, FileCode, FileSpreadsheet, FileText, FileType, Loader2, Plus, Presentation, Sheet } from '@/components/common/icons';
 import { downloadBinary } from '@/lib/download';
-import { buildExcelWorkbook, hasTable, XLSX_MIME } from '@/lib/excelExport';
+import { buildExcelWorkbook, excelLookFrom, hasTable, XLSX_MIME } from '@/lib/excelExport';
 import { recommendFormat, TABLE_FORMATS, type ExportFormat } from '@/lib/exportRequest';
 import useDismiss from '@/lib/useDismiss';
-import { Link } from 'react-router-dom';
-import type { WordLook } from '@/lib/wordExport';
+import { EENVOUDIG_STYLE, RIJK_STYLE, styleFrom, type ExportStyle } from '@/lib/exportStyle';
 import {
-  choiceFromTemplate,
-  EENVOUDIG_STYLE,
-  getOwnStyle,
-  RIJK_STYLE,
-  styleFrom,
-  useOwnStyle,
-  type ExportStyle,
-} from '@/lib/exportStyle';
-import {
-  loadPptxTemplate,
-  loadWordTemplate,
-  setWordLook,
-  useWordLook,
-  usePptxTemplateName,
-  useWordTemplateName,
-} from '@/lib/wordSettings';
+  getOpmaak,
+  setExportLook,
+  useExportLook,
+  useOpmaken,
+  type ExcelLook,
+  type ExportLook,
+  type Opmaak,
+} from '@/lib/exportTemplates';
 import { trackEvent } from '@/services/analyticsService';
 import type { ChatSource } from '@/types';
 
 const BUTTON_CLASS =
   'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-rijksblauw-700 disabled:opacity-60 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-rijksblauw-200';
 
-const LOOK_LABEL: Record<WordLook, string> = {
-  rijk: 'Rijkshuisstijl',
-  eenvoudig: 'eenvoudige opmaak',
-  eigen: 'je eigen opmaak',
-  sjabloon: 'je eigen sjabloon',
-};
+/** De naam van een opmaak in een zin: "in Rijkshuisstijl", "in Mijn huisstijl". */
+function lookLabel(look: ExportLook, opmaken: Opmaak[] | undefined): string {
+  if (look === 'rijk') return 'Rijkshuisstijl';
+  if (look === 'eenvoudig') return 'eenvoudige opmaak';
+  return opmaken?.find((o) => `opmaak:${o.id}` === look)?.naam ?? 'Rijkshuisstijl';
+}
 
-const LOOK_CHOICES: { value: WordLook; label: string }[] = [
-  { value: 'rijk', label: 'Rijkshuisstijl' },
-  { value: 'eenvoudig', label: 'Eenvoudig' },
-  { value: 'eigen', label: 'Mijn eigen opmaak' },
-  { value: 'sjabloon', label: 'Mijn sjablonen' },
-];
+/** De keuzes: eerst de standaard, dan de eigen opmaken. */
+function lookChoices(opmaken: Opmaak[] | undefined): { value: ExportLook; label: string }[] {
+  return [
+    { value: 'rijk', label: 'Rijkshuisstijl' },
+    { value: 'eenvoudig', label: 'Eenvoudig' },
+    ...(opmaken ?? []).map((o) => ({ value: `opmaak:${o.id}` as ExportLook, label: o.naam })),
+  ];
+}
 
-/**
- * De opmaak voor deze download, en de sjablonen als die er zijn. Bij Mijn
- * sjablonen gebruikt elk formaat zijn eigen sjabloon; heeft het er geen, dan
- * krijgt het de kleuren en de letter uit het andere sjabloon.
- */
-async function resolveLook(look: WordLook): Promise<{ style: ExportStyle; word: Uint8Array | null; pptx: Uint8Array | null }> {
-  if (look === 'eenvoudig') return { style: EENVOUDIG_STYLE, word: null, pptx: null };
-  if (look === 'eigen') {
-    const own = getOwnStyle();
-    return { style: own ? styleFrom(own.choice) : RIJK_STYLE, word: null, pptx: null };
-  }
-  if (look === 'sjabloon') {
-    const [word, pptx] = await Promise.all([loadWordTemplate(), loadPptxTemplate()]);
-    const source = word?.bytes ?? pptx?.bytes;
-    const choice = source ? await choiceFromTemplate(source) : null;
-    if (!word && !pptx) toast('Je sjabloon is niet gevonden. Het bestand heeft de Rijkshuisstijl.');
-    return { style: choice ? styleFrom(choice) : RIJK_STYLE, word: word?.bytes ?? null, pptx: pptx?.bytes ?? null };
-  }
-  return { style: RIJK_STYLE, word: null, pptx: null };
+interface Resolved {
+  style: ExportStyle;
+  excel: ExcelLook;
+  word: Uint8Array | null;
+  pptx: Uint8Array | null;
 }
 
 /**
- * De opmaak van het Word-document, meteen in het menu te kiezen. Een eigen
- * sjabloon toevoegen gaat via Instellingen, Chat: daar staat ook hoe je
- * {inhoud}, {titel} en {datum} gebruikt.
+ * De opmaak voor deze download. Een eigen opmaak gebruikt zijn Word- of
+ * PowerPoint-sjabloon als dat er is; elk ander formaat krijgt de letter en de
+ * kleuren van die opmaak, en Excel de tabelkop uit een Excel-sjabloon.
  */
-function WordLookChoice({ look }: { look: WordLook }) {
-  const templateName = useWordTemplateName();
-  const pptxName = usePptxTemplateName();
-  const own = useOwnStyle();
-  const name = useId();
-  const choices = LOOK_CHOICES.filter(
-    (c) => (c.value !== 'sjabloon' || templateName || pptxName) && (c.value !== 'eigen' || own),
+async function resolveLook(look: ExportLook): Promise<Resolved> {
+  if (look === 'eenvoudig') return { style: EENVOUDIG_STYLE, excel: excelLookFrom(EENVOUDIG_STYLE), word: null, pptx: null };
+  if (look.startsWith('opmaak:')) {
+    const opmaak = await getOpmaak(look.slice('opmaak:'.length));
+    if (opmaak) {
+      const style = styleFrom(opmaak.choice);
+      return {
+        style,
+        excel: opmaak.excel ?? excelLookFrom(style),
+        word: opmaak.word?.bytes ?? null,
+        pptx: opmaak.pptx?.bytes ?? null,
+      };
+    }
+    toast('Je eigen opmaak is niet gevonden. Het bestand heeft de Rijkshuisstijl.');
+  }
+  return { style: RIJK_STYLE, excel: excelLookFrom(RIJK_STYLE), word: null, pptx: null };
+}
+
+/** Een link naar Template-based Output, waar je een eigen opmaak maakt. */
+function MakeOpmaakButton({ onMake, className }: { onMake?: () => void; className?: string }) {
+  if (!onMake) return null;
+  return (
+    <button
+      type="button"
+      onClick={onMake}
+      className={clsx(
+        'opl-raak inline-flex items-center gap-1 text-xs font-medium text-rijksblauw-700 underline hover:no-underline dark:text-rijksblauw-200',
+        className,
+      )}
+    >
+      <Plus size={12} aria-hidden="true" /> Nieuwe opmaak maken
+    </button>
   );
+}
+
+/** De opmaak, meteen in het menu te kiezen; standaard de Rijkshuisstijl. */
+function LookChoice({ look, onMakeOpmaak }: { look: ExportLook; onMakeOpmaak?: () => void }) {
+  const opmaken = useOpmaken();
+  const name = useId();
   return (
     <fieldset className="mt-1 border-t border-slate-200 px-2.5 pb-1 pt-2 dark:border-slate-700">
-      <legend className="sr-only">Opmaak van Word, PDF en PowerPoint</legend>
+      <legend className="sr-only">Opmaak van Word, PDF, PowerPoint en Excel</legend>
       <p aria-hidden="true" className="text-xs font-medium text-slate-500 dark:text-slate-400">
         Opmaak
       </p>
-      {choices.map((choice) => (
+      {lookChoices(opmaken).map((choice) => (
         <label key={choice.value} className="flex cursor-pointer items-center gap-2 py-1 text-sm text-slate-700 dark:text-slate-200">
           <input
             type="radio"
             name={name}
             value={choice.value}
             checked={look === choice.value}
-            onChange={() => setWordLook(choice.value)}
+            onChange={() => setExportLook(choice.value)}
             className="h-4 w-4 shrink-0 accent-rijksblauw-700"
           />
-          {choice.label}
+          <span className="min-w-0 truncate">{choice.label}</span>
         </label>
       ))}
-      <Link
-        to="/instellingen/chat#word-document"
-        className="opl-raak mt-1 inline-block text-xs font-medium text-rijksblauw-700 underline hover:no-underline dark:text-rijksblauw-200"
-      >
-        {own || templateName || pptxName ? 'Opmaak aanpassen' : 'Eigen opmaak of sjabloon'}
-      </Link>
+      <MakeOpmaakButton onMake={onMakeOpmaak} className="mt-1" />
     </fieldset>
   );
 }
 
 /**
  * Maakt een bestand van een chatantwoord, in de browser: de AI levert de inhoud,
- * de opmaak komt uit de gekozen vormgeving (Instellingen, Chat). Excel en CSV
- * kunnen alleen als het antwoord een tabel heeft. Elk formaat laadt zijn eigen
- * code pas bij de eerste download.
+ * de opmaak komt uit de gekozen opmaak. Excel en CSV kunnen alleen als het
+ * antwoord een tabel heeft. Elk formaat laadt zijn eigen code pas bij de eerste
+ * download.
  */
 function useDocumentExport(text: string, sources?: ChatSource[]) {
-  const look = useWordLook();
+  const look = useExportLook();
+  const opmaken = useOpmaken();
   const withTable = useMemo(() => hasTable(text), [text]);
   const [busy, setBusy] = useState<ExportFormat | null>(null);
+
   async function build(format: ExportFormat): Promise<{ data: Uint8Array; fileName: string; mime: string } | null> {
     const input = { markdown: text, sources };
-    const needsStyle = format === 'word' || format === 'pdf' || format === 'pptx';
-    const { style, word, pptx } = needsStyle ? await resolveLook(look) : { style: RIJK_STYLE, word: null, pptx: null };
+    const resolved = format === 'csv' || format === 'md' ? null : await resolveLook(look);
+    const style = resolved?.style ?? RIJK_STYLE;
     switch (format) {
       case 'word': {
         const { buildWordDocument, DOCX_MIME } = await import('@/lib/wordExport');
-        const result = await buildWordDocument(input, style, word);
-        void trackEvent({ event_type: 'export_word', metadata: { vormgeving: word ? 'sjabloon' : look } });
+        const result = await buildWordDocument(input, style, resolved?.word);
+        void trackEvent({ event_type: 'export_word', metadata: { vormgeving: look.startsWith('opmaak:') ? 'eigen' : look } });
         return { ...result, mime: DOCX_MIME };
       }
       case 'excel': {
-        const result = await buildExcelWorkbook(text);
+        const result = await buildExcelWorkbook(text, resolved?.excel);
         if (result) void trackEvent({ event_type: 'export_excel' });
         return result && { ...result, mime: XLSX_MIME };
       }
       case 'pdf':
         return (await import('@/lib/pdfExport')).buildPdf(input, style);
       case 'pptx':
-        return (await import('@/lib/pptxExport')).buildPptx(input, style, pptx);
+        return (await import('@/lib/pptxExport')).buildPptx(input, style, resolved?.pptx);
       case 'csv':
         return (await import('@/lib/textExport')).buildCsv(text);
       case 'md':
@@ -165,7 +172,7 @@ function useDocumentExport(text: string, sources?: ChatSource[]) {
     }
   }
 
-  return { look, withTable, busy, download };
+  return { look, label: lookLabel(look, opmaken), withTable, busy, download };
 }
 
 const FORMATS: Record<ExportFormat, { file: string; noun: string; icon: typeof FileText }> = {
@@ -178,17 +185,17 @@ const FORMATS: Record<ExportFormat, { file: string; noun: string; icon: typeof F
 };
 
 /** Wat er in het menu onder elk formaat staat. */
-function formatHint(format: ExportFormat, look: keyof typeof LOOK_LABEL): string {
-  const plain = LOOK_LABEL[look];
+function formatHint(format: ExportFormat, label: string): string {
+  const plain = label;
   switch (format) {
     case 'word':
-      return `tekst met opmaak, in ${LOOK_LABEL[look]}`;
+      return `tekst met opmaak, in ${label}`;
     case 'pdf':
       return `om te versturen of te printen, in ${plain}`;
     case 'pptx':
       return `een dia per kopje, in ${plain}`;
     case 'excel':
-      return 'de tabellen, om mee te rekenen';
+      return `de tabellen, om mee te rekenen, in ${plain}`;
     case 'csv':
       return 'de tabellen, voor een ander programma';
     case 'md':
@@ -212,8 +219,17 @@ function FormatIcon({ format, busy }: { format: ExportFormat; busy: boolean }) {
  * Eén knop Downloaden onder een antwoord, met de formaten in een menu. Zo blijft
  * de rij kort, ook als er later meer formaten bij komen.
  */
-export default function DocumentDownloads({ text, sources }: { text: string; sources?: ChatSource[] }) {
-  const { look, withTable, busy, download } = useDocumentExport(text, sources);
+export default function DocumentDownloads({
+  text,
+  sources,
+  onMakeOpmaak,
+}: {
+  text: string;
+  sources?: ChatSource[];
+  /** Naar Template-based Output om een eigen opmaak te maken. */
+  onMakeOpmaak?: () => void;
+}) {
+  const { look, label, withTable, busy, download } = useDocumentExport(text, sources);
   const [open, setOpen] = useState(false);
   // Omhoog openen, tenzij de knop bovenin het gesprek staat: dan valt het menu
   // buiten de lijst.
@@ -224,7 +240,7 @@ export default function DocumentDownloads({ text, sources }: { text: string; sou
 
   const options = MENU_ORDER.filter((f) => withTable || !TABLE_FORMATS.includes(f)).map((format) => ({
     format,
-    hint: formatHint(format, look),
+    hint: formatHint(format, label),
   }));
 
   return (
@@ -278,7 +294,7 @@ export default function DocumentDownloads({ text, sources }: { text: string; sou
             </li>
           ))}
         </ul>
-        <WordLookChoice look={look} />
+        <LookChoice look={look} onMakeOpmaak={onMakeOpmaak} />
         </div>
       )}
     </div>
@@ -324,14 +340,17 @@ export function ExportCard({
   target,
   format,
   onMakeTable,
+  onMakeOpmaak,
 }: {
   /** Het antwoord waar het bestand van wordt gemaakt; weg = verwijderd. */
   target?: { content: string; sources?: ChatSource[] };
   format?: ExportFormat;
   onMakeTable?: () => void;
+  /** Naar Template-based Output om een eigen opmaak te maken. */
+  onMakeOpmaak?: () => void;
 }) {
   const text = target?.content ?? '';
-  const { look, withTable, busy, download } = useDocumentExport(text, target?.sources);
+  const { look, label, withTable, busy, download } = useDocumentExport(text, target?.sources);
   const recommended = useMemo(() => recommendFormat(text), [text]);
 
   if (!target) {
@@ -383,7 +402,8 @@ export function ExportCard({
   if (format) {
     return (
       <ExportFrame title={FORMATS[format].file}>
-        <p>{READY[format](look)}</p>
+        <p>{READY[format](label)}</p>
+        {STYLED.includes(format) && <LookQuestion look={look} onMakeOpmaak={onMakeOpmaak} />}
         <div className="mt-3 flex flex-wrap gap-2">{button(format, true)}</div>
       </ExportFrame>
     );
@@ -393,7 +413,8 @@ export function ExportCard({
   if (!withTable) {
     return (
       <ExportFrame title="Word-document">
-        <p>Dit antwoord is tekst met opmaak, dus het wordt een Word-document, in {LOOK_LABEL[look]}.</p>
+        <p>Dit antwoord is tekst met opmaak, dus het wordt een Word-document.</p>
+        <LookQuestion look={look} onMakeOpmaak={onMakeOpmaak} />
         <div className="mt-3 flex flex-wrap gap-2">{button('word', true)}</div>
         <OtherFormats exclude={['word']} withTable={withTable} busy={busy} onPick={(f) => void download(f)} />
       </ExportFrame>
@@ -407,15 +428,59 @@ export function ExportCard({
           ? 'Dit antwoord is vooral een tabel. In Excel kun je er meteen mee rekenen en filteren. Liever de tekst met opmaak? Kies dan Word.'
           : 'Dit antwoord is vooral tekst met opmaak, dus Word ligt voor de hand. Wil je alleen de tabel, om mee te rekenen? Kies dan Excel.'}
       </p>
+      <LookQuestion look={look} onMakeOpmaak={onMakeOpmaak} />
       <div className="mt-3 flex flex-wrap gap-2">{order.map((f, i) => button(f, i === 0))}</div>
       <OtherFormats exclude={order} withTable={withTable} busy={busy} onPick={(f) => void download(f)} />
     </ExportFrame>
   );
 }
 
-const READY: Record<ExportFormat, (look: keyof typeof LOOK_LABEL) => string> = {
-  word: (look) => `Je Word-document staat klaar, in ${LOOK_LABEL[look]}.`,
-  pdf: (look) => `Je PDF staat klaar, in ${LOOK_LABEL[look]}.`,
+/** Formaten met een opmaak; CSV en Markdown zijn kale tekst. */
+const STYLED: ExportFormat[] = ['word', 'pdf', 'pptx', 'excel'];
+
+/**
+ * De vraag in de exportkaart: in welke opmaak? Standaard de Rijkshuisstijl; een
+ * eigen opmaak die je eerder maakte staat erbij, en een nieuwe maak je in
+ * Template-based Output.
+ */
+function LookQuestion({ look, onMakeOpmaak }: { look: ExportLook; onMakeOpmaak?: () => void }) {
+  const opmaken = useOpmaken();
+  const name = useId();
+  return (
+    <fieldset className="mt-3">
+      <legend className="text-sm font-medium text-slate-900 dark:text-white">In welke opmaak?</legend>
+      <div className="mt-1.5 flex flex-wrap gap-2">
+        {lookChoices(opmaken).map((choice) => (
+          <label
+            key={choice.value}
+            className={clsx(
+              'inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-1.5 text-sm',
+              look === choice.value
+                ? 'border-rijksblauw-600 bg-rijksblauw-50 text-rijksblauw-800 dark:border-rijksblauw-300 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-100'
+                : 'border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700',
+            )}
+          >
+            <input
+              type="radio"
+              name={name}
+              value={choice.value}
+              checked={look === choice.value}
+              onChange={() => setExportLook(choice.value)}
+              className="h-4 w-4 shrink-0 accent-rijksblauw-700"
+            />
+            {choice.label}
+            {choice.value === 'rijk' && <span className="text-xs text-slate-500 dark:text-slate-400">standaard</span>}
+          </label>
+        ))}
+      </div>
+      <MakeOpmaakButton onMake={onMakeOpmaak} className="mt-2" />
+    </fieldset>
+  );
+}
+
+const READY: Record<ExportFormat, (label: string) => string> = {
+  word: () => 'Je Word-document staat klaar.',
+  pdf: () => 'Je PDF staat klaar.',
   pptx: () => 'Je presentatie staat klaar: een titeldia en een dia per kopje.',
   excel: () => 'Je Excel-bestand staat klaar. Elke tabel krijgt een eigen tabblad.',
   csv: () => 'Je CSV-bestand staat klaar, met een puntkomma tussen de kolommen. Meer tabellen gaan samen in een zip.',

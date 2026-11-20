@@ -4,6 +4,8 @@
 
 import { splitAnswer } from './chatFiles';
 import { parseBlocks, plainInline, type Block } from './markdownBlocks';
+import type { ExportStyle } from './exportStyle';
+import type { ExcelLook } from './exportTemplates';
 import { fileNameFrom, XML_HEAD, xmlEscape, zipOffice } from './officeXml';
 
 export const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -82,28 +84,55 @@ function sheetNames(tables: FoundTable[]): string[] {
   });
 }
 
+/** De kop zoals Excel hem tot nu toe kreeg: Rijkshuisstijl, in Calibri. */
+export const DEFAULT_EXCEL_LOOK: ExcelLook = {
+  font: 'Calibri',
+  headFill: '154273',
+  headText: 'FFFFFF',
+  headBold: true,
+  border: 'CBD5E1',
+};
+
+/** De tabelkop uit de gedeelde opmaak. Rijks Sans wordt in een rekenblad Calibri. */
+export function excelLookFrom(style: ExportStyle): ExcelLook {
+  return {
+    font: style.font === 'Rijks Sans' ? 'Calibri' : style.font,
+    headFill: style.tableHeadFill,
+    headText: style.tableHeadText,
+    headBold: true,
+    border: style.border,
+  };
+}
+
 // Stijlen: 0 gewoon, 1 kop, 2 heel getal, 3 procent, 4 euro, 5 tekst met terugloop,
 // 6 getal met decimalen.
-const STYLES_XML =
-  XML_HEAD +
-  '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
-  '<numFmts count="1"><numFmt numFmtId="165" formatCode="&quot;€&quot; #,##0.00"/></numFmts>' +
-  '<fonts count="2"><font><sz val="11"/><name val="Calibri"/><family val="2"/></font>' +
-  '<font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/><family val="2"/></font></fonts>' +
-  '<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>' +
-  '<fill><patternFill patternType="solid"><fgColor rgb="FF154273"/><bgColor indexed="64"/></patternFill></fill></fills>' +
-  '<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border>' +
-  '<border><left/><right/><top/><bottom style="thin"><color rgb="FFCBD5E1"/></bottom><diagonal/></border></borders>' +
-  '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
-  '<cellXfs count="7">' +
-  '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1"><alignment vertical="top" wrapText="1"/></xf>' +
-  '<xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"><alignment vertical="center" wrapText="1"/></xf>' +
-  '<xf numFmtId="3" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"><alignment vertical="top"/></xf>' +
-  '<xf numFmtId="10" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"><alignment vertical="top"/></xf>' +
-  '<xf numFmtId="165" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"><alignment vertical="top"/></xf>' +
-  '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1"><alignment vertical="top" wrapText="1"/></xf>' +
-  '<xf numFmtId="4" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"><alignment vertical="top"/></xf>' +
-  '</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
+function stylesXml(look: ExcelLook): string {
+  const font = xmlEscape(look.font);
+  const fill = look.headFill
+    ? `<fill><patternFill patternType="solid"><fgColor rgb="FF${look.headFill}"/><bgColor indexed="64"/></patternFill></fill>`
+    : '<fill><patternFill patternType="none"/></fill>';
+  return (
+    XML_HEAD +
+    '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+    '<numFmts count="1"><numFmt numFmtId="165" formatCode="&quot;€&quot; #,##0.00"/></numFmts>' +
+    `<fonts count="2"><font><sz val="11"/><name val="${font}"/><family val="2"/></font>` +
+    `<font>${look.headBold ? '<b/>' : ''}<sz val="11"/><color rgb="FF${look.headText}"/><name val="${font}"/><family val="2"/></font></fonts>` +
+    `<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>${fill}</fills>` +
+    '<borders count="3"><border><left/><right/><top/><bottom/><diagonal/></border>' +
+    `<border><left/><right/><top/><bottom style="thin"><color rgb="FF${look.border}"/></bottom><diagonal/></border>` +
+    `<border><left/><right/><top/><bottom style="medium"><color rgb="FF${look.headFill ?? look.headText}"/></bottom><diagonal/></border></borders>` +
+    '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
+    '<cellXfs count="7">' +
+    '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1"><alignment vertical="top" wrapText="1"/></xf>' +
+    `<xf numFmtId="0" fontId="1" fillId="2" borderId="${look.headFill ? 0 : 2}" xfId="0" applyFont="1" applyFill="1" applyBorder="1"><alignment vertical="center" wrapText="1"/></xf>` +
+    '<xf numFmtId="3" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"><alignment vertical="top"/></xf>' +
+    '<xf numFmtId="10" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"><alignment vertical="top"/></xf>' +
+    '<xf numFmtId="165" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"><alignment vertical="top"/></xf>' +
+    '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1"><alignment vertical="top" wrapText="1"/></xf>' +
+    '<xf numFmtId="4" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"><alignment vertical="top"/></xf>' +
+    '</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>'
+  );
+}
 
 function sheetXml(table: FoundTable): string {
   const cols = table.header.length;
@@ -145,7 +174,10 @@ function sheetXml(table: FoundTable): string {
 }
 
 /** Maakt het Excel-bestand met alle tabellen uit het antwoord. */
-export async function buildExcelWorkbook(markdown: string): Promise<{ data: Uint8Array; fileName: string } | null> {
+export async function buildExcelWorkbook(
+  markdown: string,
+  look: ExcelLook = DEFAULT_EXCEL_LOOK,
+): Promise<{ data: Uint8Array; fileName: string } | null> {
   const tables = findTables(markdown);
   if (!tables.length) return null;
   const names = sheetNames(tables);
@@ -192,7 +224,7 @@ export async function buildExcelWorkbook(markdown: string): Promise<{ data: Uint
         .join('') +
       `<Relationship Id="rId${tables.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>` +
       '</Relationships>',
-    'xl/styles.xml': STYLES_XML,
+    'xl/styles.xml': stylesXml(look),
   };
   tables.forEach((table, i) => {
     files[`xl/worksheets/sheet${i + 1}.xml`] = sheetXml(table);

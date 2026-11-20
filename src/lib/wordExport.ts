@@ -9,8 +9,6 @@ import { isSerif, type ExportStyle } from './exportStyle';
 import { inlineRuns, type Block, type InlineRun, type ListNode } from './markdownBlocks';
 import { todayLong, XML_HEAD, xmlEscape, zipOffice } from './officeXml';
 
-/** De keuze in Instellingen en het menu: twee vaste opmaken, een eigen beschreven opmaak, of je sjablonen. */
-export type WordLook = 'rijk' | 'eenvoudig' | 'eigen' | 'sjabloon';
 
 export interface WordSource {
   title: string;

@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { Check, FileUp, Loader2, Sparkles } from '@/components/common/icons';
 import toast from 'react-hot-toast';
+import { ACCEPTED_DOC_ACCEPT, TEMPLATE_DOC_ACCEPT } from '@/lib/extractDocument';
 
 /**
  * Upload-zone voor een voorbeelddocument (Template-based Output). Extraheert de
@@ -15,8 +16,14 @@ import toast from 'react-hot-toast';
 export default function DocumentUpload({
   onPrefill,
   onDescribe,
+  onDesignFile,
   disabled,
 }: {
+  /**
+   * Een Word-, PowerPoint- of Excel-bestand: daar lezen we ook de opmaak uit,
+   * voor een eigen opmaak van de downloads. Zonder deze callback alleen de tekst.
+   */
+  onDesignFile?: (file: File) => void;
   /** Ontvangt de geëxtraheerde tekst; geeft true terug als de velden gevuld zijn. */
   onPrefill: (text: string) => Promise<boolean>;
   /** Ontvangt de omschrijving van het gewenste document; true als de velden gevuld zijn. */
@@ -35,6 +42,7 @@ export default function DocumentUpload({
     if (!file) return;
     setBusy(true);
     setDoneName(null);
+    if (onDesignFile && /\.(docx|dotx|pptx|potx|xlsx|xltx)$/i.test(file.name)) onDesignFile(file);
     try {
       const { extractDocument } = await import('@/lib/extractDocument');
       const doc = await extractDocument(file);
@@ -75,7 +83,8 @@ export default function DocumentUpload({
             </p>
             <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-300">
               De AI leest het document volledig door, analyseert de opbouw (format, rubrieken, regels)
-              en vult de velden hieronder automatisch voor. Ondersteunt .txt, .md, .pdf en .docx.
+              en vult de velden hieronder automatisch voor. Ondersteunt .txt, .md, .pdf, .docx
+              {onDesignFile ? ', .pptx en .xlsx. Van Word, PowerPoint en Excel lezen we ook de opmaak.' : '.'}
             </p>
           </div>
         </div>
@@ -105,7 +114,7 @@ export default function DocumentUpload({
       <input
         ref={inputRef}
         type="file"
-        accept=".txt,.md,.markdown,.pdf,.docx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        accept={onDesignFile ? TEMPLATE_DOC_ACCEPT : ACCEPTED_DOC_ACCEPT}
         className="hidden"
         onChange={(e) => void handleFile(e.target.files?.[0])}
       />

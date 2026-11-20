@@ -13,7 +13,7 @@ import {
   Upload,
 } from '@/components/common/icons';
 import InfoDot from '@/components/common/InfoDot';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/context/AuthContext';
 import { AuthLoading } from '@/components/auth/RequireAuth';
@@ -339,6 +339,19 @@ function ChatPageInner() {
     setProjectPage(id);
   }, []);
 
+  // Terug uit Template-based Output na het maken van een opmaak: hetzelfde gesprek
+  // weer open. Eén keer; daarna gaat de state eraf, zodat herladen niets herhaalt.
+  const location = useLocation();
+  const reopenRef = useRef(false);
+  const reopenId = (location.state as { openConversation?: string } | null)?.openConversation;
+  useEffect(() => {
+    if (!reopenId || reopenRef.current) return;
+    reopenRef.current = true;
+    setProjectPage(null);
+    controller.selectConversation(reopenId);
+    navigate(location.pathname, { replace: true, state: null });
+  }, [reopenId, controller, navigate, location.pathname]);
+
   // Een zojuist aangemaakt project dat nog nooit is opgeslagen: bestaat al in de
   // database (bestanden hebben een project-id nodig), maar is voor de gebruiker
   // nog leeg. Annuleert hij, of verlaat hij de projectpagina zonder iets in te
@@ -594,6 +607,12 @@ function ChatPageInner() {
     },
     [projectNeedsLogin, requireLogin, sendMessage],
   );
+
+  // Een eigen opmaak voor de downloads maak je in Template-based Output. Daarna
+  // kom je terug in dit gesprek; het staat in deze browser, dus er gaat niets verloren.
+  const handleMakeOpmaak = useCallback(() => {
+    navigate('/technieken', { state: { opmaak: 'nieuw', terugChat: conversationId ?? null } });
+  }, [navigate, conversationId]);
 
   // Excel gevraagd bij een antwoord zonder tabel: de AI zet het eerst in een
   // tabel, en daaronder staat het Excel-bestand klaar.
@@ -877,6 +896,7 @@ function ChatPageInner() {
                     }
                     onRepair={handleRepair}
                     onMakeTable={handleMakeTable}
+                    onMakeOpmaak={handleMakeOpmaak}
                     onEdit={composerDisabled ? undefined : (id, text) => guardedSend(text, id)}
                     onImprove={handleImprove}
                     onSaveAsPrompt={handleSaveAsPrompt}

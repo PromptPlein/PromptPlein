@@ -54,6 +54,7 @@ export default function ChatMessageList({
   onImprove,
   onSaveAsPrompt,
   onMakeTable,
+  onMakeOpmaak,
   nudgeMessageId,
   onNudgeDismiss,
 }: {
@@ -72,6 +73,8 @@ export default function ChatMessageList({
   onRepair?: (text: string) => void;
   /** Exportkaart: Excel gevraagd zonder tabel; laat de AI het eerst in een tabel zetten. */
   onMakeTable?: () => void;
+  /** Naar Template-based Output om een eigen opmaak voor downloads te maken. */
+  onMakeOpmaak?: () => void;
   /** Vervang je laatste bericht en laat het antwoord opnieuw schrijven. */
   onEdit?: (messageId: string, text: string) => void;
   /**
@@ -286,6 +289,7 @@ export default function ChatMessageList({
               onContinue={onContinue}
               onRepair={streaming ? undefined : onRepair}
               onMakeTable={streaming ? undefined : onMakeTable}
+              onMakeOpmaak={onMakeOpmaak}
               exportTarget={
                 message.exportOf ? messages.find((m) => m.id === message.exportOf) : undefined
               }
@@ -566,6 +570,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
   onContinue,
   onRepair,
   onMakeTable,
+  onMakeOpmaak,
   exportTarget,
   canRetry,
   fillsTurn,
@@ -582,6 +587,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
   onContinue?: () => void;
   onRepair?: (text: string) => void;
   onMakeTable?: () => void;
+  onMakeOpmaak?: () => void;
   /** Bij een exportkaart: het antwoord waar het bestand van komt. */
   exportTarget?: ChatMessage;
   canRetry: boolean;
@@ -624,6 +630,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
           target={exportTarget}
           format={message.exportFormat}
           onMakeTable={canRetry ? onMakeTable : undefined}
+          onMakeOpmaak={onMakeOpmaak}
         />
       </div>
     );
@@ -717,7 +724,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
           {suggested && (
             <ExportSuggestion text={message.content} sources={message.sources} format={suggested} />
           )}
-          <DocumentDownloads text={message.content} sources={message.sources} />
+          <DocumentDownloads text={message.content} sources={message.sources} onMakeOpmaak={onMakeOpmaak} />
           {canRetry && !message.error && !message.madeBy && (
             <button
               type="button"

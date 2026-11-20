@@ -4,8 +4,6 @@
 // van, en de rest wordt hier afgeleid, met een controle op contrast zodat tekst
 // altijd leesbaar blijft. Een sjabloon levert zijn kleuren en letter via het thema.
 
-import { useSyncExternalStore } from 'react';
-
 /** Wat de gebruiker kiest of de AI voorstelt. Kleuren als hex zonder #. */
 export interface StyleChoice {
   font: string;
@@ -248,53 +246,6 @@ export function choiceFromTheme(themeXml: string): StyleChoice | null {
     tableHead: accent1 ?? heading,
     cover: heading,
   };
-}
-
-// --- De eigen opmaak, per browser bewaard ---
-
-const OWN_KEY = 'opl.export.eigen';
-
-export interface OwnStyle {
-  /** Wat de gebruiker schreef, om later aan te passen. */
-  beschrijving: string;
-  choice: StyleChoice;
-}
-
-function readOwn(): OwnStyle | null {
-  try {
-    const raw = JSON.parse(localStorage.getItem(OWN_KEY) ?? 'null') as { beschrijving?: unknown; choice?: unknown } | null;
-    const choice = cleanChoice(raw?.choice);
-    if (!choice) return null;
-    return { beschrijving: typeof raw?.beschrijving === 'string' ? raw.beschrijving : '', choice };
-  } catch {
-    return null;
-  }
-}
-
-let own: OwnStyle | null = typeof localStorage === 'undefined' ? null : readOwn();
-const listeners = new Set<() => void>();
-const subscribe = (listener: () => void) => {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-};
-
-export function saveOwnStyle(value: OwnStyle | null): void {
-  own = value;
-  try {
-    if (value) localStorage.setItem(OWN_KEY, JSON.stringify(value));
-    else localStorage.removeItem(OWN_KEY);
-  } catch {
-    /* de opmaak geldt dan alleen deze sessie */
-  }
-  listeners.forEach((listener) => listener());
-}
-
-export function getOwnStyle(): OwnStyle | null {
-  return own;
-}
-
-export function useOwnStyle(): OwnStyle | null {
-  return useSyncExternalStore(subscribe, () => own, () => null);
 }
 
 /** Het thema uit een Word- of PowerPoint-sjabloon, als keuze. Null als er geen thema in zit. */

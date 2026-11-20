@@ -20,6 +20,7 @@ import StepBackBuilder from '@/components/optimizer/StepBackBuilder';
 import RubricBuilder from '@/components/optimizer/RubricBuilder';
 import SkillBuilder from '@/components/optimizer/SkillBuilder';
 import DocumentUpload from '@/components/optimizer/DocumentUpload';
+import OpmaakMaker from '@/components/export/OpmaakMaker';
 import InterviewFlow from '@/components/optimizer/InterviewFlow';
 import InfoDot from '@/components/common/InfoDot';
 import OptimizableTextarea from '@/components/common/OptimizableTextarea';
@@ -218,6 +219,27 @@ export default function TechniquesPage() {
     navigate(location.pathname, { replace: true, state: null });
     // handleSelectTechnique is stabiel genoeg; alleen de geladen lijst en de
     // binnenkomende state bepalen of dit moet lopen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [techniques, location.state]);
+
+  // Vanuit de chat of de instellingen: Template-based Output met de opmaakmaker
+  // open, om een eigen opmaak voor de downloads te maken of aan te passen. Wie uit
+  // een chat kwam, kan na het bewaren terug naar dat gesprek.
+  const [opmaakVisit, setOpmaakVisit] = useState<{ editId: string | null; terugChat?: string | null } | null>(null);
+  const [designFile, setDesignFile] = useState<File | null>(null);
+  const opmaakHandoffRef = useRef(false);
+  useEffect(() => {
+    const state = location.state as { opmaak?: string; terugChat?: string | null } | null;
+    if (!state?.opmaak || opmaakHandoffRef.current) return;
+    const template = techniques.find((t) => structureFormat(t) === 'template-based');
+    if (!template) return; // de technieken zijn nog niet geladen
+    opmaakHandoffRef.current = true;
+    setOpmaakVisit({
+      editId: state.opmaak === 'nieuw' ? null : state.opmaak,
+      ...('terugChat' in state ? { terugChat: state.terugChat ?? null } : {}),
+    });
+    handleSelectTechnique(template.id);
+    navigate(location.pathname, { replace: true, state: null });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [techniques, location.state]);
 
@@ -878,7 +900,17 @@ export default function TechniquesPage() {
                         <DocumentUpload
                           onPrefill={(text) => prefillFromStructure(text, 'document')}
                           onDescribe={(brief) => prefillFromStructure(brief, 'brief')}
+                          onDesignFile={setDesignFile}
                           disabled={prefilling}
+                        />
+                      )}
+                      {fmt === 'template-based' && (
+                        <OpmaakMaker
+                          key={opmaakVisit?.editId ?? 'nieuw'}
+                          incomingFile={designFile}
+                          editId={opmaakVisit?.editId}
+                          terugChat={opmaakVisit?.terugChat}
+                          startOpen={Boolean(opmaakVisit)}
                         />
                       )}
                       <FollowUpQuestions

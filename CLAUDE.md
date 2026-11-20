@@ -773,21 +773,33 @@ tellen in analytics als `export_file` met het formaat erbij. Test PowerPoint doo
 te openen: kopieer het naar `~/Library/Containers/com.microsoft.Powerpoint/Data/tmp` en laat
 PowerPoint via AppleScript een PDF bewaren.
 
-De opmaak kies je bij Instellingen, Chat (Opmaak van downloads) of in het menu Downloaden:
-Rijkshuisstijl, Eenvoudig, Mijn eigen opmaak of Mijn sjablonen. Alle drie de documentformaten
-lezen één opmaak (`ExportStyle` in `exportStyle.ts`); Rijkshuisstijl en Eenvoudig zijn daar vaste
-varianten van. Bij een eigen opmaak beschrijft de gebruiker in gewone woorden hoe het eruit moet
-zien en maakt mode `export-style` daar een letter en vier kleuren van (koppen, lijnen, tabelkop,
-eerste dia). De browser rekent de rest uit en maakt te lichte kleuren donkerder tot ze op wit
-leesbaar zijn (`styleFrom`); de gebruiker ziet een voorbeeld en kan letter en kleuren bijstellen.
-Staat er al een opmaak, dan verandert de AI alleen wat de gebruiker noemt. De keuze staat per
-browser in localStorage (`opl.export.eigen`). Bij Mijn sjablonen kan er een Word- en een
-PowerPoint-sjabloon zijn, allebei in IndexedDB. Een PowerPoint-sjabloon (`pptxTemplate.ts`) houdt
-alles van het sjabloon: de voorbeelddia's gaan eruit (ook secties en eigen diavoorstellingen, die
-anders een reparatiemelding geven) en de nieuwe dia's gebruiken de indelingen Titeldia en Titel en
-inhoud, zonder eigen letter of kleur. Een formaat zonder eigen sjabloon, en de PDF altijd, krijgt de
-kleuren en de letter uit het thema van het andere sjabloon (`choiceFromTemplate`). De PDF kent alleen
-Helvetica en Times: een schreefletter wordt Times.
+Standaard krijgen de downloads de Rijkshuisstijl. Een eigen opmaak maakt de gebruiker in
+Template-based Output (`OpmaakMaker`, onder het voorbeelddocument): uit een Word-, PowerPoint- of
+Excel-bestand, of door te beschrijven hoe het eruit moet zien, keuze van de eigenaar. Zo kan
+iemand creatief zijn en hoeft hij niet de huisstijl van de overheid te gebruiken. Een
+voorbeelddocument dat daar wordt toegevoegd, levert zowel de opbouw (de velden) als de opmaak.
+`readTemplate` (`templateAnalysis.ts`) leest zonder AI het thema (letter en kleuren), bij PowerPoint
+de dia-indelingen, het formaat, plaatjes en voorbeelddia's, bij Word Kop 1, kop- en voettekst en
+`{inhoud}`, bij Excel de opmaak van de eerste cel als tabelkop; de gebruiker ziet wat er gelezen is.
+Beschrijven loopt via mode `export-style`: een letter en vier kleuren (koppen, lijnen, tabelkop,
+eerste dia), en met een bestaande opmaak erbij verandert de AI alleen wat de gebruiker noemt. De
+browser rekent de rest uit en maakt te lichte kleuren donkerder tot ze op wit leesbaar zijn
+(`styleFrom`). Elke opmaak heeft een naam en staat met zijn bestanden per browser in IndexedDB
+(`exportTemplates.ts`, sleutel `opmaken`); de keuze staat in localStorage als `opmaak:<id>`.
+
+In de chat vraagt de exportkaart "In welke opmaak?": Rijkshuisstijl (standaard), Eenvoudig, de
+eigen opmaken, en "Nieuwe opmaak maken". Die laatste opent Template-based Output met de maker open
+(`location.state.opmaak`) en "Terug naar je chat" opent daarna hetzelfde gesprek
+(`state.openConversation`). Dezelfde keuze staat in het menu Downloaden; bij Instellingen, Chat
+kies, pas je aan en verwijder je opmaken.
+
+Word en PowerPoint bouwen op hun eigen sjabloon als de opmaak dat heeft. Een PowerPoint-sjabloon
+(`pptxTemplate.ts`) houdt alles van het sjabloon: de voorbeelddia's gaan eruit (ook secties en eigen
+diavoorstellingen, die anders een reparatiemelding geven) en de nieuwe dia's gebruiken de indelingen
+Titeldia en Titel en inhoud, zonder eigen letter of kleur. PDF krijgt altijd de letter en kleuren van
+de opmaak, en kent alleen Helvetica en Times: een schreefletter wordt Times. Excel krijgt de tabelkop
+uit een Excel-bestand (`ExcelLook`) of anders uit de kleuren van de opmaak. CSV en Markdown hebben
+geen opmaak.
 
 Het document gebruikt de stijlen van Word zelf: Titel, Kop 1 tot en met 4 en Lijstalinea, zodat
 het navigatievenster en een inhoudsopgave meteen werken. De systeemprompt in Beheer verbiedt

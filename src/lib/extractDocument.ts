@@ -9,6 +9,16 @@
 /** Maximale bestandsgrootte (10 MB) — grotere bestanden weigeren we vriendelijk. */
 export const MAX_DOC_BYTES = 10 * 1024 * 1024;
 
+/**
+ * Voor een voorbeelddocument in Template-based Output: ook PowerPoint en Excel.
+ * Daar lezen we naast de tekst ook de opmaak uit.
+ */
+export const TEMPLATE_DOC_ACCEPT =
+  '.txt,.md,.markdown,.pdf,.docx,.dotx,.pptx,.potx,.xlsx,.xltx,text/plain,application/pdf,' +
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document,' +
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation,' +
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
 /** Ondersteunde extensies (voor het accept-attribuut en de validatie). */
 export const ACCEPTED_DOC_EXTENSIONS = ['.txt', '.md', '.pdf', '.docx'] as const;
 export const ACCEPTED_DOC_ACCEPT =
@@ -47,10 +57,13 @@ export async function extractDocument(
     text = await file.text();
   } else if (ext === '.pdf') {
     text = await extractPdf(file);
-  } else if (ext === '.docx') {
+  } else if (ext === '.docx' || ext === '.dotx') {
     text = await extractDocx(file);
+  } else if (ext === '.pptx' || ext === '.potx' || ext === '.xlsx' || ext === '.xltx') {
+    const { templateText } = await import('./templateAnalysis');
+    text = await templateText(file.name, new Uint8Array(await file.arrayBuffer()));
   } else {
-    throw new Error(`"${file.name}" heeft een niet-ondersteund type. Gebruik .txt, .md, .pdf of .docx.`);
+    throw new Error(`"${file.name}" heeft een niet-ondersteund type. Gebruik .txt, .md, .pdf, .docx, .pptx of .xlsx.`);
   }
 
   const trimmed = text.trim();
