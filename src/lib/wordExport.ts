@@ -5,10 +5,12 @@
 // server, dus dit past bij de belofte dat chats in de browser blijven.
 
 import { documentBaseName, readAnswer, type AnswerDocument } from './answerDocument';
+import { isSerif, type ExportStyle } from './exportStyle';
 import { inlineRuns, type Block, type InlineRun, type ListNode } from './markdownBlocks';
 import { todayLong, XML_HEAD, xmlEscape, zipOffice } from './officeXml';
 
-export type WordLook = 'rijk' | 'eenvoudig' | 'sjabloon';
+/** De keuze in Instellingen en het menu: twee vaste opmaken, een eigen beschreven opmaak, of je sjablonen. */
+export type WordLook = 'rijk' | 'eenvoudig' | 'eigen' | 'sjabloon';
 
 export interface WordSource {
   title: string;
@@ -52,34 +54,6 @@ interface Palette {
   codeFill: string;
   quoteBar: string;
 }
-
-const RIJK: Palette = {
-  heading: '154273',
-  subheading: '01689B',
-  link: '01689B',
-  text: '1E293B',
-  muted: '64748B',
-  border: 'CBD5E1',
-  tableHeadFill: '154273',
-  tableHeadText: 'FFFFFF',
-  tableBand: 'F1F5F9',
-  codeFill: 'F1F5F9',
-  quoteBar: '01689B',
-};
-
-const EENVOUDIG: Palette = {
-  heading: '1F2937',
-  subheading: '374151',
-  link: '1D4ED8',
-  text: '111827',
-  muted: '6B7280',
-  border: 'D1D5DB',
-  tableHeadFill: 'F3F4F6',
-  tableHeadText: '111827',
-  tableBand: null,
-  codeFill: 'F3F4F6',
-  quoteBar: '9CA3AF',
-};
 
 /** Een eigen sjabloon heeft zijn eigen kleuren; wij voegen alleen neutrale lijnen toe. */
 const SJABLOON: Palette = {
@@ -386,9 +360,8 @@ function fileNameFor(read: AnswerDocument, markdown: string): string {
 
 // --- Een document met onze eigen stijl ---
 
-function stylesXml(look: 'rijk' | 'eenvoudig'): string {
-  const p = look === 'rijk' ? RIJK : EENVOUDIG;
-  const font = look === 'rijk' ? 'Rijks Sans' : 'Calibri';
+function stylesXml(p: ExportStyle): string {
+  const font = xmlEscape(p.font);
   const heading = (n: number, size: number, color: string, before: number) =>
     `<w:style w:type="paragraph" w:styleId="Heading${n}"><w:name w:val="heading ${n}"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:uiPriority w:val="9"/><w:qFormat/>` +
     `<w:pPr><w:keepNext/><w:keepLines/><w:spacing w:before="${before}" w:after="80"/><w:outlineLvl w:val="${n - 1}"/></w:pPr>` +
@@ -405,7 +378,7 @@ function stylesXml(look: 'rijk' | 'eenvoudig'): string {
     '<w:style w:type="character" w:default="1" w:styleId="DefaultParagraphFont"><w:name w:val="Default Paragraph Font"/><w:uiPriority w:val="1"/><w:semiHidden/></w:style>' +
     '<w:style w:type="table" w:default="1" w:styleId="TableNormal"><w:name w:val="Normal Table"/><w:semiHidden/><w:tblPr><w:tblInd w:w="0" w:type="dxa"/><w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="108" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="108" w:type="dxa"/></w:tblCellMar></w:tblPr></w:style>' +
     '<w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:uiPriority w:val="10"/><w:qFormat/>' +
-    `<w:pPr><w:pBdr><w:bottom w:val="single" w:sz="12" w:space="6" w:color="${look === 'rijk' ? '154273' : 'D1D5DB'}"/></w:pBdr><w:spacing w:before="0" w:after="360" w:line="240" w:lineRule="auto"/></w:pPr>` +
+    `<w:pPr><w:pBdr><w:bottom w:val="single" w:sz="12" w:space="6" w:color="${p.titleRule}"/></w:pBdr><w:spacing w:before="0" w:after="360" w:line="240" w:lineRule="auto"/></w:pPr>` +
     `<w:rPr><w:b/><w:color w:val="${p.heading}"/><w:sz w:val="48"/><w:szCs w:val="48"/></w:rPr></w:style>` +
     heading(1, 32, p.heading, 360) +
     heading(2, 26, p.heading, 280) +
@@ -418,10 +391,10 @@ function stylesXml(look: 'rijk' | 'eenvoudig'): string {
   );
 }
 
-function footerXml(title: string, look: 'rijk' | 'eenvoudig'): string {
+function footerXml(title: string, style: ExportStyle): string {
   const field = (instr: string) =>
     `<w:fldSimple w:instr=" ${instr} "><w:r><w:t>1</w:t></w:r></w:fldSimple>`;
-  const top = look === 'rijk' ? `<w:pBdr><w:top w:val="single" w:sz="4" w:space="6" w:color="${RIJK.border}"/></w:pBdr>` : '';
+  const top = style.footerRule ? `<w:pBdr><w:top w:val="single" w:sz="4" w:space="6" w:color="${style.border}"/></w:pBdr>` : '';
   return (
     XML_HEAD +
     `<w:ftr ${W_NS}><w:p><w:pPr><w:pStyle w:val="Footer"/>${top}</w:pPr>` +
@@ -431,11 +404,11 @@ function footerXml(title: string, look: 'rijk' | 'eenvoudig'): string {
   );
 }
 
-async function buildOwn(input: WordInput, look: 'rijk' | 'eenvoudig'): Promise<WordResult> {
+async function buildOwn(input: WordInput, style: ExportStyle): Promise<WordResult> {
   const read = readAnswer(input.markdown);
   const numbering = new Numbering(1, 2, 1);
   const ctx: Ctx = {
-    palette: look === 'rijk' ? RIJK : EENVOUDIG,
+    palette: style,
     styles: {
       title: 'Title',
       headings: ['Heading1', 'Heading2', 'Heading3', 'Heading4', 'Heading4', 'Heading4'],
@@ -493,23 +466,22 @@ async function buildOwn(input: WordInput, look: 'rijk' | 'eenvoudig'): Promise<W
       '<Relationship Id="rIdFooter" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/>' +
       '</Relationships>',
     'word/document.xml': XML_HEAD + `<w:document ${W_NS}><w:body>${body}${sectPr}</w:body></w:document>`,
-    'word/styles.xml': stylesXml(look),
+    'word/styles.xml': stylesXml(style),
     'word/numbering.xml':
       XML_HEAD + `<w:numbering ${W_NS}>${numbering.abstractXml()}${numbering.numsXml()}</w:numbering>`,
     'word/settings.xml':
       XML_HEAD +
       `<w:settings ${W_NS}><w:defaultTabStop w:val="709"/><w:characterSpacingControl w:val="doNotCompress"/>` +
       '<w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat></w:settings>',
-    // Rijks Sans staat niet in het bestand (het lettertype is niet vrij). Wie het
-    // niet heeft, krijgt van Word een schreefloze letter zoals Arial.
+    // De letter staat niet in het bestand (Rijks Sans is niet vrij). Wie hem niet
+    // heeft, krijgt van Word een vergelijkbare letter: Arial of Times New Roman.
     'word/fontTable.xml':
       XML_HEAD +
       `<w:fonts ${W_NS}>` +
-      '<w:font w:name="Rijks Sans"><w:altName w:val="Arial"/><w:family w:val="swiss"/><w:pitch w:val="variable"/></w:font>' +
-      '<w:font w:name="Calibri"><w:family w:val="swiss"/><w:pitch w:val="variable"/></w:font>' +
+      `<w:font w:name="${xmlEscape(style.font)}"><w:altName w:val="${isSerif(style.font) ? 'Times New Roman' : 'Arial'}"/><w:family w:val="${isSerif(style.font) ? 'roman' : 'swiss'}"/><w:pitch w:val="variable"/></w:font>` +
       '<w:font w:name="Consolas"><w:family w:val="modern"/><w:pitch w:val="fixed"/></w:font>' +
       '</w:fonts>',
-    'word/footer1.xml': footerXml(read.plainTitle, look),
+    'word/footer1.xml': footerXml(read.plainTitle, style),
   });
   return { data, fileName: fileNameFor(read, input.markdown) };
 }
@@ -724,14 +696,14 @@ async function buildFromTemplate(input: WordInput, template: Uint8Array): Promis
   return { data: await zipOffice(out), fileName: fileNameFor(read, input.markdown) };
 }
 
-/** Maakt het Word-bestand in de gekozen vormgeving. */
+/** Maakt het Word-bestand: in het sjabloon als dat er is, anders in deze opmaak. */
 export async function buildWordDocument(
   input: WordInput,
-  look: WordLook,
+  style: ExportStyle,
   template?: Uint8Array | null,
 ): Promise<WordResult> {
-  if (look === 'sjabloon' && template) return buildFromTemplate(input, template);
-  return buildOwn(input, look === 'eenvoudig' ? 'eenvoudig' : 'rijk');
+  if (template) return buildFromTemplate(input, template);
+  return buildOwn(input, style);
 }
 
 /** Controleert bij het toevoegen of een sjabloon bruikbaar is. Geeft een fout of null. */

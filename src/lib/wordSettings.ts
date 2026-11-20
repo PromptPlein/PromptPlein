@@ -1,4 +1,4 @@
-// De vormgeving van de Word-download en het eigen sjabloon. Allebei per browser,
+// De opmaak van de downloads en de eigen sjablonen (Word en PowerPoint). Per browser,
 // net als de chats: het sjabloon gaat nergens heen. De keuze staat in
 // localStorage, het sjabloon zelf in IndexedDB, want een sjabloon met logo is
 // al snel groter dan wat localStorage prettig vasthoudt.
@@ -10,6 +10,7 @@ const LOOK_KEY = 'opl.word.vormgeving';
 const DB_NAME = 'promptplein';
 const STORE = 'bestanden';
 const TEMPLATE_KEY = 'word-sjabloon';
+const PPTX_KEY = 'pptx-sjabloon';
 
 /** Groter dan dit is geen sjabloon meer maar een document met foto's. */
 export const MAX_TEMPLATE_BYTES = 10 * 1024 * 1024;
@@ -25,7 +26,7 @@ export interface StoredTemplate {
 function readLook(): WordLook {
   try {
     const value = localStorage.getItem(LOOK_KEY);
-    if (value === 'eenvoudig' || value === 'sjabloon') return value;
+    if (value === 'eenvoudig' || value === 'sjabloon' || value === 'eigen') return value;
   } catch {
     /* geen opslag: dan de standaard */
   }
@@ -108,7 +109,7 @@ export async function saveWordTemplate(name: string, bytes: Uint8Array): Promise
 export async function removeWordTemplate(): Promise<void> {
   await withStore('readwrite', (s) => s.delete(TEMPLATE_KEY));
   templateName = null;
-  if (look === 'sjabloon') setWordLook('rijk');
+  if (look === 'sjabloon' && !pptxName) setWordLook('rijk');
   else emit();
 }
 
@@ -118,6 +119,48 @@ export function useWordTemplateName(): string | null | undefined {
   if (name === undefined && !loading && typeof indexedDB !== 'undefined') {
     loading = true;
     void loadWordTemplate();
+  }
+  return name;
+}
+
+// --- Het eigen PowerPoint-sjabloon ---
+
+let pptxName: string | null | undefined;
+let pptxLoading = false;
+
+export async function loadPptxTemplate(): Promise<StoredTemplate | null> {
+  try {
+    const stored = await withStore<StoredTemplate | undefined>('readonly', (s) => s.get(PPTX_KEY));
+    pptxName = stored?.name ?? null;
+    emit();
+    return stored ?? null;
+  } catch {
+    pptxName = null;
+    emit();
+    return null;
+  }
+}
+
+export async function savePptxTemplate(name: string, bytes: Uint8Array): Promise<void> {
+  const value: StoredTemplate = { name, bytes, savedAt: new Date().toISOString() };
+  await withStore('readwrite', (s) => s.put(value, PPTX_KEY));
+  pptxName = name;
+  emit();
+}
+
+export async function removePptxTemplate(): Promise<void> {
+  await withStore('readwrite', (s) => s.delete(PPTX_KEY));
+  pptxName = null;
+  if (look === 'sjabloon' && !templateName) setWordLook('rijk');
+  else emit();
+}
+
+/** De naam van het PowerPoint-sjabloon: null als er geen is, undefined tijdens het laden. */
+export function usePptxTemplateName(): string | null | undefined {
+  const name = useSyncExternalStore(subscribe, () => pptxName, () => undefined);
+  if (name === undefined && !pptxLoading && typeof indexedDB !== 'undefined') {
+    pptxLoading = true;
+    void loadPptxTemplate();
   }
   return name;
 }

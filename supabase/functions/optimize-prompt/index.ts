@@ -154,7 +154,8 @@ type Mode =
   | 'image-options'
   | 'image-style'
   | 'image-style-save'
-  | 'image-option-apply';
+  | 'image-option-apply'
+  | 'export-style';
 
 /**
  * Eén beurt in een chatgesprek. De chat-modus stuurt de volledige (al
@@ -415,6 +416,10 @@ interface RequestBody {
   siblings?: Array<{ label: string; value: string }>;
   /** image-option-apply: de keuze die de medewerker onder het veld aanklikte. */
   keuze?: string;
+  /** export-style: hoe de medewerker zijn downloads opgemaakt wil hebben, in eigen woorden. */
+  opmaakWens?: string;
+  /** export-style: de opmaak die er al is, om alleen het genoemde te veranderen. */
+  huidigeOpmaak?: Record<string, unknown>;
   // 'analyze'-velden: toets de eigen prompt aan de eisen van het prompt framework.
   ownPrompt?: string;
   analyzeFields?: AnalyzeField[];
@@ -7113,6 +7118,8 @@ const MODE_MAX_TOKENS: Record<Mode, number> = {
   'image-style-save': 2048,
   // Eén veld van een beeldprompt opnieuw, met de gekozen keuze erin: hooguit twee zinnen.
   'image-option-apply': 768,
+  // Een opmaak voor de downloads: een letter, vier kleuren en één zin uitleg.
+  'export-style': 512,
   'meta-build': 4096,
   'fewshot-extract': 4096,
   plan: 3072,
@@ -10287,6 +10294,62 @@ function parseImageOptions(
 // in andere prompts worden geplakt (zoals de JSON-variant van de clarity-gate);
 // die zie en bewerk je als deel van die prompts.
 
+/**
+ * Een eigen opmaak voor de downloads (mode export-style). De medewerker beschrijft
+ * in gewone woorden hoe Word, PDF en PowerPoint eruit moeten zien; het model kiest
+ * een letter en vier kleuren. De rest van de opmaak rekent de browser daaruit,
+ * met een controle op contrast.
+ */
+let EXPORT_STYLE_SYSTEM_PROMPT = `Je zet een beschrijving van de opmaak van documenten om in een letter en vier kleuren.
+
+<taak>
+Lees hoe de medewerker zijn Word-documenten, PDF's en presentaties opgemaakt wil hebben. Kies één letter uit de lijst en vier kleuren als hexcode van zes tekens.
+</taak>
+
+<letters>
+Rijks Sans, Arial, Calibri, Aptos, Verdana, Segoe UI, Tahoma, Trebuchet MS, Georgia, Cambria, Times New Roman, Garamond
+</letters>
+
+<velden>
+- font: de letter voor alle tekst, uit de lijst hierboven. Noemt de medewerker een letter die er niet in staat, kies dan de letter uit de lijst die er het meest op lijkt.
+- heading: de kleur van de titel en de koppen.
+- accent: de kleur van lijnen, opsommingstekens en links.
+- tableHead: de achtergrondkleur van de kop van een tabel.
+- cover: de achtergrondkleur van de eerste dia van een presentatie. FFFFFF is een witte eerste dia.
+</velden>
+
+<regels>
+- Noemt de medewerker een kleur bij naam, kies dan een hexcode die precies die tint heeft. Een donkere kleur blijft donker, een zachte kleur blijft zacht.
+- Noemt de medewerker een organisatie, gebruik dan alleen kleuren die je zeker van die organisatie kent. Weet je ze niet zeker, kies dan rustige kleuren die passen bij de rest van de beschrijving.
+- Staat er een huidige opmaak bij, neem die dan over en verander alleen wat de medewerker noemt.
+- Noemt de medewerker een veld niet, kies dan een rustige kleur die past bij de kleuren die wel genoemd zijn.
+- Kies voor heading een tint die op wit goed leesbaar is.
+</regels>
+
+<taal>
+Schrijf de uitleg in natuurlijk Nederlands, geen vertaald Engels. Zet nooit een gedachtestreepje tussen zinsdelen; gebruik een komma of een dubbele punt.
+</taal>
+
+<uitvoer>
+Geef alleen geldige JSON terug, in precies deze vorm:
+{"font":"<letter uit de lijst>","heading":"<hexcode>","accent":"<hexcode>","tableHead":"<hexcode>","cover":"<hexcode>","uitleg":"<één zin over de gekozen opmaak>"}
+</uitvoer>`;
+
+/** De wens en de huidige opmaak, voor export-style. */
+function EXPORT_STYLE_USER_PROMPT(wens: string, huidig: Record<string, unknown> | undefined): string {
+  const fields = ['font', 'heading', 'accent', 'tableHead', 'cover'];
+  const current = huidig
+    ? fields
+        .filter((f) => typeof huidig[f] === 'string')
+        .map((f) => `${f}: ${String(huidig[f]).slice(0, 40)}`)
+        .join('\n')
+    : '';
+  return (
+    (current ? `<huidige_opmaak>\n${current}\n</huidige_opmaak>\n\n` : '') +
+    `<wens_van_de_medewerker>\n${wens}\n</wens_van_de_medewerker>`
+  );
+}
+
 interface PromptCatalogEntry {
   id: string;
   groep: string;
@@ -10349,6 +10412,7 @@ const PROMPT_CATALOG: PromptCatalogEntry[] = [
   { id: 'IMAGE_STYLE_FROM_EXAMPLE_PROMPT', groep: "Afbeelding", titel: "Voorbeeldbeeld beschrijven", uitleg: "Beschrijft bij Van een voorbeeld wat er op het toegevoegde beeld staat en hoe het gemaakt is: figuren, indeling in panelen, het verhaal per paneel, opbouw, emotie, techniek, lijnen, kleuren met code en licht. Het formaat meet de server zelf.", get: () => IMAGE_STYLE_FROM_EXAMPLE_PROMPT, set: (v) => { IMAGE_STYLE_FROM_EXAMPLE_PROMPT = v; } },
   { id: 'IMAGE_STYLE_SAVE_PROMPT', groep: "Afbeelding", titel: "Voorbeeld bewaren als vaste stijl", uitleg: "Zet bij Bewaar als vaste stijl de beschrijving van een voorbeeldbeeld om in een beeldstijl zonder het uiterlijk van wat erop staat. Formaat, indeling en het verhaal per paneel blijven. Die komt als instructie in een nieuw project.", get: () => IMAGE_STYLE_SAVE_PROMPT, set: (v) => { IMAGE_STYLE_SAVE_PROMPT = v; } },
   { id: 'IMAGE_EXAMPLE_BLOCK', groep: "Afbeelding", titel: "Voorbeeldbeeld meegeven", uitleg: "Het blok waarin de beschrijving van het voorbeeldbeeld meegaat bij invullen, opties en schrijven. {{voorbeeld}} wordt de beschrijving.", get: () => IMAGE_EXAMPLE_BLOCK, set: (v) => { IMAGE_EXAMPLE_BLOCK = v; } },
+  { id: 'EXPORT_STYLE_SYSTEM_PROMPT', groep: "Chat", titel: "Eigen opmaak van downloads", uitleg: "Bij Instellingen, Chat: zet de beschrijving van de medewerker om in een letter en vier kleuren voor Word, PDF en PowerPoint. De browser rekent daar de rest van de opmaak uit, met een controle op contrast.", get: () => EXPORT_STYLE_SYSTEM_PROMPT, set: (v) => { EXPORT_STYLE_SYSTEM_PROMPT = v; } },
   { id: 'IMAGE_OPTION_APPLY_SYSTEM_PROMPT', groep: "Afbeelding", titel: "Keuze verwerken in een veld", uitleg: "Na een klik op een keuze: herschrijft het veld met de keuze erin en houdt wat er al stond, zolang het niet botst.", get: () => IMAGE_OPTION_APPLY_SYSTEM_PROMPT, set: (v) => { IMAGE_OPTION_APPLY_SYSTEM_PROMPT = v; } },
   { id: 'IMAGE_OPTIONS_SYSTEM_PROMPT', groep: "Afbeelding", titel: "Keuzes per veld", uitleg: "Bedenkt bij Afbeelding per veld een vraag en drie keuzes die bij de soort beeld passen, als inspiratie onder het veld.", get: () => IMAGE_OPTIONS_SYSTEM_PROMPT, set: (v) => { IMAGE_OPTIONS_SYSTEM_PROMPT = v; } },
   { id: 'IMAGE_PREFILL_SYSTEM_PROMPT', groep: "Afbeelding", titel: "Velden van een beeldprompt invullen", uitleg: "Vult bij Afbeelding de negen velden in uit de wens van de medewerker en, bij Van een voorbeeld, uit de beschrijving van het voorbeeldbeeld. Eigen prompt, los van \"Velden voor-invullen\".", get: () => IMAGE_PREFILL_SYSTEM_PROMPT, set: (v) => { IMAGE_PREFILL_SYSTEM_PROMPT = v; } },
@@ -10699,7 +10763,9 @@ async function handleRequest(req: Request): Promise<Response> {
                                                               ? 'image-style-save'
                                                             : body.mode === 'image-option-apply'
                                                               ? 'image-option-apply'
-                                                              : 'generate';
+                                                              : body.mode === 'export-style'
+                                                                ? 'export-style'
+                                                                : 'generate';
     const order = buildOrder(body.preferredProvider);
     const temperature = clampTemp(body.temperature);
     // Uitvoerbudget van deze modus: bepaalt het max_tokens-plafond van elke
@@ -12917,6 +12983,58 @@ async function handleRequest(req: Request): Promise<Response> {
       }
       return new Response(
         JSON.stringify({ success: false, error: 'De keuze kon niet worden verwerkt' }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    // --- Een eigen opmaak voor de downloads ---
+    if (mode === 'export-style') {
+      const wens = (body.opmaakWens ?? '').trim().slice(0, 2000);
+      if (!wens) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'opmaakWens is verplicht' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+      const huidig = body.huidigeOpmaak && typeof body.huidigeOpmaak === 'object' ? body.huidigeOpmaak : undefined;
+      const userMessage = EXPORT_STYLE_USER_PROMPT(wens, huidig);
+      const hex = (value: unknown) => {
+        const v = typeof value === 'string' ? value.trim().replace(/^#/, '') : '';
+        return /^[0-9a-fA-F]{6}$/.test(v) ? v.toUpperCase() : null;
+      };
+      for (const candidate of order) {
+        try {
+          const raw = await JSON_PROVIDERS[candidate](
+            userMessage,
+            EXPORT_STYLE_SYSTEM_PROMPT,
+            0.3,
+            resolveModel(candidate, body.preferredProvider, body.preferredModel),
+            maxTokens,
+          );
+          const match = raw.match(/\{[\s\S]*\}/);
+          const parsed = match ? (JSON.parse(escapeRawControlChars(match[0])) as Record<string, unknown>) : null;
+          const heading = parsed ? hex(parsed.heading) : null;
+          if (parsed && heading) {
+            const opmaak = {
+              font: typeof parsed.font === 'string' ? parsed.font.trim().slice(0, 40) : 'Arial',
+              heading,
+              accent: hex(parsed.accent) ?? heading,
+              tableHead: hex(parsed.tableHead) ?? heading,
+              cover: hex(parsed.cover) ?? 'FFFFFF',
+            };
+            const uitleg = typeof parsed.uitleg === 'string' ? stripEmphasis(parsed.uitleg).trim().slice(0, 300) : '';
+            return new Response(
+              JSON.stringify({ success: true, opmaak, uitleg, provider: candidate }),
+              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            );
+          }
+          console.warn(`${candidate} (export-style) gaf geen bruikbare opmaak`);
+        } catch (providerErr) {
+          console.error(`${candidate} (export-style) mislukt, probeer volgende:`, providerErr);
+        }
+      }
+      return new Response(
+        JSON.stringify({ success: false, error: 'De opmaak kon niet worden gemaakt' }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }

@@ -773,6 +773,22 @@ tellen in analytics als `export_file` met het formaat erbij. Test PowerPoint doo
 te openen: kopieer het naar `~/Library/Containers/com.microsoft.Powerpoint/Data/tmp` en laat
 PowerPoint via AppleScript een PDF bewaren.
 
+De opmaak kies je bij Instellingen, Chat (Opmaak van downloads) of in het menu Downloaden:
+Rijkshuisstijl, Eenvoudig, Mijn eigen opmaak of Mijn sjablonen. Alle drie de documentformaten
+lezen één opmaak (`ExportStyle` in `exportStyle.ts`); Rijkshuisstijl en Eenvoudig zijn daar vaste
+varianten van. Bij een eigen opmaak beschrijft de gebruiker in gewone woorden hoe het eruit moet
+zien en maakt mode `export-style` daar een letter en vier kleuren van (koppen, lijnen, tabelkop,
+eerste dia). De browser rekent de rest uit en maakt te lichte kleuren donkerder tot ze op wit
+leesbaar zijn (`styleFrom`); de gebruiker ziet een voorbeeld en kan letter en kleuren bijstellen.
+Staat er al een opmaak, dan verandert de AI alleen wat de gebruiker noemt. De keuze staat per
+browser in localStorage (`opl.export.eigen`). Bij Mijn sjablonen kan er een Word- en een
+PowerPoint-sjabloon zijn, allebei in IndexedDB. Een PowerPoint-sjabloon (`pptxTemplate.ts`) houdt
+alles van het sjabloon: de voorbeelddia's gaan eruit (ook secties en eigen diavoorstellingen, die
+anders een reparatiemelding geven) en de nieuwe dia's gebruiken de indelingen Titeldia en Titel en
+inhoud, zonder eigen letter of kleur. Een formaat zonder eigen sjabloon, en de PDF altijd, krijgt de
+kleuren en de letter uit het thema van het andere sjabloon (`choiceFromTemplate`). De PDF kent alleen
+Helvetica en Times: een schreefletter wordt Times.
+
 Het document gebruikt de stijlen van Word zelf: Titel, Kop 1 tot en met 4 en Lijstalinea, zodat
 het navigatievenster en een inhoudsopgave meteen werken. De systeemprompt in Beheer verbiedt
 kopjes en vet, dus het model schrijft een kop vaak als kale korte regel. `readAnswer`

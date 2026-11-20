@@ -8,20 +8,63 @@ import { recommendFormat, TABLE_FORMATS, type ExportFormat } from '@/lib/exportR
 import useDismiss from '@/lib/useDismiss';
 import { Link } from 'react-router-dom';
 import type { WordLook } from '@/lib/wordExport';
-import { loadWordTemplate, setWordLook, useWordLook, useWordTemplateName } from '@/lib/wordSettings';
+import {
+  choiceFromTemplate,
+  EENVOUDIG_STYLE,
+  getOwnStyle,
+  RIJK_STYLE,
+  styleFrom,
+  useOwnStyle,
+  type ExportStyle,
+} from '@/lib/exportStyle';
+import {
+  loadPptxTemplate,
+  loadWordTemplate,
+  setWordLook,
+  useWordLook,
+  usePptxTemplateName,
+  useWordTemplateName,
+} from '@/lib/wordSettings';
 import { trackEvent } from '@/services/analyticsService';
 import type { ChatSource } from '@/types';
 
 const BUTTON_CLASS =
   'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-rijksblauw-700 disabled:opacity-60 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-rijksblauw-200';
 
-const LOOK_LABEL = { rijk: 'Rijkshuisstijl', eenvoudig: 'eenvoudige opmaak', sjabloon: 'je eigen sjabloon' };
+const LOOK_LABEL: Record<WordLook, string> = {
+  rijk: 'Rijkshuisstijl',
+  eenvoudig: 'eenvoudige opmaak',
+  eigen: 'je eigen opmaak',
+  sjabloon: 'je eigen sjabloon',
+};
 
 const LOOK_CHOICES: { value: WordLook; label: string }[] = [
   { value: 'rijk', label: 'Rijkshuisstijl' },
   { value: 'eenvoudig', label: 'Eenvoudig' },
-  { value: 'sjabloon', label: 'Mijn eigen sjabloon' },
+  { value: 'eigen', label: 'Mijn eigen opmaak' },
+  { value: 'sjabloon', label: 'Mijn sjablonen' },
 ];
+
+/**
+ * De opmaak voor deze download, en de sjablonen als die er zijn. Bij Mijn
+ * sjablonen gebruikt elk formaat zijn eigen sjabloon; heeft het er geen, dan
+ * krijgt het de kleuren en de letter uit het andere sjabloon.
+ */
+async function resolveLook(look: WordLook): Promise<{ style: ExportStyle; word: Uint8Array | null; pptx: Uint8Array | null }> {
+  if (look === 'eenvoudig') return { style: EENVOUDIG_STYLE, word: null, pptx: null };
+  if (look === 'eigen') {
+    const own = getOwnStyle();
+    return { style: own ? styleFrom(own.choice) : RIJK_STYLE, word: null, pptx: null };
+  }
+  if (look === 'sjabloon') {
+    const [word, pptx] = await Promise.all([loadWordTemplate(), loadPptxTemplate()]);
+    const source = word?.bytes ?? pptx?.bytes;
+    const choice = source ? await choiceFromTemplate(source) : null;
+    if (!word && !pptx) toast('Je sjabloon is niet gevonden. Het bestand heeft de Rijkshuisstijl.');
+    return { style: choice ? styleFrom(choice) : RIJK_STYLE, word: word?.bytes ?? null, pptx: pptx?.bytes ?? null };
+  }
+  return { style: RIJK_STYLE, word: null, pptx: null };
+}
 
 /**
  * De opmaak van het Word-document, meteen in het menu te kiezen. Een eigen
@@ -30,13 +73,17 @@ const LOOK_CHOICES: { value: WordLook; label: string }[] = [
  */
 function WordLookChoice({ look }: { look: WordLook }) {
   const templateName = useWordTemplateName();
+  const pptxName = usePptxTemplateName();
+  const own = useOwnStyle();
   const name = useId();
-  const choices = LOOK_CHOICES.filter((c) => c.value !== 'sjabloon' || templateName);
+  const choices = LOOK_CHOICES.filter(
+    (c) => (c.value !== 'sjabloon' || templateName || pptxName) && (c.value !== 'eigen' || own),
+  );
   return (
     <fieldset className="mt-1 border-t border-slate-200 px-2.5 pb-1 pt-2 dark:border-slate-700">
-      <legend className="sr-only">Opmaak van het Word-document</legend>
+      <legend className="sr-only">Opmaak van Word, PDF en PowerPoint</legend>
       <p aria-hidden="true" className="text-xs font-medium text-slate-500 dark:text-slate-400">
-        Opmaak van Word
+        Opmaak
       </p>
       {choices.map((choice) => (
         <label key={choice.value} className="flex cursor-pointer items-center gap-2 py-1 text-sm text-slate-700 dark:text-slate-200">
@@ -55,7 +102,7 @@ function WordLookChoice({ look }: { look: WordLook }) {
         to="/instellingen/chat#word-document"
         className="opl-raak mt-1 inline-block text-xs font-medium text-rijksblauw-700 underline hover:no-underline dark:text-rijksblauw-200"
       >
-        {templateName ? 'Ander sjabloon kiezen' : 'Eigen Word-sjabloon gebruiken'}
+        {own || templateName || pptxName ? 'Opmaak aanpassen' : 'Eigen opmaak of sjabloon'}
       </Link>
     </fieldset>
   );
@@ -71,21 +118,15 @@ function useDocumentExport(text: string, sources?: ChatSource[]) {
   const look = useWordLook();
   const withTable = useMemo(() => hasTable(text), [text]);
   const [busy, setBusy] = useState<ExportFormat | null>(null);
-  // PDF en PowerPoint kennen geen Word-sjabloon; die krijgen dan de Rijkshuisstijl.
-  const plainLook = look === 'eenvoudig' ? 'eenvoudig' : 'rijk';
-
   async function build(format: ExportFormat): Promise<{ data: Uint8Array; fileName: string; mime: string } | null> {
     const input = { markdown: text, sources };
+    const needsStyle = format === 'word' || format === 'pdf' || format === 'pptx';
+    const { style, word, pptx } = needsStyle ? await resolveLook(look) : { style: RIJK_STYLE, word: null, pptx: null };
     switch (format) {
       case 'word': {
         const { buildWordDocument, DOCX_MIME } = await import('@/lib/wordExport');
-        const template = look === 'sjabloon' ? await loadWordTemplate() : null;
-        if (look === 'sjabloon' && !template) {
-          toast('Je sjabloon is niet gevonden. Het document heeft de Rijkshuisstijl.');
-        }
-        const effective = template ? 'sjabloon' : look === 'sjabloon' ? 'rijk' : look;
-        const result = await buildWordDocument(input, effective, template?.bytes);
-        void trackEvent({ event_type: 'export_word', metadata: { vormgeving: effective } });
+        const result = await buildWordDocument(input, style, word);
+        void trackEvent({ event_type: 'export_word', metadata: { vormgeving: word ? 'sjabloon' : look } });
         return { ...result, mime: DOCX_MIME };
       }
       case 'excel': {
@@ -94,9 +135,9 @@ function useDocumentExport(text: string, sources?: ChatSource[]) {
         return result && { ...result, mime: XLSX_MIME };
       }
       case 'pdf':
-        return (await import('@/lib/pdfExport')).buildPdf(input, plainLook);
+        return (await import('@/lib/pdfExport')).buildPdf(input, style);
       case 'pptx':
-        return (await import('@/lib/pptxExport')).buildPptx(input, plainLook);
+        return (await import('@/lib/pptxExport')).buildPptx(input, style, pptx);
       case 'csv':
         return (await import('@/lib/textExport')).buildCsv(text);
       case 'md':
@@ -115,7 +156,7 @@ function useDocumentExport(text: string, sources?: ChatSource[]) {
       }
     } catch (error) {
       toast.error(
-        error instanceof Error && error.message && format === 'word'
+        error instanceof Error && error.message && (format === 'word' || format === 'pptx')
           ? error.message
           : `Het ${FORMATS[format].noun} is niet gelukt.`,
       );
@@ -138,7 +179,7 @@ const FORMATS: Record<ExportFormat, { file: string; noun: string; icon: typeof F
 
 /** Wat er in het menu onder elk formaat staat. */
 function formatHint(format: ExportFormat, look: keyof typeof LOOK_LABEL): string {
-  const plain = look === 'eenvoudig' ? 'eenvoudige opmaak' : 'Rijkshuisstijl';
+  const plain = LOOK_LABEL[look];
   switch (format) {
     case 'word':
       return `tekst met opmaak, in ${LOOK_LABEL[look]}`;
@@ -374,7 +415,7 @@ export function ExportCard({
 
 const READY: Record<ExportFormat, (look: keyof typeof LOOK_LABEL) => string> = {
   word: (look) => `Je Word-document staat klaar, in ${LOOK_LABEL[look]}.`,
-  pdf: (look) => `Je PDF staat klaar, in ${look === 'eenvoudig' ? 'eenvoudige opmaak' : 'Rijkshuisstijl'}.`,
+  pdf: (look) => `Je PDF staat klaar, in ${LOOK_LABEL[look]}.`,
   pptx: () => 'Je presentatie staat klaar: een titeldia en een dia per kopje.',
   excel: () => 'Je Excel-bestand staat klaar. Elke tabel krijgt een eigen tabblad.',
   csv: () => 'Je CSV-bestand staat klaar, met een puntkomma tussen de kolommen. Meer tabellen gaan samen in een zip.',

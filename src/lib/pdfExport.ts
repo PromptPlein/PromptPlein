@@ -2,14 +2,15 @@
 // bibliotheek. Een PDF is tekst met een lijst van posities; het enige lastige is
 // regels afbreken, en daarvoor staan hieronder de letterbreedtes van Helvetica.
 // Rijks Sans gaat er bewust niet in: het lettertype is niet vrij, en een PDF zou
-// het moeten meenemen. Helvetica zit in elke PDF-lezer.
+// het moeten meenemen. Helvetica en Times zitten in elke PDF-lezer; een eigen
+// opmaak met een schreefletter krijgt Times, de rest Helvetica.
 
 import { documentBaseName, readAnswer } from './answerDocument';
 import { inlineRuns, type Block, type InlineRun, type ListNode } from './markdownBlocks';
+import { isSerif, type ExportStyle } from './exportStyle';
 import { todayLong } from './officeXml';
 import type { ExportFile, ExportInput } from './textExport';
 
-export type PdfLook = 'rijk' | 'eenvoudig';
 
 // --- Letters ---
 
@@ -21,14 +22,24 @@ const BOLD = '278,333,474,556,556,889,722,238,333,333,389,584,278,333,278,278,55
   .split(',')
   .map(Number);
 
+/** Dezelfde tabellen voor Times: gewoon, vet, cursief en vet cursief. */
+const TIMES = [
+  '250,333,408,500,500,833,778,180,333,333,500,564,250,333,250,278,500,500,500,500,500,500,500,500,500,500,278,278,564,564,564,444,921,722,667,667,722,611,556,722,722,333,389,722,611,889,722,722,556,722,667,556,611,722,722,944,722,722,611,333,278,333,469,500,333,444,500,444,500,444,333,500,500,278,278,500,278,778,500,500,500,500,333,389,278,500,500,722,500,500,444,480,200,480,541,0,500,0,333,500,444,1000,500,500,333,1000,556,333,889,0,611,0,0,333,333,444,444,350,500,1000,333,980,389,333,722,0,444,722,250,333,500,500,500,500,200,500,333,760,276,500,564,333,760,500,400,549,300,300,333,576,453,333,333,300,310,500,750,750,750,444,722,722,722,722,722,722,889,667,611,611,611,611,333,333,333,333,722,722,722,722,722,722,722,564,722,722,722,722,722,722,556,500,444,444,444,444,444,444,667,444,444,444,444,444,278,278,278,278,500,500,500,500,500,500,500,549,500,500,500,500,500,500,500,500',
+  '250,333,555,500,500,1000,833,278,333,333,500,570,250,333,250,278,500,500,500,500,500,500,500,500,500,500,333,333,570,570,570,500,930,722,667,722,722,667,611,778,778,389,500,778,667,944,722,778,611,778,722,556,667,722,722,1000,722,722,667,333,278,333,581,500,333,500,556,444,556,444,333,500,556,278,333,556,278,833,556,500,556,556,444,389,333,556,500,722,500,500,444,394,220,394,520,0,500,0,333,500,500,1000,500,500,333,1000,556,333,1000,0,667,0,0,333,333,500,500,350,500,1000,333,1000,389,333,722,0,444,722,250,333,500,500,500,500,220,500,333,747,300,500,570,333,747,500,400,549,300,300,333,576,540,333,333,300,330,500,750,750,750,500,722,722,722,722,722,722,1000,722,667,667,667,667,389,389,389,389,722,722,778,778,778,778,778,570,778,722,722,722,722,722,611,556,500,500,500,500,500,500,722,444,444,444,444,444,278,278,278,278,500,556,500,500,500,500,500,549,500,556,556,556,556,500,556,500',
+  '250,333,420,500,500,833,778,214,333,333,500,675,250,333,250,278,500,500,500,500,500,500,500,500,500,500,333,333,675,675,675,500,920,611,611,667,722,611,611,722,722,333,444,667,556,833,667,722,611,722,611,500,556,722,611,833,611,556,556,389,278,389,422,500,333,500,500,444,500,444,278,500,500,278,278,444,278,722,500,500,500,500,389,389,278,500,444,667,444,444,389,400,275,400,541,0,500,0,333,500,556,889,500,500,333,1000,500,333,944,0,556,0,0,333,333,556,556,350,500,889,333,980,389,333,667,0,389,556,250,389,500,500,500,500,275,500,333,760,276,500,675,333,760,500,400,549,300,300,333,576,523,250,333,300,310,500,750,750,750,500,611,611,611,611,611,611,889,667,611,611,611,611,333,333,333,333,722,667,722,722,722,722,722,675,722,722,722,722,722,556,611,500,500,500,500,500,500,500,667,444,444,444,444,444,278,278,278,278,500,500,500,500,500,500,500,549,500,500,500,500,500,444,500,444',
+  '250,389,555,500,500,833,778,278,333,333,500,570,250,333,250,278,500,500,500,500,500,500,500,500,500,500,333,333,570,570,570,500,832,667,667,667,722,667,667,722,778,389,500,667,611,889,722,722,611,722,667,556,611,722,667,889,667,611,611,333,278,333,570,500,333,500,500,444,500,444,333,500,556,278,278,500,278,778,556,500,500,500,389,389,278,556,444,667,500,444,389,348,220,348,570,0,500,0,333,500,500,1000,500,500,333,1000,556,333,944,0,611,0,0,333,333,500,500,350,500,1000,333,1000,389,333,722,0,389,611,250,389,500,500,500,500,220,500,333,747,266,500,606,333,747,500,400,549,300,300,333,576,500,250,333,300,300,500,750,750,750,500,667,667,667,667,667,667,944,667,667,667,667,667,389,389,389,389,722,722,722,722,722,722,722,570,722,722,722,722,722,611,611,500,500,500,500,500,500,500,722,444,444,444,444,444,278,278,278,278,500,556,500,500,500,500,500,549,500,556,556,556,556,444,500,444',
+].map((row) => row.split(',').map(Number));
+
 type FontKey = 'F1' | 'F2' | 'F3' | 'F4' | 'F5';
-const FONTS: Record<FontKey, string> = {
-  F1: 'Helvetica',
-  F2: 'Helvetica-Bold',
-  F3: 'Helvetica-Oblique',
-  F4: 'Helvetica-BoldOblique',
-  F5: 'Courier',
+type Family = 'helvetica' | 'times';
+const FONT_NAMES: Record<Family, Record<FontKey, string>> = {
+  helvetica: { F1: 'Helvetica', F2: 'Helvetica-Bold', F3: 'Helvetica-Oblique', F4: 'Helvetica-BoldOblique', F5: 'Courier' },
+  times: { F1: 'Times-Roman', F2: 'Times-Bold', F3: 'Times-Italic', F4: 'Times-BoldItalic', F5: 'Courier' },
 };
+const FONT_KEYS: FontKey[] = ['F1', 'F2', 'F3', 'F4', 'F5'];
+
+/** De letterfamilie van de PDF die nu gemaakt wordt; het opmaken loopt in één keer door. */
+let family: Family = 'helvetica';
 
 /** De tekens 128 tot 159 van WinAnsi, met hun Unicode-waarde. */
 const WIN_ANSI_HIGH: Record<number, number> = {
@@ -63,7 +74,12 @@ function encode(text: string): number[] {
 
 function widthOf(text: string, font: FontKey, size: number): number {
   if (font === 'F5') return encode(text).length * 600 * size / 1000;
-  const table = font === 'F2' || font === 'F4' ? BOLD : REGULAR;
+  const table =
+    family === 'times'
+      ? TIMES[{ F1: 0, F2: 1, F3: 2, F4: 3 }[font]]
+      : font === 'F2' || font === 'F4'
+        ? BOLD
+        : REGULAR;
   let w = 0;
   for (const code of encode(text)) w += table[code - 32] || 556;
   return (w * size) / 1000;
@@ -89,50 +105,7 @@ function pdfUnicode(text: string): string {
 
 // --- Kleuren ---
 
-interface Palette {
-  heading: string;
-  subheading: string;
-  link: string;
-  text: string;
-  muted: string;
-  border: string;
-  tableHeadFill: string;
-  tableHeadText: string;
-  tableBand: string | null;
-  codeFill: string;
-  quoteBar: string;
-  titleRule: string;
-}
-
-const RIJK: Palette = {
-  heading: '154273',
-  subheading: '01689B',
-  link: '01689B',
-  text: '1E293B',
-  muted: '64748B',
-  border: 'CBD5E1',
-  tableHeadFill: '154273',
-  tableHeadText: 'FFFFFF',
-  tableBand: 'F1F5F9',
-  codeFill: 'F1F5F9',
-  quoteBar: '01689B',
-  titleRule: '154273',
-};
-
-const EENVOUDIG: Palette = {
-  heading: '1F2937',
-  subheading: '374151',
-  link: '1D4ED8',
-  text: '111827',
-  muted: '6B7280',
-  border: 'D1D5DB',
-  tableHeadFill: 'F3F4F6',
-  tableHeadText: '111827',
-  tableBand: null,
-  codeFill: 'F3F4F6',
-  quoteBar: '9CA3AF',
-  titleRule: 'D1D5DB',
-};
+type Palette = ExportStyle;
 
 function rgb(hex: string): string {
   const n = parseInt(hex, 16);
@@ -474,9 +447,11 @@ function block(layout: Layout, b: Block) {
 }
 
 /** Het chatantwoord als PDF, in de kleuren van de gekozen vormgeving. */
-export async function buildPdf(input: ExportInput, look: PdfLook): Promise<ExportFile> {
+export async function buildPdf(input: ExportInput, style: ExportStyle): Promise<ExportFile> {
   const read = readAnswer(input.markdown);
-  const palette = look === 'rijk' ? RIJK : EENVOUDIG;
+  const palette = style;
+  family = isSerif(style.font) ? 'times' : 'helvetica';
+  const fonts = FONT_NAMES[family];
   const layout = new Layout(palette);
 
   if (read.title) {
@@ -512,7 +487,7 @@ export async function buildPdf(input: ExportInput, look: PdfLook): Promise<Expor
   const total = layout.pages.length;
   layout.pages.forEach((page, i) => {
     const top = PAGE_H - 40;
-    if (look === 'rijk') {
+    if (style.footerRule) {
       page.ops.push(`${rgb(palette.border)} RG 0.5 w ${MARGIN_X} ${(PAGE_H - top + 12).toFixed(2)} m ${MARGIN_X + TEXT_W} ${(PAGE_H - top + 12).toFixed(2)} l S`);
     }
     const label = `Pagina ${i + 1} van ${total}`;
@@ -523,12 +498,12 @@ export async function buildPdf(input: ExportInput, look: PdfLook): Promise<Expor
     );
   });
 
-  const data = await writePdf(layout, read.plainTitle || 'Antwoord uit PromptPlein');
+  const data = await writePdf(layout, read.plainTitle || 'Antwoord uit PromptPlein', fonts);
   return { data, fileName: `${documentBaseName(read, input.markdown)}.pdf`, mime: 'application/pdf' };
 }
 
 /** Schrijft de objecten, de inhoud (ingepakt) en de verwijzingstabel. */
-async function writePdf(layout: Layout, title: string): Promise<Uint8Array> {
+async function writePdf(layout: Layout, title: string, fonts: Record<FontKey, string>): Promise<Uint8Array> {
   const { zlibSync, strToU8 } = await import('fflate');
   const chunks: Uint8Array[] = [];
   const offsets: number[] = [];
@@ -550,7 +525,7 @@ async function writePdf(layout: Layout, title: string): Promise<Uint8Array> {
   push(ascii('%PDF-1.4\n'));
   push(new Uint8Array([37, 226, 227, 207, 211, 10]));
 
-  const fontIds = Object.keys(FONTS).map((_, i) => 3 + i);
+  const fontIds = FONT_KEYS.map((_, i) => 3 + i);
   let next = 3 + fontIds.length;
   const pageIds: number[] = [];
   const pageObjects: (() => void)[] = [];
@@ -560,13 +535,11 @@ async function writePdf(layout: Layout, title: string): Promise<Uint8Array> {
     const linkIds = page.links.map(() => next++);
     pageIds.push(pageId);
     pageObjects.push(() => {
-      const fonts = Object.keys(FONTS)
-        .map((key, i) => `/${key} ${fontIds[i]} 0 R`)
-        .join(' ');
+      const fontRefs = FONT_KEYS.map((key, i) => `/${key} ${fontIds[i]} 0 R`).join(' ');
       const annots = linkIds.length ? ` /Annots [${linkIds.map((id) => `${id} 0 R`).join(' ')}]` : '';
       object(
         pageId,
-        `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PAGE_W} ${PAGE_H}] /Resources << /Font << ${fonts} >> >> /Contents ${contentId} 0 R${annots} >>`,
+        `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PAGE_W} ${PAGE_H}] /Resources << /Font << ${fontRefs} >> >> /Contents ${contentId} 0 R${annots} >>`,
       );
       const stream = zlibSync(ascii(page.ops.join('\n')), { level: 6 });
       object(contentId, `<< /Length ${stream.length} /Filter /FlateDecode >>`, stream);
@@ -583,7 +556,7 @@ async function writePdf(layout: Layout, title: string): Promise<Uint8Array> {
 
   object(1, '<< /Type /Catalog /Pages 2 0 R /Lang (nl-NL) /ViewerPreferences << /DisplayDocTitle true >> >>');
   object(2, `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(' ')}] /Count ${pageIds.length} >>`);
-  Object.values(FONTS).forEach((name, i) => {
+  FONT_KEYS.map((key) => fonts[key]).forEach((name, i) => {
     const encoding = name === 'Courier' ? '' : ' /Encoding /WinAnsiEncoding';
     object(fontIds[i], `<< /Type /Font /Subtype /Type1 /BaseFont /${name}${encoding} >>`);
   });

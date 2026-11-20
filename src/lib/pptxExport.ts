@@ -7,10 +7,9 @@
 
 import { documentBaseName, readAnswer } from './answerDocument';
 import { inlineRuns, type Block, type InlineRun, type ListNode } from './markdownBlocks';
+import { contrast, type ExportStyle } from './exportStyle';
 import { todayLong, XML_HEAD, xmlEscape, zipOffice } from './officeXml';
 import type { ExportFile, ExportInput } from './textExport';
-
-export type PptxLook = 'rijk' | 'eenvoudig';
 
 export const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 
@@ -48,43 +47,29 @@ interface Palette {
   font: string;
 }
 
-const RIJK: Palette = {
-  title: '154273',
-  text: '1E293B',
-  muted: '64748B',
-  link: '01689B',
-  accent: '154273',
-  border: 'CBD5E1',
-  headFill: '154273',
-  headText: 'FFFFFF',
-  band: 'F1F5F9',
-  codeFill: 'F1F5F9',
-  coverFill: '154273',
-  coverText: 'FFFFFF',
-  coverMuted: 'DCE3EA',
-  font: 'Rijks Sans',
-};
-
-const EENVOUDIG: Palette = {
-  title: '1F2937',
-  text: '111827',
-  muted: '6B7280',
-  link: '1D4ED8',
-  accent: 'D1D5DB',
-  border: 'D1D5DB',
-  headFill: 'F3F4F6',
-  headText: '111827',
-  band: null,
-  codeFill: 'F3F4F6',
-  coverFill: 'FFFFFF',
-  coverText: '111827',
-  coverMuted: '6B7280',
-  font: 'Calibri',
-};
+/** De kleuren van de dia's, uit de gedeelde opmaak. */
+function paletteOf(style: ExportStyle): Palette {
+  return {
+    title: style.heading,
+    text: style.text,
+    muted: style.muted,
+    link: style.link,
+    accent: style.accent,
+    border: style.border,
+    headFill: style.tableHeadFill,
+    headText: style.tableHeadText,
+    band: style.tableBand,
+    codeFill: style.codeFill,
+    coverFill: style.coverFill,
+    coverText: style.coverText,
+    coverMuted: style.coverMuted,
+    font: style.font,
+  };
+}
 
 // --- Wat er op een dia staat ---
 
-interface TextItem {
+export interface TextItem {
   kind: 'text';
   text: string;
   level: number;
@@ -96,14 +81,14 @@ interface TextItem {
   muted?: boolean;
 }
 
-interface TableItem {
+export interface TableItem {
   kind: 'table';
   header: string[];
   align: (string | undefined)[];
   rows: string[][];
 }
 
-interface SlideSpec {
+export interface SlideSpec {
   title: string;
   items: TextItem[];
   table?: TableItem;
@@ -112,12 +97,22 @@ interface SlideSpec {
 const BODY_SIZE = 18;
 const CODE_SIZE = 12;
 
+/** Hoeveel er op een dia past: breedte van het tekstvak (EMU), hoogte (pt) en lettergrootte. */
+export interface SlideMetrics {
+  width: number;
+  budget: number;
+  bodySize: number;
+  codeSize: number;
+}
+
+const DEFAULT_METRICS: SlideMetrics = { width: CONTENT_W, budget: BODY_BUDGET, bodySize: BODY_SIZE, codeSize: CODE_SIZE };
+
 /** Hoeveel punten hoog een tekstregel op de dia wordt, geschat op het aantal tekens. */
-function itemHeight(item: TextItem): number {
-  const size = item.code ? CODE_SIZE : BODY_SIZE;
+function itemHeight(item: TextItem, m: SlideMetrics): number {
+  const size = item.code ? m.codeSize : m.bodySize;
   const plain = inlineRuns(item.text).map((r) => r.text).join('');
   const indent = item.level * 0.5 * 72 + (item.bullet === 'none' ? 0 : 0.375 * 72);
-  const width = CONTENT_W / PT - indent;
+  const width = m.width / PT - indent;
   const charsPerLine = Math.max(Math.floor(width / (size * (item.code ? 0.6 : 0.52))), 10);
   const lines = item.code ? 1 : Math.max(Math.ceil(plain.length / charsPerLine), 1);
   return lines * size * 1.2 + (item.code ? 0 : 6);
@@ -137,7 +132,7 @@ function listItems(list: ListNode, level: number, out: TextItem[]) {
 }
 
 /** Deelt het antwoord op in dia's: een nieuwe dia bij elke kop van niveau 1 of 2. */
-function planSlides(input: ExportInput): { title: string; slides: SlideSpec[] } {
+export function planSlides(input: ExportInput, m: SlideMetrics = DEFAULT_METRICS): { title: string; slides: SlideSpec[] } {
   const read = readAnswer(input.markdown);
   const docTitle = read.plainTitle || 'Antwoord uit PromptPlein';
   const sections: { title: string; blocks: (Block | { kind: 'code'; code: string } | { kind: 'html' })[] }[] = [
@@ -184,9 +179,9 @@ function planSlides(input: ExportInput): { title: string; slides: SlideSpec[] } 
       return current;
     };
     const add = (item: TextItem) => {
-      const h = itemHeight(item);
+      const h = itemHeight(item, m);
       let slide = current as SlideSpec | null;
-      if (!slide || slide.table || (used + h > BODY_BUDGET && slide.items.length)) slide = fresh();
+      if (!slide || slide.table || (used + h > m.budget && slide.items.length)) slide = fresh();
       slide.items.push(item);
       used += h;
     };
@@ -223,7 +218,7 @@ function planSlides(input: ExportInput): { title: string; slides: SlideSpec[] } 
         case 'table': {
           // Een tabel krijgt een eigen dia; lange tabellen lopen door, met de kop opnieuw.
           const size = tableFontSize(b.header.length);
-          const widths = columnWidths(b.header, b.rows);
+          const widths = columnWidths(b.header, b.rows, m.width);
           const rowHeight = (row: string[]) =>
             Math.max(
               ...widths.map((w, c) => {
@@ -245,7 +240,7 @@ function planSlides(input: ExportInput): { title: string; slides: SlideSpec[] } 
           };
           for (const row of b.rows) {
             const h = rowHeight(row);
-            if (rows.length && height + h > BODY_BUDGET + 20) flush();
+            if (rows.length && height + h > m.budget + 20) flush();
             rows.push(row);
             height += h;
           }
@@ -260,28 +255,34 @@ function planSlides(input: ExportInput): { title: string; slides: SlideSpec[] } 
   return { title: docTitle, slides };
 }
 
-function tableFontSize(cols: number): number {
+export function tableFontSize(cols: number): number {
   return cols > 6 ? 11 : cols > 4 ? 12 : 14;
 }
 
-function columnWidths(header: string[], rows: string[][]): number[] {
+export function columnWidths(header: string[], rows: string[][], width = CONTENT_W): number[] {
   const cols = header.length;
+  const size = tableFontSize(cols);
+  // Nooit smaller dan het langste woord, anders breekt "Budget" midden in het woord.
+  const longestWord = header.map((h, c) =>
+    Math.max(...[h, ...rows.map((r) => r[c] ?? '')].flatMap((t) => inlineRuns(t).map((r) => r.text).join('').split(/\s+/)).map((w) => w.length)),
+  );
+  const wordMin = longestWord.map((n) => Math.min((n * size * 0.62 + 16) * PT, width / 2));
   const want = header.map((h, c) => {
     const lengths = [h, ...rows.map((r) => r[c] ?? '')].map((t) => inlineRuns(t).map((r) => r.text).join('').length);
     return Math.min(Math.max(...lengths, 4), 60);
   });
   const total = want.reduce((a, b) => a + b, 0);
-  const min = CONTENT_W / cols / 2.5;
-  const raw = want.map((w) => Math.max((w / total) * CONTENT_W, min));
+  const min = width / cols / 2.5;
+  const raw = want.map((w, c) => Math.max((w / total) * width, min, wordMin[c]));
   const sum = raw.reduce((a, b) => a + b, 0);
-  const widths = raw.map((w) => Math.floor((w / sum) * CONTENT_W));
-  widths[widths.length - 1] += CONTENT_W - widths.reduce((a, b) => a + b, 0);
+  const widths = raw.map((w) => Math.floor((w / sum) * width));
+  widths[widths.length - 1] += width - widths.reduce((a, b) => a + b, 0);
   return widths;
 }
 
 // --- XML ---
 
-class Links {
+export class Links {
   readonly targets: string[] = [];
   id(url: string): string {
     let i = this.targets.indexOf(url);
@@ -318,7 +319,7 @@ function itemXml(item: TextItem, palette: Palette, links: Links): string {
   const marL = item.level * 457200 + (item.bullet === 'none' ? 0 : indent);
   const bullet =
     item.bullet === 'dot'
-      ? `<a:buClr><a:srgbClr val="${palette.accent === 'D1D5DB' ? palette.muted : palette.accent}"/></a:buClr><a:buFont typeface="Arial"/><a:buChar char="${item.level % 2 ? '–' : '•'}"/>`
+      ? `<a:buClr><a:srgbClr val="${contrast(palette.accent, 'FFFFFF') < 3 ? palette.text : palette.accent}"/></a:buClr><a:buFont typeface="Arial"/><a:buChar char="${item.level % 2 ? '–' : '•'}"/>`
       : item.bullet === 'num'
         ? `<a:buClr><a:srgbClr val="${palette.text}"/></a:buClr><a:buFont typeface="+mj-lt"/><a:buAutoNum type="arabicPeriod" startAt="${item.number ?? 1}"/>`
         : '<a:buNone/>';
@@ -533,8 +534,9 @@ function layoutXml(): string {
 }
 
 /** Het chatantwoord als PowerPoint, in de kleuren van de gekozen vormgeving. */
-export async function buildPptx(input: ExportInput, look: PptxLook): Promise<ExportFile> {
-  const palette = look === 'rijk' ? RIJK : EENVOUDIG;
+export async function buildPptx(input: ExportInput, style: ExportStyle, template?: Uint8Array | null): Promise<ExportFile> {
+  if (template) return (await import('./pptxTemplate')).buildPptxFromTemplate(input, template);
+  const palette = paletteOf(style);
   const { title, slides } = planSlides(input);
   const read = readAnswer(input.markdown);
 

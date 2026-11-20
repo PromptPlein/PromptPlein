@@ -3255,3 +3255,42 @@ export async function analyzeProjectContext(args: {
     return { ...failed, error: message };
   }
 }
+
+/**
+ * Zet een beschrijving van de opmaak om in een letter en vier kleuren (mode
+ * export-style), voor de downloads onder een chatantwoord. Met de huidige opmaak
+ * erbij verandert de AI alleen wat de medewerker noemt.
+ */
+export async function describeExportStyle(args: {
+  wens: string;
+  huidig?: Record<string, string>;
+}): Promise<{ opmaak: Record<string, string>; uitleg: string } | { error: string }> {
+  const functionUrl = getFunctionUrl('optimize-prompt');
+  if (!isSupabaseConfigured || !functionUrl) return { error: 'De AI is hier niet beschikbaar.' };
+  try {
+    const anonKey = getAnonKey();
+    const response = await fetch(functionUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(anonKey ? { Authorization: `Bearer ${anonKey}`, apikey: anonKey } : {}),
+      },
+      body: JSON.stringify({
+        mode: 'export-style',
+        opmaakWens: args.wens,
+        ...(args.huidig ? { huidigeOpmaak: args.huidig } : {}),
+        preferredProvider: 'auto',
+      }),
+    });
+    const data = (await response.json()) as {
+      success?: boolean;
+      opmaak?: Record<string, string>;
+      uitleg?: string;
+      error?: string;
+    };
+    if (data.success && data.opmaak) return { opmaak: data.opmaak, uitleg: data.uitleg ?? '' };
+    return { error: 'De opmaak kon niet worden gemaakt. Probeer het opnieuw.' };
+  } catch {
+    return { error: 'De opmaak kon niet worden gemaakt. Probeer het opnieuw.' };
+  }
+}
