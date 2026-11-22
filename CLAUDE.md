@@ -524,14 +524,13 @@ ander. Tavily (Amerikaans, bewaart de vragen) is er op 22-11-2026 helemaal uit
 gehaald, keuze van de eigenaar: niet terugzetten. Staat er geen zoekdienst, dan
 doet de knop niets en antwoordt het model uit eigen kennis.
 
-Mojeek geeft overheidsbronnen voorrang (`searchMojeek`): twee zoekvragen tegelijk,
-één op de 25 domeinen in `OVERHEID_DOMEINEN` en één over het hele web. Een
-overheidstreffer gaat voorop als hij minstens half zo hoog scoort als de beste
-algemene, anders kwam bij "beste laptop" een RVO-vacature bovenaan. Mojeek zoekt
-op woorden, dus `mojeekQuery` haalt opdrachten aan de AI en vraag- en vulwoorden
-uit de vraag: "Wat regelt de Wet open overheid?" vond met die woorden een
-Kamerverslag uit 2012 in plaats van rijksoverheid.nl. Twee zoekvragen kosten
-twee keer het tarief. De waarschuwing bij
+Mojeek geeft overheidsbronnen voorrang (`searchMojeek`) met één zoekvraag: 10
+treffers ophalen (kost hetzelfde als 5) en de sites uit `OVERHEID_DOMEINEN` voorop
+zetten. Twee zoekvragen, waarvan één met het domeinfilter van Mojeek, vond meer
+overheidsbronnen maar kostte het dubbele; de eigenaar koos op 22-11-2026 voor één.
+Mojeek zoekt op woorden, dus `mojeekQuery` haalt opdrachten aan de AI en vraag- en
+vulwoorden uit de vraag: "Wat regelt de Wet open overheid?" vond met die woorden
+een Kamerverslag uit 2012 in plaats van rijksoverheid.nl. De waarschuwing bij
 het aanzetten (`WebSearchToggle`) noemt Mojeek bij naam; pas die mee aan als de
 zoekdienst wisselt. Aan/uit en de instructie bij de bronnen staan wél in
 Beheer, AI-instellingen.

@@ -3551,47 +3551,81 @@ async function searchSearxng(
 
 // --- Mojeek: overheidsbronnen voorop ---
 // Mojeek kent geen parameter die een domein zwaarder laat wegen, alleen een
-// filter (`fi`). Daarom gaan er twee zoekvragen tegelijk uit: één alleen op de
-// domeinen hieronder en één over het hele web. De overheidstreffers komen
-// voorop, mits ze over de vraag gaan: een treffer telt mee als zijn score minstens
-// de helft is van de beste algemene treffer (en nooit onder 0,3). Zonder die
-// drempel kwam bij "beste laptop thuiswerken" een vacature van RVO bovenaan.
-// Gemeenten staan er niet in: dat zijn er te veel voor de 25 die Mojeek toestaat.
-// Twee zoekvragen kosten twee keer het tarief.
+// filter. Daarom vraagt de chat in één zoekvraag 10 treffers (dat kost hetzelfde
+// als 5: Mojeek rekent per zoekvraag) en zet hij zelf de treffers van
+// overheidssites voorop. Een overheidspagina die niet in die 10 staat, komt er
+// dus niet bij. Twee zoekvragen tegelijk (één met het filter `fi` op
+// overheidsdomeinen) vond er meer, maar kostte het dubbele; de eigenaar koos op
+// 22-11-2026 voor één zoekvraag.
 
-/** Domeinen die voorrang krijgen. Een punt ervoor neemt elk subdomein mee; hoogstens 25. */
+/** Zoveel treffers vraagt de chat op om uit te kiezen; meer levert Mojeek niet. */
+const MOJEEK_POOL = 10;
+
+/**
+ * Sites die voorop gaan. Een site telt mee als zijn adres op een van deze namen
+ * eindigt, dus wetten.overheid.nl valt onder overheid.nl. Gemeenten staan er niet
+ * in: dat zijn er te veel, en ze komen ook zonder voorrang goed mee.
+ */
 const OVERHEID_DOMEINEN = [
-  '.overheid.nl', // wetten, officiële bekendmakingen, ondernemersplein, lokale regelgeving
-  '.rijksoverheid.nl',
-  '.officielebekendmakingen.nl',
-  '.government.nl',
-  '.tweedekamer.nl',
-  '.eerstekamer.nl',
-  '.raadvanstate.nl',
-  '.rechtspraak.nl',
-  '.rekenkamer.nl',
-  '.rijksfinancien.nl',
-  '.digitaleoverheid.nl',
-  '.nationaalarchief.nl',
-  '.autoriteitpersoonsgegevens.nl',
-  '.belastingdienst.nl',
-  '.cbs.nl',
-  '.rvo.nl',
-  '.uwv.nl',
-  '.svb.nl',
-  '.duo.nl',
-  '.ind.nl',
-  '.kvk.nl',
-  '.rivm.nl',
-  '.knmi.nl',
-  '.ncsc.nl',
-  '.europa.eu',
-].join(',');
+  'overheid.nl', // wetten, officiële bekendmakingen, ondernemersplein, lokale regelgeving
+  'rijksoverheid.nl',
+  'officielebekendmakingen.nl',
+  'government.nl',
+  'open-overheid.nl',
+  'tweedekamer.nl',
+  'eerstekamer.nl',
+  'raadvanstate.nl',
+  'rechtspraak.nl',
+  'rekenkamer.nl',
+  'nationaleombudsman.nl',
+  'rijksfinancien.nl',
+  'digitaleoverheid.nl',
+  'nationaalarchief.nl',
+  'logius.nl',
+  'forumstandaardisatie.nl',
+  'noraonline.nl',
+  'autoriteitpersoonsgegevens.nl',
+  'belastingdienst.nl',
+  'toeslagen.nl',
+  'cbs.nl',
+  'cpb.nl',
+  'scp.nl',
+  'rvo.nl',
+  'uwv.nl',
+  'svb.nl',
+  'duo.nl',
+  'ind.nl',
+  'kvk.nl',
+  'rivm.nl',
+  'knmi.nl',
+  'ncsc.nl',
+  'rijkswaterstaat.nl',
+  'rdw.nl',
+  'cbr.nl',
+  'nvwa.nl',
+  'igj.nl',
+  'onderwijsinspectie.nl',
+  'zorginstituutnederland.nl',
+  'nza.nl',
+  'acm.nl',
+  'afm.nl',
+  'dnb.nl',
+  'om.nl',
+  'politie.nl',
+  'defensie.nl',
+  'europa.eu',
+];
 
-/** Een overheidstreffer telt mee vanaf deze fractie van de beste algemene score. */
-const OVERHEID_RELATIVE_DREMPEL = 0.5;
-/** En nooit onder deze score, ook als de algemene zoekvraag niets opleverde. */
-const OVERHEID_MINIMUM_SCORE = 0.3;
+function isOverheidUrl(url: string): boolean {
+  let host: string;
+  try {
+    host = new URL(url).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+  return OVERHEID_DOMEINEN.some((d) => host === d || host.endsWith(`.${d}`));
+}
+
 /** Mojeek zoekt op woorden: meer dan dit maakt de treffers slechter, niet beter. */
 const MOJEEK_MAX_WOORDEN = 10;
 
@@ -3643,41 +3677,27 @@ function mojeekQuery(query: string): string {
   return kaal || query;
 }
 
-interface MojeekHit extends SearchHit {
-  score: number;
-}
-
 /**
  * Mojeek weigert bij een piek van zoekvragen in een paar seconden ("speed limit
  * reached"). Eén keer opnieuw na een seconde vangt dat op; de time-out van
  * searchWeb blijft de grens.
  */
-async function mojeekRequest(
-  query: string,
-  count: number,
-  signal: AbortSignal,
-  domains?: string,
-): Promise<MojeekHit[]> {
+async function mojeekRequest(query: string, signal: AbortSignal): Promise<SearchHit[]> {
   try {
-    return await mojeekRequestOnce(query, count, signal, domains);
+    return await mojeekRequestOnce(query, signal);
   } catch (err) {
     if (signal.aborted || !/speed limit/i.test(String(err))) throw err;
     await new Promise((resolve) => setTimeout(resolve, MOJEEK_SPEED_RETRY_MS));
-    return await mojeekRequestOnce(query, count, signal, domains);
+    return await mojeekRequestOnce(query, signal);
   }
 }
 
-async function mojeekRequestOnce(
-  query: string,
-  count: number,
-  signal: AbortSignal,
-  domains?: string,
-): Promise<MojeekHit[]> {
+async function mojeekRequestOnce(query: string, signal: AbortSignal): Promise<SearchHit[]> {
   const params = new URLSearchParams({
     api_key: Deno.env.get('MOJEEK_API_KEY') ?? '',
     q: query,
     fmt: 'json',
-    t: String(count),
+    t: String(MOJEEK_POOL),
     // Nederlandstalige en Nederlandse pagina's bovenaan, zonder de rest uit te
     // sluiten; de sterktes zijn wat Mojeek zelf aanraadt.
     lb: 'NL',
@@ -3689,13 +3709,6 @@ async function mojeekRequestOnce(
     tlen: '127',
     safe: '1',
   });
-  if (domains) {
-    params.set('fi', domains);
-    // Met een filter zet Mojeek de spreiding over sites uit; hoogstens twee
-    // pagina's per site, anders is het vaak vier keer dezelfde site.
-    params.set('clufmt', '0');
-    params.set('si', '2');
-  }
   const response = await fetch(`https://api.mojeek.com/search?${params}`, {
     headers: { Accept: 'application/json' },
     signal,
@@ -3709,45 +3722,19 @@ async function mojeekRequestOnce(
   // alleen in dit veld.
   const status = data.response?.status;
   if (status !== 'OK') throw new Error(`Mojeek weigerde: ${String(status ?? 'geen status')}`);
-  const results = data.response?.results;
-  const raw: unknown[] = Array.isArray(results) ? results : [];
-  const scores = new Map<string, number>();
-  for (const item of raw as { url?: unknown; score?: unknown }[]) {
-    if (typeof item?.url === 'string') scores.set(item.url.trim(), Number(item.score) || 0);
-  }
-  return toSearchHits(raw, count).map((hit) => ({ ...hit, score: scores.get(hit.url) ?? 0 }));
+  return toSearchHits(data.response?.results, MOJEEK_POOL);
 }
 
+/** Eén zoekvraag; overheidssites voorop, verder in de volgorde van Mojeek. */
 async function searchMojeek(
   query: string,
   count: number,
   signal: AbortSignal,
 ): Promise<SearchHit[]> {
-  const q = mojeekQuery(query);
-  const [overheid, algemeen] = await Promise.allSettled([
-    mojeekRequest(q, count, signal, OVERHEID_DOMEINEN),
-    mojeekRequest(q, count, signal),
-  ]);
-  // Faalt één van de twee, dan doet de ander het werk; falen ze allebei, dan
-  // gaat de fout naar searchWeb, die zonder bronnen verder gaat.
-  if (overheid.status === 'rejected' && algemeen.status === 'rejected') throw algemeen.reason;
-  const overheidHits = overheid.status === 'fulfilled' ? overheid.value : [];
-  const algemeenHits = algemeen.status === 'fulfilled' ? algemeen.value : [];
-
-  const beste = Math.max(0, ...algemeenHits.map((h) => h.score));
-  const drempel = Math.max(OVERHEID_MINIMUM_SCORE, beste * OVERHEID_RELATIVE_DREMPEL);
-  const voorop = overheidHits.filter((h) => h.score >= drempel);
-
-  const gezien = new Set<string>();
-  const hits: SearchHit[] = [];
-  for (const { score: _score, ...hit } of [...voorop, ...algemeenHits]) {
-    const key = hit.url.replace(/\/+$/, '');
-    if (gezien.has(key)) continue;
-    gezien.add(key);
-    hits.push(hit);
-    if (hits.length >= count) break;
-  }
-  return hits;
+  const hits = await mojeekRequest(mojeekQuery(query), signal);
+  const overheid = hits.filter((h) => isOverheidUrl(h.url));
+  const rest = hits.filter((h) => !isOverheidUrl(h.url));
+  return [...overheid, ...rest].slice(0, count);
 }
 
 /** Knijpt de ingestelde hoeveelheid treffers af op wat er in de context past. */
