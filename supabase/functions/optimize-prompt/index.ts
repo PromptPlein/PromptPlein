@@ -3450,16 +3450,22 @@ function buildChatSystem(
 //                                                  infra/searxng/. Het token gaat
 //                                                  mee als X-Search-Token en de
 //                                                  server weigert alles zonder.
-//   supabase secrets set TAVILY_API_KEY=tvly-...   Tavily (VS): 1000 zoek-
-//                                                  opdrachten per maand gratis.
-//                                                  Bewaart de vragen en mag ze
-//                                                  gebruiken om zijn dienst te
-//                                                  verbeteren; zie hun beleid.
+//   supabase secrets set MOJEEK_API_KEY=...        Mojeek (VK): eigen index en
+//                                                  eigen servers in het VK, geen
+//                                                  doorgifte aan Google of Bing.
+//                                                  Verwerkt de vragen als
+//                                                  verwerker, bewaart ze hoogstens
+//                                                  90 dagen om storingen op te
+//                                                  lossen (of niet, bij zero data
+//                                                  retention) en gebruikt ze nooit
+//                                                  voor zichzelf. Betalen per
+//                                                  1000 zoekopdrachten.
 //
-// Staat er allebei iets, dan wint SearXNG. Een eigen server is een privacykeuze,
-// en die mag niet ongedaan worden gemaakt door een Tavily-sleutel die is blijven
-// staan. Tavily levert wel langere fragmenten per treffer, waar een klein model
-// als Mistral Small meer aan heeft; dat is de prijs van de eigen server.
+// Staat er allebei iets, dan wint SearXNG: met een eigen server ziet geen derde
+// partij de vraag. Er is bewust geen terugval van de een op de ander: weigert
+// Mojeek (bijvoorbeeld omdat het tegoed op is), dan antwoordt het model zonder
+// bronnen. De gebruiker heeft bij het aanzetten gelezen waar zijn vraag heen
+// gaat, en een Amerikaanse dienst als Tavily is er bewust uit gehaald.
 
 /** Eén treffer, in de vorm die beide zoekdiensten opleveren. */
 interface SearchHit {
@@ -3475,7 +3481,7 @@ const MAX_SEARCH_RESULTS = 8;
 const DEFAULT_SEARCH_RESULTS = 5;
 /** Tekens per treffer. Acht treffers van 1200 tekens is ruwweg 2500 tokens. */
 const MAX_SEARCH_SNIPPET_CHARS = 1200;
-/** Tavily weigert een zoekopdracht van meer dan 400 tekens. */
+/** Een zoekvraag hoort kort te zijn; dit kapt een geplakte lap tekst af. */
 const MAX_SEARCH_QUERY_CHARS = 380;
 /**
  * Zoeken staat tussen de vraag en de eerste regel van het antwoord in. Duurt het
@@ -3488,9 +3494,9 @@ const SEARCH_TIMEOUT_MS = 9000;
  * Welke zoekdienst is er ingesteld? Geen sleutel betekent geen zoekfunctie: de
  * knop in de chat levert dan niets op en de beurt loopt door zonder bronnen.
  */
-function searchBackend(): 'tavily' | 'searxng' | null {
+function searchBackend(): 'searxng' | 'mojeek' | null {
   if (Deno.env.get('SEARXNG_URL')) return 'searxng';
-  if (Deno.env.get('TAVILY_API_KEY')) return 'tavily';
+  if (Deno.env.get('MOJEEK_API_KEY')) return 'mojeek';
   return null;
 }
 
@@ -3505,45 +3511,17 @@ function toSearchHits(raw: unknown, count: number): SearchHit[] {
   const hits: SearchHit[] = [];
   for (const item of raw) {
     if (hits.length >= count) break;
-    const row = item as { title?: unknown; url?: unknown; content?: unknown };
+    // Mojeek noemt het fragment `desc`, SearXNG `content`.
+    const row = item as { title?: unknown; url?: unknown; content?: unknown; desc?: unknown };
     const url = typeof row?.url === 'string' ? row.url.trim() : '';
-    const snippet = typeof row?.content === 'string' ? row.content.trim() : '';
+    const text = typeof row?.content === 'string' ? row.content : row?.desc;
+    const snippet = typeof text === 'string' ? text.trim() : '';
     if (!url || !snippet) continue;
     const title =
       typeof row?.title === 'string' && row.title.trim() ? row.title.trim().slice(0, 200) : url;
     hits.push({ title, url, snippet: snippet.slice(0, MAX_SEARCH_SNIPPET_CHARS) });
   }
   return hits;
-}
-
-async function searchTavily(
-  query: string,
-  count: number,
-  signal: AbortSignal,
-): Promise<SearchHit[]> {
-  const response = await fetch('https://api.tavily.com/search', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${Deno.env.get('TAVILY_API_KEY')}`,
-    },
-    body: JSON.stringify({
-      query,
-      max_results: count,
-      // 'basic' kost één credit per zoekopdracht, 'advanced' er twee voor iets
-      // langere fragmenten. Met 1000 gratis zoekopdrachten per maand is die
-      // verdubbeling het niet waard.
-      search_depth: 'basic',
-      // Zet Nederlandse bronnen bovenaan zonder Engelstalige uit te sluiten: bij
-      // een overheidsvraag is rijksoverheid.nl vaak het antwoord, maar lang niet
-      // altijd.
-      country: 'netherlands',
-    }),
-    signal,
-  });
-  if (!response.ok) throw new Error(`Tavily gaf status ${response.status}`);
-  const data = (await response.json()) as { results?: unknown };
-  return toSearchHits(data.results, count);
 }
 
 async function searchSearxng(
@@ -3569,6 +3547,43 @@ async function searchSearxng(
   if (!response.ok) throw new Error(`SearXNG gaf status ${response.status}`);
   const data = (await response.json()) as { results?: unknown };
   return toSearchHits(data.results, count);
+}
+
+async function searchMojeek(
+  query: string,
+  count: number,
+  signal: AbortSignal,
+): Promise<SearchHit[]> {
+  const params = new URLSearchParams({
+    api_key: Deno.env.get('MOJEEK_API_KEY') ?? '',
+    q: query,
+    fmt: 'json',
+    t: String(count),
+    // Nederlandstalige en Nederlandse pagina's bovenaan, zonder de rest uit te
+    // sluiten; de sterktes zijn wat Mojeek zelf aanraadt.
+    lb: 'NL',
+    lbb: '100',
+    rb: 'NL',
+    rbb: '10',
+    // Het langste fragment dat Mojeek levert: het model leest alleen dit.
+    dlen: '511',
+    tlen: '127',
+    safe: '1',
+  });
+  const response = await fetch(`https://api.mojeek.com/search?${params}`, {
+    headers: { Accept: 'application/json' },
+    signal,
+  });
+  // Geen url in de foutmelding: daar staat de sleutel in.
+  if (!response.ok) throw new Error(`Mojeek gaf status ${response.status}`);
+  const data = (await response.json()) as {
+    response?: { status?: unknown; results?: unknown };
+  };
+  // Een weigering (op tegoed, verkeerde sleutel) komt met status 200 en staat
+  // alleen in dit veld.
+  const status = data.response?.status;
+  if (status !== 'OK') throw new Error(`Mojeek weigerde: ${String(status ?? 'geen status')}`);
+  return toSearchHits(data.response?.results, count);
 }
 
 /** Knijpt de ingestelde hoeveelheid treffers af op wat er in de context past. */
@@ -3727,8 +3742,8 @@ async function searchWeb(query: string, count: number): Promise<SearchHit[]> {
   const timer = setTimeout(() => abort.abort(), SEARCH_TIMEOUT_MS);
   try {
     const n = clampSearchResults(count);
-    return backend === 'tavily'
-      ? await searchTavily(q, n, abort.signal)
+    return backend === 'mojeek'
+      ? await searchMojeek(q, n, abort.signal)
       : await searchSearxng(q, n, abort.signal);
   } catch (err) {
     console.error(`Zoeken op internet (${backend}) mislukt:`, err);

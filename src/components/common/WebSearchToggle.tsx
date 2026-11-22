@@ -23,10 +23,10 @@ interface WebSearchToggleProps {
  * keuze: je levert wachttijd in voor een beter antwoord.
  *
  * Aanzetten vraagt eerst om een bevestiging, en die gaat over privacy. De
- * zoekvraag verlaat PromptPlein: zolang er geen eigen SearXNG-server staat,
- * gaat hij naar Tavily, een Amerikaans bedrijf dat de vragen bewaart. Wie de
- * knop aanzet, moet dat gelezen hebben vóórdat de eerste vraag vertrekt.
- * Uitzetten kan meteen.
+ * zoekvraag verlaat PromptPlein en gaat naar Mojeek, een Britse zoekmachine met
+ * een eigen index (`MOJEEK_API_KEY` in de edge function). Wie de knop aanzet,
+ * moet dat gelezen hebben vóórdat de eerste vraag vertrekt. Komt er een andere
+ * zoekdienst achter, pas deze tekst dan mee aan. Uitzetten kan meteen.
  */
 export default function WebSearchToggle({
   value,
@@ -79,9 +79,15 @@ export default function WebSearchToggle({
         message={
           <>
             <p>
-              Met zoeken aan gaat je vraag naar een externe zoekdienst. PromptPlein gebruikt daarvoor
-              Tavily, een Amerikaans bedrijf. Je zoekvraag en de gevonden resultaten worden daar
-              verwerkt en bewaard, buiten de Europese Unie en buiten het beheer van de rijksoverheid.
+              Met zoeken aan gaat je vraag naar Mojeek, een Europese zoekmachine uit het Verenigd
+              Koninkrijk. Mojeek heeft een eigen zoekindex en eigen servers in het Verenigd
+              Koninkrijk, en stuurt je vraag niet door naar Google of Bing.
+            </p>
+            <p>
+              Mojeek volgt je niet en gebruikt je vraag niet voor zichzelf. De vraag wordt hoogstens
+              90 dagen bewaard om storingen op te lossen. Het Verenigd Koninkrijk valt buiten de
+              Europese Unie, maar de EU erkent dat persoonsgegevens daar even goed beschermd zijn.
+              Het blijft wel een dienst buiten het beheer van de rijksoverheid.
             </p>
             <p>
               Zet daarom geen persoonsgegevens, vertrouwelijke informatie of niet-openbare

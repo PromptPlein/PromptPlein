@@ -517,15 +517,20 @@ client voor de bronnenlijst onder het antwoord.
 Welke zoekdienst draait staat in de **secrets** van de function en bewust niet in
 `app_settings`: een zoekadres dat de client mag kiezen, mag iedereen kiezen.
 `SEARXNG_URL` plus `SEARXNG_TOKEN` (eigen server, de opzet staat in
-`infra/searxng/`) heeft voorrang op `TAVILY_API_KEY` (Amerikaanse dienst die de
-vragen bewaart). Staat er geen van beide, dan doet de knop niets en antwoordt
-het model uit eigen kennis. Aan/uit en de instructie bij de bronnen staan wél in
+`infra/searxng/`) heeft voorrang op `MOJEEK_API_KEY` (Mojeek, Britse zoekmachine
+met eigen index en eigen servers in het VK, sinds 22-11-2026 in gebruik; tegoed
+bijkopen in het API-dashboard van Mojeek). Er is geen terugval van de een op de
+ander. Tavily (Amerikaans, bewaart de vragen) is er op 22-11-2026 helemaal uit
+gehaald, keuze van de eigenaar: niet terugzetten. Staat er geen zoekdienst, dan
+doet de knop niets en antwoordt het model uit eigen kennis. De waarschuwing bij
+het aanzetten (`WebSearchToggle`) noemt Mojeek bij naam; pas die mee aan als de
+zoekdienst wisselt. Aan/uit en de instructie bij de bronnen staan wél in
 Beheer, AI-instellingen.
 
 De keuze voor SearXNG is een privacykeuze: het enige wat de chat naar buiten
 stuurt is de zoekvraag zelf, en met een eigen server ziet geen derde partij die.
-Verplaats het zoeken niet terug naar een externe dienst zonder dat met de
-gebruiker af te stemmen.
+Mojeek is de tussenstap zolang die server er niet staat. Kies geen andere
+externe dienst zonder dat met de gebruiker af te stemmen.
 
 ### Zoeken in de bronbestanden van een project
 

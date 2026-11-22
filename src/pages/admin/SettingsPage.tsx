@@ -859,10 +859,11 @@ export default function SettingsPage() {
                 supabase secrets set
               </code>
               :{' '}
-              <strong>TAVILY_API_KEY</strong> (1000 zoekopdrachten per maand gratis, geen
-              creditcard) of <strong>SEARXNG_URL</strong> (een eigen SearXNG-server: open source en
-              geen prijs per zoekopdracht, maar je host hem zelf). Staat er geen van beide, dan doet
-              de knop niets en antwoordt het model gewoon uit eigen kennis.
+              <strong>MOJEEK_API_KEY</strong> (Mojeek, een Britse zoekmachine met eigen index, betalen
+              per 1000 zoekopdrachten) of <strong>SEARXNG_URL</strong> (een eigen SearXNG-server: open
+              source en geen prijs per zoekopdracht, maar je host hem zelf). Staan ze er allebei, dan
+              wint SearXNG. Staat er geen, dan doet de knop niets en antwoordt het model gewoon uit
+              eigen kennis.
             </p>
 
             <label className="flex cursor-pointer items-center gap-3">

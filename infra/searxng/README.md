@@ -75,13 +75,14 @@ In de repo van PromptPlein, met de Supabase CLI ingelogd:
 
 ```bash
 supabase secrets set SEARXNG_URL=https://zoeken.promptplein.nl SEARXNG_TOKEN=<SEARCH_TOKEN>
-supabase secrets unset TAVILY_API_KEY
+supabase secrets unset MOJEEK_API_KEY
 ```
 
 Secrets gelden meteen, zonder de function opnieuw uit te rollen. SearXNG heeft
-in de code voorrang op Tavily, dus de `unset` is niet nodig om het te laten
-werken; hij is nodig om geen ongebruikte sleutel van een Amerikaanse dienst te
-laten slingeren. Zet in Beheer, AI-instellingen "Zoeken op internet" aan als dat
+in de code voorrang op Mojeek, dus de `unset` is niet nodig om het te laten
+werken; hij voorkomt dat er een ongebruikte sleutel blijft staan. Pas ook de
+waarschuwing in `src/components/common/WebSearchToggle.tsx` aan: die noemt
+Mojeek bij naam. Zet in Beheer, AI-instellingen "Zoeken op internet" aan als dat
 nog niet zo is.
 
 Testen in de chat: knop "Zoeken" aan, vraag iets actueels, en kijk of er
@@ -103,10 +104,10 @@ De server bewaart niets: geen zoekgeschiedenis, geen statistieken
 (`enable_metrics: false`). De Docker-log van SearXNG is afgekapt op 1 MB en
 bevat geen zoekvragen.
 
-## Wat anders is dan bij Tavily
+## Wat anders is dan bij Mojeek
 
-- Tavily geeft per treffer een fragment van een paar honderd tekens; SearXNG
-  geeft de snippet van de zoekmachine, meestal één of twee regels. Het model
+- Mojeek geeft per treffer een fragment tot 511 tekens; SearXNG geeft de
+  snippet van de zoekmachine, meestal één of twee regels. Het model
   heeft dus minder tekst per bron. Meer treffers instellen in Beheer
   (maximaal 8) helpt daartegen.
 - Geen kosten per zoekopdracht en geen maandlimiet; wel een VPS van een paar

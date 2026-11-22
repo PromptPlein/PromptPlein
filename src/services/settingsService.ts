@@ -442,7 +442,7 @@ export interface ChatSettings {
    * invoerbalk)? Uit = knop verdwijnt.
    *
    * Hier aanzetten is niet genoeg. De edge function moet ook een zoekdienst
-   * hebben: `TAVILY_API_KEY` of `SEARXNG_URL` in de secrets. Ontbreekt die, dan
+   * hebben: `SEARXNG_URL` of `MOJEEK_API_KEY` in de secrets. Ontbreekt die, dan
    * staat de knop er wel, maar levert zoeken niets op en antwoordt het model uit
    * eigen kennis.
    */

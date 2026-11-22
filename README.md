@@ -170,7 +170,7 @@ Optionele secrets van de functies:
 | Secret | Waarvoor |
 | --- | --- |
 | `SEARXNG_URL`, `SEARXNG_TOKEN` | Zoeken in de chat via een eigen server, zie [infra/searxng](infra/searxng/README.md) |
-| `TAVILY_API_KEY` | Zoeken via Tavily, als er geen eigen server is |
+| `MOJEEK_API_KEY` | Zoeken via Mojeek, als er geen eigen server is |
 | `BREVO_API_KEY`, `CONTACT_FROM_EMAIL`, `CONTACT_TO_EMAIL` | Het contactformulier (functie `send-contact`) |
 | `BREVO_API_KEY`, `BREVO_LIST_ID`, `BREVO_WEBHOOK_SECRET` | Nieuwe gebruikers aanmelden bij Brevo (functie `register-brevo-contact`) |
 
