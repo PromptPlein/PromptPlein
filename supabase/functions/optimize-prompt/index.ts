@@ -3549,11 +3549,130 @@ async function searchSearxng(
   return toSearchHits(data.results, count);
 }
 
-async function searchMojeek(
+// --- Mojeek: overheidsbronnen voorop ---
+// Mojeek kent geen parameter die een domein zwaarder laat wegen, alleen een
+// filter (`fi`). Daarom gaan er twee zoekvragen tegelijk uit: één alleen op de
+// domeinen hieronder en één over het hele web. De overheidstreffers komen
+// voorop, mits ze over de vraag gaan: een treffer telt mee als zijn score minstens
+// de helft is van de beste algemene treffer (en nooit onder 0,3). Zonder die
+// drempel kwam bij "beste laptop thuiswerken" een vacature van RVO bovenaan.
+// Gemeenten staan er niet in: dat zijn er te veel voor de 25 die Mojeek toestaat.
+// Twee zoekvragen kosten twee keer het tarief.
+
+/** Domeinen die voorrang krijgen. Een punt ervoor neemt elk subdomein mee; hoogstens 25. */
+const OVERHEID_DOMEINEN = [
+  '.overheid.nl', // wetten, officiële bekendmakingen, ondernemersplein, lokale regelgeving
+  '.rijksoverheid.nl',
+  '.officielebekendmakingen.nl',
+  '.government.nl',
+  '.tweedekamer.nl',
+  '.eerstekamer.nl',
+  '.raadvanstate.nl',
+  '.rechtspraak.nl',
+  '.rekenkamer.nl',
+  '.rijksfinancien.nl',
+  '.digitaleoverheid.nl',
+  '.nationaalarchief.nl',
+  '.autoriteitpersoonsgegevens.nl',
+  '.belastingdienst.nl',
+  '.cbs.nl',
+  '.rvo.nl',
+  '.uwv.nl',
+  '.svb.nl',
+  '.duo.nl',
+  '.ind.nl',
+  '.kvk.nl',
+  '.rivm.nl',
+  '.knmi.nl',
+  '.ncsc.nl',
+  '.europa.eu',
+].join(',');
+
+/** Een overheidstreffer telt mee vanaf deze fractie van de beste algemene score. */
+const OVERHEID_RELATIVE_DREMPEL = 0.5;
+/** En nooit onder deze score, ook als de algemene zoekvraag niets opleverde. */
+const OVERHEID_MINIMUM_SCORE = 0.3;
+/** Mojeek zoekt op woorden: meer dan dit maakt de treffers slechter, niet beter. */
+const MOJEEK_MAX_WOORDEN = 10;
+
+/** Een zin die zo begint, is een opdracht aan de AI en geen zoekvraag. */
+const OPDRACHT_WOORDEN = new Set([
+  'antwoord', 'beantwoord', 'geef', 'schrijf', 'maak', 'leg', 'houd', 'hou', 'gebruik',
+  'noem', 'vat', 'formuleer', 'beperk', 'zet', 'wees', 'doe', 'graag', 'alsjeblieft',
+]);
+
+/** Vraagwoorden en vulwoorden: Mojeek zoekt erop en vindt dan vooral Kamerverslagen. */
+const STOPWOORDEN = new Set([
+  'de', 'het', 'een', 'en', 'of', 'van', 'voor', 'in', 'op', 'aan', 'met', 'bij', 'naar',
+  'om', 'over', 'uit', 'tot', 'door', 'als', 'dat', 'die', 'dit', 'deze', 'is', 'zijn',
+  'was', 'waren', 'wordt', 'worden', 'werd', 'kan', 'kun', 'kunt', 'je', 'jij', 'u', 'ik',
+  'we', 'wij', 'mij', 'me', 'mijn', 'mag', 'moet', 'zou', 'zouden', 'wil', 'wat', 'hoe',
+  'welke', 'welk', 'waarom', 'wie', 'wanneer', 'waar', 'hoeveel', 'graag', 'even', 'eens',
+  'alsjeblieft', 'aub', 'nog', 'ook', 'er', 'te', 'heb', 'hebt', 'heeft', 'hebben',
+  'uitleggen', 'vertellen', 'vertel', 'weet', 'weten', 'precies', 'eigenlijk', 'nu',
+  // Algemene werkwoorden: "bedraagt minimumloon 2026" vond geen enkele
+  // overheidspagina, "minimumloon 2026" de bedragen op rijksoverheid.nl.
+  'bedraagt', 'bedragen', 'betekent', 'geldt', 'gelden', 'gaat', 'komt', 'krijg', 'krijgt',
+  // Blijft een opdrachtzin staan omdat er niets anders is ("Geef me een recept
+  // voor appeltaart"), dan zoekt "recept appeltaart" beter zonder dat werkwoord.
+  'geef', 'schrijf', 'noem', 'zoek',
+]);
+
+/** Pauze voor de tweede poging als Mojeek "speed limit" meldt. */
+const MOJEEK_SPEED_RETRY_MS = 1000;
+
+/**
+ * Maakt van een chatvraag een zoekterm voor Mojeek: zinnen die een opdracht aan
+ * de AI zijn ("Antwoord in twee zinnen.") gaan eruit, net als vraag- en
+ * vulwoorden. "Wat regelt de Wet open overheid?" wordt "regelt Wet open
+ * overheid", en dat vindt de Woo-pagina van Rijksoverheid in plaats van een
+ * Kamerverslag uit 2012. Blijft er niets over, dan gaat de vraag zoals hij was.
+ */
+function mojeekQuery(query: string): string {
+  const zinnen = query.split(/(?<=[.?!])\s+|\n+/).map((z) => z.trim()).filter(Boolean);
+  const vragen = zinnen.filter((z) => {
+    const eerste = z.toLowerCase().match(/^[\p{L}]+/u)?.[0] ?? '';
+    return !OPDRACHT_WOORDEN.has(eerste);
+  });
+  const bron = (vragen.length ? vragen : zinnen).join(' ');
+  const woorden = bron
+    .split(/[^\p{L}\p{N}-]+/u)
+    .map((w) => w.replace(/^-+|-+$/g, ''))
+    .filter((w) => w && !STOPWOORDEN.has(w.toLowerCase()));
+  const kaal = woorden.slice(0, MOJEEK_MAX_WOORDEN).join(' ');
+  return kaal || query;
+}
+
+interface MojeekHit extends SearchHit {
+  score: number;
+}
+
+/**
+ * Mojeek weigert bij een piek van zoekvragen in een paar seconden ("speed limit
+ * reached"). Eén keer opnieuw na een seconde vangt dat op; de time-out van
+ * searchWeb blijft de grens.
+ */
+async function mojeekRequest(
   query: string,
   count: number,
   signal: AbortSignal,
-): Promise<SearchHit[]> {
+  domains?: string,
+): Promise<MojeekHit[]> {
+  try {
+    return await mojeekRequestOnce(query, count, signal, domains);
+  } catch (err) {
+    if (signal.aborted || !/speed limit/i.test(String(err))) throw err;
+    await new Promise((resolve) => setTimeout(resolve, MOJEEK_SPEED_RETRY_MS));
+    return await mojeekRequestOnce(query, count, signal, domains);
+  }
+}
+
+async function mojeekRequestOnce(
+  query: string,
+  count: number,
+  signal: AbortSignal,
+  domains?: string,
+): Promise<MojeekHit[]> {
   const params = new URLSearchParams({
     api_key: Deno.env.get('MOJEEK_API_KEY') ?? '',
     q: query,
@@ -3570,6 +3689,13 @@ async function searchMojeek(
     tlen: '127',
     safe: '1',
   });
+  if (domains) {
+    params.set('fi', domains);
+    // Met een filter zet Mojeek de spreiding over sites uit; hoogstens twee
+    // pagina's per site, anders is het vaak vier keer dezelfde site.
+    params.set('clufmt', '0');
+    params.set('si', '2');
+  }
   const response = await fetch(`https://api.mojeek.com/search?${params}`, {
     headers: { Accept: 'application/json' },
     signal,
@@ -3583,7 +3709,45 @@ async function searchMojeek(
   // alleen in dit veld.
   const status = data.response?.status;
   if (status !== 'OK') throw new Error(`Mojeek weigerde: ${String(status ?? 'geen status')}`);
-  return toSearchHits(data.response?.results, count);
+  const results = data.response?.results;
+  const raw: unknown[] = Array.isArray(results) ? results : [];
+  const scores = new Map<string, number>();
+  for (const item of raw as { url?: unknown; score?: unknown }[]) {
+    if (typeof item?.url === 'string') scores.set(item.url.trim(), Number(item.score) || 0);
+  }
+  return toSearchHits(raw, count).map((hit) => ({ ...hit, score: scores.get(hit.url) ?? 0 }));
+}
+
+async function searchMojeek(
+  query: string,
+  count: number,
+  signal: AbortSignal,
+): Promise<SearchHit[]> {
+  const q = mojeekQuery(query);
+  const [overheid, algemeen] = await Promise.allSettled([
+    mojeekRequest(q, count, signal, OVERHEID_DOMEINEN),
+    mojeekRequest(q, count, signal),
+  ]);
+  // Faalt één van de twee, dan doet de ander het werk; falen ze allebei, dan
+  // gaat de fout naar searchWeb, die zonder bronnen verder gaat.
+  if (overheid.status === 'rejected' && algemeen.status === 'rejected') throw algemeen.reason;
+  const overheidHits = overheid.status === 'fulfilled' ? overheid.value : [];
+  const algemeenHits = algemeen.status === 'fulfilled' ? algemeen.value : [];
+
+  const beste = Math.max(0, ...algemeenHits.map((h) => h.score));
+  const drempel = Math.max(OVERHEID_MINIMUM_SCORE, beste * OVERHEID_RELATIVE_DREMPEL);
+  const voorop = overheidHits.filter((h) => h.score >= drempel);
+
+  const gezien = new Set<string>();
+  const hits: SearchHit[] = [];
+  for (const { score: _score, ...hit } of [...voorop, ...algemeenHits]) {
+    const key = hit.url.replace(/\/+$/, '');
+    if (gezien.has(key)) continue;
+    gezien.add(key);
+    hits.push(hit);
+    if (hits.length >= count) break;
+  }
+  return hits;
 }
 
 /** Knijpt de ingestelde hoeveelheid treffers af op wat er in de context past. */

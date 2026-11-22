@@ -522,7 +522,16 @@ met eigen index en eigen servers in het VK, sinds 22-11-2026 in gebruik; tegoed
 bijkopen in het API-dashboard van Mojeek). Er is geen terugval van de een op de
 ander. Tavily (Amerikaans, bewaart de vragen) is er op 22-11-2026 helemaal uit
 gehaald, keuze van de eigenaar: niet terugzetten. Staat er geen zoekdienst, dan
-doet de knop niets en antwoordt het model uit eigen kennis. De waarschuwing bij
+doet de knop niets en antwoordt het model uit eigen kennis.
+
+Mojeek geeft overheidsbronnen voorrang (`searchMojeek`): twee zoekvragen tegelijk,
+één op de 25 domeinen in `OVERHEID_DOMEINEN` en één over het hele web. Een
+overheidstreffer gaat voorop als hij minstens half zo hoog scoort als de beste
+algemene, anders kwam bij "beste laptop" een RVO-vacature bovenaan. Mojeek zoekt
+op woorden, dus `mojeekQuery` haalt opdrachten aan de AI en vraag- en vulwoorden
+uit de vraag: "Wat regelt de Wet open overheid?" vond met die woorden een
+Kamerverslag uit 2012 in plaats van rijksoverheid.nl. Twee zoekvragen kosten
+twee keer het tarief. De waarschuwing bij
 het aanzetten (`WebSearchToggle`) noemt Mojeek bij naam; pas die mee aan als de
 zoekdienst wisselt. Aan/uit en de instructie bij de bronnen staan wél in
 Beheer, AI-instellingen.
