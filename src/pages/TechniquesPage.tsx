@@ -761,7 +761,7 @@ export default function TechniquesPage() {
                             {usesQuestionnaire ? (
                               <button
                                 type="button"
-                                className="opl-btn-secondary"
+                                className="opl-btn-primary"
                                 title="Vervangt de huidige antwoorden door een voorstel van de AI"
                                 // Zolang er een voor-invulling loopt geen tweede starten: elke
                                 // klik was een extra aanroep, en de laatste die klaar was
