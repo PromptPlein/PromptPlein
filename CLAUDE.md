@@ -131,8 +131,10 @@ omdat PromptPlein van de Rijksoverheid is, en valt net als `public/logo-rijksove
 niet onder de EUPL-1.2. Nooit naar een ander product of andere repo kopiëren.
 Het lint met het logo staat sinds 24-11-2026 tijdelijk uit, keuze van de eigenaar: de
 app moet nu niet als overheidstool overkomen. In de kop staat het nog in `Header.tsx`
-met `hidden`. De mails wijzen naar `public/email/kop-promptplein.png` (logo in het
-midden, zonder lint); `kop.png` is hetzelfde plaatje voor mails die al verstuurd zijn, en
+met `hidden`. De HTML-templates (69 tot en met 72, 104, 146) wijzen naar
+`public/email/kop-promptplein.png` (logo in het midden, zonder lint); de drag-and-drop-mails
+(welkomstmail en basis 58) hebben een logoblok met hetzelfde plaatje uit de bibliotheek van
+Brevo. `kop.png` is hetzelfde plaatje voor mails die al verstuurd zijn, en
 het origineel staat als `kop-met-lint.png`. Een gewijzigd mailplaatje krijgt altijd een
 nieuwe naam: Gmail en Apple Mail bewaren een plaatje onder zijn adres en tonen anders de
 oude versie. Terugzetten is `hidden` weghalen en de templates naar `kop-met-lint.png` laten
