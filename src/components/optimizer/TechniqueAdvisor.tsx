@@ -62,6 +62,8 @@ interface TechniqueAdvisorProps {
   settings: AiSettings;
   /** Wat de gebruiker eventueel al had opgeschreven; scheelt een vraag. */
   start?: string;
+  /** Het aangehaakte project: de adviseur weet dan al waar het werk over gaat. */
+  projectContext?: string;
   /**
    * De gebruiker neemt het advies over: dit doet precies hetzelfde als zelf op
    * de techniek klikken, met de context uit het gesprek er alvast bij.
@@ -90,6 +92,7 @@ export default function TechniqueAdvisor({
   techniques,
   settings,
   start,
+  projectContext,
   onChoose,
   onClose,
 }: TechniqueAdvisorProps) {
@@ -125,6 +128,7 @@ export default function TechniqueAdvisor({
         turns: next,
         techniques: options,
         finish,
+        projectContext,
         preferredProvider: settings.provider,
         preferredModel: settings.model,
       });

@@ -669,7 +669,9 @@ Merk het voorbeeld daarom onmiskenbaar als voorbeeld, of laat het weg.
   gesprek "Ik heb een idee", `GoalDialog` is weg): kiezen op doel met alle
   frameworks en technieken, en "Help mij kiezen" (`TechniqueAdvisor`). De adviseur
   weegt frameworks en technieken samen (alleen de beeldprompt doet niet mee) en zet
-  zijn advies met de context uit het gesprek meteen klaar.
+  zijn advies met de context uit het gesprek meteen klaar. De knop Context staat hier
+  ook, bovenaan het vlak; het project gaat mee naar de adviseur, het voorinvullen,
+  "Vul verder aan", het gesprek en het bouwen, niet naar de eigen techniekbouwers.
 
 `/frameworks` is de oefenpagina: alleen de zes frameworks voor tekst (CARE, CO-STAR,
 CREATE, CRAFT, CRISPE, RAISE), CARE bovenaan, zonder doelen en zonder adviseur
@@ -944,7 +946,7 @@ over het zwakste punt; een gekozen antwoord gaat via de aanpasstap van `context-
 Pas "Gebruik deze prompt" zet hem in het tekstvak, als uitvoergesprek. Versturen blijft
 een eigen handeling. Niets van het doorvragen komt in de opgeslagen chat.
 
-De eerste vraag staat dicht: één regel "Dit is weinig context." met Geef meer context
+De eerste vraag staat dicht: één regel "Te weinig context." met Geef meer context
 en Stuur zoals het is (keuze van de eigenaar). Pas daarna verschijnt de kaart met de
 vragen.
 

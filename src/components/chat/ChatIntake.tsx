@@ -226,7 +226,7 @@ export default function ChatIntake({
   const announcement = loading
     ? loading
     : collapsed
-      ? 'Dit is weinig context. Kies Geef meer context voor een paar korte vragen.'
+      ? 'Te weinig context. Kies Geef meer context voor een paar korte vragen.'
       : question
       ? `Vraag ${turns.length + 1}: ${question.vraag}`
       : phase === 'voorstel' && !checking
@@ -273,7 +273,7 @@ export default function ChatIntake({
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2.5 dark:border-slate-700 dark:bg-slate-800/60">
             <p className="flex min-w-0 flex-1 basis-48 items-center gap-2 text-[0.9375rem] text-slate-700 dark:text-slate-200">
               <Lightbulb size={18} className="shrink-0 text-nadruk" aria-hidden />
-              Dit is weinig context.
+              Te weinig context.
             </p>
             <button
               type="button"

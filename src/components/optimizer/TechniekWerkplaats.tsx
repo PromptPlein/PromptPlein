@@ -32,6 +32,8 @@ import useThinking from '@/lib/useThinking';
 import useWebSearch from '@/lib/useWebSearch';
 import type { StreamStatus } from '@/lib/ndjsonStream';
 import OptimizedOutput from '@/components/optimizer/OptimizedOutput';
+import type { ProjectContextSlot } from '@/components/optimizer/ProjectContextPicker';
+import { useProjectSources } from '@/hooks/useProjectSources';
 import GuardrailDialog from '@/components/optimizer/GuardrailDialog';
 import { useAuth } from '@/context/AuthContext';
 import { useReferenceData } from '@/context/ReferenceDataContext';
@@ -72,12 +74,26 @@ export type WerkplaatsVariant = 'maken' | 'oefenen';
 export default function TechniekWerkplaats({
   variant,
   header,
+  projectContext: projectBrief,
+  projectSources,
+  renderProjectContext,
 }: {
   variant: WerkplaatsVariant;
   /** De tabbladen van Maken, boven het kiesvlak. */
   header?: ReactNode;
+  /** De analyse van het aangehaakte project (knop Context op Maken). */
+  projectContext?: string;
+  /** Zoekt bij elke stap de passages uit de bronnen die bij de opdracht passen. */
+  projectSources?: (task: string) => Promise<string | undefined>;
+  /** De knop Context met de labels van wat er meegaat; alleen op Maken. */
+  renderProjectContext?: (slot: ProjectContextSlot) => ReactNode;
 }) {
   const maken = variant === 'maken';
+  // De analyse van het project, aangevuld met de passages die bij deze opdracht passen.
+  const { resolve: resolveProjectContext, current: projectContext } = useProjectSources(
+    projectBrief,
+    projectSources,
+  );
   const { profile, user } = useAuth();
   const { techniques } = useReferenceData();
 
@@ -263,6 +279,7 @@ export default function TechniekWerkplaats({
     try {
       const res = await prefillFields({
         ownPrompt: draft,
+        projectContext: await resolveProjectContext(draft),
         technique: chosen,
         preferredProvider: settingsRef.current.provider,
         preferredModel: settingsRef.current.model,
@@ -299,6 +316,7 @@ export default function TechniekWerkplaats({
     try {
       const res = await prefillFields({
         ownPrompt: text,
+        projectContext: await resolveProjectContext(text),
         technique,
         fromDocument,
         fromFormatBrief: !fromDocument,
@@ -406,6 +424,9 @@ export default function TechniekWerkplaats({
       const res = await generatePrompt({
         technique,
         promptContent: draft,
+        projectContext: await resolveProjectContext(
+          [contextText, builderText.trim()].filter(Boolean).join('\n') || technique.name,
+        ),
         followUpAnswers: answers,
         extraAnsweredFields: builderText.trim()
           ? [
@@ -519,6 +540,14 @@ export default function TechniekWerkplaats({
           maken && phase !== 'output' && 'sm:rounded-t-none',
         )}
       >
+      {/* Context: een project aanhaken, net als bij Ik heb al een prompt. Het geldt
+          voor de adviseur, het voorinvullen en het bouwen. */}
+      {phase === 'input' &&
+        renderProjectContext?.({
+          text: context,
+          stripMention: () => setContext(context.replace(/@$/, '')),
+          className: 'mb-4',
+        })}
 
       {/* Je keuze staat bovenaan, ook bij het resultaat: zo blijft zichtbaar waar
           je mee werkt en is de weg terug naar de kiezer één klik. */}
@@ -675,6 +704,7 @@ export default function TechniekWerkplaats({
               {advisorOpen && (
                 <div ref={advisorRef} className="scroll-mt-24">
                   <TechniqueAdvisor
+                    projectContext={projectContext}
                     techniques={techniques}
                     settings={settingsRef.current}
                     start={context}
@@ -942,6 +972,7 @@ export default function TechniekWerkplaats({
                           </p>
                         ) : (
                           <InterviewFlow
+                            projectContext={projectContext}
                             technique={technique}
                             settings={s}
                             goal={context}
@@ -973,6 +1004,7 @@ export default function TechniekWerkplaats({
                         />
                       )}
                       <FollowUpQuestions
+                        projectContext={projectContext}
                         technique={technique}
                         answers={answers}
                         onChange={setAnswers}

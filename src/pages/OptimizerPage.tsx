@@ -513,7 +513,13 @@ export default function OptimizerPage() {
                 webSearch={webSearchOn}
               />
             ) : (
-              <TechniekWerkplaats variant="maken" header={tabs} />
+              <TechniekWerkplaats
+                variant="maken"
+                header={tabs}
+                projectContext={projectContext?.text}
+                projectSources={projectSources}
+                renderProjectContext={renderProjectContext}
+              />
             );
           })()}
         </div>
