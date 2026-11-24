@@ -22,3 +22,9 @@ verify_jwt = false
 # aangeroepen. Authenticatie gebeurt via het gedeelde geheim in de header
 # x-webhook-secret, net als bij register-brevo-contact.
 verify_jwt = false
+
+[functions.auth-email]
+# JWT-verificatie staat uit: Supabase Auth roept deze functie aan als Send Email
+# Hook. Authenticatie gebeurt met de handtekening van de hook (standard webhooks),
+# met het geheim in SEND_EMAIL_HOOK_SECRET.
+verify_jwt = false

@@ -171,6 +171,13 @@ categorieën en functies. De indiener krijgt altijd een besluitmail, ook als die
 aanvraag afhandelt (0050). Een nieuw soort aanvraag krijgt dus een eigen trigger. In de mail staan
 de gegevens als `params.voornaam`, `soort`, `titel`, `bereik`, `aanvrager`, `toelichting` en `link`.
 
+De mails van Supabase Auth gaan ook via Brevo: de Send Email Hook roept de edge function
+`auth-email` aan (geheim `SEND_EMAIL_HOOK_SECRET`). De herstelmail is template 146 met
+`params.voornaam` en `link`. Die link gaat naar `/auth/nieuw-wachtwoord?token_hash=…` en niet
+naar Supabase `/verify`: de pagina wisselt de token pas in bij Opslaan, want mailscanners van
+de rijksmail openen elke link en maakten de oude link op. Andere soorten auth-mail komen nu niet
+voor (bevestigen staat uit) en krijgen in de functie een eenvoudige mail zonder template.
+
 Template 104 waarschuwt een week voordat de bronbestanden van een project verdwijnen (0053), ook
 transactioneel en zonder uitschrijflink, met `params.titel`, `aantal`, `datum` en `link`.
 
@@ -198,7 +205,7 @@ src/
   data/           seed.ts, promptExamples.ts
   types/          index.ts, alle domeinmodellen op één plek
 supabase/
-  functions/      optimize-prompt (de grote), send-contact, register-brevo-contact,
+  functions/      optimize-prompt (de grote), send-contact, register-brevo-contact, auth-email,
                   brevo-event
   migrations/     0001 … 0035, oplopend genummerd
 ```

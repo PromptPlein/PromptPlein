@@ -1,35 +1,43 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Eye, EyeOff } from '@/components/common/icons';
 import toast from 'react-hot-toast';
-import { updatePassword } from '@/services/authService';
+import { updatePassword, verifyRecoveryToken } from '@/services/authService';
 import { useAuth } from '@/context/AuthContext';
 import AuthLayout from './AuthLayout';
 
 const MIN_LENGTH = 8;
 
 /**
- * Stelt een nieuw wachtwoord in op basis van het recovery-token in de URL.
- * supabase-js leest dat token automatisch uit de hash (detectSessionInUrl),
- * waardoor er tijdelijk een sessie ontstaat waarmee updateUser() mag.
+ * Stelt een nieuw wachtwoord in. De herstelmail uit Brevo (edge function
+ * auth-email) linkt hierheen met `?token_hash=…&type=recovery`; die token wordt
+ * pas bij Opslaan ingewisseld, zodat een mailscanner die de link opent hem niet
+ * opmaakt. Oudere links komen binnen met een sessie in de hash, die supabase-js
+ * zelf oppakt (detectSessionInUrl).
  */
 export default function UpdatePasswordPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { configured, loading, isAuthenticated } = useAuth();
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [verified, setVerified] = useState(false);
+  const [expired, setExpired] = useState(false);
 
-  // Geef supabase-js even de tijd om het recovery-token uit de URL te verwerken.
+  const tokenHash = searchParams.get('type') === 'recovery' ? searchParams.get('token_hash') : null;
+
+  // Geef supabase-js even de tijd om een sessie uit de URL-hash te verwerken.
   const [grace, setGrace] = useState(true);
   useEffect(() => {
     const t = setTimeout(() => setGrace(false), 1200);
     return () => clearTimeout(t);
   }, []);
 
-  const ready = isAuthenticated;
-  const noToken = configured && !loading && !grace && !isAuthenticated;
+  const ready = isAuthenticated || Boolean(tokenHash);
+  const noToken =
+    expired || (configured && !loading && !grace && !isAuthenticated && !tokenHash);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -44,11 +52,20 @@ export default function UpdatePasswordPage() {
     }
     setBusy(true);
     try {
+      if (tokenHash && !verified) {
+        try {
+          await verifyRecoveryToken(tokenHash);
+          setVerified(true);
+        } catch {
+          setExpired(true);
+          return;
+        }
+      }
       await updatePassword(password);
-      toast.success('Wachtwoord bijgewerkt. Je kunt nu inloggen.');
-      navigate('/auth/login', { replace: true });
+      toast.success('Wachtwoord opgeslagen. Je bent ingelogd.');
+      navigate('/', { replace: true });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Bijwerken mislukt.');
+      toast.error(err instanceof Error ? err.message : 'Opslaan mislukt.');
     } finally {
       setBusy(false);
     }
@@ -67,8 +84,9 @@ export default function UpdatePasswordPage() {
       {noToken ? (
         <div className="space-y-3">
           <p className="rounded-lg bg-amber-50 px-3 py-3 text-sm text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">
-            Geen geldige herstellink gevonden. Vraag een nieuwe herstelmail aan en open de link
-            opnieuw.
+            {expired
+              ? 'Deze link is verlopen of al gebruikt. Vraag een nieuwe herstelmail aan en gebruik de nieuwste link.'
+              : 'Geen geldige herstellink gevonden. Vraag een nieuwe herstelmail aan en open de link opnieuw.'}
           </p>
           <Link to="/auth/wachtwoord-vergeten" className="opl-btn-primary w-full">
             Nieuwe herstellink aanvragen

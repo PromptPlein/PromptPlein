@@ -75,6 +75,17 @@ export async function requestPasswordReset(email: string): Promise<void> {
 }
 
 /**
+ * Wissel de token uit de herstelmail in voor een sessie. Pas aanroepen als de
+ * gebruiker zelf op Opslaan drukt: mailscanners openen de link ook, en dan zou
+ * de token al op zijn voordat de gebruiker er is.
+ */
+export async function verifyRecoveryToken(tokenHash: string): Promise<void> {
+  const client = requireClient();
+  const { error } = await client.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' });
+  if (error) throw error;
+}
+
+/**
  * Stel een nieuw wachtwoord in voor de huidige (recovery- of ingelogde) sessie.
  * Werkt nadat supabase-js het recovery-token uit de URL heeft opgepikt.
  */
