@@ -1115,6 +1115,8 @@ export interface OrganizationRequest {
   /** Het diepste onderdeel dat bij goedkeuring is aangemaakt. */
   created_org_id?: string | null;
   created_at: string;
+  /** Hoeveel collega's aansloten bij deze aanvraag (0067), alleen in de wachtrij. */
+  followers?: number;
   /** Verrijkt vanuit het profiel van de aanvrager (optioneel). */
   requester?: Pick<Profile, 'email' | 'full_name'> | null;
 }

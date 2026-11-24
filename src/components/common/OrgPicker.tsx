@@ -1,7 +1,11 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from 'react';
 import toast from 'react-hot-toast';
 import { useReferenceData } from '@/context/ReferenceDataContext';
-import { requestOrganization } from '@/services/organizationRequestService';
+import {
+  listPendingRequestsUnder,
+  requestOrganization,
+  type PendingOrgRequest,
+} from '@/services/organizationRequestService';
 import {
   childrenOf,
   descendantsInOrder,
@@ -50,6 +54,25 @@ function layerProblem(layer: Layer): string | null {
 }
 
 const isDepartment = (o: Organization) => o.organization_type === 'department';
+
+/**
+ * Lijkt een ingevulde laag op deze naam en afkorting? Gelijk zonder accenten en
+ * leestekens, of de meeste betekenisvolle woorden gemeen.
+ */
+function looksLike(layer: Layer, name: string, code?: string | null): boolean {
+  const keys = [layer.name, layer.code].map(compact).filter((k) => k.length >= 2);
+  if (keys.length === 0) return false;
+  const own = [name, code ?? ''].map(compact).filter(Boolean);
+  if (keys.some((k) => own.includes(k))) return true;
+  const words = significantWords(layer.name);
+  const theirs = significantWords(name);
+  const shared = words.filter((w) => theirs.includes(w)).length;
+  return words.length >= 2 && shared >= Math.ceil(words.length * 0.6);
+}
+
+/** Zijn twee rijen lagen gelijk, zonder accenten en leestekens? */
+const sameNames = (a: string[], b: string[]) =>
+  a.length === b.length && a.every((n, i) => compact(n) === compact(b[i]));
 
 /**
  * Een aanvraag die nog niet is ingediend: bij het registreren is er geen sessie,
@@ -105,6 +128,8 @@ export default function OrgPicker({
   const [directie, setDirectie] = useState<Layer>(EMPTY_LAYER);
   const [afdeling, setAfdeling] = useState<Layer>(EMPTY_LAYER);
   const [sending, setSending] = useState(false);
+  /** Wat collega's onder dit ministerie al aanvroegen en nog op goedkeuring wacht. */
+  const [pending, setPending] = useState<PendingOrgRequest[]>([]);
   const firstRef = useRef<HTMLInputElement>(null);
   const hintId = useId();
 
@@ -212,22 +237,73 @@ export default function OrgPicker({
     const wanted = layers.slice(layers.length - existing.rest);
     const found = new Map<string, Organization>();
     for (const layer of wanted) {
-      const keys = [layer.name, layer.code].map(compact).filter((k) => k.length >= 2);
-      const words = significantWords(layer.name);
-      if (keys.length === 0) continue;
       for (const o of organizations) {
         if (o.organization_type === 'ministry' || found.has(o.id)) continue;
-        const own = [o.name, o.code ?? ''].map(compact).filter(Boolean);
-        const sameKey = keys.some((k) => own.includes(k));
-        const theirs = significantWords(o.name);
-        const shared = words.filter((w) => theirs.includes(w)).length;
-        const similar = words.length >= 2 && shared >= Math.ceil(words.length * 0.6);
-        if (sameKey || similar) found.set(o.id, o);
+        if (looksLike(layer, o.name, o.code)) found.set(o.id, o);
       }
     }
     return [...found.values()].slice(0, 4);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [adding, alreadyThere, organizations, directie, afdeling, newDirectie, existing.rest]);
+
+  // Aanvragen van collega's die nog wachten, onder dit ministerie.
+  useEffect(() => {
+    if (!adding || !ministryId) return;
+    let stale = false;
+    void listPendingRequestsUnder(ministryId).then((rows) => {
+      if (!stale) setPending(rows);
+    });
+    return () => {
+      stale = true;
+    };
+  }, [adding, ministryId]);
+
+  /** Valt deze aanvraag in te vullen in het formulier? Zo ja: hoe. */
+  function fillFrom(p: PendingOrgRequest): (() => void) | null {
+    const parentOrg = organizations.find((o) => o.id === p.parent_id);
+    if (!parentOrg) return null;
+    const layer = (i: number): Layer => ({ name: p.names[i] ?? '', code: p.codes[i] ?? '' });
+    if (parentOrg.organization_type === 'ministry' && p.names.length === 2) {
+      return () => {
+        setNewDirectie(true);
+        setDirectieId(null);
+        setDirectie(layer(0));
+        setAfdeling(layer(1));
+      };
+    }
+    if (p.names.length === 1 && directies.some((d) => d.id === p.parent_id)) {
+      return () => {
+        setNewDirectie(false);
+        setDirectieId(p.parent_id);
+        setDirectie(EMPTY_LAYER);
+        setAfdeling(layer(0));
+      };
+    }
+    return null;
+  }
+
+  // Is wat er nu staat precies een aanvraag die al wacht? Dan sluit je daarbij aan.
+  const joins = useMemo(
+    () =>
+      !!parent &&
+      pending.some(
+        (p) => p.parent_id === parent.id && sameNames(p.names, layers.map((l) => l.name)),
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pending, parent, directie, afdeling, newDirectie],
+  );
+
+  // Lijkt wat je invult op een aanvraag die al wacht? Dan die aanbieden.
+  const pendingLookalikes = useMemo(() => {
+    if (!adding || joins || alreadyThere) return [];
+    const last = layers[layers.length - 1];
+    return pending
+      .filter((p) => looksLike(last, p.names[p.names.length - 1], p.codes[p.codes.length - 1]))
+      .map((p) => ({ request: p, fill: fillFrom(p) }))
+      .filter((x): x is { request: PendingOrgRequest; fill: () => void } => x.fill !== null)
+      .slice(0, 3);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adding, joins, alreadyThere, pending, directie, afdeling, newDirectie, organizations]);
 
   const ready =
     !!parent && layers.every((l) => l.name.length >= 2) && !directieProblem && !afdelingProblem;
@@ -502,8 +578,49 @@ export default function OrgPicker({
             </div>
           )}
 
+          {pendingLookalikes.length > 0 && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 dark:border-amber-500/40 dark:bg-amber-500/10">
+              <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                Een collega vroeg dit misschien al aan
+              </p>
+              <ul className="mt-2 space-y-1.5">
+                {pendingLookalikes.map(({ request, fill }) => {
+                  const above = organizations.find((o) => o.id === request.parent_id);
+                  const path = [
+                    above ? (above.organization_type === 'ministry' ? above.code || above.name : orgDisplayName(above)) : '',
+                    ...request.names.slice(0, -1).map((n, i) =>
+                      orgDisplayName({ name: n, code: request.codes[i] || null }),
+                    ),
+                  ]
+                    .filter(Boolean)
+                    .join(ORG_PATH_SEPARATOR);
+                  const last = request.names.length - 1;
+                  return (
+                    <li key={request.id}>
+                      <button
+                        type="button"
+                        onClick={fill}
+                        disabled={sending}
+                        className="opl-raak w-full rounded border border-slate-200 bg-white px-3 py-2 text-left text-sm hover:border-rijksblauw-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 dark:border-slate-600 dark:bg-slate-800"
+                      >
+                        <span className="block font-medium text-slate-800 dark:text-slate-100">
+                          {orgDisplayName({ name: request.names[last], code: request.codes[last] || null })}
+                        </span>
+                        <span className="block text-xs text-slate-500 dark:text-slate-400">
+                          {path ? `onder ${path}, ` : ''}wacht op goedkeuring. Kies om aan te sluiten.
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+
           <p id={hintId} className="text-xs text-slate-500 dark:text-slate-400">
-            {alreadyThere && existing.deepest
+            {joins && !alreadyThere
+              ? 'Een collega heeft dit al aangevraagd. Je sluit daarbij aan en krijgt ook bericht als een beheerder heeft beslist.'
+              : alreadyThere && existing.deepest
               ? `“${orgDisplayName(existing.deepest)}” bestaat al. Kies hem met de knop hieronder.`
               : ready
                 ? deferred

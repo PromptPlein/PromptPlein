@@ -58,7 +58,10 @@ export function requestLayerLabels(request: OrganizationRequest): string[] {
   });
 }
 
-/** De eigen aanvragen die nog op een beheerder wachten, voor het profiel. */
+/**
+ * De eigen aanvragen die nog op een beheerder wachten, voor het profiel. Ook die
+ * van een collega waar je bij aansloot (0067).
+ */
 export async function listOwnPendingOrganizationRequests(userId: string): Promise<OrganizationRequest[]> {
   if (!isSupabaseConfigured || !supabase) return [];
   const { data, error } = await supabase
@@ -68,7 +71,45 @@ export async function listOwnPendingOrganizationRequests(userId: string): Promis
     .eq('status', 'pending')
     .order('created_at', { ascending: true });
   if (error) throw error;
-  return (data ?? []) as OrganizationRequest[];
+  const own = (data ?? []) as OrganizationRequest[];
+
+  // Zonder migratie 0067 bestaat de tabel nog niet: dan alleen de eigen.
+  const { data: joined } = await supabase
+    .from('organization_request_followers')
+    .select('request_id')
+    .eq('user_id', userId);
+  const ids = ((joined ?? []) as { request_id: string }[])
+    .map((j) => j.request_id)
+    .filter((id) => !own.some((r) => r.id === id));
+  if (ids.length === 0) return own;
+  const { data: more } = await supabase
+    .from('organization_requests')
+    .select('*')
+    .in('id', ids)
+    .eq('status', 'pending');
+  return [...own, ...((more ?? []) as OrganizationRequest[])];
+}
+
+/** Een aanvraag die nog wacht, zoals het formulier hem kan aanbieden. */
+export interface PendingOrgRequest {
+  id: string;
+  parent_id: string;
+  names: string[];
+  codes: string[];
+}
+
+/**
+ * De afdelingen die onder een ministerie al worden aangevraagd, zonder de
+ * aanvrager. Werkt ook bij het registreren, zonder sessie. Leeg bij een fout:
+ * het is een hulp bij het aanvragen, geen voorwaarde.
+ */
+export async function listPendingRequestsUnder(ministryId: string): Promise<PendingOrgRequest[]> {
+  if (!isSupabaseConfigured || !supabase) return [];
+  const { data, error } = await supabase.rpc('pending_organization_requests', {
+    p_ministry: ministryId,
+  });
+  if (error) return [];
+  return (data ?? []) as PendingOrgRequest[];
 }
 
 /** Aantal openstaande aanvragen, voor een teller in het beheermenu. */
@@ -102,6 +143,18 @@ export async function listPendingOrganizationRequests(): Promise<OrganizationReq
     }
     for (const r of rows) {
       r.requester = r.requested_by ? byId.get(r.requested_by) ?? null : null;
+    }
+  }
+
+  // Wie aansloot bij een aanvraag (0067); zonder die tabel blijft het bij de aanvrager.
+  if (rows.length) {
+    const { data: joined } = await client
+      .from('organization_request_followers')
+      .select('request_id')
+      .in('request_id', rows.map((r) => r.id));
+    for (const j of (joined ?? []) as { request_id: string }[]) {
+      const r = rows.find((x) => x.id === j.request_id);
+      if (r) r.followers = (r.followers ?? 0) + 1;
     }
   }
   return rows;

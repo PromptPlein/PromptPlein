@@ -119,7 +119,7 @@ export default function OrganizationRequestQueuePage() {
                     {req.names.length === 1
                       ? 'Een nieuwe afdeling'
                       : 'Een nieuwe directie of dienst met een afdeling eronder, die samen worden aangemaakt'}
-                    . De aanvrager komt er bij goedkeuring op zijn profiel te staan. Klopt een
+                    . De aanvrager, en wie aansloot, komt er bij goedkeuring op zijn profiel te staan. Klopt een
                     naam of afkorting niet, keur dan goed en pas hem aan bij Organisaties.
                   </p>
                   {req.motivation && (
@@ -128,6 +128,9 @@ export default function OrganizationRequestQueuePage() {
                   <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
                     Aangevraagd {formatDate(req.created_at)} · door{' '}
                     {req.requester?.full_name || req.requester?.email || 'onbekend'}
+                    {req.followers
+                      ? `, en ${req.followers} ${req.followers === 1 ? 'collega sloot' : 'collega’s sloten'} aan`
+                      : ''}
                   </p>
                 </div>
               </div>

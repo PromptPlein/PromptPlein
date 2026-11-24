@@ -240,7 +240,10 @@ vanzelf in. Een directie of dienst zonder afdelingen staat zelf in die lijst. He
 zoeken (`zoekMatch.ts`, ook in `SearchableSelect`) let niet op accenten, leestekens
 en woordvolgorde, en toont bij geen treffer wat erop lijkt. Het aanvraagformulier
 biedt een bestaande organisatie aan als de nieuwe erop lijkt: dubbele aanvragen
-kwamen vooral van anders geschreven namen ("SSCICT" bij "SSC-ICT").
+kwamen vooral van anders geschreven namen ("SSCICT" bij "SSC-ICT"). Vraagt iemand
+aan wat een ander al heeft aangevraagd en nog wacht, dan sluit hij daarbij aan
+(`organization_request_followers`, 0067): geen tweede aanvraag, en bij het besluit
+verhuist zijn profiel mee en krijgt hij ook de mail.
 Het profiel hangt aan de afdeling. Een ontbrekende afdeling vraagt de gebruiker
 aan bij het registreren of op zijn profiel: eerst kiest hij de directie of dienst,
 en staat die er ook niet bij, dan vraagt hij die mee aan (`request_organization`,
@@ -917,6 +920,10 @@ kopje te tonen is. `chat-intake-check` beoordeelt de prompt per kopje en stelt �
 over het zwakste punt; een gekozen antwoord gaat via de aanpasstap van `context-prompt`.
 Pas "Gebruik deze prompt" zet hem in het tekstvak, als uitvoergesprek. Versturen blijft
 een eigen handeling. Niets van het doorvragen komt in de opgeslagen chat.
+
+De eerste vraag staat dicht: één regel "Dit is weinig context." met Geef meer context
+en Stuur zoals het is (keuze van de eigenaar). Pas daarna verschijnt de kaart met de
+vragen.
 
 Het slaat over bij uitvoergesprekken, projectchats, de gespreksmodus en wat
 `shouldJudgeFirstMessage` wegfiltert (korte vragen, eigen prompts met kopjes, wensen voor
