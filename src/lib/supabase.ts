@@ -38,6 +38,15 @@ function migrateAuthStorageKey(): void {
 
 if (isSupabaseConfigured) migrateAuthStorageKey();
 
+/**
+ * Kwam deze pagina binnen via een herstellink? Lezen vóór createClient, want
+ * supabase-js haalt de hash meteen weg. Supabase stuurt de link naar de Site URL
+ * als het `redirectTo` niet op de lijst staat, en dan landt hij op de startpagina:
+ * ingelogd, maar zonder formulier voor een nieuw wachtwoord.
+ */
+export const recoveryLinkInUrl =
+  typeof window !== 'undefined' && /(^|[#&])type=recovery(&|$)/.test(window.location.hash);
+
 export const supabase: SupabaseClient | null = isSupabaseConfigured
   ? createClient(url!, anonKey!, {
       auth: {

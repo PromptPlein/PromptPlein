@@ -8,7 +8,8 @@ import {
   type ReactNode,
 } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
-import { isSupabaseConfigured, supabase } from '@/lib/supabase';
+import { useNavigate } from 'react-router-dom';
+import { isSupabaseConfigured, recoveryLinkInUrl, supabase } from '@/lib/supabase';
 import { clearChatHandoffs } from '@/lib/chatStorage';
 import * as authService from '@/services/authService';
 import { fetchMyModeratorOrgIds } from '@/services/orgService';
@@ -45,7 +46,10 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 const ROLE_RANK: Record<AppRole, number> = { user: 0, admin: 1, super_admin: 2 };
 
+const UPDATE_PASSWORD_PATH = '/auth/nieuw-wachtwoord';
+
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(isSupabaseConfigured);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -79,6 +83,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     let active = true;
 
+    // Een herstellink hoort op het formulier voor een nieuw wachtwoord uit te
+    // komen, ook als hij op een andere pagina binnenkwam.
+    const toUpdatePassword = () => {
+      if (window.location.pathname !== UPDATE_PASSWORD_PATH) {
+        navigate(UPDATE_PASSWORD_PATH, { replace: true });
+      }
+    };
+    if (recoveryLinkInUrl) toUpdatePassword();
+
     supabase.auth.getSession().then(async ({ data }) => {
       if (!active) return;
       setSession(data.session);
@@ -87,6 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     const { data: sub } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (event === 'PASSWORD_RECOVERY') toUpdatePassword();
       // Bij uitloggen (ook token-verval of uitloggen in een andere tab) gaan de
       // doorgeefluiken weg. De chats zelf blijven: die horen bij het apparaat.
       if (event === 'SIGNED_OUT') clearChatHandoffs();
@@ -98,6 +112,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       active = false;
       sub.subscription.unsubscribe();
     };
+    // Alleen bij het starten: de herstellink staat dan in de URL.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadProfile]);
 
   const signIn = useCallback(async (email: string, password: string) => {
