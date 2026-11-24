@@ -40,9 +40,9 @@ export const PROMPT_EXAMPLES: PromptExample[] = [
   {
     category: 'begrijpelijk',
     title: 'Brief beoordelen op B1 en toon',
-    subtitle: 'Eerst een oordeel, daarna een suggestie op taalniveau B1',
+    subtitle: 'Eerst een oordeel, daarna dezelfde brief op B1',
     prompt:
-      'Maak een prompt die een brief beoordeelt op B1-taalniveau en toon. Laat daarna een suggestie schrijven voor hoe het wel op B1-taalniveau is.',
+      'Beoordeel een brief aan burgers op taalniveau B1 en op toon. Wijs moeilijke woorden, lange zinnen en ambtelijke of afstandelijke passages aan en leg kort uit waarom ze niet werken. Herschrijf de brief daarna op B1-niveau in een vriendelijke, directe toon. Verander niets aan de inhoud, de afspraken of de termijnen, en houd de aanspreekvorm (u of je) van het origineel aan.',
   },
   {
     category: 'beleid',
