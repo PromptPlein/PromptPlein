@@ -26,7 +26,7 @@ import {
   Zap,
   type LucideIcon,
 } from '@/components/common/icons';
-import { isContextPrompt } from '@/lib/techniques';
+import { isContextPrompt, isImagePrompt } from '@/lib/techniques';
 import type { Technique } from '@/types';
 
 /**
@@ -228,4 +228,20 @@ export function techniekKaart(t: Technique): TechniekKaart {
     info: omschrijving,
     icon: framework ? Layers : Wrench,
   };
+}
+
+/**
+ * De frameworks op de oefenpagina /frameworks: alleen die voor tekst (Schrijven
+ * en Uitdenken), met CARE bovenaan, want daar begint wie het voor het eerst doet.
+ * De frameworks voor Bouwen (dashboard, agent, vibecode) en de beeldprompt staan
+ * alleen op Maken (keuze van de eigenaar).
+ */
+export function oefenFrameworks(techniques: Technique[]): Technique[] {
+  const lijst = techniques.filter((t) => {
+    if (!isContextPrompt(t) || isImagePrompt(t)) return false;
+    const { doel } = techniekKaart(t);
+    return doel === 'schrijven' || doel === 'uitdenken';
+  });
+  const isCare = (t: Technique) => t.name.trim().toLowerCase() === 'care';
+  return [...lijst.filter(isCare), ...lijst.filter((t) => !isCare(t))];
 }

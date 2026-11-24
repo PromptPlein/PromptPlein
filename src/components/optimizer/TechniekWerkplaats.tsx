@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -8,7 +8,7 @@ import {
 } from '@/components/common/icons';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
-import TechniqueChooser from '@/components/optimizer/TechniqueChooser';
+import TechniqueChooser, { FrameworkLijst } from '@/components/optimizer/TechniqueChooser';
 import TechniqueAdvisor from '@/components/optimizer/TechniqueAdvisor';
 import FollowUpQuestions, { type FieldMeta } from '@/components/optimizer/FollowUpQuestions';
 import PersonaBuilder from '@/components/optimizer/PersonaBuilder';
@@ -59,15 +59,25 @@ import { defaultModelFor, isEnabledProvider, thinkingUnavailableReason } from '@
 import type { OptimizeResult, Technique } from '@/types';
 
 /**
- * Werken mét de prompttechnieken zelf: de volledige lijst frameworks en losse
- * technieken, en per techniek de velden die je zelf invult. Bedoeld voor de
- * training — deelnemers zien welke technieken er zijn, kiezen er één, vullen
- * hun eigen gegevens in en bouwen daar een prompt van.
+ * Werken mét een framework of techniek zelf: kiezen, de velden of de eigen
+ * bouwer invullen en daar een prompt van bouwen. Draait op twee plekken:
  *
- * Bewust naast /genereren: die pagina kiest de techniek zélf op basis van een
- * analyse. Hier kiest de gebruiker en blijft de techniek het onderwerp.
+ * - 'maken': het tabblad "Wat wil je bereiken?" op /genereren. Alle frameworks
+ *   en technieken, ingedeeld op doel, met de adviseur "Help mij kiezen".
+ * - 'oefenen': /frameworks, de oefenpagina. Alleen de frameworks voor tekst,
+ *   CARE bovenaan, zonder doelen en zonder adviseur (keuze van de eigenaar).
  */
-export default function TechniquesPage() {
+export type WerkplaatsVariant = 'maken' | 'oefenen';
+
+export default function TechniekWerkplaats({
+  variant,
+  header,
+}: {
+  variant: WerkplaatsVariant;
+  /** De tabbladen van Maken, boven het kiesvlak. */
+  header?: ReactNode;
+}) {
+  const maken = variant === 'maken';
   const { profile, user } = useAuth();
   const { techniques } = useReferenceData();
 
@@ -201,14 +211,16 @@ export default function TechniquesPage() {
     handleSelectTechnique(chosen.id, draft || undefined);
   }
 
-  // Doorverwijzing vanaf /genereren: wie daar bij "Wat wil je maken?" Skill
+  // Doorverwijzing vanaf het andere tabblad: wie bij "Wat wil je maken?" Skill
   // koos, komt hier binnen met de Skill Creator gekozen en zijn tekst als
   // eerste antwoord. Eén keer; daarna gaat de state eraf, zodat herladen of
-  // terugbladeren niet opnieuw een techniek kiest.
+  // terugbladeren niet opnieuw een techniek kiest. Alleen op Maken: de
+  // oefenpagina kent alleen frameworks.
   const location = useLocation();
   const navigate = useNavigate();
   const skillHandoffRef = useRef(false);
   useEffect(() => {
+    if (!maken) return;
     const skillContext = (location.state as { skillContext?: string } | null)?.skillContext;
     if (skillContext === undefined || skillHandoffRef.current) return;
     const skill = techniques.find(isSkillCreator);
@@ -229,6 +241,7 @@ export default function TechniquesPage() {
   const [designFile, setDesignFile] = useState<File | null>(null);
   const opmaakHandoffRef = useRef(false);
   useEffect(() => {
+    if (!maken) return;
     const state = location.state as { opmaak?: string; terugChat?: string | null } | null;
     if (!state?.opmaak || opmaakHandoffRef.current) return;
     const template = techniques.find((t) => structureFormat(t) === 'template-based');
@@ -432,7 +445,8 @@ export default function TechniquesPage() {
         user_identifier: activityIdentifier(profile, user?.email),
         prompt_id: null,
         technique_id: technique.id,
-        metadata: { provider: res.provider, flow: 'techniques' },
+        // 'goal' is de oude waarde van dit tabblad, zodat de reeks in analytics doorloopt.
+        metadata: { provider: res.provider, flow: maken ? 'goal' : 'techniques' },
       });
 
       setPhase('transition');
@@ -485,13 +499,27 @@ export default function TechniquesPage() {
     advisorOpen ||
     Object.keys(answers).length > 0;
 
+  // Op Maken staat de kop van de pagina (Prompt maken) er al: daar is alles h2.
+  const ChosenHeading = maken ? 'h2' : 'h1';
+
   return (
     <div
       className={clsx(
-        'mx-auto px-4 py-8 sm:px-6 lg:px-8',
-        technique ? 'max-w-4xl' : 'max-w-5xl',
+        !maken && 'mx-auto px-4 py-8 sm:px-6 lg:px-8',
+        !maken && (technique ? 'max-w-4xl' : 'max-w-5xl'),
       )}
     >
+      {phase !== 'output' && header}
+
+      {/* Op Maken loopt het gekozen tabblad over in dit vlak. */}
+      <div
+        className={clsx(
+          maken &&
+            'rounded-xl border border-slate-200 bg-white p-4 sm:p-5 dark:border-slate-700 dark:bg-slate-800',
+          maken && phase !== 'output' && 'sm:rounded-t-none',
+        )}
+      >
+
       {/* Je keuze staat bovenaan, ook bij het resultaat: zo blijft zichtbaar waar
           je mee werkt en is de weg terug naar de kiezer één klik. */}
       {technique && (
@@ -510,9 +538,9 @@ export default function TechniquesPage() {
             <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
               {isContextPrompt(technique) ? 'Framework gekozen' : 'Techniek gekozen'}
             </p>
-            <h1 className="text-2xl font-bold leading-tight text-rijksblauw-700 dark:text-rijksblauw-200">
+            <ChosenHeading className="text-2xl font-bold leading-tight text-rijksblauw-700 dark:text-rijksblauw-200">
               {technique.name}
-            </h1>
+            </ChosenHeading>
           </div>
           <InfoDot label={`Uitleg over ${technique.name}`} text={chosenInfo(technique)} />
           {phase === 'input' && (
@@ -542,7 +570,7 @@ export default function TechniquesPage() {
       )}
 
       {phase === 'output' && result ? (
-        <div className="opl-card p-6">
+        <div className={maken ? undefined : 'opl-card p-6'}>
           <OptimizedOutput
             result={result}
             technique={technique}
@@ -572,21 +600,52 @@ export default function TechniquesPage() {
         >
           {/* De kiezer: het eerste scherm zonder techniek, en wat "Andere kiezen"
               opent. De adviseur hoort erbij, voor wie er zelf niet uitkomt. */}
-          {(!technique || chooserOpen) && (
+          {/* De oefenpagina: alleen de frameworks, CARE bovenaan. */}
+          {!maken && (!technique || chooserOpen) && (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
+                <div className="flex items-center gap-1">
+                  {technique ? (
+                    <h2 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
+                      Kies een framework
+                    </h2>
+                  ) : (
+                    <h1 className="text-3xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
+                      Kies een framework
+                    </h1>
+                  )}
+                  <InfoDot
+                    label="Uitleg over frameworks oefenen"
+                    text={
+                      'Een framework bouwt je hele prompt op. Kies er een, vul de velden in en bouw je prompt.\nBegin je net? Begin dan met CARE.'
+                    }
+                  />
+                </div>
+                {!technique && hasContent && (
+                  <button
+                    type="button"
+                    onClick={handleClearAll}
+                    title="Wis je invoer en begin opnieuw"
+                    className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-rijksblauw-700 transition-colors hover:text-nadruk dark:text-rijksblauw-200"
+                  >
+                    <Eraser size={15} /> Opschonen
+                  </button>
+                )}
+              </div>
+              <FrameworkLijst selectedId={techniqueId} onSelect={handleSelectTechnique} />
+            </div>
+          )}
+
+          {maken && (!technique || chooserOpen) && (
             <div className="space-y-6">
               {/* Hetzelfde raster als de tegels eronder: de knop is even breed als de
                   laatste tegel. */}
               <div className="grid grid-cols-1 items-center gap-3 lg:grid-cols-5">
                 <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 lg:col-span-4">
-                  {technique ? (
-                    <h2 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
-                      Wat wil je bereiken?
-                    </h2>
-                  ) : (
-                    <h1 className="text-3xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
-                      Wat wil je bereiken?
-                    </h1>
-                  )}
+                  {/* Het tabblad heet al "Wat wil je bereiken?"; de kop herhaalt dat niet. */}
+                  <h2 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">
+                    Kies je doel
+                  </h2>
                   {!technique && hasContent && (
                     <button
                       type="button"
@@ -960,6 +1019,8 @@ export default function TechniquesPage() {
           )}
         </div>
       )}
+
+      </div>
 
       {guardrailFindings && (
         <GuardrailDialog

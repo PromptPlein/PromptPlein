@@ -93,7 +93,7 @@ export default function WordSettings() {
                 <button
                   type="button"
                   className={SMALL_BUTTON}
-                  onClick={() => navigate('/technieken', { state: { opmaak: option.id } })}
+                  onClick={() => navigate('/genereren', { state: { opmaak: option.id } })}
                   aria-label={`${option.label} aanpassen`}
                 >
                   <Pencil size={14} aria-hidden="true" /> Aanpassen
@@ -115,7 +115,7 @@ export default function WordSettings() {
       <button
         type="button"
         className="opl-btn-secondary mt-2"
-        onClick={() => navigate('/technieken', { state: { opmaak: 'nieuw' } })}
+        onClick={() => navigate('/genereren', { state: { opmaak: 'nieuw' } })}
       >
         <Plus size={16} aria-hidden="true" /> Nieuwe opmaak maken
       </button>

@@ -4,7 +4,12 @@ import { ArrowRight, Check } from '@/components/common/icons';
 import InfoDot from '@/components/common/InfoDot';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { isContextPrompt, isImagePrompt } from '@/lib/techniques';
-import { TECHNIEK_DOELEN, techniekKaart, type TechniekDoel } from '@/lib/techniekDoelen';
+import {
+  TECHNIEK_DOELEN,
+  oefenFrameworks,
+  techniekKaart,
+  type TechniekDoel,
+} from '@/lib/techniekDoelen';
 import type { Technique } from '@/types';
 
 /**
@@ -136,6 +141,33 @@ export default function TechniqueChooser({
         </ul>
       </section>
     </div>
+  );
+}
+
+/**
+ * De oefenpagina /frameworks: alleen de frameworks voor tekst, zonder doelen,
+ * in dezelfde rijen als op Maken.
+ */
+export function FrameworkLijst({
+  selectedId,
+  onSelect,
+}: {
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  const { techniques } = useReferenceData();
+  const lijst = useMemo(() => oefenFrameworks(techniques), [techniques]);
+  return (
+    <ul aria-label="Frameworks" className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
+      {lijst.map((t) => (
+        <TechniqueRow
+          key={t.id}
+          technique={t}
+          active={t.id === selectedId}
+          onSelect={() => onSelect(t.id)}
+        />
+      ))}
+    </ul>
   );
 }
 

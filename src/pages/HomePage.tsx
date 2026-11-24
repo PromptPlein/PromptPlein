@@ -11,6 +11,7 @@ import {
 } from '@/components/common/icons';
 import clsx from 'clsx';
 import { useReferenceData } from '@/context/ReferenceDataContext';
+import { oefenFrameworks } from '@/lib/techniekDoelen';
 import { listPrompts } from '@/services/repository';
 import { getChatSettingsCached } from '@/services/settingsService';
 import { usePromptCommunity } from '@/hooks/usePromptCommunity';
@@ -89,11 +90,11 @@ export default function HomePage() {
             className="bg-[#dff4ed] text-rijksblauw-700 hover:bg-[#c8ecdf] dark:bg-[#1f4346] dark:text-white dark:hover:bg-[#285558]"
           />
           <TaskTile
-            to="/technieken"
+            to="/frameworks"
             icon={Layers}
-            label="Technieken leren"
-            count={techniques.length || null}
-            countLabel="technieken"
+            label="Frameworks oefenen"
+            count={oefenFrameworks(techniques).length || null}
+            countLabel="frameworks"
             className="bg-[#fff0c9] text-rijksblauw-700 hover:bg-[#ffe6a6] dark:bg-[#403a24] dark:text-white dark:hover:bg-[#524a2d]"
           />
         </div>

@@ -217,7 +217,7 @@ server-side op wat jij mag beoordelen.
 Ingelogd vereist: `/bibliotheek`, `/profiel`, `/netwerk`. De chat (`/chat`)
 werkt zonder account; alleen chatprojecten vragen er een. Admin
 vereist: alles onder `/admin`. De rest is openbaar, inclusief `/genereren`,
-`/zoeken`, `/community`, `/technieken` en `/toegankelijkheid`.
+`/zoeken`, `/community`, `/frameworks` en `/toegankelijkheid`.
 
 Prompts hebben een zichtbaarheidsniveau met een goedkeuringsstroom
 (`visibilityService`, `ApprovalQueuePage`): Privé, Afdeling (direct), Directie of
@@ -648,23 +648,33 @@ Zet je een voorbeeld in een prompt die zelf een prompt schrijft, dan neemt het
 model dat voorbeeld met enige regelmaat over als échte regel in de uitvoer.
 Merk het voorbeeld daarom onmiskenbaar als voorbeeld, of laat het weg.
 
-## De bouwer: twee ingangen
+## De bouwer: Maken en Frameworks oefenen
 
-- **`/genereren`** is de gewone weg. De AI analyseert wat de gebruiker wil, kiest
-  zelf het framework en vult de velden in; niemand kiest hier een framework. De
-  gebruiker kijkt na, vult aan en bouwt. De naam van de aanpak blijft zichtbaar
-  (`AanpakKaart`) en "Andere aanpak" toont de alternatieven die de AI al gaf, zonder
-  extra aanroep. Bij te weinig tekst vraagt de AI bij het tekstvak om meer, nooit
-  via een lijst. Geldt voor beide tabbladen: na het gesprek bij "Ik heb een idee"
-  kiest de AI op dezelfde manier. Hier zit ook de PlanWizard (plan met stappen,
-  interview in de tool, socratische aannamecontrole) en de Testkamer, de gesloten
-  lus bouwen, testen, verbeteren met versies.
-- **`/technieken`** is de trainingspagina waar de gebruiker zélf een techniek
-  kiest en de velden invult. Bouw geen handmatige techniekkiezer in
-  `/genereren`: dat is precies de scheiding tussen die twee pagina's.
+`/genereren` (Maken) heeft twee tabbladen:
 
-Op `/technieken` kies je op doel (`TechniqueChooser`): eerst Schrijven, Uitdenken,
-Controleren, Bouwen of Vaste vorm, dan de frameworks en technieken daarbij. De
+- **Ik heb al een prompt**: de AI analyseert de tekst, kiest zelf het framework en
+  vult de velden in. De gebruiker kijkt na, vult aan en bouwt. De naam van de aanpak
+  blijft zichtbaar (`AanpakKaart`) en "Andere aanpak" toont de alternatieven die de AI
+  al gaf, zonder extra aanroep. Bij te weinig tekst vraagt de AI bij het tekstvak om
+  meer, nooit via een lijst. Hier zit ook de Testkamer, de gesloten lus bouwen,
+  testen, verbeteren met versies.
+- **Wat wil je bereiken?** (sinds 24-11-2026, keuze van de eigenaar; vervangt het
+  gesprek "Ik heb een idee", `GoalDialog` is weg): kiezen op doel met alle
+  frameworks en technieken, en "Help mij kiezen" (`TechniqueAdvisor`). De adviseur
+  weegt frameworks en technieken samen (alleen de beeldprompt doet niet mee) en zet
+  zijn advies met de context uit het gesprek meteen klaar.
+
+`/frameworks` is de oefenpagina: alleen de zes frameworks voor tekst (CARE, CO-STAR,
+CREATE, CRAFT, CRISPE, RAISE), CARE bovenaan, zonder doelen en zonder adviseur
+(`oefenFrameworks`, keuze van de eigenaar). De frameworks voor Bouwen staan alleen op
+Maken. `/technieken` stuurt door naar `/frameworks`.
+
+Beide draaien op `TechniekWerkplaats` (variant `maken` of `oefenen`). Doorverwijzingen
+met `state.skillContext` (Skill Creator) of `state.opmaak` (Template-based Output met de
+opmaakmaker) gaan naar `/genereren`; die opent dan zelf het tabblad Wat wil je bereiken?
+
+Bij de doelen (`TechniqueChooser`) kies je eerst Schrijven, Uitdenken, Controleren,
+Bouwen of Vaste vorm, dan de frameworks en technieken daarbij. De
 indeling, de korte tekst en het icoon per techniek staan op naam in
 `src/lib/techniekDoelen.ts`, dus een techniek die in Beheer een nieuwe naam krijgt,
 hoort daar ook te worden aangepast. Een onbekende naam blijft zichtbaar en valt
@@ -674,8 +684,7 @@ kiezen" opent hem boven het invulblok, zonder de invoer te wissen.
 De doelen zijn tabbladen: de gekozen tegel loopt zonder lijn over in het vlak
 eronder, met een rode streep bovenaan. Dezelfde streep staat op de balk met je
 keuze. "Help mij kiezen" staat op hetzelfde raster als de tegels en is even breed
-als de laatste. De adviseur daarachter stelt alleen technieken voor, geen frameworks
-(`TechniqueAdvisor`).
+als de laatste.
 
 De invulvelden (`FollowUpQuestions`) staan overal in een compact raster: naam, uitleg
 achter het infobolletje, "Vul verder aan" pas als er tekst staat. Bij frameworks is de
@@ -692,7 +701,7 @@ framework, Beeldprompt (`modality = 'image'`, `structureFormat` 'image'), met
 negen velden in de volgorde van de promptgids van OpenAI: doel, onderwerp,
 omgeving, stijl, kader, licht, tekst, niet in beeld, formaat. Dezelfde bouwstenen
 staan op de spiekkaart (`BeeldSpiekkaart`) die verschijnt zodra iemand Afbeelding
-kiest. De beeldprompt doet niet mee als de AI kiest, en staat niet op /technieken.
+kiest. De beeldprompt doet niet mee als de AI kiest, en staat niet bij de doelen of op /frameworks.
 
 Boven het tekstvak kiest de gebruiker de stijl: Vrij, Rijkshuisstijl of Uit een
 project (per browser onthouden, `opl.beeld.stijl`). Bij een project gaat de

@@ -2421,7 +2421,7 @@ export async function explainFrameworkFit(args: {
 }
 
 /**
- * Eén beurt van de techniek-adviseur op /technieken: de gebruiker weet niet
+ * Eén beurt van de adviseur (Help mij kiezen bij Maken): de gebruiker weet niet
  * welke techniek hij moet hebben, en de AI redeneert dat in hoogstens vier
  * vragen uit.
  *

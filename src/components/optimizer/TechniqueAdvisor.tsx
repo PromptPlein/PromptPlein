@@ -12,7 +12,7 @@ import {
 } from '@/components/common/icons';
 import { adviseTechnique } from '@/services/optimizeService';
 import type { AiSettings } from '@/services/settingsService';
-import { isContextPrompt, isSkillCreator } from '@/lib/techniques';
+import { isContextPrompt, isImagePrompt } from '@/lib/techniques';
 import type { AdvisorAdvies, AdvisorCandidate, AdvisorQuestion, Technique } from '@/types';
 
 /** Zelfde budget als in de edge function; alleen voor de voortgangsregel. */
@@ -47,13 +47,16 @@ const OPENING_OPTIONS = [
   'vragen beantwoorden uit een dossier',
   // -> eerst uitzoomen (de oplossing ligt vast, het probleem niet)
   'uitzoeken of we het juiste probleem oplossen',
+  // -> een framework voor communicatie (doelgroep en toon tellen)
+  'een bericht voor een bepaalde doelgroep',
+  // -> een framework voor bouwen (dashboard, agent, code)
+  'een dashboard, tool of agent laten bouwen',
 ];
 
 interface TechniqueAdvisorProps {
   /**
-   * De volledige lijst; de adviseur filtert er zelf de losse technieken uit.
-   * Prompt frameworks (CARE, CRISPE, CO-STAR) doen bewust niet mee: dit scherm
-   * gaat alleen over de vraag welke TECHNIEK bij het vraagstuk past.
+   * De volledige lijst: alle frameworks en alle technieken. Alleen de beeldprompt
+   * valt af, want die hoort bij Afbeelding, met een eigen keuze voor de stijl.
    */
   techniques: Technique[];
   settings: AiSettings;
@@ -90,10 +93,10 @@ export default function TechniqueAdvisor({
   onChoose,
   onClose,
 }: TechniqueAdvisorProps) {
-  // Alleen losse technieken. Filteren bij de bron in plaats van het antwoord
-  // achteraf opschonen: wat de AI niet in zijn lijst ziet, kan hij ook niet
-  // adviseren, en hij verspilt er geen vraag aan.
-  const options = techniques.filter((t) => !isContextPrompt(t) && !isSkillCreator(t));
+  // Frameworks en technieken samen: de adviseur kiest de aanpak die past, wat
+  // voor soort het ook is. Filteren bij de bron: wat de AI niet in zijn lijst
+  // ziet, kan hij ook niet adviseren.
+  const options = techniques.filter((t) => !isImagePrompt(t));
 
   const [turns, setTurns] = useState<{ question: string; answer: string }[]>([]);
   const [question, setQuestion] = useState<AdvisorQuestion | null>(null);
@@ -197,11 +200,11 @@ export default function TechniqueAdvisor({
             </span>
             <div>
               <h2 className="font-semibold text-slate-800 dark:text-slate-100">
-                De AI zoekt je techniek erbij
+                De AI zoekt je aanpak erbij
               </h2>
               <p className="text-sm text-slate-500 dark:text-slate-400">
                 {advies
-                  ? 'Op basis van je antwoorden past deze techniek het best.'
+                  ? `Op basis van je antwoorden past ${geadviseerd && isContextPrompt(geadviseerd) ? 'dit framework' : 'deze techniek'} het best.`
                   : `Hooguit ${MAX_QUESTIONS} korte vragen over je taak. Na elk antwoord weegt de AI opnieuw.`}
               </p>
             </div>
@@ -209,7 +212,7 @@ export default function TechniqueAdvisor({
           <button
             type="button"
             onClick={onClose}
-            title="Sluiten en zelf een techniek kiezen"
+            title="Sluiten en zelf kiezen"
             className="shrink-0 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-200"
           >
             <X size={18} />
@@ -344,7 +347,7 @@ export default function TechniqueAdvisor({
                   <Check size={12} />
                 </span>
                 <span className="text-xs font-semibold uppercase tracking-wide text-nadruk">
-                  Prompttechniek
+                  {isContextPrompt(geadviseerd) ? 'Framework' : 'Prompttechniek'}
                 </span>
               </span>
               <span className="mt-1.5 block text-lg font-bold text-rijksblauw-700 dark:text-rijksblauw-200">

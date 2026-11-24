@@ -267,7 +267,7 @@ const KIND_OPTIONS: Record<
  * Flow om een EIGEN prompt te optimaliseren. De gebruiker plakt zijn prompt; de AI
  * kiest het best passende framework en vult de velden alvast in. Daarna kijkt de
  * gebruiker na, vult aan wat ontbreekt en bouwt de prompt. Zelf een framework kiezen
- * hoeft hier niet: dat kan op /technieken, en "Andere aanpak" vangt een misser op.
+ * hoeft hier niet: dat kan onder Wat wil je bereiken?, en "Andere aanpak" vangt een misser op.
  */
 export default function OwnPromptOptimizer({
   settings,
@@ -566,11 +566,11 @@ export default function OwnPromptOptimizer({
   }
 
   /**
-   * Skill kiest geen framework: de Skill Creator op /technieken heeft een eigen
-   * bouwer. Wat de gebruiker hier typte, gaat mee als eerste antwoord.
+   * Skill kiest geen framework: de Skill Creator onder Wat wil je bereiken? heeft
+   * een eigen bouwer. Wat de gebruiker hier typte, gaat mee als eerste antwoord.
    */
   function openSkillCreator() {
-    navigate('/technieken', { state: { skillContext: ownPrompt.trim() } });
+    navigate('/genereren', { state: { skillContext: ownPrompt.trim() } });
   }
 
   /** Klap het invulvlak in en breng de voortgang in beeld. */

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Compass, Wand2 } from '@/components/common/icons';
-import GoalDialog, { type GoalDialogRestore } from '@/components/optimizer/GoalDialog';
+import TechniekWerkplaats from '@/components/optimizer/TechniekWerkplaats';
 import DailyBackground from '@/components/common/DailyBackground';
 import InfoDot from '@/components/common/InfoDot';
 import ThinkingToggle from '@/components/common/ThinkingToggle';
@@ -40,16 +40,20 @@ import {
 } from '@/services/settingsService';
 import { thinkingUnavailableReason } from '@/config/aiModels';
 import { activityIdentifier } from '@/lib/utils';
-import { usePersistentDraft } from '@/lib/usePersistentDraft';
 import type { OptimizeResult, Technique } from '@/types';
 
 /**
- * Welke instap actief is. Beide zijn automatisch: de gebruiker levert inhoud
- * (een eigen prompt of een doel), de AI kiest het passende framework en vult de
- * velden voor. Een framework "vanaf nul" handmatig invullen kan bewust niet
- * meer — er is geen instap zonder analyse.
+ * Welke instap actief is. Bij "Ik heb al een prompt" kiest de AI het framework en
+ * vult hij de velden voor. Bij "Wat wil je bereiken?" kies je zelf op doel een
+ * framework of techniek, of laat je de adviseur (Help mij kiezen) er een zoeken.
  */
 type EntryMode = 'own-prompt' | 'goal';
+
+/** Komt de bezoeker binnen voor de Skill Creator of een eigen opmaak? Die staan bij de doelen. */
+function wantsGoalTab(state: unknown): boolean {
+  const s = state as { skillContext?: string; opmaak?: string } | null;
+  return Boolean(s && (s.skillContext !== undefined || s.opmaak));
+}
 
 export default function OptimizerPage() {
   const { promptId } = useParams<{ promptId?: string }>();
@@ -62,16 +66,20 @@ export default function OptimizerPage() {
   // framework bij aanbeveelt; het id koppelt de optimalisatie aan die prompt.
   const [sourcePromptId, setSourcePromptId] = useState<string | null>(null);
   const [initialPrompt, setInitialPrompt] = useState<string | null>(null);
-  // De doel-flow (GoalDialog) beheert dit veld zelf via dezelfde 'goal'-sleutel;
-  // de pagina leest het alleen nog als titel-fallback in het resultaat.
-  const [goal] = usePersistentDraft('goal');
   // Standaard staat de eigen-prompt-flow open: dat is het meest gebruikte startpunt.
-  const [entryMode, setEntryMode] = useState<EntryMode>('own-prompt');
+  // Wie binnenkomt voor de Skill Creator of een eigen opmaak, landt bij de doelen.
+  const location = useLocation();
+  const [entryMode, setEntryMode] = useState<EntryMode>(() =>
+    wantsGoalTab(location.state) ? 'goal' : 'own-prompt',
+  );
+  useEffect(() => {
+    if (wantsGoalTab(location.state)) setEntryMode('goal');
+  }, [location.state]);
   // De stand van de bouwer bij het laatste resultaat (framework en velden), en of
   // de gebruiker daar nu naar terug is gegaan met "Velden aanpassen".
-  const [builderState, setBuilderState] = useState<
-    { mode: 'own'; data: OwnPromptRestore } | { mode: 'goal'; data: GoalDialogRestore } | null
-  >(null);
+  const [builderState, setBuilderState] = useState<{ mode: 'own'; data: OwnPromptRestore } | null>(
+    null,
+  );
   const [restoring, setRestoring] = useState(false);
   // Denkstand voor het schrijven van de prompt. Eén knop voor beide instappen.
   // Staat bij elke nieuwe prompt uit: zie useThinking.
@@ -201,7 +209,6 @@ export default function OptimizerPage() {
   // Bewaar als vaste stijl: een voorbeeldbeeld wordt een project met de stijl als
   // instructie, en dat project hangt meteen aan. Projecten vragen een account.
   const navigate = useNavigate();
-  const location = useLocation();
   const saveStyleProject = useCallback(
     async (name: string, instructions: string): Promise<boolean> => {
       if (!user) {
@@ -311,9 +318,7 @@ export default function OptimizerPage() {
    */
   function handleResult(res: OptimizeResult, usedTechnique: Technique) {
     const isPlanWizard = Boolean(res.recipe);
-    // De doel-flow levert een `dialogue` mee (het gevoerde gesprek); zo blijft in
-    // de analytics zichtbaar via welke instap de prompt tot stand kwam.
-    const flow = isPlanWizard ? 'plan-wizard' : res.dialogue ? 'goal' : 'own-prompt';
+    const flow = isPlanWizard ? 'plan-wizard' : 'own-prompt';
     void trackEvent({
       event_type: 'optimization_run',
       user_identifier: activityIdentifier(profile, user?.email),
@@ -352,7 +357,7 @@ export default function OptimizerPage() {
   /** Terug naar de velden van het laatste resultaat, om ze aan te passen en opnieuw te bouwen. */
   function handleEditFields() {
     if (!builderState) return;
-    setEntryMode(builderState.mode === 'own' ? 'own-prompt' : 'goal');
+    setEntryMode('own-prompt');
     setRestoring(true);
     setVersions([]);
     setActiveVersion(0);
@@ -390,7 +395,7 @@ export default function OptimizerPage() {
         <InfoDot
           label="Uitleg over prompt maken"
           text={
-            'Je maakt een herbruikbare prompt. De AI kiest de aanpak en vult alvast in; jij vult aan.\nHeb je nog geen tekst? Bij Ik heb een idee denken we eerst met je mee.'
+            'Je maakt een herbruikbare prompt. Heb je al een prompt, dan kiest de AI de aanpak en vult alvast in; jij vult aan.\nBij Wat wil je bereiken? kies je zelf een aanpak, of helpt de AI je kiezen.'
           }
         />
       </div>
@@ -400,8 +405,7 @@ export default function OptimizerPage() {
           <OptimizedOutput
             result={result}
             technique={resultTechnique}
-            goal={goal}
-            kind={builderState?.mode === 'own' ? builderState.data.kind : null}
+            kind={builderState?.data.kind ?? null}
             onReset={handleReset}
             onEditFields={builderState ? handleEditFields : undefined}
             versions={versions}
@@ -430,7 +434,7 @@ export default function OptimizerPage() {
                   active={!ownActive}
                   onClick={() => setEntryMode('goal')}
                   icon={<Compass size={22} />}
-                  title="Ik heb een idee"
+                  title="Wat wil je bereiken?"
                 />
               </div>
             );
@@ -482,9 +486,8 @@ export default function OptimizerPage() {
             );
 
             // Beide instappen renderen de tabs zelf, boven hun eigen vlak. De
-            // eigen-prompt-flow leest een geplakte prompt; de doel-flow voert eerst
-            // een gesprek. In beide gevallen kiest de AI het framework en vult zij
-            // de velden voor. Niemand kiest hier zelf; dat kan op /technieken.
+            // eigen-prompt-flow leest een geplakte prompt en de AI kiest het
+            // framework. Bij de doelen kiest de gebruiker zelf, of de adviseur.
             return ownActive ? (
               <OwnPromptOptimizer
                 settings={settingsRef.current}
@@ -510,22 +513,7 @@ export default function OptimizerPage() {
                 webSearch={webSearchOn}
               />
             ) : (
-              <GoalDialog
-                settings={settingsRef.current}
-                onResult={(res, t, data) => {
-                  setBuilderState({ mode: 'goal', data });
-                  setRestoring(false);
-                  handleResult(res, t);
-                }}
-                restore={restoring && builderState?.mode === 'goal' ? builderState.data : null}
-                header={tabs}
-                toggles={toggles}
-                projectContext={projectContext?.text}
-                projectSources={projectSources}
-                renderProjectContext={renderProjectContext}
-                thinking={thinkingOn}
-                webSearch={webSearchOn}
-              />
+              <TechniekWerkplaats variant="maken" header={tabs} />
             );
           })()}
         </div>

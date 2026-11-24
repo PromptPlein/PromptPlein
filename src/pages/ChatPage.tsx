@@ -614,7 +614,7 @@ function ChatPageInner() {
   // Een eigen opmaak voor de downloads maak je in Template-based Output. Daarna
   // kom je terug in dit gesprek; het staat in deze browser, dus er gaat niets verloren.
   const handleMakeOpmaak = useCallback(() => {
-    navigate('/technieken', { state: { opmaak: 'nieuw', terugChat: conversationId ?? null } });
+    navigate('/genereren', { state: { opmaak: 'nieuw', terugChat: conversationId ?? null } });
   }, [navigate, conversationId]);
 
   // Excel gevraagd bij een antwoord zonder tabel: de AI zet het eerst in een
