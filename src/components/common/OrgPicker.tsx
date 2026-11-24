@@ -13,6 +13,7 @@ import {
   ORG_PATH_SEPARATOR,
 } from '@/lib/orgTree';
 import SearchableSelect from '@/components/common/SearchableSelect';
+import { compact, significantWords } from '@/lib/zoekMatch';
 import InfoDot from '@/components/common/InfoDot';
 import { Plus } from '@/components/common/icons';
 import type { Organization, OrganizationRequest } from '@/types';
@@ -129,22 +130,34 @@ export default function OrgPicker({
     orgChain(o.id, organizations).slice(1, -1).map(orgDisplayName).join(ORG_PATH_SEPARATOR);
 
   // Bij elke keuze de naam met afkorting en de lagen erboven: daar zoek je ook op.
+  // Zonder ministerie staan alle afdelingen erin, met het ministerie in de hint:
+  // wie zijn afdeling kent, hoeft niet eerst te weten onder welk ministerie die valt.
   const afdelingOptions = useMemo(() => {
+    const pool = ministryId ? under : organizations;
+    // Een directie of dienst zonder afdelingen is zelf de onderste laag: zonder hem
+    // in de lijst werd SSC-ICT opnieuw aangevraagd als afdeling.
+    const hasChildren = new Set(organizations.map((o) => o.parent_id).filter(Boolean));
+    const lowest = (o: Organization) =>
+      isDepartment(o) ||
+      (o.organization_type !== 'ministry' && o.organization_type !== 'government' && !hasChildren.has(o.id));
     // Een profiel dat op een directie staat, blijft zichtbaar gekozen.
-    return under
-      .filter((o) => isDepartment(o) || o.id === value)
+    return pool
+      .filter((o) => lowest(o) || (ministryId !== null && o.id === value))
       .map((o) => {
         const above = between(o);
+        const top = ministryId ? ministryShort : orgChain(o.id, organizations)[0];
+        const topShort = typeof top === 'string' ? top : top ? top.code || top.name : '';
+        const path = ministryId ? above : [topShort, above].filter(Boolean).join(ORG_PATH_SEPARATOR);
         // De afkorting staat in de naam, dus je vindt hem ook daarop.
         return {
           id: o.id,
           label: orgDisplayName(o),
-          hint: above ? `onder ${above}` : `direct onder ${ministryShort}`,
+          hint: ministryId && !above ? `direct onder ${ministryShort}` : `onder ${path}`,
         };
       })
       .sort((a, b) => a.label.localeCompare(b.label, 'nl', { sensitivity: 'base' }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [under, value, ministryShort, organizations]);
+  }, [under, value, ministryId, ministryShort, organizations]);
 
   const directieOptions = useMemo(
     () =>
@@ -190,6 +203,31 @@ export default function OrgPicker({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [parent, organizations, directie, afdeling, newDirectie]);
   const alreadyThere = existing.deepest !== null && existing.rest === 0;
+
+  // Lijkt een nieuwe laag op iets wat er al staat, ook onder een andere directie of
+  // anders geschreven ("SSCICT" bij "SSC-ICT")? Dan eerst dat aanbieden: zo kwamen
+  // er aanvragen binnen voor afdelingen die er al stonden.
+  const lookalikes = useMemo(() => {
+    if (!adding || alreadyThere) return [] as Organization[];
+    const wanted = layers.slice(layers.length - existing.rest);
+    const found = new Map<string, Organization>();
+    for (const layer of wanted) {
+      const keys = [layer.name, layer.code].map(compact).filter((k) => k.length >= 2);
+      const words = significantWords(layer.name);
+      if (keys.length === 0) continue;
+      for (const o of organizations) {
+        if (o.organization_type === 'ministry' || found.has(o.id)) continue;
+        const own = [o.name, o.code ?? ''].map(compact).filter(Boolean);
+        const sameKey = keys.some((k) => own.includes(k));
+        const theirs = significantWords(o.name);
+        const shared = words.filter((w) => theirs.includes(w)).length;
+        const similar = words.length >= 2 && shared >= Math.ceil(words.length * 0.6);
+        if (sameKey || similar) found.set(o.id, o);
+      }
+    }
+    return [...found.values()].slice(0, 4);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adding, alreadyThere, organizations, directie, afdeling, newDirectie, existing.rest]);
 
   const ready =
     !!parent && layers.every((l) => l.name.length >= 2) && !directieProblem && !afdelingProblem;
@@ -316,12 +354,12 @@ export default function OrgPicker({
             closeAdd();
             onChange(id ?? ministryId);
           }}
-          disabled={disabled || !ministryId}
-          placeholder={!ministryId ? 'Kies eerst een ministerie' : 'Kies je afdeling'}
-          clearLabel="Geen afdeling"
-          searchPlaceholder="Zoek op afdeling, afkorting of directie"
+          disabled={disabled || loading}
+          placeholder={ministryId ? 'Kies je afdeling' : 'Zoek je afdeling'}
+          clearLabel={ministryId ? 'Geen afdeling' : undefined}
+          searchPlaceholder="Zoek op afdeling, directie, ministerie of afkorting"
           emptyLabel={`Nog geen afdelingen bij ${ministryShort || 'dit ministerie'}.`}
-          onRequestNew={canRequest ? (term) => openAdd(term) : undefined}
+          onRequestNew={canRequest && ministryId ? (term) => openAdd(term) : undefined}
           requestNewLabel={(term) => `“${term}” aanvragen als afdeling`}
           requestNewHint={`Nieuw bij ${ministryShort}`}
         />
@@ -332,6 +370,11 @@ export default function OrgPicker({
           <Plus size={14} aria-hidden />
           Mijn afdeling staat er niet bij
         </button>
+      )}
+      {canRequest && !ministryId && (
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          Staat je afdeling er niet bij? Kies dan eerst je ministerie.
+        </p>
       )}
 
       {adding && ministry && (
@@ -422,6 +465,42 @@ export default function OrgPicker({
               inputRef={firstRef}
             />
           </fieldset>
+
+          {lookalikes.length > 0 && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 dark:border-amber-500/40 dark:bg-amber-500/10">
+              <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                Bestaat dit al? Kies hem dan hier.
+              </p>
+              <ul className="mt-2 space-y-1.5">
+                {lookalikes.map((o) => {
+                  const path = orgChain(o.id, organizations)
+                    .slice(0, -1)
+                    .map((x, i) => (i === 0 ? x.code || x.name : orgDisplayName(x)))
+                    .join(ORG_PATH_SEPARATOR);
+                  return (
+                    <li key={o.id}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onChange(o.id);
+                          closeAdd();
+                        }}
+                        disabled={sending}
+                        className="opl-raak w-full rounded border border-slate-200 bg-white px-3 py-2 text-left text-sm hover:border-rijksblauw-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-rijksblauw-500 dark:border-slate-600 dark:bg-slate-800"
+                      >
+                        <span className="block font-medium text-slate-800 dark:text-slate-100">
+                          {orgDisplayName(o)}
+                        </span>
+                        {path && (
+                          <span className="block text-xs text-slate-500 dark:text-slate-400">onder {path}</span>
+                        )}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
 
           <p id={hintId} className="text-xs text-slate-500 dark:text-slate-400">
             {alreadyThere && existing.deepest

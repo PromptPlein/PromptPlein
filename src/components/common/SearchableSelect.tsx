@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown, Plus, Search, X } from '@/components/common/icons';
+import { compact, matchesAll, overlap } from '@/lib/zoekMatch';
 
 export interface SearchableOption {
   id: string;
@@ -58,19 +59,29 @@ export default function SearchableSelect({
 
   const selected = useMemo(() => options.find((o) => o.id === value) ?? null, [options, value]);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return options;
-    return options.filter(
-      (o) => o.label.toLowerCase().includes(q) || (o.hint?.toLowerCase().includes(q) ?? false),
-    );
+  // Eerst wat alle woorden bevat, zonder te letten op accenten en leestekens. Past
+  // niets, dan wat er het meest op lijkt: wie het anders schrijft dan de lijst,
+  // moet het bestaande toch zien voordat hij het opnieuw aanvraagt.
+  const { filtered, loose } = useMemo(() => {
+    const q = query.trim();
+    if (!q) return { filtered: options, loose: false };
+    const text = (o: SearchableOption) => `${o.label} ${o.hint ?? ''}`;
+    const strict = options.filter((o) => matchesAll(q, text(o)));
+    if (strict.length > 0) return { filtered: strict, loose: false };
+    const near = options
+      .map((o) => ({ o, score: overlap(q, text(o)) }))
+      .filter((x) => x.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 8)
+      .map((x) => x.o);
+    return { filtered: near, loose: near.length > 0 };
   }, [options, query]);
 
-  // Of de zoekterm exact overeenkomt met een bestaande optie — bepaalt of we
+  // Of de zoekterm gelijk is aan een bestaande optie: bepaalt of we
   // de "aanvragen"-actie tonen.
   const exactMatch = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return q.length > 0 && options.some((o) => o.label.toLowerCase() === q);
+    const q = compact(query);
+    return q.length > 0 && options.some((o) => compact(o.label) === q);
   }, [options, query]);
 
   // Sluit bij klik buiten de component.
@@ -138,7 +149,7 @@ export default function SearchableSelect({
                 // Enter kiest de enige treffer, of voegt toe als er niets is.
                 if (e.key === 'Enter') {
                   e.preventDefault();
-                  if (filtered.length === 1) choose(filtered[0].id);
+                  if (filtered.length === 1 && !loose) choose(filtered[0].id);
                   else if (filtered.length === 0 && !exactMatch) requestNew();
                   return;
                 }
@@ -172,6 +183,12 @@ export default function SearchableSelect({
                   {clearLabel}
                   {value === null && <Check size={15} className="text-rijksblauw-500" aria-hidden />}
                 </button>
+              </li>
+            )}
+
+            {loose && (
+              <li className="px-3 pb-1 pt-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                Niet precies gevonden. Bedoel je een van deze?
               </li>
             )}
 
