@@ -233,8 +233,14 @@ aanmaken altijd op 'pending', ook als de browser iets anders stuurt
 Onder een ministerie hangt een directie of dienst (type `directorate`) en daaronder
 de afdeling (type `department`). Zo heten die lagen in de app; "onderdeel" is te
 vaag, keuze van de eigenaar. Mensen zoeken hun afdeling, niet de directie:
-`OrgPicker` toont na het ministerie één zoeklijst met alle afdelingen, met bij
-elke afdeling de afkorting en de directie erboven, zodat je op alle drie zoekt.
+`OrgPicker` toont één zoeklijst met alle afdelingen, met bij elke afdeling de
+afkorting en de directie erboven, zodat je op alle drie zoekt. Zonder gekozen
+ministerie zoekt hij in alle ministeries en vult het ministerie zich na de keuze
+vanzelf in. Een directie of dienst zonder afdelingen staat zelf in die lijst. Het
+zoeken (`zoekMatch.ts`, ook in `SearchableSelect`) let niet op accenten, leestekens
+en woordvolgorde, en toont bij geen treffer wat erop lijkt. Het aanvraagformulier
+biedt een bestaande organisatie aan als de nieuwe erop lijkt: dubbele aanvragen
+kwamen vooral van anders geschreven namen ("SSCICT" bij "SSC-ICT").
 Het profiel hangt aan de afdeling. Een ontbrekende afdeling vraagt de gebruiker
 aan bij het registreren of op zijn profiel: eerst kiest hij de directie of dienst,
 en staat die er ook niet bij, dan vraagt hij die mee aan (`request_organization`,
