@@ -84,6 +84,16 @@ function writeFilters(filters: AdvancedPromptFilters, showAll: boolean): URLSear
   return params;
 }
 
+/** Hoeveel prompts er per waarde zijn; prompts zonder waarde tellen niet mee. */
+function countBy(list: Prompt[], key: (p: Prompt) => string | null | undefined) {
+  const m = new Map<string, number>();
+  for (const p of list) {
+    const k = key(p);
+    if (k) m.set(k, (m.get(k) ?? 0) + 1);
+  }
+  return m;
+}
+
 const byLikes = (a: Prompt, b: Prompt) => (b.like_count ?? 0) - (a.like_count ?? 0);
 
 /**
@@ -97,7 +107,6 @@ export default function SearchPage() {
   const { categories, organizations, categoryById, organizationById, roleById } =
     useReferenceData();
 
-  const paramKey = searchParams.toString();
   const rawFilters = useMemo(() => readFilters(searchParams), [searchParams]);
 
   // Op organisatie filter je alleen langs je eigen lijn: je afdeling, je directie
@@ -160,10 +169,28 @@ export default function SearchPage() {
   );
   const orgIdsKey = orgIds.join(',');
 
+  // Soort, categorie, functie en deelniveau filtert de client (zie hieronder), dus
+  // die vier halen niets nieuws op.
+  const fetchKey = JSON.stringify([
+    urlQuery,
+    orgIdsKey,
+    filters.rijksbreed,
+    filters.date_from,
+    filters.date_to,
+    filters.sort,
+  ]);
+
   useEffect(() => {
     let active = true;
     setLoading(true);
-    searchPrompts({ ...filters, kinds: [], category_ids: [], organization_ids: orgIds })
+    searchPrompts({
+      ...filters,
+      kinds: [],
+      category_ids: [],
+      role_ids: [],
+      sharing_levels: [],
+      organization_ids: orgIds,
+    })
       .then((p) => active && setBase(p))
       .finally(() => active && setLoading(false));
 
@@ -180,30 +207,40 @@ export default function SearchPage() {
       active = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paramKey, orgIdsKey]);
+  }, [fetchKey]);
 
   function handleChanged(updated: Prompt) {
     setBase((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
   }
 
-  // Soort en categorie filtert de client, zodat de tellers bij elke keuze kloppen.
+  // Soort, categorie, functie en deelniveau filtert de client. Elke keuzelijst telt
+  // met alle andere keuzes erop, maar niet met die van zichzelf: zo blijven de andere
+  // opties binnen dezelfde lijst te kiezen, en toont het filterpaneel alleen wat er
+  // binnen de selectie ook echt is.
   const kindSel = filters.kinds ?? [];
   const catSel = filters.category_ids ?? [];
-  const inKind = useMemo(
-    () => base.filter((p) => !kindSel.length || kindSel.includes(promptKindOf(p))),
+  const roleSel = filters.role_ids ?? [];
+  const levelSel = filters.sharing_levels ?? [];
+  const selKey = [kindSel, catSel, roleSel, levelSel].map((a) => a.join(',')).join('|');
+  const facets = useMemo(() => {
+    const kindOk = (p: Prompt) => !kindSel.length || kindSel.includes(promptKindOf(p));
+    const catOk = (p: Prompt) => !catSel.length || (!!p.category_id && catSel.includes(p.category_id));
+    const roleOk = (p: Prompt) => !roleSel.length || (!!p.role_id && roleSel.includes(p.role_id));
+    const levelOk = (p: Prompt) => !levelSel.length || levelSel.includes(p.sharing_level);
+    const pool = base.filter((p) => roleOk(p) && levelOk(p));
+    const inKind = pool.filter(kindOk);
+    return {
+      pool,
+      prompts: inKind.filter(catOk),
+      kinds: countBy(pool, (p) => promptKindOf(p)),
+      categories: countBy(inKind, (p) => p.category_id),
+      roles: countBy(base.filter((p) => kindOk(p) && catOk(p) && levelOk(p)), (p) => p.role_id),
+      levels: countBy(base.filter((p) => kindOk(p) && catOk(p) && roleOk(p)), (p) => p.sharing_level),
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [base, kindSel.join(',')],
-  );
-  const prompts = useMemo(
-    () => inKind.filter((p) => !catSel.length || (p.category_id ? catSel.includes(p.category_id) : false)),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [inKind, catSel.join(',')],
-  );
-  const kindCounts = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const p of base) m.set(promptKindOf(p), (m.get(promptKindOf(p)) ?? 0) + 1);
-    return m;
-  }, [base]);
+  }, [base, selKey]);
+  const { pool, prompts } = facets;
+  const kindCounts = facets.kinds;
   const activeKind = kindSel.length === 1 ? kindSel[0] : null;
 
   const { enriched, authors, likesReady } = usePromptCommunity(prompts);
@@ -267,7 +304,7 @@ export default function SearchPage() {
             const active = k ? activeKind === k : kindSel.length === 0;
             const meta = k ? PROMPT_KIND_META[k] : null;
             const Icon = meta?.icon ?? LayoutGrid;
-            const n = k ? (kindCounts.get(k) ?? 0) : base.length;
+            const n = k ? (kindCounts.get(k) ?? 0) : pool.length;
             return (
               <button
                 key={k ?? 'alles'}
@@ -299,7 +336,7 @@ export default function SearchPage() {
             {categories.map((c) => {
               const Icon = categoryIcon(c.icon);
               const active = catSel.includes(c.id);
-              const n = inKind.filter((p) => p.category_id === c.id).length;
+              const n = facets.categories.get(c.id) ?? 0;
               return (
                 <button
                   key={c.id}
@@ -481,6 +518,7 @@ export default function SearchPage() {
         filters={filters}
         onChange={update}
         resultCount={loading ? null : prompts.length}
+        counts={facets}
       />
     </div>
   );

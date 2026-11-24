@@ -865,6 +865,13 @@ een andere afdeling, directie of een ander ministerie is bewust niet te kiezen, 
 niet via een oude link. Keuze van de eigenaar: filteren volgt de goedkeuringsstroom. Een laag neemt alles mee wat eronder hangt
 (`orgSubtreeIds`).
 
+"Zoek binnen" staat bovenaan het paneel en bepaalt wat eronder staat: een categorie,
+functie of deelniveau zonder prompts binnen die keuze verdwijnt, en elke optie toont
+zijn aantal. Elke lijst telt met alle andere keuzes erop maar niet met die van zichzelf,
+zodat je binnen een lijst nog kunt bijkiezen; een optie die aanstaat blijft staan, ook op
+nul, zodat hij uit kan. Daarvoor haalt de pagina alleen op met zoekvraag, organisatie,
+Rijksoverheid en datum; soort, categorie, functie en deelniveau filtert de client.
+
 Een prompt heeft twee assen. De categorie zegt waar hij over gaat (Beleid & Advies,
 Communicatie, Juridisch, Data & Analyse, Vergaderingen, Onderzoek, of Overig als er geen is).
 De soort zegt wat hij oplevert: dezelfde zes als bij Maken, Wat wordt het? (`prompts.kind`,

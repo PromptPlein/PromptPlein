@@ -18,6 +18,17 @@ interface FilterPanelProps {
   onChange: (patch: Partial<AdvancedPromptFilters>) => void;
   /** Aantal resultaten met deze filters; null zolang er gezocht wordt. */
   resultCount: number | null;
+  /**
+   * Hoeveel prompts elke optie oplevert binnen "Zoek binnen" en de andere keuzes.
+   * Een optie zonder prompts verdwijnt, tenzij hij aanstaat: dan moet hij uit kunnen.
+   */
+  counts: FacetCounts;
+}
+
+export interface FacetCounts {
+  categories: Map<string, number>;
+  roles: Map<string, number>;
+  levels: Map<string, number>;
 }
 
 /**
@@ -25,7 +36,11 @@ interface FilterPanelProps {
  * dus er valt niets te verliezen: anders dan bij Modal sluit hij ook met Escape
  * en met een klik ernaast.
  *
- * "Zoek binnen" is één keuze, net als de deelniveaus: alles wat je mag zien, je
+ * "Zoek binnen" staat bovenaan en bepaalt wat de rest toont: categorieën, functies
+ * en deelniveaus zonder prompts binnen die keuze verdwijnen, en elke optie toont
+ * hoeveel prompts hij oplevert.
+ *
+ * "Zoek binnen" is één keuze: alles wat je mag zien, je
  * afdeling, je directie, je ministerie, of wat voor de hele Rijksoverheid is
  * goedgekeurd. Een balkje laat zien hoe breed dat is. Alleen je eigen lijn, die
  * volgt uit je afdeling: een andere afdeling of directie is bewust niet te kiezen.
@@ -38,6 +53,7 @@ export default function FilterPanel({
   filters,
   onChange,
   resultCount,
+  counts,
 }: FilterPanelProps) {
   const { categories, organizations, roles } = useReferenceData();
   const { profile } = useAuth();
@@ -83,6 +99,25 @@ export default function FilterPanel({
     ? 'rijk'
     : (shown.find((sc) => sc.org && sc.org.id === pickedId)?.key ?? 'alles');
 
+  // Alleen wat binnen de keuze bestaat, plus wat aanstaat zodat het uit kan.
+  const catSel = filters.category_ids ?? [];
+  const roleSel = filters.role_ids ?? [];
+  const levelSel = filters.sharing_levels ?? [];
+  const shownCategories = categories.filter(
+    (c) => (counts.categories.get(c.id) ?? 0) > 0 || catSel.includes(c.id),
+  );
+  const shownRoles = roles.filter(
+    (r) => (counts.roles.get(r.id) ?? 0) > 0 || roleSel.includes(r.id),
+  );
+  const shownLevels = SHARING_LEVELS.filter(
+    (s) => (counts.levels.get(s.value) ?? 0) > 0 || levelSel.includes(s.value),
+  );
+  const nothing =
+    resultCount !== null &&
+    !shownCategories.length &&
+    !shownRoles.length &&
+    !shownLevels.length;
+
   function chooseScope(scope: (typeof scopes)[number]) {
     onChange({
       rijksbreed: scope.key === 'rijk',
@@ -123,27 +158,6 @@ export default function FilterPanel({
         </div>
 
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
-          <FilterGroup title="Categorie">
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-1.5">
-              {categories.map((c) => {
-                const Icon = categoryIcon(c.icon);
-                return (
-                  <ToggleButton
-                    key={c.id}
-                    active={filters.category_ids?.includes(c.id) ?? false}
-                    onClick={() =>
-                      onChange({ category_ids: toggled(filters.category_ids, c.id) })
-                    }
-                    className="justify-start gap-2 text-left text-sm"
-                  >
-                    <Icon size={18} className="shrink-0" />
-                    {c.name}
-                  </ToggleButton>
-                );
-              })}
-            </div>
-          </FilterGroup>
-
           <fieldset>
             <legend className="mb-2 text-sm font-bold text-slate-900 dark:text-slate-100">
               Zoek binnen
@@ -201,6 +215,12 @@ export default function FilterPanel({
               })}
             </div>
 
+            {nothing && (
+              <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
+                Binnen deze keuze staan nog geen prompts.
+              </p>
+            )}
+
             {!ownMinistry && (
               <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
                 {profile
@@ -210,45 +230,73 @@ export default function FilterPanel({
             )}
           </fieldset>
 
-          {roles.length > 0 && (
+          {shownCategories.length > 0 && (
+            <FilterGroup title="Categorie">
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-1.5">
+                {shownCategories.map((c) => {
+                  const Icon = categoryIcon(c.icon);
+                  return (
+                    <ToggleButton
+                      key={c.id}
+                      active={catSel.includes(c.id)}
+                      onClick={() =>
+                        onChange({ category_ids: toggled(filters.category_ids, c.id) })
+                      }
+                      className="justify-start gap-2 text-left text-sm"
+                    >
+                      <Icon size={18} className="shrink-0" />
+                      <span className="min-w-0 flex-1">{c.name}</span>
+                      <Count n={counts.categories.get(c.id) ?? 0} />
+                    </ToggleButton>
+                  );
+                })}
+              </div>
+            </FilterGroup>
+          )}
+
+          {shownRoles.length > 0 && (
             <FilterGroup title="Functie">
               <div className="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-x-3">
-                {roles.map((r) => (
+                {shownRoles.map((r) => (
                   <label
                     key={r.id}
                     className="flex min-h-[2.25rem] cursor-pointer items-center gap-2 text-sm text-slate-700 dark:text-slate-200"
                   >
                     <input
                       type="checkbox"
-                      checked={filters.role_ids?.includes(r.id) ?? false}
+                      checked={roleSel.includes(r.id)}
                       onChange={() => onChange({ role_ids: toggled(filters.role_ids, r.id) })}
                       className="h-[1.125rem] w-[1.125rem] shrink-0 accent-rijksblauw-500"
                     />
-                    <span className="min-w-0">{r.name}</span>
+                    <span className="min-w-0 flex-1">{r.name}</span>
+                    <Count n={counts.roles.get(r.id) ?? 0} />
                   </label>
                 ))}
               </div>
             </FilterGroup>
           )}
 
-          <FilterGroup title="Deelniveau">
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(5rem,1fr))] gap-1.5">
-              {SHARING_LEVELS.map((s) => (
-                <ToggleButton
-                  key={s.value}
-                  active={filters.sharing_levels?.includes(s.value) ?? false}
-                  onClick={() =>
-                    onChange({
-                      sharing_levels: toggled<SharingLevel>(filters.sharing_levels, s.value),
-                    })
-                  }
-                  className="justify-center text-sm"
-                >
-                  {s.label}
-                </ToggleButton>
-              ))}
-            </div>
-          </FilterGroup>
+          {shownLevels.length > 0 && (
+            <FilterGroup title="Deelniveau">
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(8rem,1fr))] gap-1.5">
+                {shownLevels.map((s) => (
+                  <ToggleButton
+                    key={s.value}
+                    active={levelSel.includes(s.value)}
+                    onClick={() =>
+                      onChange({
+                        sharing_levels: toggled<SharingLevel>(filters.sharing_levels, s.value),
+                      })
+                    }
+                    className="justify-between gap-2 text-left text-sm"
+                  >
+                    {s.label}
+                    <Count n={counts.levels.get(s.value) ?? 0} />
+                  </ToggleButton>
+                ))}
+              </div>
+            </FilterGroup>
+          )}
 
           <div className="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-3">
             <div>
@@ -306,6 +354,16 @@ export default function FilterPanel({
       </aside>
     </div>,
     document.body,
+  );
+}
+
+/** Hoeveel prompts een optie oplevert. Op een gekozen (blauwe) knop erft hij het wit. */
+function Count({ n }: { n: number }) {
+  return (
+    <span className="shrink-0 text-xs font-normal tabular-nums opacity-80">
+      {n}
+      <span className="sr-only"> prompts</span>
+    </span>
   );
 }
 
