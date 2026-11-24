@@ -150,7 +150,7 @@ Deno.serve(async (req: Request) => {
   const secrets = hookSecret
     .replace(/^\s*SEND_EMAIL_HOOK_SECRET\s*=\s*/, '')
     .split(/[\s|]+/)
-    .map((s) => s.replace(/^['"]+|['"]+$/g, '').replace(/^v1,/, '').replace(/^whsec_/, ''))
+    .map((s) => s.replace(/^['"‘’“”]+|['"‘’“”]+$/g, '').replace(/^v1,/, '').replace(/^whsec_/, ''))
     .filter(Boolean);
   const headers = Object.fromEntries(req.headers);
   let lastError = '';
