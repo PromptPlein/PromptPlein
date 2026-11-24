@@ -20,7 +20,13 @@ export default function PasswordResetPage() {
       setSent(true);
       toast.success('Als dit adres bestaat, is er een herstelmail verstuurd.');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Versturen mislukt.');
+      // Supabase geeft bij een fout in de mailhook alleen "{}" als melding mee.
+      const status = (err as { status?: number } | null)?.status;
+      toast.error(
+        status === 429
+          ? 'Je hebt net al een herstelmail gevraagd. Wacht een minuut en probeer het dan opnieuw.'
+          : 'De herstelmail kon niet worden verstuurd. Probeer het over een paar minuten opnieuw.',
+      );
     } finally {
       setBusy(false);
     }

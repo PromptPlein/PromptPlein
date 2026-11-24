@@ -143,10 +143,22 @@ Deno.serve(async (req: Request) => {
 
   const raw = await req.text();
   let payload: HookPayload;
+  // Het geheim staat in het dashboard als "v1,whsec_<base64>". Aanhalingstekens of
+  // spaties die bij het plakken zijn meegekomen, halen we er ook af.
+  const secret = hookSecret
+    .trim()
+    .replace(/^['"]|['"]$/g, '')
+    .replace(/^v1,/, '')
+    .replace(/^whsec_/, '');
   try {
-    const wh = new Webhook(hookSecret.replace('v1,whsec_', ''));
+    const wh = new Webhook(secret);
     payload = wh.verify(raw, Object.fromEntries(req.headers)) as HookPayload;
-  } catch {
+  } catch (err) {
+    console.error('Handtekening afgewezen', {
+      fout: err instanceof Error ? err.message : String(err),
+      geheimLengte: secret.length,
+      heeftHandtekening: req.headers.has('webhook-signature'),
+    });
     return hookError('Ongeldige handtekening', 401);
   }
 
