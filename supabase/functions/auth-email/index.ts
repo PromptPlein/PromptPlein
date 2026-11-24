@@ -142,21 +142,35 @@ Deno.serve(async (req: Request) => {
   if (!hookSecret || !apiKey) return hookError('Mailinstellingen ontbreken', 500);
 
   const raw = await req.text();
-  let payload: HookPayload;
-  // Het geheim staat in het dashboard als "v1,whsec_<base64>". Aanhalingstekens of
-  // spaties die bij het plakken zijn meegekomen, halen we er ook af.
-  const secret = hookSecret
-    .trim()
-    .replace(/^['"]|['"]$/g, '')
-    .replace(/^v1,/, '')
-    .replace(/^whsec_/, '');
-  try {
-    const wh = new Webhook(secret);
-    payload = wh.verify(raw, Object.fromEntries(req.headers)) as HookPayload;
-  } catch (err) {
+  let payload: HookPayload | null = null;
+  // Het geheim staat in het dashboard als "v1,whsec_<base64>"; bij meer geheimen
+  // staan ze met een | of spatie ertussen. Aanhalingstekens, een naam ervoor
+  // ("SEND_EMAIL_HOOK_SECRET=") en spaties die bij het plakken zijn meegekomen,
+  // halen we eraf.
+  const secrets = hookSecret
+    .replace(/^\s*SEND_EMAIL_HOOK_SECRET\s*=\s*/, '')
+    .split(/[\s|]+/)
+    .map((s) => s.replace(/^['"]+|['"]+$/g, '').replace(/^v1,/, '').replace(/^whsec_/, ''))
+    .filter(Boolean);
+  const headers = Object.fromEntries(req.headers);
+  let lastError = '';
+  for (const secret of secrets) {
+    try {
+      payload = new Webhook(secret).verify(raw, headers) as HookPayload;
+      break;
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : String(err);
+    }
+  }
+  if (!payload) {
+    // Alleen de soort tekens loggen, nooit het geheim zelf.
+    const vreemd = [...new Set(secrets.join('').replace(/[A-Za-z0-9+/=]/g, ''))]
+      .map((c) => `U+${c.codePointAt(0)!.toString(16).padStart(4, '0')}`);
     console.error('Handtekening afgewezen', {
-      fout: err instanceof Error ? err.message : String(err),
-      geheimLengte: secret.length,
+      fout: lastError,
+      aantalGeheimen: secrets.length,
+      lengtes: secrets.map((s) => s.length),
+      vreemdeTekens: vreemd,
       heeftHandtekening: req.headers.has('webhook-signature'),
     });
     return hookError('Ongeldige handtekening', 401);
