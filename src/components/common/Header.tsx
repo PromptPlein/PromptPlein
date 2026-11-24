@@ -93,13 +93,15 @@ export default function Header() {
             />
           </Link>
 
-          {/* Het lint hangt aan de bovenrand, midden op de pagina. */}
+          {/* Het lint hangt aan de bovenrand, midden op de pagina. Staat tijdelijk
+              verborgen (keuze van de eigenaar, 24-11-2026): de app moet nu niet als
+              overheidstool overkomen. Terugzetten is `hidden` weghalen. */}
           <img
             src="/logo-rijksoverheid.svg"
             alt="Logo Rijksoverheid"
             width={40}
             height={80}
-            className="opl-lint absolute left-1/2 top-0 h-[64px] w-[32px] -translate-x-1/2 sm:h-[80px] sm:w-[40px]"
+            className="opl-lint absolute left-1/2 top-0 hidden h-[64px] w-[32px] -translate-x-1/2 sm:h-[80px] sm:w-[40px]"
           />
 
           {/* Naast het lint is op een smalle telefoon plek voor drie knoppen.

@@ -129,6 +129,11 @@ het rood en voor op lintblauw, zodat het contrast klopt), de vormtaal in
 `src/assets/fonts/` en is niet vrij: het staat met toestemming in deze openbare repo
 omdat PromptPlein van de Rijksoverheid is, en valt net als `public/logo-rijksoverheid.*`
 niet onder de EUPL-1.2. Nooit naar een ander product of andere repo kopiëren.
+Het lint met het logo staat sinds 24-11-2026 tijdelijk uit, keuze van de eigenaar: de
+app moet nu niet als overheidstool overkomen. In de kop staat het nog in `Header.tsx`
+met `hidden`; de mailkop `public/email/kop.png` is zonder lint en het origineel staat
+ernaast als `kop-met-lint.png`. Terugzetten is `hidden` weghalen en dat bestand weer
+`kop.png` noemen. Inloggen gaat met een privé-e-mailadres.
 Bron: het thema van RijksICTGilde (`hugo-theme-rijksoverheid`) en de
 tokens van `nl-design-system/rijkshuisstijl-community`. De contextmap van de skill
 `pas-rijkshuisstijl-toe` staat niet op deze machine.

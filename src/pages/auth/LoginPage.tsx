@@ -33,7 +33,7 @@ export default function LoginPage() {
   return (
     <AuthLayout
       title="Inloggen"
-      subtitle="Log in met je overheids-e-mailadres."
+      subtitle="Log in met je privé-e-mailadres."
       footer={
         <>
           Nog geen account?{' '}
