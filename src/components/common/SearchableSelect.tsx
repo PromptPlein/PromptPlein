@@ -31,6 +31,12 @@ interface SearchableSelectProps {
   requestNewHint?: string;
   /** Tekst als er nog helemaal niets te kiezen is. */
   emptyLabel?: string;
+  /**
+   * Of Enter in het zoekveld meteen de enige treffer kiest (standaard). Zet hem
+   * uit waar een stille keuze schade doet, zoals de afdeling bij het registreren:
+   * Enter gaat dan naar de eerste treffer en pas een tweede Enter kiest.
+   */
+  enterPicks?: boolean;
 }
 
 /**
@@ -51,6 +57,7 @@ export default function SearchableSelect({
   requestNewLabel = (term) => `“${term}” aanvragen`,
   requestNewHint,
   emptyLabel = 'Nog leeg. Typ een naam om hem toe te voegen.',
+  enterPicks = true,
 }: SearchableSelectProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -146,11 +153,18 @@ export default function SearchableSelect({
               placeholder={searchPlaceholder}
               aria-label={searchPlaceholder}
               onKeyDown={(e) => {
-                // Enter kiest de enige treffer, of voegt toe als er niets is.
+                // Enter kiest de enige treffer, of voegt toe als er niets is. Zonder
+                // enterPicks gaat Enter naar de eerste treffer: zo ziet de gebruiker
+                // wat hij kiest voordat het gekozen is.
                 if (e.key === 'Enter') {
                   e.preventDefault();
-                  if (filtered.length === 1 && !loose) choose(filtered[0].id);
-                  else if (filtered.length === 0 && !exactMatch) requestNew();
+                  if (filtered.length === 0) {
+                    if (!exactMatch) requestNew();
+                  } else if (!enterPicks) {
+                    rootRef.current?.querySelector<HTMLButtonElement>('button[data-optie]')?.focus();
+                  } else if (filtered.length === 1 && !loose) {
+                    choose(filtered[0].id);
+                  }
                   return;
                 }
                 if (e.key !== 'Escape') return;
@@ -197,6 +211,7 @@ export default function SearchableSelect({
                 <button
                   type="button"
                   onClick={() => choose(o.id)}
+                  data-optie
                   className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm text-slate-800 hover:bg-slate-50 dark:text-slate-100 dark:hover:bg-slate-700/60"
                   aria-current={o.id === value ? 'true' : undefined}
                 >

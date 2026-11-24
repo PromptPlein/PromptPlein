@@ -118,6 +118,8 @@ export default function OrgPicker({
   disabled?: boolean;
 }) {
   const deferred = !!onDraftRequest;
+  // Bij het registreren kiest Enter in de zoeklijsten niet meteen de enige treffer:
+  // zo belandde iemand stil op een afdeling waar hij niet werkte.
   const canRequest = allowCreate || deferred;
   const { organizations, loading } = useReferenceData();
   const [adding, setAdding] = useState(false);
@@ -396,6 +398,7 @@ export default function OrgPicker({
         </label>
         <SearchableSelect
           id={`${idPrefix}-ministerie`}
+          enterPicks={!deferred}
           options={ministryOptions}
           value={ministryId}
           onChange={(id) => {
@@ -424,6 +427,7 @@ export default function OrgPicker({
         </div>
         <SearchableSelect
           id={`${idPrefix}-afdeling`}
+          enterPicks={!deferred}
           options={afdelingOptions}
           value={value && value !== ministryId ? value : null}
           onChange={(id) => {
@@ -472,6 +476,7 @@ export default function OrgPicker({
                 en vraag je alleen aan wat er echt niet bij staat. */}
             <SearchableSelect
               id={`${idPrefix}-directie`}
+              enterPicks={!deferred}
               options={directieOptions}
               value={newDirectie ? null : directieId}
               onChange={(id) => {
