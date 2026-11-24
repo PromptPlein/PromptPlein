@@ -3,7 +3,9 @@ import clsx from 'clsx';
 import {
   Bookmark,
   Check,
+  ChevronDown,
   ChevronRight,
+  Lightbulb,
   Loader2,
   Paperclip,
   Pencil,
@@ -200,6 +202,11 @@ export default function ChatIntake({
     () => (draft ? splitPromptSections(draft.prompt, draft.kopjes) : []),
     [draft],
   );
+  // De eerste vraag staat dicht: één regel dat er weinig context is, en pas na
+  // Geef meer context de vragen. Wie verder vraagt, heeft gekozen; dan blijft hij open.
+  const [opened, setOpened] = useState(false);
+  const collapsed = Boolean(question) && turns.length === 0 && !opened;
+  const questionHeadingRef = useRef<HTMLHeadingElement>(null);
   const sterk = check ? check.kopjes.filter((k) => k.oordeel === 'sterk').length : 0;
   const total = check?.kopjes.length ?? 0;
   const busy = Boolean(loading);
@@ -218,7 +225,9 @@ export default function ChatIntake({
   // Een aparte statusregel, zodat een schermlezer hoort wat er veranderde.
   const announcement = loading
     ? loading
-    : question
+    : collapsed
+      ? 'Dit is weinig context. Kies Geef meer context voor een paar korte vragen.'
+      : question
       ? `Vraag ${turns.length + 1}: ${question.vraag}`
       : phase === 'voorstel' && !checking
         ? 'Je prompt staat klaar. Lees hem na en kies Gebruik deze prompt.'
@@ -246,7 +255,7 @@ export default function ChatIntake({
       <div className="mx-auto max-w-[60ch] space-y-5">
         <UserBubble>{goal}</UserBubble>
 
-        {intro && (
+        {intro && !collapsed && (
           <div>
             <h2 className="sr-only">Antwoord</h2>
             <p className="text-base leading-7 text-slate-800 dark:text-slate-100">{intro}</p>
@@ -260,7 +269,31 @@ export default function ChatIntake({
           </div>
         ))}
 
-        {question && (
+        {collapsed && (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2.5 dark:border-slate-700 dark:bg-slate-800/60">
+            <p className="flex min-w-0 flex-1 basis-48 items-center gap-2 text-[0.9375rem] text-slate-700 dark:text-slate-200">
+              <Lightbulb size={18} className="shrink-0 text-nadruk" aria-hidden />
+              Dit is weinig context.
+            </p>
+            <button
+              type="button"
+              aria-expanded={false}
+              className="opl-btn-primary !px-3 !py-1.5"
+              onClick={() => {
+                setOpened(true);
+                // Na het tekenen naar de vraag, zodat toetsenbord en schermlezer meegaan.
+                requestAnimationFrame(() => questionHeadingRef.current?.focus());
+              }}
+            >
+              Geef meer context <ChevronDown size={16} aria-hidden />
+            </button>
+            <button type="button" className={LINK} onClick={onSkip}>
+              Stuur zoals het is
+            </button>
+          </div>
+        )}
+
+        {question && !collapsed && (
           <section aria-labelledby={questionId} className={clsx(CARD, 'p-4')}>
             <div className="flex items-center gap-2">
               <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">
@@ -273,7 +306,9 @@ export default function ChatIntake({
             </div>
             <h3
               id={questionId}
-              className="mt-2 text-lg font-bold leading-snug text-rijksblauw-700 dark:text-rijksblauw-200"
+              ref={questionHeadingRef}
+              tabIndex={-1}
+              className="mt-2 text-lg font-bold leading-snug text-rijksblauw-700 focus:outline-none dark:text-rijksblauw-200"
             >
               {question.vraag}
             </h3>

@@ -276,7 +276,10 @@ function ChatPageInner() {
 
   const intakePlaceholder =
     intakeState?.phase === 'vragen'
-      ? 'Of typ je eigen antwoord'
+      ? // Bij de eerste vraag staan de vragen nog dicht: dan is er niets om op te antwoorden.
+        intakeState.turns.length === 0
+        ? 'Of vertel hier meer over wat je wilt'
+        : 'Of typ je eigen antwoord'
       : intakeState?.phase === 'voorstel'
         ? 'Of zeg wat er anders moet'
         : undefined;
