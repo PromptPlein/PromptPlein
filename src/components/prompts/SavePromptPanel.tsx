@@ -7,6 +7,11 @@ import { createPrompt } from '@/services/repository';
 import { generateMetadata } from '@/services/optimizeService';
 import { requestCategory } from '@/services/categoryRequestService';
 import { requestFunction } from '@/services/functionRequestService';
+import {
+  listOwnPendingOrganizationRequests,
+  requestLayerLabels,
+} from '@/services/organizationRequestService';
+import { orgPathLabel, ORG_PATH_SEPARATOR } from '@/lib/orgTree';
 import { useAuth } from '@/context/AuthContext';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import SearchableSelect from '@/components/common/SearchableSelect';
@@ -14,7 +19,7 @@ import VisibilityPicker from '@/components/prompts/VisibilityPicker';
 import KindPicker from '@/components/prompts/KindPicker';
 import { kindFromModality } from '@/lib/promptKinds';
 import type { PromptKind } from '@/lib/techniques';
-import type { Prompt, Technique, VisibilityLevel } from '@/types';
+import type { OrganizationRequest, Prompt, Technique, VisibilityLevel } from '@/types';
 
 interface SavePromptPanelProps {
   /** De prompt-inhoud die wordt opgeslagen. */
@@ -97,6 +102,20 @@ export default function SavePromptPanel({
   const [roleRequestBusy, setRoleRequestBusy] = useState(false);
   // Naam van de aangevraagde functie zodra de aanvraag is verstuurd (pending).
   const [pendingRole, setPendingRole] = useState<string | null>(null);
+
+  // Een eigen afdeling die nog op goedkeuring wacht: dan staat het profiel op de
+  // laag erboven, en dat moet de gebruiker hier ook lezen.
+  const [pendingOrgs, setPendingOrgs] = useState<OrganizationRequest[]>([]);
+  useEffect(() => {
+    if (!user || isAdmin) return;
+    let active = true;
+    listOwnPendingOrganizationRequests(user.id)
+      .then((rows) => active && setPendingOrgs(rows))
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [user, isAdmin]);
 
   // Het profiel laadt asynchroon: zodra de organisatie van de gebruiker bekend is
   // en de gebruiker het veld nog niet zelf koos, vullen we de organisatie voor op
@@ -479,28 +498,22 @@ export default function SavePromptPanel({
           Voor welke functie is deze prompt geschreven?
         </p>
       </div>
-      {organizations.length > 0 && (
+      {organizations.length > 0 && isAdmin && (
         <div>
           <label className="opl-label" htmlFor="tpl-organization">
             Organisatie
           </label>
-          {/* Beheerders/superadmins mogen elke organisatie (of geen) kiezen.
-              Een normale gebruiker kan alleen de eigen organisatie koppelen:
-              het veld is dan vergrendeld op de organisatie uit het profiel. */}
+          {/* Alleen een beheerder koppelt een prompt aan een andere organisatie. */}
           <select
             id="tpl-organization"
-            className="opl-input disabled:cursor-not-allowed disabled:opacity-70"
+            className="opl-input"
             value={organizationId}
-            disabled={!isAdmin}
             onChange={(e) => {
               organizationTouched.current = true;
               setOrganizationId(e.target.value);
             }}
           >
-            {/* "Geen organisatie" voor beheerders, of als terugval voor een
-                normale gebruiker zonder eigen organisatie (anders heeft het
-                vergrendelde veld geen geldige optie om te tonen). */}
-            {(isAdmin || !organizationId) && <option value="">Geen organisatie</option>}
+            <option value="">Geen organisatie</option>
             {organizations.map((o) => (
               <option key={o.id} value={o.id}>
                 {o.code ? `${o.name} (${o.code})` : o.name}
@@ -508,9 +521,35 @@ export default function SavePromptPanel({
             ))}
           </select>
           <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-            {isAdmin
-              ? 'Koppel deze prompt aan een ministerie of afdeling, zodat hij vindbaar is via de netwerkverkenner.'
-              : 'Deze prompt wordt gekoppeld aan jouw eigen organisatie, zodat hij vindbaar is via de netwerkverkenner.'}
+            Koppel deze prompt aan een ministerie of afdeling, zodat hij vindbaar is via de netwerkverkenner.
+          </p>
+        </div>
+      )}
+      {organizations.length > 0 && !isAdmin && (
+        <div>
+          {/* Een gewone gebruiker koppelt altijd zijn eigen afdeling uit het profiel.
+              Geen vergrendelde keuzelijst met alle organisaties: die las als een keuze
+              die de app had gemaakt. Klopt de afdeling niet, dan pas je hem aan op
+              je profiel. */}
+          <p className="opl-label">Jouw afdeling</p>
+          <p className="text-sm text-slate-700 dark:text-slate-200">
+            {organizationId ? orgPathLabel(organizationId, organizations) : 'Nog geen afdeling gekozen'}
+          </p>
+          {pendingOrgs.map((r) => (
+            <p key={r.id} className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+              <span className="font-medium">
+                {[orgPathLabel(r.parent_id, organizations, { short: true }), ...requestLayerLabels(r)]
+                  .filter(Boolean)
+                  .join(ORG_PATH_SEPARATOR)}
+              </span>
+              : wacht op goedkeuring
+            </p>
+          ))}
+          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+            Niet jouw afdeling?{' '}
+            <Link to="/profiel" className="opl-raak font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300">
+              Pas hem aan op je profiel
+            </Link>
           </p>
         </div>
       )}
