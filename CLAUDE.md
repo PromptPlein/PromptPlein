@@ -183,6 +183,14 @@ naar Supabase `/verify`: de pagina wisselt de token pas in bij Opslaan, want mai
 de rijksmail openen elke link en maakten de oude link op. Andere soorten auth-mail komen nu niet
 voor (bevestigen staat uit) en krijgen in de functie een eenvoudige mail zonder template.
 
+De welkomstmail is automation 13 in Brevo ("PromptPlein #1 Welcome message"): een contact
+dat op lijst 14 komt (`register-brevo-contact`) krijgt hem, en roy@awaren.nl krijgt een
+melding. De mail is een kopie in die stap en is via de API niet te wijzigen of uit te lezen
+als automation; aanpassen gaat in de editor van Brevo (stap openen, Edit, "Use this design in
+automation", daarna de stap opslaan). Bovenaan staat "Goed om te weten": geen officieel
+hulpmiddel van de overheid, geen gevoelige informatie, alles draait in Europa, invoer wordt
+niet gebruikt om te trainen (24-11-2026).
+
 Template 104 waarschuwt een week voordat de bronbestanden van een project verdwijnen (0053), ook
 transactioneel en zonder uitschrijflink, met `params.titel`, `aantal`, `datum` en `link`.
 
