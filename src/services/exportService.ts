@@ -91,7 +91,7 @@ export function buildPromptHtml(prompt: Prompt, meta: ExportMeta = {}): string {
 <body>
   <div class="classification">${escapeHtml(classification)}</div>
   <header>
-    <div class="brand">Rijksoverheid<small>Overheid Prompt Library</small></div>
+    <div class="brand">PromptPlein<small>Prompt Library</small></div>
     <div style="font-size:12px;color:#64748b;">Gegenereerd: ${escapeHtml(generated)}</div>
   </header>
 
@@ -116,7 +116,7 @@ export function buildPromptHtml(prompt: Prompt, meta: ExportMeta = {}): string {
   </div>
 
   <footer>
-    Dit document is automatisch gegenereerd uit de Overheid Prompt Library. Rubricering: ${escapeHtml(classification)}.
+    Dit document is automatisch gegenereerd uit de Prompt Library. Rubricering: ${escapeHtml(classification)}.
   </footer>
 </body>
 </html>`;
@@ -126,7 +126,7 @@ function buildMarkdown(prompt: Prompt, meta: ExportMeta): string {
   const classification = CLASSIFICATION[prompt.sharing_level] ?? 'Intern';
   const status = prompt.status ? PROMPT_STATUS_META[prompt.status].label : '—';
   return [
-    `> **${classification}** · Overheid Prompt Library`,
+    `> **${classification}** · Prompt Library`,
     '',
     `# ${prompt.title}`,
     prompt.description ? `\n_${prompt.description}_` : '',

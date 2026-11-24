@@ -1,7 +1,7 @@
 import type { PromptKind } from '@/lib/techniques';
 
 
-// Domeinmodellen voor de Overheid Prompt Library (Phase 1).
+// Domeinmodellen voor de Prompt Library (Phase 1).
 
 export type SharingLevel = 'private' | 'department' | 'directorate' | 'ministry' | 'public';
 

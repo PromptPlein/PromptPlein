@@ -173,7 +173,7 @@ export function printReport(data: ReportData, catName: (id: string) => string): 
   </style></head><body>
     <div class="classification">Intern: bestuurlijke rapportage</div>
     <div class="brand">Rijksoverheid</div>
-    <h1>Bestuurlijke rapportage: Overheid Prompt Library</h1>
+    <h1>Bestuurlijke rapportage: Prompt Library</h1>
     <p style="color:#64748b;font-size:13px;">Gegenereerd: ${generated}</p>
     <div class="kpis">
       <div class="kpi"><b>${kpis.totalPrompts}</b><span>Prompts</span></div>
@@ -187,7 +187,7 @@ export function printReport(data: ReportData, catName: (id: string) => string): 
     ${table('Prompts per categorie', promptsByCategory(data.prompts, catName))}
     ${table('Prompts per organisatie', promptsByOrganization(data))}
     ${table('Goedkeuringen', approvalOutcomes(data.approvals))}
-    <footer>Automatisch gegenereerd uit de Overheid Prompt Library · Rubricering: Intern</footer>
+    <footer>Automatisch gegenereerd uit de Prompt Library · Rubricering: Intern</footer>
   </body></html>`;
 
   const win = window.open('', '_blank');

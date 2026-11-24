@@ -76,7 +76,7 @@ export function buildMailto(promptTitle: string, url: string, sharedBy: string):
   const body = [
     'Hoi,',
     '',
-    `${sharedBy || 'Een collega'} deelt een prompt met je uit de Overheid Prompt Library:`,
+    `${sharedBy || 'Een collega'} deelt een prompt met je uit de Prompt Library:`,
     '',
     `"${promptTitle}"`,
     url,

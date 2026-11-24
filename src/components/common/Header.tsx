@@ -85,7 +85,10 @@ export default function Header() {
             pathname === '/chat' ? 'max-w-6xl' : 'max-w-7xl',
           )}
         >
-          <Link to="/" className="flex items-center">
+          {/* Vanaf sm staat het logo in het midden, op de plek van het lint. Op de
+              telefoon blijft het links: in het midden botst het op 320 pixels met
+              de drie knoppen rechts. */}
+          <Link to="/" className="flex items-center sm:absolute sm:left-1/2 sm:-translate-x-1/2">
             <img
               src="/promptplein-logo.png"
               alt="PromptPlein"
@@ -107,7 +110,7 @@ export default function Header() {
           {/* Naast het lint is op een smalle telefoon plek voor drie knoppen.
               Toegankelijkheid blijft altijd staan; de rest zit op de telefoon in
               het accountmenu. */}
-          <div className="flex items-center gap-0.5 sm:gap-1">
+          <div className="ml-auto flex items-center gap-0.5 sm:gap-1">
             {(isModerator || isAdmin) && (
               <NavLink
                 to="/goedkeuringen"
