@@ -5,6 +5,7 @@
 const TITLES: [prefix: string, title: string][] = [
   ['/instellingen/toegankelijkheid/hulp', 'Hulp bij toegankelijkheid'],
   ['/instellingen/toegankelijkheid', 'Toegankelijkheid instellen'],
+  ['/instellingen/account', 'Account'],
   ['/instellingen', 'Instellingen'],
   ['/genereren', 'Prompt maken'],
   ['/frameworks', 'Frameworks'],

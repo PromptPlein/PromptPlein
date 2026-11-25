@@ -28,3 +28,8 @@ verify_jwt = false
 # Hook. Authenticatie gebeurt met de handtekening van de hook (standard webhooks),
 # met het geheim in SEND_EMAIL_HOOK_SECRET.
 verify_jwt = false
+
+[functions.delete-account]
+# JWT-verificatie staat aan: alleen een ingelogde gebruiker verwijdert zijn eigen
+# account. De functie leest de gebruiker zelf uit het token, nooit uit de body.
+verify_jwt = true

@@ -239,7 +239,7 @@ src/
   types/          index.ts, alle domeinmodellen op één plek
 supabase/
   functions/      optimize-prompt (de grote), send-contact, register-brevo-contact, auth-email,
-                  brevo-event
+                  brevo-event, delete-account
   migrations/     0001 … 0035, oplopend genummerd
 ```
 
@@ -325,7 +325,7 @@ te stemmen.
 
 ## Persoonlijke instellingen
 
-`/instellingen` is openbaar en heeft twee onderdelen: Chat en Toegankelijkheid. Bij
+`/instellingen` is openbaar en heeft drie onderdelen: Chat, Toegankelijkheid en Account. Bij
 Toegankelijkheid staan Instellen en Hulp. Je
 komt er via het gebruikersmenu, de knop onder in de chatzijbalk en het
 toegankelijkheidsicoon in de kop. Dat icoon blijft staan: wie grotere letters
@@ -342,6 +342,27 @@ De instructie vervangt de systeemprompt van de beheerder niet, maar komt eronder
 wens met de huisregels, dan gelden de huisregels. Hij geldt alleen in een gewone
 chat: een uitvoergesprek test de prompt zelf en in een project is de
 projectinstructie al de instructie van de gebruiker.
+
+## Account verwijderen
+
+Onder Instellingen, Account verwijdert een gebruiker zijn eigen account (sinds 25-11-2026,
+keuze van de eigenaar). Hij typt zijn e-mailadres over; de edge function `delete-account`
+leest wie het is uit het token, haalt eerst het contact uit Brevo en roept daarna
+`delete_user_account` aan (0068). Die databasefunctie mag alleen de service role aanroepen,
+anders bleef het Brevo-contact staan. Lukt Brevo niet, dan blijft het account staan en kan
+de gebruiker het opnieuw proberen.
+
+Mee weg gaan zijn prompts (ook gedeelde, met versies, likes en reacties), chatprojecten met
+bronbestanden, profiel, geheugen, eigen instructie, meldingen en zijn aanvragen. Organisaties
+die op zijn aanvraag zijn gemaakt blijven staan; een lopende afdelingsaanvraag met
+aangesloten collega's gaat over op de eerste van hen. In analytics wordt naam of e-mailadres
+leeg, de telling blijft. Het auditlog van de beheerders blijft ongemoeid. De laatste
+beheerder kan zichzelf niet verwijderen.
+
+Het Brevo-account wordt gedeeld met Awaren en MoonMix. Staat het contact alleen op lijst 14,
+dan gaat het hele contact weg; staat het ook op een andere lijst, dan alleen van lijst 14 af.
+Een beheerder die een account met de hand wist, roept dezelfde databasefunctie aan en haalt
+het contact zelf uit Brevo: de Brevo-koppeling van Claude kan geen contacten verwijderen.
 
 ## Geheugen van de chat
 
