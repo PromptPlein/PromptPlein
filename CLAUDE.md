@@ -101,6 +101,21 @@ auth, dan opnieuw koppelen met
 `claude mcp add --scope project --transport http supabase "https://mcp.supabase.com/mcp?project_ref=qpttoyahhjybejgqohfz"`
 en daarna `/mcp` in een gewone terminal, niet in de IDE-extensie.
 
+**SQL zelf uitvoeren, meteen.** Roy heeft vaste toestemming (2026-11-25) voor
+elke SQL op dit project; geef hem nooit een bestand om zelf te draaien. De
+MCP-server vraagt bij destructieve SQL (DROP, DELETE, TRUNCATE, kolom weg,
+UPDATE zonder WHERE) om bevestiging, en de VS Code-extensie weigert die stil:
+je krijgt `{"status":"declined"}`. Supabase kan dat niet uitzetten. Probeer het
+dan niet opnieuw, maar gebruik de Supabase CLI vanuit de root van deze repo
+(gelinkt aan `qpttoyahhjybejgqohfz`):
+
+- schrijven en migraties: `supabase db query --remote --yes -f supabase/migrations/<bestand>.sql`
+- alleen lezen: `supabase db query --remote --read-only "<sql>"`
+
+De CLI draait als `postgres` en vraagt niets. Hij schrijft geen regel in de
+migratiegeschiedenis van Supabase, dus het bestand in `supabase/migrations/`
+is de administratie. Controleer daarna met een leesquery.
+
 **AIPromptHub is een ander Supabase-project.** De twee repo's delen geen
 database. Wordt er code van daar geport, hernummer dan de migratie.
 
