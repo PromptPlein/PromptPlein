@@ -36,10 +36,10 @@ export const PROJECT_PROMPT_TEMPLATES: ProjectPromptTemplate[] = [
     naam: 'Memo in vaste vorm',
     icon: 'FileText',
     prompt: `Context:
-Ik werk bij de Rijksoverheid en schrijf regelmatig een memo voor collega's of mijn leidinggevende. Ik geef je steeds de aanleiding en mijn aantekeningen.
+Ik schrijf regelmatig een memo voor collega's of mijn leidinggevende. Ik geef je steeds de aanleiding en mijn aantekeningen.
 
 Ask:
-Je bent een ervaren beleidsmedewerker bij de Rijksoverheid die heldere, zakelijke memo's schrijft.
+Je bent een ervaren beleidsmedewerker die heldere, zakelijke memo's schrijft.
 Schrijf van mijn aantekeningen een memo dat er elke keer hetzelfde uitziet.
 
 Rules:
@@ -237,10 +237,10 @@ Meer weten? Kijk op ...`,
     naam: 'Vacaturetekst',
     icon: 'Briefcase',
     prompt: `Context:
-Ik schrijf vacatures voor mijn team bij de Rijksoverheid. Ik geef steeds de functie, de taken, de eisen en wat we bieden.
+Ik schrijf vacatures voor mijn team. Ik geef steeds de functie, de taken, de eisen en wat we bieden.
 
 Ask:
-Je bent een wervingsadviseur van de Rijksoverheid die eerlijke en aantrekkelijke vacatures schrijft.
+Je bent een ervaren wervingsadviseur die eerlijke en aantrekkelijke vacatures schrijft.
 Schrijf een vacaturetekst die de juiste kandidaten aanspreekt en eerlijk is over het werk.
 
 Rules:

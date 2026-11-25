@@ -1,58 +1,23 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/context/AuthContext';
-import { useReferenceData } from '@/context/ReferenceDataContext';
 import { updateOwnProfile } from '@/services/authService';
 import { APP_ROLE_LABELS } from '@/services/orgService';
-import { listOwnPendingFunctionRequests, requestFunction } from '@/services/functionRequestService';
-import {
-  listOwnPendingOrganizationRequests,
-  requestLayerLabels,
-} from '@/services/organizationRequestService';
-import { orgPathLabel, ORG_PATH_SEPARATOR } from '@/lib/orgTree';
-import FunctionPicker from '@/components/common/FunctionPicker';
-import OrgPicker from '@/components/common/OrgPicker';
-import type { FunctionRequest, OrganizationRequest } from '@/types';
 
-/** De eigen gegevens: naam, afdeling en functie. Staat bij Instellingen, Profiel. */
+/**
+ * De eigen gegevens: e-mailadres, rol en naam. Staat bij Instellingen, Profiel.
+ * Afdeling en functie staan sinds 25-11-2026 niet meer in beeld; wat er op het
+ * profiel staat blijft ongemoeid, voor de stand op branch stand-25-11-2026.
+ */
 export default function ProfileSettings() {
   const { user, profile, refreshProfile } = useAuth();
-  const { roles, organizations } = useReferenceData();
   const [fullName, setFullName] = useState(profile?.full_name ?? '');
-  const [orgId, setOrgId] = useState<string | null>(profile?.organization_id ?? null);
-  const [functionId, setFunctionId] = useState<string | null>(profile?.function_id ?? null);
   const [saving, setSaving] = useState(false);
-  const [pending, setPending] = useState<FunctionRequest[]>([]);
-  const [pendingOrgs, setPendingOrgs] = useState<OrganizationRequest[]>([]);
-
-  useEffect(() => {
-    if (!user) return;
-    let active = true;
-    listOwnPendingFunctionRequests(user.id)
-      .then((rows) => active && setPending(rows))
-      .catch(() => undefined);
-    return () => {
-      active = false;
-    };
-  }, [user]);
-
-  useEffect(() => {
-    if (!user) return;
-    let active = true;
-    listOwnPendingOrganizationRequests(user.id)
-      .then((rows) => active && setPendingOrgs(rows))
-      .catch(() => undefined);
-    return () => {
-      active = false;
-    };
-  }, [user]);
 
   // Alleen bij een ander profiel overnemen: het ververst het profiel en mag de rest
   // van wat je aan het invullen bent niet wissen.
   useEffect(() => {
     setFullName(profile?.full_name ?? '');
-    setOrgId(profile?.organization_id ?? null);
-    setFunctionId(profile?.function_id ?? null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.id]);
 
@@ -62,8 +27,6 @@ export default function ProfileSettings() {
     try {
       await updateOwnProfile(user.id, {
         full_name: fullName.trim() || null,
-        organization_id: orgId || null,
-        function_id: functionId,
       });
       await refreshProfile();
       toast.success('Profiel opgeslagen');
@@ -120,54 +83,6 @@ export default function ProfileSettings() {
           onChange={(e) => setFullName(e.target.value)}
         />
       </div>
-
-      <OrgPicker
-        idPrefix="profile"
-        value={orgId}
-        onChange={setOrgId}
-        allowCreate
-        onRequested={(request) => setPendingOrgs((prev) => [...prev, request])}
-      />
-      {pendingOrgs.length > 0 && (
-        <ul className="-mt-2 space-y-1 text-sm text-slate-600 dark:text-slate-300">
-          {pendingOrgs.map((r) => (
-            <li key={r.id}>
-              <span className="font-medium">
-                {[orgPathLabel(r.parent_id, organizations, { short: true }), ...requestLayerLabels(r)]
-                  .filter(Boolean)
-                  .join(ORG_PATH_SEPARATOR)}
-              </span>
-              : wacht op goedkeuring
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <FunctionPicker
-        idPrefix="profile"
-        roles={roles}
-        value={functionId}
-        onChange={setFunctionId}
-        pending={pending}
-        onRequest={async (name, motivation) => {
-          if (!user) return false;
-          try {
-            const created = await requestFunction({
-              name,
-              motivation,
-              requestedBy: user.id,
-            });
-            setPending((prev) => [...prev, created]);
-            toast.success(
-              `“${name}” aangevraagd. Je krijgt een mail als een beheerder hem heeft beoordeeld.`,
-            );
-            return true;
-          } catch (err) {
-            toast.error(err instanceof Error ? err.message : 'Aanvraag mislukt');
-            return false;
-          }
-        }}
-      />
 
       <div className="flex justify-end">
         <button className="opl-btn-primary" onClick={save} disabled={saving}>

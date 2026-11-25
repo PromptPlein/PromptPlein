@@ -5,7 +5,7 @@ import type { Category, CategoryRequest, Profile } from '@/types';
  * Categorie-aanvragen: een gebruiker vraagt een ontbrekende categorie aan, een
  * admin keurt die goed (waarna de categorie in de categories-tabel verschijnt)
  * of af. RLS dwingt af wie wat mag; deze laag verzorgt de samengestelde acties.
- * Spiegelt functionRequestService.
+ * Zelfde opzet als de functieaanvragen uit de stand van vóór 25-11-2026.
  */
 
 function requireClient() {

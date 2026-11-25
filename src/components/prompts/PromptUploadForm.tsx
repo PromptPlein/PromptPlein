@@ -6,7 +6,6 @@ import { useAuthGuard } from '@/hooks/useAuthGuard';
 import { createPrompt } from '@/services/repository';
 import { trackEvent } from '@/services/analyticsService';
 import { requestCategory } from '@/services/categoryRequestService';
-import { requestFunction } from '@/services/functionRequestService';
 import { getCurrentUser } from '@/lib/utils';
 import { usePersistentDraft } from '@/lib/usePersistentDraft';
 import SearchableSelect from '@/components/common/SearchableSelect';
@@ -21,8 +20,8 @@ interface PromptUploadFormProps {
 }
 
 export default function PromptUploadForm({ onCreated, onCancel }: PromptUploadFormProps) {
-  const { categories, roles, organizations } = useReferenceData();
-  const { user } = useAuth();
+  const { categories } = useReferenceData();
+  const { user, profile } = useAuth();
   const requireAuth = useAuthGuard();
   // De tekstvelden staan als concept in localStorage: sluit het venster per
   // ongeluk (Escape, kruisje, klik ernaast), dan staat de tekst er bij het
@@ -34,8 +33,6 @@ export default function PromptUploadForm({ onCreated, onCancel }: PromptUploadFo
   const [kind, setKind] = useState<PromptKind>('text');
   // Aangevraagde categorie: de prompt krijgt hem na goedkeuring vanzelf.
   const [pendingCategory, setPendingCategory] = useState<{ id: string; name: string } | null>(null);
-  const [roleId, setRoleId] = useState<string | null>(null);
-  const [organizationId, setOrganizationId] = useState<string>('');
   const [sharingLevels, setSharingLevels] = useState<VisibilityLevel[]>([]);
   const [createdBy, setCreatedBy] = useState(getCurrentUser());
   const [submitting, setSubmitting] = useState(false);
@@ -62,8 +59,8 @@ export default function PromptUploadForm({ onCreated, onCancel }: PromptUploadFo
       category_id: categoryId,
       requested_category_id: categoryId ? null : (pendingCategory?.id ?? null),
       kind,
-      role_id: roleId,
-      organization_id: organizationId || null,
+      // Stil uit het profiel, voor de stand op branch stand-25-11-2026.
+      organization_id: profile?.organization_id ?? null,
       sharing_levels: sharingLevels,
       created_by: createdBy.trim(),
     };
@@ -175,66 +172,10 @@ export default function PromptUploadForm({ onCreated, onCancel }: PromptUploadFo
         </p>
       </div>
 
-      <div>
-        <label className="opl-label" htmlFor="up-role">
-          Functie
-        </label>
-        <SearchableSelect
-          id="up-role"
-          options={roles.map((r) => ({ id: r.id, label: r.name, hint: r.description }))}
-          value={roleId}
-          onChange={(id) => setRoleId(id)}
-          placeholder="Voor welke functie is deze prompt geschreven?"
-          clearLabel="Geen functie"
-          searchPlaceholder="Zoek een functie…"
-          onRequestNew={
-            user
-              ? async (term) => {
-                  try {
-                    await requestFunction({ name: term, requestedBy: user.id });
-                    toast.success(`Aanvraag voor “${term}” verstuurd; een beheerder beoordeelt hem.`);
-                  } catch (err) {
-                    toast.error(err instanceof Error ? err.message : 'Aanvraag mislukt');
-                  }
-                }
-              : undefined
-          }
-          requestNewLabel={(term) => `“${term}” als nieuwe functie aanvragen`}
-        />
-        <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-          Voor welke functie is deze prompt geschreven? Staat de juiste functie er niet bij? Vraag hem aan.
-        </p>
-      </div>
-
-      {organizations.length > 0 && (
-        <div>
-          <label className="opl-label" htmlFor="up-organization">
-            Organisatie
-          </label>
-          <select
-            id="up-organization"
-            className="opl-input"
-            value={organizationId}
-            onChange={(e) => setOrganizationId(e.target.value)}
-          >
-            <option value="">Geen organisatie</option>
-            {organizations.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.code ? `${o.name} (${o.code})` : o.name}
-              </option>
-            ))}
-          </select>
-          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-            Koppel deze prompt aan een ministerie of afdeling, zodat hij vindbaar is via de netwerkverkenner.
-          </p>
-        </div>
-      )}
-
       <VisibilityPicker
         idPrefix="up"
         value={sharingLevels}
         onChange={setSharingLevels}
-        organizationId={organizationId || null}
       />
 
       <div>

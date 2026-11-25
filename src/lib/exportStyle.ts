@@ -82,7 +82,16 @@ export const EENVOUDIG_STYLE: ExportStyle = {
   footerRule: false,
 };
 
-/** Letters die op vrijwel elke werkplek staan. Rijks Sans alleen bij de Rijksoverheid. */
+/**
+ * Hoe een letter in de keuzelijst heet. Rijks Sans is de letter van de
+ * Pleinhuisstijl en heet in beeld zo; in het bestand blijft de echte naam staan,
+ * anders vindt Word hem niet.
+ */
+export function fontLabel(font: string): string {
+  return font === 'Rijks Sans' ? 'Pleinletter' : font;
+}
+
+/** Letters die op vrijwel elke werkplek staan, met voorop de letter van de Pleinhuisstijl. */
 export const STYLE_FONTS = [
   'Rijks Sans',
   'Arial',

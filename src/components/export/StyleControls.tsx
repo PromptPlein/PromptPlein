@@ -1,5 +1,5 @@
 import { useId, useMemo } from 'react';
-import { isSerif, STYLE_FONTS, styleFrom, type StyleChoice } from '@/lib/exportStyle';
+import { fontLabel, isSerif, STYLE_FONTS, styleFrom, type StyleChoice } from '@/lib/exportStyle';
 
 const COLOR_FIELDS: { key: keyof Omit<StyleChoice, 'font'>; label: string }[] = [
   { key: 'heading', label: 'Koppen' },
@@ -20,7 +20,7 @@ export function StyleFields({ choice, onChange }: { choice: StyleChoice; onChang
         <select id={fontId} className="opl-input" value={choice.font} onChange={(e) => onChange({ font: e.target.value })}>
           {[...new Set([choice.font, ...STYLE_FONTS])].map((font) => (
             <option key={font} value={font}>
-              {font}
+              {fontLabel(font)}
             </option>
           ))}
         </select>

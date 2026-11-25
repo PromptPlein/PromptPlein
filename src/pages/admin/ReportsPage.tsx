@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Download, Printer, FileText, CheckCircle2, Clock, XCircle, Building2, Users } from '@/components/common/icons';
+import { Download, Printer, FileText, CheckCircle2, Clock, XCircle, Users } from '@/components/common/icons';
 import toast from 'react-hot-toast';
 import { BarChartCard, LineChartCard, PieChartCard } from '@/components/analytics/Charts';
 import { useReferenceData } from '@/context/ReferenceDataContext';
@@ -10,8 +10,6 @@ import {
   loadReportData,
   printReport,
   promptsByCategory,
-  promptsByOrganization,
-  promptsByRole,
   promptsByStatus,
   reportToCsv,
   type ReportData,
@@ -32,7 +30,7 @@ function Kpi({ icon: Icon, value, label }: { icon: typeof FileText; value: numbe
 }
 
 export default function ReportsPage() {
-  const { categoryById, roleById } = useReferenceData();
+  const { categoryById } = useReferenceData();
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -40,7 +38,6 @@ export default function ReportsPage() {
     () => (id: string) => categoryById(id)?.name ?? 'Onbekend',
     [categoryById],
   );
-  const roleName = useMemo(() => (id: string) => roleById(id)?.name ?? 'Onbekend', [roleById]);
 
   useEffect(() => {
     loadReportData()
@@ -57,8 +54,8 @@ export default function ReportsPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Bestuurlijke rapportage</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">Overzicht van prompts, organisaties en goedkeuringen.</p>
+          <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Rapportage</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">Overzicht van prompts en goedkeuringen.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button className="opl-btn-secondary" onClick={() => reportToCsv(data, catName)}>
@@ -70,12 +67,11 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <Kpi icon={FileText} value={kpis.totalPrompts} label="Prompts" />
         <Kpi icon={CheckCircle2} value={kpis.approved} label="Goedgekeurd" />
         <Kpi icon={Clock} value={kpis.inReview} label="In behandeling" />
         <Kpi icon={XCircle} value={kpis.rejected} label="Afgewezen" />
-        <Kpi icon={Building2} value={kpis.organizations} label="Organisaties" />
         <Kpi icon={Users} value={kpis.users} label="Gebruikers" />
       </div>
 
@@ -87,12 +83,6 @@ export default function ReportsPage() {
           emptyHint="Nog geen goedkeuringsbeslissingen."
         />
         <BarChartCard title="Prompts per categorie" data={promptsByCategory(data.prompts, catName)} />
-        <BarChartCard title="Prompts per functiegroep" data={promptsByRole(data.prompts, roleName)} />
-        <BarChartCard
-          title="Prompts per organisatie"
-          data={promptsByOrganization(data)}
-          emptyHint="Nog geen aan organisaties gekoppelde prompts."
-        />
         <LineChartCard
           title="Goedkeuringen (laatste 30 dagen)"
           data={approvalsPerDay(data.approvals)}

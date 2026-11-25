@@ -7,7 +7,7 @@ import { rijksblauw } from '@/config/brandColors';
 // Decoratief: pointer-events staat uit en de canvas is verborgen voor schermlezers.
 
 const FRAGMENTS = [
-  'Je bent een {rol} bij het ministerie van {ministerie}.',
+  'Je bent een {rol} bij {organisatie}.',
   'Schrijf een beleidsnotitie van één pagina voor {doelgroep}.',
   'Vat de onderstaande Kamerbrief samen in vijf punten.',
   'Gebruik taalniveau B1 en vermijd ambtelijk jargon.',

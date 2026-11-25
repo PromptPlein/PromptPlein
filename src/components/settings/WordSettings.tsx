@@ -32,7 +32,7 @@ export default function WordSettings() {
   }, [hash]);
 
   const choices: { value: ExportLook; label: string; hint: string; id?: string }[] = [
-    { value: 'rijk', label: 'Rijkshuisstijl', hint: 'De standaard. Koppen in lintblauw, tabellen met een blauwe kop.' },
+    { value: 'rijk', label: 'Pleinhuisstijl', hint: 'De standaard. Koppen in lintblauw, tabellen met een blauwe kop.' },
     { value: 'eenvoudig', label: 'Eenvoudig', hint: 'Zwart op wit, in Calibri.' },
     ...(opmaken ?? []).map((o) => ({
       value: `opmaak:${o.id}` as ExportLook,

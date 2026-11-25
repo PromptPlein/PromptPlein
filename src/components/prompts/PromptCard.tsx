@@ -4,7 +4,6 @@ import { Copy, Star, Check, Share2, ThumbsUp } from '@/components/common/icons';
 import toast from 'react-hot-toast';
 import InfoDot from '@/components/common/InfoDot';
 import { PROMPT_KIND_META, promptKindOf } from '@/lib/promptKinds';
-import { orgPathLabel } from '@/lib/orgTree';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { useAuth } from '@/context/AuthContext';
 import {
@@ -22,14 +21,14 @@ import type { Prompt, PublicProfile } from '@/types';
 
 interface PromptCardProps {
   prompt: Prompt;
-  /** Publiek auteursprofiel (naam + organisatie) voor het auteurslabel. */
+  /** Publiek auteursprofiel voor het auteurslabel. */
   author?: PublicProfile | null;
   onChanged?: (updated: Prompt) => void;
 }
 
 export default function PromptCard({ prompt, author, onChanged }: PromptCardProps) {
   const navigate = useNavigate();
-  const { categoryById, roleById, organizationById, organizations } = useReferenceData();
+  const { categoryById } = useReferenceData();
   const { user, profile, configured } = useAuth();
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -47,8 +46,6 @@ export default function PromptCard({ prompt, author, onChanged }: PromptCardProp
   }, [prompt.like_count, prompt.liked_by_me]);
 
   const category = categoryById(prompt.category_id);
-  const role = roleById(prompt.role_id);
-  const org = organizationById(author?.organization_id ?? prompt.organization_id);
 
   const authorId = prompt.created_by_user ?? author?.id ?? null;
   const authorName = author?.full_name
@@ -120,15 +117,9 @@ export default function PromptCard({ prompt, author, onChanged }: PromptCardProp
   // Variant A: het vierkant zegt wat de prompt oplevert, de regel eronder waar hij over gaat.
   const kind = PROMPT_KIND_META[promptKindOf(prompt)];
   const KindIcon = kind.icon;
-  // Wat van de kaart af is gegaan (omschrijving, organisatie, functie, datum)
-  // staat achter het infobolletje: één blik op de kaart, de rest op verzoek.
-  const info = [
-    prompt.description,
-    // Het hele pad, zodat bij een afdeling ook de directie en het ministerie erboven staan.
-    [org ? orgPathLabel(org.id, organizations, { short: true }) || org.name : null, role?.name, formatDate(prompt.created_at)]
-      .filter(Boolean)
-      .join(' · '),
-  ]
+  // Wat van de kaart af is gegaan (omschrijving, datum) staat achter het
+  // infobolletje: één blik op de kaart, de rest op verzoek.
+  const info = [prompt.description, formatDate(prompt.created_at)]
     .filter(Boolean)
     .join('\n');
   const ACTION =

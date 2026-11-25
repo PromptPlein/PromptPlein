@@ -50,7 +50,7 @@ const navItems: NavItem[] = [
 ];
 
 export default function Header() {
-  const { isAdmin, isModerator, configured } = useAuth();
+  const { isAdmin, configured } = useAuth();
   const { pathname } = useLocation();
   const [chatEnabled, setChatEnabled] = useState(true);
 
@@ -96,22 +96,11 @@ export default function Header() {
             />
           </Link>
 
-          {/* Het lint hangt aan de bovenrand, midden op de pagina. Staat tijdelijk
-              verborgen (keuze van de eigenaar, 24-11-2026): de app moet nu niet als
-              overheidstool overkomen. Terugzetten is `hidden` weghalen. */}
-          <img
-            src="/logo-rijksoverheid.svg"
-            alt="Logo Rijksoverheid"
-            width={40}
-            height={80}
-            className="opl-lint absolute left-1/2 top-0 hidden h-[64px] w-[32px] -translate-x-1/2 sm:h-[80px] sm:w-[40px]"
-          />
-
           {/* Naast het lint is op een smalle telefoon plek voor drie knoppen.
               Toegankelijkheid blijft altijd staan; de rest zit op de telefoon in
               het accountmenu. */}
           <div className="ml-auto flex items-center gap-0.5 sm:gap-1">
-            {(isModerator || isAdmin) && (
+            {isAdmin && (
               <NavLink
                 to="/goedkeuringen"
                 className={({ isActive }) =>

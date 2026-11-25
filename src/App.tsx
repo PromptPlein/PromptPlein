@@ -23,7 +23,6 @@ const MyLibraryPage = lazy(() => import('@/pages/MyLibraryPage'));
 const PromptDetailPage = lazy(() => import('@/pages/PromptDetailPage'));
 const SharePreviewPage = lazy(() => import('@/pages/SharePreviewPage'));
 const ContactPage = lazy(() => import('@/pages/ContactPage'));
-const NetworkPage = lazy(() => import('@/pages/NetworkPage'));
 const CommunityPage = lazy(() => import('@/pages/CommunityPage'));
 const PublicProfilePage = lazy(() => import('@/pages/PublicProfilePage'));
 const ChatPage = lazy(() => import('@/pages/ChatPage'));
@@ -38,16 +37,11 @@ const ActivityPage = lazy(() => import('@/pages/ActivityPage'));
 const AdminLayout = lazy(() => import('@/components/admin/AdminLayout'));
 const AdminDashboardPage = lazy(() => import('@/pages/admin/AdminDashboardPage'));
 const TechniqueManagerPage = lazy(() => import('@/pages/admin/TechniqueManagerPage'));
-const RoleManagerPage = lazy(() => import('@/pages/admin/RoleManagerPage'));
-const FunctionRequestQueuePage = lazy(() => import('@/pages/admin/FunctionRequestQueuePage'));
-const OrganizationRequestQueuePage = lazy(() => import('@/pages/admin/OrganizationRequestQueuePage'));
 const CategoryManagerPage = lazy(() => import('@/pages/admin/CategoryManagerPage'));
 const CategoryRequestQueuePage = lazy(() => import('@/pages/admin/CategoryRequestQueuePage'));
 const AdminAnalyticsPage = lazy(() => import('@/pages/admin/AdminAnalyticsPage'));
 const AuditLogPage = lazy(() => import('@/pages/admin/AuditLogPage'));
 const UserManagerPage = lazy(() => import('@/pages/admin/UserManagerPage'));
-const ModeratorManagerPage = lazy(() => import('@/pages/admin/ModeratorManagerPage'));
-const OrganizationManagerPage = lazy(() => import('@/pages/admin/OrganizationManagerPage'));
 const ApprovalQueuePage = lazy(() => import('@/pages/admin/ApprovalQueuePage'));
 const ReportsPage = lazy(() => import('@/pages/admin/ReportsPage'));
 const SettingsPage = lazy(() => import('@/pages/admin/SettingsPage'));
@@ -133,18 +127,17 @@ export default function App() {
                 element={<Navigate to="/instellingen/toegankelijkheid" replace />}
               />
               {/* Het profiel staat sinds 25-11-2026 bij de instellingen. */}
+              <Route path="/netwerk" element={<Navigate to="/zoeken" replace />} />
               <Route path="/profiel" element={<Navigate to="/instellingen/profiel" replace />} />
 
               {/* Vereist een ingelogde gebruiker */}
               <Route element={<RequireAuth />}>
                 <Route path="/bibliotheek" element={<MyLibraryPage />} />
-                <Route path="/netwerk" element={<NetworkPage />} />
                 <Route path="/bronnen-bewaren/:projectId" element={<KeepProjectFilesPage />} />
               </Route>
 
-              {/* Goedkeuringen — toegankelijk voor admins én moderatoren.
-                  De wachtrij filtert via RLS automatisch op wat jíj mag beoordelen. */}
-              <Route element={<RequireAuth role="admin" allowModerator />}>
+              {/* Goedkeuringen: alleen voor beheerders. */}
+              <Route element={<RequireAuth role="admin" />}>
                 <Route
                   path="/goedkeuringen"
                   element={
@@ -162,12 +155,7 @@ export default function App() {
                   <Route index element={<AdminDashboardPage />} />
                   <Route path="goedkeuringen" element={<ApprovalQueuePage />} />
                   <Route path="gebruikers" element={<UserManagerPage />} />
-                  <Route path="moderatoren" element={<ModeratorManagerPage />} />
-                  <Route path="organisaties" element={<OrganizationManagerPage />} />
                   <Route path="technieken" element={<TechniqueManagerPage />} />
-                  <Route path="rollen" element={<RoleManagerPage />} />
-                  <Route path="functie-aanvragen" element={<FunctionRequestQueuePage />} />
-                  <Route path="onderdeel-aanvragen" element={<OrganizationRequestQueuePage />} />
                   <Route path="categorieen" element={<CategoryManagerPage />} />
                   <Route path="categorie-aanvragen" element={<CategoryRequestQueuePage />} />
                   <Route path="analytics" element={<AdminAnalyticsPage />} />
@@ -175,6 +163,10 @@ export default function App() {
                   <Route path="audit" element={<AuditLogPage />} />
                   <Route path="instellingen" element={<SettingsPage />} />
                   <Route path="prompts" element={<PromptsPage />} />
+                  {/* Organisaties, moderatoren en functies staan sinds 25-11-2026 uit beeld. */}
+                  {['moderatoren', 'organisaties', 'rollen', 'functie-aanvragen', 'onderdeel-aanvragen'].map((p) => (
+                    <Route key={p} path={p} element={<Navigate to="/admin" replace />} />
+                  ))}
                 </Route>
               </Route>
 

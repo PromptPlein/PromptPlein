@@ -7,11 +7,10 @@ import { useAuth } from '@/context/AuthContext';
 import {
   adminUpdateProfile,
   listProfiles,
-  listOrganizations,
   APP_ROLE_LABELS,
 } from '@/services/orgService';
 import { logAdminAction } from '@/services/adminService';
-import type { AppRole, Organization, Profile } from '@/types';
+import type { AppRole, Profile } from '@/types';
 import StackTable from '@/components/common/StackTable';
 
 const ROLES: AppRole[] = ['user', 'admin', 'super_admin'];
@@ -21,7 +20,6 @@ interface Editor {
   email: string;
   full_name: string;
   role: AppRole;
-  organization_id: string;
   is_active: boolean;
 }
 
@@ -29,36 +27,22 @@ export default function UserManagerPage() {
   const { hasRole, user } = useAuth();
   const canEditRoles = hasRole('super_admin');
   const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [orgs, setOrgs] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
   const [editor, setEditor] = useState<Editor | null>(null);
-  const [orgFilter, setOrgFilter] = useState<string>('all');
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
 
-  const orgName = useMemo(() => {
-    const map = new Map(orgs.map((o) => [o.id, o.name]));
-    return (id?: string | null) => (id ? map.get(id) ?? '—' : '—');
-  }, [orgs]);
-
   const visibleProfiles = useMemo(() => {
-    const filtered = profiles.filter((p) => {
-      if (orgFilter === 'all') return true;
-      if (orgFilter === 'none') return !p.organization_id;
-      return p.organization_id === orgFilter;
-    });
-    return [...filtered].sort((a, b) => {
+    return [...profiles].sort((a, b) => {
       const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
       const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
       return sortOrder === 'newest' ? tb - ta : ta - tb;
     });
-  }, [profiles, orgFilter, sortOrder]);
+  }, [profiles, sortOrder]);
 
   async function load() {
     setLoading(true);
     try {
-      const [p, o] = await Promise.all([listProfiles(), listOrganizations(true)]);
-      setProfiles(p);
-      setOrgs(o);
+      setProfiles(await listProfiles());
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Laden mislukt');
     } finally {
@@ -74,7 +58,6 @@ export default function UserManagerPage() {
     try {
       await adminUpdateProfile(editor.id, {
         full_name: editor.full_name.trim() || null,
-        organization_id: editor.organization_id || null,
         is_active: editor.is_active,
         ...(canEditRoles ? { role: editor.role } : {}),
       });
@@ -84,7 +67,6 @@ export default function UserManagerPage() {
         entity_id: editor.id,
         changes: {
           role: canEditRoles ? editor.role : undefined,
-          organization_id: editor.organization_id || null,
           is_active: editor.is_active,
         },
       });
@@ -102,29 +84,11 @@ export default function UserManagerPage() {
         <div>
           <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Gebruikers beheren</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            {visibleProfiles.length}
-            {visibleProfiles.length !== profiles.length && ` van ${profiles.length}`} gebruikers
+            {profiles.length} gebruikers
             {!canEditRoles && ' · alleen hoofdbeheerders kunnen rollen wijzigen'}
           </p>
         </div>
         <div className="flex flex-wrap items-end gap-3">
-          <div>
-            <label className="opl-label" htmlFor="org-filter">Organisatie</label>
-            <select
-              id="org-filter"
-              className="opl-input"
-              value={orgFilter}
-              onChange={(e) => setOrgFilter(e.target.value)}
-            >
-              <option value="all">Alle organisaties</option>
-              <option value="none">— Geen organisatie —</option>
-              {orgs.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.name}
-                </option>
-              ))}
-            </select>
-          </div>
           <div>
             <label className="opl-label" htmlFor="sort-order">Sorteren</label>
             <select
@@ -149,7 +113,6 @@ export default function UserManagerPage() {
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
               <tr>
                 <th className="px-4 py-3 font-medium">Naam / e-mail</th>
-                <th className="hidden px-4 py-3 font-medium sm:table-cell">Organisatie</th>
                 <th className="px-4 py-3 font-medium">Rol</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 text-right font-medium">Acties</th>
@@ -161,9 +124,6 @@ export default function UserManagerPage() {
                   <td className="px-4 py-3">
                     <div className="font-medium text-slate-800 dark:text-slate-100">{p.full_name || '—'}</div>
                     <div className="text-xs text-slate-400 dark:text-slate-500">{p.email}</div>
-                  </td>
-                  <td className="hidden px-4 py-3 text-slate-500 sm:table-cell dark:text-slate-400">
-                    {orgName(p.organization_id)}
                   </td>
                   <td className="px-4 py-3">
                     <span
@@ -199,7 +159,6 @@ export default function UserManagerPage() {
                             email: p.email,
                             full_name: p.full_name ?? '',
                             role: p.role,
-                            organization_id: p.organization_id ?? '',
                             is_active: p.is_active,
                           })
                         }
@@ -214,8 +173,8 @@ export default function UserManagerPage() {
               ))}
               {visibleProfiles.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-sm text-slate-400 dark:text-slate-500">
-                    {profiles.length === 0 ? 'Nog geen gebruikers.' : 'Geen gebruikers voor dit filter.'}
+                  <td colSpan={4} className="px-4 py-8 text-center text-sm text-slate-400 dark:text-slate-500">
+                    Nog geen gebruikers.
                   </td>
                 </tr>
               )}
@@ -257,21 +216,6 @@ export default function UserManagerPage() {
               {editor.id === user?.id && (
                 <p className="mt-1 text-xs text-amber-600 dark:text-amber-300">Je kunt je eigen rol niet wijzigen.</p>
               )}
-            </div>
-            <div>
-              <label className="opl-label">Organisatie</label>
-              <select
-                className="opl-input"
-                value={editor.organization_id}
-                onChange={(e) => setEditor({ ...editor, organization_id: e.target.value })}
-              >
-                <option value="">— Geen organisatie —</option>
-                {orgs.map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {o.name}
-                  </option>
-                ))}
-              </select>
             </div>
             <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
               <input

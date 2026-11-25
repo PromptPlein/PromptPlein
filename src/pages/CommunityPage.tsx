@@ -1,10 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Users, Trophy, ThumbsUp, FileText, Building2, ChevronRight, Flame } from '@/components/common/icons';
-import OrgTree from '@/components/network/OrgTree';
+import { Users, Trophy, ThumbsUp, FileText, ChevronRight, Flame } from '@/components/common/icons';
 import clsx from 'clsx';
-import { useReferenceData } from '@/context/ReferenceDataContext';
-import { orgPathLabel } from '@/lib/orgTree';
 import { listCommunityMembers, firstName } from '@/services/communityService';
 import TrendingPage from '@/pages/TrendingPage';
 import type { CommunityMember } from '@/types';
@@ -23,7 +20,7 @@ export default function CommunityPage() {
         <div>
           <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">Community</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Wie maakt de prompts, bij welk ministerie horen ze, en welke prompts waarderen collega’s het meest.
+            Wie maakt de prompts, en welke prompts worden het meest gewaardeerd.
           </p>
         </div>
       </div>
@@ -79,7 +76,6 @@ function TabButton({
 }
 
 function CommunityTab() {
-  const { organizations } = useReferenceData();
   const [members, setMembers] = useState<CommunityMember[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -105,7 +101,7 @@ function CommunityTab() {
         <Stat icon={<ThumbsUp size={18} />} value={totalLikes} label="Likes" />
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-2">
+      <div className="grid gap-8">
         {/* Ranglijst */}
         <section className="min-w-0">
           <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold text-slate-700 dark:text-slate-200">
@@ -138,10 +134,6 @@ function CommunityTab() {
                       <p className="truncate font-medium text-slate-800 dark:text-slate-100">
                         {firstName(m.full_name)}
                       </p>
-                      <p className="truncate text-xs text-slate-500 dark:text-slate-400">
-                        {orgPathLabel(m.organization_id, organizations, { short: true }) ||
-                          'Onbekende organisatie'}
-                      </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
                       <span className="inline-flex items-center gap-1" title="Likes">
@@ -159,15 +151,6 @@ function CommunityTab() {
           )}
         </section>
 
-        {/* Boomstructuur Rijksoverheid → ministerie → afdeling */}
-        <section className="min-w-0">
-          <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold text-slate-700 dark:text-slate-200">
-            <Building2 size={18} className="text-rijksblauw-500" /> Organisatie
-          </h2>
-          <div className="opl-card p-4">
-            <OrgTree orgs={organizations} />
-          </div>
-        </section>
       </div>
     </>
   );

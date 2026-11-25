@@ -1,5 +1,4 @@
-# PromptPlein is bedoeld voor intern overheidsgebruik en mag niet
-# worden geïndexeerd door zoekmachines.
+# PromptPlein mag niet worden geïndexeerd door zoekmachines.
 #
 # Zoekmachines mogen hier bewust wel komen: alleen zo zien ze de kop
 # X-Robots-Tag: noindex (vercel.json) en halen ze de site uit hun index.

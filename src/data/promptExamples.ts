@@ -98,7 +98,7 @@ export const PROMPT_EXAMPLES: PromptExample[] = [
     title: 'Rapport samenvatten voor de leiding',
     subtitle: 'Bevindingen, aannames en wat het voor ons betekent',
     prompt:
-      'Vat een lang onderzoeksrapport samen voor de directie. Geef de belangrijkste bevindingen, de aanbevelingen die ons departement raken, de aannames waarop de conclusies rusten en de beperkingen van het onderzoek. Zet er een korte passage onder over wat dit betekent voor ons lopende beleid. Houd strikt gescheiden wat in het rapport staat en wat een eigen conclusie zou zijn.',
+      'Vat een lang onderzoeksrapport samen voor de directie. Geef de belangrijkste bevindingen, de aanbevelingen die onze organisatie raken, de aannames waarop de conclusies rusten en de beperkingen van het onderzoek. Zet er een korte passage onder over wat dit betekent voor ons lopende beleid. Houd strikt gescheiden wat in het rapport staat en wat een eigen conclusie zou zijn.',
   },
   {
     category: 'onderzoek',
@@ -150,7 +150,7 @@ export const PROMPT_EXAMPLES: PromptExample[] = [
     // daaronder invulregels tussen rechte haken. De gebruiker vervangt alleen
     // die haken; de basis blijft staan en geeft de voor-invulling houvast.
     prompt:
-      'Bouw een demo-dashboard als werkende React-webapplicatie op localhost, met dummy data in het geheugen en zonder backend, database of login. Het scherm is datagericht: cijfers en visualisaties dragen de boodschap, tekst niet. Rijkshuisstijl, rustig en neutraal; rood en groen alleen voor status of afwijking van een norm. Elke weergave heeft drie niveaus: bovenaan de belangrijkste cijfers groot, elk met een vergelijking of doelwaarde; daaronder de hoofdvisualisatie; onderaan een detailtabel met filters. Alles staat altijd zichtbaar in een vast raster dat op mobiel in dezelfde volgorde stackt.\n\n' +
+      'Bouw een demo-dashboard als werkende React-webapplicatie op localhost, met dummy data in het geheugen en zonder backend, database of login. Het scherm is datagericht: cijfers en visualisaties dragen de boodschap, tekst niet. Een rustige, neutrale huisstijl; rood en groen alleen voor status of afwijking van een norm. Elke weergave heeft drie niveaus: bovenaan de belangrijkste cijfers groot, elk met een vergelijking of doelwaarde; daaronder de hoofdvisualisatie; onderaan een detailtabel met filters. Alles staat altijd zichtbaar in een vast raster dat op mobiel in dezelfde volgorde stackt.\n\n' +
       'Wat er in dit dashboard moet:\n' +
       '- Onderwerp en voor wie: [bijvoorbeeld de werkvoorraad van team Vergunningen, voor het MT]\n' +
       '- Weergaven (tabs): [bijvoorbeeld Overzicht, Behandelaars en Trends; welke is de ster van de show]\n' +

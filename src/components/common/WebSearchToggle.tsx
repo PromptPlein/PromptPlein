@@ -87,7 +87,7 @@ export default function WebSearchToggle({
               Mojeek volgt je niet en gebruikt je vraag niet voor zichzelf. De vraag wordt hoogstens
               90 dagen bewaard om storingen op te lossen. Het Verenigd Koninkrijk valt buiten de
               Europese Unie, maar de EU erkent dat persoonsgegevens daar even goed beschermd zijn.
-              Het blijft wel een dienst buiten het beheer van de rijksoverheid.
+              Het blijft wel een dienst buiten het beheer van PromptPlein.
             </p>
             <p>
               Zet daarom geen persoonsgegevens, vertrouwelijke informatie of niet-openbare

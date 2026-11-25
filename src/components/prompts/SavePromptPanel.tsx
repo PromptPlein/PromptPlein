@@ -6,12 +6,6 @@ import { getCurrentUser } from '@/lib/utils';
 import { createPrompt } from '@/services/repository';
 import { generateMetadata } from '@/services/optimizeService';
 import { requestCategory } from '@/services/categoryRequestService';
-import { requestFunction } from '@/services/functionRequestService';
-import {
-  listOwnPendingOrganizationRequests,
-  requestLayerLabels,
-} from '@/services/organizationRequestService';
-import { orgPathLabel, ORG_PATH_SEPARATOR } from '@/lib/orgTree';
 import { useAuth } from '@/context/AuthContext';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import SearchableSelect from '@/components/common/SearchableSelect';
@@ -19,7 +13,7 @@ import VisibilityPicker from '@/components/prompts/VisibilityPicker';
 import KindPicker from '@/components/prompts/KindPicker';
 import { kindFromModality } from '@/lib/promptKinds';
 import type { PromptKind } from '@/lib/techniques';
-import type { OrganizationRequest, Prompt, Technique, VisibilityLevel } from '@/types';
+import type { Prompt, Technique, VisibilityLevel } from '@/types';
 
 interface SavePromptPanelProps {
   /** De prompt-inhoud die wordt opgeslagen. */
@@ -41,8 +35,9 @@ interface SavePromptPanelProps {
 
 /**
  * Het opslagformulier voor een prompt: AI-gesuggereerde titel/omschrijving/
- * categorie, functie- en organisatiekeuze, zichtbaarheid en de aanvraagpanelen
- * voor ontbrekende categorieën/functies. Losgemaakt uit OptimizedOutput zodat
+ * categorie, soort, zichtbaarheid en het aanvraagpaneel voor een ontbrekende
+ * categorie. De organisatie gaat stil mee uit het profiel, zodat de stand op
+ * branch stand-25-11-2026 er nog mee kan werken. Losgemaakt uit OptimizedOutput zodat
  * de chat ("Bewaar als prompt") hetzelfde formulier gebruikt.
  */
 export default function SavePromptPanel({
@@ -54,8 +49,8 @@ export default function SavePromptPanel({
   onCancel,
   frameless = false,
 }: SavePromptPanelProps) {
-  const { profile, user, isAuthenticated, isAdmin } = useAuth();
-  const { categories, roles, organizations } = useReferenceData();
+  const { profile, user, isAuthenticated } = useAuth();
+  const { categories } = useReferenceData();
 
   // Start leeg: tijdens het laden zien we alleen het laadscherm, geen oude
   // standaardtitel die later "verspringt" naar de AI-suggestie.
@@ -66,16 +61,7 @@ export default function SavePromptPanel({
   // Soort: uit de bouwer als die bekend is, anders tekst. De gebruiker kan hem wijzigen.
   const knownKind = initialKind ?? kindFromModality(technique?.modality);
   const [kind, setKind] = useState<PromptKind>(knownKind ?? 'text');
-  // Functie: voor welke functie is deze prompt geschreven (zelfde keuze als bij het uploaden).
-  const [roleId, setRoleId] = useState<string | null>(null);
-  // Organisatie staat standaard op die van de gebruiker (uit het profiel), zodat
-  // de template meteen aan de eigen afdeling/ministerie gekoppeld is. De maker
-  // kan dit aanpassen. We onthouden of de gebruiker het veld zelf heeft gewijzigd.
-  const [organizationId, setOrganizationId] = useState<string>(profile?.organization_id ?? '');
-  const organizationTouched = useRef(false);
-  // Standaard privé (geen enkel niveau aangevinkt): de maker deelt pas bewust.
-  // Dit is de veiligste default — niemand deelt per ongeluk met de afdeling,
-  // het ministerie of de hele Rijksoverheid.
+  // Standaard privé: de maker deelt pas bewust.
   const [sharingLevels, setSharingLevels] = useState<VisibilityLevel[]>([]);
   const sharingTouched = useRef(false);
   const [saving, setSaving] = useState(false);
@@ -95,37 +81,6 @@ export default function SavePromptPanel({
   const [pendingCategory, setPendingCategory] = useState<string | null>(null);
   // De aanvraag zelf: de prompt onthoudt hem en krijgt na goedkeuring die categorie.
   const [pendingCategoryId, setPendingCategoryId] = useState<string | null>(null);
-  // Functie-aanvraag: paneel om een ontbrekende functie aan te vragen (zelfde
-  // patroon als de categorie-aanvraag hierboven).
-  const [showRoleRequest, setShowRoleRequest] = useState(false);
-  const [roleRequestName, setRoleRequestName] = useState('');
-  const [roleRequestBusy, setRoleRequestBusy] = useState(false);
-  // Naam van de aangevraagde functie zodra de aanvraag is verstuurd (pending).
-  const [pendingRole, setPendingRole] = useState<string | null>(null);
-
-  // Een eigen afdeling die nog op goedkeuring wacht: dan staat het profiel op de
-  // laag erboven, en dat moet de gebruiker hier ook lezen.
-  const [pendingOrgs, setPendingOrgs] = useState<OrganizationRequest[]>([]);
-  useEffect(() => {
-    if (!user || isAdmin) return;
-    let active = true;
-    listOwnPendingOrganizationRequests(user.id)
-      .then((rows) => active && setPendingOrgs(rows))
-      .catch(() => undefined);
-    return () => {
-      active = false;
-    };
-  }, [user, isAdmin]);
-
-  // Het profiel laadt asynchroon: zodra de organisatie van de gebruiker bekend is
-  // en de gebruiker het veld nog niet zelf koos, vullen we de organisatie voor op
-  // die van het profiel. De zichtbaarheid blijft bewust op privé (standaard) staan.
-  useEffect(() => {
-    if (!profile?.organization_id) return;
-    if (!organizationTouched.current && !organizationId) {
-      setOrganizationId(profile.organization_id);
-    }
-  }, [profile?.organization_id, organizationId]);
 
   // AI-metadata één keer ophalen bij het openen van het formulier; de
   // touched-refs beschermen wat de gebruiker ondertussen zelf typte.
@@ -181,33 +136,6 @@ export default function SavePromptPanel({
     }
   }
 
-  /** Dien een aanvraag in voor een ontbrekende functie. */
-  async function submitRoleRequest() {
-    const name = roleRequestName.trim();
-    if (!name) {
-      toast.error('Geef de functie een naam.');
-      return;
-    }
-    if (!user) {
-      toast.error('Log in om een functie aan te vragen.');
-      return;
-    }
-    setRoleRequestBusy(true);
-    try {
-      await requestFunction({ name, requestedBy: user.id });
-      // Functie nog niet beschikbaar: laat de keuze leeg tot een beheerder de
-      // functie goedkeurt en toon de aanvraag als pending.
-      setRoleId(null);
-      setPendingRole(name);
-      setShowRoleRequest(false);
-      setRoleRequestName('');
-      toast.success(`Aanvraag voor “${name}” verstuurd; een beheerder beoordeelt hem.`);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Aanvraag mislukt');
-    } finally {
-      setRoleRequestBusy(false);
-    }
-  }
 
   async function handleSave() {
     if (!title.trim()) {
@@ -221,13 +149,6 @@ export default function SavePromptPanel({
       toast.error('Log in om deze prompt op te slaan in de bibliotheek.');
       return;
     }
-    // Afdeling/ministerie delen vereist een organisatie om op te richten — anders
-    // weet niemand met welke afdeling de template gedeeld is.
-    const needsOrg = sharingLevels.some((l) => l === 'department' || l === 'directorate' || l === 'ministry');
-    if (needsOrg && !organizationId) {
-      toast.error('Kies een organisatie om de prompt met je afdeling of ministerie te delen.');
-      return;
-    }
     setSaving(true);
     try {
       const prompt = await createPrompt({
@@ -237,8 +158,7 @@ export default function SavePromptPanel({
         category_id: categoryId,
         requested_category_id: categoryId ? null : pendingCategoryId,
         kind,
-        role_id: roleId,
-        organization_id: organizationId || null,
+        organization_id: profile?.organization_id ?? null,
         sharing_levels: sharingLevels,
         created_by: profile?.full_name || getCurrentUser() || 'Onbekend',
       });
@@ -420,142 +340,8 @@ export default function SavePromptPanel({
           Zo vinden collega&apos;s waar deze prompt voor bedoeld is.
         </p>
       </div>
-      <div>
-        <label className="opl-label" htmlFor="tpl-role">
-          Functie
-        </label>
-        <SearchableSelect
-          id="tpl-role"
-          options={roles.map((r) => ({ id: r.id, label: r.name, hint: r.description }))}
-          value={roleId}
-          onChange={(id) => {
-            setRoleId(id);
-            if (id) setPendingRole(null); // echte keuze vervangt een aanvraag
-          }}
-          placeholder="Voor welke functie is deze prompt geschreven?"
-          clearLabel="Geen functie"
-          searchPlaceholder="Zoek een functie…"
-        />
-
-        {/* Aangevraagde (nog niet goedgekeurde) functie. */}
-        {pendingRole && (
-          <p className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-2.5 py-1.5 text-xs text-amber-800 dark:bg-amber-500/15 dark:text-amber-300">
-            <Loader2 size={12} className="animate-spin" />
-            Functie “{pendingRole}” aangevraagd, in afwachting van goedkeuring.
-          </p>
-        )}
-
-        {/* Expliciete knop: mijn functie zit er niet tussen → aanvragen. */}
-        {!showRoleRequest ? (
-          <button
-            type="button"
-            onClick={() => {
-              setShowRoleRequest(true);
-              setRoleRequestName('');
-            }}
-            className="mt-2 text-xs font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300"
-          >
-            Mijn functie zit er niet tussen
-          </button>
-        ) : (
-          <div className="mt-2 space-y-2 rounded-lg border border-rijksblauw-200 bg-white p-2.5 dark:border-rijksblauw-500/30 dark:bg-slate-800">
-            <label className="opl-label text-xs" htmlFor="tpl-role-request">
-              Nieuwe functie aanvragen
-            </label>
-            <input
-              id="tpl-role-request"
-              className="opl-input"
-              value={roleRequestName}
-              onChange={(e) => setRoleRequestName(e.target.value)}
-              placeholder="Naam van de functie, bijv. Beleidsmedewerker Inkoop"
-              onKeyDown={(e) => e.key === 'Enter' && submitRoleRequest()}
-              autoFocus
-            />
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                className="opl-btn-secondary px-3 py-1.5 text-xs"
-                onClick={() => setShowRoleRequest(false)}
-                disabled={roleRequestBusy}
-              >
-                Annuleren
-              </button>
-              <button
-                type="button"
-                className="opl-btn-primary px-3 py-1.5 text-xs"
-                onClick={submitRoleRequest}
-                disabled={roleRequestBusy}
-              >
-                {roleRequestBusy ? 'Versturen…' : 'Aanvragen'}
-              </button>
-            </div>
-            <p className="text-xs text-slate-400 dark:text-slate-500">
-              Een beheerder beoordeelt je aanvraag. Tot die tijd laat je de functie leeg.
-            </p>
-          </div>
-        )}
-        <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-          Voor welke functie is deze prompt geschreven?
-        </p>
-      </div>
-      {organizations.length > 0 && isAdmin && (
-        <div>
-          <label className="opl-label" htmlFor="tpl-organization">
-            Organisatie
-          </label>
-          {/* Alleen een beheerder koppelt een prompt aan een andere organisatie. */}
-          <select
-            id="tpl-organization"
-            className="opl-input"
-            value={organizationId}
-            onChange={(e) => {
-              organizationTouched.current = true;
-              setOrganizationId(e.target.value);
-            }}
-          >
-            <option value="">Geen organisatie</option>
-            {organizations.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.code ? `${o.name} (${o.code})` : o.name}
-              </option>
-            ))}
-          </select>
-          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-            Koppel deze prompt aan een ministerie of afdeling, zodat hij vindbaar is via de netwerkverkenner.
-          </p>
-        </div>
-      )}
-      {organizations.length > 0 && !isAdmin && (
-        <div>
-          {/* Een gewone gebruiker koppelt altijd zijn eigen afdeling uit het profiel.
-              Geen vergrendelde keuzelijst met alle organisaties: die las als een keuze
-              die de app had gemaakt. Klopt de afdeling niet, dan pas je hem aan op
-              je profiel. */}
-          <p className="opl-label">Jouw afdeling</p>
-          <p className="text-sm text-slate-700 dark:text-slate-200">
-            {organizationId ? orgPathLabel(organizationId, organizations) : 'Nog geen afdeling gekozen'}
-          </p>
-          {pendingOrgs.map((r) => (
-            <p key={r.id} className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-              <span className="font-medium">
-                {[orgPathLabel(r.parent_id, organizations, { short: true }), ...requestLayerLabels(r)]
-                  .filter(Boolean)
-                  .join(ORG_PATH_SEPARATOR)}
-              </span>
-              : wacht op goedkeuring
-            </p>
-          ))}
-          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-            Niet jouw afdeling?{' '}
-            <Link to="/instellingen/profiel" className="opl-raak font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300">
-              Pas hem aan op je profiel
-            </Link>
-          </p>
-        </div>
-      )}
       <VisibilityPicker
         idPrefix="tpl"
-        organizationId={organizationId || null}
         value={sharingLevels}
         onChange={(next) => {
           sharingTouched.current = true;

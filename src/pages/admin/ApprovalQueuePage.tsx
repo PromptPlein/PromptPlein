@@ -8,10 +8,6 @@ import { listPendingForModeration, decideVisibility } from '@/services/visibilit
 import { VISIBILITY_STATUS_META } from '@/services/collaborationService';
 import { logAdminAction } from '@/services/adminService';
 import { useAuth } from '@/context/AuthContext';
-import { useReferenceData } from '@/context/ReferenceDataContext';
-import { orgDisplayName } from '@/lib/orgTree';
-import { countPendingOrganizationRequests } from '@/services/organizationRequestService';
-import { countPendingFunctionRequests } from '@/services/functionRequestService';
 import { countPendingCategoryRequests } from '@/services/categoryRequestService';
 import type { Prompt, PromptVisibility } from '@/types';
 
@@ -19,8 +15,6 @@ type PendingRow = PromptVisibility & { prompt: Prompt | null };
 
 /** De andere wachtrijen van een beheerder; ze hebben elk een eigen pagina in Beheer. */
 const OTHER_QUEUES = [
-  { key: 'afdelingen', label: 'Afdelingen', to: '/admin/onderdeel-aanvragen', count: countPendingOrganizationRequests },
-  { key: 'functies', label: 'Functies', to: '/admin/functie-aanvragen', count: countPendingFunctionRequests },
   { key: 'categorieen', label: 'Categorieën', to: '/admin/categorie-aanvragen', count: countPendingCategoryRequests },
 ] as const;
 
@@ -30,7 +24,6 @@ export default function ApprovalQueuePage() {
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
   const { isAdmin } = useAuth();
-  const { organizationById } = useReferenceData();
   const [other, setOther] = useState<Record<string, number>>({});
 
   // Een beheerder ziet hier ook wat er in de andere wachtrijen staat: dit is de
@@ -50,8 +43,7 @@ export default function ApprovalQueuePage() {
   async function load() {
     setLoading(true);
     try {
-      // RLS levert alleen de pending-niveaus die jíj mag beoordelen
-      // (moderator: het ministerie van je tak; beheerder: alles).
+      // RLS levert alleen wat jij mag beoordelen; hier alleen Publiek.
       setRows(await listPendingForModeration());
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Laden mislukt');
@@ -145,12 +137,7 @@ export default function ApprovalQueuePage() {
                         {p?.title ?? 'Onbekende prompt'}
                       </h2>
                       <span className="rounded-full bg-rijksblauw-50 px-2 py-0.5 text-[0.6875rem] font-medium text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">
-                        Niveau: {meta?.label ?? row.level}
-                        {(() => {
-                          // Bij directie en ministerie: welke, zodat je weet voor wie het is.
-                          const scope = row.level !== 'public' ? organizationById(row.org_id ?? '') : undefined;
-                          return scope ? `: ${orgDisplayName(scope)}` : null;
-                        })()}
+                        {meta?.label ?? 'Publiek'}
                       </span>
                       <span className={clsx('opl-badge', statusMeta.classes)}>{statusMeta.label}</span>
                     </div>

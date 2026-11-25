@@ -2,13 +2,10 @@ import { useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/context/AuthContext';
-import { useReferenceData } from '@/context/ReferenceDataContext';
-import OrgPicker, { type OrgRequestDraft } from '@/components/common/OrgPicker';
 import AuthLayout from './AuthLayout';
 
 export default function SignupPage() {
   const { signUp, configured } = useAuth();
-  const { loading: orgsLoading } = useReferenceData();
   const navigate = useNavigate();
   // Kwam de gebruiker via RequireAuth (bijv. met een chat-handoff klaar in
   // sessionStorage)? Geef het oorspronkelijke doel dan door aan de loginpagina,
@@ -17,11 +14,6 @@ export default function SignupPage() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  // De gekozen organisatie/afdeling: kies de diepste eenheid, dan ben je
-  // automatisch verbonden met alle lagen daarboven (ministerie, dienst …).
-  const [organizationId, setOrganizationId] = useState<string | null>(null);
-  // Een afdeling die er nog niet staat: die vraagt de database aan na het bevestigen.
-  const [orgDraft, setOrgDraft] = useState<OrgRequestDraft | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function submit(e: FormEvent) {
@@ -31,31 +23,14 @@ export default function SignupPage() {
       toast.error('Kies een wachtwoord van minimaal 8 tekens.');
       return;
     }
-    if (!organizationId) {
-      toast.error('Kies je ministerie.');
-      return;
-    }
-    if (orgDraft && !orgDraft.ready) {
-      toast.error('Vul je nieuwe afdeling voluit in, of kies Niet aanvragen.');
-      return;
-    }
     setBusy(true);
     try {
       await signUp({
         email: email.trim(),
         password,
         fullName: fullName.trim() || undefined,
-        // Met een aanvraag staat het profiel op de laag erboven tot de afdeling er is.
-        organizationId: orgDraft ? orgDraft.parentId : organizationId,
-        organizationRequest: orgDraft
-          ? { parentId: orgDraft.parentId, names: orgDraft.names, codes: orgDraft.codes }
-          : undefined,
       });
-      toast.success(
-        orgDraft
-          ? 'Account aangemaakt. Bevestig je e-mailadres; daarna gaat je afdeling naar een beheerder.'
-          : 'Account aangemaakt. Controleer je e-mail om te bevestigen.',
-      );
+      toast.success('Account aangemaakt. Controleer je e-mail om te bevestigen.');
       navigate('/auth/login', { replace: true, state: from ? { from } : undefined });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Registreren mislukt.');
@@ -116,20 +91,10 @@ export default function SignupPage() {
           onChange={(e) => setPassword(e.target.value)}
         />
 
-        {/* Ministerie verplicht, afdeling als die er al is. Staat hij er niet bij,
-            dan vraag je hem hier aan; die aanvraag gaat in na het bevestigen. */}
-        <OrgPicker
-          idPrefix="signup"
-          value={organizationId}
-          onChange={setOrganizationId}
-          onDraftRequest={setOrgDraft}
-          disabled={orgsLoading || !configured}
-        />
-
         <button
           type="submit"
           className="opl-btn-primary w-full"
-          disabled={busy || !configured || !organizationId}
+          disabled={busy || !configured}
         >
           {busy ? 'Bezig…' : 'Account aanmaken'}
         </button>

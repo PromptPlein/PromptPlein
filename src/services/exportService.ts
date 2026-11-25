@@ -1,7 +1,8 @@
 import { downloadText } from '@/lib/download';
 import { PROMPT_STATUS_META } from '@/services/collaborationService';
 import { brand, backgroundGradient } from '@/config/brandColors';
-import type { Prompt, SharingLevel } from '@/types';
+import { sharingLabel } from '@/lib/utils';
+import type { Prompt } from '@/types';
 
 /**
  * Exporteren van prompts naar overheidsconforme documenten. Volledig client-side
@@ -18,14 +19,6 @@ export interface ExportMeta {
   roleName?: string;
 }
 
-/** Vertaal het deelniveau naar een rubriceringslabel voor de documentkop. */
-const CLASSIFICATION: Record<SharingLevel, string> = {
-  private: 'Vertrouwelijk: persoonlijk',
-  department: 'Intern: afdeling',
-  directorate: 'Intern: directie of dienst',
-  ministry: 'Intern: ministerie',
-  public: 'Openbaar',
-};
 
 function escapeHtml(s: string): string {
   return s
@@ -56,9 +49,9 @@ function formatStamp(iso?: string | null): string {
   }
 }
 
-/** Bouw een opgemaakt, overheidsconform HTML-document voor één prompt. */
+/** Bouw een opgemaakt HTML-document voor één prompt. */
 export function buildPromptHtml(prompt: Prompt, meta: ExportMeta = {}): string {
-  const classification = CLASSIFICATION[prompt.sharing_level] ?? 'Intern';
+  const classification = sharingLabel(prompt.sharing_level);
   const status = prompt.status ? PROMPT_STATUS_META[prompt.status].label : '—';
   const generated = new Date().toLocaleString('nl-NL', { dateStyle: 'long', timeStyle: 'short' });
 
@@ -100,9 +93,8 @@ export function buildPromptHtml(prompt: Prompt, meta: ExportMeta = {}): string {
 
   <table class="meta">
     ${row('Status', status)}
-    ${row('Rubricering', classification)}
+    ${row('Zichtbaarheid', classification)}
     ${row('Categorie', meta.categoryName ?? '—')}
-    ${row('Functiegroep', meta.roleName ?? '—')}
     ${row('Auteur', prompt.created_by || '—')}
     ${row('Aangemaakt', formatStamp(prompt.created_at))}
     ${row('Laatst bijgewerkt', formatStamp(prompt.updated_at))}
@@ -116,14 +108,14 @@ export function buildPromptHtml(prompt: Prompt, meta: ExportMeta = {}): string {
   </div>
 
   <footer>
-    Dit document is automatisch gegenereerd uit de Prompt Library. Rubricering: ${escapeHtml(classification)}.
+    Dit document is automatisch gegenereerd uit de Prompt Library. Zichtbaarheid: ${escapeHtml(classification)}.
   </footer>
 </body>
 </html>`;
 }
 
 function buildMarkdown(prompt: Prompt, meta: ExportMeta): string {
-  const classification = CLASSIFICATION[prompt.sharing_level] ?? 'Intern';
+  const classification = sharingLabel(prompt.sharing_level);
   const status = prompt.status ? PROMPT_STATUS_META[prompt.status].label : '—';
   return [
     `> **${classification}** · Prompt Library`,
@@ -135,7 +127,6 @@ function buildMarkdown(prompt: Prompt, meta: ExportMeta): string {
     `| --- | --- |`,
     `| Status | ${status} |`,
     `| Categorie | ${meta.categoryName ?? '—'} |`,
-    `| Functiegroep | ${meta.roleName ?? '—'} |`,
     `| Auteur | ${prompt.created_by || '—'} |`,
     `| Aangemaakt | ${formatStamp(prompt.created_at)} |`,
     '',

@@ -61,7 +61,7 @@ const THEME_OPTIONS: { value: ThemeChoice; label: string; icon: typeof Sun }[] =
 ];
 
 export default function UserMenu() {
-  const { configured, loading, isAuthenticated, isAdmin, isModerator, profile, user, signOut } = useAuth();
+  const { configured, loading, isAuthenticated, isAdmin, profile, user, signOut } = useAuth();
   const { theme, setTheme } = useTheme();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -134,7 +134,7 @@ export default function UserMenu() {
               <Settings2 size={16} className="text-rijksblauw-500" /> Instellingen
             </Link>
           )}
-          {(isModerator || isAdmin) && (
+          {isAdmin && (
             <Link to="/goedkeuringen" onClick={() => setOpen(false)} className={clsx(itemClass, 'sm:hidden')}>
               <ClipboardCheck size={16} className="text-rijksblauw-500" /> Goedkeuringen
             </Link>

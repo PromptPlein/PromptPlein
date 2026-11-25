@@ -1,24 +1,19 @@
 import type { SharingLevel, VisibilityLevel } from '@/types';
 
+/**
+ * Twee standen voor de gebruiker: Privé of Publiek. De database kent nog de oude
+ * niveaus (afdeling, directie, ministerie) van de stand op branch stand-25-11-2026;
+ * die blijven daar bestaan, maar deze app maakt ze niet meer aan en toont ze als
+ * Publiek. Publiek is het niveau 'public' en gaat langs een beheerder.
+ */
 export const SHARING_LEVELS: { value: SharingLevel; label: string; description: string }[] = [
   { value: 'private', label: 'Privé', description: 'Alleen voor jezelf zichtbaar.' },
-  { value: 'department', label: 'Afdeling', description: 'Zichtbaar binnen je afdeling.' },
-  { value: 'directorate', label: 'Directie of dienst', description: 'Zichtbaar binnen je directie of dienst.' },
-  { value: 'ministry', label: 'Ministerie', description: 'Zichtbaar binnen het ministerie.' },
-  { value: 'public', label: 'Rijksoverheid', description: 'Voor alle overheidsmedewerkers.' },
+  { value: 'public', label: 'Publiek', description: 'Voor iedereen die PromptPlein gebruikt.' },
 ];
 
 /**
- * De vier aanvinkbare deelniveaus, mét uitleg over wie het ziet én wat er na
- * opslaan gebeurt (de goedkeuringsroute). Dit is de ENIGE bron voor deze teksten
- * — elke plek waar je een prompt deelt (dashboard, zoeken, generator) gebruikt
- * deze lijst, zodat de uitleg overal identiek is.
- *
- * Goedkeuringsroute:
- *   - Afdeling     → automatisch goedgekeurd, direct beschikbaar.
- *   - Directie of dienst → een moderator van het ministerie beoordeelt het (0059).
- *   - Ministerie   → een moderator van het ministerie beoordeelt het.
- *   - Rijksoverheid → een beheerder beoordeelt het.
+ * Het enige aanvinkbare deelniveau, met uitleg over wie het ziet en wat er na
+ * opslaan gebeurt. Privé is geen niveau: dat is een prompt zonder deelniveau.
  */
 export const VISIBILITY_LEVELS: {
   value: VisibilityLevel;
@@ -32,34 +27,10 @@ export const VISIBILITY_LEVELS: {
   autoApproved: boolean;
 }[] = [
   {
-    value: 'department',
-    label: 'Afdeling',
-    description: 'Zichtbaar voor collega’s binnen je eigen afdeling.',
-    approval: 'Wordt direct gedeeld; afdelingsniveau is automatisch goedgekeurd.',
-    approvalShort: 'Direct beschikbaar',
-    autoApproved: true,
-  },
-  {
-    value: 'directorate',
-    label: 'Directie of dienst',
-    description: 'Zichtbaar voor iedereen in je directie of dienst, ook in de andere afdelingen eronder.',
-    approval: 'Een moderator van het ministerie beoordeelt het voordat het zichtbaar wordt.',
-    approvalShort: 'Wacht op moderator',
-    autoApproved: false,
-  },
-  {
-    value: 'ministry',
-    label: 'Ministerie',
-    description: 'Zichtbaar voor iedereen binnen je ministerie (inclusief de onderliggende diensten en afdelingen).',
-    approval: 'Een moderator van het ministerie beoordeelt het voordat het zichtbaar wordt.',
-    approvalShort: 'Wacht op moderator',
-    autoApproved: false,
-  },
-  {
     value: 'public',
-    label: 'Rijksoverheid',
-    description: 'Openbaar voor alle overheidsmedewerkers binnen de hele Rijksoverheid.',
-    approval: 'Een beheerder beoordeelt het voordat het Rijksbreed zichtbaar wordt.',
+    label: 'Publiek',
+    description: 'Zichtbaar voor iedereen die PromptPlein gebruikt.',
+    approval: 'Een beheerder beoordeelt het voordat het zichtbaar wordt.',
     approvalShort: 'Wacht op beheerder',
     autoApproved: false,
   },
@@ -71,38 +42,20 @@ export function visibilityMeta(level: VisibilityLevel) {
 
 /**
  * Leid het representatieve sharing_level van een prompt-rij af uit de gekozen
- * deelniveaus (het hoogste niveau telt voor de badge/export/filters). Geen
- * niveau gekozen = privé. Eén bron, gebruikt bij aanmaken én bij het later
- * aanpassen van de zichtbaarheid.
+ * deelniveaus. Geen niveau gekozen = privé. Eén bron, gebruikt bij aanmaken én
+ * bij het later aanpassen van de zichtbaarheid.
  */
 export function representativeSharingLevel(levels: VisibilityLevel[]): SharingLevel {
-  if (levels.includes('public')) return 'public';
-  if (levels.includes('ministry')) return 'ministry';
-  if (levels.includes('directorate')) return 'directorate';
-  if (levels.includes('department')) return 'department';
-  return 'private';
+  return levels.length > 0 ? 'public' : 'private';
 }
 
+/** Elk oud deelniveau (afdeling, directie, ministerie) telt hier als Publiek. */
 export function sharingLabel(level: SharingLevel): string {
-  return SHARING_LEVELS.find((s) => s.value === level)?.label ?? level;
+  return level === 'private' ? 'Privé' : 'Publiek';
 }
 
 export function sharingBadgeClasses(level: SharingLevel): string {
-  switch (level) {
-    case 'private':
-      return 'bg-slate-100 text-slate-700';
-    case 'department':
-      return 'bg-sky-100 text-sky-800';
-    case 'directorate':
-      return 'bg-cyan-100 text-cyan-800';
-    case 'ministry':
-      return 'bg-indigo-100 text-indigo-800';
-    case 'public':
-      return 'bg-emerald-100 text-emerald-800';
-    default:
-      // Vangt ook oudere prompts op met een inmiddels verwijderd deelniveau.
-      return 'bg-slate-100 text-slate-700';
-  }
+  return level === 'private' ? 'bg-slate-100 text-slate-700' : 'bg-emerald-100 text-emerald-800';
 }
 
 const USER_KEY = 'opl.currentUser';

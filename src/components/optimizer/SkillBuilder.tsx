@@ -12,8 +12,6 @@ import {
 import toast from 'react-hot-toast';
 import { draftSkill, sharpenSkillDescription, testSkillTrigger } from '@/services/optimizeService';
 import type { AiSettings } from '@/services/settingsService';
-import { useAuth } from '@/context/AuthContext';
-import { useReferenceData } from '@/context/ReferenceDataContext';
 import {
   DEFAULT_SKILL_LICENTIE,
   SKILL_DESCRIPTION_MAX,
@@ -73,21 +71,6 @@ export default function SkillBuilder({ settings, context, onSerialized, onChange
   // veld zichtbaar, ook als het (nog) leeg is.
   const [eigenLicentie, setEigenLicentie] = useState(false);
   const [goedgekeurd, setGoedgekeurd] = useState(false);
-
-  // De organisatie uit het profiel als eerste voorstel voor de eigenaar.
-  const { profile } = useAuth();
-  const { organizationById } = useReferenceData();
-  const profielOrganisatie = profile?.organization_id
-    ? (organizationById(profile.organization_id)?.name ?? '')
-    : '';
-  useEffect(() => {
-    if (!profielOrganisatie) return;
-    setData((d) =>
-      d.publicatie.organisatie.trim()
-        ? d
-        : { ...d, publicatie: { ...d.publicatie, organisatie: profielOrganisatie } },
-    );
-  }, [profielOrganisatie]);
 
   function setPublicatie(patch: Partial<SkillPublicatie>) {
     setData((d) => ({ ...d, publicatie: { ...d.publicatie, ...patch } }));
@@ -510,7 +493,7 @@ export default function SkillBuilder({ settings, context, onSerialized, onChange
                 id="sk-organisatie"
                 className="opl-input text-sm"
                 value={data.publicatie.organisatie}
-                placeholder="Bijv. Ministerie van Binnenlandse Zaken en Koninkrijksrelaties"
+                placeholder="Bijv. de naam van je organisatie of team"
                 onChange={(e) => setPublicatie({ organisatie: e.target.value })}
               />
             </div>
@@ -537,7 +520,7 @@ export default function SkillBuilder({ settings, context, onSerialized, onChange
                   type="email"
                   className="opl-input text-sm"
                   value={data.publicatie.email}
-                  placeholder="Bijv. schrijfadvies@minbzk.nl"
+                  placeholder="Bijv. schrijfadvies@organisatie.nl"
                   onChange={(e) => setPublicatie({ email: e.target.value })}
                 />
                 <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
@@ -555,7 +538,7 @@ export default function SkillBuilder({ settings, context, onSerialized, onChange
                 type="url"
                 className="opl-input text-sm"
                 value={data.publicatie.repository}
-                placeholder="Bijv. https://github.com/minbzk/skill-schrijfadvies of een adres op code.overheid.nl"
+                placeholder="Bijv. https://github.com/organisatie/skill-schrijfadvies"
                 onChange={(e) => setPublicatie({ repository: e.target.value })}
               />
               <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
@@ -578,7 +561,7 @@ export default function SkillBuilder({ settings, context, onSerialized, onChange
                       setPublicatie({ licentie: DEFAULT_SKILL_LICENTIE });
                     }}
                   />
-                  EUPL-1.2, aanbevolen door de overheid (de tekst gaat mee)
+                  EUPL-1.2 (de tekst gaat mee)
                 </label>
                 <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
                   <input
@@ -639,13 +622,12 @@ export default function SkillBuilder({ settings, context, onSerialized, onChange
                   id="sk-goedgekeurd-door"
                   className="opl-input mt-2 text-sm"
                   value={data.publicatie.goedgekeurdDoor}
-                  placeholder="Door wie? Bijv. de juridische afdeling van DGOO"
+                  placeholder="Door wie? Bijv. de juridische afdeling"
                   onChange={(e) => setPublicatie({ goedgekeurdDoor: e.target.value })}
                 />
               )}
               <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-                Het overheidsbrede standpunt over generatieve AI vraagt om bij een skill vast te
-                leggen of hij goedgekeurd is, en door wie.
+                Leg bij een skill vast of hij goedgekeurd is, en door wie.
               </p>
             </div>
 

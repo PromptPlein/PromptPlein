@@ -23,24 +23,12 @@ export async function signUp(params: {
   email: string;
   password: string;
   fullName?: string;
-  /** De gekozen organisatie/afdeling, komt via metadata mee naar het profiel. */
-  organizationId?: string;
-  /** Een afdeling die er nog niet staat; de database vraagt hem aan na bevestigen (0063). */
-  organizationRequest?: { parentId: string; names: string[]; codes: string[] };
 }): Promise<void> {
   const client = requireClient();
-  // De DB-trigger handle_new_user leest full_name én organization_id uit de
-  // metadata en valideert de organisatie voordat hij hem op het profiel zet.
+  // De DB-trigger handle_new_user leest full_name uit de metadata. Een organisatie
+  // gaat niet meer mee; het profiel krijgt er dan geen (de trigger staat dat toe).
   const data: Record<string, unknown> = {};
   if (params.fullName) data.full_name = params.fullName;
-  if (params.organizationId) data.organization_id = params.organizationId;
-  if (params.organizationRequest) {
-    data.organization_request = {
-      parent_id: params.organizationRequest.parentId,
-      names: params.organizationRequest.names,
-      codes: params.organizationRequest.codes,
-    };
-  }
   const { error } = await client.auth.signUp({
     email: params.email,
     password: params.password,

@@ -85,13 +85,11 @@ export default function CollaborationPanel({
 
   return (
     <section className="mt-8 space-y-6">
-      {/* Deelniveaus & goedkeuring per niveau */}
+      {/* Privé of Publiek, met de goedkeuring van Publiek */}
       <VisibilityApprovalPanel
         promptId={prompt.id}
         refreshKey={refreshKey}
         canEdit={canEditVisibility}
-        organizationId={prompt.organization_id ?? null}
-        ownerId={prompt.created_by_user ?? null}
         onChanged={onVisibilityChanged}
       />
 

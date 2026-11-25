@@ -9841,7 +9841,7 @@ function localFrameworkFits(ownPrompt: string, frameworks: TechniqueSummary[]): 
 // scène, het onderwerp, de details en als laatste de beperkingen, in korte
 // blokken met een label in plaats van één lange alinea.
 //
-// Een vaste beeldstijl (Rijkshuisstijl of de instructie van een project) gaat
+// Een vaste beeldstijl (Pleinhuisstijl of de instructie van een project) gaat
 // bij elk beeld mee, zodat een reeks beelden op elkaar lijkt terwijl het
 // onderwerp per keer verschilt. De stijl komt in elk onderdeel terug in de
 // woorden van de stijl zelf: herschrijft het model hem telkens, dan sluipt er
@@ -9871,7 +9871,7 @@ let IMAGE_SYSTEM_PROMPT = `Je schrijft voor een medewerker van de rijksoverheid 
 - Kleuren noem je met een naam. Geeft de medewerker, de beeldstijl of het voorbeeldbeeld een kleurcode, zet die er tussen haakjes achter, zoals "donkerblauw (#154273)". Noem de hoofdkleur eerst en zeg bij elke kleur waar hij in het beeld zit.
 - Onder Niet in beeld staat altijd: geen watermerk, geen logo's, geen merknamen. Daarachter komt wat de medewerker zelf uitsluit.
 - Vraagt de medewerker om een bestaand logo, merk of bestaande mascotte, noem die naam dan nergens in de beeldprompt. Een beeldgenerator tekent een bestaand logo niet goed na en weigert het soms. Beschrijf in plaats daarvan een eigen embleem met zichtbare vormen: de figuur, de houding, de rand eromheen en de kleuren. Zet onder Tekst in beeld dan "geen tekst in het beeld". Fout is dus "het logo van merk X centraal". Goed is een eigen embleem in het midden, beschreven met zijn vorm, de figuur en zijn houding, en de kleuren.
-- Geen logo van de Rijksoverheid of van een ministerie in het beeld. Een beeldgenerator tekent een logo nooit goed na; de medewerker zet het er later zelf op.
+- Geen bestaand logo of wapen van een organisatie in het beeld. Een beeldgenerator tekent een logo nooit goed na; de medewerker zet het er later zelf op.
 - Geen bestaande, herkenbare personen. Het beeld mag niet lijken op een foto van een echte gebeurtenis.
 - Indeling: "één beeld", tenzij de velden, de vaste beeldstijl of het voorbeeldbeeld panelen noemen. Bij panelen schrijf je dat het één afbeelding is met dat aantal panelen, hoe ze liggen en hoe ze gescheiden zijn, en daarna per paneel, genummerd, wat erin gebeurt. Staat de hoofdpersoon in elk paneel, schrijf dan: dezelfde persoon in elk paneel, in dezelfde kleding.
 - Formaat: vierkant (1:1), liggend (3:2) of staand (2:3), of de verhouding die de medewerker noemt. Noemt de vaste beeldstijl of het voorbeeldbeeld een formaat, neem dat dan over.
@@ -9904,7 +9904,7 @@ ${UNCLEAR_SENTINEL}
 
 /**
  * Het blok waarin de vaste beeldstijl meegaat, bij het invullen van de velden
- * en bij het schrijven. {{stijl}} wordt de Rijkshuisstijl of de instructie van
+ * en bij het schrijven. {{stijl}} wordt de Pleinhuisstijl of de instructie van
  * het gekozen project.
  */
 let IMAGE_STYLE_BLOCK = `<vaste_beeldstijl>
@@ -9937,19 +9937,19 @@ De medewerker gaf een voorbeeldbeeld. Hieronder staat wat erop staat en hoe het 
 </voorbeeldbeeld>`;
 
 /**
- * De beeldstijl bij de keuze Rijkshuisstijl. Opgesteld uit de kleuren van de
+ * De beeldstijl bij de keuze Pleinhuisstijl (waarde 'rijkshuisstijl'). Opgesteld uit de kleuren van de
  * huisstijl (src/config/brandColors.js) en de grenzen voor AI-beeld: geen
  * logo's natekenen en geen nepdocumentair beeld. Daarom ook een illustratie,
  * tenzij de medewerker zelf om een foto vraagt. Toets hem aan het officiële
  * beeldbeleid en pas hem in Beheer aan waar dat afwijkt.
  */
-let RIJKSHUISSTIJL_BEELD = `Beeldstijl: Rijkshuisstijl
+let RIJKSHUISSTIJL_BEELD = `Beeldstijl: Pleinhuisstijl
 - Stijl: een illustratie, tenzij de medewerker om een foto vraagt. Een illustratie is vlak en helder, met eenvoudige vormen en lijnen, zonder kleurverloop, zonder schaduw en zonder 3D-effect.
 - Foto: alleen als de medewerker erom vraagt. Dan natuurlijk daglicht, mensen die niet poseren, een herkenbare Nederlandse werk- of leefomgeving en geen stockfoto-uitstraling. Het beeld laat een voorbeeldsituatie zien en geen echte gebeurtenis.
 - Kleuren: lintblauw (#154273) als hoofdkleur, donkerblauw (#01689B) en hemelblauw (#007BC7) als steunkleuren, rood (#D52B1E) alleen als klein accent, en veel wit of lichtgrijs (#F3F3F3) als rustige achtergrond.
 - Kader: één duidelijk onderwerp, rustig en overzichtelijk, met ruimte rond het onderwerp.
 - Sfeer: betrouwbaar, toegankelijk en nuchter. Mensen verschillen in leeftijd, afkomst en beperking, zonder dat het beeld daar de nadruk op legt.
-- Niet in beeld: geen logo van de Rijksoverheid of van een ministerie, geen wapen, geen vlaggen als versiering, geen tekst die op een officieel document lijkt.`;
+- Niet in beeld: geen bestaand logo, wapen of merkteken, geen vlaggen als versiering, geen tekst die op een officieel document lijkt.`;
 
 /**
  * Het voor-invullen bij Afbeelding, als eigen systeemprompt. Eerst was het een
@@ -9997,7 +9997,7 @@ Gebruik alleen veld-id's uit de lijst, elk één keer.
 const MAX_BEELDSTIJL_CHARS = 8000;
 
 /**
- * Plakt de vaste beeldstijl onder een systeemprompt: de Rijkshuisstijl, of de
+ * Plakt de vaste beeldstijl onder een systeemprompt: de Pleinhuisstijl, of de
  * instructie van het project dat de medewerker koos. Bij 'vrij' of zonder tekst
  * blijft de systeemprompt zoals hij is.
  */
@@ -10595,8 +10595,8 @@ const PROMPT_CATALOG: PromptCatalogEntry[] = [
   { id: 'IMAGE_OPTION_APPLY_SYSTEM_PROMPT', groep: "Afbeelding", titel: "Keuze verwerken in een veld", uitleg: "Na een klik op een keuze: herschrijft het veld met de keuze erin en houdt wat er al stond, zolang het niet botst.", get: () => IMAGE_OPTION_APPLY_SYSTEM_PROMPT, set: (v) => { IMAGE_OPTION_APPLY_SYSTEM_PROMPT = v; } },
   { id: 'IMAGE_OPTIONS_SYSTEM_PROMPT', groep: "Afbeelding", titel: "Keuzes per veld", uitleg: "Bedenkt bij Afbeelding per veld een vraag en drie keuzes die bij de soort beeld passen, als inspiratie onder het veld.", get: () => IMAGE_OPTIONS_SYSTEM_PROMPT, set: (v) => { IMAGE_OPTIONS_SYSTEM_PROMPT = v; } },
   { id: 'IMAGE_PREFILL_SYSTEM_PROMPT', groep: "Afbeelding", titel: "Velden van een beeldprompt invullen", uitleg: "Vult bij Afbeelding de negen velden in uit de wens van de medewerker en, bij Van een voorbeeld, uit de beschrijving van het voorbeeldbeeld. Eigen prompt, los van \"Velden voor-invullen\".", get: () => IMAGE_PREFILL_SYSTEM_PROMPT, set: (v) => { IMAGE_PREFILL_SYSTEM_PROMPT = v; } },
-  { id: 'IMAGE_STYLE_BLOCK', groep: "Afbeelding", titel: "Vaste beeldstijl toepassen", uitleg: "Hoe een vaste beeldstijl meegaat bij het invullen en het schrijven. {{stijl}} wordt de Rijkshuisstijl of de instructie van het gekozen project.", get: () => IMAGE_STYLE_BLOCK, set: (v) => { IMAGE_STYLE_BLOCK = v; } },
-  { id: 'RIJKSHUISSTIJL_BEELD', groep: "Afbeelding", titel: "Beeldstijl: Rijkshuisstijl", uitleg: "De beeldstijl bij de keuze Rijkshuisstijl: kleuren met hun code, illustratie of foto, kader, sfeer en wat er nooit in mag.", get: () => RIJKSHUISSTIJL_BEELD, set: (v) => { RIJKSHUISSTIJL_BEELD = v; } },
+  { id: 'IMAGE_STYLE_BLOCK', groep: "Afbeelding", titel: "Vaste beeldstijl toepassen", uitleg: "Hoe een vaste beeldstijl meegaat bij het invullen en het schrijven. {{stijl}} wordt de Pleinhuisstijl of de instructie van het gekozen project.", get: () => IMAGE_STYLE_BLOCK, set: (v) => { IMAGE_STYLE_BLOCK = v; } },
+  { id: 'RIJKSHUISSTIJL_BEELD', groep: "Afbeelding", titel: "Beeldstijl: Pleinhuisstijl", uitleg: "De beeldstijl bij de keuze Pleinhuisstijl: kleuren met hun code, illustratie of foto, kader, sfeer en wat er nooit in mag.", get: () => RIJKSHUISSTIJL_BEELD, set: (v) => { RIJKSHUISSTIJL_BEELD = v; } },
   { id: 'RUBRIC_NIVEAUS_PROMPT', groep: "Techniekbouwers", titel: "Rubric: niveaus beschrijven", uitleg: "Beschrijft per criterium wanneer welke score geldt. {{sleutels}} en {{sleutels_json}} zoals hierboven.", get: () => RUBRIC_NIVEAUS_PROMPT, set: (v) => { RUBRIC_NIVEAUS_PROMPT = v; } },
   { id: 'SKILL_DRAFT_SYSTEM_PROMPT', groep: "Techniekbouwers", titel: "Skill Creator: velden voorstellen", uitleg: "Stelt de velden van een skill voor en stelt vragen over wat alleen de medewerker weet.", get: () => SKILL_DRAFT_SYSTEM_PROMPT, set: (v) => { SKILL_DRAFT_SYSTEM_PROMPT = v; } },
   { id: 'SKILL_TRIGGER_TEST_PROMPT', groep: "Techniekbouwers", titel: "Skill Creator: triggertest", uitleg: "Bedenkt testverzoeken op de grens van de beschrijving.", get: () => SKILL_TRIGGER_TEST_PROMPT, set: (v) => { SKILL_TRIGGER_TEST_PROMPT = v; } },

@@ -24,15 +24,15 @@ const BUTTON_CLASS =
 
 /** De naam van een opmaak in een zin: "in Rijkshuisstijl", "in Mijn huisstijl". */
 function lookLabel(look: ExportLook, opmaken: Opmaak[] | undefined): string {
-  if (look === 'rijk') return 'Rijkshuisstijl';
+  if (look === 'rijk') return 'Pleinhuisstijl';
   if (look === 'eenvoudig') return 'eenvoudige opmaak';
-  return opmaken?.find((o) => `opmaak:${o.id}` === look)?.naam ?? 'Rijkshuisstijl';
+  return opmaken?.find((o) => `opmaak:${o.id}` === look)?.naam ?? 'Pleinhuisstijl';
 }
 
 /** De keuzes: eerst de standaard, dan de eigen opmaken. */
 function lookChoices(opmaken: Opmaak[] | undefined): { value: ExportLook; label: string }[] {
   return [
-    { value: 'rijk', label: 'Rijkshuisstijl' },
+    { value: 'rijk', label: 'Pleinhuisstijl' },
     { value: 'eenvoudig', label: 'Eenvoudig' },
     ...(opmaken ?? []).map((o) => ({ value: `opmaak:${o.id}` as ExportLook, label: o.naam })),
   ];
@@ -63,7 +63,7 @@ async function resolveLook(look: ExportLook): Promise<Resolved> {
         pptx: opmaak.pptx?.bytes ?? null,
       };
     }
-    toast('Je eigen opmaak is niet gevonden. Het bestand heeft de Rijkshuisstijl.');
+    toast('Je eigen opmaak is niet gevonden. Het bestand heeft de Pleinhuisstijl.');
   }
   return { style: RIJK_STYLE, excel: excelLookFrom(RIJK_STYLE), word: null, pptx: null };
 }

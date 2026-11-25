@@ -18,25 +18,12 @@ import { trackEvent } from '@/services/analyticsService';
 import { categoryIcon } from '@/lib/categoryIcons';
 import { PROMPT_KIND_META, isPromptKind, promptKindOf } from '@/lib/promptKinds';
 import { PROMPT_KINDS } from '@/lib/techniques';
-import { ministryOf, orgChain, orgPathLabel, orgSubtreeIds, searchOrgIds } from '@/lib/orgTree';
-import {
-  activityIdentifier,
-  formatDate,
-  SHARING_LEVELS,
-  sharingLabel,
-  toggled,
-} from '@/lib/utils';
+import { activityIdentifier, formatDate, toggled } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import { useReferenceData } from '@/context/ReferenceDataContext';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { usePromptCommunity } from '@/hooks/usePromptCommunity';
-import type {
-  AdvancedPromptFilters,
-  Prompt,
-  PublicProfile,
-  SharingLevel,
-  SortOption,
-} from '@/types';
+import type { AdvancedPromptFilters, Prompt, PublicProfile, SortOption } from '@/types';
 
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: 'newest', label: 'Nieuwste eerst' },
@@ -48,20 +35,17 @@ const SORT_OPTIONS: { value: SortOption; label: string }[] = [
 /** Aantal kaarten per rij op de ontdekpagina. */
 const ROW_SIZE = 3;
 
-/** De filters staan in de URL: deelbaar, en de terugknop van de browser werkt. */
+/**
+ * De filters staan in de URL: deelbaar, en de terugknop van de browser werkt.
+ * Oude links met `org`, `functie`, `niveau` of `rijk` openen nog, maar die
+ * parameters tellen sinds 25-11-2026 niet meer mee.
+ */
 function readFilters(params: URLSearchParams): AdvancedPromptFilters {
   const sort = params.get('sort');
-  const levels = SHARING_LEVELS.map((s) => s.value);
   return {
     query: params.get('q') ?? '',
     category_ids: params.getAll('category'),
     kinds: params.getAll('soort').filter(isPromptKind),
-    organization_ids: params.getAll('org'),
-    role_ids: params.getAll('functie'),
-    sharing_levels: params
-      .getAll('niveau')
-      .filter((n): n is SharingLevel => levels.includes(n as SharingLevel)),
-    rijksbreed: params.get('rijk') === '1',
     date_from: params.get('van'),
     date_to: params.get('tot'),
     sort: SORT_OPTIONS.find((o) => o.value === sort)?.value ?? 'newest',
@@ -73,10 +57,6 @@ function writeFilters(filters: AdvancedPromptFilters, showAll: boolean): URLSear
   if (filters.query) params.set('q', filters.query);
   filters.category_ids?.forEach((id) => params.append('category', id));
   filters.kinds?.forEach((k) => params.append('soort', k));
-  filters.organization_ids?.forEach((id) => params.append('org', id));
-  filters.role_ids?.forEach((id) => params.append('functie', id));
-  filters.sharing_levels?.forEach((level) => params.append('niveau', level));
-  if (filters.rijksbreed) params.set('rijk', '1');
   if (filters.date_from) params.set('van', filters.date_from);
   if (filters.date_to) params.set('tot', filters.date_to);
   if (filters.sort && filters.sort !== 'newest') params.set('sort', filters.sort);
@@ -104,34 +84,15 @@ const byLikes = (a: Prompt, b: Prompt) => (b.like_count ?? 0) - (a.like_count ??
 export default function SearchPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { profile, user } = useAuth();
-  const { categories, organizations, categoryById, organizationById, roleById } =
-    useReferenceData();
+  const { categories, categoryById } = useReferenceData();
 
-  const rawFilters = useMemo(() => readFilters(searchParams), [searchParams]);
+  const filters = useMemo(() => readFilters(searchParams), [searchParams]);
 
-  // Op organisatie filter je alleen langs je eigen lijn: je afdeling, je directie
-  // en je ministerie. Die volgt uit je afdeling; een link naar een andere
-  // afdeling, directie of een ander ministerie telt daarom niet mee.
-  const ownTree = useMemo(
-    () => new Set(orgChain(profile?.organization_id, organizations).map((o) => o.id)),
-    [profile?.organization_id, organizations],
-  );
-  const filters = useMemo(
-    () => ({
-      ...rawFilters,
-      organization_ids: (rawFilters.organization_ids ?? []).filter((id) => ownTree.has(id)),
-    }),
-    [rawFilters, ownTree],
-  );
   const showAll = searchParams.has('alles');
 
   const activeCount =
     (filters.category_ids?.length ?? 0) +
     (filters.kinds?.length ?? 0) +
-    (filters.organization_ids?.length ?? 0) +
-    (filters.role_ids?.length ?? 0) +
-    (filters.sharing_levels?.length ?? 0) +
-    (filters.rijksbreed ? 1 : 0) +
     (filters.date_from ? 1 : 0) +
     (filters.date_to ? 1 : 0);
   const urlQuery = filters.query ?? '';
@@ -161,20 +122,10 @@ export default function SearchPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedQuery]);
 
-  // Een ministerie neemt alles mee wat eronder hangt, tenzij er ook een afdeling
-  // van dat ministerie gekozen is.
-  const orgIds = useMemo(
-    () => searchOrgIds(filters.organization_ids ?? [], organizations),
-    [filters.organization_ids, organizations],
-  );
-  const orgIdsKey = orgIds.join(',');
 
-  // Soort, categorie, functie en deelniveau filtert de client (zie hieronder), dus
-  // die vier halen niets nieuws op.
+  // Soort en categorie filtert de client (zie hieronder), dus die halen niets nieuws op.
   const fetchKey = JSON.stringify([
     urlQuery,
-    orgIdsKey,
-    filters.rijksbreed,
     filters.date_from,
     filters.date_to,
     filters.sort,
@@ -187,9 +138,6 @@ export default function SearchPage() {
       ...filters,
       kinds: [],
       category_ids: [],
-      role_ids: [],
-      sharing_levels: [],
-      organization_ids: orgIds,
     })
       .then((p) => active && setBase(p))
       .finally(() => active && setLoading(false));
@@ -213,29 +161,22 @@ export default function SearchPage() {
     setBase((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
   }
 
-  // Soort, categorie, functie en deelniveau filtert de client. Elke keuzelijst telt
-  // met alle andere keuzes erop, maar niet met die van zichzelf: zo blijven de andere
-  // opties binnen dezelfde lijst te kiezen, en toont het filterpaneel alleen wat er
-  // binnen de selectie ook echt is.
+  // Soort en categorie filtert de client. Elke keuzelijst telt met de andere keuze
+  // erop, maar niet met die van zichzelf: zo blijven de andere opties binnen dezelfde
+  // lijst te kiezen.
   const kindSel = filters.kinds ?? [];
   const catSel = filters.category_ids ?? [];
-  const roleSel = filters.role_ids ?? [];
-  const levelSel = filters.sharing_levels ?? [];
-  const selKey = [kindSel, catSel, roleSel, levelSel].map((a) => a.join(',')).join('|');
+  const selKey = [kindSel, catSel].map((a) => a.join(',')).join('|');
   const facets = useMemo(() => {
     const kindOk = (p: Prompt) => !kindSel.length || kindSel.includes(promptKindOf(p));
     const catOk = (p: Prompt) => !catSel.length || (!!p.category_id && catSel.includes(p.category_id));
-    const roleOk = (p: Prompt) => !roleSel.length || (!!p.role_id && roleSel.includes(p.role_id));
-    const levelOk = (p: Prompt) => !levelSel.length || levelSel.includes(p.sharing_level);
-    const pool = base.filter((p) => roleOk(p) && levelOk(p));
+    const pool = base;
     const inKind = pool.filter(kindOk);
     return {
       pool,
       prompts: inKind.filter(catOk),
       kinds: countBy(pool, (p) => promptKindOf(p)),
       categories: countBy(inKind, (p) => p.category_id),
-      roles: countBy(base.filter((p) => kindOk(p) && catOk(p) && levelOk(p)), (p) => p.role_id),
-      levels: countBy(base.filter((p) => kindOk(p) && catOk(p) && roleOk(p)), (p) => p.sharing_level),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [base, selKey]);
@@ -383,12 +324,6 @@ export default function SearchPage() {
           <BrowseRows
             prompts={enriched}
             authors={authors}
-            ministryId={
-              profile?.organization_id
-                ? (ministryOf(profile.organization_id, organizations)?.id ?? null)
-                : null
-            }
-            departmentId={profile?.organization_id ?? null}
             onChanged={handleChanged}
           />
         )
@@ -416,42 +351,6 @@ export default function SearchPage() {
                 key={k}
                 label={PROMPT_KIND_META[k].label}
                 onRemove={() => update({ kinds: toggled(filters.kinds, k) })}
-              />
-            ))}
-            {filters.rijksbreed && (
-              <ActiveChip
-                label="Rijksoverheid"
-                onRemove={() => update({ rijksbreed: false })}
-              />
-            )}
-            {filters.organization_ids?.map((id) => {
-              const org = organizationById(id);
-              return (
-                <ActiveChip
-                  key={id}
-                  label={
-                    org?.organization_type === 'ministry'
-                      ? org.code ?? org.name
-                      : orgPathLabel(id, organizations, { short: true }) || 'Organisatie'
-                  }
-                  onRemove={() =>
-                    update({ organization_ids: toggled(filters.organization_ids, id) })
-                  }
-                />
-              );
-            })}
-            {filters.role_ids?.map((id) => (
-              <ActiveChip
-                key={id}
-                label={roleById(id)?.name ?? 'Functie'}
-                onRemove={() => update({ role_ids: toggled(filters.role_ids, id) })}
-              />
-            ))}
-            {filters.sharing_levels?.map((level) => (
-              <ActiveChip
-                key={level}
-                label={sharingLabel(level)}
-                onRemove={() => update({ sharing_levels: toggled(filters.sharing_levels, level) })}
               />
             ))}
             {filters.date_from && (
@@ -525,40 +424,24 @@ export default function SearchPage() {
 }
 
 /**
- * De rijen. Privéprompts doen niet mee: dit is wat collega's delen. Populair toont
+ * De rijen. Privéprompts doen niet mee: dit is wat anderen publiek delen. Populair toont
  * alleen prompts met een like, anders is de rij gelijk aan Nieuw. Een rij zonder
  * prompts verdwijnt.
  */
 function BrowseRows({
   prompts,
   authors,
-  ministryId,
-  departmentId,
   onChanged,
 }: {
   prompts: Prompt[];
   authors: Record<string, PublicProfile>;
-  ministryId: string | null;
-  /** De organisatie op het profiel; telt alleen als afdeling als hij onder het ministerie hangt. */
-  departmentId: string | null;
   onChanged: (updated: Prompt) => void;
 }) {
-  const { organizations } = useReferenceData();
   const shared = prompts.filter((p) => p.sharing_level !== 'private');
-  const own = new Set(ministryId ? orgSubtreeIds(ministryId, organizations) : []);
-  const afdeling = departmentId && departmentId !== ministryId ? departmentId : null;
-  const ownDepartment = new Set(afdeling ? orgSubtreeIds(afdeling, organizations) : []);
 
   const rows = [
     {
-      title: 'Uit jouw afdeling',
-      to: `/zoeken?org=${ministryId}&org=${afdeling}`,
-      prompts: shared
-        .filter((p) => p.organization_id && ownDepartment.has(p.organization_id))
-        .slice(0, ROW_SIZE),
-    },
-    {
-      title: "Populair bij collega's",
+      title: 'Populair',
       to: '/zoeken?alles=1&sort=popular',
       prompts: shared
         .filter((p) => (p.like_count ?? 0) > 0)
@@ -566,13 +449,6 @@ function BrowseRows({
         .slice(0, ROW_SIZE),
     },
     { title: 'Nieuw', to: '/zoeken?alles=1', prompts: shared.slice(0, ROW_SIZE) },
-    {
-      title: 'Uit jouw ministerie',
-      to: `/zoeken?org=${ministryId}`,
-      prompts: shared
-        .filter((p) => p.organization_id && own.has(p.organization_id))
-        .slice(0, ROW_SIZE),
-    },
   ].filter((row) => row.prompts.length > 0);
 
   if (rows.length === 0) {

@@ -1,7 +1,7 @@
 {
   "name": "PromptPlein",
   "short_name": "PromptPlein",
-  "description": "Prompts bouwen, bewaren, delen en uitproberen voor de Rijksoverheid.",
+  "description": "Prompts bouwen, bewaren, delen en uitproberen.",
   "lang": "nl",
   "start_url": "/",
   "scope": "/",

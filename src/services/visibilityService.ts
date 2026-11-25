@@ -1,16 +1,17 @@
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import type { Prompt, PromptVisibility, VisibilityLevel } from '@/types';
-import { VISIBILITY_LEVELS, representativeSharingLevel } from '@/lib/utils';
+import { representativeSharingLevel } from '@/lib/utils';
 
 /**
  * Beheer van de deelniveaus (prompt_visibility) van een prompt: het klaarzetten
- * van de gekozen niveaus bij het aanmaken, het ophalen ervan, en het
- * goedkeuren/afwijzen per niveau. RLS dwingt af wie wat mag.
+ * bij het aanmaken, het ophalen, en het goedkeuren of afwijzen. RLS en de
+ * triggers in de database dwingen af wie wat mag.
  *
- * Statuslogica bij aanmaken:
- *   - Afdeling      → direct 'approved' (geen wachttijd, niemand hoeft te wachten).
- *   - Ministerie    → 'pending' (een moderator van het ministerie beoordeelt).
- *   - Rijksoverheid → 'pending' (een beheerder beoordeelt).
+ * Deze app kent alleen Privé (geen rij) en Publiek (niveau 'public', 'pending'
+ * tot een beheerder het goedkeurt). Oude niveaus van vóór 25-11-2026 (afdeling,
+ * directie, ministerie) blijven in de database staan voor de stand op branch
+ * stand-25-11-2026; ze worden hier alleen opgeruimd als de eigenaar de prompt
+ * weer privé maakt.
  */
 
 function requireClient() {
@@ -20,128 +21,54 @@ function requireClient() {
   return supabase;
 }
 
-/** De ministerie-wortel van een organisatie (eerste niveau onder Rijksoverheid). */
-async function ministryRootId(orgId: string | null | undefined): Promise<string | null> {
-  if (!orgId || !isSupabaseConfigured || !supabase) return null;
-  let currentId: string | null = orgId;
-  // Loop de boom omhoog tot de ouder de 'government'-root is.
-  for (let i = 0; i < 12 && currentId; i++) {
-    const { data } = await supabase
-      .from('organizations')
-      .select('parent_id, parent:parent_id(organization_type)')
-      .eq('id', currentId)
-      .maybeSingle();
-    const row = data as { parent_id: string | null; parent: { organization_type: string } | null } | null;
-    if (!row || !row.parent_id) return currentId;
-    if (row.parent?.organization_type === 'government') return currentId;
-    currentId = row.parent_id;
-  }
-  return currentId;
+/** Alleen het niveau Publiek wordt nog aangemaakt. */
+function publicRows(promptId: string, levels: VisibilityLevel[]) {
+  return levels
+    .filter((level) => level === 'public')
+    .map((level) => ({ prompt_id: promptId, level, org_id: null, status: 'pending' as const }));
 }
 
-const AUTO_APPROVED = new Set(VISIBILITY_LEVELS.filter((v) => v.autoApproved).map((v) => v.value));
-
 /**
- * Zet de gekozen deelniveaus klaar voor een net aangemaakte prompt. De afdeling
- * is direct goedgekeurd; hogere niveaus komen 'pending' en wachten op de juiste
- * beoordelaar. Leeg = privé, dan wordt er niets aangemaakt.
+ * Zet Publiek klaar voor een net aangemaakte prompt. Leeg = privé, dan wordt er
+ * niets aangemaakt.
  */
-export async function setInitialVisibility(
-  promptId: string,
-  levels: VisibilityLevel[],
-  organizationId: string | null | undefined,
-): Promise<void> {
-  if (!levels.length) return;
+export async function setInitialVisibility(promptId: string, levels: VisibilityLevel[]): Promise<void> {
+  const rows = publicRows(promptId, levels);
+  if (!rows.length) return;
   const client = requireClient();
-  const ministryRoot = levels.includes('ministry') ? await ministryRootId(organizationId) : null;
-
-  const rows = levels.map((level) => ({
-    prompt_id: promptId,
-    level,
-    org_id:
-      level === 'department' ? organizationId ?? null : level === 'ministry' ? ministryRoot : null,
-    status: AUTO_APPROVED.has(level) ? 'approved' : 'pending',
-    reviewed_at: AUTO_APPROVED.has(level) ? new Date().toISOString() : null,
-  }));
-
   const { error } = await client.from('prompt_visibility').insert(rows);
   if (error) throw error;
 }
 
 /**
- * Werk de deelniveaus van een bestaande prompt bij (eigenaar/admin). Vergelijkt
- * de gewenste niveaus met wat er nu staat:
- *   - nieuw gekozen niveaus → toegevoegd (afdeling direct 'approved', hoger 'pending');
- *   - weggehaalde niveaus   → verwijderd;
- *   - ongewijzigde niveaus  → met rust gelaten, zodat een al goedgekeurd niveau
- *                             niet terugvalt naar 'pending'.
- * Het representatieve `sharing_level` op de prompt-rij wordt meegewerkt zodat de
- * badge/filters kloppen. RLS dwingt af dat alleen de eigenaar/admin dit mag.
+ * Werk de zichtbaarheid van een bestaande prompt bij (eigenaar of beheerder).
+ *   - Privé: alle niveaus gaan weg, ook oude afdelings- of ministerieniveaus.
+ *   - Publiek: staat er al een publieke rij, dan blijft die staan (een
+ *     goedgekeurde prompt valt niet terug naar 'pending'); anders komt hij erbij.
+ *     Oude niveaus blijven dan ongemoeid.
+ * Het representatieve `sharing_level` op de prompt-rij werkt mee voor badge en filters.
  */
-export async function updatePromptVisibility(
-  promptId: string,
-  nextLevels: VisibilityLevel[],
-  organizationId: string | null | undefined,
-  /**
-   * De oude organisatie van de prompt, als de maker inmiddels ergens anders staat.
-   * De prompt verhuist dan naar `organizationId`, en het niveau Afdeling mee.
-   */
-  options: { moveFrom?: string | null } = {},
-): Promise<void> {
+export async function updatePromptVisibility(promptId: string, nextLevels: VisibilityLevel[]): Promise<void> {
   const client = requireClient();
-
-  // Eerst verhuizen: de database leidt de directie af uit de organisatie van de
-  // prompt, dus die moet kloppen voordat er een niveau bij komt.
-  if (options.moveFrom !== undefined && organizationId) {
-    const { error: moveErr } = await client
-      .from('prompts')
-      .update({ organization_id: organizationId })
-      .eq('id', promptId);
-    if (moveErr) throw moveErr;
-    const { error: deptErr } = await client
-      .from('prompt_visibility')
-      .update({ org_id: organizationId })
-      .eq('prompt_id', promptId)
-      .eq('level', 'department');
-    if (deptErr) throw deptErr;
-  }
-
   const current = await listVisibility(promptId);
-  const currentLevels = new Set(current.map((r) => r.level));
-  const desired = new Set(nextLevels);
+  const wantsPublic = nextLevels.includes('public');
 
-  const toAdd = nextLevels.filter((l) => !currentLevels.has(l));
-  const toRemove = current.filter((r) => !desired.has(r.level));
-
-  // Verwijderde niveaus weghalen (op id, niet op level — preciezer onder RLS).
-  if (toRemove.length) {
+  if (!wantsPublic && current.length) {
     const { error } = await client
       .from('prompt_visibility')
       .delete()
-      .in('id', toRemove.map((r) => r.id));
+      .in('id', current.map((r) => r.id));
     if (error) throw error;
   }
 
-  // Nieuwe niveaus toevoegen met de juiste begin-status en org-koppeling.
-  if (toAdd.length) {
-    const ministryRoot = toAdd.includes('ministry') ? await ministryRootId(organizationId) : null;
-    const rows = toAdd.map((level) => ({
-      prompt_id: promptId,
-      level,
-      org_id:
-        level === 'department' ? organizationId ?? null : level === 'ministry' ? ministryRoot : null,
-      status: AUTO_APPROVED.has(level) ? 'approved' : 'pending',
-      reviewed_at: AUTO_APPROVED.has(level) ? new Date().toISOString() : null,
-    }));
-    const { error } = await client.from('prompt_visibility').insert(rows);
+  if (wantsPublic && !current.some((r) => r.level === 'public')) {
+    const { error } = await client.from('prompt_visibility').insert(publicRows(promptId, ['public']));
     if (error) throw error;
   }
 
-  // Houd het representatieve sharing_level op de prompt-rij in sync met de
-  // hoogste gekozen zichtbaarheid (privé als er niets gekozen is).
   const { error: promptErr } = await client
     .from('prompts')
-    .update({ sharing_level: representativeSharingLevel(nextLevels) })
+    .update({ sharing_level: representativeSharingLevel(wantsPublic ? ['public'] : []) })
     .eq('id', promptId);
   if (promptErr) throw promptErr;
 }
@@ -176,9 +103,8 @@ export async function decideVisibility(
 }
 
 /**
- * De deelniveaus die op beoordeling wachten en die de huidige gebruiker mag
- * afhandelen (moderator: ministerie van zijn tak; admin: alles). RLS filtert dit
- * automatisch — pending-rijen zijn alleen leesbaar voor wie ze mag modereren.
+ * De publieke prompts die op een beheerder wachten. RLS filtert dit: pending-rijen
+ * zijn alleen leesbaar voor wie ze mag beoordelen.
  * We verrijken elke rij met de bijbehorende prompt voor weergave in de wachtrij.
  */
 export async function listPendingForModeration(): Promise<(PromptVisibility & { prompt: Prompt | null })[]> {
@@ -187,6 +113,7 @@ export async function listPendingForModeration(): Promise<(PromptVisibility & { 
     .from('prompt_visibility')
     .select('*, prompt:prompt_id(*)')
     .eq('status', 'pending')
+    .eq('level', 'public')
     .order('created_at', { ascending: true });
   if (error) throw error;
   return (data as (PromptVisibility & { prompt: Prompt | null })[]) ?? [];

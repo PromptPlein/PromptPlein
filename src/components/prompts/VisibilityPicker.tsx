@@ -1,183 +1,88 @@
-import { Check, Lock, Info } from '@/components/common/icons';
+import { Info, Lock, Globe } from '@/components/common/icons';
 import clsx from 'clsx';
 import { VISIBILITY_LEVELS } from '@/lib/utils';
-import { useAuth } from '@/context/AuthContext';
-import { useReferenceData } from '@/context/ReferenceDataContext';
-import { directorateOf, orgChain, orgDisplayName } from '@/lib/orgTree';
 import type { VisibilityLevel } from '@/types';
 
 /**
- * Gedeelde multi-select voor de deelniveaus van een prompt. Wordt op ELKE plek
- * gebruikt waar je een prompt deelt (dashboard, zoeken, generator), zodat de
- * labels én de uitleg overal identiek zijn.
+ * Keuze wie een prompt mag zien: Privé of Publiek. Wordt op elke plek gebruikt
+ * waar je een prompt deelt, zodat de uitleg overal gelijk is.
  *
- * Privé staat bovenaan en is ALTIJD aangevinkt: een prompt blijft altijd
- * zichtbaar voor de eigenaar. Je kunt Privé niet uitvinken — dat zou betekenen
- * dat je je eigen prompt niet meer kunt zien. De deelniveaus (afdeling en hoger)
- * stapel je er bovenop; je kunt er meerdere tegelijk kiezen. Per niveau is
- * duidelijk wat er na opslaan gebeurt (de afdeling is direct beschikbaar, hogere
- * niveaus wachten op goedkeuring). "Geen enkel deelniveau aangevinkt" betekent
- * dus: alleen privé.
- *
- * Bij elk niveau staat de naam van je eigen afdeling, directie of ministerie, zodat
- * je ziet waar de prompt terechtkomt. Die komen uit `organizationId`, of anders uit
- * je profiel. Valt je afdeling niet onder een directie of dienst, dan is dat niveau
- * niet te kiezen.
+ * Privé is een prompt zonder deelniveau. Publiek is het niveau 'public' en wacht
+ * op een beheerder voordat anderen hem zien.
  */
 export default function VisibilityPicker({
   value,
   onChange,
   idPrefix = 'vis',
-  organizationId,
 }: {
   value: VisibilityLevel[];
   onChange: (next: VisibilityLevel[]) => void;
   idPrefix?: string;
-  /** De organisatie van de prompt; zonder deze prop die van je profiel. */
-  organizationId?: string | null;
 }) {
-  const { profile } = useAuth();
-  const { organizations } = useReferenceData();
-  const orgId = organizationId === undefined ? (profile?.organization_id ?? null) : organizationId;
-  const chain = orgChain(orgId, organizations);
-  const deepest = chain.length ? chain[chain.length - 1] : null;
-  const directie = directorateOf(orgId, organizations);
-  const ministerie = chain.find((o) => o.organization_type === 'ministry') ?? null;
+  const publiek = VISIBILITY_LEVELS[0];
+  const isPublic = value.length > 0;
 
-  /** Waar de prompt op dit niveau terechtkomt, of null als dat niet te zeggen is. */
-  const scope: Record<VisibilityLevel, string | null> = {
-    department: deepest?.organization_type === 'department' ? orgDisplayName(deepest) : null,
-    directorate: directie ? orgDisplayName(directie) : null,
-    ministry: ministerie ? orgDisplayName(ministerie) : null,
-    public: null,
-  };
-
-  function toggle(level: VisibilityLevel) {
-    onChange(
-      value.includes(level) ? value.filter((l) => l !== level) : [...value, level],
-    );
-  }
-
-  const isPrivate = value.length === 0;
+  const options = [
+    {
+      key: 'private',
+      label: 'Privé',
+      description: 'Alleen zichtbaar voor jezelf.',
+      note: null as string | null,
+      icon: Lock,
+      checked: !isPublic,
+      select: () => onChange([]),
+    },
+    {
+      key: 'public',
+      label: publiek.label,
+      description: publiek.description,
+      note: publiek.approval,
+      icon: Globe,
+      checked: isPublic,
+      select: () => onChange([publiek.value]),
+    },
+  ];
 
   return (
     <fieldset className="space-y-2">
       <legend className="opl-label">Wie mag deze prompt zien?</legend>
-      <p className="-mt-1 mb-2 text-xs text-slate-400 dark:text-slate-500">
-        Kies één of meerdere niveaus. Standaard blijft de prompt privé, alleen voor jezelf.
-      </p>
-
-      <div className="space-y-2">
-        {/* Privé staat bovenaan en is ALTIJD aangevinkt en niet uit te vinken:
-            de prompt blijft altijd zichtbaar voor de eigenaar. Deelniveaus
-            stapel je hier bovenop. */}
-        <div
-          className={clsx(
-            'flex items-start gap-3 rounded-xl border p-3',
-            'border-rijksblauw-400 bg-rijksblauw-50/60 dark:border-rijksblauw-500/50 dark:bg-rijksblauw-500/10',
-          )}
-        >
-          <span
-            className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border border-rijksblauw-500 bg-rijksblauw-600 text-white opacity-80"
-            aria-hidden
-          >
-            <Check size={14} />
-          </span>
-          <input
-            id={`${idPrefix}-private`}
-            type="checkbox"
-            className="sr-only"
-            checked
-            disabled
-            readOnly
-            aria-label="Privé, altijd aangevinkt, kan niet worden uitgezet"
-          />
-          <span className="min-w-0">
-            <span className="flex flex-wrap items-center gap-2">
-              <span className="font-medium text-slate-800 dark:text-slate-100">Privé</span>
-              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[0.6875rem] font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300">
-                Altijd voor jou
-              </span>
-            </span>
-            <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
-              {isPrivate
-                ? 'Alleen zichtbaar voor jezelf; je deelt deze prompt met niemand.'
-                : 'Je blijft de prompt altijd zelf zien. Hieronder deel je hem daarnaast met anderen.'}
-            </span>
-            <span className="mt-1 flex items-start gap-1 text-xs text-slate-400 dark:text-slate-500">
-              <Lock size={12} className="mt-0.5 shrink-0" aria-hidden />
-              Deze staat altijd aan; anders zou je je eigen prompt niet meer kunnen zien.
-            </span>
-          </span>
-        </div>
-
-        {VISIBILITY_LEVELS.map((lvl) => {
-          const active = value.includes(lvl.value);
-          // Zonder directie op je profiel valt er op dit niveau niets te delen;
-          // een al gekozen niveau blijft wel uit te zetten.
-          const unavailable = lvl.value === 'directorate' && !scope.directorate && !active;
-          const noteId = `${idPrefix}-${lvl.value}-waar`;
+      <div className="grid gap-2 sm:grid-cols-2">
+        {options.map((opt) => {
+          const Icon = opt.icon;
+          const id = `${idPrefix}-${opt.key}`;
           return (
             <label
-              key={lvl.value}
-              htmlFor={`${idPrefix}-${lvl.value}`}
+              key={opt.key}
+              htmlFor={id}
               className={clsx(
-                'flex items-start gap-3 rounded-xl border p-3 transition-colors',
-                unavailable ? 'cursor-not-allowed opacity-70' : 'cursor-pointer',
-                active
+                'flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition-colors',
+                opt.checked
                   ? 'border-rijksblauw-400 bg-rijksblauw-50/60 dark:border-rijksblauw-500/50 dark:bg-rijksblauw-500/10'
                   : 'border-slate-200 hover:border-slate-300 dark:border-slate-700 dark:hover:border-slate-600',
               )}
             >
-              <span
-                className={clsx(
-                  'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border',
-                  active
-                    ? 'border-rijksblauw-500 bg-rijksblauw-600 text-white'
-                    : 'border-slate-300 bg-white dark:border-slate-600 dark:bg-slate-800',
-                )}
-                aria-hidden
-              >
-                {active && <Check size={14} />}
-              </span>
               <input
-                id={`${idPrefix}-${lvl.value}`}
-                type="checkbox"
-                className="sr-only"
-                checked={active}
-                disabled={unavailable}
-                aria-describedby={noteId}
-                onChange={() => toggle(lvl.value)}
+                id={id}
+                type="radio"
+                name={`${idPrefix}-zichtbaarheid`}
+                className="mt-1 h-4 w-4 shrink-0 accent-rijksblauw-600"
+                checked={opt.checked}
+                onChange={opt.select}
               />
               <span className="min-w-0">
-                <span className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium text-slate-800 dark:text-slate-100">{lvl.label}</span>
-                  <span
-                    className={clsx(
-                      'rounded-full px-2 py-0.5 text-[0.6875rem] font-medium',
-                      lvl.autoApproved
-                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
-                        : 'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300',
-                    )}
-                  >
-                    {lvl.approvalShort}
-                  </span>
-                </span>
-                <span id={noteId} className="mt-0.5 block text-sm text-slate-700 dark:text-slate-200">
-                  {scope[lvl.value] ??
-                    (lvl.value === 'directorate'
-                      ? 'Je afdeling valt nog niet onder een directie of dienst. Kies je afdeling op je profiel.'
-                      : lvl.value === 'department' && orgId
-                        ? 'Je hebt nog geen afdeling gekozen op je profiel.'
-                        : null)}
+                <span className="flex items-center gap-1.5 font-medium text-slate-800 dark:text-slate-100">
+                  <Icon size={14} aria-hidden />
+                  {opt.label}
                 </span>
                 <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
-                  {lvl.description}
+                  {opt.description}
                 </span>
-                <span className="mt-1 flex items-start gap-1 text-xs text-slate-400 dark:text-slate-500">
-                  <Info size={12} className="mt-0.5 shrink-0" aria-hidden />
-                  {lvl.approval}
-                </span>
+                {opt.note && (
+                  <span className="mt-1 flex items-start gap-1 text-xs text-slate-400 dark:text-slate-500">
+                    <Info size={12} className="mt-0.5 shrink-0" aria-hidden />
+                    {opt.note}
+                  </span>
+                )}
               </span>
             </label>
           );

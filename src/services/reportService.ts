@@ -139,12 +139,11 @@ export function reportToCsv(data: ReportData, catName: (id: string) => string): 
     rows.forEach((r) => lines.push(`${section},"${r.label.replace(/"/g, '""')}",${r.value}`));
   push('status', promptsByStatus(data.prompts));
   push('categorie', promptsByCategory(data.prompts, catName));
-  push('organisatie', promptsByOrganization(data));
   push('goedkeuringen', approvalOutcomes(data.approvals));
   downloadText('rapportage.csv', lines.join('\n'), 'text/csv');
 }
 
-/** Open een opgemaakt, printbaar bestuurlijk rapport (Opslaan als PDF). */
+/** Open een opgemaakt, printbaar rapport (Opslaan als PDF). */
 export function printReport(data: ReportData, catName: (id: string) => string): void {
   const kpis = computeKpis(data);
   const generated = new Date().toLocaleString('nl-NL', { dateStyle: 'long', timeStyle: 'short' });
@@ -154,11 +153,10 @@ export function printReport(data: ReportData, catName: (id: string) => string): 
     <table>${rows.map((r) => `<tr><td>${r.label}</td><td class="num">${r.value}</td></tr>`).join('')}</table>`;
 
   const html = `<!DOCTYPE html><html lang="nl"><head><meta charset="utf-8"/>
-  <title>Bestuurlijke rapportage</title>
+  <title>Rapportage</title>
   <style>
     @page { margin: 22mm 18mm; }
     body { font-family: "Segoe UI", Arial, sans-serif; color:#1f2937; max-width:800px; margin:0 auto; }
-    .classification { text-align:center; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:${brand.primary}; border-top:2px solid ${brand.primary}; border-bottom:2px solid ${brand.primary}; padding:6px 0; font-size:12px; }
     .brand { font-weight:700; color:${brand.primary}; font-size:18px; margin-top:16px; }
     h1 { color:${backgroundGradient.deep}; font-size:22px; }
     h2 { color:${brand.primary}; font-size:15px; margin-top:24px; border-bottom:1px solid #e2e8f0; padding-bottom:4px; }
@@ -171,23 +169,20 @@ export function printReport(data: ReportData, catName: (id: string) => string): 
     td.num { text-align:right; font-weight:600; }
     footer { margin-top:32px; border-top:1px solid #e2e8f0; padding-top:8px; font-size:11px; color:#94a3b8; text-align:center; }
   </style></head><body>
-    <div class="classification">Intern: bestuurlijke rapportage</div>
-    <div class="brand">Rijksoverheid</div>
-    <h1>Bestuurlijke rapportage: Prompt Library</h1>
+    <div class="brand">PromptPlein</div>
+    <h1>Rapportage: Prompt Library</h1>
     <p style="color:#64748b;font-size:13px;">Gegenereerd: ${generated}</p>
     <div class="kpis">
       <div class="kpi"><b>${kpis.totalPrompts}</b><span>Prompts</span></div>
       <div class="kpi"><b>${kpis.approved}</b><span>Goedgekeurd</span></div>
       <div class="kpi"><b>${kpis.inReview}</b><span>In behandeling</span></div>
       <div class="kpi"><b>${kpis.rejected}</b><span>Afgewezen</span></div>
-      <div class="kpi"><b>${kpis.organizations}</b><span>Organisaties</span></div>
       <div class="kpi"><b>${kpis.users}</b><span>Gebruikers</span></div>
     </div>
     ${table('Prompts per status', promptsByStatus(data.prompts))}
     ${table('Prompts per categorie', promptsByCategory(data.prompts, catName))}
-    ${table('Prompts per organisatie', promptsByOrganization(data))}
     ${table('Goedkeuringen', approvalOutcomes(data.approvals))}
-    <footer>Automatisch gegenereerd uit de Prompt Library · Rubricering: Intern</footer>
+    <footer>Automatisch gegenereerd uit de Prompt Library</footer>
   </body></html>`;
 
   const win = window.open('', '_blank');

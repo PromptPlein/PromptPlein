@@ -137,7 +137,7 @@ function writeVoorbeeld(v: Voorbeeld | null) {
 
 const BEELD_STIJLEN: { value: BeeldStijl; label: string; detail: string }[] = [
   { value: 'vrij', label: 'Vrij', detail: 'de AI kiest wat bij je beeld past' },
-  { value: 'rijkshuisstijl', label: 'Rijkshuisstijl', detail: 'kleuren en beeldtaal van het Rijk' },
+  { value: 'rijkshuisstijl', label: 'Pleinhuisstijl', detail: 'kleuren en beeldtaal van PromptPlein' },
   { value: 'project', label: 'Uit een project', detail: 'je eigen vaste stijl' },
   { value: 'voorbeeld', label: 'Van een voorbeeld', detail: 'lijkt op een beeld dat je mooi vindt' },
 ];
@@ -252,12 +252,12 @@ const KIND_OPTIONS: Record<
     icon: Blocks,
     hint: 'Een vaste werkwijze die een AI-assistent elke keer opnieuw toepast. Je bouwt hem verder in de Skill Creator.',
     placeholder:
-      'Bijv. geef feedback op conceptbrieven aan burgers, elke keer volgens de schrijfwijzer van ons ministerie.',
+      'Bijv. geef feedback op conceptbrieven aan burgers, elke keer volgens de schrijfwijzer van onze organisatie.',
   },
   image: {
     label: 'Afbeelding',
     icon: ImageIcon,
-    hint: 'Een prompt voor een beeldgenerator, zoals ChatGPT of Copilot. PromptPlein maakt zelf geen beeld. Kies een vrije stijl, de Rijkshuisstijl of de vaste stijl van een project.',
+    hint: 'Een prompt voor een beeldgenerator, zoals ChatGPT of Copilot. PromptPlein maakt zelf geen beeld. Kies een vrije stijl, de Pleinhuisstijl of de vaste stijl van een project.',
     placeholder:
       'Bijv. een illustratie bij ons intranetbericht over de nieuwe thuiswerkregeling: een medewerker aan de keukentafel met een laptop, rustig en licht.',
   },
@@ -931,7 +931,7 @@ export default function OwnPromptOptimizer({
             className="animate-fade-in mb-3 space-y-2 rounded-xl border border-rijksblauw-200 bg-rijksblauw-50/40 p-3 dark:border-rijksblauw-500/30 dark:bg-rijksblauw-500/10"
           >
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Voorbeeldprompts uit het rijkswerk. Klik op "Gebruik" om er een in het invoerveld te
+              Voorbeeldprompts uit de praktijk. Klik op "Gebruik" om er een in het invoerveld te
               zetten, en pas hem aan naar je eigen dossier.
             </p>
             {/* Vaste hoogte met eigen schuifbalk: de lijst is bewust lang (er is
@@ -1336,7 +1336,7 @@ export default function OwnPromptOptimizer({
                   {beeld.stijl === 'voorbeeld' ? 'Voorbeeld: ' : 'Vaste stijl: '}
                 </strong>
                 {beeld.stijl === 'rijkshuisstijl'
-                  ? 'Rijkshuisstijl. Die gaat altijd mee; jij kiest het onderwerp.'
+                  ? 'Pleinhuisstijl. Die gaat altijd mee; jij kiest het onderwerp.'
                   : beeld.stijl === 'voorbeeld'
                     ? `${voorbeeld?.naam || 'je beeld'}. Je nieuwe beeld gaat daarop lijken; wat jij vraagt, gaat voor.`
                     : `de stijl van ${projectStijl?.name ?? 'je project'}. Die gaat altijd mee; jij kiest het onderwerp.`}

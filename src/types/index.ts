@@ -189,8 +189,6 @@ export interface AdvancedPromptFilters {
   role_ids?: string[];
   organization_ids?: string[];
   sharing_levels?: SharingLevel[];
-  /** Alleen prompts die zijn goedgekeurd voor de hele Rijksoverheid. */
-  rijksbreed?: boolean;
   date_from?: string | null;
   date_to?: string | null;
   favorites_only?: boolean;

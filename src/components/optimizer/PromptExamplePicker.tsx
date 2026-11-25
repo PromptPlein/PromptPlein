@@ -39,7 +39,7 @@ export default function PromptExamplePicker({
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-controls="techniek-voorbeelden"
-        title={`${PROMPT_EXAMPLES.length} prompts uit het rijkswerk. Je past ze daarna aan naar je eigen dossier.`}
+        title={`${PROMPT_EXAMPLES.length} prompts uit de praktijk. Je past ze daarna aan naar je eigen dossier.`}
         className="inline-flex min-h-8 items-center gap-1.5 text-sm font-medium text-rijksblauw-500 transition-colors hover:underline dark:text-rijksblauw-200"
       >
         <Lightbulb size={16} className="shrink-0 text-nadruk" />

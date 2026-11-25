@@ -218,7 +218,7 @@ export default function OpmaakMaker({
         </h3>
         <InfoDot
           label="Uitleg over een eigen opmaak"
-          text="Standaard krijgen Word, PDF, PowerPoint en Excel onder een chatantwoord de Rijkshuisstijl. Hier maak je een eigen opmaak: uit een Word-, PowerPoint- of Excel-bestand lezen we de letter, de kleuren en de indeling, of je beschrijft zelf hoe het eruit moet zien. In de chat kies je hem bij Downloaden. De opmaak en de bestanden blijven in deze browser."
+          text="Standaard krijgen Word, PDF, PowerPoint en Excel onder een chatantwoord de Pleinhuisstijl. Hier maak je een eigen opmaak: uit een Word-, PowerPoint- of Excel-bestand lezen we de letter, de kleuren en de indeling, of je beschrijft zelf hoe het eruit moet zien. In de chat kies je hem bij Downloaden. De opmaak en de bestanden blijven in deze browser."
         />
       </div>
 

@@ -416,10 +416,10 @@ const FORMAT_EXAMPLES: Record<StructureFormat, string> = {
   care: 'schrijf een brief aan bewoners over werkzaamheden in hun straat',
   'few-shot': 'beantwoord binnengekomen burgerbrieven in dezelfde stijl als onze eerdere antwoorden',
   'chain-of-thought': 'beoordeel of dit subsidieverzoek binnen de regeling past',
-  persona: 'leg de nieuwe parkeerregels uit aan bewoners die geen ambtenaar zijn',
+  persona: 'leg de nieuwe parkeerregels uit aan bewoners zonder voorkennis',
   'multi-persona':
     'beoordeel het voorstel voor betaald parkeren vanuit bewoners, ondernemers en de wethouder',
-  'template-based': 'maak een beslisnota volgens het vaste sjabloon van ons ministerie',
+  'template-based': 'maak een beslisnota volgens het vaste sjabloon van onze organisatie',
   meta: 'ik wil een prompt waarmee ik verslagen van vergaderingen laat samenvatten',
   socratic: 'ik wil scherp krijgen waarom onze aanpak van woonoverlast niet werkt',
   'chain-of-verification': 'controleer deze Kamerbrief op cijfers, data en verwijzingen',

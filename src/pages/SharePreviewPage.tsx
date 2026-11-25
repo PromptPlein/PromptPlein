@@ -12,7 +12,7 @@ import type { EmailShare, Prompt } from '@/types';
 export default function SharePreviewPage() {
   const { token } = useParams<{ token: string }>();
   const location = useLocation();
-  const { categoryById, roleById } = useReferenceData();
+  const { categoryById } = useReferenceData();
   // De zichtbaarheid van de prompt hangt af van de sessie (RLS). Daarom laden we
   // opnieuw zodra de auth-status verandert (bijv. terugkeren na inloggen).
   const { isAuthenticated, loading: authLoading } = useAuth();
@@ -85,9 +85,9 @@ export default function SharePreviewPage() {
   }
 
   // De deel-link bestaat wél, maar de prompt is niet zichtbaar. Dat komt door de
-  // zichtbaarheidsregels (RLS): de prompt is gedeeld op afdelings-/ministerieniveau.
+  // zichtbaarheidsregels (RLS): de prompt is privé of nog niet goedgekeurd.
   // - Niet ingelogd → vraag om in te loggen en kom daarna direct hier terug.
-  // - Wel ingelogd → de prompt hoort bij een ander ministerie/afdeling: geen toegang.
+  // - Wel ingelogd → geen toegang.
   if (!prompt) {
     if (!isAuthenticated) {
       return (
@@ -99,8 +99,8 @@ export default function SharePreviewPage() {
             Log in om deze prompt te bekijken
           </h1>
           <p className="mt-2 text-slate-600 dark:text-slate-300">
-            Deze prompt is gedeeld binnen de overheid. Log in met je account; daarna open je de
-            prompt meteen; je hoeft de link niet opnieuw te openen.
+            Log in met je account. Daarna opent de prompt meteen; je hoeft de link niet opnieuw
+            te openen.
           </p>
           <Link
             to="/auth/login"
@@ -121,7 +121,7 @@ export default function SharePreviewPage() {
         </div>
       );
     }
-    // Ingelogd, maar geen toegang: de prompt hoort bij een andere afdeling/ministerie.
+    // Ingelogd, maar geen toegang: privé of nog niet goedgekeurd.
     return (
       <div className="mx-auto max-w-lg px-4 py-20 text-center">
         <span className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-300">
@@ -131,8 +131,7 @@ export default function SharePreviewPage() {
           Geen toegang tot deze prompt
         </h1>
         <p className="mt-2 text-slate-600 dark:text-slate-300">
-          Deze prompt is gedeeld binnen een ander ministerie of een andere afdeling, of is nog niet
-          goedgekeurd. Daardoor kun je hem niet bekijken.
+          Deze prompt is privé of nog niet goedgekeurd. Daardoor kun je hem niet bekijken.
         </p>
         <Link to="/" className="opl-btn-primary mt-6 inline-flex">
           Naar de bibliotheek
@@ -142,7 +141,6 @@ export default function SharePreviewPage() {
   }
 
   const category = categoryById(prompt.category_id);
-  const role = roleById(prompt.role_id);
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-10 sm:px-6">
@@ -160,7 +158,6 @@ export default function SharePreviewPage() {
 
         <div className="mt-4 flex flex-wrap gap-1.5">
           {category && <span className="opl-badge bg-rijksblauw-50 text-rijksblauw-700 dark:bg-rijksblauw-500/15 dark:text-rijksblauw-200">{category.name}</span>}
-          {role && <span className="opl-badge bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300">{role.name}</span>}
           <span className={`opl-badge ${sharingBadgeClasses(prompt.sharing_level)}`}>
             {sharingLabel(prompt.sharing_level)}
           </span>

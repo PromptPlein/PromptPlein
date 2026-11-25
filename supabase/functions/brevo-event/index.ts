@@ -80,6 +80,10 @@ Deno.serve(async (req: Request) => {
   if (!templateId) return json({ error: 'Onbekende gebeurtenis' }, 400);
 
   const properties = cleanProperties(body.properties);
+  // De database noemt het niveau 'public' nog "Rijksoverheid" (trigger uit 0059).
+  // Sinds 25-11-2026 heet dat in de app Publiek; de trigger blijft ongemoeid, zodat
+  // de stand op branch stand-25-11-2026 op dezelfde database blijft werken.
+  if (properties.bereik === 'Rijksoverheid') properties.bereik = 'Publiek';
   const recipients = (body.recipients ?? []).filter((r) => r.email && isEmail(r.email));
 
   // Docs: https://developers.brevo.com/reference/sendtransacemail

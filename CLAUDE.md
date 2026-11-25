@@ -130,30 +130,32 @@ database. Wordt er code van daar geport, hernummer dan de migratie.
 | Frontend | React 18 + TypeScript + Vite 6, `@/`-alias naar `src/` |
 | Styling | Tailwind (Rijkshuisstijl), licht/donker via `ThemeContext` |
 | Routing | react-router-dom v6, alle paden Nederlands |
-| 3D | react-three-fiber + three.js (achtergrond, organisatienetwerk) |
+| 3D | react-three-fiber + three.js (achtergrond) |
 | Grafieken | recharts, lazy geladen zodat het uit de hoofdbundle blijft |
 | Backend | Supabase: Postgres met RLS, Auth, Storage, Edge Functions (Deno) |
 | Hosting | Vercel, SPA-rewrite in `vercel.json`, `X-Robots-Tag: noindex` |
 
-Huisstijl: PromptPlein valt onder de Rijksoverheid en voert daarom de
-Rijkshuisstijl. Kleuren staan in `src/config/brandColors.js` (lintblauw `#154273`
+Huisstijl: PromptPlein voert de Rijkshuisstijl, maar in beeld heet die sinds 25-11-2026
+**Pleinhuisstijl** (keuze van de eigenaar, zie "Geen overheid in beeld"). Dat geldt voor de
+stijl bij Afbeelding en bij de downloads; de waarden in de code en in localStorage
+(`'rijkshuisstijl'`, `'rijk'`, `RIJK_STYLE`) bleven gelijk, zodat opgeslagen keuzes werken.
+Rijks Sans heet in de letterkeuze Pleinletter (`fontLabel`); in het bestand blijft de echte
+naam staan. Kleuren staan in `src/config/brandColors.js` (lintblauw `#154273`
 voor koppen en balken, donkerblauw `#01689B` voor interactie, en het token
 `nadruk` `#D52B1E` (rijksrood) als accent; dat heeft eigen tinten voor tekst in
 het rood en voor op lintblauw, zodat het contrast klopt), de vormtaal in
 `borderRadius` van de Tailwind-config. Het lettertype Rijks Sans staat in
 `src/assets/fonts/` en is niet vrij: het staat met toestemming in deze openbare repo
-omdat PromptPlein van de Rijksoverheid is, en valt net als `public/logo-rijksoverheid.*`
-niet onder de EUPL-1.2. Nooit naar een ander product of andere repo kopiëren.
-Het lint met het logo staat sinds 24-11-2026 tijdelijk uit, keuze van de eigenaar: de
-app moet nu niet als overheidstool overkomen. In de kop staat het nog in `Header.tsx`
-met `hidden`. De HTML-templates (69 tot en met 72, 104, 146) wijzen naar
+omdat PromptPlein van de Rijksoverheid is, en valt niet onder de EUPL-1.2. Nooit naar een
+ander product of andere repo kopiëren. Het lint met het logo is sinds 25-11-2026 helemaal
+weg uit de kop en uit `public/`; het staat nog op branch `stand-25-11-2026`. De HTML-templates (69 tot en met 72, 104, 146) wijzen naar
 `public/email/kop-promptplein.png` (logo in het midden, zonder lint); de drag-and-drop-mails
 (welkomstmail en basis 58) hebben een logoblok met hetzelfde plaatje uit de bibliotheek van
 Brevo. `kop.png` is hetzelfde plaatje voor mails die al verstuurd zijn, en
 het origineel staat als `kop-met-lint.png`. Een gewijzigd mailplaatje krijgt altijd een
 nieuwe naam: Gmail en Apple Mail bewaren een plaatje onder zijn adres en tonen anders de
-oude versie. Terugzetten is `hidden` weghalen en de templates naar `kop-met-lint.png` laten
-wijzen. Inloggen gaat met een privé-e-mailadres.
+oude versie. Terugzetten is de kop van `stand-25-11-2026` overnemen en de templates naar
+`kop-met-lint.png` laten wijzen. Inloggen gaat met een privé-e-mailadres.
 Bron: het thema van RijksICTGilde (`hugo-theme-rijksoverheid`) en de
 tokens van `nl-design-system/rijkshuisstijl-community`. De contextmap van de skill
 `pas-rijkshuisstijl-toe` staat niet op deze machine.
@@ -191,8 +193,8 @@ voor Brevo marketing, dus wie zich in dit gedeelde account ergens uitschrijft zo
 Daarom ook geen uitschrijflink. De templates in Brevo zijn 69 (goedkeuring wacht), 70
 (ingediend), 71 (goedgekeurd) en 72 (afgewezen); de nummers staan in de edge function
 `brevo-event`. De database-triggers uit migratie 0048 roepen die functie aan. Beoordelaars zijn
-de moderatoren van het ministerie, of de beheerders als die er niet zijn en voor Rijksoverheid,
-categorieën en functies. De indiener krijgt altijd een besluitmail, ook als die zijn eigen
+de beheerders: sinds 25-11-2026 maakt de app alleen nog Publiek en categorie-aanvragen aan.
+De triggers kennen ook nog moderatoren per ministerie, voor de stand op `stand-25-11-2026`. De indiener krijgt altijd een besluitmail, ook als die zijn eigen
 aanvraag afhandelt (0050). Een nieuw soort aanvraag krijgt dus een eigen trigger. In de mail staan
 de gegevens als `params.voornaam`, `soort`, `titel`, `bereik`, `aanvrager`, `toelichting` en `link`.
 
@@ -243,67 +245,49 @@ supabase/
   migrations/     0001 … 0035, oplopend genummerd
 ```
 
-`App.tsx` houdt de routetabel. Zware pagina's (chat, netwerk, community, alle
+`App.tsx` houdt de routetabel. Zware pagina's (chat, community, alle
 admin, alles met recharts) worden lazy geladen.
 
 ## Auth, rollen en zichtbaarheid
 
 Supabase Auth met e-mail en wachtwoord. `RequireAuth` bewaakt routes en neemt
-optioneel een minimale rol (`role="admin"`) plus `allowModerator` voor de
-goedkeuringswachtrij, die admins én moderatoren mogen zien. De echte
-afdwinging staat in RLS-policies, niet in de frontend: de wachtrij filtert
-server-side op wat jij mag beoordelen.
+optioneel een minimale rol (`role="admin"`). De echte afdwinging staat in
+RLS-policies, niet in de frontend.
 
-Ingelogd vereist: `/bibliotheek`, `/netwerk`. De chat (`/chat`)
-werkt zonder account; alleen chatprojecten vragen er een. Admin
-vereist: alles onder `/admin`. De rest is openbaar, inclusief `/genereren`,
-`/zoeken`, `/community`, `/frameworks` en `/toegankelijkheid`.
+Ingelogd vereist: `/bibliotheek`. De chat (`/chat`) werkt zonder account; alleen
+chatprojecten vragen er een. Admin vereist: alles onder `/admin` en `/goedkeuringen`.
+De rest is openbaar, inclusief `/genereren`, `/zoeken`, `/community`, `/frameworks`
+en `/toegankelijkheid`.
 
-Prompts hebben een zichtbaarheidsniveau met een goedkeuringsstroom
-(`visibilityService`, `ApprovalQueuePage`): Privé, Afdeling (direct), Directie of
-dienst, Ministerie (beide door een moderator van het ministerie, anders een
-beheerder) en Rijksoverheid (beheerder). De directie of dienst is de laag boven
-de afdeling (`private.directorate_of`, 0059); de database vult die zelf in uit de
-organisatie van de prompt. `VisibilityPicker` toont bij elk niveau de naam van je
-eigen afdeling, directie en ministerie. Een niveau boven Afdeling komt bij het
-aanmaken altijd op 'pending', ook als de browser iets anders stuurt
-(`guard_visibility_insert`). Organisaties vormen een boom van ministeries
-(`orgTree.ts`, migraties 0020/0021/0024).
+### Geen overheid in beeld (sinds 25-11-2026)
 
-Onder een ministerie hangt een directie of dienst (type `directorate`) en daaronder
-de afdeling (type `department`). Zo heten die lagen in de app; "onderdeel" is te
-vaag, keuze van de eigenaar. Mensen zoeken hun afdeling, niet de directie:
-`OrgPicker` toont één zoeklijst met alle afdelingen, met bij elke afdeling de
-afkorting en de directie erboven, zodat je op alle drie zoekt. Zonder gekozen
-ministerie zoekt hij in alle ministeries en vult het ministerie zich na de keuze
-vanzelf in. Een directie of dienst zonder afdelingen staat zelf in die lijst. Het
-zoeken (`zoekMatch.ts`, ook in `SearchableSelect`) let niet op accenten, leestekens
-en woordvolgorde, en toont bij geen treffer wat erop lijkt. Het aanvraagformulier
-biedt een bestaande organisatie aan als de nieuwe erop lijkt: dubbele aanvragen
-kwamen vooral van anders geschreven namen ("SSCICT" bij "SSC-ICT"). Vraagt iemand
-aan wat een ander al heeft aangevraagd en nog wacht, dan sluit hij daarbij aan
-(`organization_request_followers`, 0067): geen tweede aanvraag, en bij het besluit
-verhuist zijn profiel mee en krijgt hij ook de mail.
-Het profiel hangt aan de afdeling. Een ontbrekende afdeling vraagt de gebruiker
-aan bij het registreren of op zijn profiel: eerst kiest hij de directie of dienst,
-en staat die er ook niet bij, dan vraagt hij die mee aan (`request_organization`,
-0056). Bij het registreren is er nog geen sessie: de aanvraag gaat mee in de
-metadata en de database dient hem in zodra het e-mailadres is bevestigd
-(`signup_organization_request`, 0063). Tot de goedkeuring staat het profiel op de
-laag erboven. Een beheerder
-keurt goed in Beheer, Afdeling-aanvragen; `approve_organization_request` maakt de
-keten en zet de onderste laag als afdeling (0058). Bij goedkeuring verhuist het
-profiel van de aanvrager naar de nieuwe afdeling. Het direct aanmaken uit 0055 is
-vervallen.
+Feedback was dat de app te veel op de Rijksoverheid leek; keuze van de eigenaar. Alles
+wat zegt dat de app van of voor de overheid is, staat niet meer in beeld: geen
+Rijksoverheid, geen ministerie als werkgever, geen ambtenaar, geen afdeling, directie
+of functie. Inhoud mag wel: Kamerbrief, Woo, BIO, beleid en burgers in voorbeelden, en
+bronnen bij hun echte naam (developer.overheid.nl). Systeemprompts mogen de
+overheidscontext houden.
 
-Elke laag heeft de vorm van een ministerie: de naam voluit in `name`, de afkorting
-in `code` (0057). De aanvraag vraagt om beide en houdt een losse afkorting als naam
-tegen (`looksLikeAbbreviation`). Wie in dezelfde afdeling zit, deelt de prompts op
-het deelniveau Afdeling (exacte match). Een functie is op dezelfde manier een
-aanvraag; de aanvrager krijgt mail bij indienen en besluit. Waar een organisatie
-staat, toont de app het pad (`orgPathLabel`): kort met afkortingen op kaarten,
-voluit op de promptpagina. In Ontdekken zoekt een gekozen directie in alle
-afdelingen eronder, en een gekozen afdeling vernauwt dat (`searchOrgIds`).
+Een prompt is **Privé** (geen rij in `prompt_visibility`) of **Publiek** (niveau
+`public`, vroeger "Rijksoverheid"). Publiek komt altijd op 'pending'
+(`guard_visibility_insert`) en een beheerder keurt het goed in Goedkeuringen.
+`sharingLabel` toont elk oud niveau als Publiek. Privé maken haalt alle rijen weg, ook
+oude op afdeling of ministerie. Registreren en het profiel vragen geen organisatie of
+functie meer; `prompts.organization_id` gaat stil mee uit het profiel. Netwerk,
+Moderatoren, Organisaties, Afdeling-aanvragen, Functies en Functie-aanvragen zijn weg
+(oude adressen sturen door).
+
+**De database blijft zoals hij was.** Branch `stand-25-11-2026` heeft de oude stand met
+ministeries, directies, afdelingen, functies en vijf niveaus, en die moet op dezelfde
+database blijven draaien: daar gaat de eigenaar naar terug zodra het officiële traject
+loopt. Dus geen migratie die een kolom, tabel, RLS, trigger of databasefunctie van dat
+model verandert of weghaalt; organisaties, moderatoren, aanvragen en functies blijven
+staan, ook al toont de app ze niet. Alleen data veranderde: 0069 zette de twaalf prompts
+op Afdeling of Ministerie op Publiek, met de omkeer-SQL in het bestand. De mail noemt het
+bereik nog "Rijksoverheid" vanuit de trigger; `brevo-event` maakt daar Publiek van.
+
+Terugzetten: `stand-25-11-2026` uitchecken (of main daarop zetten), de omkeer-SQL uit
+0069 draaien, en `optimize-prompt` en `brevo-event` vanaf die branch opnieuw deployen.
 
 ## Opslagscheiding: dit is een bewuste keuze
 
@@ -430,8 +414,7 @@ overhoudt. Daar viel de leesruimte eerder terug tot een kwart van het venster.
   VoiceOver er met vegen niet achter komt. Nieuwe vaste panelen dus ook via een portal
   op `document.body`.
 - **Tabellen** in `StackTable` worden op de telefoon kaarten en houden hun rollen.
-- **Tekenen** (organogram, 3D) vangt elke veeg op. Daarom vult dat nooit het hele
-  scherm en heeft het netwerk een gewone lijst, op de telefoon de standaard.
+- **Tekenen** (3D) vangt elke veeg op. Daarom vult dat nooit het hele scherm.
 - **Paginawissel**: `RouteFocus` zet de titel uit `pageTitles.ts`, gaat naar boven en
   zet de focus op de zichtbare `h1`. Zichtbaar, want tijdens het laden van een lazy
   pagina staat de kop van de vorige pagina verborgen in de DOM. Elke pagina heeft dus
@@ -770,14 +753,14 @@ omgeving, stijl, kader, licht, tekst, niet in beeld, formaat. Dezelfde bouwstene
 staan op de spiekkaart (`BeeldSpiekkaart`) die verschijnt zodra iemand Afbeelding
 kiest. De beeldprompt doet niet mee als de AI kiest, en staat niet bij de doelen of op /frameworks.
 
-Boven het tekstvak kiest de gebruiker de stijl: Vrij, Rijkshuisstijl of Uit een
+Boven het tekstvak kiest de gebruiker de stijl: Vrij, Pleinhuisstijl of Uit een
 project (per browser onthouden, `opl.beeld.stijl`). Bij een project gaat de
 projectinstructie woord voor woord mee als vaste beeldstijl (`beeld` in de body,
 `withBeeldStijl`), zodat elk beeld uit dat project dezelfde stijl heeft met een
 ander onderwerp. Het project gaat dan niet via `withProject` mee: bij een beeld is
 het project de stijl, geen onderwerp. De beeldprompt heeft een eigen systeemprompt
 (`IMAGE_SYSTEM_PROMPT`) in plaats van de hoofdprompt, de toon, de lengteregel en de
-clarity-gate, en geen tweede ronde. De Rijkshuisstijl (`RIJKSHUISSTIJL_BEELD`) is
+clarity-gate, en geen tweede ronde. De Pleinhuisstijl (`RIJKSHUISSTIJL_BEELD`) is
 opgesteld uit de kleuren in `brandColors.js`, zonder logo en met een illustratie
 tenzij iemand om een foto vraagt; hij is nog niet getoetst aan het officiële
 beeldbeleid. Alle vier staan in Beheer, Prompts, groep Afbeelding.
@@ -850,7 +833,7 @@ een brief in Word"), dan gaat het gewoon naar de AI en staat het bestand onder h
 zip met XML, en `fflate` pakt die in (`wordExport.ts`, `excelExport.ts`). Geen server, geen
 extra AI-aanroep en geen nieuwe bibliotheek; de tekst verlaat de browser niet. De AI levert
 de inhoud, de opmaak komt uit de vormgeving bij Instellingen, Chat (`WordSettings`):
-Rijkshuisstijl, Eenvoudig, of een eigen Word-sjabloon. Dat sjabloon staat per browser in
+Pleinhuisstijl, Eenvoudig, of een eigen Word-sjabloon. Dat sjabloon staat per browser in
 IndexedDB (`wordSettings.ts`). Kop- en voettekst, logo en stijlen blijven staan; `{inhoud}`
 geeft aan waar de tekst komt, `{titel}` en `{datum}` worden ingevuld. Kopstijlen worden op
 naam gezocht ("heading 1"), want in een Nederlandse Word is de id "Kop1". Rijks Sans wordt
@@ -864,14 +847,14 @@ meenemen en dat mag hier niet. Het is geen getagde PDF: voor een toegankelijk do
 de betere keuze. PowerPoint (`pptxExport.ts`) is net als Word een zip met XML: een titeldia,
 een dia per kop van niveau 1 of 2, vervolgdia's als het niet past, en tabellen als echte
 PowerPoint-tabel. Elke dia heeft zijn titel in de titelplek, zodat schermlezer en overzicht hem
-kennen. PDF en PowerPoint volgen Rijkshuisstijl of Eenvoudig; bij een eigen Word-sjabloon krijgen
-ze de Rijkshuisstijl. CSV (`textExport.ts`) gebruikt een puntkomma en een BOM, zodat een
+kennen. PDF en PowerPoint volgen Pleinhuisstijl of Eenvoudig; bij een eigen Word-sjabloon krijgen
+ze de Pleinhuisstijl. CSV (`textExport.ts`) gebruikt een puntkomma en een BOM, zodat een
 Nederlandse Excel hem meteen in kolommen opent; meer tabellen gaan samen in een zip. Deze vier
 tellen in analytics als `export_file` met het formaat erbij. Test PowerPoint door het bestand echt
 te openen: kopieer het naar `~/Library/Containers/com.microsoft.Powerpoint/Data/tmp` en laat
 PowerPoint via AppleScript een PDF bewaren.
 
-Standaard krijgen de downloads de Rijkshuisstijl. Een eigen opmaak maakt de gebruiker in
+Standaard krijgen de downloads de Pleinhuisstijl. Een eigen opmaak maakt de gebruiker in
 Template-based Output (`OpmaakMaker`, onder het voorbeelddocument): uit een Word-, PowerPoint- of
 Excel-bestand, of door te beschrijven hoe het eruit moet zien, keuze van de eigenaar. Zo kan
 iemand creatief zijn en hoeft hij niet de huisstijl van de overheid te gebruiken. Een
@@ -885,7 +868,7 @@ browser rekent de rest uit en maakt te lichte kleuren donkerder tot ze op wit le
 (`styleFrom`). Elke opmaak heeft een naam en staat met zijn bestanden per browser in IndexedDB
 (`exportTemplates.ts`, sleutel `opmaken`); de keuze staat in localStorage als `opmaak:<id>`.
 
-In de chat vraagt de exportkaart "In welke opmaak?": Rijkshuisstijl (standaard), Eenvoudig, de
+In de chat vraagt de exportkaart "In welke opmaak?": Pleinhuisstijl (standaard), Eenvoudig, de
 eigen opmaken, en "Nieuwe opmaak maken". Die laatste opent Template-based Output met de maker open
 (`location.state.opmaak`) en "Terug naar je chat" opent daarna hetzelfde gesprek
 (`state.openConversation`). Dezelfde keuze staat in het menu Downloaden; bij Instellingen, Chat
@@ -908,7 +891,7 @@ blijven tekst. Een vet label wordt ook een kop. Een brief in een codeblok zonder
 tekst, niet als code. Dit geldt alleen voor de documenten, niet voor het scherm. Een eigen
 sjabloon bevat alleen de stijlen die erin gebruikt zijn; ontbrekende kopstijlen komen er bij het
 maken bij (`completeTemplateStyles`), met de letter en accentkleur van het sjabloon. De opmaak
-(Rijkshuisstijl, Eenvoudig, eigen sjabloon) kies je ook in het menu Downloaden zelf.
+(Pleinhuisstijl, Eenvoudig, eigen sjabloon) kies je ook in het menu Downloaden zelf.
 
 Elk HTML-bestand in de chat wordt na het schrijven onzichtbaar en afgeschermd
 gedraaid (`src/lib/fileCheck.ts`); scriptfouten komen met regelnummer op de
@@ -931,22 +914,13 @@ anders de resultaten. Het zoekvak en de categorieën blijven in beide standen op
 dezelfde plek, zodat er niets verspringt zodra iemand begint te typen.
 
 De filters staan in de URL en nergens anders: de links zijn deelbaar en de
-terugknop van de browser werkt. Bestaande links (`?category=`, `?org=`) blijven
-daardoor gewoon werken. De keuzes zitten in `FilterPanel` en gelden meteen, dus
-dat paneel sluit ook met Escape of een klik ernaast, anders dan `Modal`. Op
-organisatie kies je "Zoek binnen": alles wat je mag zien, je afdeling, je directie,
-je ministerie of Rijksoverheid (alleen wat daarvoor is goedgekeurd, `rijk=1`), met
-een balkje voor hoe breed dat is. Alleen je eigen lijn, die volgt uit je afdeling:
-een andere afdeling, directie of een ander ministerie is bewust niet te kiezen, ook
-niet via een oude link. Keuze van de eigenaar: filteren volgt de goedkeuringsstroom. Een laag neemt alles mee wat eronder hangt
-(`orgSubtreeIds`).
-
-"Zoek binnen" staat bovenaan het paneel en bepaalt wat eronder staat: een categorie,
-functie of deelniveau zonder prompts binnen die keuze verdwijnt, en elke optie toont
-zijn aantal. Elke lijst telt met alle andere keuzes erop maar niet met die van zichzelf,
-zodat je binnen een lijst nog kunt bijkiezen; een optie die aanstaat blijft staan, ook op
-nul, zodat hij uit kan. Daarvoor haalt de pagina alleen op met zoekvraag, organisatie,
-Rijksoverheid en datum; soort, categorie, functie en deelniveau filtert de client.
+terugknop van de browser werkt. Bestaande links met `?category=` blijven werken; oude
+links met `org`, `functie`, `niveau` of `rijk` openen nog, maar die tellen niet meer
+mee. De keuzes zitten in `FilterPanel` en gelden meteen, dus dat paneel sluit ook met
+Escape of een klik ernaast, anders dan `Modal`. Het paneel heeft categorie en datum.
+Een categorie zonder prompts binnen de andere keuzes verdwijnt, en elke optie toont
+zijn aantal; een optie die aanstaat blijft staan, ook op nul, zodat hij uit kan.
+De pagina haalt op met zoekvraag en datum; soort en categorie filtert de client.
 
 Een prompt heeft twee assen. De categorie zegt waar hij over gaat (Beleid & Advies,
 Communicatie, Juridisch, Data & Analyse, Vergaderingen, Onderzoek, of Overig als er geen is).
@@ -962,7 +936,7 @@ het opslaan; de prompt onthoudt de aanvraag (`requested_category_id`) en krijgt 
 vanzelf na goedkeuring (0065, net als een functie op het profiel). Burgerbrieven en Applicatie ontwikkeling zijn bewust geen
 categorie meer: een brief is Communicatie, een applicatie is een soort.
 
-In de rijen doen privéprompts niet mee. Populair toont alleen prompts met een
+In de rijen (Populair en Nieuw) doen privéprompts niet mee. Populair toont alleen prompts met een
 like, anders is die rij gelijk aan Nieuw. Een lege rij verdwijnt. Populairste
 eerst sorteert de client, want likes staan niet op de prompt-rij. Technieken staan
 bewust niet bij de filters: dat zegt een gebruiker niets over wat een prompt doet.

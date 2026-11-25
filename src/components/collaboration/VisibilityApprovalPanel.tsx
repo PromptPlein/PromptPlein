@@ -11,47 +11,30 @@ import { VISIBILITY_STATUS_META } from '@/services/collaborationService';
 import { visibilityMeta } from '@/lib/utils';
 import { logAdminAction } from '@/services/adminService';
 import VisibilityPicker from '@/components/prompts/VisibilityPicker';
-import { useAuth } from '@/context/AuthContext';
 import type { PromptVisibility, VisibilityLevel } from '@/types';
 
 /**
- * Toont de deelniveaus van een prompt met hun goedkeuringsstatus, en — voor wie
- * een niveau mag beoordelen — knoppen om dat niveau goed te keuren of af te
- * wijzen. Per niveau apart: de afdeling kan al goedgekeurd zijn terwijl het
- * ministerie nog wacht. RLS bepaalt of een beslissing slaagt; we tonen de
- * knoppen voor nog-openstaande niveaus en vangen een weigering netjes op.
+ * Toont of een prompt Privé of Publiek is, met de goedkeuringsstatus van Publiek,
+ * en voor een beheerder de knoppen om dat goed te keuren of af te wijzen. RLS
+ * bepaalt of een beslissing slaagt.
  *
- * Daarnaast kan de eigenaar (of een admin) de zichtbaarheid achteraf aanpassen:
- * een privé-prompt later alsnog met de afdeling of het ministerie delen, of een
- * gedeeld niveau weer intrekken. Nieuw gekozen niveaus volgen dezelfde
- * goedkeuringsroute als bij het aanmaken.
+ * De eigenaar (of een beheerder) kan de zichtbaarheid achteraf aanpassen. Oude
+ * niveaus van vóór 25-11-2026 (afdeling, ministerie) staan nog in de database,
+ * maar worden hier niet getoond.
  */
 export default function VisibilityApprovalPanel({
   promptId,
   refreshKey,
   /** Mag de huidige gebruiker de deelniveaus aanpassen (eigenaar/admin)? */
   canEdit = false,
-  /** De organisatie van de prompt, nodig om afdeling en ministerie te koppelen. */
-  organizationId = null,
-  /** De maker van de prompt. */
-  ownerId = null,
   /** Aangeroepen na een wijziging, zodat de pagina de badge kan verversen. */
   onChanged,
 }: {
   promptId: string;
   refreshKey?: number;
   canEdit?: boolean;
-  organizationId?: string | null;
-  ownerId?: string | null;
   onChanged?: () => void;
 }) {
-  const { user, profile } = useAuth();
-  // Deelt de maker zelf, dan telt waar hij nu werkt en niet waar hij werkte toen
-  // hij de prompt opsloeg. Bij opslaan verhuist de prompt mee (zie
-  // updatePromptVisibility).
-  const isOwner = !!ownerId && user?.id === ownerId;
-  const effectiveOrgId =
-    isOwner && profile?.organization_id ? profile.organization_id : organizationId;
   const [rows, setRows] = useState<PromptVisibility[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [notes, setNotes] = useState<Record<string, string>>({});
@@ -62,7 +45,7 @@ export default function VisibilityApprovalPanel({
 
   async function reload() {
     try {
-      setRows(await listVisibility(promptId));
+      setRows((await listVisibility(promptId)).filter((r) => r.level === 'public'));
     } catch {
       /* niet-blokkerend */
     }
@@ -82,9 +65,7 @@ export default function VisibilityApprovalPanel({
   async function saveLevels() {
     setSaving(true);
     try {
-      await updatePromptVisibility(promptId, draftLevels, effectiveOrgId, {
-        moveFrom: effectiveOrgId !== organizationId ? organizationId : undefined,
-      });
+      await updatePromptVisibility(promptId, draftLevels);
       toast.success('Zichtbaarheid bijgewerkt');
       setEditing(false);
       await reload();
@@ -108,10 +89,10 @@ export default function VisibilityApprovalPanel({
         entity_id: row.id,
         changes: { prompt_id: promptId, level: row.level, note: notes[row.id] || null },
       });
-      toast.success(decision === 'approved' ? 'Niveau goedgekeurd' : 'Niveau afgewezen');
+      toast.success(decision === 'approved' ? 'Goedgekeurd' : 'Afgewezen');
       await reload();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Je hebt geen rechten om dit niveau te beoordelen.');
+      toast.error(err instanceof Error ? err.message : 'Je hebt geen rechten om dit te beoordelen.');
     } finally {
       setBusyId(null);
     }
@@ -121,8 +102,7 @@ export default function VisibilityApprovalPanel({
     <div className="opl-card p-5">
       <div className="mb-3 flex items-center justify-between gap-2">
         <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
-          <Globe2 size={18} className="text-rijksblauw-500" /> Deelniveaus
-          {rows.length > 0 && ` (${rows.length})`}
+          <Globe2 size={18} className="text-rijksblauw-500" /> Zichtbaarheid
         </h2>
         {canEdit && !editing && (
           <button
@@ -141,13 +121,7 @@ export default function VisibilityApprovalPanel({
             idPrefix="edit-vis"
             value={draftLevels}
             onChange={setDraftLevels}
-            organizationId={effectiveOrgId ?? undefined}
           />
-          <p className="text-xs text-slate-400 dark:text-slate-500">
-            Nieuw aangevinkte niveaus volgen de gebruikelijke route: de afdeling is direct
-            beschikbaar, de directie of dienst, het ministerie en Rijksoverheid wachten op goedkeuring. Een niveau dat
-            je uitvinkt, wordt weer ingetrokken.
-          </p>
           <div className="flex justify-end gap-2">
             <button
               onClick={() => setEditing(false)}
@@ -163,8 +137,8 @@ export default function VisibilityApprovalPanel({
         </div>
       ) : rows.length === 0 ? (
         <p className="text-sm text-slate-400 dark:text-slate-500">
-          Deze prompt is privé; er zijn geen deelniveaus.
-          {canEdit && ' Klik op “Aanpassen” om hem met je afdeling of ministerie te delen.'}
+          Deze prompt is privé.
+          {canEdit && ' Kies Aanpassen om hem publiek te maken.'}
         </p>
       ) : (
         <ul className="space-y-3">

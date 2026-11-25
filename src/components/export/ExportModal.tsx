@@ -41,7 +41,7 @@ export default function ExportModal({
   return (
     <Modal open={open} onClose={onClose} title="Exporteren" size="max-w-md">
       <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
-        Kies een formaat. Het document krijgt een overheidsconforme kop met rubricering.
+        Kies een formaat.
       </p>
       <div className="grid grid-cols-1 gap-2">
         {FORMATS.map(({ id, label, hint, icon: Icon }) => (

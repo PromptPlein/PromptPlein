@@ -1,16 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { UserCircle2, Building2, FileText, ThumbsUp, ArrowLeft } from '@/components/common/icons';
-import { useReferenceData } from '@/context/ReferenceDataContext';
+import { UserCircle2, FileText, ThumbsUp, ArrowLeft } from '@/components/common/icons';
 import { usePromptCommunity } from '@/hooks/usePromptCommunity';
 import { getPublicProfile, listPromptsByAuthor, firstName } from '@/services/communityService';
 import PromptCard from '@/components/prompts/PromptCard';
 import { SkeletonGrid } from '@/components/common/Skeleton';
-import type { Organization, Prompt, PublicProfile } from '@/types';
+import type { Prompt, PublicProfile } from '@/types';
 
 export default function PublicProfilePage() {
   const { userId } = useParams<{ userId: string }>();
-  const { organizations } = useReferenceData();
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [prompts, setPrompts] = useState<Prompt[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,12 +37,8 @@ export default function PublicProfilePage() {
   // Naam: liever uit het profiel, anders uit de eerste prompt (created_by).
   const displayName = profile?.full_name
     ? firstName(profile.full_name)
-    : prompts[0]?.created_by || 'Onbekende ambtenaar';
+    : prompts[0]?.created_by || 'Onbekende gebruiker';
 
-  const orgPath = useMemo(
-    () => buildOrgPath(profile?.organization_id ?? prompts[0]?.organization_id, organizations),
-    [profile?.organization_id, prompts, organizations],
-  );
 
   const totalLikes = enriched.reduce((n, p) => n + (p.like_count ?? 0), 0);
 
@@ -84,21 +78,6 @@ export default function PublicProfilePage() {
         </span>
         <div className="min-w-0 flex-1">
           <h1 className="text-2xl font-bold text-rijksblauw-700 dark:text-rijksblauw-200">{displayName}</h1>
-          {orgPath.length > 0 ? (
-            <p className="mt-1 flex flex-wrap items-center gap-1 text-sm text-slate-500 dark:text-slate-400">
-              <Building2 size={14} className="shrink-0" />
-              {orgPath.map((o, i) => (
-                <span key={o.id} className="inline-flex items-center gap-1">
-                  {i > 0 && <span className="text-slate-300 dark:text-slate-600">/</span>}
-                  <Link to={`/zoeken?org=${o.id}`} className="hover:underline">
-                    {o.name}
-                  </Link>
-                </span>
-              ))}
-            </p>
-          ) : (
-            <p className="mt-1 text-sm text-slate-400 dark:text-slate-500">Geen organisatie ingesteld</p>
-          )}
         </div>
         <div className="flex shrink-0 gap-5 text-center">
           <div>
@@ -135,22 +114,4 @@ export default function PublicProfilePage() {
       )}
     </div>
   );
-}
-
-/** Bouw het pad van wortel → organisatie (bv. Rijksoverheid / BZK / Afdeling X). */
-function buildOrgPath(
-  orgId: string | null | undefined,
-  orgs: Organization[],
-): Organization[] {
-  if (!orgId) return [];
-  const byId = new Map(orgs.map((o) => [o.id, o]));
-  const path: Organization[] = [];
-  let current = byId.get(orgId);
-  const guard = new Set<string>();
-  while (current && !guard.has(current.id)) {
-    guard.add(current.id);
-    path.unshift(current);
-    current = current.parent_id ? byId.get(current.parent_id) : undefined;
-  }
-  return path;
 }

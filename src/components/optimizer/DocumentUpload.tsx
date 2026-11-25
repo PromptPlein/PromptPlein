@@ -148,7 +148,7 @@ export default function DocumentUpload({
               disabled={briefBusy || disabled}
             />
             <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
-              De AI stelt een structuur voor op basis van gangbare conventies binnen de overheid. Dat
+              De AI stelt een structuur voor op basis van gangbare conventies. Dat
               is een voorstel uit eigen kennis, geen bestaand sjabloon; loop het dus even na.
             </p>
             <button
