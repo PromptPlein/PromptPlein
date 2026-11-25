@@ -125,14 +125,15 @@ export default function UserMenu() {
             </Link>
           )}
           <div className="my-1 border-t border-slate-100 dark:border-slate-700" />
-          {isAuthenticated && (
-            <Link to="/profiel" onClick={() => setOpen(false)} className={itemClass}>
-              <User size={16} className="text-rijksblauw-500" /> Mijn profiel
+          {isAuthenticated ? (
+            <Link to="/instellingen/profiel" onClick={() => setOpen(false)} className={itemClass}>
+              <User size={16} className="text-rijksblauw-500" /> Profiel en instellingen
+            </Link>
+          ) : (
+            <Link to="/instellingen" onClick={() => setOpen(false)} className={itemClass}>
+              <Settings2 size={16} className="text-rijksblauw-500" /> Instellingen
             </Link>
           )}
-          <Link to="/instellingen" onClick={() => setOpen(false)} className={itemClass}>
-            <Settings2 size={16} className="text-rijksblauw-500" /> Instellingen
-          </Link>
           {(isModerator || isAdmin) && (
             <Link to="/goedkeuringen" onClick={() => setOpen(false)} className={clsx(itemClass, 'sm:hidden')}>
               <ClipboardCheck size={16} className="text-rijksblauw-500" /> Goedkeuringen

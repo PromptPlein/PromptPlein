@@ -1,20 +1,22 @@
 import { Navigate, NavLink, useParams } from 'react-router-dom';
 import clsx from 'clsx';
 import { Accessibility, MessageSquare, Settings2, UserRound } from '@/components/common/icons';
+import { useAuth } from '@/context/AuthContext';
 import AccountSettings from '@/components/settings/AccountSettings';
 import AccessibilityHelp from '@/components/settings/AccessibilityHelp';
 import AccessibilitySettings from '@/components/settings/AccessibilitySettings';
 import ChatInstructionSettings from '@/components/settings/ChatInstructionSettings';
 import ChatIntakeSettings from '@/components/settings/ChatIntakeSettings';
 import PromptCheckSettings from '@/components/settings/PromptCheckSettings';
+import ProfileSettings from '@/components/settings/ProfileSettings';
 import ChatMemorySettings from '@/components/settings/ChatMemorySettings';
 import WordSettings from '@/components/settings/WordSettings';
 import { HELP_PATH } from '@/lib/shortcuts';
 
 const PARTS = [
+  { slug: 'profiel', label: 'Profiel', icon: UserRound },
   { slug: 'chat', label: 'Chat', icon: MessageSquare },
   { slug: 'toegankelijkheid', label: 'Toegankelijkheid', icon: Accessibility },
-  { slug: 'account', label: 'Account', icon: UserRound },
 ] as const;
 
 const ACCESSIBILITY_PARTS = [
@@ -23,16 +25,22 @@ const ACCESSIBILITY_PARTS = [
 ] as const;
 
 /**
- * Persoonlijke instellingen. Openbaar: toegankelijkheid moet ook zonder account
- * in te stellen zijn. Elk onderdeel heeft een eigen adres en de navigatie bestaat
- * uit gewone links, zodat toetsenbord en schermlezer ze vanzelf begrijpen.
+ * Profiel en persoonlijke instellingen op één plek. Openbaar: toegankelijkheid
+ * moet ook zonder account in te stellen zijn; Profiel vraagt dan om in te loggen.
+ * Elk onderdeel heeft een eigen adres en de navigatie bestaat uit gewone links,
+ * zodat toetsenbord en schermlezer ze vanzelf begrijpen.
  */
 export default function PersonalSettingsPage() {
   const { onderdeel, sub } = useParams();
-  // Het oude adres van de hulppagina, van voordat die onder Toegankelijkheid viel.
+  const { loading, isAuthenticated } = useAuth();
+  // Oude adressen: de hulppagina van voordat die onder Toegankelijkheid viel, en
+  // Account, dat nu onder Profiel staat.
   if (onderdeel === 'hulp') return <Navigate to={HELP_PATH} replace />;
+  if (onderdeel === 'account') return <Navigate to="/instellingen/profiel" replace />;
   if (!PARTS.some((part) => part.slug === onderdeel)) {
-    return <Navigate to="/instellingen/chat" replace />;
+    // Wacht op de sessie, anders belandt een ingelogde gebruiker eerst bij Chat.
+    if (loading) return null;
+    return <Navigate to={isAuthenticated ? '/instellingen/profiel' : '/instellingen/chat'} replace />;
   }
   const accessibility = onderdeel === 'toegankelijkheid';
   if (sub && !(accessibility && sub === 'hulp')) {
@@ -43,7 +51,7 @@ export default function PersonalSettingsPage() {
     <div className="mx-auto max-w-2xl space-y-5 px-4 py-8 sm:px-6">
       <h1 className="flex items-center gap-2 text-2xl font-semibold text-rijksblauw-700 dark:text-rijksblauw-200">
         <Settings2 size={24} aria-hidden="true" />
-        Instellingen
+        {isAuthenticated ? 'Profiel en instellingen' : 'Instellingen'}
       </h1>
 
       <nav aria-label="Onderdelen van de instellingen">
@@ -107,7 +115,12 @@ export default function PersonalSettingsPage() {
       )}
       {accessibility && !sub && <AccessibilitySettings />}
       {accessibility && sub === 'hulp' && <AccessibilityHelp />}
-      {onderdeel === 'account' && <AccountSettings />}
+      {onderdeel === 'profiel' && (
+        <>
+          <ProfileSettings />
+          <AccountSettings />
+        </>
+      )}
     </div>
   );
 }

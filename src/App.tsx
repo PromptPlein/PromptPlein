@@ -22,7 +22,6 @@ const SearchPage = lazy(() => import('@/pages/SearchPage'));
 const MyLibraryPage = lazy(() => import('@/pages/MyLibraryPage'));
 const PromptDetailPage = lazy(() => import('@/pages/PromptDetailPage'));
 const SharePreviewPage = lazy(() => import('@/pages/SharePreviewPage'));
-const ProfilePage = lazy(() => import('@/pages/ProfilePage'));
 const ContactPage = lazy(() => import('@/pages/ContactPage'));
 const NetworkPage = lazy(() => import('@/pages/NetworkPage'));
 const CommunityPage = lazy(() => import('@/pages/CommunityPage'));
@@ -133,11 +132,12 @@ export default function App() {
                 path="/toegankelijkheid"
                 element={<Navigate to="/instellingen/toegankelijkheid" replace />}
               />
+              {/* Het profiel staat sinds 25-11-2026 bij de instellingen. */}
+              <Route path="/profiel" element={<Navigate to="/instellingen/profiel" replace />} />
 
               {/* Vereist een ingelogde gebruiker */}
               <Route element={<RequireAuth />}>
                 <Route path="/bibliotheek" element={<MyLibraryPage />} />
-                <Route path="/profiel" element={<ProfilePage />} />
                 <Route path="/netwerk" element={<NetworkPage />} />
                 <Route path="/bronnen-bewaren/:projectId" element={<KeepProjectFilesPage />} />
               </Route>

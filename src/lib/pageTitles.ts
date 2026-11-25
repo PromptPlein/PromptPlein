@@ -5,7 +5,7 @@
 const TITLES: [prefix: string, title: string][] = [
   ['/instellingen/toegankelijkheid/hulp', 'Hulp bij toegankelijkheid'],
   ['/instellingen/toegankelijkheid', 'Toegankelijkheid instellen'],
-  ['/instellingen/account', 'Account'],
+  ['/instellingen/profiel', 'Mijn profiel'],
   ['/instellingen', 'Instellingen'],
   ['/genereren', 'Prompt maken'],
   ['/frameworks', 'Frameworks'],
@@ -18,7 +18,6 @@ const TITLES: [prefix: string, title: string][] = [
   ['/trending', 'Trending'],
   ['/activiteit', 'Activiteit'],
   ['/contact', 'Contact'],
-  ['/profiel', 'Mijn profiel'],
   ['/netwerk', 'Netwerk'],
   ['/bronnen-bewaren/', 'Bronbestanden bewaren'],
   ['/goedkeuringen', 'Goedkeuringen'],

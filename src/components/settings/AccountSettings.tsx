@@ -65,7 +65,7 @@ export default function AccountSettings() {
         <p className="mt-2 text-slate-700 dark:text-slate-200">Log in om je account te beheren.</p>
         <Link
           to="/auth/login"
-          state={{ from: '/instellingen/account' }}
+          state={{ from: '/instellingen/profiel' }}
           className="opl-btn-primary mt-4 inline-flex"
         >
           Inloggen

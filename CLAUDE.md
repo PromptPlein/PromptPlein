@@ -254,7 +254,7 @@ goedkeuringswachtrij, die admins én moderatoren mogen zien. De echte
 afdwinging staat in RLS-policies, niet in de frontend: de wachtrij filtert
 server-side op wat jij mag beoordelen.
 
-Ingelogd vereist: `/bibliotheek`, `/profiel`, `/netwerk`. De chat (`/chat`)
+Ingelogd vereist: `/bibliotheek`, `/netwerk`. De chat (`/chat`)
 werkt zonder account; alleen chatprojecten vragen er een. Admin
 vereist: alles onder `/admin`. De rest is openbaar, inclusief `/genereren`,
 `/zoeken`, `/community`, `/frameworks` en `/toegankelijkheid`.
@@ -325,7 +325,11 @@ te stemmen.
 
 ## Persoonlijke instellingen
 
-`/instellingen` is openbaar en heeft drie onderdelen: Chat, Toegankelijkheid en Account. Bij
+`/instellingen` is openbaar en heeft drie onderdelen: Profiel, Chat en Toegankelijkheid. Profiel
+(sinds 25-11-2026, keuze van de eigenaar: profiel en instellingen op één plek) heeft de gegevens
+(naam, afdeling, functie) en daaronder Account verwijderen; zonder account vraagt het om in te
+loggen. `/profiel` en `/instellingen/account` verwijzen ernaar, en wie ingelogd is komt daar ook
+bij `/instellingen` uit. In het gebruikersmenu heet het Profiel en instellingen. Bij
 Toegankelijkheid staan Instellen en Hulp. Je
 komt er via het gebruikersmenu, de knop onder in de chatzijbalk en het
 toegankelijkheidsicoon in de kop. Dat icoon blijft staan: wie grotere letters
@@ -345,7 +349,7 @@ projectinstructie al de instructie van de gebruiker.
 
 ## Account verwijderen
 
-Onder Instellingen, Account verwijdert een gebruiker zijn eigen account (sinds 25-11-2026,
+Onder Instellingen, Profiel verwijdert een gebruiker zijn eigen account (sinds 25-11-2026,
 keuze van de eigenaar). Hij typt zijn e-mailadres over; de edge function `delete-account`
 leest wie het is uit het token, haalt eerst het contact uit Brevo en roept daarna
 `delete_user_account` aan (0068). Die databasefunctie mag alleen de service role aanroepen,

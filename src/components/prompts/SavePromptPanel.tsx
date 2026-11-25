@@ -547,7 +547,7 @@ export default function SavePromptPanel({
           ))}
           <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
             Niet jouw afdeling?{' '}
-            <Link to="/profiel" className="opl-raak font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300">
+            <Link to="/instellingen/profiel" className="opl-raak font-medium text-rijksblauw-600 hover:underline dark:text-rijksblauw-300">
               Pas hem aan op je profiel
             </Link>
           </p>
