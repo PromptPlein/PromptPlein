@@ -35,8 +35,8 @@ export const PERSONA_QUESTIONS: PersonaQuestion[] = [
   {
     id: 'rol',
     label: 'Welke functie of rol vervult deze persoon precies?',
-    why: 'Dit is de kapstok. Hoe specifieker, hoe minder de AI terugvalt op een generiek gemiddelde. "Wetgevingsjurist bij een departement" activeert echte denkkaders, "jurist" niet.',
-    placeholder: 'Bijv. wetgevingsjurist bij een departement',
+    why: 'Dit is de kapstok. Hoe specifieker, hoe minder de AI terugvalt op een generiek gemiddelde. "Jurist gespecialiseerd in privacywetgeving" activeert echte denkkaders, "jurist" niet.',
+    placeholder: 'Bijv. jurist gespecialiseerd in privacywetgeving',
   },
   {
     id: 'ervaring',

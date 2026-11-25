@@ -47,8 +47,8 @@ export const SEED_TECHNIQUES: Technique[] = [
       {
         id: 'rol',
         label: 'Welke functie of rol vervult deze persoon precies?',
-        placeholder: 'Bijv. wetgevingsjurist bij een departement',
-        why: 'Dit is de kapstok. Hoe specifieker, hoe minder de AI terugvalt op een generiek gemiddelde. "Wetgevingsjurist bij een departement" activeert echte denkkaders, "jurist" niet.',
+        placeholder: 'Bijv. jurist gespecialiseerd in privacywetgeving',
+        why: 'Dit is de kapstok. Hoe specifieker, hoe minder de AI terugvalt op een generiek gemiddelde. "Jurist gespecialiseerd in privacywetgeving" activeert echte denkkaders, "jurist" niet.',
       },
       {
         id: 'ervaring',
@@ -294,15 +294,15 @@ Oorspronkelijke opdracht:
     strength:
       'Sterk tegen fouten die er geloofwaardig uitzien. Het model stelt eerst controlevragen bij zijn eigen tekst, beantwoordt die apart, en levert daarna een gecorrigeerde versie plus een lijst van wat nog door een mens geverifieerd moet worden.',
     use_cases: [
-      'Een Kamerbrief, nota of besluit controleren voordat hij de deur uitgaat',
+      'Een brief, nota of besluit controleren voordat hij de deur uitgaat',
       'Cijfers, data en verwijzingen naar wetgeving natrekken',
       'Onderbouwde beweringen scheiden van wat nog uitgezocht moet worden',
     ],
     follow_up_questions: [
-      { id: 'gewenst_doel', label: 'Gewenst doel — wat wil je bereiken?', placeholder: 'Bijv. een concept-Kamerbrief die feitelijk klopt voordat hij naar de bewindspersoon gaat' },
+      { id: 'gewenst_doel', label: 'Gewenst doel — wat wil je bereiken?', placeholder: 'Bijv. een conceptbrief die feitelijk klopt voordat hij naar de directie gaat' },
       { id: 'te_controleren', label: 'Welke tekst moet gecontroleerd worden?', placeholder: 'Bijv. de conceptbrief hieronder' },
       { id: 'risico', label: 'Welke fouten zijn hier het duurst?', placeholder: 'Bijv. verkeerde cijfers, onjuiste wetsartikelen, toezeggingen die niet zijn gedaan' },
-      { id: 'bronnen', label: 'Wat mag als bron gelden?', placeholder: 'Bijv. alleen de meegestuurde stukken en eerdere Kamerbrieven over dit dossier' },
+      { id: 'bronnen', label: 'Wat mag als bron gelden?', placeholder: 'Bijv. alleen de meegestuurde stukken en eerdere brieven over dit dossier' },
     ],
     template: `Gewenst doel: {{gewenst_doel}}
 

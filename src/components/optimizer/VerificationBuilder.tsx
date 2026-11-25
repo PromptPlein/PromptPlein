@@ -269,7 +269,7 @@ export default function VerificationBuilder({
           id="cove-risico"
           className="opl-input text-sm"
           value={data.duursteFout}
-          placeholder="Bijv. een toezegging die de bewindspersoon nooit heeft gedaan"
+          placeholder="Bijv. een toezegging die de directeur nooit heeft gedaan"
           onChange={(e) => setData((d) => ({ ...d, duursteFout: e.target.value }))}
         />
       </div>
